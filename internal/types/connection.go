@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"net/url"
+	"regexp"
 	"strings"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -241,10 +242,8 @@ func (q *QuickBooksConnectionMetadata) Validate() error {
 			WithHint("QuickBooks OAuth client secret is required").
 			Mark(ierr.ErrValidation)
 	}
-	if q.RealmID == "" {
-		return ierr.NewError("realm_id is required").
-			WithHint("QuickBooks Company ID (realm ID) is required").
-			Mark(ierr.ErrValidation)
+	if err := ValidateQuickBooksRealmID(q.RealmID); err != nil {
+		return err
 	}
 	if q.Environment != "sandbox" && q.Environment != "production" {
 		return ierr.NewError("environment must be 'sandbox' or 'production'").
@@ -335,10 +334,8 @@ func (z *ZohoBooksConnectionMetadata) Validate() error {
 			WithHint("Zoho Books refresh token is required after OAuth completion").
 			Mark(ierr.ErrValidation)
 	}
-	if z.OrganizationID == "" {
-		return ierr.NewError("organization_id is required").
-			WithHint("Zoho Books organization_id is required for API calls").
-			Mark(ierr.ErrValidation)
+	if err := ValidateZohoOrganizationID(z.OrganizationID); err != nil {
+		return err
 	}
 
 	// accounts_server and api_domain are stored and then re-read as the host for
@@ -353,6 +350,28 @@ func (z *ZohoBooksConnectionMetadata) Validate() error {
 		return err
 	}
 
+	return nil
+}
+
+var numericIDPattern = regexp.MustCompile(`^[0-9]{1,32}$`)
+
+// ValidateQuickBooksRealmID requires a numeric QuickBooks company ID.
+func ValidateQuickBooksRealmID(id string) error {
+	if !numericIDPattern.MatchString(id) {
+		return ierr.NewError("realm_id must be numeric").
+			WithHint("QuickBooks Company ID (realm ID) must contain digits only").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// ValidateZohoOrganizationID requires a numeric Zoho Books organization ID.
+func ValidateZohoOrganizationID(id string) error {
+	if !numericIDPattern.MatchString(id) {
+		return ierr.NewError("organization_id must be numeric").
+			WithHint("Zoho Books organization_id must contain digits only").
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 

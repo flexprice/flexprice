@@ -312,7 +312,7 @@ func (c *Client) getOrganizationBaseCurrency(ctx context.Context) (string, error
 			CurrencyCode string `json:"currency_code"`
 		} `json:"organization"`
 	}
-	path := fmt.Sprintf("/books/v3/organizations/%s", orgID)
+	path := fmt.Sprintf("/books/v3/organizations/%s", url.PathEscape(orgID))
 	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
 		return "", err
 	}
@@ -369,6 +369,9 @@ func (c *Client) doBooksRequest(
 	baseURL := strings.TrimRight(md.APIDomain, "/")
 	if baseURL == "" {
 		baseURL = "https://www.zohoapis.com"
+	}
+	if err := types.ValidateZohoEndpoint(baseURL, "api_domain"); err != nil {
+		return err
 	}
 	u, err := url.Parse(baseURL + path)
 	if err != nil {
@@ -458,6 +461,9 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 	if accountsServer == "" {
 		accountsServer = "https://accounts.zoho.com"
 	}
+	if err := types.ValidateZohoEndpoint(accountsServer, "accounts_server"); err != nil {
+		return "", err
+	}
 	form := url.Values{}
 	form.Set("refresh_token", refreshToken)
 	form.Set("client_id", clientID)
@@ -494,14 +500,21 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 		return "", err
 	}
 
+	newAPIDomain := strings.TrimRight(tokenResp.APIDomain, "/")
+	if newAPIDomain != "" {
+		if err := types.ValidateZohoEndpoint(newAPIDomain, "api_domain"); err != nil {
+			return "", err
+		}
+	}
+
 	encAccess, err := c.encryptionService.Encrypt(tokenResp.AccessToken)
 	if err != nil {
 		return "", err
 	}
 
 	md.AccessToken = encAccess
-	if tokenResp.APIDomain != "" {
-		md.APIDomain = tokenResp.APIDomain
+	if newAPIDomain != "" {
+		md.APIDomain = newAPIDomain
 	}
 	md.AccessTokenExpiresAt = clock.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).Format(time.RFC3339)
 	conn.EncryptedSecretData.ZohoBooks = md
