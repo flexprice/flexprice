@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
+	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
@@ -47,6 +48,12 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	p, err := req.ToPayment(ctx)
 	if err != nil {
 		return nil, err // Already using ierr in the DTO
+	}
+
+	if req.ProcessPayment && (p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI) {
+		if err := validateChargeGateway(req); err != nil {
+			return nil, err
+		}
 	}
 
 	allowedDestinations := []types.PaymentDestinationType{
@@ -89,6 +96,13 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 					"customer_id": p.DestinationID,
 				}).
 				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if req.ProcessPayment && lo.FromPtr(req.PaymentGateway) == types.PaymentGatewayTypeRazorpay &&
+		(p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI) {
+		if err := s.validateRazorpayMandate(ctx, invoice.CustomerID, p); err != nil {
+			return nil, err
 		}
 	}
 
@@ -222,6 +236,91 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	}
 
 	return dto.NewPaymentResponse(p), nil
+}
+
+// validateChargeGateway checks the gateway for a CARD or UPI charge. CARD
+// supports Stripe (default) and Razorpay; UPI supports Razorpay only.
+func validateChargeGateway(r *dto.CreatePaymentRequest) error {
+	gateway := lo.FromPtr(r.PaymentGateway)
+	details := map[string]interface{}{
+		"payment_method_type": r.PaymentMethodType,
+		"payment_gateway":     gateway,
+	}
+
+	switch {
+	case r.PaymentMethodType == types.PaymentMethodTypeUPI && gateway != types.PaymentGatewayTypeRazorpay:
+		return ierr.NewError("UPI payments require the razorpay gateway").
+			WithHint("Set payment_gateway to razorpay for UPI payments").
+			WithReportableDetails(details).
+			Mark(ierr.ErrValidation)
+	case gateway != "" && gateway != types.PaymentGatewayTypeStripe && gateway != types.PaymentGatewayTypeRazorpay:
+		return ierr.NewError("unsupported payment gateway for card payments").
+			WithHint("CARD payments support the stripe and razorpay gateways").
+			WithReportableDetails(details).
+			Mark(ierr.ErrValidation)
+	case gateway == types.PaymentGatewayTypeRazorpay && r.PaymentMethodID != "":
+		return ierr.NewError("payment_method_id is not supported for razorpay charges").
+			WithHint("Omit payment_method_id; the customer's active Razorpay mandate for this method is used").
+			WithReportableDetails(details).
+			Mark(ierr.ErrValidation)
+	case gateway == types.PaymentGatewayTypeRazorpay && r.DestinationType != types.PaymentDestinationTypeInvoice:
+		return ierr.NewError("razorpay charges require an invoice destination").
+			WithHint("Set destination_type to INVOICE").
+			WithReportableDetails(details).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// validateRazorpayMandate rejects the charge before a payment row exists when a Razorpay
+// charge is already in flight for the invoice, or the customer has no usable mandate.
+func (s *paymentService) validateRazorpayMandate(ctx context.Context, customerID string, p *payment.Payment) error {
+	// Razorpay does not dedupe orders by receipt, so a second charge here would double-charge.
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(p.DestinationID)
+	filter.PaymentGateway = lo.ToPtr(string(types.PaymentGatewayTypeRazorpay))
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusProcessing))
+	inFlight, err := s.PaymentRepo.Count(ctx, filter)
+	if err != nil {
+		return err
+	}
+	if inFlight > 0 {
+		return ierr.NewError("razorpay charge already in progress for this invoice").
+			WithHint("A charge for this invoice is already in progress at Razorpay; wait for it to settle").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": p.DestinationID,
+			}).
+			Mark(ierr.ErrAlreadyExists)
+	}
+
+	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Razorpay is not connected for this environment").
+			Mark(ierr.ErrValidation)
+	}
+
+	_, tokens, err := razorpayIntegration.CustomerSvc.ListCustomerTokens(ctx, customerID)
+	if err == nil {
+		if _, ok := razorpay.SelectUsableToken(tokens, p.PaymentMethodType, p.Amount); ok {
+			return nil
+		}
+	}
+	return errNoRazorpayMandate(p, customerID)
+}
+
+func errNoRazorpayMandate(p *payment.Payment, customerID string) error {
+	return ierr.NewError("no usable razorpay token for payment method").
+		WithHintf("No active %s mandate covering this amount was found at Razorpay, or the customer is not synced to Razorpay. Collect one first, or use payment_method_type PAYMENT_LINK.", p.PaymentMethodType).
+		WithReportableDetails(map[string]interface{}{
+			"payment_id":          p.ID,
+			"invoice_id":          p.DestinationID,
+			"customer_id":         customerID,
+			"payment_method_type": p.PaymentMethodType,
+			"amount":              p.Amount.String(),
+		}).
+		Mark(ierr.ErrValidation)
 }
 
 func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, invoice *invoice.Invoice, p *dto.CreatePaymentRequest) error {

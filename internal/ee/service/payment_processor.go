@@ -410,16 +410,7 @@ func (p *paymentProcessor) handleRazorpayTokenCharge(ctx context.Context, paymen
 		return err
 	}
 	if !charged || result == nil {
-		return ierr.NewError("no usable razorpay token for payment method").
-			WithHintf("No active %s mandate covering this amount was found at Razorpay, or the customer is not synced to Razorpay. Collect one first, or use payment_method_type PAYMENT_LINK.", paymentObj.PaymentMethodType).
-			WithReportableDetails(map[string]interface{}{
-				"payment_id":          paymentObj.ID,
-				"invoice_id":          inv.ID,
-				"customer_id":         inv.CustomerID,
-				"payment_method_type": paymentObj.PaymentMethodType,
-				"amount":              paymentObj.Amount.String(),
-			}).
-			Mark(ierr.ErrValidation)
+		return errNoRazorpayMandate(paymentObj, inv.CustomerID)
 	}
 	if result.AlreadySubmitted {
 		return ierr.NewError("razorpay charge already submitted for this invoice").
