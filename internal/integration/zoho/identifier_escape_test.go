@@ -62,6 +62,18 @@ func TestDoBooksRequest_RejectsNonZohoAPIDomain(t *testing.T) {
 	}
 }
 
+func TestDoBooksRequest_AcceptsCAAndAEDomains(t *testing.T) {
+	for _, d := range []string{"https://www.zohoapis.ca", "https://www.zohoapis.ae"} {
+		c, rt := newIDClient(d, "123")
+		if err := c.doBooksRequest(context.Background(), http.MethodGet, "/books/v3/x", nil, nil, nil); err != nil {
+			t.Fatalf("%q: %v", d, err)
+		}
+		if len(rt.urls) != 1 {
+			t.Fatalf("%q: urls=%v", d, rt.urls)
+		}
+	}
+}
+
 func TestDoBooksRequest_AcceptsStoredDomainWithTrailingSlash(t *testing.T) {
 	c, rt := newIDClient("https://www.zohoapis.eu/", "123")
 	if err := c.doBooksRequest(context.Background(), http.MethodGet, "/books/v3/x", nil, nil, nil); err != nil {
