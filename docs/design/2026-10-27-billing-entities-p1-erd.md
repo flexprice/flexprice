@@ -21,9 +21,9 @@ inside it, all sharing the environment's catalog. Each environment is enabled on
 try entities in a sandbox before production. Each customer belongs to exactly one entity, and that
 customer's invoices show that entity as the seller, use that entity's number prefix and series, and
 start from that entity's default tax rates. Finalized invoices keep the seller they were issued with.
-Environments that never enable the feature keep today's behaviour. Payment gateways and other integrations
-keep their one connection per environment and serve only the default entity; giving each entity its own
-integrations is the next phase.
+Environments that never enable the feature keep today's behaviour. A deployment switch rejects every
+enable until the next phase gives each entity its own integrations; integrations keep their one connection
+per environment.
 
 ## 2. Use cases
 <!-- erd:locked -->
@@ -37,8 +37,8 @@ integrations is the next phase.
    The tenant's other environments are unchanged.
 
 Variation: the admin enables again while enabling is running → the same enablement continues; enabling
-an already enabled environment changes nothing. The environment uses an external tax engine → enabling
-is rejected.
+an already enabled environment changes nothing. The environment uses an external tax engine, or the
+deployment switch is off → enabling is rejected.
 
 **UC2 — Tenant admin manages an entity.**
 1. Admin creates an entity with a name, legal name, seller details, tax IDs and a distinct invoice prefix.
@@ -62,9 +62,6 @@ entity belongs to another environment → rejected.
 2. On finalization it takes the next number in the series of the customer's entity's prefix, and freezes
    the entity's seller details and tax IDs.
 3. The PDF and hosted invoice page show that entity as the seller, then and on every later rebuild.
-
-Variation: the customer belongs to a non-default entity → the invoice is not auto-charged, offers no
-online payment, and is not synced to any integration; it is recorded as paid manually.
 
 **UC5 — API client reads billing records by entity.**
 1. Client lists customers or invoices, optionally filtered by one entity.
@@ -90,7 +87,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 - Per-prefix invoice numbering for all tenants (UC4, UC6).
 - Seller snapshot on finalized invoices; entity seller on PDF and hosted invoice page (UC4).
 - Entity filter on lists and entity on responses and outbound webhooks (UC5).
-- Integrations, payments and syncs limited to the default entity (UC4).
+- Deployment switch that rejects enabling until per-entity integrations ship (UC1).
 - Same-entity rule for delegated and grouped invoices (UC4).
 - Dashboard screens for the switch, entity pages and entity choice on customer create, in the portal
   repo (UC1, UC2, UC3).
@@ -133,7 +130,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 | FR-17 | Finalizing the invoice of a customer with an entity stores a seller snapshot once: entity ID, legal name, seller details, tax IDs. | UC4 | Finalize → snapshot present; retry finalize → snapshot unchanged. |
 | FR-18 | The PDF and hosted invoice page show the snapshot for finalized invoices, the customer's entity for drafts, and the tenant for customers without an entity and for invoices issued before enablement. | UC4 | Edit entity after finalize, force PDF rebuild → old seller shown; invoice issued before enable → tenant shown. |
 | FR-19 | For customers with an entity, biller tax IDs come from the entity. | UC4 | Entity with a GSTIN → GSTIN on the PDF. |
-| FR-20 | Invoices of a non-default entity's customers are never auto-charged, never get checkout, payment links or saved payment methods, and their customers, invoices and subscriptions are never synced to integrations. | UC4 | Non-default customer with `charge_automatically` → invoice stays pending, no gateway call; checkout or payment method request → 400; no sync workflow started. |
+| FR-20 | Enabling is rejected unless the deployment's `billing_entities.enabled` switch is on. | UC1 | Switch off → enable returns 400 and the mode stays `off`; switch on → enable proceeds (FR-1). |
 | FR-21 | Delegated and grouped invoices only combine customers of one entity. | UC4 | Set `invoicing_customer_id` to a customer of another entity → 400; grouped invoice across entities → 400. |
 | FR-22 | Lists and searches of customers and invoices accept an optional `billing_entity_id`; absent means all entities. | UC5 | Filter by entity → only that entity's records; no filter → all. |
 | FR-23 | Customers and invoices carry `billing_entity_id` in Get, List and outbound webhook payloads. | UC5 | Each response and webhook shows the stored or derived entity; off environment → null. |
@@ -185,7 +182,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 | Transaction advisory lock | Transaction-scoped database lock used for wallets | Extend: shared variant for creates |
 | Temporal workflows | Long-running, retried jobs with one ID per run | Reuse for the enable job |
 | Tenant and customer caches | Cached reads with invalidation | Reuse; cleared at the end of enable |
-| Integration event dispatcher, invoice payment attempt, checkout and payment-method creation | The single entry points for syncs and money movement | Extend: guard for non-default entities |
+| Deployment configuration | Feature switches in `config.yaml`, overridable per region by environment variable | Extend: `billing_entities.enabled`, default off |
 | Delegated invoicing and grouped invoices | Combining several customers on one invoice | Extend: same-entity check |
 | Activity log | Records customer writes with snapshots | Reuse: customer snapshots carry `billing_entity_id`; entities themselves are not recorded |
 | Self-billing | Tenant's buyer record in Flexprice's own billing | Reuse unchanged |
@@ -197,7 +194,8 @@ release on, the new prefix starts its own series instead of continuing the old p
 flowchart LR
   Admin([Tenant admin]) --> API[Flexprice API]
   Client([API client]) --> API
-  API --> Enable["Enable job (new)"]
+  API --> Switch{"Deployment switch on? (new)"}
+  Switch -- yes --> Enable["Enable job (new)"]
   API --> Entities["Billing entities (new)"]
   API --> Customers[Customers + entity]
   Enable --> Entities
@@ -206,22 +204,19 @@ flowchart LR
   Billing --> Numbering["Counter per prefix (changed)"]
   Billing --> Snapshot["Seller snapshot (new)"]
   Snapshot --> PDF[PDF + hosted page]
-  Billing --> Guard{"Default entity? (new guard)"}
-  Guard -- yes --> Integrations[Gateways, syncs: one connection per env]
-  Guard -- no --> Manual[Recorded as paid manually]
   Entities --> Tax["Entity tax rates (new level)"]
   Tax --> Customers
   classDef new stroke:#3293d9,stroke-width:2px
-  class Enable,Entities,Numbering,Snapshot,Guard,Tax new
+  class Switch,Enable,Entities,Numbering,Snapshot,Tax new
 ```
 
 Main flow (UC1 → UC4):
-1. Admin enables an environment; the enable job creates its default entity and switches it to `enabling`.
+1. With the deployment switch on, admin enables an environment; the enable job creates its default entity and switches it to `enabling`.
 2. The job assigns the environment's existing customers to the default entity and switches it to `enabled`.
 3. Admin creates a second entity with its own prefix, seller details, tax IDs and tax rates.
 4. Client creates a customer under the second entity; the customer gets that entity's tax rates.
 5. The billing run finalizes the customer's invoice: the number comes from the entity prefix's counter and the seller is frozen into the snapshot.
-6. The PDF and hosted page show the entity as seller; the invoice is not charged or synced, and is recorded as paid manually.
+6. The PDF and hosted page show the entity as seller.
 
 ## 9. Detailed design
 <!-- erd:locked -->
@@ -301,7 +296,7 @@ Migration notes:
 **Enable** — `POST /v1/billing-entities/enable` · tenant super admin · environment from the request
 
 Request: none. Response `202 {"mode": "enabling"}`; on an enabled environment `200 {"mode": "enabled"}`.
-Errors: `403` not a super admin; `400` the environment uses an external tax engine (FR-8).
+Errors: `403` not a super admin; `400` the environment uses an external tax engine (FR-8); `400` the deployment switch is off (FR-20).
 
 **Status** — `GET /v1/billing-entities/status` → `{"mode": "off" | "enabling" | "enabled"}` for the request's environment
 
@@ -349,7 +344,6 @@ and `entity_id` set to the entity.
 | Update `invoice_config` setting | Prefix change rejected from `enabling` on (FR-11) |
 | Create, update or delete tenant-level tax association | Rejected from `enabling` on (FR-11) |
 | Update `tax_config` setting | External provider rejected from `enabling` on (FR-8) |
-| Checkout, payment links, payment methods | Rejected for customers of non-default entities (FR-20) |
 
 | Error | Status | When |
 |---|---|---|
@@ -359,7 +353,7 @@ and `entity_id` set to the entity.
 | External tax engine | 400 | Enable with an external engine, or external engine in an enabling or enabled environment (FR-8) |
 | Setting owned by entity | 400 | FR-11 |
 | Cross-entity invoice | 400 | FR-21 |
-| No integration for entity | 400 | FR-20 |
+| `invalid_operation` | 400 | Enable while the deployment switch is off (FR-20) |
 
 ### 9.3 Flows
 
@@ -455,24 +449,13 @@ During `enabling`, a customer the backfill has not reached yet belongs to its en
 entity: it can only predate enablement, when the default was the only entity. Every rule above treats it
 that way, so its invoices number, render and tax exactly as after the backfill.
 
-**Integration guard** (UC4; FR-20)
-
-```mermaid
-flowchart LR
-  T[Sync event, invoice payment attempt, checkout, payment method] --> G{Customer's entity}
-  G -- none, or default --> I[Proceed as today with the environment's connection]
-  G -- non-default --> X[Skip sync / leave invoice pending / reject request]
-```
-
 ### 9.4 Jobs and events
 
 | Job or event | Change |
 |---|---|
 | Enable job | New Temporal workflow, one run per tenant and environment (§9.3) |
-| Integration event dispatcher | Skips customers, invoices and subscriptions of non-default entities |
-| Invoice payment attempt (auto-charge) | Skips invoices of non-default entities; invoice stays pending |
 | Outbound webhooks for customers and invoices | Payload gains `billing_entity_id` |
-| Inbound gateway webhooks | Unchanged; they only concern default-entity records |
+| Inbound gateway webhooks | Unchanged |
 | Exports, scheduled tasks, usage processing | Unchanged |
 | Environment create and clone | A new environment starts off; clone from or into an enabling or enabled environment is rejected |
 
@@ -490,7 +473,7 @@ flowchart LR
 | Failure: customer missed by backfill | Step 3 assigns any remaining customer in the same transaction that sets `enabled` | NFR-4 |
 | Performance | Concurrent index build; batch entity lookup per page; backfill batches of 1,000 | NFR-6, NFR-8 |
 | Multi-tenancy | Entities are tenant- and environment-scoped; body and filter entities are checked against the request's environment | — |
-| Observability | Enable job logs each step with counts; skips by the integration guard are logged with record IDs | — |
+| Observability | Enable job logs each step with counts | — |
 | Activity log | Customer snapshots carry `billing_entity_id`; the backfill and entity changes are not recorded | — |
 
 ## 11. Risks & open questions
@@ -498,12 +481,11 @@ flowchart LR
 
 | Risk | Likelihood / Impact | Mitigation |
 |---|---|---|
-| An environment is enabled before the follow-up numbering release is deployed | Low / High: non-default entities cannot number | Enable only after that release; release checklist item |
-| A guard point for non-default entities is missed and money or data reaches the shared accounts | Medium / High | Guard at the few entry points listed in §9.4; e2e covers each |
+| An environment is enabled before the follow-up numbering release is deployed | Low / High: non-default entities cannot number | The deployment switch stays off until that release is deployed |
+| The switch is turned on before per-entity integrations ship | Low / High: non-default entities' payments and syncs reach the environment's shared accounts | Switch defaults off; turned on per region only after the next phase is deployed |
 | Large tenants make the backfill slow | Low / Low: billing keeps working during `enabling` | Batches of 1,000; progress logged |
 | Tenants expect the series to continue after a mid-period prefix change | Low / Low | Documented in release notes (UC6) |
 
 | Question | Answer |
 |---|---|
-| Should the hosted invoice page hide its payment option for non-default entities, or show "pay offline" text? | Hide it: the hosted invoice response sends `pay.enabled: false`, so the page shows no pay option, and the hosted Pay endpoint rejects the request (2026-10-28). |
 | Is billing entity mode set per tenant or per environment? | Per environment, like every other billing setting: a tenant can enable a sandbox first, and enable and status act on the request's environment (2026-10-28). |

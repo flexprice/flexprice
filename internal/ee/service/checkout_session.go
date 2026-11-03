@@ -113,9 +113,6 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 			WithReportableDetails(map[string]any{"customer_id": customer.ID, "status": customer.Status}).
 			Mark(ierr.ErrValidation)
 	}
-	if err := requireIntegrationsForCustomer(ctx, s.ServiceParams, customer.ID); err != nil {
-		return nil, err
-	}
 
 	session := req.ToCheckoutSession(ctx, customer.ID)
 

@@ -5,7 +5,6 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
-	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	"github.com/flexprice/flexprice/internal/types"
@@ -40,7 +39,6 @@ func provideIntegrationPubSub(
 func provideIntegrationHandler(
 	connectionRepo connection.Repository,
 	eimRepo entityintegrationmapping.Repository,
-	entityGuard interfaces.BillingEntityGuard,
 	ps types.IntegrationEventsPubSub,
 	cfg *config.Configuration,
 	log *logger.Logger,
@@ -48,7 +46,6 @@ func provideIntegrationHandler(
 	return NewHandler(Deps{
 		ConnectionRepo: connectionRepo,
 		EIMRepo:        eimRepo,
-		EntityGuard:    entityGuard,
 		Logger:         log,
 		Config:         cfg,
 		PubSub:         ps.PubSub,

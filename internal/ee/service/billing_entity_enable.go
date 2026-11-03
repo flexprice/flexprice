@@ -35,6 +35,11 @@ func (s *billingEntityService) Enable(ctx context.Context) (types.BillingEntityM
 	if mode == types.BillingEntityModeEnabled {
 		return mode, nil
 	}
+	if s.Config == nil || !s.Config.BillingEntities.Enabled {
+		return "", ierr.NewError("billing entities are disabled in this deployment").
+			WithHint("Billing entities are not available yet").
+			Mark(ierr.ErrInvalidOperation)
+	}
 
 	if err := s.rejectExternalTaxEngine(ctx); err != nil {
 		return "", err

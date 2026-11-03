@@ -21,10 +21,6 @@ type BillingEntityService interface {
 	ResolveForCreate(ctx context.Context, mode types.BillingEntityMode, requested *string) (*string, error)
 	// EffectiveEntity is the customer's entity; a customer the enable backfill has not reached belongs to the default.
 	EffectiveEntity(ctx context.Context, cust *customer.Customer) (*billingentity.BillingEntity, error)
-	CustomerServesIntegrations(ctx context.Context, customerID string) (bool, error)
-	InvoiceServesIntegrations(ctx context.Context, invoiceID string) (bool, error)
-	SubscriptionServesIntegrations(ctx context.Context, subscriptionID string) (bool, error)
-	RequireCustomerIntegrations(ctx context.Context, customerID string) error
 	ValidateFilter(ctx context.Context, billingEntityID string) error
 
 	Create(ctx context.Context, req dto.CreateBillingEntityRequest) (*dto.BillingEntityResponse, error)
@@ -240,56 +236,6 @@ func (s *billingEntityService) EffectiveEntity(ctx context.Context, cust *custom
 	return def, nil
 }
 
-func (s *billingEntityService) CustomerServesIntegrations(ctx context.Context, customerID string) (bool, error) {
-	if off, err := s.entitiesOff(ctx); err != nil || off {
-		return off, err
-	}
-	return s.customerServesIntegrations(ctx, customerID)
-}
-
-func (s *billingEntityService) InvoiceServesIntegrations(ctx context.Context, invoiceID string) (bool, error) {
-	if off, err := s.entitiesOff(ctx); err != nil || off {
-		return off, err
-	}
-	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
-	if err != nil {
-		return false, err
-	}
-	return s.customerServesIntegrations(ctx, inv.CustomerID)
-}
-
-func (s *billingEntityService) SubscriptionServesIntegrations(ctx context.Context, subscriptionID string) (bool, error) {
-	if off, err := s.entitiesOff(ctx); err != nil || off {
-		return off, err
-	}
-	sub, err := s.SubRepo.Get(ctx, subscriptionID)
-	if err != nil {
-		return false, err
-	}
-	return s.customerServesIntegrations(ctx, sub.CustomerID)
-}
-
-// entitiesOff reports whether the environment has billing entities off, so every record is served without a lookup.
-func (s *billingEntityService) entitiesOff(ctx context.Context) (bool, error) {
-	mode, err := s.mode(ctx)
-	if err != nil {
-		return false, err
-	}
-	return mode == types.BillingEntityModeOff, nil
-}
-
-func (s *billingEntityService) customerServesIntegrations(ctx context.Context, customerID string) (bool, error) {
-	cust, err := s.CustomerRepo.Get(ctx, customerID)
-	if err != nil {
-		return false, err
-	}
-	entity, err := s.EffectiveEntity(ctx, cust)
-	if err != nil {
-		return false, err
-	}
-	return entity == nil || entity.IsDefault, nil
-}
-
 func (s *billingEntityService) ValidateFilter(ctx context.Context, billingEntityID string) error {
 	if billingEntityID == "" {
 		return nil
@@ -392,39 +338,6 @@ func (s *billingEntityService) Update(ctx context.Context, id string, req dto.Up
 		return nil, err
 	}
 	return &dto.BillingEntityResponse{BillingEntity: updated}, nil
-}
-
-// requireIntegrationsForCustomer rejects an integration request for a customer of a non-default billing entity.
-func requireIntegrationsForCustomer(ctx context.Context, params ServiceParams, customerID string) error {
-	served, err := NewBillingEntityService(params).CustomerServesIntegrations(ctx, customerID)
-	if err != nil {
-		return err
-	}
-	if !served {
-		return ierr.NewError("no integration for this customer's billing entity").
-			WithHint("No integration is available for this customer's billing entity").
-			WithReportableDetails(map[string]any{"customer_id": customerID}).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
-// skipIntegrationsForCustomer reports, and logs, whether an automatic integration step must skip this customer.
-func skipIntegrationsForCustomer(ctx context.Context, params ServiceParams, customerID, step string) (bool, error) {
-	served, err := NewBillingEntityService(params).CustomerServesIntegrations(ctx, customerID)
-	if err != nil {
-		return false, err
-	}
-	if !served {
-		params.Logger.Info(ctx, "skipping integration for non-default billing entity",
-			"customer_id", customerID,
-			"step", step)
-	}
-	return !served, nil
-}
-
-func (s *billingEntityService) RequireCustomerIntegrations(ctx context.Context, customerID string) error {
-	return requireIntegrationsForCustomer(ctx, s.ServiceParams, customerID)
 }
 
 // requireSameBillingEntity rejects combining customers of different billing entities on one invoice.

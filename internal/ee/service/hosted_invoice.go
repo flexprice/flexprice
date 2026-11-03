@@ -208,15 +208,6 @@ func (s *hostedInvoiceService) payGateway(ctx context.Context, inv *dto.InvoiceR
 		return "", false, nil
 	}
 
-	// Gateways serve only the default billing entity's customers.
-	served, err := NewBillingEntityService(s.ServiceParams).CustomerServesIntegrations(ctx, inv.CustomerID)
-	if err != nil {
-		return "", false, err
-	}
-	if !served {
-		return "", false, nil
-	}
-
 	providers, err := NewPaymentProviderResolver(s.ServiceParams).ListProviders(ctx, inv.CustomerID)
 	if err != nil {
 		return "", false, err

@@ -8,7 +8,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/environment"
-	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -145,76 +144,4 @@ func (s *BillingEntityServiceSuite) TestEffectiveEntity() {
 		s.Require().NoError(err)
 		s.Nil(got)
 	})
-}
-
-func (s *BillingEntityServiceSuite) TestCustomerServesIntegrations() {
-	env := types.GetEnvironmentID(s.GetContext())
-
-	tests := []struct {
-		name     string
-		mode     types.BillingEntityMode
-		customer *string
-		want     bool
-	}{
-		{name: "off_no_entity", mode: types.BillingEntityModeOff, want: true},
-		{name: "stored_default", mode: types.BillingEntityModeEnabled, customer: lo.ToPtr("be_default"), want: true},
-		{name: "stored_non_default", mode: types.BillingEntityModeEnabled, customer: lo.ToPtr("be_eu"), want: false},
-		{name: "unassigned_while_enabling", mode: types.BillingEntityModeEnabling, want: true},
-	}
-
-	for _, tc := range tests {
-		s.Run(tc.name, func() {
-			s.ClearStores()
-			s.setMode(tc.mode)
-			if tc.mode != types.BillingEntityModeOff {
-				s.addEntity("be_default", env, "INV", true)
-				s.addEntity("be_eu", env, "EU", false)
-			}
-			s.addCustomer("c1", tc.customer)
-
-			got, err := s.service.CustomerServesIntegrations(s.GetContext(), "c1")
-			s.Require().NoError(err)
-			s.Equal(tc.want, got)
-		})
-	}
-
-	s.Run("off_missing_record_is_served", func() {
-		s.ClearStores()
-		s.setMode(types.BillingEntityModeOff)
-
-		served, err := s.service.CustomerServesIntegrations(s.GetContext(), "c_missing")
-		s.Require().NoError(err)
-		s.True(served)
-		served, err = s.service.SubscriptionServesIntegrations(s.GetContext(), "sub_missing")
-		s.Require().NoError(err)
-		s.True(served)
-	})
-}
-
-func (s *BillingEntityServiceSuite) TestSubscriptionServesIntegrations() {
-	env := types.GetEnvironmentID(s.GetContext())
-	s.ClearStores()
-	s.setMode(types.BillingEntityModeEnabled)
-	s.addEntity("be_default", env, "INV", true)
-	s.addEntity("be_eu", env, "EU", false)
-	s.addCustomer("c_eu", lo.ToPtr("be_eu"))
-	s.addCustomer("c_default", lo.ToPtr("be_default"))
-
-	ctx := s.GetContext()
-	for id, customerID := range map[string]string{"sub_eu": "c_eu", "sub_default": "c_default"} {
-		s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, &subscription.Subscription{
-			ID:            id,
-			CustomerID:    customerID,
-			EnvironmentID: env,
-			BaseModel:     types.GetDefaultBaseModel(ctx),
-		}))
-	}
-
-	served, err := s.service.SubscriptionServesIntegrations(ctx, "sub_eu")
-	s.Require().NoError(err)
-	s.False(served)
-
-	served, err = s.service.SubscriptionServesIntegrations(ctx, "sub_default")
-	s.Require().NoError(err)
-	s.True(served)
 }
