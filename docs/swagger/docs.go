@@ -2385,7 +2385,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date. Until it is triggered, a manual instalment waits at the end of the term.",
+                "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Until it is triggered, a manual instalment waits at the end of the term.",
                 "consumes": [
                     "application/json"
                 ],
@@ -19477,7 +19477,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "type": {
-                    "$ref": "#/definitions/types.CancellationFeeType"
+                    "description": "Type is fixed or percentage; a percentage fee is rejected as not supported yet.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CancellationFeeType"
+                        }
+                    ]
                 }
             }
         },
@@ -20891,7 +20896,7 @@ const docTemplate = `{
                     }
                 },
                 "billing_terms": {
-                    "description": "BillingTerms and InstalmentInvoicing apply only to collection_method billing_terms.",
+                    "description": "BillingTerms apply only to collection_method billing_terms, which requires at least one.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/BillingTermInput"
@@ -20916,7 +20921,12 @@ const docTemplate = `{
                     "maxLength": 128
                 },
                 "instalment_invoicing": {
-                    "$ref": "#/definitions/types.InstalmentDelivery"
+                    "description": "InstalmentInvoicing applies only to collection_method billing_terms.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InstalmentDelivery"
+                        }
+                    ]
                 },
                 "invoice_description": {
                     "type": "string",

@@ -107,6 +107,7 @@ func (in BillingTermInput) ToTerm(ctx context.Context, ownerID string) *billingt
 // CancellationFeeInput is the fee billed when a commitment is terminated early: a fixed amount, or a percentage,
 // which is rejected as not supported yet.
 type CancellationFeeInput struct {
+	// Type is fixed or percentage; a percentage fee is rejected as not supported yet.
 	Type types.CancellationFeeType `json:"type" validate:"required"`
 
 	Amount     *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`

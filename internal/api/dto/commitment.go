@@ -99,8 +99,9 @@ type CreateCommitmentRequest struct {
 	Priority           int                               `json:"priority"`
 	Binding            *bool                             `json:"binding,omitempty"` // default false
 	CollectionMethod   *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
-	// BillingTerms and InstalmentInvoicing apply only to collection_method billing_terms.
-	BillingTerms        []BillingTermInput        `json:"billing_terms,omitempty" validate:"omitempty,dive"`
+	// BillingTerms apply only to collection_method billing_terms, which requires at least one.
+	BillingTerms []BillingTermInput `json:"billing_terms,omitempty" validate:"omitempty,dive"`
+	// InstalmentInvoicing applies only to collection_method billing_terms.
 	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
 	StartDate           time.Time                 `json:"start_date" validate:"required"`
 	// EndDate is exclusive; omit it for an open-ended commitment, which bills every period until terminated.
