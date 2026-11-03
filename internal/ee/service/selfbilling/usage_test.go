@@ -8,6 +8,8 @@ import (
 	"time"
 
 	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
+	"github.com/flexprice/flexprice/internal/testutil"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
@@ -62,6 +64,7 @@ func TestPushUsage_Events(t *testing.T) {
 	fc := newFakeClient()
 	s, d := newTestService(fc)
 	s.Config.Billing.TenantID = "t_billing"
+	d.usage.AddEnvironment("env_1", types.EnvironmentProduction)
 
 	d.usage.AddEvents(&domainsb.TenantHourEvents{
 		TenantID:      "t1",
@@ -107,9 +110,10 @@ func TestPushUsage_Events(t *testing.T) {
 			extID:     "us:t1",
 			timestamp: hour,
 			properties: map[string]string{
-				"count":          "42",
-				"environment_id": "env_1",
-				"region":         "us",
+				"count":            "42",
+				"environment_id":   "env_1",
+				"environment_type": "PRODUCTION",
+				"region":           "us",
 			},
 		},
 		{
@@ -129,11 +133,85 @@ func TestPushUsage_Events(t *testing.T) {
 				"invoice_count":                 "2",
 				"currency":                      "USD",
 				"environment_id":                "env_1",
+				"environment_type":              "PRODUCTION",
 				"region":                        "us",
 			},
 		},
 	}
 	assert.Equal(t, want, allIngested(fc), "the billing tenant never bills itself")
+}
+
+func TestPushUsage_EnvironmentType(t *testing.T) {
+	hour := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name    string
+		envType types.EnvironmentType
+		want    string
+	}{
+		{"production_env", types.EnvironmentProduction, "PRODUCTION"},
+		{"development_env_is_sandbox", types.EnvironmentDevelopment, "SANDBOX"},
+		{"unknown_env_billed_as_production", "", "PRODUCTION"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := newFakeClient()
+			s, d := newTestService(fc)
+			if tt.envType != "" {
+				d.usage.AddEnvironment("env_1", tt.envType)
+			}
+			d.usage.AddEvents(&domainsb.TenantHourEvents{
+				TenantID:      "t1",
+				EnvironmentID: "env_1",
+				Hour:          hour,
+				Count:         1,
+			})
+			d.usage.AddInvoices(&domainsb.TenantHourInvoices{
+				TenantID:      "t1",
+				EnvironmentID: "env_1",
+				Currency:      "usd",
+				Hour:          hour,
+				InvoiceCount:  1,
+				Total:         decimal.RequireFromString("1"),
+			})
+
+			require.NoError(t, s.pushUsage(context.Background(), usageNow))
+
+			got := lo.Map(allIngested(fc), func(e usageEvent, _ int) string {
+				return e.properties["environment_type"]
+			})
+			assert.Equal(t, []string{tt.want, tt.want}, got)
+		})
+	}
+}
+
+type envLookupFailingStore struct {
+	*testutil.InMemorySelfBillingStore
+	err error
+}
+
+func (s *envLookupFailingStore) ListEnvironmentTypes(context.Context, []string) (map[string]types.EnvironmentType, error) {
+	return nil, s.err
+}
+
+func TestPushUsage_EnvironmentLookupErrorReturned(t *testing.T) {
+	fc := newFakeClient()
+	s, d := newTestService(fc)
+	lookupErr := errors.New("postgres down")
+	s.SelfBillingPostgresRepo = &envLookupFailingStore{
+		InMemorySelfBillingStore: d.usage,
+		err:                      lookupErr,
+	}
+	d.usage.AddEvents(&domainsb.TenantHourEvents{
+		TenantID:      "t1",
+		EnvironmentID: "env_1",
+		Hour:          time.Date(2026, 10, 1, 11, 0, 0, 0, time.UTC),
+		Count:         1,
+	})
+
+	err := s.pushUsage(context.Background(), usageNow)
+	assert.ErrorIs(t, err, lookupErr)
+	assert.Empty(t, allIngested(fc), "nothing is sent without environment types")
 }
 
 func TestPushUsage_Chunking(t *testing.T) {

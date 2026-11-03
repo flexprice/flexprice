@@ -38,6 +38,20 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 		return err
 	}
 
+	envIDs := make([]string, 0, len(counts)+len(invoices))
+	for _, c := range counts {
+		envIDs = append(envIDs, c.EnvironmentID)
+	}
+	for _, inv := range invoices {
+		envIDs = append(envIDs, inv.EnvironmentID)
+	}
+
+	// environment_type lets Flexprice Cloud meters leave sandbox usage out; an unknown environment counts as PRODUCTION.
+	envTypes, err := s.SelfBillingPostgresRepo.ListEnvironmentTypes(ctx, lo.Uniq(envIDs))
+	if err != nil {
+		return err
+	}
+
 	events := make([]usageEvent, 0, len(counts)+len(invoices))
 	for _, c := range counts {
 		if s.Config.Billing.IsBillingTenant(c.TenantID) {
@@ -51,9 +65,10 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 			extID:     s.extID(c.TenantID),
 			timestamp: hour,
 			properties: map[string]string{
-				"count":          strconv.FormatUint(c.Count, 10),
-				"environment_id": c.EnvironmentID,
-				"region":         region,
+				"count":            strconv.FormatUint(c.Count, 10),
+				"environment_id":   c.EnvironmentID,
+				"environment_type": strings.ToUpper(envTypes[c.EnvironmentID].DisplayTitle()),
+				"region":           region,
 			},
 		})
 	}
@@ -83,6 +98,7 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 				"invoice_count":                 strconv.FormatUint(inv.InvoiceCount, 10),
 				"currency":                      currency,
 				"environment_id":                inv.EnvironmentID,
+				"environment_type":              strings.ToUpper(envTypes[inv.EnvironmentID].DisplayTitle()),
 				"region":                        region,
 			},
 		})
