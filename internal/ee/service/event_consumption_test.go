@@ -95,7 +95,7 @@ func TestEventConsumption_BulkScope(t *testing.T) {
 		{"other tenant dropped", events.EventBatch{TenantID: "tA", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tB", "e1"), mkEvt("b", "tA", "e1")}}, "", []string{"b"}, []string{"tA"}},
 		{"other env dropped", events.EventBatch{TenantID: "tA", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tA", "e2")}}, "", nil, nil},
 		{"metadata mismatch dropped", events.EventBatch{TenantID: "tA", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tA", "e1")}}, "tB", nil, nil},
-		{"no envelope uses event tenant for suppression", events.EventBatch{Events: []*events.Event{mkEvt("a", "tB", "e1")}}, "", []string{"a"}, []string{"tB"}},
+		{"no scope anywhere dropped", events.EventBatch{Events: []*events.Event{mkEvt("a", "tB", "e1")}}, "", nil, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -208,7 +208,9 @@ func TestBulkScope_EffectiveScope(t *testing.T) {
 		{"empty batch tenant, ctx A, event A", events.EventBatch{EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tA", "e1")}}, "tA", "e1", []string{"a"}, "tA|e1"},
 		{"empty batch, event empty falls back to ctx", events.EventBatch{Events: []*events.Event{mkEvt("a", "", "")}}, "tA", "e1", []string{"a"}, "tA|e1"},
 		{"consistent", events.EventBatch{TenantID: "tA", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tA", "e1")}}, "tA", "e1", []string{"a"}, "tA|e1"},
-		{"no scope anywhere, event scoped", events.EventBatch{Events: []*events.Event{mkEvt("a", "tB", "e2")}}, "", "", []string{"a"}, "tB|e2"},
+		{"no scope anywhere, event scoped dropped", events.EventBatch{Events: []*events.Event{mkEvt("a", "tB", "e2")}}, "", "", nil, ""},
+		{"no envelope, two tenants same id dropped", events.EventBatch{Events: []*events.Event{mkEvt("a", "tA", "e1"), mkEvt("a", "tB", "e1")}}, "", "", nil, ""},
+		{"envelope env only, tenant from ctx", events.EventBatch{EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "", "")}}, "tA", "", []string{"a"}, "tA|e1"},
 	}
 	for _, tt := range tests {
 		t.Run("events/"+tt.name, func(t *testing.T) {
