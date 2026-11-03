@@ -1988,6 +1988,20 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 		return nil
 	}
 
+	// The marketplace collects for its subscriptions, so pushing to Stripe would charge the buyer twice.
+	if inv.SubscriptionID != nil {
+		mapped, err := NewSubscriptionService(s.ServiceParams).HasMarketplaceMapping(ctx, *inv.SubscriptionID)
+		if err != nil {
+			return err
+		}
+		if mapped {
+			s.Logger.Info(ctx, "marketplace subscription, skipping Stripe invoice sync",
+				"invoice_id", inv.ID,
+				"subscription_id", *inv.SubscriptionID)
+			return nil
+		}
+	}
+
 	// Keep Stripe sync working for both subscription and non-subscription invoices.
 	// For invoices without subscription context, default to send_invoice.
 	sub := &subscription.Subscription{

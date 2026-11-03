@@ -3618,3 +3618,42 @@ func (s *InvoiceServiceSuite) TestPublishInvoiceSyncWebhook_IgnoresOtherProvider
 		return e.EntityID == "inv_razorpay_only"
 	}))
 }
+
+func (s *InvoiceServiceSuite) TestHasMarketplaceMapping() {
+	tests := []struct {
+		name     string
+		provider types.SecretProvider
+		status   types.Status
+		want     bool
+	}{
+		{name: "published marketplace mapping", provider: types.SecretProviderAWSMarketplace, status: types.StatusPublished, want: true},
+		{name: "archived marketplace mapping", provider: types.SecretProviderGCPMarketplace, status: types.StatusArchived, want: true},
+		{name: "non-marketplace mapping", provider: types.SecretProviderStripe, status: types.StatusPublished, want: false},
+		{name: "no mapping", want: false},
+	}
+
+	subscriptionService := NewSubscriptionService(ServiceParams{EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo})
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			subscriptionID := fmt.Sprintf("sub_mp_%d", i)
+			if tt.provider != "" {
+				baseModel := types.GetDefaultBaseModel(ctx)
+				baseModel.Status = tt.status
+				s.Require().NoError(s.GetStores().EntityIntegrationMappingRepo.Create(ctx, &entityintegrationmapping.EntityIntegrationMapping{
+					ID:               "eim_" + subscriptionID,
+					EntityID:         subscriptionID,
+					EntityType:       types.IntegrationEntityTypeSubscription,
+					ProviderType:     string(tt.provider),
+					ProviderEntityID: "ext_" + subscriptionID,
+					EnvironmentID:    types.GetEnvironmentID(ctx),
+					BaseModel:        baseModel,
+				}))
+			}
+
+			mapped, err := subscriptionService.HasMarketplaceMapping(ctx, subscriptionID)
+			s.Require().NoError(err)
+			s.Equal(tt.want, mapped)
+		})
+	}
+}

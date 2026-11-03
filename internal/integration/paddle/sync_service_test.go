@@ -1076,6 +1076,9 @@ func (m *mockSubscriptionService) ProcessOverdueSubscriptionInvoices(ctx context
 func (m *mockSubscriptionService) MarkSubscriptionIncomplete(ctx context.Context, invoiceID string) error {
 	return nil
 }
+func (m *mockSubscriptionService) HasMarketplaceMapping(ctx context.Context, subscriptionID string) (bool, error) {
+	return false, nil
+}
 func (m *mockSubscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context, _ time.Time) error {
 	return nil
 }
