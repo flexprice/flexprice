@@ -6007,6 +6007,66 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/events/analytics/query": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Query usage analytics",
+        "description": "Use when building spend dashboards: usage cost grouped by up to three keys (event properties, source, meter, feature or line item), sorted and paginated, with optional columns, filters, search, time points and per-row metrics.\nLine costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage, or by each row's peak for MAX meters. A partial range carries the full period's rate.\ntotals.cost equals rows_cost + unattributed_cost + excluded_cost. Unused commitment is unattributed unless a row key is the meter, feature or line item. Meters whose cost cannot be split yet are listed in excluded_meters.\nPass data_through from the first page to keep later pages on the same data.",
+        "operationId": "queryUsageAnalytics",
+        "requestBody": {
+          "description": "Request body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetUsageAnalyticsV2Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetUsageAnalyticsV2Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/events/bulk": {
       "post": {
         "tags": [
@@ -21257,6 +21317,365 @@
           }
         }
       },
+      "AnalyticsV2Column": {
+        "type": "object",
+        "properties": {
+          "cost": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "string"
+          }
+        }
+      },
+      "AnalyticsV2Cost": {
+        "type": "object",
+        "properties": {
+          "commitment_utilized": {
+            "type": "string"
+          },
+          "overage": {
+            "type": "string"
+          },
+          "true_up": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "string"
+          }
+        }
+      },
+      "AnalyticsV2ExcludedMeter": {
+        "type": "object",
+        "properties": {
+          "aggregation": {
+            "$ref": "#/components/schemas/types.AggregationType"
+          },
+          "cost": {
+            "type": "string"
+          },
+          "feature_id": {
+            "type": "string"
+          },
+          "meter_id": {
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/AnalyticsV2ExcludedReason"
+          }
+        }
+      },
+      "AnalyticsV2ExcludedReason": {
+        "type": "string",
+        "enum": [
+          "aggregation_not_supported"
+        ],
+        "x-enum-varnames": [
+          "AnalyticsV2ReasonAggregationNotSupported"
+        ]
+      },
+      "AnalyticsV2Filter": {
+        "required": [
+          "key",
+          "op",
+          "values"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "properties.app"
+          },
+          "op": {
+            "$ref": "#/components/schemas/AnalyticsV2FilterOp"
+          },
+          "values": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AnalyticsV2FilterOp": {
+        "type": "string",
+        "enum": [
+          "in",
+          "not_in"
+        ],
+        "x-enum-varnames": [
+          "AnalyticsV2FilterOpIn",
+          "AnalyticsV2FilterOpNotIn"
+        ]
+      },
+      "AnalyticsV2Item": {
+        "type": "object",
+        "properties": {
+          "addon_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "breakdown": {
+            "$ref": "#/components/schemas/AnalyticsV2Cost"
+          },
+          "columns": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AnalyticsV2Column"
+            }
+          },
+          "cost": {
+            "type": "string"
+          },
+          "discount": {
+            "type": "string"
+          },
+          "event_count": {
+            "type": "integer"
+          },
+          "free_usage": {
+            "type": "string"
+          },
+          "group": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AnalyticsV2MetricValue"
+            },
+            "description": "Metrics is keyed by the requested metric string, e.g. \"distinct:properties.owner\"."
+          },
+          "plan_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsV2Point"
+            }
+          },
+          "price_ids": {
+            "type": "array",
+            "description": "A row can span several lines (a price change, two subscriptions), so these are lists.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reporting_unit": {
+            "$ref": "#/components/schemas/types.ReportingUnit"
+          },
+          "subscription_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subtotal": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "unit_plural": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "string",
+            "description": "Usage and FreeUsage are set only when the row holds a single meter."
+          }
+        }
+      },
+      "AnalyticsV2MetricValue": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AnalyticsV2Point": {
+        "type": "object",
+        "properties": {
+          "breakdown": {
+            "$ref": "#/components/schemas/AnalyticsV2Cost"
+          },
+          "columns": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AnalyticsV2Column"
+            }
+          },
+          "cost": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "string"
+          },
+          "window_start": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AnalyticsV2Sort": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "$ref": "#/components/schemas/AnalyticsV2SortBy"
+          },
+          "column": {
+            "type": "string",
+            "description": "Column is the column value to sort by when By is \"column\", e.g. \"run\" or \"2026-08\"."
+          },
+          "order": {
+            "$ref": "#/components/schemas/types.SortDirection"
+          }
+        }
+      },
+      "AnalyticsV2SortBy": {
+        "type": "string",
+        "enum": [
+          "total",
+          "column",
+          "name",
+          "usage",
+          "event_count"
+        ],
+        "x-enum-varnames": [
+          "AnalyticsV2SortByTotal",
+          "AnalyticsV2SortByColumn",
+          "AnalyticsV2SortByName",
+          "AnalyticsV2SortByUsage",
+          "AnalyticsV2SortByEventCount"
+        ]
+      },
+      "AnalyticsV2Totals": {
+        "type": "object",
+        "properties": {
+          "breakdown": {
+            "$ref": "#/components/schemas/AnalyticsV2Cost"
+          },
+          "columns": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AnalyticsV2Column"
+            }
+          },
+          "cost": {
+            "type": "string"
+          },
+          "discount": {
+            "type": "string"
+          },
+          "excluded_cost": {
+            "type": "string"
+          },
+          "free_usage": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsV2Point"
+            }
+          },
+          "rows_cost": {
+            "type": "string"
+          },
+          "subtotal": {
+            "type": "string"
+          },
+          "unattributed_cost": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "string"
+          }
+        }
+      },
+      "AnalyticsV2Unattributed": {
+        "type": "object",
+        "properties": {
+          "breakdown": {
+            "$ref": "#/components/schemas/AnalyticsV2Cost"
+          },
+          "charges": {
+            "type": "array",
+            "description": "Charges lists each billed charge no row carries, e.g. one per unused commitment.",
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsV2UnattributedCharge"
+            }
+          },
+          "cost": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsV2Point"
+            }
+          }
+        }
+      },
+      "AnalyticsV2UnattributedCharge": {
+        "type": "object",
+        "properties": {
+          "addon_id": {
+            "type": "string"
+          },
+          "breakdown": {
+            "$ref": "#/components/schemas/AnalyticsV2Cost"
+          },
+          "cost": {
+            "type": "string"
+          },
+          "meter_id": {
+            "type": "string"
+          },
+          "plan_id": {
+            "type": "string"
+          },
+          "price_id": {
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/AnalyticsV2UnattributedReason"
+          },
+          "sub_line_item_id": {
+            "type": "string"
+          },
+          "subscription_id": {
+            "type": "string"
+          }
+        }
+      },
+      "AnalyticsV2UnattributedReason": {
+        "type": "string",
+        "enum": [
+          "unused_commitment",
+          "unlinked_charge"
+        ],
+        "x-enum-varnames": [
+          "AnalyticsV2ReasonUnusedCommitment",
+          "AnalyticsV2ReasonUnlinkedCharge"
+        ]
+      },
       "AttributedToCustomerResult": {
         "type": "object",
         "properties": {
@@ -26280,6 +26699,180 @@
           },
           "total_discount": {
             "type": "string"
+          }
+        }
+      },
+      "GetUsageAnalyticsV2Request": {
+        "required": [
+          "external_customer_id",
+          "group_by"
+        ],
+        "type": "object",
+        "properties": {
+          "columns": {
+            "type": "string",
+            "description": "Columns spreads one key's values into columns on every row; also accepts \"month\".",
+            "example": "properties.type"
+          },
+          "data_through": {
+            "type": "string",
+            "description": "DataThrough pins every page to the events received by this instant; echo it from the first page."
+          },
+          "deduplicate": {
+            "type": "boolean"
+          },
+          "end_time": {
+            "type": "string",
+            "example": "2026-09-01T00:00:00Z",
+            "format": "date-time"
+          },
+          "expand": {
+            "type": "array",
+            "description": "Expand adds price, plan, addon and subscription objects; meter and feature need a meter_id, feature_id or sub_line_item_id row key.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "external_customer_id": {
+            "type": "string",
+            "example": "cust_123"
+          },
+          "feature_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "filters": {
+            "type": "array",
+            "description": "Filters include (in) or exclude (not_in) values of any key; entries are ANDed.",
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsV2Filter"
+            }
+          },
+          "group_by": {
+            "type": "array",
+            "description": "GroupBy lists 1-3 row keys: \"source\", \"meter_id\", \"feature_id\", \"sub_line_item_id\" or \"properties.<name>\".",
+            "example": [
+              "properties.app"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "example": 25
+          },
+          "meter_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metrics": {
+            "type": "array",
+            "example": [
+              "distinct:properties.owner"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "offset": {
+            "type": "integer",
+            "example": 0
+          },
+          "search": {
+            "type": "string",
+            "description": "Search is a case-insensitive contains match on the row key values."
+          },
+          "sort": {
+            "$ref": "#/components/schemas/AnalyticsV2Sort"
+          },
+          "start_time": {
+            "type": "string",
+            "example": "2026-08-01T00:00:00Z",
+            "format": "date-time"
+          },
+          "window_size": {
+            "$ref": "#/components/schemas/types.WindowSize"
+          }
+        }
+      },
+      "GetUsageAnalyticsV2Response": {
+        "type": "object",
+        "properties": {
+          "addons": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Addon"
+            }
+          },
+          "column_values": {
+            "type": "array",
+            "description": "ColumnValues lists every column across the full result, so every page has the same header.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "currency": {
+            "type": "string"
+          },
+          "data_through": {
+            "type": "string"
+          },
+          "excluded_meters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsV2ExcludedMeter"
+            }
+          },
+          "features": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Feature"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsV2Item"
+            }
+          },
+          "meters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Meter"
+            },
+            "description": "Object maps are filled only for the values requested in expand."
+          },
+          "plans": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Plan"
+            }
+          },
+          "prices": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PriceResponse"
+            }
+          },
+          "subscriptions": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Subscription"
+            }
+          },
+          "total_count": {
+            "type": "integer"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/AnalyticsV2Totals"
+          },
+          "unattributed": {
+            "$ref": "#/components/schemas/AnalyticsV2Unattributed"
           }
         }
       },
@@ -34431,6 +35024,215 @@
           },
           "updated_by": {
             "type": "string"
+          }
+        }
+      },
+      "Subscription": {
+        "type": "object",
+        "properties": {
+          "active_pause_id": {
+            "type": "string",
+            "description": "ActivePauseID references the current active pause configuration\nThis will be null if no pause is active or scheduled"
+          },
+          "auto_invoice_threshold": {
+            "type": "string",
+            "description": "AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers\nan intermediate invoice. Overrides the plan-level threshold when set.\nNil means: inherit from the plan's threshold (which may also be nil = disabled)."
+          },
+          "billing_anchor": {
+            "type": "string",
+            "description": "BillingAnchor is the reference point that aligns future billing cycle dates.\nIt sets the day of week for week intervals, the day of month for month and year intervals,\nand the month of year for year intervals. The timestamp is in UTC format.",
+            "format": "date-time"
+          },
+          "billing_cadence": {
+            "$ref": "#/components/schemas/types.BillingCadence"
+          },
+          "billing_cycle": {
+            "$ref": "#/components/schemas/types.BillingCycle"
+          },
+          "billing_period": {
+            "$ref": "#/components/schemas/types.BillingPeriod"
+          },
+          "billing_period_count": {
+            "type": "integer",
+            "description": "BillingPeriodCount is the total number units of the billing period."
+          },
+          "cancel_at": {
+            "type": "string",
+            "description": "CancelAt is the date the subscription will be canceled",
+            "format": "date-time"
+          },
+          "cancel_at_period_end": {
+            "type": "boolean",
+            "description": "CancelAtPeriodEnd is whether the subscription was canceled at the end of the current period"
+          },
+          "cancelled_at": {
+            "type": "string",
+            "description": "CanceledAt is the date the subscription was canceled",
+            "format": "date-time"
+          },
+          "collection_method": {
+            "type": "string",
+            "description": "CollectionMethod determines how invoices are collected"
+          },
+          "commitment_amount": {
+            "type": "string",
+            "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period"
+          },
+          "commitment_duration": {
+            "$ref": "#/components/schemas/types.BillingPeriod"
+          },
+          "coupon_associations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/coupon_association.CouponAssociation"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "description": "Currency is the currency of the subscription in lowercase 3 digit ISO codes"
+          },
+          "current_period_end": {
+            "type": "string",
+            "description": "CurrentPeriodEnd is the end of the current period that the subscription has been invoiced for.\nAt the end of this period, a new invoice will be created.",
+            "format": "date-time"
+          },
+          "current_period_start": {
+            "type": "string",
+            "description": "CurrentPeriodStart is the end of the current period that the subscription has been invoiced for.\nAt the end of this period, a new invoice will be created.",
+            "format": "date-time"
+          },
+          "customer_id": {
+            "type": "string",
+            "description": "CustomerID is the identifier for the customer in our system"
+          },
+          "enable_true_up": {
+            "type": "boolean"
+          },
+          "end_date": {
+            "type": "string",
+            "description": "EndDate is the end date of the subscription",
+            "format": "date-time"
+          },
+          "environment_id": {
+            "type": "string",
+            "description": "EnvironmentID is the environment identifier for the subscription"
+          },
+          "gateway_payment_method_id": {
+            "type": "string",
+            "description": "GatewayPaymentMethodID is the gateway payment method ID for this subscription"
+          },
+          "id": {
+            "type": "string",
+            "description": "ID is the unique identifier for the subscription"
+          },
+          "invoicing_customer_id": {
+            "type": "string",
+            "description": "InvoicingCustomerID is the customer ID to use for invoicing\nThis can differ from the subscription customer (e.g., parent company invoicing for child company)"
+          },
+          "line_item_grouping": {
+            "$ref": "#/components/schemas/types.LineItemGrouping"
+          },
+          "line_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/subscription.SubscriptionLineItem"
+            }
+          },
+          "lookup_key": {
+            "type": "string",
+            "description": "LookupKey is the key used to lookup the subscription in our system"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "overage_factor": {
+            "type": "string",
+            "description": "OverageFactor is a multiplier applied to usage beyond the commitment amount"
+          },
+          "parent_subscription_id": {
+            "type": "string",
+            "description": "ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)"
+          },
+          "pause_status": {
+            "$ref": "#/components/schemas/types.PauseStatus"
+          },
+          "pauses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/subscription.SubscriptionPause"
+            }
+          },
+          "payment_behavior": {
+            "type": "string",
+            "description": "PaymentBehavior determines how subscription payments are handled"
+          },
+          "payment_terms": {
+            "$ref": "#/components/schemas/types.PaymentTerms"
+          },
+          "phases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/subscription.SubscriptionPhase"
+            }
+          },
+          "plan_id": {
+            "type": "string",
+            "description": "PlanID is the identifier for the plan in our system"
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "StartDate is the start date of the subscription",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_status": {
+            "$ref": "#/components/schemas/types.SubscriptionStatus"
+          },
+          "subscription_type": {
+            "$ref": "#/components/schemas/types.SubscriptionType"
+          },
+          "synced_price_sequence": {
+            "type": "integer",
+            "description": "SyncedPriceSequence is the plan-price sequence up to which this\nsubscription's line items have been reconciled. Bumped by the\nplan-price sync after a successful pass."
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "trial_end": {
+            "type": "string",
+            "description": "TrialEnd is the end date of the trial period",
+            "format": "date-time"
+          },
+          "trial_start": {
+            "type": "string",
+            "description": "TrialStart is the start date of the trial period",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "description": "Version is used for optimistic locking"
           }
         }
       },

@@ -1282,6 +1282,258 @@ definitions:
           type: array
         type: array
     type: object
+  AnalyticsV2Column:
+    properties:
+      cost:
+        type: string
+      usage:
+        type: string
+    type: object
+  AnalyticsV2Cost:
+    properties:
+      commitment_utilized:
+        type: string
+      overage:
+        type: string
+      true_up:
+        type: string
+      usage:
+        type: string
+    type: object
+  AnalyticsV2ExcludedMeter:
+    properties:
+      aggregation:
+        $ref: '#/definitions/types.AggregationType'
+      cost:
+        type: string
+      feature_id:
+        type: string
+      meter_id:
+        type: string
+      reason:
+        $ref: '#/definitions/AnalyticsV2ExcludedReason'
+    type: object
+  AnalyticsV2ExcludedReason:
+    enum:
+    - aggregation_not_supported
+    type: string
+    x-enum-varnames:
+    - AnalyticsV2ReasonAggregationNotSupported
+  AnalyticsV2Filter:
+    properties:
+      key:
+        example: properties.app
+        type: string
+      op:
+        allOf:
+        - $ref: '#/definitions/AnalyticsV2FilterOp'
+        example: not_in
+      values:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - key
+    - op
+    - values
+    type: object
+  AnalyticsV2FilterOp:
+    enum:
+    - in
+    - not_in
+    type: string
+    x-enum-varnames:
+    - AnalyticsV2FilterOpIn
+    - AnalyticsV2FilterOpNotIn
+  AnalyticsV2Item:
+    properties:
+      addon_ids:
+        items:
+          type: string
+        type: array
+      breakdown:
+        $ref: '#/definitions/AnalyticsV2Cost'
+      columns:
+        additionalProperties:
+          $ref: '#/definitions/AnalyticsV2Column'
+        type: object
+      cost:
+        type: string
+      discount:
+        type: string
+      event_count:
+        type: integer
+      free_usage:
+        type: string
+      group:
+        additionalProperties:
+          type: string
+        type: object
+      metrics:
+        additionalProperties:
+          $ref: '#/definitions/AnalyticsV2MetricValue'
+        description: Metrics is keyed by the requested metric string, e.g. "distinct:properties.owner".
+        type: object
+      plan_ids:
+        items:
+          type: string
+        type: array
+      points:
+        items:
+          $ref: '#/definitions/AnalyticsV2Point'
+        type: array
+      price_ids:
+        description: A row can span several lines (a price change, two subscriptions),
+          so these are lists.
+        items:
+          type: string
+        type: array
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
+      subscription_ids:
+        items:
+          type: string
+        type: array
+      subtotal:
+        type: string
+      unit:
+        type: string
+      unit_plural:
+        type: string
+      usage:
+        description: Usage and FreeUsage are set only when the row holds a single
+          meter.
+        type: string
+    type: object
+  AnalyticsV2MetricValue:
+    properties:
+      count:
+        type: integer
+      values:
+        items:
+          type: string
+        type: array
+    type: object
+  AnalyticsV2Point:
+    properties:
+      breakdown:
+        $ref: '#/definitions/AnalyticsV2Cost'
+      columns:
+        additionalProperties:
+          $ref: '#/definitions/AnalyticsV2Column'
+        type: object
+      cost:
+        type: string
+      usage:
+        type: string
+      window_start:
+        type: string
+    type: object
+  AnalyticsV2Sort:
+    properties:
+      by:
+        allOf:
+        - $ref: '#/definitions/AnalyticsV2SortBy'
+        example: total
+      column:
+        description: Column is the column value to sort by when By is "column", e.g.
+          "run" or "2026-08".
+        type: string
+      order:
+        allOf:
+        - $ref: '#/definitions/types.SortDirection'
+        example: desc
+    type: object
+  AnalyticsV2SortBy:
+    enum:
+    - total
+    - column
+    - name
+    - usage
+    - event_count
+    type: string
+    x-enum-varnames:
+    - AnalyticsV2SortByTotal
+    - AnalyticsV2SortByColumn
+    - AnalyticsV2SortByName
+    - AnalyticsV2SortByUsage
+    - AnalyticsV2SortByEventCount
+  AnalyticsV2Totals:
+    properties:
+      breakdown:
+        $ref: '#/definitions/AnalyticsV2Cost'
+      columns:
+        additionalProperties:
+          $ref: '#/definitions/AnalyticsV2Column'
+        type: object
+      cost:
+        type: string
+      discount:
+        type: string
+      excluded_cost:
+        type: string
+      free_usage:
+        type: string
+      points:
+        items:
+          $ref: '#/definitions/AnalyticsV2Point'
+        type: array
+      rows_cost:
+        type: string
+      subtotal:
+        type: string
+      unattributed_cost:
+        type: string
+      usage:
+        type: string
+    type: object
+  AnalyticsV2Unattributed:
+    properties:
+      breakdown:
+        $ref: '#/definitions/AnalyticsV2Cost'
+      charges:
+        description: Charges lists each billed charge no row carries, e.g. one per
+          unused commitment.
+        items:
+          $ref: '#/definitions/AnalyticsV2UnattributedCharge'
+        type: array
+      cost:
+        type: string
+      points:
+        items:
+          $ref: '#/definitions/AnalyticsV2Point'
+        type: array
+    type: object
+  AnalyticsV2UnattributedCharge:
+    properties:
+      addon_id:
+        type: string
+      breakdown:
+        $ref: '#/definitions/AnalyticsV2Cost'
+      cost:
+        type: string
+      meter_id:
+        type: string
+      plan_id:
+        type: string
+      price_id:
+        type: string
+      reason:
+        $ref: '#/definitions/AnalyticsV2UnattributedReason'
+      sub_line_item_id:
+        type: string
+      subscription_id:
+        type: string
+    type: object
+  AnalyticsV2UnattributedReason:
+    enum:
+    - unused_commitment
+    - unlinked_charge
+    type: string
+    x-enum-varnames:
+    - AnalyticsV2ReasonUnusedCommitment
+    - AnalyticsV2ReasonUnlinkedCharge
   AttributedToCustomerResult:
     properties:
       error:
@@ -5149,6 +5401,133 @@ definitions:
         type: string
       total_discount:
         type: string
+    type: object
+  GetUsageAnalyticsV2Request:
+    properties:
+      columns:
+        description: Columns spreads one key's values into columns on every row; also
+          accepts "month".
+        example: properties.type
+        type: string
+      data_through:
+        description: DataThrough pins every page to the events received by this instant;
+          echo it from the first page.
+        type: string
+      deduplicate:
+        type: boolean
+      end_time:
+        example: "2026-09-01T00:00:00Z"
+        type: string
+      expand:
+        description: Expand adds price, plan, addon and subscription objects; meter
+          and feature need a meter_id, feature_id or sub_line_item_id row key.
+        items:
+          type: string
+        type: array
+      external_customer_id:
+        example: cust_123
+        type: string
+      feature_ids:
+        items:
+          type: string
+        type: array
+      filters:
+        description: Filters include (in) or exclude (not_in) values of any key; entries
+          are ANDed.
+        items:
+          $ref: '#/definitions/AnalyticsV2Filter'
+        type: array
+      group_by:
+        description: 'GroupBy lists 1-3 row keys: "source", "meter_id", "feature_id",
+          "sub_line_item_id" or "properties.<name>".'
+        example:
+        - properties.app
+        items:
+          type: string
+        type: array
+      limit:
+        example: 25
+        type: integer
+      meter_ids:
+        items:
+          type: string
+        type: array
+      metrics:
+        example:
+        - distinct:properties.owner
+        items:
+          type: string
+        type: array
+      offset:
+        example: 0
+        type: integer
+      search:
+        description: Search is a case-insensitive contains match on the row key values.
+        type: string
+      sort:
+        $ref: '#/definitions/AnalyticsV2Sort'
+      start_time:
+        example: "2026-08-01T00:00:00Z"
+        type: string
+      window_size:
+        allOf:
+        - $ref: '#/definitions/types.WindowSize'
+        example: DAY
+    required:
+    - external_customer_id
+    - group_by
+    type: object
+  GetUsageAnalyticsV2Response:
+    properties:
+      addons:
+        additionalProperties:
+          $ref: '#/definitions/Addon'
+        type: object
+      column_values:
+        description: ColumnValues lists every column across the full result, so every
+          page has the same header.
+        items:
+          type: string
+        type: array
+      currency:
+        type: string
+      data_through:
+        type: string
+      excluded_meters:
+        items:
+          $ref: '#/definitions/AnalyticsV2ExcludedMeter'
+        type: array
+      features:
+        additionalProperties:
+          $ref: '#/definitions/Feature'
+        type: object
+      items:
+        items:
+          $ref: '#/definitions/AnalyticsV2Item'
+        type: array
+      meters:
+        additionalProperties:
+          $ref: '#/definitions/Meter'
+        description: Object maps are filled only for the values requested in expand.
+        type: object
+      plans:
+        additionalProperties:
+          $ref: '#/definitions/Plan'
+        type: object
+      prices:
+        additionalProperties:
+          $ref: '#/definitions/PriceResponse'
+        type: object
+      subscriptions:
+        additionalProperties:
+          $ref: '#/definitions/Subscription'
+        type: object
+      total_count:
+        type: integer
+      totals:
+        $ref: '#/definitions/AnalyticsV2Totals'
+      unattributed:
+        $ref: '#/definitions/AnalyticsV2Unattributed'
     type: object
   GetUsageByMeterRequest:
     properties:
@@ -11337,6 +11716,193 @@ definitions:
         type: string
       updated_by:
         type: string
+    type: object
+  Subscription:
+    properties:
+      active_pause_id:
+        description: |-
+          ActivePauseID references the current active pause configuration
+          This will be null if no pause is active or scheduled
+        type: string
+      auto_invoice_threshold:
+        description: |-
+          AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
+          an intermediate invoice. Overrides the plan-level threshold when set.
+          Nil means: inherit from the plan's threshold (which may also be nil = disabled).
+        type: string
+      billing_anchor:
+        description: |-
+          BillingAnchor is the reference point that aligns future billing cycle dates.
+          It sets the day of week for week intervals, the day of month for month and year intervals,
+          and the month of year for year intervals. The timestamp is in UTC format.
+        type: string
+      billing_cadence:
+        $ref: '#/definitions/types.BillingCadence'
+      billing_cycle:
+        allOf:
+        - $ref: '#/definitions/types.BillingCycle'
+        description: |-
+          BillingCycle is the cycle of the billing anchor.
+          This is used to determine the billing date for the subscription (i.e set the billing anchor)
+          If not set, the default value is anniversary. Possible values are anniversary and calendar.
+          Anniversary billing means the billing anchor will be the start date of the subscription.
+          Calendar billing means the billing anchor will be the appropriate date based on the billing period.
+          For example, if the billing period is month and the start date is 2025-04-15 then in case of
+          calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
+      billing_period:
+        $ref: '#/definitions/types.BillingPeriod'
+      billing_period_count:
+        default: 1
+        description: BillingPeriodCount is the total number units of the billing period.
+        type: integer
+      cancel_at:
+        description: CancelAt is the date the subscription will be canceled
+        type: string
+      cancel_at_period_end:
+        description: CancelAtPeriodEnd is whether the subscription was canceled at
+          the end of the current period
+        type: boolean
+      cancelled_at:
+        description: CanceledAt is the date the subscription was canceled
+        type: string
+      collection_method:
+        description: CollectionMethod determines how invoices are collected
+        type: string
+      commitment_amount:
+        description: CommitmentAmount is the minimum amount a customer commits to
+          paying for a billing period
+        type: string
+      commitment_duration:
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriod'
+        description: CommitmentDuration is the time frame of the commitment (e.g.,
+          ANNUAL commitment on a MONTHLY subscription)
+      coupon_associations:
+        items:
+          $ref: '#/definitions/coupon_association.CouponAssociation'
+        type: array
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        description: Currency is the currency of the subscription in lowercase 3 digit
+          ISO codes
+        type: string
+      current_period_end:
+        description: |-
+          CurrentPeriodEnd is the end of the current period that the subscription has been invoiced for.
+          At the end of this period, a new invoice will be created.
+        type: string
+      current_period_start:
+        description: |-
+          CurrentPeriodStart is the end of the current period that the subscription has been invoiced for.
+          At the end of this period, a new invoice will be created.
+        type: string
+      customer_id:
+        description: CustomerID is the identifier for the customer in our system
+        type: string
+      enable_true_up:
+        type: boolean
+      end_date:
+        description: EndDate is the end date of the subscription
+        type: string
+      environment_id:
+        description: EnvironmentID is the environment identifier for the subscription
+        type: string
+      gateway_payment_method_id:
+        description: GatewayPaymentMethodID is the gateway payment method ID for this
+          subscription
+        type: string
+      id:
+        description: ID is the unique identifier for the subscription
+        type: string
+      invoicing_customer_id:
+        description: |-
+          InvoicingCustomerID is the customer ID to use for invoicing
+          This can differ from the subscription customer (e.g., parent company invoicing for child company)
+        type: string
+      line_item_grouping:
+        allOf:
+        - $ref: '#/definitions/types.LineItemGrouping'
+        description: |-
+          LineItemGrouping controls whether a charge shorter than the billing period bills
+          as one line item per charge period (default) or one per billing period.
+      line_items:
+        items:
+          $ref: '#/definitions/subscription.SubscriptionLineItem'
+        type: array
+      lookup_key:
+        description: LookupKey is the key used to lookup the subscription in our system
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      overage_factor:
+        description: OverageFactor is a multiplier applied to usage beyond the commitment
+          amount
+        type: string
+      parent_subscription_id:
+        description: ParentSubscriptionID is the parent subscription ID for hierarchy
+          (e.g. child subscription under a parent)
+        type: string
+      pause_status:
+        $ref: '#/definitions/types.PauseStatus'
+      pauses:
+        items:
+          $ref: '#/definitions/subscription.SubscriptionPause'
+        type: array
+      payment_behavior:
+        description: PaymentBehavior determines how subscription payments are handled
+        type: string
+      payment_terms:
+        allOf:
+        - $ref: '#/definitions/types.PaymentTerms'
+        description: PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due
+          date from period end
+      phases:
+        items:
+          $ref: '#/definitions/subscription.SubscriptionPhase'
+        type: array
+      plan_id:
+        description: PlanID is the identifier for the plan in our system
+        type: string
+      proration_behavior:
+        $ref: '#/definitions/types.ProrationBehavior'
+      start_date:
+        description: StartDate is the start date of the subscription
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_status:
+        $ref: '#/definitions/types.SubscriptionStatus'
+      subscription_type:
+        allOf:
+        - $ref: '#/definitions/types.SubscriptionType'
+        description: SubscriptionType categorises the subscription within a customer
+          hierarchy (standalone, parent, inherited).
+      synced_price_sequence:
+        description: |-
+          SyncedPriceSequence is the plan-price sequence up to which this
+          subscription's line items have been reconciled. Bumped by the
+          plan-price sync after a successful pass.
+        type: integer
+      tenant_id:
+        type: string
+      timezone:
+        type: string
+      trial_end:
+        description: TrialEnd is the end date of the trial period
+        type: string
+      trial_start:
+        description: TrialStart is the start date of the trial period
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      version:
+        description: Version is used for optimistic locking
+        type: integer
     type: object
   errors.ErrorResponse:
     properties:
@@ -20235,6 +20801,44 @@ paths:
       summary: Get usage analytics
       tags:
       - Events
+  /events/analytics/query:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Use when building spend dashboards: usage cost grouped by up to three keys (event properties, source, meter, feature or line item), sorted and paginated, with optional columns, filters, search, time points and per-row metrics.
+        Line costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage, or by each row's peak for MAX meters. A partial range carries the full period's rate.
+        totals.cost equals rows_cost + unattributed_cost + excluded_cost. Unused commitment is unattributed unless a row key is the meter, feature or line item. Meters whose cost cannot be split yet are listed in excluded_meters.
+        Pass data_through from the first page to keep later pages on the same data.
+      operationId: queryUsageAnalytics
+      parameters:
+      - description: Request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/GetUsageAnalyticsV2Request'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/GetUsageAnalyticsV2Response'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query usage analytics
+      tags:
+      - Events
+      x-scope: read
   /events/bulk:
     post:
       consumes:

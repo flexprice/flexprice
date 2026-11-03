@@ -314,9 +314,12 @@ type GetUsageAnalyticsV2Response struct {
 	Subscriptions map[string]*subscription.Subscription `json:"subscriptions,omitempty"`
 }
 
-// AnalyticsV2Totals: Cost = RowsCost + UnattributedCost + ExcludedCost.
+// AnalyticsV2Totals: Cost = RowsCost + UnattributedCost + ExcludedCost = Subtotal - Discount,
+// and the Breakdown parts add up to Subtotal.
 type AnalyticsV2Totals struct {
 	Cost             decimal.Decimal              `json:"cost" swaggertype:"string"`
+	Subtotal         decimal.Decimal              `json:"subtotal" swaggertype:"string"`
+	Discount         decimal.Decimal              `json:"discount" swaggertype:"string"`
 	RowsCost         decimal.Decimal              `json:"rows_cost" swaggertype:"string"`
 	UnattributedCost decimal.Decimal              `json:"unattributed_cost" swaggertype:"string"`
 	ExcludedCost     decimal.Decimal              `json:"excluded_cost" swaggertype:"string"`
