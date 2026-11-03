@@ -301,6 +301,12 @@ func (s *CommitmentE2ESuite) TestPaymentFinalize_ClaimsInstalments() {
 	draft, err := s.GetStores().InvoiceRepo.Get(ctx, computed.ID)
 	s.Require().NoError(err)
 	s.Require().True(draft.AmountDue.IsPositive())
+	s.Require().NoError(NewPaymentService(params).(*paymentService).validateInvoicePaymentEligibility(ctx, draft, &dto.CreatePaymentRequest{
+		DestinationType: types.PaymentDestinationTypeInvoice,
+		DestinationID:   draft.ID,
+		Amount:          draft.AmountDue,
+		Currency:        draft.Currency,
+	}))
 
 	paid := &payment.Payment{
 		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
@@ -330,8 +336,8 @@ func (s *CommitmentE2ESuite) TestPaymentFinalize_ClaimsInstalments() {
 	s.ElementsMatch(instalmentIDs(billed), s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
 }
 
-// A draft paid in full after an edit cancelled its instalments still records the payment and is finalized; the
-// cancelled instalments stay cancelled and unclaimed.
+// After an edit cancelled a draft's instalments, a new payment on it is refused. One taken before the edit still
+// records and finalizes it; the cancelled instalments stay cancelled and unclaimed.
 func (s *CommitmentE2ESuite) TestPaymentFinalize_StaleDraftKeepsPayment() {
 	ctx := s.GetContext()
 	params := fullServiceParams(&s.BaseServiceTestSuite)
@@ -343,6 +349,17 @@ func (s *CommitmentE2ESuite) TestPaymentFinalize_StaleDraftKeepsPayment() {
 
 	draft, err := s.GetStores().InvoiceRepo.Get(ctx, computed.ID)
 	s.Require().NoError(err)
+
+	payments := NewPaymentService(params).(*paymentService)
+	err = payments.validateInvoicePaymentEligibility(ctx, draft, &dto.CreatePaymentRequest{
+		DestinationType: types.PaymentDestinationTypeInvoice,
+		DestinationID:   draft.ID,
+		Amount:          draft.AmountDue,
+		Currency:        draft.Currency,
+	})
+	s.Require().ErrorIs(err, errStaleInstalments, "a new payment on the stale draft is refused")
+
+	// A payment taken before the edit still lands.
 	paid := &payment.Payment{
 		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
 		DestinationType:   types.PaymentDestinationTypeInvoice,

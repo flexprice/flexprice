@@ -246,6 +246,23 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 		return errInvoiceEventDeletionGated(invoice.ID, gatedDeletion.RequestID)
 	}
 
+	// Nor does it recompute a draft whose instalments changed, so paying one would bill them twice.
+	if invoice.InvoiceStatus == types.InvoiceStatusDraft {
+		stale, err := invSvc.staleInstalments(ctx, invoice)
+		if err != nil {
+			return err
+		}
+		if len(stale) > 0 {
+			return ierr.WithError(errStaleInstalments).
+				WithHint("Recompute the invoice before paying it").
+				WithReportableDetails(map[string]any{
+					"invoice_id":     invoice.ID,
+					"instalment_ids": stale,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+	}
+
 	// invoice validations
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 		return ierr.NewError("invoice is already paid").
