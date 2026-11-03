@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -265,4 +266,55 @@ func (s *BillingServiceSuite) TestGetUsageAnalyticsV2_ExcludedMetersAndGuards() 
 		s.Empty(resp.Items)
 		s.True(resp.Totals.Cost.IsZero())
 	})
+}
+
+// A $60 commitment on the calls line: the true-up is cost on line-keyed rows, unattributed on property rows,
+// and a partial range carries the range's share of the line's usage, so slices add up to the invoice.
+func (s *BillingServiceSuite) TestGetUsageAnalyticsV2_TrueUpByUsageShare() {
+	f := s.setupAnalyticsV2Fixture()
+	ctx := s.GetContext()
+	calls := f.sub.LineItems[0]
+	calls.CommitmentAmount = lo.ToPtr(decimal.NewFromInt(60))
+	calls.CommitmentType = types.COMMITMENT_TYPE_AMOUNT
+	calls.CommitmentOverageFactor = lo.ToPtr(decimal.NewFromInt(1))
+	calls.CommitmentTrueUpEnabled = true
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, calls))
+
+	invoice, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, f.sub, f.sub.LineItems, f.feb1, f.mar1, true, nil)
+	s.Require().NoError(err)
+	// calls: $4 used of a $60 commitment -> $56 true-up; storage: $8.
+	s.requireMoney("68", invoice.TotalAmount, "invoice")
+
+	byApp := s.queryAnalyticsV2(f, nil)
+	s.requireMoney("68", byApp.Totals.Cost, "totals match the invoice")
+	s.requireMoney("12", byApp.Totals.RowsCost, "rows carry usage only")
+	s.requireMoney("56", byApp.Totals.UnattributedCost, "the true-up is unattributed on app rows")
+	s.Require().Len(byApp.Unattributed.Charges, 1)
+	s.Equal(dto.AnalyticsV2ReasonUnusedCommitment, byApp.Unattributed.Charges[0].Reason)
+	s.Equal(calls.ID, byApp.Unattributed.Charges[0].SubLineItemID)
+
+	byMeter := s.queryAnalyticsV2(f, func(r *dto.GetUsageAnalyticsV2Request) { r.GroupBy = []string{"meter_id"} })
+	s.requireMoney("68", byMeter.Totals.Cost, "totals match the invoice")
+	s.requireMoney("0", byMeter.Totals.UnattributedCost, "the true-up stays on the meter row")
+	s.requireMoney("60", byMeter.Items[0].Cost, "calls row = $4 used + $56 true-up")
+
+	// Feb 1-5 holds payout's 100 build calls: 25% of February's 400 calls, so 25% of the true-up.
+	week := s.queryAnalyticsV2(f, func(r *dto.GetUsageAnalyticsV2Request) { r.EndTime = time.Date(2026, 2, 5, 0, 0, 0, 0, time.UTC) })
+	charges := lo.SliceToMap(week.Unattributed.Charges, func(c dto.AnalyticsV2UnattributedCharge) (string, dto.AnalyticsV2UnattributedCharge) {
+		return c.SubLineItemID, c
+	})
+	s.requireMoney("14", charges[calls.ID].Cost, "25% of the $56 true-up")
+	s.Equal(dto.AnalyticsV2ReasonUnusedCommitment, charges[calls.ID].Reason)
+	// No storage readings before Feb 5: the MAX line's cost for 4 of 28 days has no row to go to.
+	storage := charges[f.sub.LineItems[1].ID]
+	s.requireMoney("1.14", storage.Cost, "storage $8 x 4/28, rounded to cents")
+	s.Equal(dto.AnalyticsV2ReasonNoUsage, storage.Reason)
+
+	// Slices on either grouping add up to the invoice.
+	split := time.Date(2026, 2, 8, 0, 0, 0, 0, time.UTC)
+	for _, groupBy := range [][]string{{"properties.app"}, {"meter_id"}} {
+		first := s.queryAnalyticsV2(f, func(r *dto.GetUsageAnalyticsV2Request) { r.GroupBy = groupBy; r.EndTime = split })
+		second := s.queryAnalyticsV2(f, func(r *dto.GetUsageAnalyticsV2Request) { r.GroupBy = groupBy; r.StartTime = split })
+		s.requireMoney("68", first.Totals.Cost.Add(second.Totals.Cost), "slices add up for group_by "+groupBy[0])
+	}
 }

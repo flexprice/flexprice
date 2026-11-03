@@ -54,6 +54,9 @@ func (s *InMemoryMeterUsageStore) GetAnalyticsV2LineUsage(_ context.Context, par
 			if inLine(r, line) {
 				out[i].Quantity = out[i].Quantity.Add(r.QtyTotal)
 				out[i].EventCount++
+				if !r.Timestamp.Before(params.RangeStart) && r.Timestamp.Before(params.RangeEnd) {
+					out[i].RangeQuantity = out[i].RangeQuantity.Add(r.QtyTotal)
+				}
 			}
 		}
 	}

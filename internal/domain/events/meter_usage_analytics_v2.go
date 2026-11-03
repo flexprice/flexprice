@@ -31,16 +31,20 @@ type AnalyticsV2Line struct {
 	IsMax bool
 }
 
-// AnalyticsV2LineUsageParams asks for every line's full-window quantity, used to turn line costs into rates.
+// AnalyticsV2LineUsageParams asks for every line's full-window quantity, used to turn line costs into rates,
+// and its quantity inside [RangeStart, RangeEnd), used to prorate cost no row carries.
 type AnalyticsV2LineUsageParams struct {
-	Scope AnalyticsV2Scope
-	Lines []AnalyticsV2Line
+	Scope      AnalyticsV2Scope
+	Lines      []AnalyticsV2Line
+	RangeStart time.Time
+	RangeEnd   time.Time
 }
 
 // AnalyticsV2LineUsage is one line's quantity over its whole window; results align with the request's Lines.
 type AnalyticsV2LineUsage struct {
-	Quantity   decimal.Decimal
-	EventCount uint64
+	Quantity      decimal.Decimal
+	RangeQuantity decimal.Decimal
+	EventCount    uint64
 }
 
 // AnalyticsV2Amounts is a cost split by component; Cost() is the parts minus the discount.

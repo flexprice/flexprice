@@ -180,8 +180,11 @@ func (s *meterUsageService) selectAnalyticsV2Lines(ctx context.Context, ac *anal
 		if narrowed && !selected[u.charge.MeterID] {
 			continue
 		}
+		// A charge with no line has no usage to share by, so a partial range carries it in proportion to time.
+		f := analyticsV2Overlap(ac.req.StartTime, ac.req.EndTime, u.windowStart, u.windowEnd)
 		charge := u.charge
-		netAnalyticsV2Charge(&charge, u.discount)
+		charge.Cost, charge.Breakdown = charge.Cost.Mul(f), scaleAnalyticsV2Cost(charge.Breakdown, f)
+		netAnalyticsV2Charge(&charge, u.discount.Mul(f))
 		ac.unattributed = append(ac.unattributed, charge)
 	}
 	return nil
@@ -215,7 +218,9 @@ func (s *meterUsageService) buildAnalyticsV2Rates(ctx context.Context, ac *analy
 			IsMax: ac.meters[l.meterID] != nil && ac.meters[l.meterID].Aggregation.Type == types.AggregationMax,
 		}
 	})
-	usage, err := s.repo.GetAnalyticsV2LineUsage(ctx, &events.AnalyticsV2LineUsageParams{Scope: ac.scope, Lines: lines})
+	usage, err := s.repo.GetAnalyticsV2LineUsage(ctx, &events.AnalyticsV2LineUsageParams{
+		Scope: ac.scope, Lines: lines, RangeStart: ac.req.StartTime, RangeEnd: ac.req.EndTime,
+	})
 	if err != nil {
 		return err
 	}
@@ -240,8 +245,14 @@ func (s *meterUsageService) buildAnalyticsV2Rates(ctx context.Context, ac *analy
 			cost, discount = scaleAnalyticsV2Cost(cost, f), discount.Mul(f)
 		}
 		if !lineRows && cost.TrueUp.IsPositive() {
+			// The true-up is the line's current value (it moves while the period is open). A partial range
+			// carries the share the line-keyed rows would carry: the range's share of the line's usage.
 			trueUpDiscount := analyticsV2Share(discount, cost.TrueUp, l.total())
-			ac.unattributed = append(ac.unattributed, analyticsV2LineCharge(l, dto.AnalyticsV2Cost{TrueUp: cost.TrueUp.Sub(trueUpDiscount)}))
+			share := decimal.NewFromInt(1)
+			if !lines[i].IsMax {
+				share = analyticsV2UsageShare(usage[i], ac.req.StartTime, ac.req.EndTime, l)
+			}
+			ac.unattributed = append(ac.unattributed, analyticsV2LineCharge(l, dto.AnalyticsV2Cost{TrueUp: cost.TrueUp.Sub(trueUpDiscount).Mul(share)}))
 			discount = discount.Sub(trueUpDiscount)
 			cost.TrueUp = decimal.Zero
 		}
@@ -251,6 +262,11 @@ func (s *meterUsageService) buildAnalyticsV2Rates(ctx context.Context, ac *analy
 			denom = peaks[i]
 		}
 		if !denom.IsPositive() {
+			if !lines[i].IsMax {
+				// No usage to share by: a partial range carries the cost in proportion to time (MAX already is).
+				f := analyticsV2Overlap(ac.req.StartTime, ac.req.EndTime, l.key.windowStart, l.key.windowEnd)
+				cost, discount = scaleAnalyticsV2Cost(cost, f), discount.Mul(f)
+			}
 			total := cost.Usage.Add(cost.CommitmentUtilized).Add(cost.Overage).Add(cost.TrueUp)
 			if total.IsPositive() {
 				charge := analyticsV2LineCharge(l, cost)
@@ -285,6 +301,14 @@ func analyticsV2LineCharge(l *analyticsV2LineCost, cost dto.AnalyticsV2Cost) dto
 		Reason: lo.Ternary(cost.CommitmentUtilized.IsPositive() || cost.TrueUp.IsPositive(),
 			dto.AnalyticsV2ReasonUnusedCommitment, dto.AnalyticsV2ReasonNoUsage),
 	}
+}
+
+// analyticsV2UsageShare is the range's share of a line window's usage, or of its time when the window has no usage.
+func analyticsV2UsageShare(u events.AnalyticsV2LineUsage, start, end time.Time, l *analyticsV2LineCost) decimal.Decimal {
+	if u.Quantity.IsPositive() {
+		return u.RangeQuantity.Div(u.Quantity)
+	}
+	return analyticsV2Overlap(start, end, l.key.windowStart, l.key.windowEnd)
 }
 
 // analyticsV2Share is part's proportional share of amount, where part is out of whole.
@@ -589,7 +613,13 @@ func (ac *analyticsV2Context) totals(resp *dto.GetUsageAnalyticsV2Response, resu
 		}
 		resp.Unattributed.Cost = ac.round(resp.Unattributed.Cost)
 		resp.Unattributed.Breakdown = roundAnalyticsV2Cost(ac, resp.Unattributed.Breakdown)
-		resp.Unattributed.Charges = ac.unattributed
+		resp.Unattributed.Charges = lo.Map(ac.unattributed, func(c dto.AnalyticsV2UnattributedCharge, _ int) dto.AnalyticsV2UnattributedCharge {
+			c.Cost, c.Breakdown = ac.round(c.Cost), roundAnalyticsV2Cost(ac, c.Breakdown)
+			return c
+		})
+		reconcileAnalyticsV2Rounding(lo.Map(resp.Unattributed.Charges, func(_ dto.AnalyticsV2UnattributedCharge, i int) *decimal.Decimal {
+			return &resp.Unattributed.Charges[i].Cost
+		}), resp.Unattributed.Cost)
 		t.UnattributedCost = resp.Unattributed.Cost
 		t.Breakdown = addAnalyticsV2Cost(t.Breakdown, resp.Unattributed.Breakdown)
 

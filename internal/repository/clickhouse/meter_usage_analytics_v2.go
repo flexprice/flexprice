@@ -142,9 +142,10 @@ func (r *MeterUsageRepository) GetAnalyticsV2LineUsage(ctx context.Context, para
 	from, to := analyticsV2Window(params.Lines)
 	_, settings := analyticsV2Settings(params.Scope.UseFinal)
 	q := &analyticsV2Query{}
-	q.add("SELECT idx, sum(qty_total) AS quantity, count() AS events\n\tFROM (\n")
+	q.add("SELECT idx, sum(qty_total) AS quantity, sumIf(qty_total, ts >= ? AND ts < ?) AS range_quantity, count() AS events\n\tFROM (\n",
+		params.RangeStart.UTC(), params.RangeEnd.UTC())
 	writeAnalyticsV2Events(q, params.Scope, params.Lines, from, to, "",
-		func(q *analyticsV2Query) { q.add("r.idx AS idx, e.qty_total AS qty_total") }, nil, nil)
+		func(q *analyticsV2Query) { q.add("r.idx AS idx, e.qty_total AS qty_total, e.timestamp AS ts") }, nil, nil)
 	q.add("\n\t)\n\tGROUP BY idx\n\t" + settings)
 
 	rows, err := r.store.GetConn().Query(ctx, q.sql.String(), q.args...)
@@ -157,13 +158,13 @@ func (r *MeterUsageRepository) GetAnalyticsV2LineUsage(ctx context.Context, para
 	out := make([]events.AnalyticsV2LineUsage, len(params.Lines))
 	for rows.Next() {
 		var idx uint32
-		var quantity decimal.Decimal
+		var quantity, rangeQuantity decimal.Decimal
 		var n uint64
-		if err := rows.Scan(&idx, &quantity, &n); err != nil {
+		if err := rows.Scan(&idx, &quantity, &rangeQuantity, &n); err != nil {
 			SetSpanError(span, err)
 			return nil, ierr.WithError(err).WithHint("Failed to scan analytics line usage").Mark(ierr.ErrDatabase)
 		}
-		out[idx-1] = events.AnalyticsV2LineUsage{Quantity: quantity, EventCount: n}
+		out[idx-1] = events.AnalyticsV2LineUsage{Quantity: quantity, RangeQuantity: rangeQuantity, EventCount: n}
 	}
 	if err := rows.Err(); err != nil {
 		SetSpanError(span, err)

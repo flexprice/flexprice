@@ -214,14 +214,17 @@ func TestRankAnalyticsV2Rows_MatchesOracle_Integration(t *testing.T) {
 		for _, final := range []bool{false, true} {
 			sc := scope
 			sc.UseFinal = final
-			got, err := repo.GetAnalyticsV2LineUsage(ctx, &events.AnalyticsV2LineUsageParams{Scope: sc, Lines: lines})
+			lp := &events.AnalyticsV2LineUsageParams{Scope: sc, Lines: lines, RangeStart: aug(10, 0), RangeEnd: aug(20, 6)}
+			got, err := repo.GetAnalyticsV2LineUsage(ctx, lp)
 			require.NoError(t, err)
-			want, err := ref.GetAnalyticsV2LineUsage(ctx, &events.AnalyticsV2LineUsageParams{Scope: sc, Lines: lines})
+			want, err := ref.GetAnalyticsV2LineUsage(ctx, lp)
 			require.NoError(t, err)
 			require.Len(t, got, len(lines))
 			for i := range lines {
 				require.Truef(t, want[i].Quantity.Equal(got[i].Quantity), "final=%v line %s: want %s got %s", final, lines[i].ID, want[i].Quantity, got[i].Quantity)
 				require.Equal(t, want[i].EventCount, got[i].EventCount)
+				require.Truef(t, want[i].RangeQuantity.Equal(got[i].RangeQuantity), "final=%v line %s range: want %s got %s", final, lines[i].ID, want[i].RangeQuantity, got[i].RangeQuantity)
+				require.True(t, got[i].RangeQuantity.IsPositive() && got[i].RangeQuantity.LessThan(got[i].Quantity), "range is a strict part of the window")
 			}
 		}
 	})
