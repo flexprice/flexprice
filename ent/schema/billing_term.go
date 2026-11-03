@@ -53,14 +53,8 @@ func (BillingTerm) Fields() []ent.Field {
 			Immutable().
 			GoType(types.BillingTermValueType("")),
 
-		field.Other("amount", decimal.Decimal{}).
+		field.Other("value", decimal.Decimal{}).
 			SchemaType(map[string]string{"postgres": "numeric(20,8)"}).
-			Optional().
-			Nillable().
-			Immutable(),
-
-		field.Other("percentage", decimal.Decimal{}).
-			SchemaType(map[string]string{"postgres": "numeric(10,4)"}).
 			Optional().
 			Nillable().
 			Immutable(),
@@ -77,22 +71,12 @@ func (BillingTerm) Fields() []ent.Field {
 			Nillable().
 			Immutable(),
 
-		field.Time("covers_from").
+		field.Time("start_date").
 			Optional().
 			Nillable().
 			Immutable(),
 
-		field.Time("covers_to").
-			Optional().
-			Nillable().
-			Immutable(),
-
-		field.Time("starts_on").
-			Optional().
-			Nillable().
-			Immutable(),
-
-		field.Time("ends_on").
+		field.Time("end_date").
 			Optional().
 			Nillable().
 			Immutable(),
@@ -116,7 +100,7 @@ func (BillingTerm) Fields() []ent.Field {
 			Immutable().
 			GoType(types.BillingTermSplit("")),
 
-		field.String("description").
+		field.String("invoice_label").
 			SchemaType(varchar("255")).
 			Optional().
 			Nillable().

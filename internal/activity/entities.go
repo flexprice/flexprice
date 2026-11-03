@@ -89,12 +89,12 @@ func Registrations() *Registry {
 		Registration{
 			EntityType: types.SystemEntityTypeBillingTerm, EntName: "BillingTerm",
 			Snapshot: snapshotOf(billingterm.TermFromEnt),
-			Label:    []string{"description", "kind"},
+			Label:    []string{"invoice_label", "kind"},
 		},
 		Registration{
 			EntityType: types.SystemEntityTypeBillingInstalment, EntName: "BillingInstalment",
 			Snapshot: snapshotOf(billingterm.InstalmentFromEnt),
-			Label:    []string{"description"},
+			Label:    []string{"invoice_label"},
 		},
 	)
 	if err != nil {

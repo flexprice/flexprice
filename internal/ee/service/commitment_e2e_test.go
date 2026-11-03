@@ -260,7 +260,7 @@ func (s *CommitmentE2ESuite) requireFullyBilled(subscriptionID string, count int
 
 	sum := decimal.Zero
 	for _, inst := range instalments {
-		s.Equal(types.InstalmentStatusInvoiced, inst.InstalmentStatus, inst.Description)
+		s.Equal(types.InstalmentStatusInvoiced, inst.InstalmentStatus, inst.InvoiceLabel)
 		sum = sum.Add(inst.Amount)
 	}
 	s.True(sum.Equal(dec(total)), "instalments total %s, want %s", sum, total)
@@ -864,7 +864,7 @@ func (s *CommitmentE2ESuite) TestE2E_A2_Upfront() {
 	sub := s.subscribe(tokens, s.jan, termsRequest("Platform", tokens.ID, "100", s.jan, end, wholeValueUpfront(nil)))
 
 	opening := s.openingInvoice(sub.ID)
-	s.requireBilled(opening, "1200", wantLine{types.CommitmentLineInstalment, "Platform - Commitment payment", "1", "1200"})
+	s.requireBilled(opening, "1200", wantLine{types.CommitmentLineInstalment, "Platform - Instalment 1 of 1", "1", "1200"})
 	paid := s.billedInstalments(opening.ID)[0]
 	s.True(paid.ServicePeriodStart.Equal(s.jan) && paid.ServicePeriodEnd.Equal(end), "the instalment pays for the whole year")
 
@@ -891,12 +891,12 @@ func (s *CommitmentE2ESuite) TestE2E_A3_PartialUpfront() {
 	tokens := s.planWith("a3", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	sub := s.subscribe(tokens, s.jan, termsRequest("Platform", tokens.ID, "100", s.jan, s.jan.AddDate(0, 10, 0), upfrontPlusRemainder()...))
 
-	s.requireBilled(s.openingInvoice(sub.ID), "300", wantLine{types.CommitmentLineInstalment, "Platform - Commitment payment", "1", "300"})
+	s.requireBilled(s.openingInvoice(sub.ID), "300", wantLine{types.CommitmentLineInstalment, "Platform - Instalment 1 of 11", "1", "300"})
 
 	s.record(s.tokens, time.Date(2026, 2, 10, 12, 0, 0, 0, time.UTC), "700")
 
 	for month := 0; month < 10; month++ {
-		want := []wantLine{{types.CommitmentLineInstalment, fmt.Sprintf("Platform - Instalment %d of 10", month+1), "1", "70"}}
+		want := []wantLine{{types.CommitmentLineInstalment, fmt.Sprintf("Platform - Instalment %d of 11", month+2), "1", "70"}}
 		if month == 1 {
 			want = append(want, wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "700", "0"})
 		}
@@ -915,23 +915,23 @@ func (s *CommitmentE2ESuite) TestE2E_A4_Milestones() {
 	tokens := s.planWith("a4", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	sub := s.subscribe(tokens, s.jan, termsRequest("Platform", tokens.ID, "100", s.jan, end,
 		dto.BillingTermInput{
-			Kind:        types.BillingTermKindOnce,
-			ValueType:   types.BillingTermValuePercentage,
-			Percentage:  lo.ToPtr(dec("30")),
-			Description: lo.ToPtr("Signing"),
+			Kind:         types.BillingTermKindOnce,
+			ValueType:    types.BillingTermValueFixed,
+			Value:        lo.ToPtr(dec("360")),
+			InvoiceLabel: lo.ToPtr("Signing"),
 		},
 		dto.BillingTermInput{
-			Kind:        types.BillingTermKindOnce,
-			ValueType:   types.BillingTermValuePercentage,
-			Percentage:  lo.ToPtr(dec("50")),
-			BillOn:      lo.ToPtr(jul),
-			Description: lo.ToPtr("Mid-year"),
+			Kind:         types.BillingTermKindOnce,
+			ValueType:    types.BillingTermValueFixed,
+			Value:        lo.ToPtr(dec("600")),
+			BillOn:       lo.ToPtr(jul),
+			InvoiceLabel: lo.ToPtr("Mid-year"),
 		},
 		dto.BillingTermInput{
-			Kind:        types.BillingTermKindOnce,
-			ValueType:   types.BillingTermValueRemainder,
-			BillOn:      lo.ToPtr(end),
-			Description: lo.ToPtr("Completion"),
+			Kind:         types.BillingTermKindOnce,
+			ValueType:    types.BillingTermValueRemainder,
+			BillOn:       lo.ToPtr(end),
+			InvoiceLabel: lo.ToPtr("Completion"),
 		},
 	))
 
@@ -952,25 +952,23 @@ func (s *CommitmentE2ESuite) TestE2E_A4_Milestones() {
 	s.requireFullyBilled(sub.ID, 3, "1200")
 }
 
-// A6: $100 a month for 2026, with a $300 deposit covering January to March. The deposit is billed on 1 Jan, the
-// first three months bill only usage above the commitment, and from April each month's invoice carries its $100.
+// A6: $100 a month for 2026, with a $300 deposit. The deposit is billed on 1 Jan, the first three months bill only
+// usage above the commitment, and from April each month's invoice carries its $100.
 func (s *CommitmentE2ESuite) TestE2E_A6_Deposit() {
 	apr, end := s.jan.AddDate(0, 3, 0), s.jan.AddDate(1, 0, 0)
 	tokens := s.planWith("a6", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	sub := s.subscribe(tokens, s.jan, termsRequest("Platform", tokens.ID, "100", s.jan, end,
 		dto.BillingTermInput{
-			Kind:        types.BillingTermKindOnce,
-			ValueType:   types.BillingTermValueFixed,
-			Amount:      lo.ToPtr(dec("300")),
-			CoversFrom:  lo.ToPtr(s.jan),
-			CoversTo:    lo.ToPtr(apr),
-			Description: lo.ToPtr("Deposit"),
+			Kind:         types.BillingTermKindOnce,
+			ValueType:    types.BillingTermValueFixed,
+			Value:        lo.ToPtr(dec("300")),
+			InvoiceLabel: lo.ToPtr("Deposit"),
 		},
 		dto.BillingTermInput{
 			Kind:           types.BillingTermKindRecurring,
 			ValueType:      types.BillingTermValueFixed,
-			Amount:         lo.ToPtr(dec("100")),
-			StartsOn:       lo.ToPtr(apr),
+			Value:          lo.ToPtr(dec("100")),
+			StartDate:      lo.ToPtr(apr),
 			InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear),
 		},
 	))
@@ -978,7 +976,7 @@ func (s *CommitmentE2ESuite) TestE2E_A6_Deposit() {
 	opening := s.openingInvoice(sub.ID)
 	s.requireBilled(opening, "300", wantLine{types.CommitmentLineInstalment, "Platform - Deposit", "1", "300"})
 	deposit := s.billedInstalments(opening.ID)[0]
-	s.True(deposit.ServicePeriodStart.Equal(s.jan) && deposit.ServicePeriodEnd.Equal(apr), "the deposit pays for January to March")
+	s.True(deposit.ServicePeriodStart.Equal(s.jan) && deposit.ServicePeriodEnd.Equal(end), "a once instalment's service period is the term")
 
 	// $80 of usage in January, $150 in February and $100 in April.
 	s.record(s.tokens, time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), "800")
@@ -993,7 +991,7 @@ func (s *CommitmentE2ESuite) TestE2E_A6_Deposit() {
 	s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, 2, 0)), "0")
 
 	for month := 3; month < 12; month++ {
-		want := []wantLine{{types.CommitmentLineInstalment, fmt.Sprintf("Platform - Instalment %d of 9", month-2), "1", "100"}}
+		want := []wantLine{{types.CommitmentLineInstalment, fmt.Sprintf("Platform - Instalment %d of 10", month-1), "1", "100"}}
 		if month == 3 {
 			want = append(want, wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "1000", "0"})
 		}
@@ -1012,7 +1010,7 @@ func (s *CommitmentE2ESuite) TestE2E_A7_QuarterlyAdvance() {
 	sub := s.subscribe(tokens, s.jan, termsRequest("Platform", tokens.ID, "100", s.jan, end, dto.BillingTermInput{
 		Kind:           types.BillingTermKindRecurring,
 		ValueType:      types.BillingTermValueFixed,
-		Amount:         lo.ToPtr(dec("300")),
+		Value:          lo.ToPtr(dec("300")),
 		PeriodCount:    lo.ToPtr(3),
 		InvoiceCadence: lo.ToPtr(types.InvoiceCadenceAdvance),
 	}))
@@ -1054,7 +1052,7 @@ func (s *CommitmentE2ESuite) TestE2E_B1_SeparateInvoice() {
 
 	// $310 a month is $70 for the 7 days of August the term covers, so the term is worth $380.
 	req := termsRequest("Platform", tokens.ID, "310", start, end,
-		dto.BillingTermInput{Kind: types.BillingTermKindOnce, ValueType: types.BillingTermValueFixed, Amount: lo.ToPtr(dec("300"))},
+		dto.BillingTermInput{Kind: types.BillingTermKindOnce, ValueType: types.BillingTermValueFixed, Value: lo.ToPtr(dec("300"))},
 		dto.BillingTermInput{Kind: types.BillingTermKindRecurring, ValueType: types.BillingTermValueRemainder, InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear)},
 	)
 	req.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
@@ -1075,9 +1073,9 @@ func (s *CommitmentE2ESuite) TestE2E_B1_SeparateInvoice() {
 	s.Require().NoError(s.commitments.BillDueInstalments(s.GetContext()))
 
 	for i, want := range []struct{ amount, label string }{
-		{"300", "Commitment payment"},
-		{"40", "Instalment 1 of 2"},
-		{"40", "Instalment 2 of 2"},
+		{"300", "Instalment 1 of 3"},
+		{"40", "Instalment 2 of 3"},
+		{"40", "Instalment 3 of 3"},
 	} {
 		billed := s.instalmentStatus(committed.Instalments[i].ID)
 		s.Equal(types.InstalmentStatusInvoiced, billed.InstalmentStatus, want.label)

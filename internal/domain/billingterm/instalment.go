@@ -17,17 +17,17 @@ type Instalment struct {
 	OwnerID       string                     `json:"owner_id"`
 	BillingTermID *string                    `json:"billing_term_id,omitempty"`
 
-	CustomerID     string `json:"customer_id"`
-	SubscriptionID string `json:"subscription_id"`
-	Currency       string `json:"currency"`
+	CustomerID     string  `json:"customer_id"`
+	SubscriptionID *string `json:"subscription_id,omitempty"`
+	Currency       string  `json:"currency"`
 
 	Kind        types.InstalmentKind        `json:"kind"`
 	BillTrigger types.InstalmentBillTrigger `json:"bill_trigger"`
 	BillOn      time.Time                   `json:"bill_on"`
 	TriggeredAt *time.Time                  `json:"triggered_at,omitempty"`
 
-	Amount      decimal.Decimal `json:"amount" swaggertype:"string"`
-	Description string          `json:"description"`
+	Amount       decimal.Decimal `json:"amount" swaggertype:"string"`
+	InvoiceLabel string          `json:"invoice_label"`
 
 	ServicePeriodStart time.Time `json:"service_period_start"`
 	ServicePeriodEnd   time.Time `json:"service_period_end"`
@@ -62,7 +62,7 @@ func InstalmentFromEnt(e *ent.BillingInstalment) *Instalment {
 		BillOn:             e.BillOn,
 		TriggeredAt:        e.TriggeredAt,
 		Amount:             e.Amount,
-		Description:        e.Description,
+		InvoiceLabel:       e.InvoiceLabel,
 		ServicePeriodStart: e.ServicePeriodStart,
 		ServicePeriodEnd:   e.ServicePeriodEnd,
 		Delivery:           e.Delivery,

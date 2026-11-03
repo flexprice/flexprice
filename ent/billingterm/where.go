@@ -124,14 +124,9 @@ func ValueType(v types.BillingTermValueType) predicate.BillingTerm {
 	return predicate.BillingTerm(sql.FieldEQ(FieldValueType, vc))
 }
 
-// Amount applies equality check predicate on the "amount" field. It's identical to AmountEQ.
-func Amount(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldAmount, v))
-}
-
-// Percentage applies equality check predicate on the "percentage" field. It's identical to PercentageEQ.
-func Percentage(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldPercentage, v))
+// Value applies equality check predicate on the "value" field. It's identical to ValueEQ.
+func Value(v decimal.Decimal) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldEQ(FieldValue, v))
 }
 
 // BillTrigger applies equality check predicate on the "bill_trigger" field. It's identical to BillTriggerEQ.
@@ -145,24 +140,14 @@ func BillOn(v time.Time) predicate.BillingTerm {
 	return predicate.BillingTerm(sql.FieldEQ(FieldBillOn, v))
 }
 
-// CoversFrom applies equality check predicate on the "covers_from" field. It's identical to CoversFromEQ.
-func CoversFrom(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldCoversFrom, v))
+// StartDate applies equality check predicate on the "start_date" field. It's identical to StartDateEQ.
+func StartDate(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldEQ(FieldStartDate, v))
 }
 
-// CoversTo applies equality check predicate on the "covers_to" field. It's identical to CoversToEQ.
-func CoversTo(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldCoversTo, v))
-}
-
-// StartsOn applies equality check predicate on the "starts_on" field. It's identical to StartsOnEQ.
-func StartsOn(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldStartsOn, v))
-}
-
-// EndsOn applies equality check predicate on the "ends_on" field. It's identical to EndsOnEQ.
-func EndsOn(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldEndsOn, v))
+// EndDate applies equality check predicate on the "end_date" field. It's identical to EndDateEQ.
+func EndDate(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldEQ(FieldEndDate, v))
 }
 
 // PeriodCount applies equality check predicate on the "period_count" field. It's identical to PeriodCountEQ.
@@ -182,9 +167,9 @@ func Split(v types.BillingTermSplit) predicate.BillingTerm {
 	return predicate.BillingTerm(sql.FieldEQ(FieldSplit, vc))
 }
 
-// Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
-func Description(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldDescription, v))
+// InvoiceLabel applies equality check predicate on the "invoice_label" field. It's identical to InvoiceLabelEQ.
+func InvoiceLabel(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldEQ(FieldInvoiceLabel, v))
 }
 
 // Metadata applies equality check predicate on the "metadata" field. It's identical to MetadataEQ.
@@ -944,104 +929,54 @@ func ValueTypeContainsFold(v types.BillingTermValueType) predicate.BillingTerm {
 	return predicate.BillingTerm(sql.FieldContainsFold(FieldValueType, vc))
 }
 
-// AmountEQ applies the EQ predicate on the "amount" field.
-func AmountEQ(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldAmount, v))
+// ValueEQ applies the EQ predicate on the "value" field.
+func ValueEQ(v decimal.Decimal) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldEQ(FieldValue, v))
 }
 
-// AmountNEQ applies the NEQ predicate on the "amount" field.
-func AmountNEQ(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNEQ(FieldAmount, v))
+// ValueNEQ applies the NEQ predicate on the "value" field.
+func ValueNEQ(v decimal.Decimal) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNEQ(FieldValue, v))
 }
 
-// AmountIn applies the In predicate on the "amount" field.
-func AmountIn(vs ...decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIn(FieldAmount, vs...))
+// ValueIn applies the In predicate on the "value" field.
+func ValueIn(vs ...decimal.Decimal) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldIn(FieldValue, vs...))
 }
 
-// AmountNotIn applies the NotIn predicate on the "amount" field.
-func AmountNotIn(vs ...decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotIn(FieldAmount, vs...))
+// ValueNotIn applies the NotIn predicate on the "value" field.
+func ValueNotIn(vs ...decimal.Decimal) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNotIn(FieldValue, vs...))
 }
 
-// AmountGT applies the GT predicate on the "amount" field.
-func AmountGT(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGT(FieldAmount, v))
+// ValueGT applies the GT predicate on the "value" field.
+func ValueGT(v decimal.Decimal) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldGT(FieldValue, v))
 }
 
-// AmountGTE applies the GTE predicate on the "amount" field.
-func AmountGTE(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGTE(FieldAmount, v))
+// ValueGTE applies the GTE predicate on the "value" field.
+func ValueGTE(v decimal.Decimal) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldGTE(FieldValue, v))
 }
 
-// AmountLT applies the LT predicate on the "amount" field.
-func AmountLT(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLT(FieldAmount, v))
+// ValueLT applies the LT predicate on the "value" field.
+func ValueLT(v decimal.Decimal) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldLT(FieldValue, v))
 }
 
-// AmountLTE applies the LTE predicate on the "amount" field.
-func AmountLTE(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLTE(FieldAmount, v))
+// ValueLTE applies the LTE predicate on the "value" field.
+func ValueLTE(v decimal.Decimal) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldLTE(FieldValue, v))
 }
 
-// AmountIsNil applies the IsNil predicate on the "amount" field.
-func AmountIsNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIsNull(FieldAmount))
+// ValueIsNil applies the IsNil predicate on the "value" field.
+func ValueIsNil() predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldIsNull(FieldValue))
 }
 
-// AmountNotNil applies the NotNil predicate on the "amount" field.
-func AmountNotNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotNull(FieldAmount))
-}
-
-// PercentageEQ applies the EQ predicate on the "percentage" field.
-func PercentageEQ(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldPercentage, v))
-}
-
-// PercentageNEQ applies the NEQ predicate on the "percentage" field.
-func PercentageNEQ(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNEQ(FieldPercentage, v))
-}
-
-// PercentageIn applies the In predicate on the "percentage" field.
-func PercentageIn(vs ...decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIn(FieldPercentage, vs...))
-}
-
-// PercentageNotIn applies the NotIn predicate on the "percentage" field.
-func PercentageNotIn(vs ...decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotIn(FieldPercentage, vs...))
-}
-
-// PercentageGT applies the GT predicate on the "percentage" field.
-func PercentageGT(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGT(FieldPercentage, v))
-}
-
-// PercentageGTE applies the GTE predicate on the "percentage" field.
-func PercentageGTE(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGTE(FieldPercentage, v))
-}
-
-// PercentageLT applies the LT predicate on the "percentage" field.
-func PercentageLT(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLT(FieldPercentage, v))
-}
-
-// PercentageLTE applies the LTE predicate on the "percentage" field.
-func PercentageLTE(v decimal.Decimal) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLTE(FieldPercentage, v))
-}
-
-// PercentageIsNil applies the IsNil predicate on the "percentage" field.
-func PercentageIsNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIsNull(FieldPercentage))
-}
-
-// PercentageNotNil applies the NotNil predicate on the "percentage" field.
-func PercentageNotNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotNull(FieldPercentage))
+// ValueNotNil applies the NotNil predicate on the "value" field.
+func ValueNotNil() predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNotNull(FieldValue))
 }
 
 // BillTriggerEQ applies the EQ predicate on the "bill_trigger" field.
@@ -1188,204 +1123,104 @@ func BillOnNotNil() predicate.BillingTerm {
 	return predicate.BillingTerm(sql.FieldNotNull(FieldBillOn))
 }
 
-// CoversFromEQ applies the EQ predicate on the "covers_from" field.
-func CoversFromEQ(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldCoversFrom, v))
+// StartDateEQ applies the EQ predicate on the "start_date" field.
+func StartDateEQ(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldEQ(FieldStartDate, v))
 }
 
-// CoversFromNEQ applies the NEQ predicate on the "covers_from" field.
-func CoversFromNEQ(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNEQ(FieldCoversFrom, v))
+// StartDateNEQ applies the NEQ predicate on the "start_date" field.
+func StartDateNEQ(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNEQ(FieldStartDate, v))
 }
 
-// CoversFromIn applies the In predicate on the "covers_from" field.
-func CoversFromIn(vs ...time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIn(FieldCoversFrom, vs...))
+// StartDateIn applies the In predicate on the "start_date" field.
+func StartDateIn(vs ...time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldIn(FieldStartDate, vs...))
 }
 
-// CoversFromNotIn applies the NotIn predicate on the "covers_from" field.
-func CoversFromNotIn(vs ...time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotIn(FieldCoversFrom, vs...))
+// StartDateNotIn applies the NotIn predicate on the "start_date" field.
+func StartDateNotIn(vs ...time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNotIn(FieldStartDate, vs...))
 }
 
-// CoversFromGT applies the GT predicate on the "covers_from" field.
-func CoversFromGT(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGT(FieldCoversFrom, v))
+// StartDateGT applies the GT predicate on the "start_date" field.
+func StartDateGT(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldGT(FieldStartDate, v))
 }
 
-// CoversFromGTE applies the GTE predicate on the "covers_from" field.
-func CoversFromGTE(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGTE(FieldCoversFrom, v))
+// StartDateGTE applies the GTE predicate on the "start_date" field.
+func StartDateGTE(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldGTE(FieldStartDate, v))
 }
 
-// CoversFromLT applies the LT predicate on the "covers_from" field.
-func CoversFromLT(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLT(FieldCoversFrom, v))
+// StartDateLT applies the LT predicate on the "start_date" field.
+func StartDateLT(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldLT(FieldStartDate, v))
 }
 
-// CoversFromLTE applies the LTE predicate on the "covers_from" field.
-func CoversFromLTE(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLTE(FieldCoversFrom, v))
+// StartDateLTE applies the LTE predicate on the "start_date" field.
+func StartDateLTE(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldLTE(FieldStartDate, v))
 }
 
-// CoversFromIsNil applies the IsNil predicate on the "covers_from" field.
-func CoversFromIsNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIsNull(FieldCoversFrom))
+// StartDateIsNil applies the IsNil predicate on the "start_date" field.
+func StartDateIsNil() predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldIsNull(FieldStartDate))
 }
 
-// CoversFromNotNil applies the NotNil predicate on the "covers_from" field.
-func CoversFromNotNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotNull(FieldCoversFrom))
+// StartDateNotNil applies the NotNil predicate on the "start_date" field.
+func StartDateNotNil() predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNotNull(FieldStartDate))
 }
 
-// CoversToEQ applies the EQ predicate on the "covers_to" field.
-func CoversToEQ(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldCoversTo, v))
+// EndDateEQ applies the EQ predicate on the "end_date" field.
+func EndDateEQ(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldEQ(FieldEndDate, v))
 }
 
-// CoversToNEQ applies the NEQ predicate on the "covers_to" field.
-func CoversToNEQ(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNEQ(FieldCoversTo, v))
+// EndDateNEQ applies the NEQ predicate on the "end_date" field.
+func EndDateNEQ(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNEQ(FieldEndDate, v))
 }
 
-// CoversToIn applies the In predicate on the "covers_to" field.
-func CoversToIn(vs ...time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIn(FieldCoversTo, vs...))
+// EndDateIn applies the In predicate on the "end_date" field.
+func EndDateIn(vs ...time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldIn(FieldEndDate, vs...))
 }
 
-// CoversToNotIn applies the NotIn predicate on the "covers_to" field.
-func CoversToNotIn(vs ...time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotIn(FieldCoversTo, vs...))
+// EndDateNotIn applies the NotIn predicate on the "end_date" field.
+func EndDateNotIn(vs ...time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNotIn(FieldEndDate, vs...))
 }
 
-// CoversToGT applies the GT predicate on the "covers_to" field.
-func CoversToGT(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGT(FieldCoversTo, v))
+// EndDateGT applies the GT predicate on the "end_date" field.
+func EndDateGT(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldGT(FieldEndDate, v))
 }
 
-// CoversToGTE applies the GTE predicate on the "covers_to" field.
-func CoversToGTE(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGTE(FieldCoversTo, v))
+// EndDateGTE applies the GTE predicate on the "end_date" field.
+func EndDateGTE(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldGTE(FieldEndDate, v))
 }
 
-// CoversToLT applies the LT predicate on the "covers_to" field.
-func CoversToLT(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLT(FieldCoversTo, v))
+// EndDateLT applies the LT predicate on the "end_date" field.
+func EndDateLT(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldLT(FieldEndDate, v))
 }
 
-// CoversToLTE applies the LTE predicate on the "covers_to" field.
-func CoversToLTE(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLTE(FieldCoversTo, v))
+// EndDateLTE applies the LTE predicate on the "end_date" field.
+func EndDateLTE(v time.Time) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldLTE(FieldEndDate, v))
 }
 
-// CoversToIsNil applies the IsNil predicate on the "covers_to" field.
-func CoversToIsNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIsNull(FieldCoversTo))
+// EndDateIsNil applies the IsNil predicate on the "end_date" field.
+func EndDateIsNil() predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldIsNull(FieldEndDate))
 }
 
-// CoversToNotNil applies the NotNil predicate on the "covers_to" field.
-func CoversToNotNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotNull(FieldCoversTo))
-}
-
-// StartsOnEQ applies the EQ predicate on the "starts_on" field.
-func StartsOnEQ(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldStartsOn, v))
-}
-
-// StartsOnNEQ applies the NEQ predicate on the "starts_on" field.
-func StartsOnNEQ(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNEQ(FieldStartsOn, v))
-}
-
-// StartsOnIn applies the In predicate on the "starts_on" field.
-func StartsOnIn(vs ...time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIn(FieldStartsOn, vs...))
-}
-
-// StartsOnNotIn applies the NotIn predicate on the "starts_on" field.
-func StartsOnNotIn(vs ...time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotIn(FieldStartsOn, vs...))
-}
-
-// StartsOnGT applies the GT predicate on the "starts_on" field.
-func StartsOnGT(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGT(FieldStartsOn, v))
-}
-
-// StartsOnGTE applies the GTE predicate on the "starts_on" field.
-func StartsOnGTE(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGTE(FieldStartsOn, v))
-}
-
-// StartsOnLT applies the LT predicate on the "starts_on" field.
-func StartsOnLT(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLT(FieldStartsOn, v))
-}
-
-// StartsOnLTE applies the LTE predicate on the "starts_on" field.
-func StartsOnLTE(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLTE(FieldStartsOn, v))
-}
-
-// StartsOnIsNil applies the IsNil predicate on the "starts_on" field.
-func StartsOnIsNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIsNull(FieldStartsOn))
-}
-
-// StartsOnNotNil applies the NotNil predicate on the "starts_on" field.
-func StartsOnNotNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotNull(FieldStartsOn))
-}
-
-// EndsOnEQ applies the EQ predicate on the "ends_on" field.
-func EndsOnEQ(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldEndsOn, v))
-}
-
-// EndsOnNEQ applies the NEQ predicate on the "ends_on" field.
-func EndsOnNEQ(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNEQ(FieldEndsOn, v))
-}
-
-// EndsOnIn applies the In predicate on the "ends_on" field.
-func EndsOnIn(vs ...time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIn(FieldEndsOn, vs...))
-}
-
-// EndsOnNotIn applies the NotIn predicate on the "ends_on" field.
-func EndsOnNotIn(vs ...time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotIn(FieldEndsOn, vs...))
-}
-
-// EndsOnGT applies the GT predicate on the "ends_on" field.
-func EndsOnGT(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGT(FieldEndsOn, v))
-}
-
-// EndsOnGTE applies the GTE predicate on the "ends_on" field.
-func EndsOnGTE(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGTE(FieldEndsOn, v))
-}
-
-// EndsOnLT applies the LT predicate on the "ends_on" field.
-func EndsOnLT(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLT(FieldEndsOn, v))
-}
-
-// EndsOnLTE applies the LTE predicate on the "ends_on" field.
-func EndsOnLTE(v time.Time) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLTE(FieldEndsOn, v))
-}
-
-// EndsOnIsNil applies the IsNil predicate on the "ends_on" field.
-func EndsOnIsNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIsNull(FieldEndsOn))
-}
-
-// EndsOnNotNil applies the NotNil predicate on the "ends_on" field.
-func EndsOnNotNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotNull(FieldEndsOn))
+// EndDateNotNil applies the NotNil predicate on the "end_date" field.
+func EndDateNotNil() predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNotNull(FieldEndDate))
 }
 
 // PeriodCountEQ applies the EQ predicate on the "period_count" field.
@@ -1626,79 +1461,79 @@ func SplitContainsFold(v types.BillingTermSplit) predicate.BillingTerm {
 	return predicate.BillingTerm(sql.FieldContainsFold(FieldSplit, vc))
 }
 
-// DescriptionEQ applies the EQ predicate on the "description" field.
-func DescriptionEQ(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEQ(FieldDescription, v))
+// InvoiceLabelEQ applies the EQ predicate on the "invoice_label" field.
+func InvoiceLabelEQ(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldEQ(FieldInvoiceLabel, v))
 }
 
-// DescriptionNEQ applies the NEQ predicate on the "description" field.
-func DescriptionNEQ(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNEQ(FieldDescription, v))
+// InvoiceLabelNEQ applies the NEQ predicate on the "invoice_label" field.
+func InvoiceLabelNEQ(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNEQ(FieldInvoiceLabel, v))
 }
 
-// DescriptionIn applies the In predicate on the "description" field.
-func DescriptionIn(vs ...string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIn(FieldDescription, vs...))
+// InvoiceLabelIn applies the In predicate on the "invoice_label" field.
+func InvoiceLabelIn(vs ...string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldIn(FieldInvoiceLabel, vs...))
 }
 
-// DescriptionNotIn applies the NotIn predicate on the "description" field.
-func DescriptionNotIn(vs ...string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotIn(FieldDescription, vs...))
+// InvoiceLabelNotIn applies the NotIn predicate on the "invoice_label" field.
+func InvoiceLabelNotIn(vs ...string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNotIn(FieldInvoiceLabel, vs...))
 }
 
-// DescriptionGT applies the GT predicate on the "description" field.
-func DescriptionGT(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGT(FieldDescription, v))
+// InvoiceLabelGT applies the GT predicate on the "invoice_label" field.
+func InvoiceLabelGT(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldGT(FieldInvoiceLabel, v))
 }
 
-// DescriptionGTE applies the GTE predicate on the "description" field.
-func DescriptionGTE(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldGTE(FieldDescription, v))
+// InvoiceLabelGTE applies the GTE predicate on the "invoice_label" field.
+func InvoiceLabelGTE(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldGTE(FieldInvoiceLabel, v))
 }
 
-// DescriptionLT applies the LT predicate on the "description" field.
-func DescriptionLT(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLT(FieldDescription, v))
+// InvoiceLabelLT applies the LT predicate on the "invoice_label" field.
+func InvoiceLabelLT(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldLT(FieldInvoiceLabel, v))
 }
 
-// DescriptionLTE applies the LTE predicate on the "description" field.
-func DescriptionLTE(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldLTE(FieldDescription, v))
+// InvoiceLabelLTE applies the LTE predicate on the "invoice_label" field.
+func InvoiceLabelLTE(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldLTE(FieldInvoiceLabel, v))
 }
 
-// DescriptionContains applies the Contains predicate on the "description" field.
-func DescriptionContains(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldContains(FieldDescription, v))
+// InvoiceLabelContains applies the Contains predicate on the "invoice_label" field.
+func InvoiceLabelContains(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldContains(FieldInvoiceLabel, v))
 }
 
-// DescriptionHasPrefix applies the HasPrefix predicate on the "description" field.
-func DescriptionHasPrefix(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldHasPrefix(FieldDescription, v))
+// InvoiceLabelHasPrefix applies the HasPrefix predicate on the "invoice_label" field.
+func InvoiceLabelHasPrefix(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldHasPrefix(FieldInvoiceLabel, v))
 }
 
-// DescriptionHasSuffix applies the HasSuffix predicate on the "description" field.
-func DescriptionHasSuffix(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldHasSuffix(FieldDescription, v))
+// InvoiceLabelHasSuffix applies the HasSuffix predicate on the "invoice_label" field.
+func InvoiceLabelHasSuffix(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldHasSuffix(FieldInvoiceLabel, v))
 }
 
-// DescriptionIsNil applies the IsNil predicate on the "description" field.
-func DescriptionIsNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldIsNull(FieldDescription))
+// InvoiceLabelIsNil applies the IsNil predicate on the "invoice_label" field.
+func InvoiceLabelIsNil() predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldIsNull(FieldInvoiceLabel))
 }
 
-// DescriptionNotNil applies the NotNil predicate on the "description" field.
-func DescriptionNotNil() predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldNotNull(FieldDescription))
+// InvoiceLabelNotNil applies the NotNil predicate on the "invoice_label" field.
+func InvoiceLabelNotNil() predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNotNull(FieldInvoiceLabel))
 }
 
-// DescriptionEqualFold applies the EqualFold predicate on the "description" field.
-func DescriptionEqualFold(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldEqualFold(FieldDescription, v))
+// InvoiceLabelEqualFold applies the EqualFold predicate on the "invoice_label" field.
+func InvoiceLabelEqualFold(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldEqualFold(FieldInvoiceLabel, v))
 }
 
-// DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
-func DescriptionContainsFold(v string) predicate.BillingTerm {
-	return predicate.BillingTerm(sql.FieldContainsFold(FieldDescription, v))
+// InvoiceLabelContainsFold applies the ContainsFold predicate on the "invoice_label" field.
+func InvoiceLabelContainsFold(v string) predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldContainsFold(FieldInvoiceLabel, v))
 }
 
 // MetadataEQ applies the EQ predicate on the "metadata" field.

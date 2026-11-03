@@ -394,9 +394,9 @@ func TestCreateSubscriptionRequestValidate_InlineCommitments(t *testing.T) {
 	}
 	subscriptionScope := CommitmentScopeInput{EntityType: types.CommitmentScopeSubscription}
 	priceScope := CommitmentScopeInput{EntityType: types.CommitmentScopePrice, EntityID: "price_a"}
-	longDescription := inline("", priceScope)
-	longDescription.BillingTerms = []BillingTermInput{
-		{ValueType: types.BillingTermValueRemainder, Description: lo.ToPtr(strings.Repeat("a", 256))},
+	longLabel := inline("", priceScope)
+	longLabel.BillingTerms = []BillingTermInput{
+		{ValueType: types.BillingTermValueRemainder, InvoiceLabel: lo.ToPtr(strings.Repeat("a", 256))},
 	}
 
 	tests := []struct {
@@ -427,9 +427,9 @@ func TestCreateSubscriptionRequestValidate_InlineCommitments(t *testing.T) {
 			errSub:      "more than once",
 		},
 		{
-			name:        "billing term description over 255 characters",
-			commitments: []CreateCommitmentRequest{longDescription},
-			errSub:      "BillingTerms[0].Description",
+			name:        "billing term invoice_label over 255 characters",
+			commitments: []CreateCommitmentRequest{longLabel},
+			errSub:      "BillingTerms[0].InvoiceLabel",
 		},
 	}
 	for _, tc := range tests {

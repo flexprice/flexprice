@@ -41,30 +41,24 @@ type BillingTerm struct {
 	Kind types.BillingTermKind `json:"kind,omitempty"`
 	// ValueType holds the value of the "value_type" field.
 	ValueType types.BillingTermValueType `json:"value_type,omitempty"`
-	// Amount holds the value of the "amount" field.
-	Amount *decimal.Decimal `json:"amount,omitempty"`
-	// Percentage holds the value of the "percentage" field.
-	Percentage *decimal.Decimal `json:"percentage,omitempty"`
+	// Value holds the value of the "value" field.
+	Value *decimal.Decimal `json:"value,omitempty"`
 	// BillTrigger holds the value of the "bill_trigger" field.
 	BillTrigger *types.InstalmentBillTrigger `json:"bill_trigger,omitempty"`
 	// BillOn holds the value of the "bill_on" field.
 	BillOn *time.Time `json:"bill_on,omitempty"`
-	// CoversFrom holds the value of the "covers_from" field.
-	CoversFrom *time.Time `json:"covers_from,omitempty"`
-	// CoversTo holds the value of the "covers_to" field.
-	CoversTo *time.Time `json:"covers_to,omitempty"`
-	// StartsOn holds the value of the "starts_on" field.
-	StartsOn *time.Time `json:"starts_on,omitempty"`
-	// EndsOn holds the value of the "ends_on" field.
-	EndsOn *time.Time `json:"ends_on,omitempty"`
+	// StartDate holds the value of the "start_date" field.
+	StartDate *time.Time `json:"start_date,omitempty"`
+	// EndDate holds the value of the "end_date" field.
+	EndDate *time.Time `json:"end_date,omitempty"`
 	// PeriodCount holds the value of the "period_count" field.
 	PeriodCount *int `json:"period_count,omitempty"`
 	// InvoiceCadence holds the value of the "invoice_cadence" field.
 	InvoiceCadence *types.InvoiceCadence `json:"invoice_cadence,omitempty"`
 	// Split holds the value of the "split" field.
 	Split *types.BillingTermSplit `json:"split,omitempty"`
-	// Description holds the value of the "description" field.
-	Description *string `json:"description,omitempty"`
+	// InvoiceLabel holds the value of the "invoice_label" field.
+	InvoiceLabel *string `json:"invoice_label,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata     types.Metadata `json:"metadata,omitempty"`
 	selectValues sql.SelectValues
@@ -75,13 +69,13 @@ func (*BillingTerm) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case billingterm.FieldAmount, billingterm.FieldPercentage:
+		case billingterm.FieldValue:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case billingterm.FieldPeriodCount:
 			values[i] = new(sql.NullInt64)
-		case billingterm.FieldID, billingterm.FieldTenantID, billingterm.FieldStatus, billingterm.FieldCreatedBy, billingterm.FieldUpdatedBy, billingterm.FieldEnvironmentID, billingterm.FieldOwnerType, billingterm.FieldOwnerID, billingterm.FieldKind, billingterm.FieldValueType, billingterm.FieldBillTrigger, billingterm.FieldInvoiceCadence, billingterm.FieldSplit, billingterm.FieldDescription:
+		case billingterm.FieldID, billingterm.FieldTenantID, billingterm.FieldStatus, billingterm.FieldCreatedBy, billingterm.FieldUpdatedBy, billingterm.FieldEnvironmentID, billingterm.FieldOwnerType, billingterm.FieldOwnerID, billingterm.FieldKind, billingterm.FieldValueType, billingterm.FieldBillTrigger, billingterm.FieldInvoiceCadence, billingterm.FieldSplit, billingterm.FieldInvoiceLabel:
 			values[i] = new(sql.NullString)
-		case billingterm.FieldCreatedAt, billingterm.FieldUpdatedAt, billingterm.FieldBillOn, billingterm.FieldCoversFrom, billingterm.FieldCoversTo, billingterm.FieldStartsOn, billingterm.FieldEndsOn:
+		case billingterm.FieldCreatedAt, billingterm.FieldUpdatedAt, billingterm.FieldBillOn, billingterm.FieldStartDate, billingterm.FieldEndDate:
 			values[i] = new(sql.NullTime)
 		case billingterm.FieldMetadata:
 			values[i] = new(types.Metadata)
@@ -172,19 +166,12 @@ func (_m *BillingTerm) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ValueType = types.BillingTermValueType(value.String)
 			}
-		case billingterm.FieldAmount:
+		case billingterm.FieldValue:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
-				return fmt.Errorf("unexpected type %T for field amount", values[i])
+				return fmt.Errorf("unexpected type %T for field value", values[i])
 			} else if value.Valid {
-				_m.Amount = new(decimal.Decimal)
-				*_m.Amount = *value.S.(*decimal.Decimal)
-			}
-		case billingterm.FieldPercentage:
-			if value, ok := values[i].(*sql.NullScanner); !ok {
-				return fmt.Errorf("unexpected type %T for field percentage", values[i])
-			} else if value.Valid {
-				_m.Percentage = new(decimal.Decimal)
-				*_m.Percentage = *value.S.(*decimal.Decimal)
+				_m.Value = new(decimal.Decimal)
+				*_m.Value = *value.S.(*decimal.Decimal)
 			}
 		case billingterm.FieldBillTrigger:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -200,33 +187,19 @@ func (_m *BillingTerm) assignValues(columns []string, values []any) error {
 				_m.BillOn = new(time.Time)
 				*_m.BillOn = value.Time
 			}
-		case billingterm.FieldCoversFrom:
+		case billingterm.FieldStartDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field covers_from", values[i])
+				return fmt.Errorf("unexpected type %T for field start_date", values[i])
 			} else if value.Valid {
-				_m.CoversFrom = new(time.Time)
-				*_m.CoversFrom = value.Time
+				_m.StartDate = new(time.Time)
+				*_m.StartDate = value.Time
 			}
-		case billingterm.FieldCoversTo:
+		case billingterm.FieldEndDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field covers_to", values[i])
+				return fmt.Errorf("unexpected type %T for field end_date", values[i])
 			} else if value.Valid {
-				_m.CoversTo = new(time.Time)
-				*_m.CoversTo = value.Time
-			}
-		case billingterm.FieldStartsOn:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field starts_on", values[i])
-			} else if value.Valid {
-				_m.StartsOn = new(time.Time)
-				*_m.StartsOn = value.Time
-			}
-		case billingterm.FieldEndsOn:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field ends_on", values[i])
-			} else if value.Valid {
-				_m.EndsOn = new(time.Time)
-				*_m.EndsOn = value.Time
+				_m.EndDate = new(time.Time)
+				*_m.EndDate = value.Time
 			}
 		case billingterm.FieldPeriodCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -249,12 +222,12 @@ func (_m *BillingTerm) assignValues(columns []string, values []any) error {
 				_m.Split = new(types.BillingTermSplit)
 				*_m.Split = types.BillingTermSplit(value.String)
 			}
-		case billingterm.FieldDescription:
+		case billingterm.FieldInvoiceLabel:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field description", values[i])
+				return fmt.Errorf("unexpected type %T for field invoice_label", values[i])
 			} else if value.Valid {
-				_m.Description = new(string)
-				*_m.Description = value.String
+				_m.InvoiceLabel = new(string)
+				*_m.InvoiceLabel = value.String
 			}
 		case billingterm.FieldMetadata:
 			if value, ok := values[i].(*types.Metadata); !ok {
@@ -269,9 +242,9 @@ func (_m *BillingTerm) assignValues(columns []string, values []any) error {
 	return nil
 }
 
-// Value returns the ent.Value that was dynamically selected and assigned to the BillingTerm.
+// GetValue returns the ent.Value that was dynamically selected and assigned to the BillingTerm.
 // This includes values selected through modifiers, order, etc.
-func (_m *BillingTerm) Value(name string) (ent.Value, error) {
+func (_m *BillingTerm) GetValue(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
@@ -331,13 +304,8 @@ func (_m *BillingTerm) String() string {
 	builder.WriteString("value_type=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ValueType))
 	builder.WriteString(", ")
-	if v := _m.Amount; v != nil {
-		builder.WriteString("amount=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	if v := _m.Percentage; v != nil {
-		builder.WriteString("percentage=")
+	if v := _m.Value; v != nil {
+		builder.WriteString("value=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
@@ -351,23 +319,13 @@ func (_m *BillingTerm) String() string {
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := _m.CoversFrom; v != nil {
-		builder.WriteString("covers_from=")
+	if v := _m.StartDate; v != nil {
+		builder.WriteString("start_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := _m.CoversTo; v != nil {
-		builder.WriteString("covers_to=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
-	builder.WriteString(", ")
-	if v := _m.StartsOn; v != nil {
-		builder.WriteString("starts_on=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
-	builder.WriteString(", ")
-	if v := _m.EndsOn; v != nil {
-		builder.WriteString("ends_on=")
+	if v := _m.EndDate; v != nil {
+		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
@@ -386,8 +344,8 @@ func (_m *BillingTerm) String() string {
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := _m.Description; v != nil {
-		builder.WriteString("description=")
+	if v := _m.InvoiceLabel; v != nil {
+		builder.WriteString("invoice_label=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

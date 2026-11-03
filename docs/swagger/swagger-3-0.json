@@ -20685,9 +20685,6 @@
           "delivery": {
             "$ref": "#/components/schemas/types.InstalmentDelivery"
           },
-          "description": {
-            "type": "string"
-          },
           "environment_id": {
             "type": "string"
           },
@@ -20698,6 +20695,9 @@
             "$ref": "#/components/schemas/types.InstalmentStatus"
           },
           "invoice_id": {
+            "type": "string"
+          },
+          "invoice_label": {
             "type": "string"
           },
           "kind": {
@@ -20745,21 +20745,11 @@
       "billingterm.Term": {
         "type": "object",
         "properties": {
-          "amount": {
-            "type": "string",
-            "description": "Amount is nil for a remainder term; Percentage keeps what the tenant entered, for display."
-          },
           "bill_on": {
             "type": "string"
           },
           "bill_trigger": {
             "$ref": "#/components/schemas/types.InstalmentBillTrigger"
-          },
-          "covers_from": {
-            "type": "string"
-          },
-          "covers_to": {
-            "type": "string"
           },
           "created_at": {
             "type": "string",
@@ -20768,11 +20758,9 @@
           "created_by": {
             "type": "string"
           },
-          "description": {
-            "type": "string"
-          },
-          "ends_on": {
-            "type": "string"
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
           },
           "environment_id": {
             "type": "string"
@@ -20782,6 +20770,10 @@
           },
           "invoice_cadence": {
             "$ref": "#/components/schemas/types.InvoiceCadence"
+          },
+          "invoice_label": {
+            "type": "string",
+            "description": "InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number\nall of the owner's instalments together."
           },
           "kind": {
             "$ref": "#/components/schemas/types.BillingTermKind"
@@ -20795,18 +20787,16 @@
           "owner_type": {
             "$ref": "#/components/schemas/types.BillingTermOwnerType"
           },
-          "percentage": {
-            "type": "string"
-          },
           "period_count": {
             "type": "integer"
           },
           "split": {
             "$ref": "#/components/schemas/types.BillingTermSplit"
           },
-          "starts_on": {
+          "start_date": {
             "type": "string",
-            "description": "Recurring terms."
+            "description": "Recurring terms.",
+            "format": "date-time"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -20820,6 +20810,10 @@
           },
           "updated_by": {
             "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "description": "Value is the amount of a fixed term, per instalment on a recurring one; it is nil for a remainder term."
           },
           "value_type": {
             "$ref": "#/components/schemas/types.BillingTermValueType"
@@ -22221,30 +22215,22 @@
       "BillingTermInput": {
         "type": "object",
         "properties": {
-          "amount": {
-            "type": "string"
-          },
           "bill_on": {
             "type": "string"
           },
           "bill_trigger": {
             "$ref": "#/components/schemas/types.InstalmentBillTrigger"
           },
-          "covers_from": {
-            "type": "string"
-          },
-          "covers_to": {
-            "type": "string"
-          },
-          "description": {
-            "maxLength": 255,
-            "type": "string"
-          },
-          "ends_on": {
-            "type": "string"
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
           },
           "invoice_cadence": {
             "$ref": "#/components/schemas/types.InvoiceCadence"
+          },
+          "invoice_label": {
+            "maxLength": 255,
+            "type": "string"
           },
           "kind": {
             "$ref": "#/components/schemas/types.BillingTermKind"
@@ -22252,16 +22238,17 @@
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
           },
-          "percentage": {
-            "type": "string"
-          },
           "period_count": {
             "type": "integer"
           },
           "split": {
             "$ref": "#/components/schemas/types.BillingTermSplit"
           },
-          "starts_on": {
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "value": {
             "type": "string"
           },
           "value_type": {
@@ -22466,14 +22453,11 @@
         ],
         "type": "object",
         "properties": {
-          "amount": {
-            "type": "string"
-          },
-          "percentage": {
-            "type": "string"
-          },
           "type": {
             "$ref": "#/components/schemas/types.CancellationFeeType"
+          },
+          "value": {
+            "type": "string"
           }
         }
       },
@@ -30070,7 +30054,7 @@
           "bill_trigger": {
             "$ref": "#/components/schemas/types.InstalmentBillTrigger"
           },
-          "description": {
+          "invoice_label": {
             "maxLength": 255,
             "type": "string"
           }

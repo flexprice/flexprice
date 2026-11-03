@@ -17666,9 +17666,6 @@ const docTemplate = `{
                 "delivery": {
                     "$ref": "#/definitions/types.InstalmentDelivery"
                 },
-                "description": {
-                    "type": "string"
-                },
                 "environment_id": {
                     "type": "string"
                 },
@@ -17679,6 +17676,9 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.InstalmentStatus"
                 },
                 "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_label": {
                     "type": "string"
                 },
                 "kind": {
@@ -17722,10 +17722,6 @@ const docTemplate = `{
         "billingterm.Term": {
             "type": "object",
             "properties": {
-                "amount": {
-                    "description": "Amount is nil for a remainder term; Percentage keeps what the tenant entered, for display.",
-                    "type": "string"
-                },
                 "bill_on": {
                     "type": "string"
                 },
@@ -17737,22 +17733,13 @@ const docTemplate = `{
                         }
                     ]
                 },
-                "covers_from": {
-                    "type": "string"
-                },
-                "covers_to": {
-                    "type": "string"
-                },
                 "created_at": {
                     "type": "string"
                 },
                 "created_by": {
                     "type": "string"
                 },
-                "description": {
-                    "type": "string"
-                },
-                "ends_on": {
+                "end_date": {
                     "type": "string"
                 },
                 "environment_id": {
@@ -17763,6 +17750,10 @@ const docTemplate = `{
                 },
                 "invoice_cadence": {
                     "$ref": "#/definitions/types.InvoiceCadence"
+                },
+                "invoice_label": {
+                    "description": "InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number\nall of the owner's instalments together.",
+                    "type": "string"
                 },
                 "kind": {
                     "$ref": "#/definitions/types.BillingTermKind"
@@ -17776,16 +17767,13 @@ const docTemplate = `{
                 "owner_type": {
                     "$ref": "#/definitions/types.BillingTermOwnerType"
                 },
-                "percentage": {
-                    "type": "string"
-                },
                 "period_count": {
                     "type": "integer"
                 },
                 "split": {
                     "$ref": "#/definitions/types.BillingTermSplit"
                 },
-                "starts_on": {
+                "start_date": {
                     "description": "Recurring terms.",
                     "type": "string"
                 },
@@ -17799,6 +17787,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_by": {
+                    "type": "string"
+                },
+                "value": {
+                    "description": "Value is the amount of a fixed term, per instalment on a recurring one; it is nil for a remainder term.",
                     "type": "string"
                 },
                 "value_type": {
@@ -19198,30 +19190,21 @@ const docTemplate = `{
         "BillingTermInput": {
             "type": "object",
             "properties": {
-                "amount": {
-                    "type": "string"
-                },
                 "bill_on": {
                     "type": "string"
                 },
                 "bill_trigger": {
                     "$ref": "#/definitions/types.InstalmentBillTrigger"
                 },
-                "covers_from": {
-                    "type": "string"
-                },
-                "covers_to": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "ends_on": {
+                "end_date": {
                     "type": "string"
                 },
                 "invoice_cadence": {
                     "$ref": "#/definitions/types.InvoiceCadence"
+                },
+                "invoice_label": {
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "kind": {
                     "$ref": "#/definitions/types.BillingTermKind"
@@ -19229,20 +19212,25 @@ const docTemplate = `{
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
                 },
-                "percentage": {
-                    "type": "string"
-                },
                 "period_count": {
                     "type": "integer"
                 },
                 "split": {
                     "$ref": "#/definitions/types.BillingTermSplit"
                 },
-                "starts_on": {
+                "start_date": {
+                    "type": "string"
+                },
+                "value": {
                     "type": "string"
                 },
                 "value_type": {
-                    "$ref": "#/definitions/types.BillingTermValueType"
+                    "description": "ValueType is fixed or remainder; percentage is rejected as not supported yet.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingTermValueType"
+                        }
+                    ]
                 }
             }
         },
@@ -19470,12 +19458,6 @@ const docTemplate = `{
                 "type"
             ],
             "properties": {
-                "amount": {
-                    "type": "string"
-                },
-                "percentage": {
-                    "type": "string"
-                },
                 "type": {
                     "description": "Type is fixed or percentage; a percentage fee is rejected as not supported yet.",
                     "allOf": [
@@ -19483,6 +19465,9 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.CancellationFeeType"
                         }
                     ]
+                },
+                "value": {
+                    "type": "string"
                 }
             }
         },
@@ -27424,7 +27409,7 @@ const docTemplate = `{
                 "bill_trigger": {
                     "$ref": "#/definitions/types.InstalmentBillTrigger"
                 },
-                "description": {
+                "invoice_label": {
                     "type": "string",
                     "maxLength": 255
                 }

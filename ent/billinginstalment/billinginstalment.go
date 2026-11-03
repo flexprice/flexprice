@@ -50,8 +50,8 @@ const (
 	FieldTriggeredAt = "triggered_at"
 	// FieldAmount holds the string denoting the amount field in the database.
 	FieldAmount = "amount"
-	// FieldDescription holds the string denoting the description field in the database.
-	FieldDescription = "description"
+	// FieldInvoiceLabel holds the string denoting the invoice_label field in the database.
+	FieldInvoiceLabel = "invoice_label"
 	// FieldServicePeriodStart holds the string denoting the service_period_start field in the database.
 	FieldServicePeriodStart = "service_period_start"
 	// FieldServicePeriodEnd holds the string denoting the service_period_end field in the database.
@@ -89,7 +89,7 @@ var Columns = []string{
 	FieldBillOn,
 	FieldTriggeredAt,
 	FieldAmount,
-	FieldDescription,
+	FieldInvoiceLabel,
 	FieldServicePeriodStart,
 	FieldServicePeriodEnd,
 	FieldDelivery,
@@ -127,16 +127,14 @@ var (
 	OwnerIDValidator func(string) error
 	// CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	CustomerIDValidator func(string) error
-	// SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
-	SubscriptionIDValidator func(string) error
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
 	// KindValidator is a validator for the "kind" field. It is called by the builders before save.
 	KindValidator func(string) error
 	// BillTriggerValidator is a validator for the "bill_trigger" field. It is called by the builders before save.
 	BillTriggerValidator func(string) error
-	// DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
-	DescriptionValidator func(string) error
+	// InvoiceLabelValidator is a validator for the "invoice_label" field. It is called by the builders before save.
+	InvoiceLabelValidator func(string) error
 	// DeliveryValidator is a validator for the "delivery" field. It is called by the builders before save.
 	DeliveryValidator func(string) error
 	// InstalmentStatusValidator is a validator for the "instalment_status" field. It is called by the builders before save.
@@ -243,9 +241,9 @@ func ByAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAmount, opts...).ToFunc()
 }
 
-// ByDescription orders the results by the description field.
-func ByDescription(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+// ByInvoiceLabel orders the results by the invoice_label field.
+func ByInvoiceLabel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoiceLabel, opts...).ToFunc()
 }
 
 // ByServicePeriodStart orders the results by the service_period_start field.

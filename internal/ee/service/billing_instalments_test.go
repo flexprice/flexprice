@@ -21,13 +21,13 @@ func termsRequest(name, priceID, value string, start, end time.Time, terms ...dt
 	return req
 }
 
-// wholeValueUpfront is one term billing the commitment's whole value on billOn, or on its start when billOn is nil.
+// wholeValueUpfront is one remainder term billing the commitment's whole value on billOn, or on its start when billOn
+// is nil.
 func wholeValueUpfront(billOn *time.Time) dto.BillingTermInput {
 	return dto.BillingTermInput{
-		Kind:       types.BillingTermKindOnce,
-		ValueType:  types.BillingTermValuePercentage,
-		Percentage: lo.ToPtr(dec("100")),
-		BillOn:     billOn,
+		Kind:      types.BillingTermKindOnce,
+		ValueType: types.BillingTermValueRemainder,
+		BillOn:    billOn,
 	}
 }
 
@@ -99,14 +99,16 @@ func (s *CommitmentE2ESuite) TestInstalments_ArrearAndAdvanceLanding() {
 
 	a3Price := s.planWith("a3", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	a3Sub := s.subscribe(a3Price, s.jan)
-	a3 := s.commit(a3Sub.ID, termsRequest("A3", a3Price.ID, "100", s.jan, s.jan.AddDate(0, 10, 0), upfrontPlusRemainder()...))
+	a3Req := termsRequest("A3", a3Price.ID, "100", s.jan, s.jan.AddDate(0, 10, 0), upfrontPlusRemainder()...)
+	a3Req.InvoiceDescription = lo.ToPtr("Annual platform commitment")
+	a3 := s.commit(a3Sub.ID, a3Req)
 
 	january := s.invoiceFor(a3Sub.ID, s.jan, feb)
 	s.True(january.AmountDue.Equal(dec("370")), "amount due %s", january.AmountDue)
 	lines := instalmentLines(january)
 	requireLines(s.T(), []wantLine{
-		{types.CommitmentLineInstalment, "A3 - Commitment payment", "1", "300"},
-		{types.CommitmentLineInstalment, "A3 - Instalment 1 of 10", "1", "70"},
+		{types.CommitmentLineInstalment, "A3 - Instalment 1 of 11", "1", "300"},
+		{types.CommitmentLineInstalment, "A3 - Instalment 2 of 11", "1", "70"},
 	}, lines)
 
 	upfront, first := a3.Instalments[0], a3.Instalments[1]
@@ -121,6 +123,7 @@ func (s *CommitmentE2ESuite) TestInstalments_ArrearAndAdvanceLanding() {
 		s.Equal(string(types.InvoiceLineItemEntityTypeCommitment), lo.FromPtr(line.EntityType))
 		s.Equal(a3.ID, lo.FromPtr(line.EntityID))
 		s.Equal(a3.ID, line.Metadata[types.MetadataKeyCommitmentID])
+		s.Equal("Annual platform commitment", line.Metadata[types.MetadataKeyDescription])
 	}
 
 	previewed := instalmentLines(s.invoiceAt(types.ReferencePointPreview, a3Sub.ID, s.jan, feb))
@@ -133,7 +136,7 @@ func (s *CommitmentE2ESuite) TestInstalments_ArrearAndAdvanceLanding() {
 	s.commit(a7Sub.ID, termsRequest("A7", a7Price.ID, "100", s.jan, s.jan.AddDate(1, 0, 0), dto.BillingTermInput{
 		Kind:           types.BillingTermKindRecurring,
 		ValueType:      types.BillingTermValueFixed,
-		Amount:         lo.ToPtr(dec("300")),
+		Value:          lo.ToPtr(dec("300")),
 		PeriodCount:    lo.ToPtr(3),
 		InvoiceCadence: lo.ToPtr(types.InvoiceCadenceAdvance),
 	}))
@@ -159,7 +162,7 @@ func (s *CommitmentE2ESuite) TestInstalments_MidPeriodAdvance() {
 	created := s.commit(sub.ID, termsRequest("Ramp", tokens.ID, "93", start, apr, dto.BillingTermInput{
 		Kind:           types.BillingTermKindRecurring,
 		ValueType:      types.BillingTermValueFixed,
-		Amount:         lo.ToPtr(dec("79")),
+		Value:          lo.ToPtr(dec("79")),
 		InvoiceCadence: lo.ToPtr(types.InvoiceCadenceAdvance),
 	}))
 	first := created.Instalments[0]
@@ -188,7 +191,7 @@ func (s *CommitmentE2ESuite) TestInstalments_OnlyInvoiceWithInstalments() {
 	s.commit(sub.ID, termsRequest("Platform", tokens.ID, "100", s.jan, s.jan.AddDate(0, 10, 0), upfrontPlusRemainder()...))
 
 	s.requireInvoice(s.invoiceAt(types.ReferencePointPeriodStart, sub.ID, s.jan, s.jan.AddDate(0, 1, 0)), "300",
-		wantLine{types.CommitmentLineInstalment, "Platform - Commitment payment", "1", "300"},
+		wantLine{types.CommitmentLineInstalment, "Platform - Instalment 1 of 11", "1", "300"},
 	)
 }
 
@@ -307,13 +310,13 @@ func (s *CommitmentE2ESuite) TestInstalments_ReconcileKeepsSamePeriodPair() {
 			OwnerType:          types.BillingTermOwnerCommitment,
 			OwnerID:            created.ID,
 			CustomerID:         s.customer.ID,
-			SubscriptionID:     sub.ID,
+			SubscriptionID:     lo.ToPtr(sub.ID),
 			Currency:           "usd",
 			Kind:               types.InstalmentKindInstalment,
 			BillTrigger:        types.InstalmentBillTriggerDate,
 			BillOn:             s.jan.AddDate(0, 0, 10*n),
 			Amount:             dec(amount),
-			Description:        "January payment",
+			InvoiceLabel:       "January payment",
 			ServicePeriodStart: s.jan,
 			ServicePeriodEnd:   feb,
 			Delivery:           types.InstalmentDeliverySubscriptionInvoice,

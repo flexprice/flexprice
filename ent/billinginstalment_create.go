@@ -150,6 +150,14 @@ func (_c *BillingInstalmentCreate) SetSubscriptionID(v string) *BillingInstalmen
 	return _c
 }
 
+// SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
+func (_c *BillingInstalmentCreate) SetNillableSubscriptionID(v *string) *BillingInstalmentCreate {
+	if v != nil {
+		_c.SetSubscriptionID(*v)
+	}
+	return _c
+}
+
 // SetCurrency sets the "currency" field.
 func (_c *BillingInstalmentCreate) SetCurrency(v string) *BillingInstalmentCreate {
 	_c.mutation.SetCurrency(v)
@@ -194,9 +202,9 @@ func (_c *BillingInstalmentCreate) SetAmount(v decimal.Decimal) *BillingInstalme
 	return _c
 }
 
-// SetDescription sets the "description" field.
-func (_c *BillingInstalmentCreate) SetDescription(v string) *BillingInstalmentCreate {
-	_c.mutation.SetDescription(v)
+// SetInvoiceLabel sets the "invoice_label" field.
+func (_c *BillingInstalmentCreate) SetInvoiceLabel(v string) *BillingInstalmentCreate {
+	_c.mutation.SetInvoiceLabel(v)
 	return _c
 }
 
@@ -350,14 +358,6 @@ func (_c *BillingInstalmentCreate) check() error {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "BillingInstalment.customer_id": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.SubscriptionID(); !ok {
-		return &ValidationError{Name: "subscription_id", err: errors.New(`ent: missing required field "BillingInstalment.subscription_id"`)}
-	}
-	if v, ok := _c.mutation.SubscriptionID(); ok {
-		if err := billinginstalment.SubscriptionIDValidator(v); err != nil {
-			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "BillingInstalment.subscription_id": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "BillingInstalment.currency"`)}
 	}
@@ -388,12 +388,12 @@ func (_c *BillingInstalmentCreate) check() error {
 	if _, ok := _c.mutation.Amount(); !ok {
 		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "BillingInstalment.amount"`)}
 	}
-	if _, ok := _c.mutation.Description(); !ok {
-		return &ValidationError{Name: "description", err: errors.New(`ent: missing required field "BillingInstalment.description"`)}
+	if _, ok := _c.mutation.InvoiceLabel(); !ok {
+		return &ValidationError{Name: "invoice_label", err: errors.New(`ent: missing required field "BillingInstalment.invoice_label"`)}
 	}
-	if v, ok := _c.mutation.Description(); ok {
-		if err := billinginstalment.DescriptionValidator(v); err != nil {
-			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "BillingInstalment.description": %w`, err)}
+	if v, ok := _c.mutation.InvoiceLabel(); ok {
+		if err := billinginstalment.InvoiceLabelValidator(v); err != nil {
+			return &ValidationError{Name: "invoice_label", err: fmt.Errorf(`ent: validator failed for field "BillingInstalment.invoice_label": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.ServicePeriodStart(); !ok {
@@ -499,7 +499,7 @@ func (_c *BillingInstalmentCreate) createSpec() (*BillingInstalment, *sqlgraph.C
 	}
 	if value, ok := _c.mutation.SubscriptionID(); ok {
 		_spec.SetField(billinginstalment.FieldSubscriptionID, field.TypeString, value)
-		_node.SubscriptionID = value
+		_node.SubscriptionID = &value
 	}
 	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(billinginstalment.FieldCurrency, field.TypeString, value)
@@ -525,9 +525,9 @@ func (_c *BillingInstalmentCreate) createSpec() (*BillingInstalment, *sqlgraph.C
 		_spec.SetField(billinginstalment.FieldAmount, field.TypeOther, value)
 		_node.Amount = value
 	}
-	if value, ok := _c.mutation.Description(); ok {
-		_spec.SetField(billinginstalment.FieldDescription, field.TypeString, value)
-		_node.Description = value
+	if value, ok := _c.mutation.InvoiceLabel(); ok {
+		_spec.SetField(billinginstalment.FieldInvoiceLabel, field.TypeString, value)
+		_node.InvoiceLabel = value
 	}
 	if value, ok := _c.mutation.ServicePeriodStart(); ok {
 		_spec.SetField(billinginstalment.FieldServicePeriodStart, field.TypeTime, value)

@@ -159,9 +159,9 @@ func Amount(v decimal.Decimal) predicate.BillingInstalment {
 	return predicate.BillingInstalment(sql.FieldEQ(FieldAmount, v))
 }
 
-// Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
-func Description(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldEQ(FieldDescription, v))
+// InvoiceLabel applies equality check predicate on the "invoice_label" field. It's identical to InvoiceLabelEQ.
+func InvoiceLabel(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldEQ(FieldInvoiceLabel, v))
 }
 
 // ServicePeriodStart applies equality check predicate on the "service_period_start" field. It's identical to ServicePeriodStartEQ.
@@ -975,6 +975,16 @@ func SubscriptionIDHasSuffix(v string) predicate.BillingInstalment {
 	return predicate.BillingInstalment(sql.FieldHasSuffix(FieldSubscriptionID, v))
 }
 
+// SubscriptionIDIsNil applies the IsNil predicate on the "subscription_id" field.
+func SubscriptionIDIsNil() predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldIsNull(FieldSubscriptionID))
+}
+
+// SubscriptionIDNotNil applies the NotNil predicate on the "subscription_id" field.
+func SubscriptionIDNotNil() predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldNotNull(FieldSubscriptionID))
+}
+
 // SubscriptionIDEqualFold applies the EqualFold predicate on the "subscription_id" field.
 func SubscriptionIDEqualFold(v string) predicate.BillingInstalment {
 	return predicate.BillingInstalment(sql.FieldEqualFold(FieldSubscriptionID, v))
@@ -1348,69 +1358,69 @@ func AmountLTE(v decimal.Decimal) predicate.BillingInstalment {
 	return predicate.BillingInstalment(sql.FieldLTE(FieldAmount, v))
 }
 
-// DescriptionEQ applies the EQ predicate on the "description" field.
-func DescriptionEQ(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldEQ(FieldDescription, v))
+// InvoiceLabelEQ applies the EQ predicate on the "invoice_label" field.
+func InvoiceLabelEQ(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldEQ(FieldInvoiceLabel, v))
 }
 
-// DescriptionNEQ applies the NEQ predicate on the "description" field.
-func DescriptionNEQ(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldNEQ(FieldDescription, v))
+// InvoiceLabelNEQ applies the NEQ predicate on the "invoice_label" field.
+func InvoiceLabelNEQ(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldNEQ(FieldInvoiceLabel, v))
 }
 
-// DescriptionIn applies the In predicate on the "description" field.
-func DescriptionIn(vs ...string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldIn(FieldDescription, vs...))
+// InvoiceLabelIn applies the In predicate on the "invoice_label" field.
+func InvoiceLabelIn(vs ...string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldIn(FieldInvoiceLabel, vs...))
 }
 
-// DescriptionNotIn applies the NotIn predicate on the "description" field.
-func DescriptionNotIn(vs ...string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldNotIn(FieldDescription, vs...))
+// InvoiceLabelNotIn applies the NotIn predicate on the "invoice_label" field.
+func InvoiceLabelNotIn(vs ...string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldNotIn(FieldInvoiceLabel, vs...))
 }
 
-// DescriptionGT applies the GT predicate on the "description" field.
-func DescriptionGT(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldGT(FieldDescription, v))
+// InvoiceLabelGT applies the GT predicate on the "invoice_label" field.
+func InvoiceLabelGT(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldGT(FieldInvoiceLabel, v))
 }
 
-// DescriptionGTE applies the GTE predicate on the "description" field.
-func DescriptionGTE(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldGTE(FieldDescription, v))
+// InvoiceLabelGTE applies the GTE predicate on the "invoice_label" field.
+func InvoiceLabelGTE(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldGTE(FieldInvoiceLabel, v))
 }
 
-// DescriptionLT applies the LT predicate on the "description" field.
-func DescriptionLT(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldLT(FieldDescription, v))
+// InvoiceLabelLT applies the LT predicate on the "invoice_label" field.
+func InvoiceLabelLT(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldLT(FieldInvoiceLabel, v))
 }
 
-// DescriptionLTE applies the LTE predicate on the "description" field.
-func DescriptionLTE(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldLTE(FieldDescription, v))
+// InvoiceLabelLTE applies the LTE predicate on the "invoice_label" field.
+func InvoiceLabelLTE(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldLTE(FieldInvoiceLabel, v))
 }
 
-// DescriptionContains applies the Contains predicate on the "description" field.
-func DescriptionContains(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldContains(FieldDescription, v))
+// InvoiceLabelContains applies the Contains predicate on the "invoice_label" field.
+func InvoiceLabelContains(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldContains(FieldInvoiceLabel, v))
 }
 
-// DescriptionHasPrefix applies the HasPrefix predicate on the "description" field.
-func DescriptionHasPrefix(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldHasPrefix(FieldDescription, v))
+// InvoiceLabelHasPrefix applies the HasPrefix predicate on the "invoice_label" field.
+func InvoiceLabelHasPrefix(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldHasPrefix(FieldInvoiceLabel, v))
 }
 
-// DescriptionHasSuffix applies the HasSuffix predicate on the "description" field.
-func DescriptionHasSuffix(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldHasSuffix(FieldDescription, v))
+// InvoiceLabelHasSuffix applies the HasSuffix predicate on the "invoice_label" field.
+func InvoiceLabelHasSuffix(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldHasSuffix(FieldInvoiceLabel, v))
 }
 
-// DescriptionEqualFold applies the EqualFold predicate on the "description" field.
-func DescriptionEqualFold(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldEqualFold(FieldDescription, v))
+// InvoiceLabelEqualFold applies the EqualFold predicate on the "invoice_label" field.
+func InvoiceLabelEqualFold(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldEqualFold(FieldInvoiceLabel, v))
 }
 
-// DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
-func DescriptionContainsFold(v string) predicate.BillingInstalment {
-	return predicate.BillingInstalment(sql.FieldContainsFold(FieldDescription, v))
+// InvoiceLabelContainsFold applies the ContainsFold predicate on the "invoice_label" field.
+func InvoiceLabelContainsFold(v string) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldContainsFold(FieldInvoiceLabel, v))
 }
 
 // ServicePeriodStartEQ applies the EQ predicate on the "service_period_start" field.

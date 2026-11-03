@@ -56,18 +56,15 @@ func (r *billingTermRepository) CreateMany(ctx context.Context, terms []*billing
 			SetOwnerID(t.OwnerID).
 			SetKind(t.Kind).
 			SetValueType(t.ValueType).
-			SetNillableAmount(t.Amount).
-			SetNillablePercentage(t.Percentage).
+			SetNillableValue(t.Value).
 			SetNillableBillTrigger(t.BillTrigger).
 			SetNillableBillOn(t.BillOn).
-			SetNillableCoversFrom(t.CoversFrom).
-			SetNillableCoversTo(t.CoversTo).
-			SetNillableStartsOn(t.StartsOn).
-			SetNillableEndsOn(t.EndsOn).
+			SetNillableStartDate(t.StartDate).
+			SetNillableEndDate(t.EndDate).
 			SetNillablePeriodCount(t.PeriodCount).
 			SetNillableInvoiceCadence(t.InvoiceCadence).
 			SetNillableSplit(t.Split).
-			SetNillableDescription(t.Description).
+			SetNillableInvoiceLabel(t.InvoiceLabel).
 			SetMetadata(t.Metadata).
 			SetTenantID(t.TenantID).
 			SetEnvironmentID(environmentID).

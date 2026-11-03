@@ -19,7 +19,6 @@ import (
 )
 
 // planInstalments expands terms into the commitment's instalments, valuing each commitment period with amountOf.
-// terms must be new: expanding fills the amount of a percentage term.
 func (s *commitmentService) planInstalments(
 	ctx context.Context,
 	c *commitment.Commitment,
@@ -265,8 +264,8 @@ func invoicesToReview(instalments []*billingterm.Instalment) []string {
 	return ids
 }
 
-// settlementDescription labels the instalment that settles a terminated commitment.
-const settlementDescription = "Settlement"
+// settlementLabel is the invoice label of the instalment that settles a terminated commitment.
+const settlementLabel = "Settlement"
 
 // settle cancels the commitment's scheduled instalments and, when it earned more by effectiveAt than its invoiced
 // instalments bill, creates a settlement instalment for the difference and returns it. Nothing is refunded when they
@@ -320,7 +319,7 @@ func (s *commitmentService) settle(
 	settlement.BillTrigger = types.InstalmentBillTriggerDate
 	settlement.BillOn = effectiveAt
 	settlement.Amount = unbilled
-	settlement.Description = settlementDescription
+	settlement.InvoiceLabel = settlementLabel
 	settlement.ServicePeriodStart = c.StartDate
 	settlement.ServicePeriodEnd = effectiveAt
 	settlement.Delivery = types.InstalmentDeliverySeparateInvoice
@@ -406,7 +405,7 @@ func (s *commitmentService) billEnvironmentInstalments(ctx context.Context) erro
 				"error", err,
 				"instalment_id", instalment.ID,
 				"commitment_id", instalment.OwnerID,
-				"subscription_id", instalment.SubscriptionID,
+				"subscription_id", lo.FromPtr(instalment.SubscriptionID),
 			)
 			errs = append(errs, fmt.Errorf("billing instalment %s: %w", instalment.ID, err))
 			continue
@@ -445,11 +444,11 @@ func (s *commitmentService) billInstalment(ctx context.Context, listed *billingt
 			return nil
 		}
 
-		sub, err := s.SubRepo.Get(txCtx, instalment.SubscriptionID)
+		sub, err := s.SubRepo.Get(txCtx, lo.FromPtr(instalment.SubscriptionID))
 		if ierr.IsNotFound(err) {
 			s.Logger.Info(ctx, "skipping instalment whose subscription no longer exists",
 				"instalment_id", instalment.ID,
-				"subscription_id", instalment.SubscriptionID,
+				"subscription_id", lo.FromPtr(instalment.SubscriptionID),
 			)
 			return nil
 		}

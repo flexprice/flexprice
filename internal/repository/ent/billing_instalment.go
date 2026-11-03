@@ -56,14 +56,14 @@ func (r *billingInstalmentRepository) CreateMany(ctx context.Context, instalment
 			SetOwnerID(in.OwnerID).
 			SetNillableBillingTermID(in.BillingTermID).
 			SetCustomerID(in.CustomerID).
-			SetSubscriptionID(in.SubscriptionID).
+			SetNillableSubscriptionID(in.SubscriptionID).
 			SetCurrency(in.Currency).
 			SetKind(in.Kind).
 			SetBillTrigger(in.BillTrigger).
 			SetBillOn(in.BillOn).
 			SetNillableTriggeredAt(in.TriggeredAt).
 			SetAmount(in.Amount).
-			SetDescription(in.Description).
+			SetInvoiceLabel(in.InvoiceLabel).
 			SetServicePeriodStart(in.ServicePeriodStart).
 			SetServicePeriodEnd(in.ServicePeriodEnd).
 			SetDelivery(in.Delivery).

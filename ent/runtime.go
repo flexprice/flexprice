@@ -392,10 +392,6 @@ func init() {
 	billinginstalmentDescCustomerID := billinginstalmentFields[4].Descriptor()
 	// billinginstalment.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	billinginstalment.CustomerIDValidator = billinginstalmentDescCustomerID.Validators[0].(func(string) error)
-	// billinginstalmentDescSubscriptionID is the schema descriptor for subscription_id field.
-	billinginstalmentDescSubscriptionID := billinginstalmentFields[5].Descriptor()
-	// billinginstalment.SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
-	billinginstalment.SubscriptionIDValidator = billinginstalmentDescSubscriptionID.Validators[0].(func(string) error)
 	// billinginstalmentDescCurrency is the schema descriptor for currency field.
 	billinginstalmentDescCurrency := billinginstalmentFields[6].Descriptor()
 	// billinginstalment.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
@@ -408,10 +404,10 @@ func init() {
 	billinginstalmentDescBillTrigger := billinginstalmentFields[8].Descriptor()
 	// billinginstalment.BillTriggerValidator is a validator for the "bill_trigger" field. It is called by the builders before save.
 	billinginstalment.BillTriggerValidator = billinginstalmentDescBillTrigger.Validators[0].(func(string) error)
-	// billinginstalmentDescDescription is the schema descriptor for description field.
-	billinginstalmentDescDescription := billinginstalmentFields[12].Descriptor()
-	// billinginstalment.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
-	billinginstalment.DescriptionValidator = billinginstalmentDescDescription.Validators[0].(func(string) error)
+	// billinginstalmentDescInvoiceLabel is the schema descriptor for invoice_label field.
+	billinginstalmentDescInvoiceLabel := billinginstalmentFields[12].Descriptor()
+	// billinginstalment.InvoiceLabelValidator is a validator for the "invoice_label" field. It is called by the builders before save.
+	billinginstalment.InvoiceLabelValidator = billinginstalmentDescInvoiceLabel.Validators[0].(func(string) error)
 	// billinginstalmentDescDelivery is the schema descriptor for delivery field.
 	billinginstalmentDescDelivery := billinginstalmentFields[15].Descriptor()
 	// billinginstalment.DeliveryValidator is a validator for the "delivery" field. It is called by the builders before save.
@@ -494,7 +490,7 @@ func init() {
 	// billingterm.ValueTypeValidator is a validator for the "value_type" field. It is called by the builders before save.
 	billingterm.ValueTypeValidator = billingtermDescValueType.Validators[0].(func(string) error)
 	// billingtermDescMetadata is the schema descriptor for metadata field.
-	billingtermDescMetadata := billingtermFields[17].Descriptor()
+	billingtermDescMetadata := billingtermFields[14].Descriptor()
 	// billingterm.DefaultMetadata holds the default value on creation for the metadata field.
 	billingterm.DefaultMetadata = billingtermDescMetadata.Default.(types.Metadata)
 	checkoutsessionMixin := schema.CheckoutSession{}.Mixin()

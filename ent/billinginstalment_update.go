@@ -236,6 +236,9 @@ func (_u *BillingInstalmentUpdate) sqlSave(ctx context.Context) (_node int, err 
 	if _u.mutation.BillingTermIDCleared() {
 		_spec.ClearField(billinginstalment.FieldBillingTermID, field.TypeString)
 	}
+	if _u.mutation.SubscriptionIDCleared() {
+		_spec.ClearField(billinginstalment.FieldSubscriptionID, field.TypeString)
+	}
 	if value, ok := _u.mutation.BillOn(); ok {
 		_spec.SetField(billinginstalment.FieldBillOn, field.TypeTime, value)
 	}
@@ -515,6 +518,9 @@ func (_u *BillingInstalmentUpdateOne) sqlSave(ctx context.Context) (_node *Billi
 	}
 	if _u.mutation.BillingTermIDCleared() {
 		_spec.ClearField(billinginstalment.FieldBillingTermID, field.TypeString)
+	}
+	if _u.mutation.SubscriptionIDCleared() {
+		_spec.ClearField(billinginstalment.FieldSubscriptionID, field.TypeString)
 	}
 	if value, ok := _u.mutation.BillOn(); ok {
 		_spec.SetField(billinginstalment.FieldBillOn, field.TypeTime, value)

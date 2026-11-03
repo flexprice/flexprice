@@ -96,7 +96,7 @@ func (s *CommitmentServiceSuite) TestReplanInstalments_ReplacesScheduledOnly() {
 	sep := time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC)
 	resp, err := s.svc.ReplanInstalments(ctx, created.ID, dto.ReplanInstalmentsRequest{Instalments: []dto.ReplanInstalmentInput{
 		{Amount: dec("200"), BillTrigger: lo.ToPtr(types.InstalmentBillTriggerManual)},
-		{Amount: dec("300"), BillOn: &sep, Description: lo.ToPtr("Catch-up")},
+		{Amount: dec("300"), BillOn: &sep, InvoiceLabel: lo.ToPtr("Catch-up")},
 		{Amount: dec("200"), BillOn: &sep},
 	}})
 	s.Require().NoError(err)
@@ -114,8 +114,8 @@ func (s *CommitmentServiceSuite) TestReplanInstalments_ReplacesScheduledOnly() {
 	replanned := s.addedSince(before)
 	s.Require().Len(replanned, 3)
 	s.Equal(
-		[]string{"Catch-up", billingterm.DefaultOnceDescription, billingterm.DefaultOnceDescription},
-		lo.Map(replanned, func(inst *billingterm.Instalment, _ int) string { return inst.Description }),
+		[]string{"Catch-up", "Instalment 7 of 8", "Instalment 8 of 8"},
+		lo.Map(replanned, func(inst *billingterm.Instalment, _ int) string { return inst.InvoiceLabel }),
 	)
 
 	s.True(replanned[0].Amount.Equal(dec("300")))
@@ -136,7 +136,7 @@ func (s *CommitmentServiceSuite) TestReplanInstalments_ReplacesScheduledOnly() {
 		s.Equal(types.BillingTermOwnerCommitment, inst.OwnerType)
 		s.Equal(created.ID, inst.OwnerID)
 		s.Equal(created.CustomerID, inst.CustomerID)
-		s.Equal(created.SubscriptionID, inst.SubscriptionID)
+		s.Equal(lo.ToPtr(created.SubscriptionID), inst.SubscriptionID)
 		s.Equal(created.Currency, inst.Currency)
 		s.Equal(lo.FromPtr(created.InstalmentInvoicing), inst.Delivery)
 		s.True(inst.ServicePeriodStart.Equal(created.StartDate))
@@ -366,11 +366,11 @@ func (s *CommitmentServiceSuite) TestBringForwardInstalments_B5() {
 	s.Equal(types.InstalmentBillTriggerDate, added.BillTrigger)
 	s.Equal(types.InstalmentKindInstalment, added.Kind)
 	s.Equal(types.InstalmentStatusScheduled, added.InstalmentStatus)
-	s.Equal("Payment brought forward", added.Description)
+	s.Equal("Payment brought forward", added.InvoiceLabel)
 	s.Nil(added.BillingTermID)
 	s.Equal(created.ID, added.OwnerID)
 	s.Equal(created.CustomerID, added.CustomerID)
-	s.Equal(created.SubscriptionID, added.SubscriptionID)
+	s.Equal(lo.ToPtr(created.SubscriptionID), added.SubscriptionID)
 	s.Equal(lo.FromPtr(created.InstalmentInvoicing), added.Delivery)
 	s.True(added.ServicePeriodStart.Equal(before[5].ServicePeriodStart), "it pays for the months it replaces")
 	s.True(added.ServicePeriodEnd.Equal(before[7].ServicePeriodEnd))
@@ -418,7 +418,7 @@ func (s *CommitmentServiceSuite) TestBringForwardInstalments_PartialReduction() 
 	added := s.addedSince(before)
 	s.Require().Len(added, 2)
 	replacement, broughtForward := added[0], added[1]
-	if replacement.Description == "Payment brought forward" {
+	if replacement.InvoiceLabel == "Payment brought forward" {
 		replacement, broughtForward = broughtForward, replacement
 	}
 
@@ -428,14 +428,14 @@ func (s *CommitmentServiceSuite) TestBringForwardInstalments_PartialReduction() 
 	s.True(replacement.BillOn.Equal(partlyReduced.BillOn), "what is left keeps its date")
 	s.Equal(partlyReduced.BillTrigger, replacement.BillTrigger)
 	s.Equal(partlyReduced.BillingTermID, replacement.BillingTermID)
-	s.Equal(partlyReduced.Description, replacement.Description)
+	s.Equal(partlyReduced.InvoiceLabel, replacement.InvoiceLabel)
 	s.Equal(partlyReduced.Kind, replacement.Kind)
 	s.Equal(partlyReduced.Delivery, replacement.Delivery)
 	s.Equal(types.InstalmentStatusScheduled, replacement.InstalmentStatus)
 	s.True(replacement.ServicePeriodStart.Equal(partlyReduced.ServicePeriodStart))
 	s.True(replacement.ServicePeriodEnd.Equal(partlyReduced.ServicePeriodEnd))
 
-	s.Equal("Payment brought forward", broughtForward.Description)
+	s.Equal("Payment brought forward", broughtForward.InvoiceLabel)
 	s.True(broughtForward.Amount.Equal(dec("250")))
 	s.True(broughtForward.ServicePeriodStart.Equal(before[5].ServicePeriodStart))
 	s.True(broughtForward.ServicePeriodEnd.Equal(before[7].ServicePeriodEnd), "the partly reduced month is part of what it pays for")
@@ -776,10 +776,11 @@ func (s *CommitmentE2ESuite) milestoneCommitment(name string, end time.Time) (*d
 	tokens := s.planWith(name, types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	sub := s.subscribe(tokens, s.jan)
 
+	months := (end.Year()-s.jan.Year())*12 + int(end.Month()-s.jan.Month())
 	signing := dto.BillingTermInput{
-		Kind:       types.BillingTermKindOnce,
-		ValueType:  types.BillingTermValuePercentage,
-		Percentage: lo.ToPtr(dec("50")),
+		Kind:      types.BillingTermKindOnce,
+		ValueType: types.BillingTermValueFixed,
+		Value:     lo.ToPtr(decimal.NewFromInt(int64(50 * months))),
 	}
 	goLive := dto.BillingTermInput{
 		Kind:        types.BillingTermKindOnce,

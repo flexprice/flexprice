@@ -245,7 +245,7 @@ func TestCommitmentHandler_TerminateEmptyBodyOfUnknownLength(t *testing.T) {
 func TestCommitmentHandler_TerminatePassesWholeRequestToService(t *testing.T) {
 	svc := &stubCommitmentService{}
 	router := setupCommitmentRouter(t, svc)
-	body := `{"effective_at":"2025-04-01T00:00:00Z","cancellation_fee":{"type":"fixed","amount":"5"}}`
+	body := `{"effective_at":"2025-04-01T00:00:00Z","cancellation_fee":{"type":"fixed","value":"5"}}`
 	w := doCommitmentRequest(router, http.MethodPost, "/v1/commitments/cmt_4/terminate", body)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	require.Equal(t, "cmt_4", svc.gotID)
@@ -253,20 +253,18 @@ func TestCommitmentHandler_TerminatePassesWholeRequestToService(t *testing.T) {
 	require.True(t, svc.gotTerminate.EffectiveAt.Equal(time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)))
 	require.NotNil(t, svc.gotTerminate.CancellationFee)
 	require.Equal(t, types.CancellationFeeFixed, svc.gotTerminate.CancellationFee.Type)
-	require.True(t, svc.gotTerminate.CancellationFee.Amount.Equal(decimal.NewFromInt(5)))
-	require.Nil(t, svc.gotTerminate.CancellationFee.Percentage)
+	require.True(t, svc.gotTerminate.CancellationFee.Value.Equal(decimal.NewFromInt(5)))
 }
 
 func TestCommitmentHandler_TerminateBindsPercentageFee(t *testing.T) {
 	svc := &stubCommitmentService{}
 	router := setupCommitmentRouter(t, svc)
-	body := `{"cancellation_fee":{"type":"percentage","percentage":"10"}}`
+	body := `{"cancellation_fee":{"type":"percentage","value":"10"}}`
 	w := doCommitmentRequest(router, http.MethodPost, "/v1/commitments/cmt_7/terminate", body)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	require.NotNil(t, svc.gotTerminate.CancellationFee)
 	require.Equal(t, types.CancellationFeePercentage, svc.gotTerminate.CancellationFee.Type)
-	require.True(t, svc.gotTerminate.CancellationFee.Percentage.Equal(decimal.NewFromInt(10)))
-	require.Nil(t, svc.gotTerminate.CancellationFee.Amount)
+	require.True(t, svc.gotTerminate.CancellationFee.Value.Equal(decimal.NewFromInt(10)))
 }
 
 func TestCommitmentHandler_TerminateRejectsAScalarFee(t *testing.T) {
@@ -283,7 +281,7 @@ func TestCommitmentHandler_TerminateFeeOnNonBindingIsBadRequest(t *testing.T) {
 		Mark(ierr.ErrValidation)
 	svc := &stubCommitmentService{err: svcErr}
 	router := setupCommitmentRouter(t, svc)
-	w := doCommitmentRequest(router, http.MethodPost, "/v1/commitments/cmt_6/terminate", `{"cancellation_fee":{"type":"fixed","amount":"5"}}`)
+	w := doCommitmentRequest(router, http.MethodPost, "/v1/commitments/cmt_6/terminate", `{"cancellation_fee":{"type":"fixed","value":"5"}}`)
 	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 	require.NotNil(t, svc.gotTerminate.CancellationFee)
 	require.Contains(t, w.Body.String(), "binding")
@@ -292,13 +290,13 @@ func TestCommitmentHandler_TerminateFeeOnNonBindingIsBadRequest(t *testing.T) {
 func TestCommitmentHandler_ReplaceBillingTermsPassesTermsToService(t *testing.T) {
 	svc := &stubCommitmentService{}
 	router := setupCommitmentRouter(t, svc)
-	body := `{"billing_terms":[{"kind":"once","value_type":"percentage","percentage":"30"},{"kind":"recurring","value_type":"remainder","invoice_cadence":"ARREAR"}]}`
+	body := `{"billing_terms":[{"kind":"once","value_type":"fixed","value":"30"},{"kind":"recurring","value_type":"remainder","invoice_cadence":"ARREAR"}]}`
 	w := doCommitmentRequest(router, http.MethodPut, "/v1/commitments/cmt_5/billing-terms", body)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	require.Equal(t, "cmt_5", svc.gotID)
 	require.Len(t, svc.gotReplace.BillingTerms, 2)
 	require.Equal(t, types.BillingTermKindOnce, svc.gotReplace.BillingTerms[0].Kind)
-	require.True(t, svc.gotReplace.BillingTerms[0].Percentage.Equal(decimal.NewFromInt(30)))
+	require.True(t, svc.gotReplace.BillingTerms[0].Value.Equal(decimal.NewFromInt(30)))
 	require.Equal(t, types.BillingTermValueRemainder, svc.gotReplace.BillingTerms[1].ValueType)
 }
 
@@ -332,7 +330,7 @@ func TestCommitmentHandler_ReplanInstalmentsPassesInstalmentsToService(t *testin
 	svc := &stubCommitmentService{}
 	router := setupCommitmentRouter(t, svc)
 	body := `{"instalments":[
-		{"amount":"400","bill_on":"2027-09-01T00:00:00Z","description":"Catch-up"},
+		{"amount":"400","bill_on":"2027-09-01T00:00:00Z","invoice_label":"Catch-up"},
 		{"amount":"300","bill_trigger":"manual"}
 	]}`
 	w := doCommitmentRequest(router, http.MethodPut, "/v1/commitments/cmt_8/instalments", body)
@@ -343,7 +341,7 @@ func TestCommitmentHandler_ReplanInstalmentsPassesInstalmentsToService(t *testin
 	dated, manual := svc.gotReplan.Instalments[0], svc.gotReplan.Instalments[1]
 	require.True(t, dated.Amount.Equal(decimal.NewFromInt(400)))
 	require.True(t, dated.BillOn.Equal(time.Date(2027, 9, 1, 0, 0, 0, 0, time.UTC)))
-	require.Equal(t, "Catch-up", *dated.Description)
+	require.Equal(t, "Catch-up", *dated.InvoiceLabel)
 	require.Nil(t, dated.BillTrigger)
 	require.True(t, manual.Amount.Equal(decimal.NewFromInt(300)))
 	require.Equal(t, types.InstalmentBillTriggerManual, *manual.BillTrigger)

@@ -7399,7 +7399,7 @@ type BillingInstalmentMutation struct {
 	bill_on              *time.Time
 	triggered_at         *time.Time
 	amount               *decimal.Decimal
-	description          *string
+	invoice_label        *string
 	service_period_start *time.Time
 	service_period_end   *time.Time
 	delivery             *types.InstalmentDelivery
@@ -7981,7 +7981,7 @@ func (m *BillingInstalmentMutation) SubscriptionID() (r string, exists bool) {
 // OldSubscriptionID returns the old "subscription_id" field's value of the BillingInstalment entity.
 // If the BillingInstalment object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingInstalmentMutation) OldSubscriptionID(ctx context.Context) (v string, err error) {
+func (m *BillingInstalmentMutation) OldSubscriptionID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSubscriptionID is only allowed on UpdateOne operations")
 	}
@@ -7995,9 +7995,22 @@ func (m *BillingInstalmentMutation) OldSubscriptionID(ctx context.Context) (v st
 	return oldValue.SubscriptionID, nil
 }
 
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (m *BillingInstalmentMutation) ClearSubscriptionID() {
+	m.subscription_id = nil
+	m.clearedFields[billinginstalment.FieldSubscriptionID] = struct{}{}
+}
+
+// SubscriptionIDCleared returns if the "subscription_id" field was cleared in this mutation.
+func (m *BillingInstalmentMutation) SubscriptionIDCleared() bool {
+	_, ok := m.clearedFields[billinginstalment.FieldSubscriptionID]
+	return ok
+}
+
 // ResetSubscriptionID resets all changes to the "subscription_id" field.
 func (m *BillingInstalmentMutation) ResetSubscriptionID() {
 	m.subscription_id = nil
+	delete(m.clearedFields, billinginstalment.FieldSubscriptionID)
 }
 
 // SetCurrency sets the "currency" field.
@@ -8229,40 +8242,40 @@ func (m *BillingInstalmentMutation) ResetAmount() {
 	m.amount = nil
 }
 
-// SetDescription sets the "description" field.
-func (m *BillingInstalmentMutation) SetDescription(s string) {
-	m.description = &s
+// SetInvoiceLabel sets the "invoice_label" field.
+func (m *BillingInstalmentMutation) SetInvoiceLabel(s string) {
+	m.invoice_label = &s
 }
 
-// Description returns the value of the "description" field in the mutation.
-func (m *BillingInstalmentMutation) Description() (r string, exists bool) {
-	v := m.description
+// InvoiceLabel returns the value of the "invoice_label" field in the mutation.
+func (m *BillingInstalmentMutation) InvoiceLabel() (r string, exists bool) {
+	v := m.invoice_label
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldDescription returns the old "description" field's value of the BillingInstalment entity.
+// OldInvoiceLabel returns the old "invoice_label" field's value of the BillingInstalment entity.
 // If the BillingInstalment object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingInstalmentMutation) OldDescription(ctx context.Context) (v string, err error) {
+func (m *BillingInstalmentMutation) OldInvoiceLabel(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+		return v, errors.New("OldInvoiceLabel is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDescription requires an ID field in the mutation")
+		return v, errors.New("OldInvoiceLabel requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+		return v, fmt.Errorf("querying old value for OldInvoiceLabel: %w", err)
 	}
-	return oldValue.Description, nil
+	return oldValue.InvoiceLabel, nil
 }
 
-// ResetDescription resets all changes to the "description" field.
-func (m *BillingInstalmentMutation) ResetDescription() {
-	m.description = nil
+// ResetInvoiceLabel resets all changes to the "invoice_label" field.
+func (m *BillingInstalmentMutation) ResetInvoiceLabel() {
+	m.invoice_label = nil
 }
 
 // SetServicePeriodStart sets the "service_period_start" field.
@@ -8596,8 +8609,8 @@ func (m *BillingInstalmentMutation) Fields() []string {
 	if m.amount != nil {
 		fields = append(fields, billinginstalment.FieldAmount)
 	}
-	if m.description != nil {
-		fields = append(fields, billinginstalment.FieldDescription)
+	if m.invoice_label != nil {
+		fields = append(fields, billinginstalment.FieldInvoiceLabel)
 	}
 	if m.service_period_start != nil {
 		fields = append(fields, billinginstalment.FieldServicePeriodStart)
@@ -8661,8 +8674,8 @@ func (m *BillingInstalmentMutation) Field(name string) (ent.Value, bool) {
 		return m.TriggeredAt()
 	case billinginstalment.FieldAmount:
 		return m.Amount()
-	case billinginstalment.FieldDescription:
-		return m.Description()
+	case billinginstalment.FieldInvoiceLabel:
+		return m.InvoiceLabel()
 	case billinginstalment.FieldServicePeriodStart:
 		return m.ServicePeriodStart()
 	case billinginstalment.FieldServicePeriodEnd:
@@ -8720,8 +8733,8 @@ func (m *BillingInstalmentMutation) OldField(ctx context.Context, name string) (
 		return m.OldTriggeredAt(ctx)
 	case billinginstalment.FieldAmount:
 		return m.OldAmount(ctx)
-	case billinginstalment.FieldDescription:
-		return m.OldDescription(ctx)
+	case billinginstalment.FieldInvoiceLabel:
+		return m.OldInvoiceLabel(ctx)
 	case billinginstalment.FieldServicePeriodStart:
 		return m.OldServicePeriodStart(ctx)
 	case billinginstalment.FieldServicePeriodEnd:
@@ -8869,12 +8882,12 @@ func (m *BillingInstalmentMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetAmount(v)
 		return nil
-	case billinginstalment.FieldDescription:
+	case billinginstalment.FieldInvoiceLabel:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetDescription(v)
+		m.SetInvoiceLabel(v)
 		return nil
 	case billinginstalment.FieldServicePeriodStart:
 		v, ok := value.(time.Time)
@@ -8960,6 +8973,9 @@ func (m *BillingInstalmentMutation) ClearedFields() []string {
 	if m.FieldCleared(billinginstalment.FieldBillingTermID) {
 		fields = append(fields, billinginstalment.FieldBillingTermID)
 	}
+	if m.FieldCleared(billinginstalment.FieldSubscriptionID) {
+		fields = append(fields, billinginstalment.FieldSubscriptionID)
+	}
 	if m.FieldCleared(billinginstalment.FieldTriggeredAt) {
 		fields = append(fields, billinginstalment.FieldTriggeredAt)
 	}
@@ -8994,6 +9010,9 @@ func (m *BillingInstalmentMutation) ClearField(name string) error {
 		return nil
 	case billinginstalment.FieldBillingTermID:
 		m.ClearBillingTermID()
+		return nil
+	case billinginstalment.FieldSubscriptionID:
+		m.ClearSubscriptionID()
 		return nil
 	case billinginstalment.FieldTriggeredAt:
 		m.ClearTriggeredAt()
@@ -9066,8 +9085,8 @@ func (m *BillingInstalmentMutation) ResetField(name string) error {
 	case billinginstalment.FieldAmount:
 		m.ResetAmount()
 		return nil
-	case billinginstalment.FieldDescription:
-		m.ResetDescription()
+	case billinginstalment.FieldInvoiceLabel:
+		m.ResetInvoiceLabel()
 		return nil
 	case billinginstalment.FieldServicePeriodStart:
 		m.ResetServicePeriodStart()
@@ -9734,19 +9753,16 @@ type BillingTermMutation struct {
 	owner_id        *string
 	kind            *types.BillingTermKind
 	value_type      *types.BillingTermValueType
-	amount          *decimal.Decimal
-	percentage      *decimal.Decimal
+	value           *decimal.Decimal
 	bill_trigger    *types.InstalmentBillTrigger
 	bill_on         *time.Time
-	covers_from     *time.Time
-	covers_to       *time.Time
-	starts_on       *time.Time
-	ends_on         *time.Time
+	start_date      *time.Time
+	end_date        *time.Time
 	period_count    *int
 	addperiod_count *int
 	invoice_cadence *types.InvoiceCadence
 	split           *types.BillingTermSplit
-	description     *string
+	invoice_label   *string
 	metadata        *types.Metadata
 	clearedFields   map[string]struct{}
 	done            bool
@@ -10293,102 +10309,53 @@ func (m *BillingTermMutation) ResetValueType() {
 	m.value_type = nil
 }
 
-// SetAmount sets the "amount" field.
-func (m *BillingTermMutation) SetAmount(d decimal.Decimal) {
-	m.amount = &d
+// SetValue sets the "value" field.
+func (m *BillingTermMutation) SetValue(d decimal.Decimal) {
+	m.value = &d
 }
 
-// Amount returns the value of the "amount" field in the mutation.
-func (m *BillingTermMutation) Amount() (r decimal.Decimal, exists bool) {
-	v := m.amount
+// Value returns the value of the "value" field in the mutation.
+func (m *BillingTermMutation) Value() (r decimal.Decimal, exists bool) {
+	v := m.value
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldAmount returns the old "amount" field's value of the BillingTerm entity.
+// OldValue returns the old "value" field's value of the BillingTerm entity.
 // If the BillingTerm object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingTermMutation) OldAmount(ctx context.Context) (v *decimal.Decimal, err error) {
+func (m *BillingTermMutation) OldValue(ctx context.Context) (v *decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAmount is only allowed on UpdateOne operations")
+		return v, errors.New("OldValue is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAmount requires an ID field in the mutation")
+		return v, errors.New("OldValue requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAmount: %w", err)
+		return v, fmt.Errorf("querying old value for OldValue: %w", err)
 	}
-	return oldValue.Amount, nil
+	return oldValue.Value, nil
 }
 
-// ClearAmount clears the value of the "amount" field.
-func (m *BillingTermMutation) ClearAmount() {
-	m.amount = nil
-	m.clearedFields[billingterm.FieldAmount] = struct{}{}
+// ClearValue clears the value of the "value" field.
+func (m *BillingTermMutation) ClearValue() {
+	m.value = nil
+	m.clearedFields[billingterm.FieldValue] = struct{}{}
 }
 
-// AmountCleared returns if the "amount" field was cleared in this mutation.
-func (m *BillingTermMutation) AmountCleared() bool {
-	_, ok := m.clearedFields[billingterm.FieldAmount]
+// ValueCleared returns if the "value" field was cleared in this mutation.
+func (m *BillingTermMutation) ValueCleared() bool {
+	_, ok := m.clearedFields[billingterm.FieldValue]
 	return ok
 }
 
-// ResetAmount resets all changes to the "amount" field.
-func (m *BillingTermMutation) ResetAmount() {
-	m.amount = nil
-	delete(m.clearedFields, billingterm.FieldAmount)
-}
-
-// SetPercentage sets the "percentage" field.
-func (m *BillingTermMutation) SetPercentage(d decimal.Decimal) {
-	m.percentage = &d
-}
-
-// Percentage returns the value of the "percentage" field in the mutation.
-func (m *BillingTermMutation) Percentage() (r decimal.Decimal, exists bool) {
-	v := m.percentage
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPercentage returns the old "percentage" field's value of the BillingTerm entity.
-// If the BillingTerm object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingTermMutation) OldPercentage(ctx context.Context) (v *decimal.Decimal, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPercentage is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPercentage requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPercentage: %w", err)
-	}
-	return oldValue.Percentage, nil
-}
-
-// ClearPercentage clears the value of the "percentage" field.
-func (m *BillingTermMutation) ClearPercentage() {
-	m.percentage = nil
-	m.clearedFields[billingterm.FieldPercentage] = struct{}{}
-}
-
-// PercentageCleared returns if the "percentage" field was cleared in this mutation.
-func (m *BillingTermMutation) PercentageCleared() bool {
-	_, ok := m.clearedFields[billingterm.FieldPercentage]
-	return ok
-}
-
-// ResetPercentage resets all changes to the "percentage" field.
-func (m *BillingTermMutation) ResetPercentage() {
-	m.percentage = nil
-	delete(m.clearedFields, billingterm.FieldPercentage)
+// ResetValue resets all changes to the "value" field.
+func (m *BillingTermMutation) ResetValue() {
+	m.value = nil
+	delete(m.clearedFields, billingterm.FieldValue)
 }
 
 // SetBillTrigger sets the "bill_trigger" field.
@@ -10489,200 +10456,102 @@ func (m *BillingTermMutation) ResetBillOn() {
 	delete(m.clearedFields, billingterm.FieldBillOn)
 }
 
-// SetCoversFrom sets the "covers_from" field.
-func (m *BillingTermMutation) SetCoversFrom(t time.Time) {
-	m.covers_from = &t
+// SetStartDate sets the "start_date" field.
+func (m *BillingTermMutation) SetStartDate(t time.Time) {
+	m.start_date = &t
 }
 
-// CoversFrom returns the value of the "covers_from" field in the mutation.
-func (m *BillingTermMutation) CoversFrom() (r time.Time, exists bool) {
-	v := m.covers_from
+// StartDate returns the value of the "start_date" field in the mutation.
+func (m *BillingTermMutation) StartDate() (r time.Time, exists bool) {
+	v := m.start_date
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldCoversFrom returns the old "covers_from" field's value of the BillingTerm entity.
+// OldStartDate returns the old "start_date" field's value of the BillingTerm entity.
 // If the BillingTerm object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingTermMutation) OldCoversFrom(ctx context.Context) (v *time.Time, err error) {
+func (m *BillingTermMutation) OldStartDate(ctx context.Context) (v *time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCoversFrom is only allowed on UpdateOne operations")
+		return v, errors.New("OldStartDate is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCoversFrom requires an ID field in the mutation")
+		return v, errors.New("OldStartDate requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCoversFrom: %w", err)
+		return v, fmt.Errorf("querying old value for OldStartDate: %w", err)
 	}
-	return oldValue.CoversFrom, nil
+	return oldValue.StartDate, nil
 }
 
-// ClearCoversFrom clears the value of the "covers_from" field.
-func (m *BillingTermMutation) ClearCoversFrom() {
-	m.covers_from = nil
-	m.clearedFields[billingterm.FieldCoversFrom] = struct{}{}
+// ClearStartDate clears the value of the "start_date" field.
+func (m *BillingTermMutation) ClearStartDate() {
+	m.start_date = nil
+	m.clearedFields[billingterm.FieldStartDate] = struct{}{}
 }
 
-// CoversFromCleared returns if the "covers_from" field was cleared in this mutation.
-func (m *BillingTermMutation) CoversFromCleared() bool {
-	_, ok := m.clearedFields[billingterm.FieldCoversFrom]
+// StartDateCleared returns if the "start_date" field was cleared in this mutation.
+func (m *BillingTermMutation) StartDateCleared() bool {
+	_, ok := m.clearedFields[billingterm.FieldStartDate]
 	return ok
 }
 
-// ResetCoversFrom resets all changes to the "covers_from" field.
-func (m *BillingTermMutation) ResetCoversFrom() {
-	m.covers_from = nil
-	delete(m.clearedFields, billingterm.FieldCoversFrom)
+// ResetStartDate resets all changes to the "start_date" field.
+func (m *BillingTermMutation) ResetStartDate() {
+	m.start_date = nil
+	delete(m.clearedFields, billingterm.FieldStartDate)
 }
 
-// SetCoversTo sets the "covers_to" field.
-func (m *BillingTermMutation) SetCoversTo(t time.Time) {
-	m.covers_to = &t
+// SetEndDate sets the "end_date" field.
+func (m *BillingTermMutation) SetEndDate(t time.Time) {
+	m.end_date = &t
 }
 
-// CoversTo returns the value of the "covers_to" field in the mutation.
-func (m *BillingTermMutation) CoversTo() (r time.Time, exists bool) {
-	v := m.covers_to
+// EndDate returns the value of the "end_date" field in the mutation.
+func (m *BillingTermMutation) EndDate() (r time.Time, exists bool) {
+	v := m.end_date
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldCoversTo returns the old "covers_to" field's value of the BillingTerm entity.
+// OldEndDate returns the old "end_date" field's value of the BillingTerm entity.
 // If the BillingTerm object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingTermMutation) OldCoversTo(ctx context.Context) (v *time.Time, err error) {
+func (m *BillingTermMutation) OldEndDate(ctx context.Context) (v *time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCoversTo is only allowed on UpdateOne operations")
+		return v, errors.New("OldEndDate is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCoversTo requires an ID field in the mutation")
+		return v, errors.New("OldEndDate requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCoversTo: %w", err)
+		return v, fmt.Errorf("querying old value for OldEndDate: %w", err)
 	}
-	return oldValue.CoversTo, nil
+	return oldValue.EndDate, nil
 }
 
-// ClearCoversTo clears the value of the "covers_to" field.
-func (m *BillingTermMutation) ClearCoversTo() {
-	m.covers_to = nil
-	m.clearedFields[billingterm.FieldCoversTo] = struct{}{}
+// ClearEndDate clears the value of the "end_date" field.
+func (m *BillingTermMutation) ClearEndDate() {
+	m.end_date = nil
+	m.clearedFields[billingterm.FieldEndDate] = struct{}{}
 }
 
-// CoversToCleared returns if the "covers_to" field was cleared in this mutation.
-func (m *BillingTermMutation) CoversToCleared() bool {
-	_, ok := m.clearedFields[billingterm.FieldCoversTo]
+// EndDateCleared returns if the "end_date" field was cleared in this mutation.
+func (m *BillingTermMutation) EndDateCleared() bool {
+	_, ok := m.clearedFields[billingterm.FieldEndDate]
 	return ok
 }
 
-// ResetCoversTo resets all changes to the "covers_to" field.
-func (m *BillingTermMutation) ResetCoversTo() {
-	m.covers_to = nil
-	delete(m.clearedFields, billingterm.FieldCoversTo)
-}
-
-// SetStartsOn sets the "starts_on" field.
-func (m *BillingTermMutation) SetStartsOn(t time.Time) {
-	m.starts_on = &t
-}
-
-// StartsOn returns the value of the "starts_on" field in the mutation.
-func (m *BillingTermMutation) StartsOn() (r time.Time, exists bool) {
-	v := m.starts_on
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldStartsOn returns the old "starts_on" field's value of the BillingTerm entity.
-// If the BillingTerm object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingTermMutation) OldStartsOn(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldStartsOn is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldStartsOn requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldStartsOn: %w", err)
-	}
-	return oldValue.StartsOn, nil
-}
-
-// ClearStartsOn clears the value of the "starts_on" field.
-func (m *BillingTermMutation) ClearStartsOn() {
-	m.starts_on = nil
-	m.clearedFields[billingterm.FieldStartsOn] = struct{}{}
-}
-
-// StartsOnCleared returns if the "starts_on" field was cleared in this mutation.
-func (m *BillingTermMutation) StartsOnCleared() bool {
-	_, ok := m.clearedFields[billingterm.FieldStartsOn]
-	return ok
-}
-
-// ResetStartsOn resets all changes to the "starts_on" field.
-func (m *BillingTermMutation) ResetStartsOn() {
-	m.starts_on = nil
-	delete(m.clearedFields, billingterm.FieldStartsOn)
-}
-
-// SetEndsOn sets the "ends_on" field.
-func (m *BillingTermMutation) SetEndsOn(t time.Time) {
-	m.ends_on = &t
-}
-
-// EndsOn returns the value of the "ends_on" field in the mutation.
-func (m *BillingTermMutation) EndsOn() (r time.Time, exists bool) {
-	v := m.ends_on
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEndsOn returns the old "ends_on" field's value of the BillingTerm entity.
-// If the BillingTerm object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingTermMutation) OldEndsOn(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEndsOn is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEndsOn requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEndsOn: %w", err)
-	}
-	return oldValue.EndsOn, nil
-}
-
-// ClearEndsOn clears the value of the "ends_on" field.
-func (m *BillingTermMutation) ClearEndsOn() {
-	m.ends_on = nil
-	m.clearedFields[billingterm.FieldEndsOn] = struct{}{}
-}
-
-// EndsOnCleared returns if the "ends_on" field was cleared in this mutation.
-func (m *BillingTermMutation) EndsOnCleared() bool {
-	_, ok := m.clearedFields[billingterm.FieldEndsOn]
-	return ok
-}
-
-// ResetEndsOn resets all changes to the "ends_on" field.
-func (m *BillingTermMutation) ResetEndsOn() {
-	m.ends_on = nil
-	delete(m.clearedFields, billingterm.FieldEndsOn)
+// ResetEndDate resets all changes to the "end_date" field.
+func (m *BillingTermMutation) ResetEndDate() {
+	m.end_date = nil
+	delete(m.clearedFields, billingterm.FieldEndDate)
 }
 
 // SetPeriodCount sets the "period_count" field.
@@ -10853,53 +10722,53 @@ func (m *BillingTermMutation) ResetSplit() {
 	delete(m.clearedFields, billingterm.FieldSplit)
 }
 
-// SetDescription sets the "description" field.
-func (m *BillingTermMutation) SetDescription(s string) {
-	m.description = &s
+// SetInvoiceLabel sets the "invoice_label" field.
+func (m *BillingTermMutation) SetInvoiceLabel(s string) {
+	m.invoice_label = &s
 }
 
-// Description returns the value of the "description" field in the mutation.
-func (m *BillingTermMutation) Description() (r string, exists bool) {
-	v := m.description
+// InvoiceLabel returns the value of the "invoice_label" field in the mutation.
+func (m *BillingTermMutation) InvoiceLabel() (r string, exists bool) {
+	v := m.invoice_label
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldDescription returns the old "description" field's value of the BillingTerm entity.
+// OldInvoiceLabel returns the old "invoice_label" field's value of the BillingTerm entity.
 // If the BillingTerm object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingTermMutation) OldDescription(ctx context.Context) (v *string, err error) {
+func (m *BillingTermMutation) OldInvoiceLabel(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+		return v, errors.New("OldInvoiceLabel is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDescription requires an ID field in the mutation")
+		return v, errors.New("OldInvoiceLabel requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+		return v, fmt.Errorf("querying old value for OldInvoiceLabel: %w", err)
 	}
-	return oldValue.Description, nil
+	return oldValue.InvoiceLabel, nil
 }
 
-// ClearDescription clears the value of the "description" field.
-func (m *BillingTermMutation) ClearDescription() {
-	m.description = nil
-	m.clearedFields[billingterm.FieldDescription] = struct{}{}
+// ClearInvoiceLabel clears the value of the "invoice_label" field.
+func (m *BillingTermMutation) ClearInvoiceLabel() {
+	m.invoice_label = nil
+	m.clearedFields[billingterm.FieldInvoiceLabel] = struct{}{}
 }
 
-// DescriptionCleared returns if the "description" field was cleared in this mutation.
-func (m *BillingTermMutation) DescriptionCleared() bool {
-	_, ok := m.clearedFields[billingterm.FieldDescription]
+// InvoiceLabelCleared returns if the "invoice_label" field was cleared in this mutation.
+func (m *BillingTermMutation) InvoiceLabelCleared() bool {
+	_, ok := m.clearedFields[billingterm.FieldInvoiceLabel]
 	return ok
 }
 
-// ResetDescription resets all changes to the "description" field.
-func (m *BillingTermMutation) ResetDescription() {
-	m.description = nil
-	delete(m.clearedFields, billingterm.FieldDescription)
+// ResetInvoiceLabel resets all changes to the "invoice_label" field.
+func (m *BillingTermMutation) ResetInvoiceLabel() {
+	m.invoice_label = nil
+	delete(m.clearedFields, billingterm.FieldInvoiceLabel)
 }
 
 // SetMetadata sets the "metadata" field.
@@ -10985,7 +10854,7 @@ func (m *BillingTermMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BillingTermMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 21)
 	if m.tenant_id != nil {
 		fields = append(fields, billingterm.FieldTenantID)
 	}
@@ -11019,11 +10888,8 @@ func (m *BillingTermMutation) Fields() []string {
 	if m.value_type != nil {
 		fields = append(fields, billingterm.FieldValueType)
 	}
-	if m.amount != nil {
-		fields = append(fields, billingterm.FieldAmount)
-	}
-	if m.percentage != nil {
-		fields = append(fields, billingterm.FieldPercentage)
+	if m.value != nil {
+		fields = append(fields, billingterm.FieldValue)
 	}
 	if m.bill_trigger != nil {
 		fields = append(fields, billingterm.FieldBillTrigger)
@@ -11031,17 +10897,11 @@ func (m *BillingTermMutation) Fields() []string {
 	if m.bill_on != nil {
 		fields = append(fields, billingterm.FieldBillOn)
 	}
-	if m.covers_from != nil {
-		fields = append(fields, billingterm.FieldCoversFrom)
+	if m.start_date != nil {
+		fields = append(fields, billingterm.FieldStartDate)
 	}
-	if m.covers_to != nil {
-		fields = append(fields, billingterm.FieldCoversTo)
-	}
-	if m.starts_on != nil {
-		fields = append(fields, billingterm.FieldStartsOn)
-	}
-	if m.ends_on != nil {
-		fields = append(fields, billingterm.FieldEndsOn)
+	if m.end_date != nil {
+		fields = append(fields, billingterm.FieldEndDate)
 	}
 	if m.period_count != nil {
 		fields = append(fields, billingterm.FieldPeriodCount)
@@ -11052,8 +10912,8 @@ func (m *BillingTermMutation) Fields() []string {
 	if m.split != nil {
 		fields = append(fields, billingterm.FieldSplit)
 	}
-	if m.description != nil {
-		fields = append(fields, billingterm.FieldDescription)
+	if m.invoice_label != nil {
+		fields = append(fields, billingterm.FieldInvoiceLabel)
 	}
 	if m.metadata != nil {
 		fields = append(fields, billingterm.FieldMetadata)
@@ -11088,30 +10948,24 @@ func (m *BillingTermMutation) Field(name string) (ent.Value, bool) {
 		return m.Kind()
 	case billingterm.FieldValueType:
 		return m.ValueType()
-	case billingterm.FieldAmount:
-		return m.Amount()
-	case billingterm.FieldPercentage:
-		return m.Percentage()
+	case billingterm.FieldValue:
+		return m.Value()
 	case billingterm.FieldBillTrigger:
 		return m.BillTrigger()
 	case billingterm.FieldBillOn:
 		return m.BillOn()
-	case billingterm.FieldCoversFrom:
-		return m.CoversFrom()
-	case billingterm.FieldCoversTo:
-		return m.CoversTo()
-	case billingterm.FieldStartsOn:
-		return m.StartsOn()
-	case billingterm.FieldEndsOn:
-		return m.EndsOn()
+	case billingterm.FieldStartDate:
+		return m.StartDate()
+	case billingterm.FieldEndDate:
+		return m.EndDate()
 	case billingterm.FieldPeriodCount:
 		return m.PeriodCount()
 	case billingterm.FieldInvoiceCadence:
 		return m.InvoiceCadence()
 	case billingterm.FieldSplit:
 		return m.Split()
-	case billingterm.FieldDescription:
-		return m.Description()
+	case billingterm.FieldInvoiceLabel:
+		return m.InvoiceLabel()
 	case billingterm.FieldMetadata:
 		return m.Metadata()
 	}
@@ -11145,30 +10999,24 @@ func (m *BillingTermMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldKind(ctx)
 	case billingterm.FieldValueType:
 		return m.OldValueType(ctx)
-	case billingterm.FieldAmount:
-		return m.OldAmount(ctx)
-	case billingterm.FieldPercentage:
-		return m.OldPercentage(ctx)
+	case billingterm.FieldValue:
+		return m.OldValue(ctx)
 	case billingterm.FieldBillTrigger:
 		return m.OldBillTrigger(ctx)
 	case billingterm.FieldBillOn:
 		return m.OldBillOn(ctx)
-	case billingterm.FieldCoversFrom:
-		return m.OldCoversFrom(ctx)
-	case billingterm.FieldCoversTo:
-		return m.OldCoversTo(ctx)
-	case billingterm.FieldStartsOn:
-		return m.OldStartsOn(ctx)
-	case billingterm.FieldEndsOn:
-		return m.OldEndsOn(ctx)
+	case billingterm.FieldStartDate:
+		return m.OldStartDate(ctx)
+	case billingterm.FieldEndDate:
+		return m.OldEndDate(ctx)
 	case billingterm.FieldPeriodCount:
 		return m.OldPeriodCount(ctx)
 	case billingterm.FieldInvoiceCadence:
 		return m.OldInvoiceCadence(ctx)
 	case billingterm.FieldSplit:
 		return m.OldSplit(ctx)
-	case billingterm.FieldDescription:
-		return m.OldDescription(ctx)
+	case billingterm.FieldInvoiceLabel:
+		return m.OldInvoiceLabel(ctx)
 	case billingterm.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -11257,19 +11105,12 @@ func (m *BillingTermMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetValueType(v)
 		return nil
-	case billingterm.FieldAmount:
+	case billingterm.FieldValue:
 		v, ok := value.(decimal.Decimal)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetAmount(v)
-		return nil
-	case billingterm.FieldPercentage:
-		v, ok := value.(decimal.Decimal)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPercentage(v)
+		m.SetValue(v)
 		return nil
 	case billingterm.FieldBillTrigger:
 		v, ok := value.(types.InstalmentBillTrigger)
@@ -11285,33 +11126,19 @@ func (m *BillingTermMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBillOn(v)
 		return nil
-	case billingterm.FieldCoversFrom:
+	case billingterm.FieldStartDate:
 		v, ok := value.(time.Time)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetCoversFrom(v)
+		m.SetStartDate(v)
 		return nil
-	case billingterm.FieldCoversTo:
+	case billingterm.FieldEndDate:
 		v, ok := value.(time.Time)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetCoversTo(v)
-		return nil
-	case billingterm.FieldStartsOn:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetStartsOn(v)
-		return nil
-	case billingterm.FieldEndsOn:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEndsOn(v)
+		m.SetEndDate(v)
 		return nil
 	case billingterm.FieldPeriodCount:
 		v, ok := value.(int)
@@ -11334,12 +11161,12 @@ func (m *BillingTermMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSplit(v)
 		return nil
-	case billingterm.FieldDescription:
+	case billingterm.FieldInvoiceLabel:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetDescription(v)
+		m.SetInvoiceLabel(v)
 		return nil
 	case billingterm.FieldMetadata:
 		v, ok := value.(types.Metadata)
@@ -11402,11 +11229,8 @@ func (m *BillingTermMutation) ClearedFields() []string {
 	if m.FieldCleared(billingterm.FieldEnvironmentID) {
 		fields = append(fields, billingterm.FieldEnvironmentID)
 	}
-	if m.FieldCleared(billingterm.FieldAmount) {
-		fields = append(fields, billingterm.FieldAmount)
-	}
-	if m.FieldCleared(billingterm.FieldPercentage) {
-		fields = append(fields, billingterm.FieldPercentage)
+	if m.FieldCleared(billingterm.FieldValue) {
+		fields = append(fields, billingterm.FieldValue)
 	}
 	if m.FieldCleared(billingterm.FieldBillTrigger) {
 		fields = append(fields, billingterm.FieldBillTrigger)
@@ -11414,17 +11238,11 @@ func (m *BillingTermMutation) ClearedFields() []string {
 	if m.FieldCleared(billingterm.FieldBillOn) {
 		fields = append(fields, billingterm.FieldBillOn)
 	}
-	if m.FieldCleared(billingterm.FieldCoversFrom) {
-		fields = append(fields, billingterm.FieldCoversFrom)
+	if m.FieldCleared(billingterm.FieldStartDate) {
+		fields = append(fields, billingterm.FieldStartDate)
 	}
-	if m.FieldCleared(billingterm.FieldCoversTo) {
-		fields = append(fields, billingterm.FieldCoversTo)
-	}
-	if m.FieldCleared(billingterm.FieldStartsOn) {
-		fields = append(fields, billingterm.FieldStartsOn)
-	}
-	if m.FieldCleared(billingterm.FieldEndsOn) {
-		fields = append(fields, billingterm.FieldEndsOn)
+	if m.FieldCleared(billingterm.FieldEndDate) {
+		fields = append(fields, billingterm.FieldEndDate)
 	}
 	if m.FieldCleared(billingterm.FieldPeriodCount) {
 		fields = append(fields, billingterm.FieldPeriodCount)
@@ -11435,8 +11253,8 @@ func (m *BillingTermMutation) ClearedFields() []string {
 	if m.FieldCleared(billingterm.FieldSplit) {
 		fields = append(fields, billingterm.FieldSplit)
 	}
-	if m.FieldCleared(billingterm.FieldDescription) {
-		fields = append(fields, billingterm.FieldDescription)
+	if m.FieldCleared(billingterm.FieldInvoiceLabel) {
+		fields = append(fields, billingterm.FieldInvoiceLabel)
 	}
 	if m.FieldCleared(billingterm.FieldMetadata) {
 		fields = append(fields, billingterm.FieldMetadata)
@@ -11464,11 +11282,8 @@ func (m *BillingTermMutation) ClearField(name string) error {
 	case billingterm.FieldEnvironmentID:
 		m.ClearEnvironmentID()
 		return nil
-	case billingterm.FieldAmount:
-		m.ClearAmount()
-		return nil
-	case billingterm.FieldPercentage:
-		m.ClearPercentage()
+	case billingterm.FieldValue:
+		m.ClearValue()
 		return nil
 	case billingterm.FieldBillTrigger:
 		m.ClearBillTrigger()
@@ -11476,17 +11291,11 @@ func (m *BillingTermMutation) ClearField(name string) error {
 	case billingterm.FieldBillOn:
 		m.ClearBillOn()
 		return nil
-	case billingterm.FieldCoversFrom:
-		m.ClearCoversFrom()
+	case billingterm.FieldStartDate:
+		m.ClearStartDate()
 		return nil
-	case billingterm.FieldCoversTo:
-		m.ClearCoversTo()
-		return nil
-	case billingterm.FieldStartsOn:
-		m.ClearStartsOn()
-		return nil
-	case billingterm.FieldEndsOn:
-		m.ClearEndsOn()
+	case billingterm.FieldEndDate:
+		m.ClearEndDate()
 		return nil
 	case billingterm.FieldPeriodCount:
 		m.ClearPeriodCount()
@@ -11497,8 +11306,8 @@ func (m *BillingTermMutation) ClearField(name string) error {
 	case billingterm.FieldSplit:
 		m.ClearSplit()
 		return nil
-	case billingterm.FieldDescription:
-		m.ClearDescription()
+	case billingterm.FieldInvoiceLabel:
+		m.ClearInvoiceLabel()
 		return nil
 	case billingterm.FieldMetadata:
 		m.ClearMetadata()
@@ -11544,11 +11353,8 @@ func (m *BillingTermMutation) ResetField(name string) error {
 	case billingterm.FieldValueType:
 		m.ResetValueType()
 		return nil
-	case billingterm.FieldAmount:
-		m.ResetAmount()
-		return nil
-	case billingterm.FieldPercentage:
-		m.ResetPercentage()
+	case billingterm.FieldValue:
+		m.ResetValue()
 		return nil
 	case billingterm.FieldBillTrigger:
 		m.ResetBillTrigger()
@@ -11556,17 +11362,11 @@ func (m *BillingTermMutation) ResetField(name string) error {
 	case billingterm.FieldBillOn:
 		m.ResetBillOn()
 		return nil
-	case billingterm.FieldCoversFrom:
-		m.ResetCoversFrom()
+	case billingterm.FieldStartDate:
+		m.ResetStartDate()
 		return nil
-	case billingterm.FieldCoversTo:
-		m.ResetCoversTo()
-		return nil
-	case billingterm.FieldStartsOn:
-		m.ResetStartsOn()
-		return nil
-	case billingterm.FieldEndsOn:
-		m.ResetEndsOn()
+	case billingterm.FieldEndDate:
+		m.ResetEndDate()
 		return nil
 	case billingterm.FieldPeriodCount:
 		m.ResetPeriodCount()
@@ -11577,8 +11377,8 @@ func (m *BillingTermMutation) ResetField(name string) error {
 	case billingterm.FieldSplit:
 		m.ResetSplit()
 		return nil
-	case billingterm.FieldDescription:
-		m.ResetDescription()
+	case billingterm.FieldInvoiceLabel:
+		m.ResetInvoiceLabel()
 		return nil
 	case billingterm.FieldMetadata:
 		m.ResetMetadata()

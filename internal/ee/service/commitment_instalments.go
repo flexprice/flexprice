@@ -15,8 +15,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// broughtForwardDescription labels the instalment a bring forward adds.
-const broughtForwardDescription = "Payment brought forward"
+// broughtForwardLabel is the invoice label of the instalment a bring forward adds.
+const broughtForwardLabel = "Payment brought forward"
 
 // ReplanInstalments replaces the commitment's scheduled instalments with req's, which must add up to what the invoiced
 // ones leave of the commitment's total. The response is the resulting plan.
@@ -74,6 +74,11 @@ func (s *commitmentService) ReplanInstalments(
 			)
 		}
 
+		// The new instalments are numbered among the invoiced ones they join.
+		numbered := append(slices.Clone(invoiced.Items), replanned...)
+		slices.SortStableFunc(numbered, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) })
+		billingterm.NumberLabels(numbered)
+
 		if created, err = s.BillingInstalmentRepo.CreateMany(txCtx, replanned); err != nil {
 			return err
 		}
@@ -124,7 +129,7 @@ func replannedInstalments(
 		instalment.BillTrigger = in.Trigger()
 		instalment.BillOn = billOn
 		instalment.Amount = in.Amount
-		instalment.Description = lo.CoalesceOrEmpty(lo.FromPtr(in.Description), billingterm.DefaultOnceDescription)
+		instalment.InvoiceLabel = lo.CoalesceOrEmpty(lo.FromPtr(in.InvoiceLabel), billingterm.DefaultInvoiceLabel)
 		instalment.ServicePeriodStart = term.Start
 		instalment.ServicePeriodEnd = term.End
 		instalments = append(instalments, &instalment)
@@ -219,7 +224,7 @@ func (s *commitmentService) BringForwardInstalments(
 				replacement.BillOn = instalment.BillOn
 				replacement.TriggeredAt = instalment.TriggeredAt
 				replacement.Amount = left
-				replacement.Description = instalment.Description
+				replacement.InvoiceLabel = instalment.InvoiceLabel
 				replacement.ServicePeriodStart = instalment.ServicePeriodStart
 				replacement.ServicePeriodEnd = instalment.ServicePeriodEnd
 				replacement.Metadata = instalment.Metadata
@@ -232,7 +237,7 @@ func (s *commitmentService) BringForwardInstalments(
 		broughtForward.BillTrigger = types.InstalmentBillTriggerDate
 		broughtForward.BillOn = billOn
 		broughtForward.Amount = req.Amount
-		broughtForward.Description = broughtForwardDescription
+		broughtForward.InvoiceLabel = broughtForwardLabel
 		broughtForward.ServicePeriodStart = lo.MinBy(touched, func(a, b *billingterm.Instalment) bool {
 			return a.ServicePeriodStart.Before(b.ServicePeriodStart)
 		}).ServicePeriodStart

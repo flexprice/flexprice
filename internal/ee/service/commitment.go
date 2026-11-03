@@ -525,7 +525,7 @@ func (s *commitmentService) Terminate(
 
 	var fee *decimal.Decimal
 	if req.CancellationFee != nil {
-		fee = req.CancellationFee.Amount
+		fee = lo.ToPtr(req.CancellationFee.Value)
 	}
 
 	var out *commitment.Commitment

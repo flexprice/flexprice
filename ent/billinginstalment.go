@@ -42,7 +42,7 @@ type BillingInstalment struct {
 	// CustomerID holds the value of the "customer_id" field.
 	CustomerID string `json:"customer_id,omitempty"`
 	// SubscriptionID holds the value of the "subscription_id" field.
-	SubscriptionID string `json:"subscription_id,omitempty"`
+	SubscriptionID *string `json:"subscription_id,omitempty"`
 	// Currency holds the value of the "currency" field.
 	Currency string `json:"currency,omitempty"`
 	// Kind holds the value of the "kind" field.
@@ -55,8 +55,8 @@ type BillingInstalment struct {
 	TriggeredAt *time.Time `json:"triggered_at,omitempty"`
 	// Amount holds the value of the "amount" field.
 	Amount decimal.Decimal `json:"amount,omitempty"`
-	// Description holds the value of the "description" field.
-	Description string `json:"description,omitempty"`
+	// InvoiceLabel holds the value of the "invoice_label" field.
+	InvoiceLabel string `json:"invoice_label,omitempty"`
 	// ServicePeriodStart holds the value of the "service_period_start" field.
 	ServicePeriodStart time.Time `json:"service_period_start,omitempty"`
 	// ServicePeriodEnd holds the value of the "service_period_end" field.
@@ -79,7 +79,7 @@ func (*BillingInstalment) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case billinginstalment.FieldAmount:
 			values[i] = new(decimal.Decimal)
-		case billinginstalment.FieldID, billinginstalment.FieldTenantID, billinginstalment.FieldStatus, billinginstalment.FieldCreatedBy, billinginstalment.FieldUpdatedBy, billinginstalment.FieldEnvironmentID, billinginstalment.FieldOwnerType, billinginstalment.FieldOwnerID, billinginstalment.FieldBillingTermID, billinginstalment.FieldCustomerID, billinginstalment.FieldSubscriptionID, billinginstalment.FieldCurrency, billinginstalment.FieldKind, billinginstalment.FieldBillTrigger, billinginstalment.FieldDescription, billinginstalment.FieldDelivery, billinginstalment.FieldInstalmentStatus, billinginstalment.FieldInvoiceID:
+		case billinginstalment.FieldID, billinginstalment.FieldTenantID, billinginstalment.FieldStatus, billinginstalment.FieldCreatedBy, billinginstalment.FieldUpdatedBy, billinginstalment.FieldEnvironmentID, billinginstalment.FieldOwnerType, billinginstalment.FieldOwnerID, billinginstalment.FieldBillingTermID, billinginstalment.FieldCustomerID, billinginstalment.FieldSubscriptionID, billinginstalment.FieldCurrency, billinginstalment.FieldKind, billinginstalment.FieldBillTrigger, billinginstalment.FieldInvoiceLabel, billinginstalment.FieldDelivery, billinginstalment.FieldInstalmentStatus, billinginstalment.FieldInvoiceID:
 			values[i] = new(sql.NullString)
 		case billinginstalment.FieldCreatedAt, billinginstalment.FieldUpdatedAt, billinginstalment.FieldBillOn, billinginstalment.FieldTriggeredAt, billinginstalment.FieldServicePeriodStart, billinginstalment.FieldServicePeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -177,7 +177,8 @@ func (_m *BillingInstalment) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				_m.SubscriptionID = value.String
+				_m.SubscriptionID = new(string)
+				*_m.SubscriptionID = value.String
 			}
 		case billinginstalment.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -216,11 +217,11 @@ func (_m *BillingInstalment) assignValues(columns []string, values []any) error 
 			} else if value != nil {
 				_m.Amount = *value
 			}
-		case billinginstalment.FieldDescription:
+		case billinginstalment.FieldInvoiceLabel:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field description", values[i])
+				return fmt.Errorf("unexpected type %T for field invoice_label", values[i])
 			} else if value.Valid {
-				_m.Description = value.String
+				_m.InvoiceLabel = value.String
 			}
 		case billinginstalment.FieldServicePeriodStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -330,8 +331,10 @@ func (_m *BillingInstalment) String() string {
 	builder.WriteString("customer_id=")
 	builder.WriteString(_m.CustomerID)
 	builder.WriteString(", ")
-	builder.WriteString("subscription_id=")
-	builder.WriteString(_m.SubscriptionID)
+	if v := _m.SubscriptionID; v != nil {
+		builder.WriteString("subscription_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
 	builder.WriteString(_m.Currency)
@@ -353,8 +356,8 @@ func (_m *BillingInstalment) String() string {
 	builder.WriteString("amount=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Amount))
 	builder.WriteString(", ")
-	builder.WriteString("description=")
-	builder.WriteString(_m.Description)
+	builder.WriteString("invoice_label=")
+	builder.WriteString(_m.InvoiceLabel)
 	builder.WriteString(", ")
 	builder.WriteString("service_period_start=")
 	builder.WriteString(_m.ServicePeriodStart.Format(time.ANSIC))

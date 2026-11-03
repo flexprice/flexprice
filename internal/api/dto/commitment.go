@@ -244,17 +244,7 @@ func (r *CreateCommitmentRequest) validateBillingTerms() error {
 		return ierr.Validation("collection_method billing_terms requires an end_date")
 	}
 
-	if err := lo.FromPtr(r.InstalmentInvoicing).Validate(); err != nil {
-		return err
-	}
-
-	for i, term := range r.BillingTerms {
-		if err := term.Validate(i); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return lo.FromPtr(r.InstalmentInvoicing).Validate()
 }
 
 // validatePrices checks each rate against its billing model; the price request's own validation covers tier and

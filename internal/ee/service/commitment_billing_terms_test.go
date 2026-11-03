@@ -19,13 +19,13 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// upfrontPlusRemainder is the A3 shape: 30% on the start date, the rest in arrear instalments.
+// upfrontPlusRemainder is the A3 shape: 300 on the start date, the rest in arrear instalments.
 func upfrontPlusRemainder() []dto.BillingTermInput {
 	return []dto.BillingTermInput{
 		{
-			Kind:       types.BillingTermKindOnce,
-			ValueType:  types.BillingTermValuePercentage,
-			Percentage: lo.ToPtr(dec("30")),
+			Kind:      types.BillingTermKindOnce,
+			ValueType: types.BillingTermValueFixed,
+			Value:     lo.ToPtr(dec("300")),
 		},
 		{
 			Kind:           types.BillingTermKindRecurring,
@@ -84,11 +84,10 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_StoresTermsAndInstalmen
 		upfront, remainder = remainder, upfront
 	}
 
-	s.Equal(types.BillingTermValueFixed, upfront.ValueType, "a percentage is stored as a fixed amount")
-	s.True(lo.FromPtr(upfront.Amount).Equal(dec("300")))
-	s.True(lo.FromPtr(upfront.Percentage).Equal(dec("30")), "the percentage entered is kept")
+	s.Equal(types.BillingTermValueFixed, upfront.ValueType)
+	s.True(lo.FromPtr(upfront.Value).Equal(dec("300")))
 	s.Equal(types.BillingTermValueRemainder, remainder.ValueType)
-	s.Nil(remainder.Amount)
+	s.Nil(remainder.Value)
 
 	instalments := s.storedInstalments()
 	s.Require().Len(instalments, 11)
@@ -99,7 +98,7 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_StoresTermsAndInstalmen
 		total = total.Add(i.Amount)
 		s.Equal(resp.ID, i.OwnerID)
 		s.Equal(types.BillingTermOwnerCommitment, i.OwnerType)
-		s.Equal(s.fx.sub.ID, i.SubscriptionID)
+		s.Equal(lo.ToPtr(s.fx.sub.ID), i.SubscriptionID)
 		s.Equal(s.fx.customer.ID, i.CustomerID)
 		s.Equal(types.InstalmentStatusScheduled, i.InstalmentStatus)
 		s.Equal(types.InstalmentDeliverySubscriptionInvoice, i.Delivery)
@@ -123,7 +122,7 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_QuantityCommitmentTotal
 		{
 			Kind:      types.BillingTermKindOnce,
 			ValueType: types.BillingTermValueFixed,
-			Amount:    lo.ToPtr(dec("1")),
+			Value:     lo.ToPtr(dec("1")),
 		},
 		{
 			Kind:           types.BillingTermKindRecurring,
@@ -158,7 +157,7 @@ func (s *CommitmentServiceSuite) TestPreview_BillingTerms_WritesNothing() {
 
 	upfront, ok := lo.Find(resp.BillingTerms, func(t *billingterm.Term) bool { return t.Kind == types.BillingTermKindOnce })
 	s.Require().True(ok)
-	s.True(lo.FromPtr(upfront.Amount).Equal(dec("300")), "a preview resolves a percentage to its amount")
+	s.True(lo.FromPtr(upfront.Value).Equal(dec("300")))
 
 	s.Empty(s.storedInstalments())
 	s.Empty(s.storedTerms(resp.ID))
@@ -202,21 +201,18 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_Validation() {
 		{"unknown instalment_invoicing", func(r *dto.CreateCommitmentRequest) {
 			r.InstalmentInvoicing = lo.ToPtr(types.InstalmentDelivery("post"))
 		}},
-		{"percentage term with an amount", func(r *dto.CreateCommitmentRequest) {
-			r.BillingTerms[0].Amount = lo.ToPtr(dec("300"))
+		{"percentage term", func(r *dto.CreateCommitmentRequest) {
+			r.BillingTerms[0].ValueType = types.BillingTermValuePercentage
 		}},
-		{"percentage term without a percentage", func(r *dto.CreateCommitmentRequest) {
-			r.BillingTerms[0].Percentage = nil
-		}},
-		{"fixed term with a percentage", func(r *dto.CreateCommitmentRequest) {
-			r.BillingTerms[0].ValueType = types.BillingTermValueFixed
+		{"fixed term without a value", func(r *dto.CreateCommitmentRequest) {
+			r.BillingTerms[0].Value = nil
 		}},
 		{"terms that miss the total", func(r *dto.CreateCommitmentRequest) { r.BillingTerms = r.BillingTerms[:1] }},
 		{"two remainder terms", func(r *dto.CreateCommitmentRequest) {
 			r.BillingTerms = append(r.BillingTerms, r.BillingTerms[1])
 		}},
-		{"a description template over 255 characters that renders shorter", func(r *dto.CreateCommitmentRequest) {
-			r.BillingTerms[1].Description = lo.ToPtr(strings.Repeat("{n}", 86))
+		{"an invoice_label template over 255 characters that renders shorter", func(r *dto.CreateCommitmentRequest) {
+			r.BillingTerms[1].InvoiceLabel = lo.ToPtr(strings.Repeat("{n}", 86))
 		}},
 	}
 
@@ -280,19 +276,19 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_KolkataBoundary() {
 		{
 			Kind:      types.BillingTermKindOnce,
 			ValueType: types.BillingTermValueFixed,
-			Amount:    lo.ToPtr(dec("300")),
+			Value:     lo.ToPtr(dec("300")),
 		},
 		{
 			Kind:           types.BillingTermKindRecurring,
 			ValueType:      types.BillingTermValueRemainder,
 			InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear),
-			StartsOn:       &april,
+			StartDate:      &april,
 		},
 	}
 
 	utcApril := req
 	utcApril.BillingTerms = slices.Clone(req.BillingTerms)
-	utcApril.BillingTerms[1].StartsOn = lo.ToPtr(time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC))
+	utcApril.BillingTerms[1].StartDate = lo.ToPtr(time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC))
 	_, err = s.svc.Create(ctx, utcApril)
 	s.Require().Error(err, "1 Apr 00:00 UTC is no boundary of a Kolkata subscription")
 	s.True(ierr.IsValidation(err), "got %v", err)
@@ -309,14 +305,14 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_KolkataBoundary() {
 	s.True(first.Amount.Equal(dec("100")))
 }
 
-func (s *CommitmentServiceSuite) TestCreate_BillingTerms_StartsOnMustBeABoundary() {
+func (s *CommitmentServiceSuite) TestCreate_BillingTerms_StartDateMustBeABoundary() {
 	req := s.billingTermsRequest()
-	req.BillingTerms[1].StartsOn = lo.ToPtr(req.StartDate.AddDate(0, 3, 14))
+	req.BillingTerms[1].StartDate = lo.ToPtr(req.StartDate.AddDate(0, 3, 14))
 
 	_, err := s.svc.Create(s.GetContext(), req)
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err), "got %v", err)
-	s.Contains(err.Error(), "billing_terms[1].starts_on")
+	s.Contains(err.Error(), "billing_terms[1].start_date")
 	s.Empty(s.storedInstalments())
 }
 
@@ -341,7 +337,7 @@ func (s *CommitmentE2ESuite) TestCreateSubscription_InlineBillingTerms() {
 	s.Require().NoError(err)
 	s.Require().Len(instalments, 11)
 	for _, i := range instalments {
-		s.Equal(sub.ID, i.SubscriptionID)
+		s.Equal(lo.ToPtr(sub.ID), i.SubscriptionID)
 		s.Equal(s.customer.ID, i.CustomerID)
 	}
 
@@ -353,7 +349,7 @@ func (s *CommitmentE2ESuite) TestCreateSubscription_InlineBillingTerms() {
 // halfUpfrontPlusRemainder replaces upfrontPlusRemainder with 500 fixed up front.
 func halfUpfrontPlusRemainder() dto.ReplaceBillingTermsRequest {
 	terms := upfrontPlusRemainder()
-	terms[0].ValueType, terms[0].Percentage, terms[0].Amount = types.BillingTermValueFixed, nil, lo.ToPtr(dec("500"))
+	terms[0].Value = lo.ToPtr(dec("500"))
 	return dto.ReplaceBillingTermsRequest{BillingTerms: terms}
 }
 
@@ -454,12 +450,11 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_InvalidTermsChangeNothi
 	for name, req := range map[string]dto.ReplaceBillingTermsRequest{
 		"no terms":         {},
 		"terms miss total": {BillingTerms: upfrontPlusRemainder()[:1]},
-		"percentage with amount": {BillingTerms: []dto.BillingTermInput{
+		"percentage term": {BillingTerms: []dto.BillingTermInput{
 			{
-				Kind:       types.BillingTermKindOnce,
-				ValueType:  types.BillingTermValuePercentage,
-				Percentage: lo.ToPtr(dec("30")),
-				Amount:     lo.ToPtr(dec("300")),
+				Kind:      types.BillingTermKindOnce,
+				ValueType: types.BillingTermValuePercentage,
+				Value:     lo.ToPtr(dec("30")),
 			},
 			upfrontPlusRemainder()[1],
 		}},
@@ -519,9 +514,9 @@ func (s *CommitmentServiceSuite) TestPreviewBillingTerms_WritesNothing() {
 	resp, err := s.svc.PreviewBillingTerms(ctx, created.ID, dto.ReplaceBillingTermsRequest{
 		BillingTerms: []dto.BillingTermInput{
 			{
-				Kind:       types.BillingTermKindOnce,
-				ValueType:  types.BillingTermValuePercentage,
-				Percentage: lo.ToPtr(dec("50")),
+				Kind:      types.BillingTermKindOnce,
+				ValueType: types.BillingTermValueFixed,
+				Value:     lo.ToPtr(dec("500")),
 			},
 			upfrontPlusRemainder()[1],
 		},
@@ -534,7 +529,7 @@ func (s *CommitmentServiceSuite) TestPreviewBillingTerms_WritesNothing() {
 
 	upfront, ok := lo.Find(resp.BillingTerms, func(t *billingterm.Term) bool { return t.Kind == types.BillingTermKindOnce })
 	s.Require().True(ok)
-	s.True(lo.FromPtr(upfront.Amount).Equal(dec("500")), "a preview resolves a percentage to its amount")
+	s.True(lo.FromPtr(upfront.Value).Equal(dec("500")))
 
 	s.Equal(terms, s.storedTerms(created.ID))
 	s.Equal(invoiced, s.storedInstalments(), "no instalment was cancelled or added")
@@ -808,12 +803,12 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 		{
 			Kind:      types.BillingTermKindOnce,
 			ValueType: types.BillingTermValueFixed,
-			Amount:    lo.ToPtr(dec("300")),
+			Value:     lo.ToPtr(dec("300")),
 		},
 		{
 			Kind:           types.BillingTermKindRecurring,
 			ValueType:      types.BillingTermValueFixed,
-			Amount:         lo.ToPtr(dec("75")),
+			Value:          lo.ToPtr(dec("75")),
 			InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear),
 		},
 	}
@@ -901,7 +896,7 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 			s.True(settlement.BillOn.Equal(tt.at), "bill_on %s", settlement.BillOn)
 			s.True(settlement.ServicePeriodStart.Equal(jan) && settlement.ServicePeriodEnd.Equal(tt.at), "the term up to termination")
 			s.Equal(types.InstalmentDeliverySeparateInvoice, settlement.Delivery)
-			s.Equal("Settlement", settlement.Description)
+			s.Equal("Settlement", settlement.InvoiceLabel)
 			s.Equal(types.InstalmentStatusInvoiced, settlement.InstalmentStatus)
 			s.Require().NotNil(resp.TerminationInvoiceID)
 			s.Equal(*resp.TerminationInvoiceID, lo.FromPtr(settlement.InvoiceID))
@@ -1020,9 +1015,9 @@ func (s *CommitmentE2ESuite) separateInvoiceCommitment(name string) (*dto.Subscr
 	sub := s.subscribe(tokens, s.jan)
 
 	half := dto.BillingTermInput{
-		Kind:       types.BillingTermKindOnce,
-		ValueType:  types.BillingTermValuePercentage,
-		Percentage: lo.ToPtr(dec("50")),
+		Kind:      types.BillingTermKindOnce,
+		ValueType: types.BillingTermValueFixed,
+		Value:     lo.ToPtr(dec("1200")),
 	}
 	milestone := half
 	milestone.BillTrigger = lo.ToPtr(types.InstalmentBillTriggerManual)
@@ -1072,7 +1067,7 @@ func (s *CommitmentE2ESuite) TestBillDueInstalments_IssuesOneOffInvoices() {
 	s.Equal(upfront.ID, lo.FromPtr(lines[0].BillingInstalmentID))
 	s.Equal(committed.ID, lo.FromPtr(lines[0].CommitmentID))
 	s.Equal(string(types.InvoiceLineItemEntityTypeCommitment), lo.FromPtr(lines[0].EntityType))
-	s.Equal("Platform - Commitment payment", lo.FromPtr(lines[0].DisplayName))
+	s.Equal("Platform - Instalment 1 of 2", lo.FromPtr(lines[0].DisplayName))
 
 	billed := s.instalmentStatus(upfront.ID)
 	s.Equal(types.InstalmentStatusInvoiced, billed.InstalmentStatus)
@@ -1273,7 +1268,7 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_KeepsBillingUntil
 		dto.BillingTermInput{
 			Kind:      types.BillingTermKindOnce,
 			ValueType: types.BillingTermValueFixed,
-			Amount:    lo.ToPtr(dec("30")),
+			Value:     lo.ToPtr(dec("30")),
 		},
 		dto.BillingTermInput{
 			Kind:      types.BillingTermKindOnce,
@@ -1438,7 +1433,7 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_SettlesTheOpenDra
 		dto.BillingTermInput{
 			Kind:      types.BillingTermKindOnce,
 			ValueType: types.BillingTermValueFixed,
-			Amount:    lo.ToPtr(dec("30")),
+			Value:     lo.ToPtr(dec("30")),
 		},
 		dto.BillingTermInput{
 			Kind:           types.BillingTermKindRecurring,

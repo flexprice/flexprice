@@ -57,13 +57,13 @@ func (f *billingTermFixture) instalment(ctx context.Context, id, ownerID string,
 		OwnerType:          types.BillingTermOwnerCommitment,
 		OwnerID:            ownerID,
 		CustomerID:         "cust_" + f.runID,
-		SubscriptionID:     "subs_" + f.runID,
+		SubscriptionID:     lo.ToPtr("subs_" + f.runID),
 		Currency:           "usd",
 		Kind:               types.InstalmentKindInstalment,
 		BillTrigger:        types.InstalmentBillTriggerDate,
 		BillOn:             billOn,
 		Amount:             decimal.NewFromInt(100),
-		Description:        "Instalment " + id,
+		InvoiceLabel:       "Instalment " + id,
 		ServicePeriodStart: billOn,
 		ServicePeriodEnd:   billOn.AddDate(0, 1, 0),
 		Delivery:           types.InstalmentDeliverySubscriptionInvoice,
@@ -245,7 +245,7 @@ func TestInstalmentList_FiltersAndOrder(t *testing.T) {
 	second := f.instalment(f.ctx, "b", owner, types.InstalmentStatusInvoiced, nextDay)
 	second.InvoiceID = &firstInvoice
 	third := f.instalment(f.ctx, "c", owner, types.InstalmentStatusScheduled, nextDay)
-	third.SubscriptionID = "subs_" + f.runID + "_other"
+	third.SubscriptionID = lo.ToPtr("subs_" + f.runID + "_other")
 	third.Delivery = types.InstalmentDeliverySeparateInvoice
 	fourth := f.instalment(f.ctx, "d", owner, types.InstalmentStatusScheduled, dayAfter)
 	fourth.Delivery = types.InstalmentDeliverySeparateInvoice
@@ -296,7 +296,7 @@ func TestInstalmentList_FiltersAndOrder(t *testing.T) {
 		},
 		{
 			name:   "subscription",
-			filter: billingterm.InstalmentFilter{SubscriptionIDs: []string{third.SubscriptionID}},
+			filter: billingterm.InstalmentFilter{SubscriptionIDs: []string{*third.SubscriptionID}},
 			want:   []string{third.ID},
 		},
 		{
@@ -335,7 +335,7 @@ func TestTermArchive_HidesArchived(t *testing.T) {
 	f := newBillingTermFixture(t)
 	owner := "cmt_" + f.runID + "_1"
 	otherOwner := "cmt_" + f.runID + "_2"
-	startsOn := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	startDate := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	newTerm := func(id, ownerID string) *billingterm.Term {
 		return &billingterm.Term{
@@ -344,8 +344,8 @@ func TestTermArchive_HidesArchived(t *testing.T) {
 			OwnerID:        ownerID,
 			Kind:           types.BillingTermKindRecurring,
 			ValueType:      types.BillingTermValueFixed,
-			Amount:         lo.ToPtr(decimal.NewFromInt(1200)),
-			StartsOn:       &startsOn,
+			Value:          lo.ToPtr(decimal.NewFromInt(1200)),
+			StartDate:      &startDate,
 			PeriodCount:    lo.ToPtr(12),
 			InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear),
 			Split:          lo.ToPtr(types.BillingTermSplitEven),
@@ -364,7 +364,7 @@ func TestTermArchive_HidesArchived(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, listed, 2)
 	require.Equal(t, archivable[0].ID, listed[0].ID)
-	require.True(t, archivable[0].Amount.Equal(lo.FromPtr(listed[0].Amount)))
+	require.True(t, archivable[0].Value.Equal(lo.FromPtr(listed[0].Value)))
 
 	archived, err := f.terms.Archive(f.ctx, types.BillingTermOwnerCommitment, owner)
 	require.NoError(t, err)

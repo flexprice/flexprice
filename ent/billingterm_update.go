@@ -136,11 +136,8 @@ func (_u *BillingTermUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(billingterm.FieldEnvironmentID, field.TypeString)
 	}
-	if _u.mutation.AmountCleared() {
-		_spec.ClearField(billingterm.FieldAmount, field.TypeOther)
-	}
-	if _u.mutation.PercentageCleared() {
-		_spec.ClearField(billingterm.FieldPercentage, field.TypeOther)
+	if _u.mutation.ValueCleared() {
+		_spec.ClearField(billingterm.FieldValue, field.TypeOther)
 	}
 	if _u.mutation.BillTriggerCleared() {
 		_spec.ClearField(billingterm.FieldBillTrigger, field.TypeString)
@@ -148,17 +145,11 @@ func (_u *BillingTermUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if _u.mutation.BillOnCleared() {
 		_spec.ClearField(billingterm.FieldBillOn, field.TypeTime)
 	}
-	if _u.mutation.CoversFromCleared() {
-		_spec.ClearField(billingterm.FieldCoversFrom, field.TypeTime)
+	if _u.mutation.StartDateCleared() {
+		_spec.ClearField(billingterm.FieldStartDate, field.TypeTime)
 	}
-	if _u.mutation.CoversToCleared() {
-		_spec.ClearField(billingterm.FieldCoversTo, field.TypeTime)
-	}
-	if _u.mutation.StartsOnCleared() {
-		_spec.ClearField(billingterm.FieldStartsOn, field.TypeTime)
-	}
-	if _u.mutation.EndsOnCleared() {
-		_spec.ClearField(billingterm.FieldEndsOn, field.TypeTime)
+	if _u.mutation.EndDateCleared() {
+		_spec.ClearField(billingterm.FieldEndDate, field.TypeTime)
 	}
 	if _u.mutation.PeriodCountCleared() {
 		_spec.ClearField(billingterm.FieldPeriodCount, field.TypeInt)
@@ -169,8 +160,8 @@ func (_u *BillingTermUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if _u.mutation.SplitCleared() {
 		_spec.ClearField(billingterm.FieldSplit, field.TypeString)
 	}
-	if _u.mutation.DescriptionCleared() {
-		_spec.ClearField(billingterm.FieldDescription, field.TypeString)
+	if _u.mutation.InvoiceLabelCleared() {
+		_spec.ClearField(billingterm.FieldInvoiceLabel, field.TypeString)
 	}
 	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(billingterm.FieldMetadata, field.TypeOther)
@@ -333,11 +324,8 @@ func (_u *BillingTermUpdateOne) sqlSave(ctx context.Context) (_node *BillingTerm
 	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(billingterm.FieldEnvironmentID, field.TypeString)
 	}
-	if _u.mutation.AmountCleared() {
-		_spec.ClearField(billingterm.FieldAmount, field.TypeOther)
-	}
-	if _u.mutation.PercentageCleared() {
-		_spec.ClearField(billingterm.FieldPercentage, field.TypeOther)
+	if _u.mutation.ValueCleared() {
+		_spec.ClearField(billingterm.FieldValue, field.TypeOther)
 	}
 	if _u.mutation.BillTriggerCleared() {
 		_spec.ClearField(billingterm.FieldBillTrigger, field.TypeString)
@@ -345,17 +333,11 @@ func (_u *BillingTermUpdateOne) sqlSave(ctx context.Context) (_node *BillingTerm
 	if _u.mutation.BillOnCleared() {
 		_spec.ClearField(billingterm.FieldBillOn, field.TypeTime)
 	}
-	if _u.mutation.CoversFromCleared() {
-		_spec.ClearField(billingterm.FieldCoversFrom, field.TypeTime)
+	if _u.mutation.StartDateCleared() {
+		_spec.ClearField(billingterm.FieldStartDate, field.TypeTime)
 	}
-	if _u.mutation.CoversToCleared() {
-		_spec.ClearField(billingterm.FieldCoversTo, field.TypeTime)
-	}
-	if _u.mutation.StartsOnCleared() {
-		_spec.ClearField(billingterm.FieldStartsOn, field.TypeTime)
-	}
-	if _u.mutation.EndsOnCleared() {
-		_spec.ClearField(billingterm.FieldEndsOn, field.TypeTime)
+	if _u.mutation.EndDateCleared() {
+		_spec.ClearField(billingterm.FieldEndDate, field.TypeTime)
 	}
 	if _u.mutation.PeriodCountCleared() {
 		_spec.ClearField(billingterm.FieldPeriodCount, field.TypeInt)
@@ -366,8 +348,8 @@ func (_u *BillingTermUpdateOne) sqlSave(ctx context.Context) (_node *BillingTerm
 	if _u.mutation.SplitCleared() {
 		_spec.ClearField(billingterm.FieldSplit, field.TypeString)
 	}
-	if _u.mutation.DescriptionCleared() {
-		_spec.ClearField(billingterm.FieldDescription, field.TypeString)
+	if _u.mutation.InvoiceLabelCleared() {
+		_spec.ClearField(billingterm.FieldInvoiceLabel, field.TypeString)
 	}
 	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(billingterm.FieldMetadata, field.TypeOther)

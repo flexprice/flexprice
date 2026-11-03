@@ -40,13 +40,13 @@ func (f *instalmentFixture) instalment(id, ownerID string, status types.Instalme
 		OwnerType:          types.BillingTermOwnerCommitment,
 		OwnerID:            ownerID,
 		CustomerID:         "cust_1",
-		SubscriptionID:     "subs_1",
+		SubscriptionID:     lo.ToPtr("subs_1"),
 		Currency:           "usd",
 		Kind:               types.InstalmentKindInstalment,
 		BillTrigger:        types.InstalmentBillTriggerDate,
 		BillOn:             billOn,
 		Amount:             decimal.NewFromInt(100),
-		Description:        "Instalment " + id,
+		InvoiceLabel:       "Instalment " + id,
 		ServicePeriodStart: billOn,
 		ServicePeriodEnd:   billOn.AddDate(0, 1, 0),
 		Delivery:           types.InstalmentDeliverySubscriptionInvoice,
@@ -193,7 +193,7 @@ func TestInMemoryBillingInstalmentStore_ListFiltersAndOrder(t *testing.T) {
 	second := f.instalment("binst_b", "cmt_1", types.InstalmentStatusInvoiced, nextDay)
 	second.InvoiceID = lo.ToPtr("inv_1")
 	third := f.instalment("binst_c", "cmt_1", types.InstalmentStatusScheduled, nextDay)
-	third.SubscriptionID = "subs_other"
+	third.SubscriptionID = lo.ToPtr("subs_other")
 	third.Delivery = types.InstalmentDeliverySeparateInvoice
 	fourth := f.instalment("binst_d", "cmt_1", types.InstalmentStatusScheduled, dayAfter)
 	fourth.Delivery = types.InstalmentDeliverySeparateInvoice
@@ -286,7 +286,7 @@ func TestInMemoryBillingInstalmentStore_Update(t *testing.T) {
 	updated, err = f.store.Update(f.ctx, cleared)
 	require.NoError(t, err)
 	require.Nil(t, updated.TriggeredAt)
-	require.Equal(t, row.Description, updated.Description, "fields outside the update set are kept")
+	require.Equal(t, row.InvoiceLabel, updated.InvoiceLabel, "fields outside the update set are kept")
 
 	_, err = f.store.Update(types.SetEnvironmentID(f.ctx, "env_2"), updated)
 	require.Error(t, err)

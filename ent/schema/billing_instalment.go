@@ -54,7 +54,8 @@ func (BillingInstalment) Fields() []ent.Field {
 
 		field.String("subscription_id").
 			SchemaType(varchar("50")).
-			NotEmpty().
+			Optional().
+			Nillable().
 			Immutable(),
 
 		field.String("currency").
@@ -83,7 +84,7 @@ func (BillingInstalment) Fields() []ent.Field {
 		field.Other("amount", decimal.Decimal{}).
 			SchemaType(map[string]string{"postgres": "numeric(20,8)"}),
 
-		field.String("description").
+		field.String("invoice_label").
 			SchemaType(varchar("255")).
 			NotEmpty().
 			Immutable(),

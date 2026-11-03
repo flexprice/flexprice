@@ -136,30 +136,16 @@ func (_c *BillingTermCreate) SetValueType(v types.BillingTermValueType) *Billing
 	return _c
 }
 
-// SetAmount sets the "amount" field.
-func (_c *BillingTermCreate) SetAmount(v decimal.Decimal) *BillingTermCreate {
-	_c.mutation.SetAmount(v)
+// SetValue sets the "value" field.
+func (_c *BillingTermCreate) SetValue(v decimal.Decimal) *BillingTermCreate {
+	_c.mutation.SetValue(v)
 	return _c
 }
 
-// SetNillableAmount sets the "amount" field if the given value is not nil.
-func (_c *BillingTermCreate) SetNillableAmount(v *decimal.Decimal) *BillingTermCreate {
+// SetNillableValue sets the "value" field if the given value is not nil.
+func (_c *BillingTermCreate) SetNillableValue(v *decimal.Decimal) *BillingTermCreate {
 	if v != nil {
-		_c.SetAmount(*v)
-	}
-	return _c
-}
-
-// SetPercentage sets the "percentage" field.
-func (_c *BillingTermCreate) SetPercentage(v decimal.Decimal) *BillingTermCreate {
-	_c.mutation.SetPercentage(v)
-	return _c
-}
-
-// SetNillablePercentage sets the "percentage" field if the given value is not nil.
-func (_c *BillingTermCreate) SetNillablePercentage(v *decimal.Decimal) *BillingTermCreate {
-	if v != nil {
-		_c.SetPercentage(*v)
+		_c.SetValue(*v)
 	}
 	return _c
 }
@@ -192,58 +178,30 @@ func (_c *BillingTermCreate) SetNillableBillOn(v *time.Time) *BillingTermCreate 
 	return _c
 }
 
-// SetCoversFrom sets the "covers_from" field.
-func (_c *BillingTermCreate) SetCoversFrom(v time.Time) *BillingTermCreate {
-	_c.mutation.SetCoversFrom(v)
+// SetStartDate sets the "start_date" field.
+func (_c *BillingTermCreate) SetStartDate(v time.Time) *BillingTermCreate {
+	_c.mutation.SetStartDate(v)
 	return _c
 }
 
-// SetNillableCoversFrom sets the "covers_from" field if the given value is not nil.
-func (_c *BillingTermCreate) SetNillableCoversFrom(v *time.Time) *BillingTermCreate {
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (_c *BillingTermCreate) SetNillableStartDate(v *time.Time) *BillingTermCreate {
 	if v != nil {
-		_c.SetCoversFrom(*v)
+		_c.SetStartDate(*v)
 	}
 	return _c
 }
 
-// SetCoversTo sets the "covers_to" field.
-func (_c *BillingTermCreate) SetCoversTo(v time.Time) *BillingTermCreate {
-	_c.mutation.SetCoversTo(v)
+// SetEndDate sets the "end_date" field.
+func (_c *BillingTermCreate) SetEndDate(v time.Time) *BillingTermCreate {
+	_c.mutation.SetEndDate(v)
 	return _c
 }
 
-// SetNillableCoversTo sets the "covers_to" field if the given value is not nil.
-func (_c *BillingTermCreate) SetNillableCoversTo(v *time.Time) *BillingTermCreate {
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (_c *BillingTermCreate) SetNillableEndDate(v *time.Time) *BillingTermCreate {
 	if v != nil {
-		_c.SetCoversTo(*v)
-	}
-	return _c
-}
-
-// SetStartsOn sets the "starts_on" field.
-func (_c *BillingTermCreate) SetStartsOn(v time.Time) *BillingTermCreate {
-	_c.mutation.SetStartsOn(v)
-	return _c
-}
-
-// SetNillableStartsOn sets the "starts_on" field if the given value is not nil.
-func (_c *BillingTermCreate) SetNillableStartsOn(v *time.Time) *BillingTermCreate {
-	if v != nil {
-		_c.SetStartsOn(*v)
-	}
-	return _c
-}
-
-// SetEndsOn sets the "ends_on" field.
-func (_c *BillingTermCreate) SetEndsOn(v time.Time) *BillingTermCreate {
-	_c.mutation.SetEndsOn(v)
-	return _c
-}
-
-// SetNillableEndsOn sets the "ends_on" field if the given value is not nil.
-func (_c *BillingTermCreate) SetNillableEndsOn(v *time.Time) *BillingTermCreate {
-	if v != nil {
-		_c.SetEndsOn(*v)
+		_c.SetEndDate(*v)
 	}
 	return _c
 }
@@ -290,16 +248,16 @@ func (_c *BillingTermCreate) SetNillableSplit(v *types.BillingTermSplit) *Billin
 	return _c
 }
 
-// SetDescription sets the "description" field.
-func (_c *BillingTermCreate) SetDescription(v string) *BillingTermCreate {
-	_c.mutation.SetDescription(v)
+// SetInvoiceLabel sets the "invoice_label" field.
+func (_c *BillingTermCreate) SetInvoiceLabel(v string) *BillingTermCreate {
+	_c.mutation.SetInvoiceLabel(v)
 	return _c
 }
 
-// SetNillableDescription sets the "description" field if the given value is not nil.
-func (_c *BillingTermCreate) SetNillableDescription(v *string) *BillingTermCreate {
+// SetNillableInvoiceLabel sets the "invoice_label" field if the given value is not nil.
+func (_c *BillingTermCreate) SetNillableInvoiceLabel(v *string) *BillingTermCreate {
 	if v != nil {
-		_c.SetDescription(*v)
+		_c.SetInvoiceLabel(*v)
 	}
 	return _c
 }
@@ -518,13 +476,9 @@ func (_c *BillingTermCreate) createSpec() (*BillingTerm, *sqlgraph.CreateSpec) {
 		_spec.SetField(billingterm.FieldValueType, field.TypeString, value)
 		_node.ValueType = value
 	}
-	if value, ok := _c.mutation.Amount(); ok {
-		_spec.SetField(billingterm.FieldAmount, field.TypeOther, value)
-		_node.Amount = &value
-	}
-	if value, ok := _c.mutation.Percentage(); ok {
-		_spec.SetField(billingterm.FieldPercentage, field.TypeOther, value)
-		_node.Percentage = &value
+	if value, ok := _c.mutation.Value(); ok {
+		_spec.SetField(billingterm.FieldValue, field.TypeOther, value)
+		_node.Value = &value
 	}
 	if value, ok := _c.mutation.BillTrigger(); ok {
 		_spec.SetField(billingterm.FieldBillTrigger, field.TypeString, value)
@@ -534,21 +488,13 @@ func (_c *BillingTermCreate) createSpec() (*BillingTerm, *sqlgraph.CreateSpec) {
 		_spec.SetField(billingterm.FieldBillOn, field.TypeTime, value)
 		_node.BillOn = &value
 	}
-	if value, ok := _c.mutation.CoversFrom(); ok {
-		_spec.SetField(billingterm.FieldCoversFrom, field.TypeTime, value)
-		_node.CoversFrom = &value
+	if value, ok := _c.mutation.StartDate(); ok {
+		_spec.SetField(billingterm.FieldStartDate, field.TypeTime, value)
+		_node.StartDate = &value
 	}
-	if value, ok := _c.mutation.CoversTo(); ok {
-		_spec.SetField(billingterm.FieldCoversTo, field.TypeTime, value)
-		_node.CoversTo = &value
-	}
-	if value, ok := _c.mutation.StartsOn(); ok {
-		_spec.SetField(billingterm.FieldStartsOn, field.TypeTime, value)
-		_node.StartsOn = &value
-	}
-	if value, ok := _c.mutation.EndsOn(); ok {
-		_spec.SetField(billingterm.FieldEndsOn, field.TypeTime, value)
-		_node.EndsOn = &value
+	if value, ok := _c.mutation.EndDate(); ok {
+		_spec.SetField(billingterm.FieldEndDate, field.TypeTime, value)
+		_node.EndDate = &value
 	}
 	if value, ok := _c.mutation.PeriodCount(); ok {
 		_spec.SetField(billingterm.FieldPeriodCount, field.TypeInt, value)
@@ -562,9 +508,9 @@ func (_c *BillingTermCreate) createSpec() (*BillingTerm, *sqlgraph.CreateSpec) {
 		_spec.SetField(billingterm.FieldSplit, field.TypeString, value)
 		_node.Split = &value
 	}
-	if value, ok := _c.mutation.Description(); ok {
-		_spec.SetField(billingterm.FieldDescription, field.TypeString, value)
-		_node.Description = &value
+	if value, ok := _c.mutation.InvoiceLabel(); ok {
+		_spec.SetField(billingterm.FieldInvoiceLabel, field.TypeString, value)
+		_node.InvoiceLabel = &value
 	}
 	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(billingterm.FieldMetadata, field.TypeOther, value)

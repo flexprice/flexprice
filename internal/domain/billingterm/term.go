@@ -18,25 +18,24 @@ type Term struct {
 	Kind      types.BillingTermKind      `json:"kind"`
 	ValueType types.BillingTermValueType `json:"value_type"`
 
-	// Amount is nil for a remainder term; Percentage keeps what the tenant entered, for display.
-	Amount     *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
-	Percentage *decimal.Decimal `json:"percentage,omitempty" swaggertype:"string"`
+	// Value is the amount of a fixed term, per instalment on a recurring one; it is nil for a remainder term.
+	Value *decimal.Decimal `json:"value,omitempty" swaggertype:"string"`
 
 	// Once terms.
 	BillTrigger *types.InstalmentBillTrigger `json:"bill_trigger,omitempty"`
 	BillOn      *time.Time                   `json:"bill_on,omitempty"`
-	CoversFrom  *time.Time                   `json:"covers_from,omitempty"`
-	CoversTo    *time.Time                   `json:"covers_to,omitempty"`
 
 	// Recurring terms.
-	StartsOn       *time.Time              `json:"starts_on,omitempty"`
-	EndsOn         *time.Time              `json:"ends_on,omitempty"`
+	StartDate      *time.Time              `json:"start_date,omitempty"`
+	EndDate        *time.Time              `json:"end_date,omitempty"`
 	PeriodCount    *int                    `json:"period_count,omitempty"`
 	InvoiceCadence *types.InvoiceCadence   `json:"invoice_cadence,omitempty"`
 	Split          *types.BillingTermSplit `json:"split,omitempty"`
 
-	Description *string        `json:"description,omitempty"`
-	Metadata    types.Metadata `json:"metadata,omitempty" activity:"drop"`
+	// InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number
+	// all of the owner's instalments together.
+	InvoiceLabel *string        `json:"invoice_label,omitempty"`
+	Metadata     types.Metadata `json:"metadata,omitempty" activity:"drop"`
 
 	EnvironmentID string `json:"environment_id"`
 
@@ -55,18 +54,15 @@ func TermFromEnt(e *ent.BillingTerm) *Term {
 		OwnerID:        e.OwnerID,
 		Kind:           e.Kind,
 		ValueType:      e.ValueType,
-		Amount:         e.Amount,
-		Percentage:     e.Percentage,
+		Value:          e.Value,
 		BillTrigger:    e.BillTrigger,
 		BillOn:         e.BillOn,
-		CoversFrom:     e.CoversFrom,
-		CoversTo:       e.CoversTo,
-		StartsOn:       e.StartsOn,
-		EndsOn:         e.EndsOn,
+		StartDate:      e.StartDate,
+		EndDate:        e.EndDate,
 		PeriodCount:    e.PeriodCount,
 		InvoiceCadence: e.InvoiceCadence,
 		Split:          e.Split,
-		Description:    e.Description,
+		InvoiceLabel:   e.InvoiceLabel,
 		Metadata:       e.Metadata,
 		EnvironmentID:  e.EnvironmentID,
 		BaseModel: types.BaseModel{

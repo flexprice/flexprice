@@ -68,8 +68,16 @@ func instalmentLine(c *commitment.Commitment, i *billingterm.Instalment) dto.Cre
 		kind = types.CommitmentLineSettlement
 	}
 
+	metadata := types.Metadata{
+		types.MetadataKeyCommitmentLineKind: string(kind),
+		types.MetadataKeyCommitmentID:       c.ID,
+	}
+	if c.InvoiceDescription != nil {
+		metadata[types.MetadataKeyDescription] = *c.InvoiceDescription
+	}
+
 	return dto.CreateInvoiceLineItemRequest{
-		DisplayName: lo.ToPtr(c.InvoiceLabel + " - " + i.Description),
+		DisplayName: lo.ToPtr(c.InvoiceLabel + " - " + i.InvoiceLabel),
 		Amount:      i.Amount,
 		Quantity:    decimal.NewFromInt(1),
 		PeriodStart: lo.ToPtr(i.ServicePeriodStart),
@@ -81,9 +89,6 @@ func instalmentLine(c *commitment.Commitment, i *billingterm.Instalment) dto.Cre
 		EntityID:            lo.ToPtr(c.ID),
 		BillingInstalmentID: lo.ToPtr(i.ID),
 
-		Metadata: types.Metadata{
-			types.MetadataKeyCommitmentLineKind: string(kind),
-			types.MetadataKeyCommitmentID:       c.ID,
-		},
+		Metadata: metadata,
 	}
 }

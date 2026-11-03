@@ -30,7 +30,7 @@ type BillingTermValueType string
 
 const (
 	BillingTermValueFixed BillingTermValueType = "fixed"
-	// BillingTermValuePercentage is accepted on requests only and stored as a fixed amount.
+	// BillingTermValuePercentage is reserved; a percentage term is rejected as not supported yet.
 	BillingTermValuePercentage BillingTermValueType = "percentage"
 	BillingTermValueRemainder  BillingTermValueType = "remainder"
 )

@@ -200,7 +200,7 @@ func setCommitmentsV2(t *testing.T, ctx context.Context, stores testutil.Stores,
 
 // fixedFee is a fixed cancellation fee of amount.
 func fixedFee(amount string) *dto.CancellationFeeInput {
-	return &dto.CancellationFeeInput{Type: types.CancellationFeeFixed, Amount: lo.ToPtr(dec(amount))}
+	return &dto.CancellationFeeInput{Type: types.CancellationFeeFixed, Value: dec(amount)}
 }
 
 type CommitmentServiceSuite struct {
@@ -707,7 +707,7 @@ func (s *CommitmentServiceSuite) TestTerminate_RejectsInvalidCancellationFee() {
 	}{
 		{name: "zero fee", at: midTerm, fee: fixedFee("0")},
 		{name: "negative fee", at: midTerm, fee: fixedFee("-5")},
-		{name: "missing type", at: midTerm, fee: &dto.CancellationFeeInput{Amount: lo.ToPtr(dec("5"))}},
+		{name: "missing type", at: midTerm, fee: &dto.CancellationFeeInput{Value: dec("5")}},
 		{name: "terminate at end_date", at: *created.EndDate, fee: fixedFee("10")},
 	}
 
@@ -732,8 +732,8 @@ func (s *CommitmentServiceSuite) TestTerminate_PercentageFeeNotSupported() {
 	_, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
 		EffectiveAt: &at,
 		CancellationFee: &dto.CancellationFeeInput{
-			Type:       types.CancellationFeePercentage,
-			Percentage: lo.ToPtr(dec("10")),
+			Type:  types.CancellationFeePercentage,
+			Value: dec("10"),
 		},
 	})
 	s.requireValidation(err, "percentage cancellation fees are not supported yet")

@@ -23,13 +23,11 @@ const (
 	MaxInstalments = 500
 )
 
-// DefaultOnceDescription labels an instalment that has no description of its own.
-const DefaultOnceDescription = "Commitment payment"
+// DefaultInvoiceLabel is the invoice label of an instalment given none. NumberLabels fills {n} and {of}.
+const DefaultInvoiceLabel = "Instalment {n} of {of}"
 
 const (
-	maxDescriptionLength = 255
-
-	defaultRecurringDescription = "Instalment {n} of {of}"
+	maxInvoiceLabelLength = 255
 
 	// termErrorFormat names the term's index, then the field, then the reason.
 	termErrorFormat = "billing_terms[%d].%s: %s"
@@ -40,9 +38,9 @@ type resolvedTerm struct {
 	index int
 	term  *Term
 
-	billTrigger types.InstalmentBillTrigger
-	billOn      time.Time
-	covers      types.Period
+	billTrigger   types.InstalmentBillTrigger
+	billOn        time.Time
+	servicePeriod types.Period
 
 	cadence types.InvoiceCadence
 	split   types.BillingTermSplit
@@ -54,7 +52,6 @@ type resolvedTerm struct {
 }
 
 // Expand validates the terms against the owner and its period values and returns their instalments in billing order.
-// It fills Amount on terms entered as a percentage.
 func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Term) ([]*Instalment, error) {
 	collection := owner.CollectionPeriod()
 	total := owner.CollectionTotal()
@@ -87,7 +84,7 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 		resolved = append(resolved, r)
 	}
 
-	if err := resolveAmounts(resolved, total, currency); err != nil {
+	if err := resolveAmounts(resolved, total); err != nil {
 		return nil, err
 	}
 
@@ -114,24 +111,29 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 		i.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)
 	}
 
-	for _, r := range resolved {
-		if r.term.Percentage != nil {
-			r.term.Amount = lo.ToPtr(r.instalmentAmount)
-		}
-	}
+	NumberLabels(instalments)
 
 	return instalments, nil
 }
 
+// NumberLabels fills {n} and {of} in each invoice label with the instalment's position in plan and the plan's length.
+// plan is all of an owner's instalments in billing order; labels already numbered are left as they are.
+func NumberLabels(plan []*Instalment) {
+	of := strconv.Itoa(len(plan))
+	for n, i := range plan {
+		i.InvoiceLabel = strings.NewReplacer("{n}", strconv.Itoa(n+1), "{of}", of).Replace(i.InvoiceLabel)
+	}
+}
+
 // InstalmentTemplate is a scheduled instalment of the owner with the owner's fields filled in. The caller sets the ID,
-// amount, dates, trigger, description and service period.
+// amount, dates, trigger, invoice label and service period.
 func InstalmentTemplate(ctx context.Context, owner Owner) Instalment {
 	return Instalment{
 		OwnerType: owner.OwnerType(),
 		OwnerID:   owner.OwnerID(),
 
 		CustomerID:     owner.BilledCustomerID(),
-		SubscriptionID: owner.BilledSubscriptionID(),
+		SubscriptionID: lo.EmptyableToPtr(owner.BilledSubscriptionID()),
 		Currency:       owner.BillingCurrency(),
 
 		Kind:             types.InstalmentKindInstalment,
@@ -145,35 +147,25 @@ func InstalmentTemplate(ctx context.Context, owner Owner) Instalment {
 
 // resolveTerm validates one term against the collection period and applies the defaults of its kind.
 func resolveTerm(index int, t *Term, collection types.Period, currency string, periods []PeriodValue) (*resolvedTerm, error) {
-	if utf8.RuneCountInString(lo.FromPtr(t.Description)) > maxDescriptionLength {
-		return nil, ierr.Validationf(termErrorFormat, index, "description", "must be at most 255 characters")
+	if utf8.RuneCountInString(lo.FromPtr(t.InvoiceLabel)) > maxInvoiceLabelLength {
+		return nil, ierr.Validationf(termErrorFormat, index, "invoice_label", "must be at most 255 characters")
 	}
 
 	switch t.ValueType {
 	case types.BillingTermValueFixed:
-		if (t.Amount == nil) == (t.Percentage == nil) {
-			return nil, ierr.Validationf(termErrorFormat, index, "amount", "a fixed term needs exactly one of amount or percentage")
+		if t.Value == nil || !t.Value.IsPositive() {
+			return nil, ierr.Validationf(termErrorFormat, index, "value", "must be greater than 0")
 		}
 
-		if t.Amount != nil && !t.Amount.IsPositive() {
-			return nil, ierr.Validationf(termErrorFormat, index, "amount", "must be greater than 0")
-		}
-
-		if t.Amount != nil && !t.Amount.Equal(types.RoundToCurrencyPrecision(*t.Amount, currency)) {
-			return nil, ierr.Validationf(termErrorFormat, index, "amount", fmt.Sprintf("must be rounded to %s precision", currency))
-		}
-
-		if t.Percentage != nil && (!t.Percentage.IsPositive() || t.Percentage.GreaterThan(decimal.NewFromInt(100))) {
-			return nil, ierr.Validationf(termErrorFormat, index, "percentage", "must be greater than 0 and at most 100")
+		if !t.Value.Equal(types.RoundToCurrencyPrecision(*t.Value, currency)) {
+			return nil, ierr.Validationf(termErrorFormat, index, "value", fmt.Sprintf("must be rounded to %s precision", currency))
 		}
 	case types.BillingTermValueRemainder:
-		if t.Amount != nil {
-			return nil, ierr.Validationf(termErrorFormat, index, "amount", "a remainder term takes no amount")
+		if t.Value != nil {
+			return nil, ierr.Validationf(termErrorFormat, index, "value", "a remainder term takes no value")
 		}
-
-		if t.Percentage != nil {
-			return nil, ierr.Validationf(termErrorFormat, index, "percentage", "a remainder term takes no percentage")
-		}
+	case types.BillingTermValuePercentage:
+		return nil, ierr.Validationf(termErrorFormat, index, "value_type", "percentage terms are not supported yet")
 	default:
 		return nil, ierr.Validationf(termErrorFormat, index, "value_type", "must be fixed or remainder")
 	}
@@ -188,11 +180,12 @@ func resolveTerm(index int, t *Term, collection types.Period, currency string, p
 	}
 }
 
-// resolveOnce checks a once term's dates; bill_on and coverage default to the collection period.
+// resolveOnce checks a once term's dates; bill_on defaults to the start of the collection period, which is also the
+// service period of its instalment.
 func resolveOnce(index int, t *Term, collection types.Period) (*resolvedTerm, error) {
 	unused := []lo.Entry[string, bool]{
-		{Key: "starts_on", Value: t.StartsOn != nil},
-		{Key: "ends_on", Value: t.EndsOn != nil},
+		{Key: "start_date", Value: t.StartDate != nil},
+		{Key: "end_date", Value: t.EndDate != nil},
 		{Key: "period_count", Value: t.PeriodCount != nil},
 		{Key: "invoice_cadence", Value: t.InvoiceCadence != nil},
 		{Key: "split", Value: t.Split != nil},
@@ -207,12 +200,9 @@ func resolveOnce(index int, t *Term, collection types.Period) (*resolvedTerm, er
 		index: index,
 		term:  t,
 
-		billTrigger: lo.FromPtrOr(t.BillTrigger, types.InstalmentBillTriggerDate),
-		billOn:      lo.FromPtrOr(t.BillOn, collection.Start),
-		covers: types.Period{
-			Start: lo.FromPtrOr(t.CoversFrom, collection.Start),
-			End:   lo.FromPtrOr(t.CoversTo, collection.End),
-		},
+		billTrigger:   lo.FromPtrOr(t.BillTrigger, types.InstalmentBillTriggerDate),
+		billOn:        lo.FromPtrOr(t.BillOn, collection.Start),
+		servicePeriod: collection,
 	}
 
 	switch r.billTrigger {
@@ -231,28 +221,14 @@ func resolveOnce(index int, t *Term, collection types.Period) (*resolvedTerm, er
 		return nil, ierr.Validationf(termErrorFormat, index, "bill_trigger", "must be date or manual")
 	}
 
-	if !r.covers.Start.Before(r.covers.End) {
-		return nil, ierr.Validationf(termErrorFormat, index, "covers_from", "must be before covers_to")
-	}
-
-	if r.covers.Start.Before(collection.Start) {
-		return nil, ierr.Validationf(termErrorFormat, index, "covers_from", "must fall within the collection period")
-	}
-
-	if r.covers.End.After(collection.End) {
-		return nil, ierr.Validationf(termErrorFormat, index, "covers_to", "must fall within the collection period")
-	}
-
 	return r, nil
 }
 
-// resolveRecurring checks a recurring term and cuts its steps; starts_on and ends_on default to the collection period.
+// resolveRecurring checks a recurring term and cuts its steps; start_date and end_date default to the collection period.
 func resolveRecurring(index int, t *Term, collection types.Period, periods []PeriodValue) (*resolvedTerm, error) {
 	unused := []lo.Entry[string, bool]{
 		{Key: "bill_trigger", Value: t.BillTrigger != nil},
 		{Key: "bill_on", Value: t.BillOn != nil},
-		{Key: "covers_from", Value: t.CoversFrom != nil},
-		{Key: "covers_to", Value: t.CoversTo != nil},
 	}
 	for _, field := range unused {
 		if field.Value {
@@ -280,20 +256,20 @@ func resolveRecurring(index int, t *Term, collection types.Period, periods []Per
 	}
 
 	span := types.Period{
-		Start: lo.FromPtrOr(t.StartsOn, collection.Start),
-		End:   lo.FromPtrOr(t.EndsOn, collection.End),
+		Start: lo.FromPtrOr(t.StartDate, collection.Start),
+		End:   lo.FromPtrOr(t.EndDate, collection.End),
 	}
 
 	if !lo.ContainsBy(periods, func(p PeriodValue) bool { return p.Start.Equal(span.Start) }) {
-		return nil, ierr.Validationf(termErrorFormat, index, "starts_on", "must be the start of a billing period")
+		return nil, ierr.Validationf(termErrorFormat, index, "start_date", "must be the start of a billing period")
 	}
 
 	if !lo.ContainsBy(periods, func(p PeriodValue) bool { return p.End.Equal(span.End) }) {
-		return nil, ierr.Validationf(termErrorFormat, index, "ends_on", "must be the end of a billing period")
+		return nil, ierr.Validationf(termErrorFormat, index, "end_date", "must be the end of a billing period")
 	}
 
 	if !span.Start.Before(span.End) {
-		return nil, ierr.Validationf(termErrorFormat, index, "starts_on", "must be before ends_on")
+		return nil, ierr.Validationf(termErrorFormat, index, "start_date", "must be before end_date")
 	}
 
 	steps := cutSteps(periods, span, periodCount)
@@ -332,8 +308,8 @@ func cutSteps(periods []PeriodValue, span types.Period, count int) []PeriodValue
 	return steps
 }
 
-// resolveAmounts rounds percentage amounts to the currency and gives the remainder term whatever the others leave of total.
-func resolveAmounts(terms []*resolvedTerm, total decimal.Decimal, currency string) error {
+// resolveAmounts gives the remainder term whatever the fixed terms leave of total.
+func resolveAmounts(terms []*resolvedTerm, total decimal.Decimal) error {
 	var remainder *resolvedTerm
 	others := decimal.Zero
 	for _, r := range terms {
@@ -346,10 +322,7 @@ func resolveAmounts(terms []*resolvedTerm, total decimal.Decimal, currency strin
 			continue
 		}
 
-		r.instalmentAmount = lo.FromPtr(r.term.Amount)
-		if r.term.Percentage != nil {
-			r.instalmentAmount = types.RoundToCurrencyPrecision(total.Mul(*r.term.Percentage).Div(decimal.NewFromInt(100)), currency)
-		}
+		r.instalmentAmount = lo.FromPtr(r.term.Value)
 		r.amount = r.instalmentAmount.Mul(decimal.NewFromInt(int64(r.instalmentCount())))
 		others = others.Add(r.amount)
 	}
@@ -357,7 +330,7 @@ func resolveAmounts(terms []*resolvedTerm, total decimal.Decimal, currency strin
 	if remainder == nil {
 		if !others.Equal(total) {
 			return ierr.Validationf(
-				termErrorFormat, len(terms)-1, "amount",
+				termErrorFormat, len(terms)-1, "value",
 				fmt.Sprintf("the terms add up to %s, not the total of %s; adjust them or add a remainder term", others, total),
 			)
 		}
@@ -387,17 +360,14 @@ func (r *resolvedTerm) instalmentCount() int {
 // instalments renders the term's instalments onto copies of template, which carries the owner's fields.
 func (r *resolvedTerm) instalments(template Instalment, currency string) ([]*Instalment, error) {
 	out := make([]*Instalment, 0, r.instalmentCount())
-	description := lo.FromPtr(r.term.Description)
 	if r.term.Kind == types.BillingTermKindOnce {
 		i := template
 		i.BillTrigger = r.billTrigger
 		i.BillOn = r.billOn
 		i.Amount = r.amount
-		i.ServicePeriodStart = r.covers.Start
-		i.ServicePeriodEnd = r.covers.End
+		i.ServicePeriodStart = r.servicePeriod.Start
+		i.ServicePeriodEnd = r.servicePeriod.End
 		out = append(out, &i)
-
-		description = lo.CoalesceOrEmpty(description, DefaultOnceDescription)
 	} else {
 		amounts := r.stepAmounts(currency)
 		for n, step := range r.steps {
@@ -413,20 +383,14 @@ func (r *resolvedTerm) instalments(template Instalment, currency string) ([]*Ins
 			i.ServicePeriodEnd = step.End
 			out = append(out, &i)
 		}
-
-		description = lo.CoalesceOrEmpty(description, defaultRecurringDescription)
 	}
 
 	for n, i := range out {
 		i.BillingTermID = lo.ToPtr(r.term.ID)
-		i.Description = strings.NewReplacer("{n}", strconv.Itoa(n+1), "{of}", strconv.Itoa(len(out))).Replace(description)
-		if utf8.RuneCountInString(i.Description) > maxDescriptionLength {
-			return nil, ierr.Validationf(termErrorFormat, r.index, "description", "must be at most 255 characters")
-		}
-
+		i.InvoiceLabel = lo.CoalesceOrEmpty(lo.FromPtr(r.term.InvoiceLabel), DefaultInvoiceLabel)
 		if !i.Amount.IsPositive() {
 			return nil, ierr.Validationf(
-				termErrorFormat, r.index, "amount",
+				termErrorFormat, r.index, "value",
 				fmt.Sprintf("instalment %d of %d comes to %s; every instalment must be greater than 0", n+1, len(out), i.Amount),
 			)
 		}

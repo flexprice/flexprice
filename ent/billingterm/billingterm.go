@@ -36,30 +36,24 @@ const (
 	FieldKind = "kind"
 	// FieldValueType holds the string denoting the value_type field in the database.
 	FieldValueType = "value_type"
-	// FieldAmount holds the string denoting the amount field in the database.
-	FieldAmount = "amount"
-	// FieldPercentage holds the string denoting the percentage field in the database.
-	FieldPercentage = "percentage"
+	// FieldValue holds the string denoting the value field in the database.
+	FieldValue = "value"
 	// FieldBillTrigger holds the string denoting the bill_trigger field in the database.
 	FieldBillTrigger = "bill_trigger"
 	// FieldBillOn holds the string denoting the bill_on field in the database.
 	FieldBillOn = "bill_on"
-	// FieldCoversFrom holds the string denoting the covers_from field in the database.
-	FieldCoversFrom = "covers_from"
-	// FieldCoversTo holds the string denoting the covers_to field in the database.
-	FieldCoversTo = "covers_to"
-	// FieldStartsOn holds the string denoting the starts_on field in the database.
-	FieldStartsOn = "starts_on"
-	// FieldEndsOn holds the string denoting the ends_on field in the database.
-	FieldEndsOn = "ends_on"
+	// FieldStartDate holds the string denoting the start_date field in the database.
+	FieldStartDate = "start_date"
+	// FieldEndDate holds the string denoting the end_date field in the database.
+	FieldEndDate = "end_date"
 	// FieldPeriodCount holds the string denoting the period_count field in the database.
 	FieldPeriodCount = "period_count"
 	// FieldInvoiceCadence holds the string denoting the invoice_cadence field in the database.
 	FieldInvoiceCadence = "invoice_cadence"
 	// FieldSplit holds the string denoting the split field in the database.
 	FieldSplit = "split"
-	// FieldDescription holds the string denoting the description field in the database.
-	FieldDescription = "description"
+	// FieldInvoiceLabel holds the string denoting the invoice_label field in the database.
+	FieldInvoiceLabel = "invoice_label"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// Table holds the table name of the billingterm in the database.
@@ -80,18 +74,15 @@ var Columns = []string{
 	FieldOwnerID,
 	FieldKind,
 	FieldValueType,
-	FieldAmount,
-	FieldPercentage,
+	FieldValue,
 	FieldBillTrigger,
 	FieldBillOn,
-	FieldCoversFrom,
-	FieldCoversTo,
-	FieldStartsOn,
-	FieldEndsOn,
+	FieldStartDate,
+	FieldEndDate,
 	FieldPeriodCount,
 	FieldInvoiceCadence,
 	FieldSplit,
-	FieldDescription,
+	FieldInvoiceLabel,
 	FieldMetadata,
 }
 
@@ -193,14 +184,9 @@ func ByValueType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldValueType, opts...).ToFunc()
 }
 
-// ByAmount orders the results by the amount field.
-func ByAmount(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAmount, opts...).ToFunc()
-}
-
-// ByPercentage orders the results by the percentage field.
-func ByPercentage(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPercentage, opts...).ToFunc()
+// ByValue orders the results by the value field.
+func ByValue(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldValue, opts...).ToFunc()
 }
 
 // ByBillTrigger orders the results by the bill_trigger field.
@@ -213,24 +199,14 @@ func ByBillOn(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillOn, opts...).ToFunc()
 }
 
-// ByCoversFrom orders the results by the covers_from field.
-func ByCoversFrom(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCoversFrom, opts...).ToFunc()
+// ByStartDate orders the results by the start_date field.
+func ByStartDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStartDate, opts...).ToFunc()
 }
 
-// ByCoversTo orders the results by the covers_to field.
-func ByCoversTo(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCoversTo, opts...).ToFunc()
-}
-
-// ByStartsOn orders the results by the starts_on field.
-func ByStartsOn(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldStartsOn, opts...).ToFunc()
-}
-
-// ByEndsOn orders the results by the ends_on field.
-func ByEndsOn(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEndsOn, opts...).ToFunc()
+// ByEndDate orders the results by the end_date field.
+func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEndDate, opts...).ToFunc()
 }
 
 // ByPeriodCount orders the results by the period_count field.
@@ -248,9 +224,9 @@ func BySplit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSplit, opts...).ToFunc()
 }
 
-// ByDescription orders the results by the description field.
-func ByDescription(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+// ByInvoiceLabel orders the results by the invoice_label field.
+func ByInvoiceLabel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoiceLabel, opts...).ToFunc()
 }
 
 // ByMetadata orders the results by the metadata field.

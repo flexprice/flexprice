@@ -48,7 +48,7 @@ func billingInstalmentFilterFn(ctx context.Context, in *billingterm.Instalment, 
 	switch {
 	case f.OwnerType != "" && f.OwnerType != in.OwnerType,
 		len(f.OwnerIDs) > 0 && !lo.Contains(f.OwnerIDs, in.OwnerID),
-		len(f.SubscriptionIDs) > 0 && !lo.Contains(f.SubscriptionIDs, in.SubscriptionID),
+		len(f.SubscriptionIDs) > 0 && (in.SubscriptionID == nil || !lo.Contains(f.SubscriptionIDs, *in.SubscriptionID)),
 		len(f.Statuses) > 0 && !lo.Contains(f.Statuses, in.InstalmentStatus),
 		len(f.Deliveries) > 0 && !lo.Contains(f.Deliveries, in.Delivery),
 		f.BillOnOrBefore != nil && in.BillOn.After(*f.BillOnOrBefore),

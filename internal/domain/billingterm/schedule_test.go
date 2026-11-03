@@ -97,16 +97,7 @@ func onceFixed(amount string) *Term {
 		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_TERM),
 		Kind:      types.BillingTermKindOnce,
 		ValueType: types.BillingTermValueFixed,
-		Amount:    lo.ToPtr(dec(amount)),
-	}
-}
-
-func oncePercentage(percentage string) *Term {
-	return &Term{
-		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_TERM),
-		Kind:       types.BillingTermKindOnce,
-		ValueType:  types.BillingTermValueFixed,
-		Percentage: lo.ToPtr(dec(percentage)),
+		Value:     lo.ToPtr(dec(amount)),
 	}
 }
 
@@ -123,7 +114,7 @@ func recurringFixed(amount string, cadence types.InvoiceCadence) *Term {
 		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_TERM),
 		Kind:           types.BillingTermKindRecurring,
 		ValueType:      types.BillingTermValueFixed,
-		Amount:         lo.ToPtr(dec(amount)),
+		Value:          lo.ToPtr(dec(amount)),
 		InvoiceCadence: lo.ToPtr(cadence),
 	}
 }
@@ -180,21 +171,21 @@ func TestExpand(t *testing.T) {
 				monthlyWants(jan2027, repeat("70", 10), types.InvoiceCadenceArrear)...,
 			),
 			check: func(t *testing.T, terms []*Term, got []*Instalment) {
-				require.Equal(t, "Commitment payment", got[0].Description)
-				require.Equal(t, "Instalment 2 of 10", got[2].Description)
-				require.Equal(t, "Instalment 10 of 10", got[10].Description)
+				require.Equal(t, "Instalment 1 of 11", got[0].InvoiceLabel, "a once term is numbered with the recurring ones")
+				require.Equal(t, "Instalment 3 of 11", got[2].InvoiceLabel)
+				require.Equal(t, "Instalment 11 of 11", got[10].InvoiceLabel)
 				require.Equal(t, lo.ToPtr(terms[0].ID), got[0].BillingTermID)
 				require.Equal(t, lo.ToPtr(terms[1].ID), got[1].BillingTermID)
 			},
 		},
 		{
-			name:    "A3 with a custom description",
+			name:    "A3 with a custom invoice label",
 			owner:   usd("1000", jan2027, date(2027, time.November, 1)),
 			periods: monthly(jan2027, 10, "100"),
 			terms: []*Term{
 				onceFixed("300"),
 				with(recurringRemainder(types.InvoiceCadenceArrear), func(t *Term) {
-					t.Description = lo.ToPtr("Payment {n}/{of}")
+					t.InvoiceLabel = lo.ToPtr("Payment {n}/{of}")
 				}),
 			},
 			want: append(
@@ -202,17 +193,18 @@ func TestExpand(t *testing.T) {
 				monthlyWants(jan2027, repeat("70", 10), types.InvoiceCadenceArrear)...,
 			),
 			check: func(t *testing.T, _ []*Term, got []*Instalment) {
-				require.Equal(t, "Payment 1/10", got[1].Description)
-				require.Equal(t, "Payment 10/10", got[10].Description)
+				require.Equal(t, "Instalment 1 of 11", got[0].InvoiceLabel)
+				require.Equal(t, "Payment 2/11", got[1].InvoiceLabel)
+				require.Equal(t, "Payment 11/11", got[10].InvoiceLabel)
 			},
 		},
 		{
-			name:    "A4 percentages and a remainder at term end",
+			name:    "A4 fixed payments and a remainder at term end",
 			owner:   usd("1200", jan2027, jan2028),
 			periods: monthly(jan2027, 12, "100"),
 			terms: []*Term{
-				oncePercentage("30"),
-				with(oncePercentage("50"), func(t *Term) { t.BillOn = lo.ToPtr(date(2027, time.July, 1)) }),
+				onceFixed("360"),
+				with(onceFixed("600"), func(t *Term) { t.BillOn = lo.ToPtr(date(2027, time.July, 1)) }),
 				with(onceRemainder(), func(t *Term) { t.BillOn = lo.ToPtr(jan2028) }),
 			},
 			want: []instalmentWant{
@@ -220,27 +212,19 @@ func TestExpand(t *testing.T) {
 				{billOn: date(2027, time.July, 1), amount: "600", service: period(jan2027, jan2028)},
 				{billOn: jan2028, amount: "240", service: period(jan2027, jan2028)},
 			},
-			check: func(t *testing.T, terms []*Term, _ []*Instalment) {
-				require.True(t, terms[0].Amount.Equal(dec("360")), "got %s", terms[0].Amount)
-				require.True(t, terms[1].Amount.Equal(dec("600")), "got %s", terms[1].Amount)
-				require.Nil(t, terms[2].Amount)
-			},
 		},
 		{
 			name:    "A6 deposit then monthly fixed from April",
 			owner:   usd("1200", jan2027, jan2028),
 			periods: monthly(jan2027, 12, "100"),
 			terms: []*Term{
-				with(onceFixed("300"), func(t *Term) {
-					t.CoversFrom = lo.ToPtr(jan2027)
-					t.CoversTo = lo.ToPtr(date(2027, time.April, 1))
-				}),
+				onceFixed("300"),
 				with(recurringFixed("100", types.InvoiceCadenceArrear), func(t *Term) {
-					t.StartsOn = lo.ToPtr(date(2027, time.April, 1))
+					t.StartDate = lo.ToPtr(date(2027, time.April, 1))
 				}),
 			},
 			want: append(
-				[]instalmentWant{{billOn: jan2027, amount: "300", service: period(jan2027, date(2027, time.April, 1))}},
+				[]instalmentWant{{billOn: jan2027, amount: "300", service: period(jan2027, jan2028)}},
 				monthlyWants(date(2027, time.April, 1), repeat("100", 9), types.InvoiceCadenceArrear)...,
 			),
 		},
@@ -291,7 +275,7 @@ func TestExpand(t *testing.T) {
 			owner:   usd("1200", jan2027, jan2028),
 			periods: monthly(jan2027, 12, "100"),
 			terms: []*Term{
-				oncePercentage("50"),
+				onceFixed("600"),
 				with(onceRemainder(), func(t *Term) { t.BillTrigger = lo.ToPtr(types.InstalmentBillTriggerManual) }),
 			},
 			want: []instalmentWant{
@@ -366,7 +350,7 @@ func TestExpand(t *testing.T) {
 				require.Equal(t, types.BillingTermOwnerCommitment, i.OwnerType)
 				require.Equal(t, "cmt_1", i.OwnerID)
 				require.Equal(t, "cust_1", i.CustomerID)
-				require.Equal(t, "subs_1", i.SubscriptionID)
+				require.Equal(t, lo.ToPtr("subs_1"), i.SubscriptionID)
 				require.Equal(t, tt.owner.currency, i.Currency)
 				require.Equal(t, types.InstalmentKindInstalment, i.Kind)
 				require.Equal(t, tt.owner.delivery, i.Delivery)
@@ -457,13 +441,13 @@ func TestExpand_Validation(t *testing.T) {
 			wantMsg: "billing_terms[0].kind:",
 		},
 		{
-			name:    "percentage value type is input only",
+			name:    "percentage terms",
 			owner:   year,
 			periods: months,
-			terms: []*Term{with(oncePercentage("100"), func(t *Term) {
+			terms: []*Term{with(onceFixed("100"), func(t *Term) {
 				t.ValueType = types.BillingTermValuePercentage
 			})},
-			wantMsg: "billing_terms[0].value_type:",
+			wantMsg: "billing_terms[0].value_type: percentage terms are not supported yet",
 		},
 		{
 			name:    "recurring with bill_on",
@@ -482,53 +466,32 @@ func TestExpand_Validation(t *testing.T) {
 			wantMsg: "billing_terms[0].period_count:",
 		},
 		{
-			name:    "fixed with neither amount nor percentage",
+			name:    "fixed without a value",
 			owner:   year,
 			periods: months,
-			terms:   []*Term{with(onceFixed("1200"), func(t *Term) { t.Amount = nil })},
-			wantMsg: "billing_terms[0].amount:",
+			terms:   []*Term{with(onceFixed("1200"), func(t *Term) { t.Value = nil })},
+			wantMsg: "billing_terms[0].value:",
 		},
 		{
-			name:    "fixed with both amount and percentage",
-			owner:   year,
-			periods: months,
-			terms:   []*Term{with(onceFixed("1200"), func(t *Term) { t.Percentage = lo.ToPtr(dec("100")) })},
-			wantMsg: "billing_terms[0].amount:",
-		},
-		{
-			name:    "fixed amount of 0",
+			name:    "fixed value of 0",
 			owner:   year,
 			periods: months,
 			terms:   []*Term{onceFixed("0"), onceRemainder()},
-			wantMsg: "billing_terms[0].amount:",
+			wantMsg: "billing_terms[0].value:",
 		},
 		{
-			name:    "fixed amount finer than the currency precision",
+			name:    "fixed value finer than the currency precision",
 			owner:   usd("1200.12", jan2027, jan2028),
 			periods: months,
 			terms:   []*Term{recurringFixed("100.005", types.InvoiceCadenceArrear)},
-			wantMsg: "billing_terms[0].amount: must be rounded to USD precision",
+			wantMsg: "billing_terms[0].value: must be rounded to USD precision",
 		},
 		{
-			name:    "percentage 0",
+			name:    "remainder with a value",
 			owner:   year,
 			periods: months,
-			terms:   []*Term{oncePercentage("0"), onceRemainder()},
-			wantMsg: "billing_terms[0].percentage:",
-		},
-		{
-			name:    "percentage 100.01",
-			owner:   year,
-			periods: months,
-			terms:   []*Term{oncePercentage("100.01")},
-			wantMsg: "billing_terms[0].percentage:",
-		},
-		{
-			name:    "remainder with an amount",
-			owner:   year,
-			periods: months,
-			terms:   []*Term{with(onceRemainder(), func(t *Term) { t.Amount = lo.ToPtr(dec("1200")) })},
-			wantMsg: "billing_terms[0].amount:",
+			terms:   []*Term{with(onceRemainder(), func(t *Term) { t.Value = lo.ToPtr(dec("1200")) })},
+			wantMsg: "billing_terms[0].value:",
 		},
 		{
 			name:    "two remainders",
@@ -549,7 +512,7 @@ func TestExpand_Validation(t *testing.T) {
 			owner:   year,
 			periods: months,
 			terms:   []*Term{onceFixed("300"), recurringFixed("70", types.InvoiceCadenceArrear)},
-			wantMsg: "billing_terms[1].amount:",
+			wantMsg: "billing_terms[1].value:",
 		},
 		{
 			name:    "once bill_on after the period end",
@@ -585,21 +548,11 @@ func TestExpand_Validation(t *testing.T) {
 			wantMsg: "billing_terms[0].bill_trigger:",
 		},
 		{
-			name:    "covers_from not before covers_to",
+			name:    "once with start_date",
 			owner:   year,
 			periods: months,
-			terms: []*Term{with(onceRemainder(), func(t *Term) {
-				t.CoversFrom = lo.ToPtr(date(2027, time.April, 1))
-				t.CoversTo = lo.ToPtr(date(2027, time.April, 1))
-			})},
-			wantMsg: "billing_terms[0].covers_from:",
-		},
-		{
-			name:    "covers_to past the period end",
-			owner:   year,
-			periods: months,
-			terms:   []*Term{with(onceRemainder(), func(t *Term) { t.CoversTo = lo.ToPtr(jan2028.AddDate(0, 1, 0)) })},
-			wantMsg: "billing_terms[0].covers_to:",
+			terms:   []*Term{with(onceRemainder(), func(t *Term) { t.StartDate = lo.ToPtr(jan2027) })},
+			wantMsg: "billing_terms[0].start_date: is not used by once terms",
 		},
 		{
 			name:    "recurring without invoice_cadence",
@@ -629,32 +582,32 @@ func TestExpand_Validation(t *testing.T) {
 			wantMsg: "billing_terms[0].split:",
 		},
 		{
-			name:    "starts_on not a period start",
+			name:    "start_date not a period start",
 			owner:   year,
 			periods: months,
 			terms: []*Term{with(recurringRemainder(types.InvoiceCadenceArrear), func(t *Term) {
-				t.StartsOn = lo.ToPtr(date(2027, time.January, 15))
+				t.StartDate = lo.ToPtr(date(2027, time.January, 15))
 			})},
-			wantMsg: "billing_terms[0].starts_on:",
+			wantMsg: "billing_terms[0].start_date:",
 		},
 		{
-			name:    "ends_on not a period end",
+			name:    "end_date not a period end",
 			owner:   year,
 			periods: months,
 			terms: []*Term{with(recurringRemainder(types.InvoiceCadenceArrear), func(t *Term) {
-				t.EndsOn = lo.ToPtr(date(2027, time.June, 15))
+				t.EndDate = lo.ToPtr(date(2027, time.June, 15))
 			})},
-			wantMsg: "billing_terms[0].ends_on:",
+			wantMsg: "billing_terms[0].end_date:",
 		},
 		{
-			name:    "starts_on not before ends_on",
+			name:    "start_date not before end_date",
 			owner:   year,
 			periods: months,
 			terms: []*Term{with(recurringRemainder(types.InvoiceCadenceArrear), func(t *Term) {
-				t.StartsOn = lo.ToPtr(date(2027, time.June, 1))
-				t.EndsOn = lo.ToPtr(date(2027, time.June, 1))
+				t.StartDate = lo.ToPtr(date(2027, time.June, 1))
+				t.EndDate = lo.ToPtr(date(2027, time.June, 1))
 			})},
-			wantMsg: "billing_terms[0].starts_on:",
+			wantMsg: "billing_terms[0].start_date:",
 		},
 		{
 			name:    "period_count 0",
@@ -684,27 +637,27 @@ func TestExpand_Validation(t *testing.T) {
 			wantMsg: "billing_terms[0].split:",
 		},
 		{
-			name:    "description over 255 characters",
+			name:    "invoice_label over 255 characters",
 			owner:   year,
 			periods: months,
-			terms:   []*Term{with(onceRemainder(), func(t *Term) { t.Description = lo.ToPtr(strings.Repeat("a", 256)) })},
-			wantMsg: "billing_terms[0].description:",
+			terms:   []*Term{with(onceRemainder(), func(t *Term) { t.InvoiceLabel = lo.ToPtr(strings.Repeat("a", 256)) })},
+			wantMsg: "billing_terms[0].invoice_label:",
 		},
 		{
-			name:    "description template over 255 characters that renders shorter",
+			name:    "invoice_label template over 255 characters that renders shorter",
 			owner:   year,
 			periods: months,
 			terms: []*Term{with(recurringRemainder(types.InvoiceCadenceArrear), func(t *Term) {
-				t.Description = lo.ToPtr(strings.Repeat("{n}", 86))
+				t.InvoiceLabel = lo.ToPtr(strings.Repeat("{n}", 86))
 			})},
-			wantMsg: "billing_terms[0].description:",
+			wantMsg: "billing_terms[0].invoice_label:",
 		},
 		{
 			name:    "an instalment rounds to 0",
 			owner:   usd("0.10", jan2027, date(2027, time.July, 1)),
 			periods: monthly(jan2027, 6, "100"),
 			terms:   []*Term{recurringRemainder(types.InvoiceCadenceArrear)},
-			wantMsg: "billing_terms[0].amount:",
+			wantMsg: "billing_terms[0].value:",
 		},
 		{
 			name:    "501 instalments",
@@ -727,12 +680,36 @@ func TestExpand_Validation(t *testing.T) {
 	}
 }
 
-func TestExpand_LeavesPercentageTermsUntouchedOnError(t *testing.T) {
+// unsubscribedOwner is an owner billed without a subscription.
+type unsubscribedOwner struct{ testOwner }
+
+func (unsubscribedOwner) BilledSubscriptionID() string { return "" }
+
+func TestExpand_OwnerWithoutSubscription(t *testing.T) {
 	jan2027 := date(2027, time.January, 1)
-	terms := []*Term{oncePercentage("30"), onceFixed("10")}
+	owner := unsubscribedOwner{usd("1200", jan2027, date(2028, time.January, 1))}
 
-	_, err := Expand(context.Background(), usd("1200", jan2027, date(2028, time.January, 1)), monthly(jan2027, 12, "100"), terms)
+	got, err := Expand(context.Background(), owner, monthly(jan2027, 12, "100"), []*Term{onceRemainder()})
 
-	require.True(t, ierr.IsValidation(err))
-	require.Nil(t, terms[0].Amount)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Nil(t, got[0].SubscriptionID)
+}
+
+func TestExpand_NumbersEveryTermInBillingOrder(t *testing.T) {
+	jan2027 := date(2027, time.January, 1)
+	midJune := date(2027, time.June, 15)
+	terms := []*Term{
+		recurringFixed("50", types.InvoiceCadenceAdvance),
+		with(onceRemainder(), func(t *Term) { t.BillOn = lo.ToPtr(midJune) }),
+	}
+
+	got, err := Expand(context.Background(), usd("1200", jan2027, date(2028, time.January, 1)), monthly(jan2027, 12, "100"), terms)
+
+	require.NoError(t, err)
+	require.Len(t, got, 13)
+	require.True(t, got[6].BillOn.Equal(midJune))
+	require.Equal(t, "Instalment 6 of 13", got[5].InvoiceLabel)
+	require.Equal(t, "Instalment 7 of 13", got[6].InvoiceLabel, "the once instalment takes its place among the recurring ones")
+	require.Equal(t, "Instalment 8 of 13", got[7].InvoiceLabel)
 }

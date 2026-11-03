@@ -1268,7 +1268,7 @@ func (s *SubscriptionServiceSuite) TestArchiveDraftCheckoutSubscription_CancelsB
 	s.Require().NoError(err)
 	s.Len(instalments, len(scheduled))
 	for _, inst := range instalments {
-		s.Equal(types.InstalmentStatusCancelled, inst.InstalmentStatus, inst.Description)
+		s.Equal(types.InstalmentStatusCancelled, inst.InstalmentStatus, inst.InvoiceLabel)
 	}
 
 	terms, err := s.GetStores().BillingTermRepo.List(ctx, types.BillingTermOwnerCommitment, owner)
