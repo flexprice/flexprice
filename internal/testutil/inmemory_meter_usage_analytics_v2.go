@@ -240,6 +240,7 @@ func (s *InMemoryMeterUsageStore) RankAnalyticsV2Rows(_ context.Context, p *even
 			t := out.ColumnTotals[k]
 			t.Amounts.Usage = t.Amounts.Usage.Add(c.Amounts.Usage)
 			t.Quantity = t.Quantity.Add(c.Quantity)
+			t.Peak = decimal.Max(t.Peak, c.Peak)
 			out.ColumnTotals[k] = t
 		}
 	}
@@ -384,7 +385,7 @@ func (s *InMemoryMeterUsageStore) GetAnalyticsV2Detail(_ context.Context, params
 		}
 		if row, ok := page[c.rk]; ok {
 			detail.Points = append(detail.Points, events.AnalyticsV2PointCell{
-				Row: row, WindowStart: c.w, Column: c.col, Line: c.line, Quantity: c.q, PeakWeight: weight, EventCount: c.n,
+				Row: row, WindowStart: c.w, Column: c.col, Line: c.line, Quantity: c.q, PeakWeight: weight, Peak: c.pk, EventCount: c.n,
 			})
 		}
 		tk := fmt.Sprintf("%d\x01%s\x01%d", c.w.Unix(), c.col, c.line)
@@ -394,6 +395,7 @@ func (s *InMemoryMeterUsageStore) GetAnalyticsV2Detail(_ context.Context, params
 			totals[tk] = t
 		}
 		t.Quantity, t.PeakWeight, t.EventCount = t.Quantity.Add(c.q), t.PeakWeight.Add(weight), t.EventCount+c.n
+		t.Peak = decimal.Max(t.Peak, c.pk)
 	}
 	for _, t := range totals {
 		detail.Points = append(detail.Points, *t)

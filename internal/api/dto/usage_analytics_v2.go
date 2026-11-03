@@ -73,13 +73,11 @@ type GetUsageAnalyticsV2Request struct {
 	// Filters include (in) or exclude (not_in) values of any key; entries are ANDed.
 	Filters []AnalyticsV2Filter `json:"filters,omitempty" validate:"omitempty,dive"`
 	// Search is a case-insensitive contains match on the row key values.
-	Search string           `json:"search,omitempty"`
-	Sort   *AnalyticsV2Sort `json:"sort,omitempty"`
-	Limit  int              `json:"limit,omitempty" example:"25"`
-	Offset int              `json:"offset,omitempty" example:"0"`
-	// DataThrough pins every page to the events received by this instant; echo it from the first page.
-	DataThrough *time.Time       `json:"data_through,omitempty"`
-	WindowSize  types.WindowSize `json:"window_size,omitempty" example:"DAY"`
+	Search     string           `json:"search,omitempty"`
+	Sort       *AnalyticsV2Sort `json:"sort,omitempty"`
+	Limit      int              `json:"limit,omitempty" example:"25"`
+	Offset     int              `json:"offset,omitempty" example:"0"`
+	WindowSize types.WindowSize `json:"window_size,omitempty" example:"DAY"`
 	// Expand adds price, plan, addon and subscription objects; meter and feature need a meter_id, feature_id or sub_line_item_id row key.
 	Expand      []string `json:"expand,omitempty"`
 	Metrics     []string `json:"metrics,omitempty" example:"distinct:properties.owner"`
@@ -296,8 +294,9 @@ func analyticsV2Error(msg string, details map[string]any) error {
 
 // GetUsageAnalyticsV2Response is one sorted page of rows plus totals over the full filtered set.
 type GetUsageAnalyticsV2Response struct {
-	Currency    string    `json:"currency"`
-	TotalCount  int64     `json:"total_count"`
+	Currency   string `json:"currency"`
+	TotalCount int64  `json:"total_count"`
+	// DataThrough is the instant the data was read up to: events received later are not included.
 	DataThrough time.Time `json:"data_through"`
 	// ColumnValues lists every column across the full result, so every page has the same header.
 	ColumnValues   []string                   `json:"column_values,omitempty"`
@@ -390,6 +389,8 @@ const (
 	AnalyticsV2ReasonUnusedCommitment AnalyticsV2UnattributedReason = "unused_commitment"
 	// AnalyticsV2ReasonUnlinkedCharge is a usage charge billing did not tie to a subscription line.
 	AnalyticsV2ReasonUnlinkedCharge AnalyticsV2UnattributedReason = "unlinked_charge"
+	// AnalyticsV2ReasonNoUsage is billed usage cost on a line with no usage in the visible events.
+	AnalyticsV2ReasonNoUsage AnalyticsV2UnattributedReason = "no_usage"
 )
 
 type AnalyticsV2UnattributedCharge struct {

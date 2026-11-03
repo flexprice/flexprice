@@ -255,7 +255,7 @@ func (r *MeterUsageRepository) RankAnalyticsV2Rows(ctx context.Context, params *
 		group := make([]string, keys)
 		var m, t analyticsV2ScanMeasure
 		var lines []uint32
-		var colCost, colQty, colPeak, totColCost, totColQty map[string]decimal.Decimal
+		var colCost, colQty, colPeak, totColCost, totColQty, totColPeak map[string]decimal.Decimal
 		var colEvents map[string]uint64
 		var total uint64
 
@@ -266,7 +266,7 @@ func (r *MeterUsageRepository) RankAnalyticsV2Rows(ctx context.Context, params *
 		dest = append(dest, m.targets()...)
 		dest = append(dest, &lines, &colCost, &colQty, &colPeak, &colEvents, &total)
 		dest = append(dest, t.targets()...)
-		dest = append(dest, &totColCost, &totColQty)
+		dest = append(dest, &totColCost, &totColQty, &totColPeak)
 		if err := rows.Scan(dest...); err != nil {
 			SetSpanError(span, err)
 			return nil, ierr.WithError(err).WithHint("Failed to scan analytics rows").Mark(ierr.ErrDatabase)
@@ -285,7 +285,7 @@ func (r *MeterUsageRepository) RankAnalyticsV2Rows(ctx context.Context, params *
 		result.TotalCount = int64(total)
 		result.Totals = t.measure()
 		if params.Column != "" {
-			result.ColumnTotals = analyticsV2Columns(totColCost, totColQty, nil, nil)
+			result.ColumnTotals = analyticsV2Columns(totColCost, totColQty, totColPeak, nil)
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -373,7 +373,7 @@ SELECT `, isMax,
 	count() OVER () AS total_rows,
 	sum(a_usage) OVER (), sum(a_utilized) OVER (), sum(a_overage) OVER (), sum(a_true_up) OVER (),
 	sum(a_discount) OVER (), sum(a_free) OVER (), sum(quantity) OVER (), max(peak) OVER (), sum(events) OVER (),
-	sumMap(c_cost) OVER (), sumMap(c_quantity) OVER ()
+	sumMap(c_cost) OVER (), sumMap(c_quantity) OVER (), maxMap(c_peak) OVER ()
 FROM (
 	SELECT ` + keyList + `,
 		sum(b_usage) AS a_usage, sum(b_utilized) AS a_utilized, sum(b_overage) AS a_overage,
@@ -572,9 +572,9 @@ func (r *MeterUsageRepository) analyticsV2Points(ctx context.Context, params *ev
 
 	q := &analyticsV2Query{}
 	// page_row: 1..N for page rows, max for other rows (dropped), 0 for the all-rows grouping set.
-	q.add(`SELECT page_row, w, col, idx, sum(q) AS quantity, sum(weight) AS peak_weight, sum(n) AS events
+	q.add(`SELECT page_row, w, col, idx, sum(q) AS quantity, sum(weight) AS peak_weight, max(pk) AS peak, sum(n) AS events
 FROM (
-	SELECT page_row, w, col, idx, q, n,
+	SELECT page_row, w, col, idx, q, pk, n,
 		if(cell_peak_sum = 0, toDecimal256(0, 30),
 			toDecimal256(toDecimal256(row_peak, 30) * toDecimal256(pk, 15) / cell_peak_sum, 30)) AS weight
 	FROM (
@@ -623,14 +623,14 @@ HAVING page_row != 4294967295
 		var pageRow, idx uint32
 		var w time.Time
 		var col string
-		var quantity, weight decimal.Decimal
+		var quantity, weight, peak decimal.Decimal
 		var n uint64
-		if err := rows.Scan(&pageRow, &w, &col, &idx, &quantity, &weight, &n); err != nil {
+		if err := rows.Scan(&pageRow, &w, &col, &idx, &quantity, &weight, &peak, &n); err != nil {
 			return nil, ierr.WithError(err).WithHint("Failed to scan analytics points").Mark(ierr.ErrDatabase)
 		}
 		cells = append(cells, events.AnalyticsV2PointCell{
 			Row: int(pageRow) - 1, WindowStart: w.UTC(), Column: col, Line: int(idx) - 1,
-			Quantity: quantity, PeakWeight: weight, EventCount: n,
+			Quantity: quantity, PeakWeight: weight, Peak: peak, EventCount: n,
 		})
 	}
 	if err := rows.Err(); err != nil {

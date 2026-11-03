@@ -45,9 +45,6 @@ type analyticsV2Context struct {
 // the invoice code; ClickHouse splits them across rows by usage. req must already be defaulted and validated.
 func (s *meterUsageService) GetUsageAnalyticsV2(ctx context.Context, req *dto.GetUsageAnalyticsV2Request) (*dto.GetUsageAnalyticsV2Response, error) {
 	dataThrough := clock.Now().Truncate(time.Second)
-	if req.DataThrough != nil {
-		dataThrough = req.DataThrough.UTC()
-	}
 	empty := &dto.GetUsageAnalyticsV2Response{DataThrough: dataThrough, Items: []dto.AnalyticsV2Item{}, ExcludedMeters: []dto.AnalyticsV2ExcludedMeter{}}
 
 	cust, subs, err := s.resolveCustomerAndSubscriptions(ctx, req.ExternalCustomerID)
@@ -99,6 +96,16 @@ func (s *meterUsageService) GetUsageAnalyticsV2(ctx context.Context, req *dto.Ge
 	result, err := s.repo.RankAnalyticsV2Rows(ctx, rank)
 	if err != nil {
 		return nil, err
+	}
+	if len(result.Rows) == 0 && req.Offset > 0 {
+		// Window totals come back only on returned rows; read them from the first row instead.
+		probe := *rank
+		probe.Offset, probe.Limit = 0, 1
+		first, err := s.repo.RankAnalyticsV2Rows(ctx, &probe)
+		if err != nil {
+			return nil, err
+		}
+		result.TotalCount, result.Totals, result.ColumnTotals = first.TotalCount, first.Totals, first.ColumnTotals
 	}
 	if len(result.ColumnTotals) > dto.AnalyticsV2MaxColumns {
 		return nil, ierr.NewErrorf("columns key %q has %d values; the limit is %d", req.Columns, len(result.ColumnTotals), dto.AnalyticsV2MaxColumns).
@@ -275,7 +282,8 @@ func analyticsV2LineCharge(l *analyticsV2LineCost, cost dto.AnalyticsV2Cost) dto
 		SubLineItemID: l.key.lineItemID, PriceID: l.priceID,
 		Cost:      cost.Usage.Add(cost.CommitmentUtilized).Add(cost.Overage).Add(cost.TrueUp),
 		Breakdown: cost,
-		Reason:    dto.AnalyticsV2ReasonUnusedCommitment,
+		Reason: lo.Ternary(cost.CommitmentUtilized.IsPositive() || cost.TrueUp.IsPositive(),
+			dto.AnalyticsV2ReasonUnusedCommitment, dto.AnalyticsV2ReasonNoUsage),
 	}
 }
 
@@ -360,7 +368,7 @@ func (s *meterUsageService) assembleAnalyticsV2(
 	for i, row := range result.Rows {
 		item := ac.item(row, singleMeter)
 		if detail != nil {
-			item.Points = ac.points(detail.Points, i, singleMeter)
+			item.Points = ac.points(detail.Points, i, singleMeter, item.Cost)
 			if i < len(detail.Distinct) && detail.Distinct[i] != nil {
 				item.Metrics = make(map[string]dto.AnalyticsV2MetricValue, len(detail.Distinct[i]))
 				for key, d := range detail.Distinct[i] {
@@ -424,6 +432,18 @@ func (ac *analyticsV2Context) item(row events.AnalyticsV2Row, singleMeter bool) 
 			}
 			item.Columns[name] = col
 		}
+		names := lo.Keys(item.Columns)
+		sort.Strings(names)
+		costs := make([]decimal.Decimal, len(names))
+		for i, n := range names {
+			costs[i] = item.Columns[n].Cost
+		}
+		reconcileAnalyticsV2Rounding(lo.Map(costs, func(_ decimal.Decimal, i int) *decimal.Decimal { return &costs[i] }), item.Cost)
+		for i, n := range names {
+			col := item.Columns[n]
+			col.Cost = costs[i]
+			item.Columns[n] = col
+		}
 	}
 
 	var priceIDs, subIDs, planIDs, addonIDs []string
@@ -468,22 +488,27 @@ func (ac *analyticsV2Context) rowFeature(row events.AnalyticsV2Row) *feature.Fea
 	return ac.features[meters[0]]
 }
 
-// pointCost prices one point cell: quantity x rate for additive lines, peak weight x rate for MAX lines.
+func (ac *analyticsV2Context) isMaxCell(c events.AnalyticsV2PointCell) bool {
+	return c.Line >= 0 && c.Line < len(ac.ranked) && ac.ranked[c.Line].IsMax
+}
+
+// pointCost prices one point cell and returns its usage: quantity for additive lines, peak for MAX lines.
 func (ac *analyticsV2Context) pointCost(c events.AnalyticsV2PointCell) (decimal.Decimal, decimal.Decimal) {
 	if c.Line < 0 || c.Line >= len(ac.rates) {
 		return decimal.Zero, decimal.Zero
 	}
-	measure := c.Quantity
 	if ac.ranked[c.Line].IsMax {
-		measure = c.PeakWeight
+		return c.PeakWeight.Mul(ac.rates[c.Line].Cost()), c.Peak
 	}
-	return measure.Mul(ac.rates[c.Line].Cost()), c.Quantity
+	return c.Quantity.Mul(ac.rates[c.Line].Cost()), c.Quantity
 }
 
 // points rolls cells of one row (or -1 for all rows) up to one point per window, with columns.
-func (ac *analyticsV2Context) points(cells []events.AnalyticsV2PointCell, row int, singleMeter bool) []dto.AnalyticsV2Point {
+// Rounded point costs add up to target, the already-rounded cost they split.
+func (ac *analyticsV2Context) points(cells []events.AnalyticsV2PointCell, row int, singleMeter bool, target decimal.Decimal) []dto.AnalyticsV2Point {
 	byWindow := map[time.Time]*dto.AnalyticsV2Point{}
-	usage := map[time.Time]decimal.Decimal{}
+	// Usage adds up for additive lines; for MAX lines a window's usage is its highest peak.
+	usage, peak := map[time.Time]decimal.Decimal{}, map[time.Time]decimal.Decimal{}
 	colUsage := map[time.Time]map[string]decimal.Decimal{}
 	for _, c := range cells {
 		if c.Row != row {
@@ -497,7 +522,11 @@ func (ac *analyticsV2Context) points(cells []events.AnalyticsV2PointCell, row in
 			colUsage[c.WindowStart] = map[string]decimal.Decimal{}
 		}
 		p.Cost = p.Cost.Add(cost)
-		usage[c.WindowStart] = usage[c.WindowStart].Add(qty)
+		if ac.isMaxCell(c) {
+			peak[c.WindowStart] = decimal.Max(peak[c.WindowStart], qty)
+		} else {
+			usage[c.WindowStart] = usage[c.WindowStart].Add(qty)
+		}
 		if ac.req.Columns != "" {
 			if p.Columns == nil {
 				p.Columns = map[string]dto.AnalyticsV2Column{}
@@ -513,7 +542,7 @@ func (ac *analyticsV2Context) points(cells []events.AnalyticsV2PointCell, row in
 	for w, p := range byWindow {
 		p.Cost = ac.round(p.Cost)
 		if singleMeter {
-			p.Usage = lo.ToPtr(usage[w])
+			p.Usage = lo.ToPtr(usage[w].Add(peak[w]))
 		}
 		for name, col := range p.Columns {
 			col.Cost = ac.round(col.Cost)
@@ -525,7 +554,23 @@ func (ac *analyticsV2Context) points(cells []events.AnalyticsV2PointCell, row in
 		out = append(out, *p)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].WindowStart.Before(out[j].WindowStart) })
+	reconcileAnalyticsV2Rounding(lo.Map(out, func(_ dto.AnalyticsV2Point, i int) *decimal.Decimal { return &out[i].Cost }), target)
 	return out
+}
+
+// reconcileAnalyticsV2Rounding puts the cents lost to rounding on the largest value, so the values add up to target.
+func reconcileAnalyticsV2Rounding(values []*decimal.Decimal, target decimal.Decimal) {
+	if len(values) == 0 {
+		return
+	}
+	sum, largest := decimal.Zero, 0
+	for i, v := range values {
+		sum = sum.Add(*v)
+		if v.Abs().GreaterThan(values[largest].Abs()) {
+			largest = i
+		}
+	}
+	*values[largest] = values[largest].Add(target.Sub(sum))
 }
 
 // totals fills totals so that cost = rows + unattributed + excluded. With filters or search the view is a
@@ -570,7 +615,7 @@ func (ac *analyticsV2Context) totals(resp *dto.GetUsageAnalyticsV2Response, resu
 		for name, c := range result.ColumnTotals {
 			col := dto.AnalyticsV2Column{Cost: ac.round(c.Amounts.Usage)}
 			if singleMeter {
-				col.Usage = lo.ToPtr(c.Quantity)
+				col.Usage = lo.ToPtr(c.Quantity.Add(c.Peak))
 			}
 			t.Columns[name] = col
 			resp.ColumnValues = append(resp.ColumnValues, name)
@@ -578,7 +623,7 @@ func (ac *analyticsV2Context) totals(resp *dto.GetUsageAnalyticsV2Response, resu
 		sort.Strings(resp.ColumnValues)
 	}
 	if detail != nil && ac.req.WindowSize != "" {
-		t.Points = ac.points(detail.Points, -1, singleMeter)
+		t.Points = ac.points(detail.Points, -1, singleMeter, t.RowsCost)
 	}
 }
 

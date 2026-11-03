@@ -331,7 +331,7 @@ func splitAnalyticsV2Excluded(
 			excludedByMeter[line.meterID] = ex
 			order = append(order, line.meterID)
 		}
-		ex.Cost = lo.ToPtr(ex.Cost.Add(line.total()))
+		ex.Cost = lo.ToPtr(ex.Cost.Add(line.total().Sub(line.discount)))
 	}
 
 	excluded := make([]dto.AnalyticsV2ExcludedMeter, 0, len(order))

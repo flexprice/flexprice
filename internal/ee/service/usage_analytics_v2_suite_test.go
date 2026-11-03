@@ -11,7 +11,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -95,7 +94,6 @@ func (s *BillingServiceSuite) setupAnalyticsV2Fixture() *analyticsV2Fixture {
 func (s *BillingServiceSuite) queryAnalyticsV2(f *analyticsV2Fixture, mutate func(r *dto.GetUsageAnalyticsV2Request)) *dto.GetUsageAnalyticsV2Response {
 	req := &dto.GetUsageAnalyticsV2Request{
 		ExternalCustomerID: "ext_qa", StartTime: f.feb1, EndTime: f.mar1, GroupBy: []string{"properties.app"},
-		DataThrough: lo.ToPtr(f.mar1.Add(time.Hour)),
 	}
 	if mutate != nil {
 		mutate(req)
@@ -182,7 +180,7 @@ func (s *BillingServiceSuite) TestGetUsageAnalyticsV2_RanksAndReconcilesToInvoic
 			for _, p := range it.Points {
 				sum = sum.Add(p.Cost)
 			}
-			s.requireMoney(it.Cost.String(), sum, "points of "+it.Group["app"])
+			s.requireMoney(it.Cost.String(), sum, "points of "+it.Group["app"]+" add up exactly")
 		}
 		s.Equal(uint64(2), *daily.Items[0].Metrics["distinct:properties.type"].Count)
 		s.Equal([]string{"build", "run"}, daily.Items[0].Metrics["distinct:properties.type"].Values)
@@ -190,7 +188,7 @@ func (s *BillingServiceSuite) TestGetUsageAnalyticsV2_RanksAndReconcilesToInvoic
 		for _, p := range daily.Totals.Points {
 			total = total.Add(p.Cost)
 		}
-		s.requireMoney("12", total, "all-rows points")
+		s.requireMoney("12", total, "all-rows points add up exactly")
 	})
 }
 
