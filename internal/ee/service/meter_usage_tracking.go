@@ -250,6 +250,14 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		return nil
 	}
 
+	if scopeConflict(types.GetTenantID(ctx), batch.TenantID) ||
+		scopeConflict(types.GetEnvironmentID(ctx), batch.EnvironmentID) {
+		s.Logger.Error(ctx, "dropping bulk meter usage batch: message scope mismatch",
+			"message_uuid", msg.UUID,
+		)
+		return nil
+	}
+
 	tenantID := batch.TenantID
 	environmentID := batch.EnvironmentID
 	if tenantID != "" {
@@ -284,6 +292,13 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		if evt == nil {
 			continue
 		}
+		if scopeConflict(evt.TenantID, tenantID) || scopeConflict(evt.EnvironmentID, environmentID) {
+			s.Logger.Error(ctx, "dropping bulk event: scope mismatch",
+				"event_id", evt.ID,
+				"message_uuid", msg.UUID,
+			)
+			continue
+		}
 		if evt.TenantID == "" {
 			evt.TenantID = tenantID
 		}
@@ -294,7 +309,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 
 		// Ahead of the dedup lock: a held event must take no lock. The whole batch
 		// is held, and the deferred release above returns the locks it already took.
-		if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(ctx, evt.ExternalCustomerID, evt.Timestamp) {
+		if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(withEventScope(ctx, evt), evt.ExternalCustomerID, evt.Timestamp) {
 			s.Logger.Error(ctx, "holding bulk meter usage batch: a deletion is in progress for this customer and period",
 				"error", types.ErrEventDeletionInProgress,
 				"event_id", evt.ID,
@@ -406,6 +421,14 @@ func (s *meterUsageTrackingService) processMessage(ctx context.Context, msg *mes
 			"message_uuid", msg.UUID,
 		)
 		return nil // non-retriable
+	}
+
+	if scopeConflict(event.TenantID, tenantID) || scopeConflict(event.EnvironmentID, environmentID) {
+		s.Logger.Error(ctx, "dropping event: scope mismatch",
+			"event_id", event.ID,
+			"message_uuid", msg.UUID,
+		)
+		return nil
 	}
 
 	if tenantID == "" && event.TenantID != "" {

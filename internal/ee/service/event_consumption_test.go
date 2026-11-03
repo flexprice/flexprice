@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -58,4 +59,119 @@ func TestEventConsumption_NoBillingCopy(t *testing.T) {
 			assert.Equal(t, "t1", repo.inserted[0].TenantID)
 		})
 	}
+}
+
+type scopeRecordingWindow struct {
+	tenants []string
+}
+
+func (w *scopeRecordingWindow) IsSuppressed(ctx context.Context, _ string, _ time.Time) bool {
+	w.tenants = append(w.tenants, types.GetTenantID(ctx))
+	return false
+}
+
+func scopedMsg(t *testing.T, batch events.EventBatch) *message.Message {
+	t.Helper()
+	payload, err := json.Marshal(batch)
+	require.NoError(t, err)
+	return message.NewMessage("m1", payload)
+}
+
+func mkEvt(id, tenant, env string) *events.Event {
+	return events.NewEvent("api_call", tenant, "cust_1", map[string]interface{}{}, time.Now().UTC(), id, "", "api", env)
+}
+
+func TestEventConsumption_BulkScope(t *testing.T) {
+	tests := []struct {
+		name      string
+		batch     events.EventBatch
+		mdTenant  string
+		wantIDs   []string
+		wantTenat []string
+	}{
+		{"consistent", events.EventBatch{TenantID: "tA", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tA", "e1")}}, "", []string{"a"}, []string{"tA"}},
+		{"empty falls back", events.EventBatch{TenantID: "tA", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "", "")}}, "", []string{"a"}, []string{"tA"}},
+		{"other tenant dropped", events.EventBatch{TenantID: "tA", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tB", "e1"), mkEvt("b", "tA", "e1")}}, "", []string{"b"}, []string{"tA"}},
+		{"other env dropped", events.EventBatch{TenantID: "tA", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tA", "e2")}}, "", nil, nil},
+		{"metadata mismatch dropped", events.EventBatch{TenantID: "tA", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tA", "e1")}}, "tB", nil, nil},
+		{"no envelope uses event tenant for suppression", events.EventBatch{Events: []*events.Event{mkEvt("a", "tB", "e1")}}, "", []string{"a"}, []string{"tB"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &recordingEventRepo{}
+			win := &scopeRecordingWindow{}
+			s := &eventConsumptionService{
+				ServiceParams:  ServiceParams{Logger: logger.NewNoopLogger(), Config: &config.Configuration{}},
+				eventRepo:      repo,
+				deletionWindow: win,
+			}
+			ctx := context.WithValue(context.Background(), types.CtxTenantID, tt.mdTenant)
+
+			require.NoError(t, s.processBulkMessage(ctx, scopedMsg(t, tt.batch)))
+
+			var ids []string
+			for _, e := range repo.inserted {
+				ids = append(ids, e.ID)
+			}
+			assert.Equal(t, tt.wantIDs, ids)
+			assert.Equal(t, tt.wantTenat, win.tenants)
+		})
+	}
+}
+
+func TestEventConsumption_SingleScope(t *testing.T) {
+	tests := []struct {
+		name     string
+		mdTenant string
+		mdEnv    string
+		evt      *events.Event
+		want     int
+	}{
+		{"consistent", "tA", "e1", mkEvt("a", "tA", "e1"), 1},
+		{"empty metadata uses payload", "", "", mkEvt("a", "tA", "e1"), 1},
+		{"tenant mismatch", "tA", "e1", mkEvt("a", "tB", "e1"), 0},
+		{"env mismatch", "tA", "e1", mkEvt("a", "tA", "e2"), 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &recordingEventRepo{}
+			s := &eventConsumptionService{
+				ServiceParams: ServiceParams{Logger: logger.NewNoopLogger(), Config: &config.Configuration{}},
+				eventRepo:     repo,
+			}
+			payload, err := json.Marshal(tt.evt)
+			require.NoError(t, err)
+			ctx := context.WithValue(context.Background(), types.CtxTenantID, tt.mdTenant)
+			ctx = context.WithValue(ctx, types.CtxEnvironmentID, tt.mdEnv)
+
+			require.NoError(t, s.processMessage(ctx, message.NewMessage("m1", payload)))
+			assert.Len(t, repo.inserted, tt.want)
+		})
+	}
+}
+
+func TestMeterUsageTracking_ScopeMismatchDropped(t *testing.T) {
+	newSvc := func() *meterUsageTrackingService {
+		return &meterUsageTrackingService{ServiceParams: ServiceParams{
+			Logger: logger.NewNoopLogger(),
+			Config: &config.Configuration{},
+		}}
+	}
+	ctx := context.WithValue(context.Background(), types.CtxTenantID, "tA")
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, "e1")
+
+	// nil MeterRepo panics if a mismatched event is processed.
+	t.Run("bulk event tenant", func(t *testing.T) {
+		b := events.EventBatch{TenantID: "tA", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tB", "e1")}}
+		require.NoError(t, newSvc().processBulkMessage(ctx, scopedMsg(t, b)))
+	})
+	t.Run("bulk metadata vs envelope", func(t *testing.T) {
+		b := events.EventBatch{TenantID: "tB", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tB", "e1")}}
+		require.NoError(t, newSvc().processBulkMessage(ctx, scopedMsg(t, b)))
+	})
+	t.Run("single payload vs metadata", func(t *testing.T) {
+		payload, err := json.Marshal(mkEvt("a", "tB", "e1"))
+		require.NoError(t, err)
+		require.NoError(t, newSvc().processMessage(ctx, message.NewMessage("m1", payload)))
+	})
 }
