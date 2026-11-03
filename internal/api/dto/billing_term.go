@@ -21,8 +21,11 @@ type BillingTermInput struct {
 	Value     *decimal.Decimal           `json:"value,omitempty" swaggertype:"string"`
 
 	BillTrigger *types.InstalmentBillTrigger `json:"bill_trigger,omitempty"`
-	BillOn      *time.Time                   `json:"bill_on,omitempty"`
 
+	// BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now.
+	BillOn *time.Time `json:"bill_on,omitempty"`
+
+	// StartDate defaults like BillOn; EndDate defaults to the commitment end.
 	StartDate      *time.Time              `json:"start_date,omitempty"`
 	EndDate        *time.Time              `json:"end_date,omitempty"`
 	PeriodCount    *int                    `json:"period_count,omitempty"`
@@ -112,107 +115,10 @@ func (r ReplaceBillingTermsRequest) Validate() error {
 	return validator.ValidateRequest(r)
 }
 
-// BillingTermsResponse is a commitment's terms with the instalments they produce. InvoicesToReview lists the
-// invoices that carry an instalment an edit replaced.
+// BillingTermsResponse is a commitment's terms with its scheduled and invoiced instalments in billing order.
 type BillingTermsResponse struct {
-	BillingTerms     []*billingterm.Term       `json:"billing_terms"`
-	Instalments      []*billingterm.Instalment `json:"instalments"`
-	InvoicesToReview []string                  `json:"invoices_to_review,omitempty"`
-}
-
-// ReplanInstalmentInput is one instalment of a re-plan. A date instalment needs a bill_on; a manual one takes none and
-// waits at the end of the commitment term until it is triggered.
-type ReplanInstalmentInput struct {
-	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
-
-	BillOn      *time.Time                   `json:"bill_on,omitempty"`
-	BillTrigger *types.InstalmentBillTrigger `json:"bill_trigger,omitempty"`
-
-	InvoiceLabel *string `json:"invoice_label,omitempty" validate:"omitempty,max=255"`
-}
-
-// Trigger returns how the instalment becomes billable, date unless the request says otherwise.
-func (in ReplanInstalmentInput) Trigger() types.InstalmentBillTrigger {
-	return lo.CoalesceOrEmpty(lo.FromPtr(in.BillTrigger), types.InstalmentBillTriggerDate)
-}
-
-// Validate checks the rules that need only the instalment. index is its position in the request.
-func (in ReplanInstalmentInput) Validate(index int) error {
-	if !in.Amount.IsPositive() {
-		return ierr.Validationf("instalments[%d].amount: must be greater than 0", index)
-	}
-
-	switch in.Trigger() {
-	case types.InstalmentBillTriggerDate:
-		if in.BillOn == nil {
-			return ierr.Validationf("instalments[%d].bill_on: a date instalment needs a bill_on", index)
-		}
-	case types.InstalmentBillTriggerManual:
-		if in.BillOn != nil {
-			return ierr.Validationf("instalments[%d].bill_on: is set by triggering a manual instalment, not in the plan", index)
-		}
-	default:
-		return ierr.Validationf("instalments[%d].bill_trigger: must be date or manual", index)
-	}
-
-	return nil
-}
-
-// ReplanInstalmentsRequest is the new list of instalments of a commitment, which replaces its scheduled instalments
-// as a whole.
-type ReplanInstalmentsRequest struct {
-	Instalments []ReplanInstalmentInput `json:"instalments" validate:"required,min=1,dive"`
-}
-
-// ApplyDefaults aligns the bill_on of every instalment to whole seconds.
-func (r *ReplanInstalmentsRequest) ApplyDefaults() {
-	for n := range r.Instalments {
-		if billOn := r.Instalments[n].BillOn; billOn != nil {
-			r.Instalments[n].BillOn = lo.ToPtr(billOn.Truncate(time.Second))
-		}
-	}
-}
-
-// Validate checks the rules that need only the request. Call ApplyDefaults first.
-func (r ReplanInstalmentsRequest) Validate() error {
-	if err := validator.ValidateRequest(r); err != nil {
-		return err
-	}
-
-	if len(r.Instalments) > billingterm.MaxInstalments {
-		return ierr.Validationf("instalments: must hold 1 to %d instalments", billingterm.MaxInstalments)
-	}
-
-	for n, instalment := range r.Instalments {
-		if err := instalment.Validate(n); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// BringForwardInstalmentsRequest moves Amount of the commitment's scheduled instalments into one new instalment
-// billed on BillOn, now by default.
-type BringForwardInstalmentsRequest struct {
-	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
-	BillOn *time.Time      `json:"bill_on,omitempty"`
-}
-
-// ApplyDefaults aligns bill_on to whole seconds.
-func (r *BringForwardInstalmentsRequest) ApplyDefaults() {
-	if r.BillOn != nil {
-		r.BillOn = lo.ToPtr(r.BillOn.Truncate(time.Second))
-	}
-}
-
-// Validate checks the rules that need only the request. Call ApplyDefaults first.
-func (r BringForwardInstalmentsRequest) Validate() error {
-	if !r.Amount.IsPositive() {
-		return ierr.Validation("amount: must be greater than 0")
-	}
-
-	return nil
+	BillingTerms []*billingterm.Term       `json:"billing_terms"`
+	Instalments  []*billingterm.Instalment `json:"instalments"`
 }
 
 // TriggerInstalmentRequest triggers a manual instalment to be billed on BillOn, now by default.

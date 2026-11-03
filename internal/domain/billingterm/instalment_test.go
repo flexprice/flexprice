@@ -37,7 +37,6 @@ func TestNewInstalmentBuilder_Nil(t *testing.T) {
 }
 
 func TestInstalmentBuilder_WithSetsOnlyItsField(t *testing.T) {
-	newAmount := decimal.NewFromInt(250)
 	newBillOn := time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
 	newTriggeredAt := time.Date(2027, 5, 1, 12, 0, 0, 0, time.UTC)
 
@@ -59,11 +58,6 @@ func TestInstalmentBuilder_WithSetsOnlyItsField(t *testing.T) {
 		expect func(i *Instalment)
 	}{
 		{
-			name:   "amount",
-			apply:  func(b *instalmentBuilder) *instalmentBuilder { return b.WithAmount(newAmount) },
-			expect: func(i *Instalment) { i.Amount = newAmount },
-		},
-		{
 			name:   "bill_on",
 			apply:  func(b *instalmentBuilder) *instalmentBuilder { return b.WithBillOn(newBillOn) },
 			expect: func(i *Instalment) { i.BillOn = newBillOn },
@@ -72,13 +66,6 @@ func TestInstalmentBuilder_WithSetsOnlyItsField(t *testing.T) {
 			name:   "triggered_at",
 			apply:  func(b *instalmentBuilder) *instalmentBuilder { return b.WithTriggeredAt(newTriggeredAt) },
 			expect: func(i *Instalment) { i.TriggeredAt = lo.ToPtr(newTriggeredAt) },
-		},
-		{
-			name: "status",
-			apply: func(b *instalmentBuilder) *instalmentBuilder {
-				return b.WithStatus(types.InstalmentStatusCancelled)
-			},
-			expect: func(i *Instalment) { i.InstalmentStatus = types.InstalmentStatusCancelled },
 		},
 	}
 

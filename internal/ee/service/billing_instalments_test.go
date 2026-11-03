@@ -287,7 +287,7 @@ func (s *CommitmentE2ESuite) TestInstalments_PauseDefersToResume() {
 	s.Len(s.storedInstalmentLines(resumed[0].ID), 1)
 }
 
-// Two instalments of one commitment covering the same month, as re-planning can leave them, stay two lines however
+// Two instalments of one commitment covering the same month, as two terms can produce them, stay two lines however
 // often the draft is recalculated.
 func (s *CommitmentE2ESuite) TestInstalments_ReconcileKeepsSamePeriodPair() {
 	ctx := s.GetContext()

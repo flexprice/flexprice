@@ -52,6 +52,7 @@ type resolvedTerm struct {
 }
 
 // Expand validates the terms against the owner and its period values and returns their instalments in billing order.
+// Their labels keep {n} and {of} until NumberLabels numbers them among the owner's other instalments.
 func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Term) ([]*Instalment, error) {
 	collection := owner.CollectionPeriod()
 	total := owner.CollectionTotal()
@@ -76,7 +77,7 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 
 	resolved := make([]*resolvedTerm, 0, len(terms))
 	for i, t := range terms {
-		r, err := resolveTerm(i, t, collection, currency, periods)
+		r, err := resolveTerm(i, t, collection, owner.TermStart(), currency, periods)
 		if err != nil {
 			return nil, err
 		}
@@ -111,8 +112,6 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 		i.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)
 	}
 
-	NumberLabels(instalments)
-
 	return instalments, nil
 }
 
@@ -145,8 +144,16 @@ func InstalmentTemplate(ctx context.Context, owner Owner) Instalment {
 	}
 }
 
-// resolveTerm validates one term against the collection period and applies the defaults of its kind.
-func resolveTerm(index int, t *Term, collection types.Period, currency string, periods []PeriodValue) (*resolvedTerm, error) {
+// resolveTerm validates one term against the collection period and applies the defaults of its kind; a term without
+// dates starts at termStart.
+func resolveTerm(
+	index int,
+	t *Term,
+	collection types.Period,
+	termStart time.Time,
+	currency string,
+	periods []PeriodValue,
+) (*resolvedTerm, error) {
 	if utf8.RuneCountInString(lo.FromPtr(t.InvoiceLabel)) > maxInvoiceLabelLength {
 		return nil, ierr.Validationf(termErrorFormat, index, "invoice_label", "must be at most 255 characters")
 	}
@@ -172,17 +179,17 @@ func resolveTerm(index int, t *Term, collection types.Period, currency string, p
 
 	switch t.Kind {
 	case types.BillingTermKindOnce:
-		return resolveOnce(index, t, collection)
+		return resolveOnce(index, t, collection, termStart)
 	case types.BillingTermKindRecurring:
-		return resolveRecurring(index, t, collection, periods)
+		return resolveRecurring(index, t, collection, termStart, periods)
 	default:
 		return nil, ierr.Validationf(termErrorFormat, index, "kind", "must be once or recurring")
 	}
 }
 
-// resolveOnce checks a once term's dates; bill_on defaults to the start of the collection period, which is also the
-// service period of its instalment.
-func resolveOnce(index int, t *Term, collection types.Period) (*resolvedTerm, error) {
+// resolveOnce checks a once term's dates; bill_on defaults to termStart. The collection period is the service period of
+// its instalment.
+func resolveOnce(index int, t *Term, collection types.Period, termStart time.Time) (*resolvedTerm, error) {
 	unused := []lo.Entry[string, bool]{
 		{Key: "start_date", Value: t.StartDate != nil},
 		{Key: "end_date", Value: t.EndDate != nil},
@@ -201,7 +208,7 @@ func resolveOnce(index int, t *Term, collection types.Period) (*resolvedTerm, er
 		term:  t,
 
 		billTrigger:   lo.FromPtrOr(t.BillTrigger, types.InstalmentBillTriggerDate),
-		billOn:        lo.FromPtrOr(t.BillOn, collection.Start),
+		billOn:        lo.FromPtrOr(t.BillOn, termStart),
 		servicePeriod: collection,
 	}
 
@@ -224,8 +231,15 @@ func resolveOnce(index int, t *Term, collection types.Period) (*resolvedTerm, er
 	return r, nil
 }
 
-// resolveRecurring checks a recurring term and cuts its steps; start_date and end_date default to the collection period.
-func resolveRecurring(index int, t *Term, collection types.Period, periods []PeriodValue) (*resolvedTerm, error) {
+// resolveRecurring checks a recurring term and cuts its steps; start_date defaults to termStart and end_date to the end
+// of the collection period.
+func resolveRecurring(
+	index int,
+	t *Term,
+	collection types.Period,
+	termStart time.Time,
+	periods []PeriodValue,
+) (*resolvedTerm, error) {
 	unused := []lo.Entry[string, bool]{
 		{Key: "bill_trigger", Value: t.BillTrigger != nil},
 		{Key: "bill_on", Value: t.BillOn != nil},
@@ -256,7 +270,7 @@ func resolveRecurring(index int, t *Term, collection types.Period, periods []Per
 	}
 
 	span := types.Period{
-		Start: lo.FromPtrOr(t.StartDate, collection.Start),
+		Start: lo.FromPtrOr(t.StartDate, termStart),
 		End:   lo.FromPtrOr(t.EndDate, collection.End),
 	}
 

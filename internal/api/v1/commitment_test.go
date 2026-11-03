@@ -31,8 +31,6 @@ type stubCommitmentService struct {
 	gotReplace   dto.ReplaceBillingTermsRequest
 	gotStatuses  []types.InstalmentStatus
 
-	gotReplan       dto.ReplanInstalmentsRequest
-	gotBringForward dto.BringForwardInstalmentsRequest
 	gotInstalmentID string
 	gotTrigger      dto.TriggerInstalmentRequest
 }
@@ -85,16 +83,6 @@ func (s *stubCommitmentService) ListInstalments(_ context.Context, id string, st
 	return &dto.ListInstalmentsResponse{}, s.err
 }
 
-func (s *stubCommitmentService) ReplanInstalments(_ context.Context, id string, req dto.ReplanInstalmentsRequest) (*dto.ListInstalmentsResponse, error) {
-	s.gotID, s.gotReplan = id, req
-	return &dto.ListInstalmentsResponse{}, s.err
-}
-
-func (s *stubCommitmentService) BringForwardInstalments(_ context.Context, id string, req dto.BringForwardInstalmentsRequest) (*dto.ListInstalmentsResponse, error) {
-	s.gotID, s.gotBringForward = id, req
-	return &dto.ListInstalmentsResponse{}, s.err
-}
-
 func (s *stubCommitmentService) TriggerInstalment(
 	_ context.Context,
 	id, instalmentID string,
@@ -143,8 +131,6 @@ func setupCommitmentRouter(t *testing.T, svc *stubCommitmentService) *gin.Engine
 	router.PUT("/v1/commitments/:id/billing-terms", h.ReplaceBillingTerms)
 	router.POST("/v1/commitments/:id/billing-terms/preview", h.PreviewBillingTerms)
 	router.GET("/v1/commitments/:id/instalments", h.ListInstalments)
-	router.PUT("/v1/commitments/:id/instalments", h.ReplanInstalments)
-	router.POST("/v1/commitments/:id/instalments/bring-forward", h.BringForwardInstalments)
 	router.POST("/v1/commitments/:id/instalments/:instalment_id/trigger", h.TriggerInstalment)
 	return router
 }
@@ -194,18 +180,6 @@ func TestCommitmentHandler(t *testing.T) {
 		{"list instalments with a status", nil, http.MethodGet, "/v1/commitments/cmt_4/instalments?status=cancelled", ``, http.StatusOK, "cmt_4"},
 		{"list instalments with an unknown status", nil, http.MethodGet, "/v1/commitments/cmt_4/instalments?status=paid", ``, http.StatusBadRequest, ""},
 		{"list instalments with an empty status", nil, http.MethodGet, "/v1/commitments/cmt_4/instalments?status=", ``, http.StatusBadRequest, ""},
-		{"replan instalments ok", nil, http.MethodPut, "/v1/commitments/cmt_8/instalments", `{"instalments":[{"amount":"700","bill_on":"2027-09-01T00:00:00Z"}]}`, http.StatusOK, "cmt_8"},
-		{"replan instalments bad json", nil, http.MethodPut, "/v1/commitments/cmt_8/instalments", `{`, http.StatusBadRequest, ""},
-		{"replan instalments not found", ierr.NewError("missing").
-			Mark(ierr.ErrNotFound), http.MethodPut, "/v1/commitments/cmt_8/instalments", `{"instalments":[]}`, http.StatusNotFound, ""},
-		{"replan instalments off the total", ierr.NewError("short of the total").
-			Mark(ierr.ErrValidation), http.MethodPut, "/v1/commitments/cmt_8/instalments", `{"instalments":[{"amount":"1"}]}`, http.StatusBadRequest, ""},
-		{"bring forward ok", nil, http.MethodPost, "/v1/commitments/cmt_9/instalments/bring-forward", `{"amount":"300"}`, http.StatusOK, "cmt_9"},
-		{"bring forward bad json", nil, http.MethodPost, "/v1/commitments/cmt_9/instalments/bring-forward", `not json`, http.StatusBadRequest, ""},
-		{"bring forward inactive", ierr.NewError("terminated").
-			Mark(ierr.ErrInvalidOperation), http.MethodPost, "/v1/commitments/cmt_9/instalments/bring-forward", `{"amount":"300"}`, http.StatusBadRequest, ""},
-		{"bring forward not found", ierr.NewError("missing").
-			Mark(ierr.ErrNotFound), http.MethodPost, "/v1/commitments/cmt_9/instalments/bring-forward", `{"amount":"300"}`, http.StatusNotFound, ""},
 		{"trigger instalment empty body", nil, http.MethodPost, "/v1/commitments/cmt_10/instalments/binst_1/trigger", ``, http.StatusOK, "cmt_10"},
 		{"trigger instalment empty object", nil, http.MethodPost, "/v1/commitments/cmt_10/instalments/binst_1/trigger", `{}`, http.StatusOK, "cmt_10"},
 		{"trigger instalment bad json", nil, http.MethodPost, "/v1/commitments/cmt_10/instalments/binst_1/trigger", `not json`, http.StatusBadRequest, ""},
@@ -322,56 +296,6 @@ func TestCommitmentHandler_ListInstalmentsPassesStatusesToService(t *testing.T) 
 			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 			require.Equal(t, "cmt_7", svc.gotID)
 			require.Equal(t, tc.want, svc.gotStatuses)
-		})
-	}
-}
-
-func TestCommitmentHandler_ReplanInstalmentsPassesInstalmentsToService(t *testing.T) {
-	svc := &stubCommitmentService{}
-	router := setupCommitmentRouter(t, svc)
-	body := `{"instalments":[
-		{"amount":"400","bill_on":"2027-09-01T00:00:00Z","invoice_label":"Catch-up"},
-		{"amount":"300","bill_trigger":"manual"}
-	]}`
-	w := doCommitmentRequest(router, http.MethodPut, "/v1/commitments/cmt_8/instalments", body)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, "cmt_8", svc.gotID)
-	require.Len(t, svc.gotReplan.Instalments, 2)
-
-	dated, manual := svc.gotReplan.Instalments[0], svc.gotReplan.Instalments[1]
-	require.True(t, dated.Amount.Equal(decimal.NewFromInt(400)))
-	require.True(t, dated.BillOn.Equal(time.Date(2027, 9, 1, 0, 0, 0, 0, time.UTC)))
-	require.Equal(t, "Catch-up", *dated.InvoiceLabel)
-	require.Nil(t, dated.BillTrigger)
-	require.True(t, manual.Amount.Equal(decimal.NewFromInt(300)))
-	require.Equal(t, types.InstalmentBillTriggerManual, *manual.BillTrigger)
-	require.Nil(t, manual.BillOn)
-}
-
-func TestCommitmentHandler_BringForwardInstalmentsPassesRequestToService(t *testing.T) {
-	tests := []struct {
-		name       string
-		body       string
-		wantBillOn *time.Time
-	}{
-		{"default date", `{"amount":"300"}`, nil},
-		{"explicit date", `{"amount":"300","bill_on":"2027-06-15T00:00:00Z"}`, lo.ToPtr(time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC))},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := &stubCommitmentService{}
-			router := setupCommitmentRouter(t, svc)
-			w := doCommitmentRequest(router, http.MethodPost, "/v1/commitments/cmt_9/instalments/bring-forward", tc.body)
-			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-			require.Equal(t, "cmt_9", svc.gotID)
-			require.True(t, svc.gotBringForward.Amount.Equal(decimal.NewFromInt(300)))
-			if tc.wantBillOn == nil {
-				require.Nil(t, svc.gotBringForward.BillOn)
-				return
-			}
-
-			require.True(t, svc.gotBringForward.BillOn.Equal(*tc.wantBillOn))
 		})
 	}
 }

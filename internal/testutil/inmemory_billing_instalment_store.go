@@ -125,10 +125,8 @@ func (s *InMemoryBillingInstalmentStore) Update(ctx context.Context, in *billing
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	updated.Amount = in.Amount
 	updated.BillOn = in.BillOn
 	updated.TriggeredAt = in.TriggeredAt
-	updated.InstalmentStatus = in.InstalmentStatus
 	updated.UpdatedAt = clock.Now()
 	updated.UpdatedBy = types.GetUserID(ctx)
 

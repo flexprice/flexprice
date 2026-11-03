@@ -14,10 +14,11 @@ import (
 )
 
 type testOwner struct {
-	currency string
-	delivery types.InstalmentDelivery
-	period   types.Period
-	total    decimal.Decimal
+	currency  string
+	delivery  types.InstalmentDelivery
+	period    types.Period
+	total     decimal.Decimal
+	termStart time.Time
 }
 
 func (o testOwner) OwnerType() types.BillingTermOwnerType { return types.BillingTermOwnerCommitment }
@@ -35,6 +36,14 @@ func (o testOwner) InstalmentDelivery() types.InstalmentDelivery { return o.deli
 func (o testOwner) CollectionPeriod() types.Period { return o.period }
 
 func (o testOwner) CollectionTotal() decimal.Decimal { return o.total }
+
+func (o testOwner) TermStart() time.Time {
+	if o.termStart.IsZero() {
+		return o.period.Start
+	}
+
+	return o.termStart
+}
 
 type instalmentWant struct {
 	billOn  time.Time
@@ -171,6 +180,8 @@ func TestExpand(t *testing.T) {
 				monthlyWants(jan2027, repeat("70", 10), types.InvoiceCadenceArrear)...,
 			),
 			check: func(t *testing.T, terms []*Term, got []*Instalment) {
+				require.Equal(t, DefaultInvoiceLabel, got[0].InvoiceLabel, "Expand leaves the numbering to NumberLabels")
+				NumberLabels(got)
 				require.Equal(t, "Instalment 1 of 11", got[0].InvoiceLabel, "a once term is numbered with the recurring ones")
 				require.Equal(t, "Instalment 3 of 11", got[2].InvoiceLabel)
 				require.Equal(t, "Instalment 11 of 11", got[10].InvoiceLabel)
@@ -193,6 +204,7 @@ func TestExpand(t *testing.T) {
 				monthlyWants(jan2027, repeat("70", 10), types.InvoiceCadenceArrear)...,
 			),
 			check: func(t *testing.T, _ []*Term, got []*Instalment) {
+				NumberLabels(got)
 				require.Equal(t, "Instalment 1 of 11", got[0].InvoiceLabel)
 				require.Equal(t, "Payment 2/11", got[1].InvoiceLabel)
 				require.Equal(t, "Payment 11/11", got[10].InvoiceLabel)
@@ -696,7 +708,44 @@ func TestExpand_OwnerWithoutSubscription(t *testing.T) {
 	require.Nil(t, got[0].SubscriptionID)
 }
 
-func TestExpand_NumbersEveryTermInBillingOrder(t *testing.T) {
+func TestExpand_UndatedTermsStartAtTheTermStart(t *testing.T) {
+	jan2027 := date(2027, time.January, 1)
+	apr2027 := date(2027, time.April, 1)
+	owner := usd("1200", jan2027, date(2028, time.January, 1))
+	owner.termStart = apr2027
+
+	got, err := Expand(context.Background(), owner, monthly(jan2027, 12, "100"),
+		[]*Term{onceFixed("300"), recurringRemainder(types.InvoiceCadenceAdvance)})
+
+	require.NoError(t, err)
+	require.Len(t, got, 10)
+	require.True(t, got[0].BillOn.Equal(apr2027))
+	require.True(t, got[0].Amount.Equal(dec("300")))
+	for i, step := range got[1:] {
+		require.True(t, step.BillOn.Equal(apr2027.AddDate(0, i, 0)), "step %d bills on %s", i, step.BillOn)
+		require.True(t, step.Amount.Equal(dec("100")))
+	}
+}
+
+func TestExpand_DatedTermsMayStartBeforeTheTermStart(t *testing.T) {
+	jan2027 := date(2027, time.January, 1)
+	feb2027 := date(2027, time.February, 1)
+	owner := usd("1200", jan2027, date(2028, time.January, 1))
+	owner.termStart = date(2027, time.April, 1)
+	terms := []*Term{
+		with(onceFixed("300"), func(t *Term) { t.BillOn = lo.ToPtr(feb2027) }),
+		with(recurringRemainder(types.InvoiceCadenceAdvance), func(t *Term) { t.StartDate = lo.ToPtr(feb2027) }),
+	}
+
+	got, err := Expand(context.Background(), owner, monthly(jan2027, 12, "100"), terms)
+
+	require.NoError(t, err)
+	require.Len(t, got, 12)
+	require.True(t, got[0].BillOn.Equal(feb2027))
+	require.True(t, got[1].BillOn.Equal(feb2027))
+}
+
+func TestNumberLabels_CountsEveryTermInBillingOrder(t *testing.T) {
 	jan2027 := date(2027, time.January, 1)
 	midJune := date(2027, time.June, 15)
 	terms := []*Term{
@@ -709,6 +758,8 @@ func TestExpand_NumbersEveryTermInBillingOrder(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 13)
 	require.True(t, got[6].BillOn.Equal(midJune))
+
+	NumberLabels(got)
 	require.Equal(t, "Instalment 6 of 13", got[5].InvoiceLabel)
 	require.Equal(t, "Instalment 7 of 13", got[6].InvoiceLabel, "the once instalment takes its place among the recurring ones")
 	require.Equal(t, "Instalment 8 of 13", got[7].InvoiceLabel)

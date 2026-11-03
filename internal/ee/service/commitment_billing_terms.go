@@ -18,14 +18,23 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// planInstalments expands terms into the commitment's instalments, valuing each commitment period with amountOf.
+// planInstalments expands terms into the commitment's new instalments, valuing each commitment period with amountOf.
+// They add up to what the invoiced instalments leave of the total and are numbered among them. A term without dates
+// starts at the billing period holding from, or at the commitment start when from is past its end.
 func (s *commitmentService) planInstalments(
 	ctx context.Context,
 	c *commitment.Commitment,
 	cc *commitmentContext,
 	amountOf func(capacity decimal.Decimal) decimal.Decimal,
 	terms []*billingterm.Term,
+	invoiced []*billingterm.Instalment,
+	from time.Time,
 ) ([]*billingterm.Instalment, error) {
+	left := c.CollectionTotal().Sub(sumInstalments(invoiced))
+	if !left.IsPositive() {
+		return nil, ierr.Validationf("billing_terms: the commitment is fully invoiced; nothing is left to plan")
+	}
+
 	periods, err := commitmentPeriods(c, cc.Sub, amountOf, bucketFor(c, cc), c.StartDate, *c.EndDate)
 	if err != nil {
 		return nil, err
@@ -38,7 +47,44 @@ func (s *commitmentService) planInstalments(
 		}
 	})
 
-	return billingterm.Expand(ctx, c, values, terms)
+	owner := plannedOwner{
+		Commitment: c,
+		left:       left,
+		termStart:  c.StartDate,
+	}
+	if current, ok := lo.Find(periods, func(p commitmentPeriod) bool { return p.End.After(from) }); ok {
+		owner.termStart = current.Start
+	}
+
+	instalments, err := billingterm.Expand(ctx, owner, values, terms)
+	if err != nil {
+		return nil, err
+	}
+
+	plan := append(slices.Clone(invoiced), instalments...)
+	slices.SortStableFunc(plan, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) })
+	billingterm.NumberLabels(plan)
+
+	return instalments, nil
+}
+
+// plannedOwner is a commitment as a new plan sees it: its instalments collect only what the invoiced ones leave of the
+// total, and its terms start by default at termStart.
+type plannedOwner struct {
+	*commitment.Commitment
+	left      decimal.Decimal
+	termStart time.Time
+}
+
+func (o plannedOwner) CollectionTotal() decimal.Decimal { return o.left }
+
+func (o plannedOwner) TermStart() time.Time { return o.termStart }
+
+// sumInstalments adds up the amounts of the instalments.
+func sumInstalments(instalments []*billingterm.Instalment) decimal.Decimal {
+	return decimal.Sum(decimal.Zero, lo.Map(instalments, func(instalment *billingterm.Instalment, _ int) decimal.Decimal {
+		return instalment.Amount
+	})...)
 }
 
 func (s *commitmentService) GetBillingTerms(ctx context.Context, id string) (*dto.BillingTermsResponse, error) {
@@ -110,29 +156,28 @@ func (s *commitmentService) PreviewBillingTerms(
 		return nil, err
 	}
 
-	terms, instalments, err := s.planReplacement(ctx, c, req)
+	if err := requireActiveBillingTerms(c); err != nil {
+		return nil, err
+	}
+
+	invoiced, err := s.ListInstalments(ctx, c.ID, []types.InstalmentStatus{types.InstalmentStatusInvoiced})
 	if err != nil {
 		return nil, err
 	}
 
-	invoiced, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
-		OwnerType: types.BillingTermOwnerCommitment,
-		OwnerIDs:  []string{c.ID},
-		Statuses:  []types.InstalmentStatus{types.InstalmentStatusInvoiced},
-	})
+	terms, instalments, err := s.planReplacement(ctx, c, req, invoiced.Items)
 	if err != nil {
 		return nil, err
 	}
 
-	return &dto.BillingTermsResponse{
-		BillingTerms:     terms,
-		Instalments:      instalments,
-		InvoicesToReview: invoicesToReview(invoiced),
-	}, nil
+	plan := append(slices.Clone(invoiced.Items), instalments...)
+	slices.SortStableFunc(plan, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) })
+
+	return &dto.BillingTermsResponse{BillingTerms: terms, Instalments: plan}, nil
 }
 
-// ReplaceBillingTerms swaps the commitment's whole set of terms for req's. Every current instalment is cancelled,
-// invoiced ones included, and the new terms expand against the unchanged total; invoices are left as they are.
+// ReplaceBillingTerms swaps the commitment's whole set of terms for req's. The scheduled instalments are cancelled and
+// the new terms expand against what the invoiced ones, which are kept, leave of the total.
 func (s *commitmentService) ReplaceBillingTerms(
 	ctx context.Context,
 	id string,
@@ -148,7 +193,7 @@ func (s *commitmentService) ReplaceBillingTerms(
 	}
 
 	var c *commitment.Commitment
-	var cancelled []*billingterm.Instalment
+	var cancelled, created []*billingterm.Instalment
 	var resp *dto.BillingTermsResponse
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.lockCommitment(txCtx, id); err != nil {
@@ -160,7 +205,22 @@ func (s *commitmentService) ReplaceBillingTerms(
 			return err
 		}
 
-		terms, instalments, err := s.planReplacement(txCtx, c, req)
+		if err := requireActiveBillingTerms(c); err != nil {
+			return err
+		}
+
+		// Cancelling first fixes what is invoiced: a finalize cannot claim a cancelled instalment.
+		scheduled := []types.InstalmentStatus{types.InstalmentStatusScheduled}
+		if cancelled, err = s.BillingInstalmentRepo.Cancel(txCtx, types.BillingTermOwnerCommitment, c.ID, scheduled); err != nil {
+			return err
+		}
+
+		invoiced, err := s.ListInstalments(txCtx, c.ID, []types.InstalmentStatus{types.InstalmentStatusInvoiced})
+		if err != nil {
+			return err
+		}
+
+		terms, instalments, err := s.planReplacement(txCtx, c, req, invoiced.Items)
 		if err != nil {
 			return err
 		}
@@ -169,7 +229,16 @@ func (s *commitmentService) ReplaceBillingTerms(
 			return err
 		}
 
-		cancelled, err = s.BillingInstalmentRepo.Cancel(txCtx, types.BillingTermOwnerCommitment, c.ID, []types.InstalmentStatus{
+		resp = &dto.BillingTermsResponse{}
+		if resp.BillingTerms, err = s.BillingTermRepo.CreateMany(txCtx, terms); err != nil {
+			return err
+		}
+
+		if created, err = s.BillingInstalmentRepo.CreateMany(txCtx, instalments); err != nil {
+			return err
+		}
+
+		plan, err := s.ListInstalments(txCtx, c.ID, []types.InstalmentStatus{
 			types.InstalmentStatusScheduled,
 			types.InstalmentStatusInvoiced,
 		})
@@ -177,13 +246,8 @@ func (s *commitmentService) ReplaceBillingTerms(
 			return err
 		}
 
-		resp = &dto.BillingTermsResponse{InvoicesToReview: invoicesToReview(cancelled)}
-		if resp.BillingTerms, err = s.BillingTermRepo.CreateMany(txCtx, terms); err != nil {
-			return err
-		}
-
-		resp.Instalments, err = s.BillingInstalmentRepo.CreateMany(txCtx, instalments)
-		return err
+		resp.Instalments = plan.Items
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -193,27 +257,25 @@ func (s *commitmentService) ReplaceBillingTerms(
 		"operation", "commitment.billing_terms_replaced",
 		"commitment_id", id,
 		"terms", len(resp.BillingTerms),
-		"instalments", len(resp.Instalments),
-		"invoices_to_review", len(resp.InvoicesToReview),
+		"cancelled", len(cancelled),
+		"created", len(created),
 	)
 
 	publishBillingTermsEvent(ctx, s.ServiceParams, types.WebhookEventBillingTermsUpdated, c)
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
-	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, resp.Instalments)
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, created)
 
 	return resp, nil
 }
 
-// planReplacement builds new terms from req and expands them against c's unchanged total. It writes nothing.
+// planReplacement builds new terms from req and expands them against what the invoiced instalments leave of c's
+// total; terms without dates start at the current billing period. It writes nothing.
 func (s *commitmentService) planReplacement(
 	ctx context.Context,
 	c *commitment.Commitment,
 	req dto.ReplaceBillingTermsRequest,
+	invoiced []*billingterm.Instalment,
 ) ([]*billingterm.Term, []*billingterm.Instalment, error) {
-	if err := requireActiveBillingTerms(c); err != nil {
-		return nil, nil, err
-	}
-
 	cc, err := s.loadCommitmentContext(ctx, c.SubscriptionID)
 	if err != nil {
 		return nil, nil, err
@@ -228,7 +290,7 @@ func (s *commitmentService) planReplacement(
 		return in.ToTerm(ctx, c.ID)
 	})
 
-	instalments, err := s.planInstalments(ctx, c, cc, amountOf, terms)
+	instalments, err := s.planInstalments(ctx, c, cc, amountOf, terms, invoiced, clock.Now())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -252,16 +314,6 @@ func requireActiveBillingTerms(c *commitment.Commitment) error {
 	}
 
 	return nil
-}
-
-// invoicesToReview returns the distinct invoices the instalments sit on, in order.
-func invoicesToReview(instalments []*billingterm.Instalment) []string {
-	ids := lo.Uniq(lo.FilterMap(instalments, func(i *billingterm.Instalment, _ int) (string, bool) {
-		return lo.FromPtr(i.InvoiceID), i.InvoiceID != nil
-	}))
-	slices.Sort(ids)
-
-	return ids
 }
 
 // settlementLabel is the invoice label of the instalment that settles a terminated commitment.

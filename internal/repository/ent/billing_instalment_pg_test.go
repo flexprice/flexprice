@@ -199,18 +199,16 @@ func TestInstalmentUpdate_OnlyScheduledRows(t *testing.T) {
 	_, err := f.instalments.CreateMany(f.ctx, []*billingterm.Instalment{scheduled, invoiced, cancelled})
 	require.NoError(t, err)
 
+	moved := start.AddDate(0, 0, 7)
 	for _, row := range []*billingterm.Instalment{invoiced, cancelled} {
-		_, err := f.instalments.Update(f.ctx, billingterm.NewInstalmentBuilder(row).
-			WithAmount(decimal.NewFromInt(50)).
-			WithStatus(types.InstalmentStatusScheduled).
-			Build())
+		_, err := f.instalments.Update(f.ctx, billingterm.NewInstalmentBuilder(row).WithBillOn(moved).Build())
 		require.Error(t, err)
 		require.True(t, ierr.IsInvalidOperation(err), "got %v", err)
 
 		unchanged, err := f.instalments.Get(f.ctx, row.ID)
 		require.NoError(t, err)
 		require.Equal(t, row.InstalmentStatus, unchanged.InstalmentStatus)
-		require.True(t, row.Amount.Equal(unchanged.Amount))
+		require.True(t, row.BillOn.Equal(unchanged.BillOn))
 		require.Equal(t, row.InvoiceID, unchanged.InvoiceID)
 	}
 
@@ -220,17 +218,15 @@ func TestInstalmentUpdate_OnlyScheduledRows(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, ierr.IsNotFound(err), "got %v", err)
 
-	updated, err := f.instalments.Update(f.ctx, billingterm.NewInstalmentBuilder(scheduled).
-		WithAmount(decimal.NewFromInt(50)).
-		WithStatus(types.InstalmentStatusCancelled).
-		Build())
+	changed := billingterm.NewInstalmentBuilder(scheduled).WithBillOn(moved).WithTriggeredAt(moved).Build()
+	changed.Amount = decimal.NewFromInt(50)
+	changed.InstalmentStatus = types.InstalmentStatusCancelled
+	updated, err := f.instalments.Update(f.ctx, changed)
 	require.NoError(t, err)
-	require.Equal(t, types.InstalmentStatusCancelled, updated.InstalmentStatus)
-	require.True(t, decimal.NewFromInt(50).Equal(updated.Amount))
-
-	_, err = f.instalments.Update(f.ctx, billingterm.NewInstalmentBuilder(updated).WithAmount(decimal.NewFromInt(60)).Build())
-	require.Error(t, err)
-	require.True(t, ierr.IsInvalidOperation(err), "a cancelled row stays as it is: %v", err)
+	require.True(t, moved.Equal(updated.BillOn))
+	require.True(t, moved.Equal(lo.FromPtr(updated.TriggeredAt)))
+	require.Equal(t, types.InstalmentStatusScheduled, updated.InstalmentStatus, "only bill_on and triggered_at are written")
+	require.True(t, scheduled.Amount.Equal(updated.Amount))
 }
 
 func TestInstalmentList_FiltersAndOrder(t *testing.T) {

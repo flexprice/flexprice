@@ -739,8 +739,6 @@ func NewRouter(
 			commitments.PUT("/:id/billing-terms", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.ReplaceBillingTerms)
 			commitments.POST("/:id/billing-terms/preview", read(types.EntityCommitment, types.ActionRead), handlers.Commitment.PreviewBillingTerms)
 			commitments.GET("/:id/instalments", read(types.EntityCommitment, types.ActionRead), handlers.Commitment.ListInstalments)
-			commitments.PUT("/:id/instalments", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.ReplanInstalments)
-			commitments.POST("/:id/instalments/bring-forward", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.BringForwardInstalments)
 			commitments.POST("/:id/instalments/:instalment_id/trigger", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.TriggerInstalment)
 		}
 

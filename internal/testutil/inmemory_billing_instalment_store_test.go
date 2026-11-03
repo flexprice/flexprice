@@ -271,13 +271,13 @@ func TestInMemoryBillingInstalmentStore_Update(t *testing.T) {
 	f.seed(t, row)
 
 	moved := f.start.AddDate(0, 0, 7)
-	updated, err := f.store.Update(f.ctx, billingterm.NewInstalmentBuilder(row).
-		WithAmount(decimal.NewFromInt(250)).
-		WithBillOn(moved).
-		Build())
+	changed := billingterm.NewInstalmentBuilder(row).WithBillOn(moved).Build()
+	changed.Amount = decimal.NewFromInt(250)
+	changed.InstalmentStatus = types.InstalmentStatusCancelled
+	updated, err := f.store.Update(f.ctx, changed)
 	require.NoError(t, err)
-	require.True(t, decimal.NewFromInt(250).Equal(updated.Amount))
 	require.Equal(t, moved, updated.BillOn)
+	require.True(t, row.Amount.Equal(updated.Amount), "the amount is not written")
 	require.Equal(t, types.InstalmentStatusScheduled, updated.InstalmentStatus)
 	require.Equal(t, "user_1", updated.UpdatedBy)
 
@@ -297,10 +297,6 @@ func TestInMemoryBillingInstalmentStore_Update(t *testing.T) {
 	_, err = f.store.Update(f.ctx, missing)
 	require.Error(t, err)
 	require.True(t, ierr.IsNotFound(err))
-
-	cancelled, err := f.store.Update(f.ctx, billingterm.NewInstalmentBuilder(updated).WithStatus(types.InstalmentStatusCancelled).Build())
-	require.NoError(t, err)
-	require.Equal(t, types.InstalmentStatusCancelled, cancelled.InstalmentStatus)
 }
 
 func TestInMemoryBillingInstalmentStore_UpdateOnlyScheduled(t *testing.T) {
@@ -311,11 +307,7 @@ func TestInMemoryBillingInstalmentStore_UpdateOnlyScheduled(t *testing.T) {
 			f.seed(t, row)
 			before := f.get(t, row.ID)
 
-			_, err := f.store.Update(f.ctx, billingterm.NewInstalmentBuilder(row).
-				WithAmount(decimal.NewFromInt(250)).
-				WithBillOn(f.start.AddDate(0, 0, 7)).
-				WithStatus(types.InstalmentStatusScheduled).
-				Build())
+			_, err := f.store.Update(f.ctx, billingterm.NewInstalmentBuilder(row).WithBillOn(f.start.AddDate(0, 0, 7)).Build())
 			require.Error(t, err)
 			require.True(t, ierr.IsInvalidOperation(err), "got %v", err)
 			require.Equal(t, before, f.get(t, row.ID), "the row is left as it was")

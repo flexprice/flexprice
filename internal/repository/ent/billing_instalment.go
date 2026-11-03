@@ -190,9 +190,7 @@ func (r *billingInstalmentRepository) Update(ctx context.Context, in *billingter
 	update := r.client.Writer(ctx).BillingInstalment.UpdateOneID(in.ID).
 		Where(r.scope(ctx)...).
 		Where(entbillinginstalment.InstalmentStatusEQ(types.InstalmentStatusScheduled)).
-		SetAmount(in.Amount).
 		SetBillOn(in.BillOn).
-		SetInstalmentStatus(in.InstalmentStatus).
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 

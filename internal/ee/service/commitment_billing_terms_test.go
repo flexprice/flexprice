@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -363,7 +364,7 @@ func (s *CommitmentServiceSuite) claimFirstInstalment(invoiceID string) *billing
 	return claimed[0]
 }
 
-func (s *CommitmentServiceSuite) TestReplaceBillingTerms_CancelsAllAndRegenerates() {
+func (s *CommitmentServiceSuite) TestReplaceBillingTerms_KeepsInvoicedInstalments() {
 	ctx := s.GetContext()
 	created, err := s.svc.Create(ctx, s.billingTermsRequest())
 	s.Require().NoError(err)
@@ -374,15 +375,13 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_CancelsAllAndRegenerate
 
 	resp, err := s.svc.ReplaceBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
 	s.Require().NoError(err)
-	s.Equal([]string{"inv_x"}, resp.InvoicesToReview)
 
-	for _, old := range oldInstalments {
-		got, err := s.GetStores().BillingInstalmentRepo.Get(ctx, old.ID)
-		s.Require().NoError(err)
-		s.Equal(types.InstalmentStatusCancelled, got.InstalmentStatus, "instalment %s", old.ID)
-		if old.ID == invoiced.ID {
-			s.Equal("inv_x", lo.FromPtr(got.InvoiceID), "a cancelled instalment keeps its invoice")
-		}
+	kept := s.instalmentByID(invoiced.ID)
+	s.Equal(types.InstalmentStatusInvoiced, kept.InstalmentStatus, "an edit keeps the invoiced instalment")
+	s.Equal("inv_x", lo.FromPtr(kept.InvoiceID))
+	s.Equal("Instalment 1 of 11", kept.InvoiceLabel)
+	for _, old := range oldInstalments[1:] {
+		s.Equal(types.InstalmentStatusCancelled, s.instalmentByID(old.ID).InstalmentStatus, "instalment %s", old.ID)
 	}
 
 	archived := s.GetStores().BillingTermRepo.(*testutil.InMemoryBillingTermStore)
@@ -396,30 +395,52 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_CancelsAllAndRegenerate
 	s.Require().Len(published, 2)
 	s.ElementsMatch(lo.Map(published, func(t *billingterm.Term, _ int) string { return t.ID }),
 		lo.Map(resp.BillingTerms, func(t *billingterm.Term, _ int) string { return t.ID }))
-	for _, term := range published {
-		s.False(lo.Contains(lo.Map(oldTerms, func(t *billingterm.Term, _ int) string { return t.ID }), term.ID))
-	}
 
-	live := lo.Filter(s.storedInstalments(), func(i *billingterm.Instalment, _ int) bool {
-		return i.InstalmentStatus == types.InstalmentStatusScheduled
-	})
-	s.Require().Len(live, 11)
-	s.Len(resp.Instalments, 11)
+	// The 300 invoiced leaves 700: 500 up front and ten instalments of 20.
+	s.Require().Len(resp.Instalments, 12)
+	s.Equal(invoiced.ID, resp.Instalments[0].ID, "the plan lists the invoiced instalment with the new ones")
+	added := s.addedSince(oldInstalments)
+	s.Require().Len(added, 11)
+	s.True(sumInstalments(added).Equal(dec("700")), "new instalments add up to %s", sumInstalments(added))
+	s.True(added[0].Amount.Equal(dec("500")))
+	s.True(added[1].Amount.Equal(dec("20")))
+	s.Equal("Instalment 2 of 12", added[0].InvoiceLabel, "new instalments are numbered after the invoiced one")
+	s.Equal("Instalment 12 of 12", added[10].InvoiceLabel)
+	s.True(s.liveTotal().Equal(dec("1000")), "the plan still adds up to the total")
+}
 
-	total := decimal.Zero
-	for n, i := range resp.Instalments {
-		total = total.Add(i.Amount)
-		s.Equal(live[n].ID, i.ID, "the response lists the stored instalments in billing order")
-		s.Equal(types.InstalmentStatusScheduled, i.InstalmentStatus)
-	}
-
-	s.True(total.Equal(dec("1000")), "new instalments add up to %s", total)
-	s.True(resp.Instalments[0].Amount.Equal(dec("500")))
-	s.True(resp.Instalments[1].Amount.Equal(dec("50")))
-
-	got, err := s.GetStores().CommitmentRepo.Get(ctx, created.ID)
+func (s *CommitmentServiceSuite) TestReplaceBillingTerms_SizesThePlanAfterTheCancellation() {
+	ctx := s.GetContext()
+	created, err := s.svc.Create(ctx, s.billingTermsRequest())
 	s.Require().NoError(err)
-	s.True(lo.FromPtr(got.TotalAmount).Equal(dec("1000")), "the total is unchanged")
+
+	rows := s.storedInstalments()
+	racing := s.racingCommitmentService(func(ctx context.Context) {
+		_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_race", []string{rows[0].ID})
+		s.Require().NoError(err)
+	})
+
+	_, err = racing.ReplaceBillingTerms(ctx, created.ID, dto.ReplaceBillingTermsRequest{BillingTerms: upfrontPlusRemainder()[1:]})
+	s.Require().NoError(err)
+
+	s.Equal(types.InstalmentStatusInvoiced, s.instalmentByID(rows[0].ID).InstalmentStatus)
+	s.True(s.liveTotal().Equal(dec("1000")), "an instalment claimed before the cancellation is left out of the new plan")
+}
+
+func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsAFullyInvoicedCommitment() {
+	ctx := s.GetContext()
+	created, err := s.svc.Create(ctx, s.billingTermsRequest())
+	s.Require().NoError(err)
+
+	ids := lo.Map(s.storedInstalments(), func(i *billingterm.Instalment, _ int) string { return i.ID })
+	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", ids)
+	s.Require().NoError(err)
+
+	_, err = s.svc.PreviewBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
+	s.requireValidation(err, "the commitment is fully invoiced")
+
+	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
+	s.requireValidation(err, "the commitment is fully invoiced")
 }
 
 func (s *CommitmentServiceSuite) TestReplaceBillingTerms_CanReplaceTwice() {
@@ -428,9 +449,8 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_CanReplaceTwice() {
 	s.Require().NoError(err)
 
 	req := dto.ReplaceBillingTermsRequest{BillingTerms: upfrontPlusRemainder()}
-	first, err := s.svc.ReplaceBillingTerms(ctx, created.ID, req)
+	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, req)
 	s.Require().NoError(err)
-	s.Empty(first.InvoicesToReview)
 
 	second, err := s.svc.ReplaceBillingTerms(ctx, created.ID, req)
 	s.Require().NoError(err)
@@ -438,12 +458,66 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_CanReplaceTwice() {
 	s.Len(s.storedTerms(created.ID), 2)
 }
 
+// A commitment that began three months ago and runs seven more, worth 1,000. An edit's undated terms start at the
+// period holding now: 300 on its start, then 700 over the seven periods left, billed at each one's end.
+func (s *CommitmentServiceSuite) TestReplaceBillingTerms_UndatedTermsStartAtTheCurrentPeriod() {
+	ctx := s.GetContext()
+	now := clock.Now().UTC()
+	current := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	req := s.billingTermsRequest()
+	req.StartDate = current.AddDate(0, -3, 0)
+	req.EndDate = lo.ToPtr(current.AddDate(0, 7, 0))
+	created, err := s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+
+	old := s.storedInstalments()
+	s.True(old[0].BillOn.Equal(req.StartDate), "a new commitment's undated terms start at its start")
+
+	edit := dto.ReplaceBillingTermsRequest{BillingTerms: upfrontPlusRemainder()}
+	preview, err := s.svc.PreviewBillingTerms(ctx, created.ID, edit)
+	s.Require().NoError(err)
+
+	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, edit)
+	s.Require().NoError(err)
+
+	added := s.addedSince(old)
+	s.Require().Len(added, 8)
+	s.True(added[0].BillOn.Equal(current), "the once term bills at the current period's start, got %s", added[0].BillOn)
+	s.True(added[0].Amount.Equal(dec("300")))
+	for i, inst := range added[1:] {
+		s.True(inst.BillOn.Equal(current.AddDate(0, i+1, 0)), "instalment %d bills on %s", i+1, inst.BillOn)
+		s.True(inst.Amount.Equal(dec("100")))
+	}
+
+	s.True(s.liveTotal().Equal(dec("1000")))
+	s.Equal(
+		lo.Map(preview.Instalments, func(i *billingterm.Instalment, _ int) time.Time { return i.BillOn }),
+		lo.Map(added, func(i *billingterm.Instalment, _ int) time.Time { return i.BillOn }),
+		"the preview plans the same dates",
+	)
+}
+
+func (s *CommitmentServiceSuite) TestReplaceBillingTerms_PastItsEndUndatedTermsStartAtTheCommitmentStart() {
+	ctx := s.GetContext()
+	created, err := s.svc.Create(ctx, s.billingTermsRequest())
+	s.Require().NoError(err)
+	s.Require().True(created.EndDate.Before(clock.Now()))
+
+	old := s.storedInstalments()
+	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
+	s.Require().NoError(err)
+
+	added := s.addedSince(old)
+	s.Require().NotEmpty(added)
+	s.True(added[0].BillOn.Equal(created.StartDate))
+}
+
 func (s *CommitmentServiceSuite) TestReplaceBillingTerms_InvalidTermsChangeNothing() {
 	ctx := s.GetContext()
 	created, err := s.svc.Create(ctx, s.billingTermsRequest())
 	s.Require().NoError(err)
 
-	terms, instalments := s.storedTerms(created.ID), s.storedInstalments()
+	terms := s.storedTerms(created.ID)
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
 	publisher.Reset()
 
@@ -464,8 +538,8 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_InvalidTermsChangeNothi
 		s.True(ierr.IsValidation(err), "%s: got %v", name, err)
 	}
 
+	// The in-memory store does not roll back, so only the terms show that nothing was saved.
 	s.Equal(terms, s.storedTerms(created.ID))
-	s.Equal(instalments, s.storedInstalments())
 	s.Empty(publisher.Events(), "a rejected edit publishes nothing")
 }
 
@@ -507,9 +581,9 @@ func (s *CommitmentServiceSuite) TestPreviewBillingTerms_WritesNothing() {
 	created, err := s.svc.Create(ctx, s.billingTermsRequest())
 	s.Require().NoError(err)
 
-	terms, instalments := s.storedTerms(created.ID), s.storedInstalments()
-	s.claimFirstInstalment("inv_x")
-	invoiced := s.storedInstalments()
+	terms := s.storedTerms(created.ID)
+	invoiced := s.claimFirstInstalment("inv_x")
+	stored := s.storedInstalments()
 
 	resp, err := s.svc.PreviewBillingTerms(ctx, created.ID, dto.ReplaceBillingTermsRequest{
 		BillingTerms: []dto.BillingTermInput{
@@ -523,8 +597,9 @@ func (s *CommitmentServiceSuite) TestPreviewBillingTerms_WritesNothing() {
 	})
 	s.Require().NoError(err)
 
-	s.Equal([]string{"inv_x"}, resp.InvoicesToReview)
-	s.Len(resp.Instalments, 11)
+	s.Require().Len(resp.Instalments, 12, "the invoiced instalment and eleven new ones")
+	s.Equal(invoiced.ID, resp.Instalments[0].ID)
+	s.True(sumInstalments(resp.Instalments[1:]).Equal(dec("700")))
 	s.Require().Len(resp.BillingTerms, 2)
 
 	upfront, ok := lo.Find(resp.BillingTerms, func(t *billingterm.Term) bool { return t.Kind == types.BillingTermKindOnce })
@@ -532,8 +607,7 @@ func (s *CommitmentServiceSuite) TestPreviewBillingTerms_WritesNothing() {
 	s.True(lo.FromPtr(upfront.Value).Equal(dec("500")))
 
 	s.Equal(terms, s.storedTerms(created.ID))
-	s.Equal(invoiced, s.storedInstalments(), "no instalment was cancelled or added")
-	s.NotEqual(instalments, invoiced)
+	s.Equal(stored, s.storedInstalments(), "no instalment was cancelled or added")
 }
 
 func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsInactiveOrPerPeriod() {
@@ -585,7 +659,6 @@ func (s *CommitmentServiceSuite) TestGetBillingTerms_And_ListInstalments() {
 
 	got, err := s.svc.GetBillingTerms(ctx, created.ID)
 	s.Require().NoError(err)
-	s.Empty(got.InvoicesToReview)
 	s.Len(got.BillingTerms, 2, "archived terms are not listed")
 	s.ElementsMatch(
 		lo.Map(replaced.BillingTerms, func(t *billingterm.Term, _ int) string { return t.ID }),
@@ -637,13 +710,13 @@ func (s *CommitmentServiceSuite) TestListInstalments_FiltersByStatus() {
 		wantOnly []types.InstalmentStatus
 	}{
 		{"every status", nil, 22, nil},
-		{"cancelled", []types.InstalmentStatus{types.InstalmentStatusCancelled}, 11, []types.InstalmentStatus{types.InstalmentStatusCancelled}},
+		{"cancelled", []types.InstalmentStatus{types.InstalmentStatusCancelled}, 10, []types.InstalmentStatus{types.InstalmentStatusCancelled}},
 		{"scheduled", []types.InstalmentStatus{types.InstalmentStatusScheduled}, 11, []types.InstalmentStatus{types.InstalmentStatusScheduled}},
-		{"invoiced", []types.InstalmentStatus{types.InstalmentStatusInvoiced}, 0, nil},
+		{"invoiced", []types.InstalmentStatus{types.InstalmentStatusInvoiced}, 1, []types.InstalmentStatus{types.InstalmentStatusInvoiced}},
 		{
 			"scheduled and cancelled",
 			[]types.InstalmentStatus{types.InstalmentStatusScheduled, types.InstalmentStatusCancelled},
-			22,
+			21,
 			[]types.InstalmentStatus{types.InstalmentStatusScheduled, types.InstalmentStatusCancelled},
 		},
 	}
@@ -757,25 +830,25 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_PublishesEvents() {
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
 	publisher.Reset()
 
-	resp, err := s.svc.ReplaceBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
+	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
 	s.Require().NoError(err)
 
 	events := publisher.Events()
-	s.Require().Len(events, 23, "billing_terms.updated, 11 cancelled and 11 created")
+	s.Require().Len(events, 22, "billing_terms.updated, 10 cancelled and 11 created")
 	s.Equal(types.WebhookEventBillingTermsUpdated, events[0].EventName)
 	s.Equal(created.ID, events[0].EntityID)
 
 	cancelled := s.instalmentEventIDs(events, types.WebhookEventBillingInstalmentCancelled)
-	s.ElementsMatch(lo.Map(before, func(i *billingterm.Instalment, _ int) string { return i.ID }), cancelled,
-		"every replaced instalment is reported, invoiced ones included")
+	s.ElementsMatch(lo.Map(before[1:], func(i *billingterm.Instalment, _ int) string { return i.ID }), cancelled,
+		"only the scheduled instalments are cancelled")
 
 	createdIDs := s.instalmentEventIDs(events, types.WebhookEventBillingInstalmentCreated)
-	s.ElementsMatch(lo.Map(resp.Instalments, func(i *billingterm.Instalment, _ int) string { return i.ID }), createdIDs)
+	s.ElementsMatch(lo.Map(s.addedSince(before), func(i *billingterm.Instalment, _ int) string { return i.ID }), createdIDs)
 
 	names := lo.Map(events, func(e *types.WebhookEvent, _ int) types.WebhookEventName { return e.EventName })
 	s.Equal(types.WebhookEventBillingTermsUpdated, names[0])
 	s.Equal(types.WebhookEventBillingInstalmentCancelled, names[1])
-	s.Equal(types.WebhookEventBillingInstalmentCreated, names[22], "cancellations precede the new instalments")
+	s.Equal(types.WebhookEventBillingInstalmentCreated, names[21], "cancellations precede the new instalments")
 }
 
 // yearOfTermsRequest is a binding amount commitment of 100 a month for 2025, worth 1,200, collected through terms.

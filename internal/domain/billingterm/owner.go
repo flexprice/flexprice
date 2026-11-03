@@ -1,6 +1,8 @@
 package billingterm
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -25,6 +27,10 @@ type Owner interface {
 
 	// CollectionTotal is the value the instalments add up to, rounded to the currency.
 	CollectionTotal() decimal.Decimal
+
+	// TermStart is where a term without a start_date or bill_on starts: a billing period start in the collection
+	// period.
+	TermStart() time.Time
 }
 
 // PeriodValue is an owner's value for one billing period.

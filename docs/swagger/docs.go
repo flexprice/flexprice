@@ -2010,7 +2010,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns the commitment's current billing terms and the instalments they produce. Cancelled instalments are listed by the instalments endpoint.",
+                "description": "Returns the commitment's current billing terms with its scheduled and invoiced instalments in billing order. Invoiced instalments may come from terms an edit replaced. Cancelled instalments are listed by the instalments endpoint.",
                 "produces": [
                     "application/json"
                 ],
@@ -2062,7 +2062,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Replaces the whole set of billing terms of an active commitment. Every current instalment is cancelled, including invoiced ones, and the new terms generate fresh instalments against the unchanged total. Invoices are not touched; invoices_to_review lists the finalized invoices that carry a replaced instalment.",
+                "description": "Replaces the whole set of billing terms of an active commitment. Its scheduled instalments are cancelled and the new terms generate instalments for what the invoiced ones leave of the commitment total; invoiced instalments and their invoices are kept. A term without bill_on or start_date starts at the billing period holding now, or at the commitment start once its term has ended. Returns the new terms with the scheduled and invoiced instalments in billing order.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2127,7 +2127,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns what editing the billing terms would produce, without saving anything: the resolved terms, the new instalments and the invoices to review.",
+                "description": "Returns what editing the billing terms would produce, without saving anything: the new terms with the invoiced and new instalments in billing order.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2248,134 +2248,6 @@ const docTemplate = `{
                     }
                 },
                 "x-scope": "read"
-            },
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Replaces every scheduled instalment of an active commitment with the given list. Invoiced instalments are untouched, so the new instalments must add up to what they leave of the commitment total. A manual instalment takes no bill_on and waits at the end of the commitment term until it is triggered. Returns the resulting scheduled and invoiced instalments in billing order.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Commitments"
-                ],
-                "summary": "Re-plan instalments",
-                "operationId": "replanCommitmentInstalments",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Commitment ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Instalments",
-                        "name": "instalments",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/ReplanInstalmentsRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/ListInstalmentsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/commitments/{id}/instalments/bring-forward": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Adds one instalment of the given amount, billed now unless bill_on is set, and takes the same amount off the earliest scheduled instalments. Instalments that reach zero are cancelled, so the commitment total does not change. Returns the resulting scheduled and invoiced instalments in billing order.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Commitments"
-                ],
-                "summary": "Bring instalments forward",
-                "operationId": "bringForwardCommitmentInstalments",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Commitment ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Amount to bring forward",
-                        "name": "bring_forward",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/BringForwardInstalmentsRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/ListInstalmentsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
             }
         },
         "/commitments/{id}/instalments/{instalment_id}/trigger": {
@@ -2385,7 +2257,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; re-plan the instalments to bill it later.",
+                "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; edit the billing terms to bill it later.",
                 "consumes": [
                     "application/json"
                 ],
@@ -19191,6 +19063,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "bill_on": {
+                    "description": "BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now.",
                     "type": "string"
                 },
                 "bill_trigger": {
@@ -19219,6 +19092,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.BillingTermSplit"
                 },
                 "start_date": {
+                    "description": "StartDate defaults like BillOn; EndDate defaults to the commitment end.",
                     "type": "string"
                 },
                 "value": {
@@ -19248,23 +19122,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/billingterm.Instalment"
                     }
-                },
-                "invoices_to_review": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "BringForwardInstalmentsRequest": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "string"
-                },
-                "bill_on": {
-                    "type": "string"
                 }
             }
         },
@@ -27393,39 +27250,6 @@ const docTemplate = `{
                     "minItems": 1,
                     "items": {
                         "$ref": "#/definitions/BillingTermInput"
-                    }
-                }
-            }
-        },
-        "ReplanInstalmentInput": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "string"
-                },
-                "bill_on": {
-                    "type": "string"
-                },
-                "bill_trigger": {
-                    "$ref": "#/definitions/types.InstalmentBillTrigger"
-                },
-                "invoice_label": {
-                    "type": "string",
-                    "maxLength": 255
-                }
-            }
-        },
-        "ReplanInstalmentsRequest": {
-            "type": "object",
-            "required": [
-                "instalments"
-            ],
-            "properties": {
-                "instalments": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "$ref": "#/definitions/ReplanInstalmentInput"
                     }
                 }
             }

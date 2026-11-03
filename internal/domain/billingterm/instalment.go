@@ -107,12 +107,6 @@ func NewInstalmentBuilder(i *Instalment) *instalmentBuilder {
 	return &instalmentBuilder{i: &cp}
 }
 
-// WithAmount sets the instalment amount.
-func (b *instalmentBuilder) WithAmount(v decimal.Decimal) *instalmentBuilder {
-	b.i.Amount = v
-	return b
-}
-
 // WithBillOn sets when the instalment becomes billable.
 func (b *instalmentBuilder) WithBillOn(t time.Time) *instalmentBuilder {
 	b.i.BillOn = t
@@ -122,12 +116,6 @@ func (b *instalmentBuilder) WithBillOn(t time.Time) *instalmentBuilder {
 // WithTriggeredAt sets when a manual instalment was triggered.
 func (b *instalmentBuilder) WithTriggeredAt(t time.Time) *instalmentBuilder {
 	b.i.TriggeredAt = &t
-	return b
-}
-
-// WithStatus sets the instalment status.
-func (b *instalmentBuilder) WithStatus(s types.InstalmentStatus) *instalmentBuilder {
-	b.i.InstalmentStatus = s
 	return b
 }
 

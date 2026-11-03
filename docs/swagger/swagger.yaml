@@ -1470,6 +1470,8 @@ definitions:
   BillingTermInput:
     properties:
       bill_on:
+        description: BillOn defaults to the commitment start, or on an edit to the
+          start of the billing period holding now.
         type: string
       bill_trigger:
         $ref: '#/definitions/types.InstalmentBillTrigger'
@@ -1489,6 +1491,8 @@ definitions:
       split:
         $ref: '#/definitions/types.BillingTermSplit'
       start_date:
+        description: StartDate defaults like BillOn; EndDate defaults to the commitment
+          end.
         type: string
       value:
         type: string
@@ -1508,17 +1512,6 @@ definitions:
         items:
           $ref: '#/definitions/billingterm.Instalment'
         type: array
-      invoices_to_review:
-        items:
-          type: string
-        type: array
-    type: object
-  BringForwardInstalmentsRequest:
-    properties:
-      amount:
-        type: string
-      bill_on:
-        type: string
     type: object
   BucketSummary:
     properties:
@@ -7425,28 +7418,6 @@ definitions:
         type: array
     required:
     - billing_terms
-    type: object
-  ReplanInstalmentInput:
-    properties:
-      amount:
-        type: string
-      bill_on:
-        type: string
-      bill_trigger:
-        $ref: '#/definitions/types.InstalmentBillTrigger'
-      invoice_label:
-        maxLength: 255
-        type: string
-    type: object
-  ReplanInstalmentsRequest:
-    properties:
-      instalments:
-        items:
-          $ref: '#/definitions/ReplanInstalmentInput'
-        minItems: 1
-        type: array
-    required:
-    - instalments
     type: object
   ReportCatalogEntry:
     properties:
@@ -18565,8 +18536,10 @@ paths:
       - Commitments
   /commitments/{id}/billing-terms:
     get:
-      description: Returns the commitment's current billing terms and the instalments
-        they produce. Cancelled instalments are listed by the instalments endpoint.
+      description: Returns the commitment's current billing terms with its scheduled
+        and invoiced instalments in billing order. Invoiced instalments may come from
+        terms an edit replaced. Cancelled instalments are listed by the instalments
+        endpoint.
       operationId: getCommitmentBillingTerms
       parameters:
       - description: Commitment ID
@@ -18603,10 +18576,12 @@ paths:
       consumes:
       - application/json
       description: Replaces the whole set of billing terms of an active commitment.
-        Every current instalment is cancelled, including invoiced ones, and the new
-        terms generate fresh instalments against the unchanged total. Invoices are
-        not touched; invoices_to_review lists the finalized invoices that carry a
-        replaced instalment.
+        Its scheduled instalments are cancelled and the new terms generate instalments
+        for what the invoiced ones leave of the commitment total; invoiced instalments
+        and their invoices are kept. A term without bill_on or start_date starts at
+        the billing period holding now, or at the commitment start once its term has
+        ended. Returns the new terms with the scheduled and invoiced instalments in
+        billing order.
       operationId: replaceCommitmentBillingTerms
       parameters:
       - description: Commitment ID
@@ -18649,8 +18624,8 @@ paths:
       consumes:
       - application/json
       description: 'Returns what editing the billing terms would produce, without
-        saving anything: the resolved terms, the new instalments and the invoices
-        to review.'
+        saving anything: the new terms with the invoiced and new instalments in billing
+        order.'
       operationId: previewCommitmentBillingTerms
       parameters:
       - description: Commitment ID
@@ -18732,51 +18707,6 @@ paths:
       tags:
       - Commitments
       x-scope: read
-    put:
-      consumes:
-      - application/json
-      description: Replaces every scheduled instalment of an active commitment with
-        the given list. Invoiced instalments are untouched, so the new instalments
-        must add up to what they leave of the commitment total. A manual instalment
-        takes no bill_on and waits at the end of the commitment term until it is triggered.
-        Returns the resulting scheduled and invoiced instalments in billing order.
-      operationId: replanCommitmentInstalments
-      parameters:
-      - description: Commitment ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Instalments
-        in: body
-        name: instalments
-        required: true
-        schema:
-          $ref: '#/definitions/ReplanInstalmentsRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/ListInstalmentsResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "404":
-          description: Resource not found
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Re-plan instalments
-      tags:
-      - Commitments
   /commitments/{id}/instalments/{instalment_id}/trigger:
     post:
       consumes:
@@ -18787,7 +18717,7 @@ paths:
         once due when the commitment's instalment_invoicing is separate_invoice. Either
         way it waits while the subscription is trialing or paused. Until it is triggered,
         a manual instalment waits at the end of the term, and bill_on can only move
-        earlier; re-plan the instalments to bill it later.
+        earlier; edit the billing terms to bill it later.
       operationId: triggerCommitmentInstalment
       parameters:
       - description: Commitment ID
@@ -18827,52 +18757,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Trigger instalment
-      tags:
-      - Commitments
-  /commitments/{id}/instalments/bring-forward:
-    post:
-      consumes:
-      - application/json
-      description: Adds one instalment of the given amount, billed now unless bill_on
-        is set, and takes the same amount off the earliest scheduled instalments.
-        Instalments that reach zero are cancelled, so the commitment total does not
-        change. Returns the resulting scheduled and invoiced instalments in billing
-        order.
-      operationId: bringForwardCommitmentInstalments
-      parameters:
-      - description: Commitment ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Amount to bring forward
-        in: body
-        name: bring_forward
-        required: true
-        schema:
-          $ref: '#/definitions/BringForwardInstalmentsRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/ListInstalmentsResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "404":
-          description: Resource not found
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Bring instalments forward
       tags:
       - Commitments
   /commitments/{id}/terminate:

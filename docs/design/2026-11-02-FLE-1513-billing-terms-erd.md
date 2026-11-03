@@ -12,8 +12,8 @@
 - **Billing terms say how a commitment's value is collected:** when, how much, and on which invoice.
 - **Terms expand into instalments.** An instalment is one dated amount. The instalments of a commitment always add up to its value.
 - **Instalments are billed on the subscription invoice** (default) **or on their own invoice** on the exact date.
-- **Terms can be edited** when they were set up wrong. An edit replaces the whole set of terms and regenerates the instalments. Invoices already issued are left alone and listed so the tenant can void them.
-- **A deal can be renegotiated** without an edit: bring payments forward, re-plan unbilled instalments, or trigger a milestone.
+- **Terms can be edited.** An edit replaces the whole set of terms and regenerates the instalments not yet billed. Invoiced instalments and their invoices are kept.
+- **A milestone is billed when it is triggered.**
 - **Every instalment invoice line points back** to its instalment, and from there to its term and commitment.
 - **Early termination never refunds automatically.** It cancels what hasn't been billed, bills anything earned but not yet billed, and adds an optional cancellation fee.
 
@@ -36,10 +36,10 @@ This document keeps the ERD's model where it worked and simplifies the rest.
 - Create a commitment with `collection_method = billing_terms`, directly or inline on subscription create, with a preview before anything is saved.
 - Edit the terms of an active commitment, with a preview of the edit.
 - Deliver instalments on the subscription invoice or on separate invoices.
-- Bring forward, re-plan and trigger instalments.
+- Trigger manual instalments.
 - Terminate early: cancel unbilled instalments, settle earned-but-unbilled money, bill an optional flat cancellation fee.
 - Show where every instalment invoice line came from.
-- Cover scenarios A2–A7, A14–A17 and B1–B8 of the [scenarios doc](./2026-10-07-FLE-1513-commitments-scenarios.md), with the changes listed in §15.
+- Cover scenarios A2–A7, A14–A17, B1–B4, B7 and B8 of the [scenarios doc](./2026-10-07-FLE-1513-commitments-scenarios.md), with the changes listed in §15.
 
 **Non-goals**
 
@@ -49,6 +49,7 @@ This document keeps the ERD's model where it worked and simplifies the rest.
 - Future-dated termination. `effective_at` stays in the API; a future value is rejected as not supported yet.
 - The ERD's `credit_note` and `bill_remaining` termination rules. `on_early_termination` stays unexposed.
 - Presets (`upfront`, `partial_upfront`, `spread`). Plain rows cover the same cases.
+- Re-plan and bring forward (scenarios B5 and B6). An edit covers both; such flows can be added when a need shows up.
 - The "covered by instalment" display on usage lines (ERD D13).
 - Analytics, utilisation, cost explorer and revenue recognition (billed / earned / deferred).
 - Billing terms on open-ended commitments. They have no finite value to split.
@@ -90,9 +91,9 @@ Do not use: rule, schedule item, occurrence, claim (as a noun), budget, principa
 | BT6 | A term's `value_type` is `fixed` or `remainder`; `percentage` is reserved and rejected as not supported yet. A fixed term's `value` is money; on a recurring term it is per instalment. At most one term is the remainder. | Stored terms are plain money. One `value` column read by `value_type` lets percentage terms arrive later without a schema change. |
 | BT7 | While the commitment is active, its instalments that are not cancelled add up to `total_amount` exactly. In a remainder term, the last instalment absorbs rounding. | Everything adds up to the contract value. |
 | BT8 | Instalments are billed when `bill_on` is reached. A milestone instalment (`bill_trigger = manual`) is stored with `bill_on = end_date` until triggered; triggering moves `bill_on`. | One due rule for every instalment. "Billed at term end if never triggered" needs no extra code. |
-| BT9 | An edit replaces the whole set of terms. Old terms are archived. Every instalment of the commitment is cancelled, including invoiced ones, and the new terms generate fresh instalments. Invoices are not touched. The response lists live invoices that carry replaced instalments. Voiding them is the tenant's call. | Edits fix mistakes, so they start over. Terms are linked through the remainder, so one term can't change on its own. |
-| BT10 | Bring forward, re-plan and trigger work on scheduled instalments only and keep BT7. Re-planned instalments and the brought-forward instalment have no `billing_term_id`; the replacement bring forward creates for a partly reduced instalment keeps the original's. | Renegotiation keeps invoiced history intact. |
-| BT11 | An instalment is claimed when the invoice carrying it is **finalized**: one conditional update (`scheduled` → `invoiced`, setting `invoice_id`) in the finalize transaction. Computing a draft never claims; finalizing claims. If a subscription draft carries instalments that are no longer `scheduled`, finalization recomputes it once and finalizes again; a manually edited draft fails and asks for a recompute. Voiding the invoice reschedules its `invoiced` instalments (back to `scheduled`), so they land on the recalculated replacement or the next invoice. Cancelled instalments stay cancelled. Voiding never forgives commitment money; forgiving it is a credit note. | The current period's draft is recomputed daily and mid-period, so claiming on compute would lock instalments before they are due and make edits, re-plans and terminations depend on when a background compute ran. "Billed" means on a finalized invoice, nothing else. |
+| BT9 | An edit replaces the whole set of terms. Old terms are archived. The scheduled instalments are cancelled and the new terms generate instalments for what the invoiced ones leave of `total_amount`. Invoiced instalments and their invoices are never touched. New terms without dates start at the billing period holding the edit. | Billed history stays as it is. Terms are linked through the remainder, so one term can't change on its own. An edit plans from now, so a term left undated doesn't land its instalments in the past. |
+| BT10 | Edit and trigger change scheduled instalments only and keep BT7. | Invoiced history stays intact. |
+| BT11 | An instalment is claimed when the invoice carrying it is **finalized**: one conditional update (`scheduled` → `invoiced`, setting `invoice_id`) in the finalize transaction. Computing a draft never claims; finalizing claims. If a subscription draft carries instalments that are no longer `scheduled`, finalization recomputes it once and finalizes again; a manually edited draft fails and asks for a recompute. Voiding the invoice reschedules its `invoiced` instalments (back to `scheduled`), so they land on the recalculated replacement or the next invoice. Cancelled instalments stay cancelled. Voiding never forgives commitment money; forgiving it is a credit note. | The current period's draft is recomputed daily and mid-period, so claiming on compute would lock instalments before they are due and make edits and terminations depend on when a background compute ran. "Billed" means on a finalized invoice, nothing else. |
 | BT12 | Under `billing_terms`, usage within the commitment is billed at $0 and there is no true-up. Overage is billed as usual. | The commitment's money is collected only through instalments. Skipping only the true-up would collect twice. |
 | BT13 | Termination cancels scheduled instalments. If earned is more than billed, a settlement instalment bills the difference. Nothing is refunded. A cancellation fee is billed as it is today. | Earned money is never left unbilled, and refunds stay a deliberate tenant action. |
 | BT14 | `cancellation_fee` becomes `{type, value}`, with `type` `fixed` or `percentage`; `type` says how to read `value`, as on a term. Only `fixed` is accepted today. | Leaves room for percentage fees without another API change. |
@@ -125,8 +126,8 @@ Both new tables use `BaseMixin` and `EnvironmentMixin`. Every query filters on `
 | `value_type` | varchar(20) | no | all | `fixed` or `remainder` |
 | `value` | numeric(20,8) | yes | all | Read by `value_type`. Fixed, once: the instalment's amount. Fixed, recurring: the amount per instalment. NULL for remainder. |
 | `bill_trigger` | varchar(20) | yes | once | `date` (default) or `manual` (a milestone, BT8) |
-| `bill_on` | timestamptz | yes | once | Billing date within `[start_date, end_date]`. Default `start_date`. NULL when `manual`. |
-| `start_date`, `end_date` | timestamptz | yes | recurring | First step's start and last step's end. Default: the term. |
+| `bill_on` | timestamptz | yes | once | Billing date within `[start_date, end_date]`. Default: the term start (BT9 on an edit). NULL when `manual`. |
+| `start_date`, `end_date` | timestamptz | yes | recurring | First step's start and last step's end. Default: the term start (BT9 on an edit) and the term end. |
 | `period_count` | int | yes | recurring | Commitment periods per step. Default 1. |
 | `invoice_cadence` | varchar(20) | yes | recurring | `ADVANCE` (bill at step start) or `ARREAR` (bill at step end). Reuses `types.InvoiceCadence`. |
 | `split` | varchar(20) | yes | recurring remainder | `even` (default) or `proportional` (each instalment matches its step's period amounts) |
@@ -143,7 +144,7 @@ Both new tables use `BaseMixin` and `EnvironmentMixin`. Every query filters on `
 | --- | --- | --- | --- |
 | `id` | varchar(50) | no | `binst_…`, time-sortable. Instalments are ordered by `bill_on`, then `id`. |
 | `owner_type`, `owner_id` | varchar | no | The commitment |
-| `billing_term_id` | varchar(50) | yes | The term that produced it. NULL for settlements, re-planned instalments and the brought-forward instalment. A bring-forward replacement keeps the original's. |
+| `billing_term_id` | varchar(50) | yes | The term that produced it. NULL for settlements. |
 | `customer_id` | varchar(50) | no | Copied from the commitment |
 | `subscription_id` | varchar(50) | yes | Copied from the owner, for lookups. NULL for an owner billed without a subscription. |
 | `currency` | varchar(10) | no | Copied from the commitment |
@@ -156,7 +157,7 @@ Both new tables use `BaseMixin` and `EnvironmentMixin`. Every query filters on `
 | `service_period_start`, `service_period_end` | timestamptz | no | What it pays for: the step, the whole term for a once term, or for a settlement the term up to termination. Used for the invoice line period. |
 | `delivery` | varchar(30) | no | `subscription_invoice` or `separate_invoice`, copied from `commitments.instalment_invoicing` |
 | `instalment_status` | varchar(20) | no | `scheduled`, `invoiced` or `cancelled` |
-| `invoice_id` | varchar(50) | yes | The finalized invoice that billed it. Kept when an edit cancels it, so the edit can list that invoice. |
+| `invoice_id` | varchar(50) | yes | The finalized invoice that billed it. Cleared when that invoice is voided. |
 | `metadata` | jsonb | yes | Free-form |
 
 **Indexes**
@@ -185,8 +186,10 @@ Both new tables use `BaseMixin` and `EnvironmentMixin`. Every query filters on `
 | --- | --- | --- |
 | `value_type`, `value` | required (no value for remainder) | required (no value for remainder) |
 | `bill_trigger` | optional, default `date` | not allowed |
-| `bill_on` | optional, default `start_date`; absent when `manual` | not allowed |
+| `bill_on` | optional, default the term start; absent when `manual` | not allowed |
 | `start_date`, `end_date` | not allowed | optional, default the term |
+
+On an edit, "the term start" is the start of the billing period holding now, or the commitment start once the term has ended (BT9). Earlier dates can still be given explicitly.
 | `period_count` | not allowed | optional, default 1 |
 | `invoice_cadence` | not allowed | required |
 | `split` | not allowed | remainder only, default `even` |
@@ -243,7 +246,7 @@ Inputs: the terms, `total_amount`, the commitment periods with their period amou
 **Subscription invoice** (default)
 
 - Whenever the subscription invoice for boundary *b* is computed (including the daily draft computes), it includes the subscription's instalments with `delivery = subscription_invoice`, status `scheduled` and `bill_on` ≤ *b*. Each becomes a fixed line: no price, `commitment_id`, `billing_instalment_id`, the commitment's `invoice_label` followed by the instalment's, the commitment's `invoice_description`, the instalment's service period.
-- Computing never claims. Finalizing claims (BT11). If a subscription draft carries instalments that are no longer `scheduled` (cancelled, re-planned or billed by another draft since it was computed), finalization recomputes it once and finalizes again, so they drop out on their own. A manually edited draft fails and asks for a recompute.
+- Computing never claims. Finalizing claims (BT11). If a subscription draft carries instalments that are no longer `scheduled` (cancelled by an edit or termination, or billed by another draft since it was computed), finalization recomputes it once and finalizes again, so they drop out on their own. A manually edited draft fails and asks for a recompute.
 - An advance step lands on the invoice that opens it, an arrear step on the invoice that closes it, and a once instalment dated mid-period on the next boundary's invoice. Instalments dated in the past (after an edit or a late trigger) land on the next invoice.
 - The trial-start invoice carries no instalments. Paused periods are never computed. In both cases due instalments land on the first invoice after the trial or pause, because they are still `scheduled` with `bill_on` ≤ *b* (BT16).
 
@@ -254,6 +257,8 @@ Inputs: the terms, `total_amount`, the commitment periods with their period amou
 
 **Void.** Voiding an invoice returns its `invoiced` instalments to `scheduled` and clears `invoice_id`, in the void transaction. The existing recalculate action then re-bills them on the replacement invoice. Cancelled instalments stay cancelled.
 
+**Re-billing in full.** To plan the whole `total_amount` again, void the invoices that carry instalments, then edit the terms: the voided instalments are scheduled again, so the edit replaces them. A replacement draft that still carries them recomputes when finalized (BT11). An invoice that should stay valid is corrected with a credit note instead, and the instalments it billed stay invoiced.
+
 **Previews and dry runs** list due instalments without claiming them.
 
 ## 8. Changing a plan
@@ -262,11 +267,9 @@ Every operation locks the commitment row and runs in one transaction. All of the
 
 | Operation | API | Behaviour | Rules |
 | --- | --- | --- | --- |
-| Edit | `PUT /v1/commitments/{id}/billing-terms` | Archives the current terms, saves the new ones, cancels every instalment of the commitment, and expands the new terms against the unchanged `total_amount` (BT9). | §6.2. Returns the new terms, the new instalments and `invoices_to_review`: finalized, non-voided invoices that carry a replaced instalment. Drafts need no review; their next compute picks up the new instalments. |
+| Edit | `PUT /v1/commitments/{id}/billing-terms` | Cancels the scheduled instalments, archives the current terms, saves the new ones and expands them against what the invoiced instalments leave of `total_amount` (BT9). Undated terms start at the billing period holding now (§6.1). New instalments are numbered after the invoiced ones. | §6.2, with the remainder in place of `total_amount`; a fully invoiced commitment can't be edited. Cancelling comes first, so an instalment a finalize claims meanwhile counts as invoiced. Returns the new terms with the scheduled and invoiced instalments. Drafts carrying a cancelled instalment recompute when finalized (BT11). |
 | Preview edit | `POST /v1/commitments/{id}/billing-terms/preview` | Same as edit without saving. | Same response. |
-| Re-plan | `PUT /v1/commitments/{id}/instalments` | Replaces every scheduled instalment with the given list. The default label numbers the new instalments among the invoiced ones they join. | Each amount > 0, each `bill_on` within the term (or `manual`); invoiced + new = `total_amount`. |
-| Bring forward | `POST /v1/commitments/{id}/instalments/bring-forward` `{amount, bill_on?}` | Adds one instalment of `amount` (default `bill_on` now) and takes the same total off the earliest scheduled instalments. Every instalment it reduces is cancelled, and one only partly reduced is replaced by a new instalment for what is left, with the same date, service period and `billing_term_id`. Amounts never change in place, so a draft that still carries a cancelled instalment is recomputed when it is finalized (BT11). | 0 < amount ≤ sum of scheduled; `bill_on` within the term. |
-| Trigger | `POST /v1/commitments/{id}/instalments/{instalment_id}/trigger` `{bill_on?}` | Sets `bill_on` (default now) and `triggered_at` on a manual instalment. | The instalment is manual and scheduled; `bill_on` within the term and not after its current `bill_on`, since a draft may already carry it there. Billing it later is a re-plan. |
+| Trigger | `POST /v1/commitments/{id}/instalments/{instalment_id}/trigger` `{bill_on?}` | Sets `bill_on` (default now) and `triggered_at` on a manual instalment. | The instalment is manual and scheduled; `bill_on` within the term and not after its current `bill_on`, since a draft may already carry it there. Billing it later is an edit. |
 
 ## 9. Termination
 
@@ -313,8 +316,6 @@ A void after termination still returns the instalment to `scheduled` (BT11), so 
 | PUT | `/v1/commitments/{id}/billing-terms` | Edit (§8) |
 | POST | `/v1/commitments/{id}/billing-terms/preview` | Preview an edit |
 | GET | `/v1/commitments/{id}/instalments` | Instalments, filterable by status |
-| PUT | `/v1/commitments/{id}/instalments` | Re-plan |
-| POST | `/v1/commitments/{id}/instalments/bring-forward` | Bring forward |
 | POST | `/v1/commitments/{id}/instalments/{instalment_id}/trigger` | Trigger |
 | POST | `/v1/commitments/{id}/terminate` | `cancellation_fee` object (BT14); a future `effective_at` is rejected (BT15) |
 
@@ -354,9 +355,9 @@ The second form is rejected until percentage fees are built. What the percentage
 | --- | --- | --- |
 | `billing_terms.created` | Terms are saved with a new commitment | Owner type and id, the current terms |
 | `billing_terms.updated` | An edit replaces the terms | Same |
-| `billing_instalment.created` | An instalment is added: expansion on create or edit, re-plan, bring forward, settlement | The instalment |
+| `billing_instalment.created` | An instalment is added: expansion on create or edit, settlement | The instalment |
 | `billing_instalment.updated` | A trigger changes its date, or a void reschedules it | The instalment |
-| `billing_instalment.cancelled` | An edit, re-plan, bring forward or termination cancels it | The instalment |
+| `billing_instalment.cancelled` | An edit or termination cancels it | The instalment |
 | `billing_instalment.invoiced` | The invoice carrying it is finalized | The instalment, with `invoice_id` |
 
 Events are listed in `cmd/migrate/data.json`, built by payload builders registered in `internal/webhook/payload/factory.go`, and published post-commit like `commitment.*` events.
@@ -372,7 +373,7 @@ Events are listed in `cmd/migrate/data.json`, built by payload builders register
 | `internal/domain/commitment/` | `*Commitment` implements `billingterm.Owner` |
 | `internal/repository/ent/billing_term.go`, `billing_instalment.go` | Repositories |
 | `internal/webhook/payload/`, `internal/webhook/dto/` | Billing terms and instalment payload builders and DTOs |
-| `internal/ee/service/commitment_billing_terms.go` | Create, edit, re-plan, bring forward, trigger and termination, as commitment service methods |
+| `internal/ee/service/commitment_billing_terms.go` | Create, edit, trigger and termination, as commitment service methods |
 | `internal/ee/service/billing.go` | One step that turns due instalments into invoice line requests |
 | `internal/ee/service/invoice.go` | Claim at finalization (recovering a stale draft once), reschedule on void |
 | `internal/temporal/workflows/cron/` | The separate-invoice workflow |
@@ -401,14 +402,14 @@ A suggested stack of small PRs, each reviewable on its own:
 2. Pure validation and expansion, with table tests for every example in §6.3.
 3. Commitment create, preview and edit with billing terms; $0 within-commitment lines and no true-up.
 4. Delivery: the subscription invoice step, claiming, void release, draft recompute; the separate-invoice workflow.
-5. Re-plan, bring forward and trigger.
+5. Trigger.
 6. Termination and the cancellation fee shape.
 
 ## 14. Tests
 
 - **Expansion** (pure, table-driven): every example in §6.3 to the cent, plus every rule in §6.2.
 - **Delivery** (real database): advance and arrear landing, a mid-period once instalment, a past-dated instalment, a daily draft compute that claims nothing, a claim retried after commit, a void then recalculate, a stale draft that finalization recomputes once, two catch-up drafts that share an instalment, a manually edited stale draft that fails.
-- **Plan changes:** an edit with and without invoiced instalments (and the `invoices_to_review` list), re-plan, bring forward that cancels instalments, trigger.
+- **Plan changes:** an edit with and without invoiced instalments, an instalment claimed while an edit runs, a fully invoiced commitment, trigger.
 - **Termination:** each row of the §9 table, a void after termination, a percentage fee rejected, a future `effective_at` rejected, a subscription cancelled immediately.
 - **Trial and pause:** an upfront instalment on a trialing subscription lands on the trial-end invoice; an instalment due during a pause lands on the first invoice after resume; the separate-invoice job skips both.
 - **End to end**, extending `commitment_e2e_test.go`: A2, A3, A4, A6, A7 and B1 with exact invoice totals.
@@ -418,7 +419,8 @@ A suggested stack of small PRs, each reviewable on its own:
 
 | Scenario | Status |
 | --- | --- |
-| A2, A4, A5, A6, A14, A16, A17, B1–B8 | Covered as written, using `once` / `recurring` terms in place of presets |
+| A2, A4, A5, A6, A14, A16, A17, B1–B4, B7, B8 | Covered as written, using `once` / `recurring` terms in place of presets |
+| B5, B6 | Not in this release; an edit of the terms covers both |
 | A3 | Covered, without the "covered by" list on usage lines |
 | A7 | Covered with `period_count: 3` |
 | A15 | Only the default behaviour: settle earned-but-unbilled, never refund. `credit_note` and `bill_remaining` are not built. |
@@ -437,7 +439,6 @@ These were not discussed explicitly. Review them first.
 - Old terms are archived (not deleted) on edit, so invoiced instalments still point to the term that produced them.
 - Instalments are claimed at finalization, not at compute (BT11). Draft recompute recreates lines, so the line points to the instalment and the instalment records only `invoice_id`.
 - Milestones store `bill_on = end_date` until triggered (BT8) instead of a NULL date.
-- `invoices_to_review` lists only finalized invoices; drafts fix themselves on recompute.
 - A settlement always goes on its own one-off invoice with the cancellation fee, whatever the commitment's delivery. The subscription-invoice path can't carry it without changing subscription cancellation code.
 - A settlement and cancellation fee are billed at termination even while the subscription is trialing or paused, as the cancellation fee is today. Termination is an explicit action; BT16 covers only scheduled instalments.
 - `split` defaults to `even`; `invoice_cadence` is required on recurring terms and reuses the existing `ADVANCE` / `ARREAR` values.

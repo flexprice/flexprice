@@ -1,6 +1,8 @@
 package commitment
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -42,4 +44,8 @@ func (c *Commitment) CollectionPeriod() types.Period {
 
 func (c *Commitment) CollectionTotal() decimal.Decimal {
 	return lo.FromPtr(c.TotalAmount)
+}
+
+func (c *Commitment) TermStart() time.Time {
+	return c.StartDate
 }

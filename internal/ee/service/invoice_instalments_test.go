@@ -120,26 +120,6 @@ func (s *CommitmentE2ESuite) TestFinalize_EditedTermsRecomputeTheDraft() {
 	s.True(finalized.AmountDue.Equal(dec("550")), "500 up front and the first of ten 50 instalments, got %s", finalized.AmountDue)
 }
 
-// A re-plan after the draft was computed cancels the instalments it carries, so finalizing recomputes the draft with
-// the re-planned instalment that is due by its boundary.
-func (s *CommitmentE2ESuite) TestFinalize_ReplannedInstalmentsRecomputeTheDraft() {
-	ctx := s.GetContext()
-	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
-	draft, commitmentID := s.januaryDraft(invoices, "replanned")
-
-	plan, err := s.commitments.ReplanInstalments(ctx, commitmentID, dto.ReplanInstalmentsRequest{
-		Instalments: []dto.ReplanInstalmentInput{
-			{Amount: dec("400"), BillOn: lo.ToPtr(s.jan.AddDate(0, 0, 14))},
-			{Amount: dec("600"), BillOn: lo.ToPtr(s.jan.AddDate(0, 5, 0))},
-		},
-	})
-	s.Require().NoError(err)
-	s.Require().Len(plan.Items, 2)
-
-	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
-	s.requireBilledBy(draft.ID, []string{plan.Items[0].ID})
-}
-
 // A manually edited draft is never recomputed, so a stale instalment still fails its finalization.
 func (s *CommitmentE2ESuite) TestFinalize_ManuallyEditedStaleDraftFails() {
 	ctx := s.GetContext()
@@ -278,6 +258,7 @@ func (s *CommitmentE2ESuite) TestVoid_ReschedulesInstalments() {
 		s.Equal(replacement.ID, lo.FromPtr(inst.InvoiceID))
 	}
 
+	// An edit keeps invoiced instalments, so voiding their invoice still reschedules them.
 	_, err = s.commitments.ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
 	s.Require().NoError(err)
 
@@ -285,11 +266,13 @@ func (s *CommitmentE2ESuite) TestVoid_ReschedulesInstalments() {
 	_, err = invoices.VoidInvoice(ctx, replacement.ID, dto.InvoiceVoidRequest{})
 	s.Require().NoError(err)
 
-	for _, inst := range s.billedInstalments(replacement.ID) {
-		s.Equal(types.InstalmentStatusCancelled, inst.InstalmentStatus)
-		s.Equal(replacement.ID, lo.FromPtr(inst.InvoiceID))
+	for _, id := range instalmentIDs(rebilled) {
+		inst, err := s.GetStores().BillingInstalmentRepo.Get(ctx, id)
+		s.Require().NoError(err)
+		s.Equal(types.InstalmentStatusScheduled, inst.InstalmentStatus)
+		s.Nil(inst.InvoiceID)
 	}
-	s.Empty(s.instalmentEvents(types.WebhookEventBillingInstalmentUpdated))
+	s.ElementsMatch(instalmentIDs(rebilled), s.instalmentEvents(types.WebhookEventBillingInstalmentUpdated))
 }
 
 // A draft paid in full is finalized by the payment and claims its instalments.

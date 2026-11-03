@@ -242,7 +242,7 @@ func (h *CommitmentHandler) TerminateCommitment(c *gin.Context) {
 
 // @Summary Get billing terms
 // @ID getCommitmentBillingTerms
-// @Description Returns the commitment's current billing terms and the instalments they produce. Cancelled instalments are listed by the instalments endpoint.
+// @Description Returns the commitment's current billing terms with its scheduled and invoiced instalments in billing order. Invoiced instalments may come from terms an edit replaced. Cancelled instalments are listed by the instalments endpoint.
 // @Tags Commitments
 // @Produce json
 // @Security ApiKeyAuth
@@ -273,7 +273,7 @@ func (h *CommitmentHandler) GetBillingTerms(c *gin.Context) {
 
 // @Summary Edit billing terms
 // @ID replaceCommitmentBillingTerms
-// @Description Replaces the whole set of billing terms of an active commitment. Every current instalment is cancelled, including invoiced ones, and the new terms generate fresh instalments against the unchanged total. Invoices are not touched; invoices_to_review lists the finalized invoices that carry a replaced instalment.
+// @Description Replaces the whole set of billing terms of an active commitment. Its scheduled instalments are cancelled and the new terms generate instalments for what the invoiced ones leave of the commitment total; invoiced instalments and their invoices are kept. A term without bill_on or start_date starts at the billing period holding now, or at the commitment start once its term has ended. Returns the new terms with the scheduled and invoiced instalments in billing order.
 // @Tags Commitments
 // @Accept json
 // @Produce json
@@ -313,7 +313,7 @@ func (h *CommitmentHandler) ReplaceBillingTerms(c *gin.Context) {
 
 // @Summary Preview billing terms edit
 // @ID previewCommitmentBillingTerms
-// @Description Returns what editing the billing terms would produce, without saving anything: the resolved terms, the new instalments and the invoices to review.
+// @Description Returns what editing the billing terms would produce, without saving anything: the new terms with the invoiced and new instalments in billing order.
 // @Tags Commitments
 // @Accept json
 // @Produce json
@@ -401,89 +401,9 @@ func (h *CommitmentHandler) ListInstalments(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Re-plan instalments
-// @ID replanCommitmentInstalments
-// @Description Replaces every scheduled instalment of an active commitment with the given list. Invoiced instalments are untouched, so the new instalments must add up to what they leave of the commitment total. A manual instalment takes no bill_on and waits at the end of the commitment term until it is triggered. Returns the resulting scheduled and invoiced instalments in billing order.
-// @Tags Commitments
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Commitment ID"
-// @Param instalments body dto.ReplanInstalmentsRequest true "Instalments"
-// @Success 200 {object} dto.ListInstalmentsResponse
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
-// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /commitments/{id}/instalments [put]
-func (h *CommitmentHandler) ReplanInstalments(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.Error(ierr.NewError("commitment ID is required").
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	var req dto.ReplanInstalmentsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	resp, err := h.commitmentService.ReplanInstalments(c.Request.Context(), id, req)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
-}
-
-// @Summary Bring instalments forward
-// @ID bringForwardCommitmentInstalments
-// @Description Adds one instalment of the given amount, billed now unless bill_on is set, and takes the same amount off the earliest scheduled instalments. Instalments that reach zero are cancelled, so the commitment total does not change. Returns the resulting scheduled and invoiced instalments in billing order.
-// @Tags Commitments
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Commitment ID"
-// @Param bring_forward body dto.BringForwardInstalmentsRequest true "Amount to bring forward"
-// @Success 200 {object} dto.ListInstalmentsResponse
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
-// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /commitments/{id}/instalments/bring-forward [post]
-func (h *CommitmentHandler) BringForwardInstalments(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.Error(ierr.NewError("commitment ID is required").
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	var req dto.BringForwardInstalmentsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	resp, err := h.commitmentService.BringForwardInstalments(c.Request.Context(), id, req)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
-}
-
 // @Summary Trigger instalment
 // @ID triggerCommitmentInstalment
-// @Description Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; re-plan the instalments to bill it later.
+// @Description Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; edit the billing terms to bill it later.
 // @Tags Commitments
 // @Accept json
 // @Produce json
