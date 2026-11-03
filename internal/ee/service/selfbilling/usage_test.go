@@ -112,7 +112,7 @@ func TestPushUsage_Events(t *testing.T) {
 			properties: map[string]string{
 				"count":            "42",
 				"environment_id":   "env_1",
-				"environment_type": "PRODUCTION",
+				"environment_type": "production",
 				"region":           "us",
 			},
 		},
@@ -133,7 +133,7 @@ func TestPushUsage_Events(t *testing.T) {
 				"invoice_count":                 "2",
 				"currency":                      "USD",
 				"environment_id":                "env_1",
-				"environment_type":              "PRODUCTION",
+				"environment_type":              "production",
 				"region":                        "us",
 			},
 		},
@@ -149,9 +149,9 @@ func TestPushUsage_EnvironmentType(t *testing.T) {
 		envType types.EnvironmentType
 		want    string
 	}{
-		{"production_env", types.EnvironmentProduction, "PRODUCTION"},
-		{"development_env_is_sandbox", types.EnvironmentDevelopment, "SANDBOX"},
-		{"unknown_env_billed_as_production", "", "PRODUCTION"},
+		{"production_env", types.EnvironmentProduction, "production"},
+		{"development_env", types.EnvironmentDevelopment, "development"},
+		{"unknown_env_billed_as_production", "", "production"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
