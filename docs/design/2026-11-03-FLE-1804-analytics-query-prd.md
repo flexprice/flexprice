@@ -273,19 +273,7 @@ rows and daily totals across all rows (app spend also counts distinct owners and
 4. Number of line windows doesn't limit the approach: 7,500 daily windows run in ~22 s on 30M events.
 5. Wide JSON doubles the cost; 100M events per request is beyond a dashboard and needs the v2 rollup.
 
-## 9. Open for review
-
-1. **Target for the full dashboard at 10M events.** ~5–7 s today. Two planned improvements: fold the chart's
-   all-rows totals into the rank pass and merge the page detail into one pass (expected ~3–4 s), and run the
-   quantity and peak passes in parallel (~0.5–1 s).
-2. **Open-period true-up.** Shown as billing's current value (like the invoice preview), so a dashboard early in
-   the month shows the full current shortfall. Alternative: keep it out of cost while the period is open.
-3. **Coupon visibility.** Rows carry the discount amount, not which coupons applied. Add `coupon_ids` if needed.
-4. **v2 trigger.** Build the hourly rollup when customers regularly scan ~30M+ events per request.
-5. **App-spend dashboards:** confirm events carry `app`, `owner`, `team`, `type`, `model`, and whether values are IDs
-   or display names (search matches the raw value).
-
-## 10. What's next — v2: hourly rollup
+## 9. What's next — v2: hourly rollup
 
 **When:** a customer's requests regularly scan ~30M+ events, or many people view the dashboard.
 
@@ -303,7 +291,7 @@ Queries read the rollup for closed hours and raw events only for the current hou
 Dropped: storing breakdown keys as typed columns — every customer has different properties.
 Later, separate design: tenant-wide breakdowns across all customers.
 
-## 11. Decisions
+## 10. Decisions
 
 - Pricing stays in the app at line level, using the invoice calculation for every billing period in the range;
   per-row math, sort and paging run in ClickHouse.
