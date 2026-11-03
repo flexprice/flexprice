@@ -655,11 +655,6 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 		}
 	}
 
-	if err := h.walletService.FillBillingEntityIDs(c.Request.Context(), items); err != nil {
-		c.Error(err)
-		return
-	}
-
 	response := &types.ListResponse[*dto.WalletResponse]{
 		Items:      items,
 		Pagination: resp.Pagination,
@@ -729,11 +724,6 @@ func (h *WalletHandler) QueryWallets(c *gin.Context) {
 				items[i].CreditsAvailableBreakdown = breakdown
 			}
 		}
-	}
-
-	if err := h.walletService.FillBillingEntityIDs(c.Request.Context(), items); err != nil {
-		c.Error(err)
-		return
 	}
 
 	response := &types.ListResponse[*dto.WalletResponse]{

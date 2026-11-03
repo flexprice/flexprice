@@ -18,7 +18,6 @@ type CreditNote struct {
 	CreditNoteNumber string                 `json:"credit_note_number,omitempty"`
 	InvoiceID        string                 `json:"invoice_id"`
 	CustomerID       string                 `json:"customer_id"`
-	BillingEntityID  *string                `json:"billing_entity_id"`
 	SubscriptionID   *string                `json:"subscription_id,omitempty"`
 	CreditNoteStatus types.CreditNoteStatus `json:"credit_note_status"`
 	CreditNoteType   types.CreditNoteType   `json:"credit_note_type"`
@@ -36,7 +35,6 @@ func NewCreditNote(resp *dto.CreditNoteResponse) *CreditNote {
 		return nil
 	}
 	return &CreditNote{
-		BillingEntityID:  resp.BillingEntityID,
 		ID:               resp.ID,
 		CreditNoteNumber: resp.CreditNoteNumber,
 		InvoiceID:        resp.InvoiceID,

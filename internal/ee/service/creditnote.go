@@ -402,16 +402,12 @@ func (s *creditNoteService) GetCreditNote(ctx context.Context, id string) (*dto.
 		customerData = customerResp.Customer
 	}
 
-	resp := &dto.CreditNoteResponse{
+	return &dto.CreditNoteResponse{
 		CreditNote:   cn,
 		Invoice:      invoiceResponse,
 		Subscription: subscription,
 		Customer:     customerData,
-	}
-	if err := fillCreditNoteBillingEntityIDs(ctx, s.ServiceParams, resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
+	}, nil
 }
 
 func (s *creditNoteService) ListCreditNotes(ctx context.Context, filter *types.CreditNoteFilter) (*dto.ListCreditNotesResponse, error) {
@@ -572,10 +568,6 @@ func (s *creditNoteService) ListCreditNotes(ctx context.Context, filter *types.C
 	}
 
 	response.Pagination = types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset())
-
-	if err := fillCreditNoteBillingEntityIDs(ctx, s.ServiceParams, response.Items...); err != nil {
-		return nil, err
-	}
 
 	return response, nil
 }

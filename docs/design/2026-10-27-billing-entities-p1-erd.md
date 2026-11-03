@@ -69,7 +69,7 @@ online payment, and is not synced to any integration; it is recorded as paid man
 **UC5 — API client reads billing records by entity.**
 1. Client lists customers, invoices, subscriptions, wallets, credit notes, payments or refunds,
    optionally filtered by one entity.
-2. Every returned record, and every outbound webhook for it, shows the entity it belongs to.
+2. Every returned customer and invoice, and every outbound webhook for one, shows the entity it belongs to.
 
 Variation: the environment is off → the filter is rejected and records show no entity.
 
@@ -137,7 +137,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 | FR-20 | Invoices of a non-default entity's customers are never auto-charged, never get checkout, payment links or saved payment methods, and their customers, invoices and subscriptions are never synced to integrations. | UC4 | Non-default customer with `charge_automatically` → invoice stays pending, no gateway call; checkout or payment method request → 400; no sync workflow started. |
 | FR-21 | Delegated and grouped invoices only combine customers of one entity. | UC4 | Set `invoicing_customer_id` to a customer of another entity → 400; grouped invoice across entities → 400. |
 | FR-22 | Lists and searches of customers, invoices, subscriptions, wallets, credit notes, payments and refunds accept an optional `billing_entity_id`; absent means all entities. | UC5 | Filter by entity → only that entity's records; no filter → all. |
-| FR-23 | Customers, invoices, subscriptions, wallets, credit notes, payments and refunds carry `billing_entity_id` in Get, List and outbound webhook payloads. | UC5 | Each response and webhook shows the stored or derived entity; off environment → null. |
+| FR-23 | Customers and invoices carry `billing_entity_id` in Get, List and outbound webhook payloads. | UC5 | Each response and webhook shows the stored or derived entity; off environment → null. |
 | FR-24 | Get, update and delete by ID are not scoped by entity. | UC5 | Get a record of any entity by ID → returned with its entity. |
 
 ## 5. Non-functional requirements
@@ -346,7 +346,7 @@ and `entity_id` set to the entity.
 | Create customer | Optional `billing_entity_id` (FR-12, FR-15) |
 | Update customer | `billing_entity_id` not accepted (FR-13) |
 | List / search customers, invoices, subscriptions, wallets, credit notes, payments, refunds | Optional `billing_entity_id` filter (FR-22) |
-| Same resources: Get, List, outbound webhooks | `billing_entity_id` field (FR-23) |
+| Customers and invoices: Get, List, outbound webhooks | `billing_entity_id` field (FR-23) |
 | Update `invoice_config` setting | Prefix change rejected from `enabling` on (FR-11) |
 | Create, update or delete tenant-level tax association | Rejected from `enabling` on (FR-11) |
 | Update `tax_config` setting | External provider rejected from `enabling` on (FR-8) |
@@ -472,7 +472,7 @@ flowchart LR
 | Enable job | New Temporal workflow, one run per tenant and environment (§9.3) |
 | Integration event dispatcher | Skips customers, invoices and subscriptions of non-default entities |
 | Invoice payment attempt (auto-charge) | Skips invoices of non-default entities; invoice stays pending |
-| Outbound webhooks for customers, invoices, subscriptions, wallets, credit notes, payments, refunds | Payload gains `billing_entity_id` |
+| Outbound webhooks for customers and invoices | Payload gains `billing_entity_id` |
 | Inbound gateway webhooks | Unchanged; they only concern default-entity records |
 | Exports, scheduled tasks, usage processing | Unchanged |
 | Environment create and clone | A new environment starts off; clone from or into an enabling or enabled environment is rejected |

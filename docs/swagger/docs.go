@@ -23401,10 +23401,6 @@ const docTemplate = `{
         "CreditNoteResponse": {
             "type": "object",
             "properties": {
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
-                    "type": "string"
-                },
                 "created_at": {
                     "type": "string"
                 },
@@ -26876,10 +26872,6 @@ const docTemplate = `{
                         "$ref": "#/definitions/PaymentAttemptResponse"
                     }
                 },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
-                    "type": "string"
-                },
                 "created_at": {
                     "type": "string"
                 },
@@ -27624,10 +27616,6 @@ const docTemplate = `{
                 },
                 "attempt": {
                     "type": "integer"
-                },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
-                    "type": "string"
                 },
                 "cancelled_at": {
                     "type": "string"
@@ -30073,10 +30061,6 @@ const docTemplate = `{
                         }
                     ]
                 },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
-                    "type": "string"
-                },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
@@ -30340,10 +30324,6 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.BillingCycle"
                         }
                     ]
-                },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
-                    "type": "string"
                 },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
@@ -32773,10 +32753,6 @@ const docTemplate = `{
                 "balance_updated_at": {
                     "type": "string"
                 },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the wallet's customer; set on customer wallet lists in environments with billing entities",
-                    "type": "string"
-                },
                 "config": {
                     "$ref": "#/definitions/types.WalletConfig"
                 },
@@ -32870,10 +32846,6 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.AutoTopup"
                 },
                 "balance": {
-                    "type": "string"
-                },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
                 },
                 "config": {
@@ -40348,9 +40320,6 @@ const docTemplate = `{
         "webhookDto.CreditNote": {
             "type": "object",
             "properties": {
-                "billing_entity_id": {
-                    "type": "string"
-                },
                 "credit_note_number": {
                     "type": "string"
                 },
@@ -40837,9 +40806,6 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
-                "billing_entity_id": {
-                    "type": "string"
-                },
                 "currency": {
                     "type": "string"
                 },
@@ -41055,9 +41021,6 @@ const docTemplate = `{
                 "attempt": {
                     "type": "integer"
                 },
-                "billing_entity_id": {
-                    "type": "string"
-                },
                 "credit_note_id": {
                     "type": "string"
                 },
@@ -41194,9 +41157,6 @@ const docTemplate = `{
             "properties": {
                 "billing_cadence": {
                     "$ref": "#/definitions/types.BillingCadence"
-                },
-                "billing_entity_id": {
-                    "type": "string"
                 },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
@@ -41507,9 +41467,6 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "balance": {
-                    "type": "string"
-                },
-                "billing_entity_id": {
                     "type": "string"
                 },
                 "conversion_rate": {

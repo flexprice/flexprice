@@ -26212,10 +26212,6 @@
       "CreditNoteResponse": {
         "type": "object",
         "properties": {
-          "billing_entity_id": {
-            "type": "string",
-            "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities"
-          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -29585,10 +29581,6 @@
               "$ref": "#/components/schemas/PaymentAttemptResponse"
             }
           },
-          "billing_entity_id": {
-            "type": "string",
-            "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities"
-          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -30338,10 +30330,6 @@
           },
           "attempt": {
             "type": "integer"
-          },
-          "billing_entity_id": {
-            "type": "string",
-            "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities"
           },
           "cancelled_at": {
             "type": "string",
@@ -32581,10 +32569,6 @@
           "billing_cycle": {
             "$ref": "#/components/schemas/types.BillingCycle"
           },
-          "billing_entity_id": {
-            "type": "string",
-            "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities"
-          },
           "billing_period": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
@@ -32828,10 +32812,6 @@
           },
           "billing_cycle": {
             "$ref": "#/components/schemas/types.BillingCycle"
-          },
-          "billing_entity_id": {
-            "type": "string",
-            "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities"
           },
           "billing_period": {
             "$ref": "#/components/schemas/types.BillingPeriod"
@@ -35116,10 +35096,6 @@
             "type": "string",
             "format": "date-time"
           },
-          "billing_entity_id": {
-            "type": "string",
-            "description": "billing_entity_id is the billing entity of the wallet's customer; set on customer wallet lists in environments with billing entities"
-          },
           "config": {
             "$ref": "#/components/schemas/types.WalletConfig"
           },
@@ -35216,10 +35192,6 @@
           },
           "balance": {
             "type": "string"
-          },
-          "billing_entity_id": {
-            "type": "string",
-            "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities"
           },
           "config": {
             "$ref": "#/components/schemas/types.WalletConfig"
@@ -42847,9 +42819,6 @@
       "webhookDto.CreditNote": {
         "type": "object",
         "properties": {
-          "billing_entity_id": {
-            "type": "string"
-          },
           "credit_note_number": {
             "type": "string"
           },
@@ -43338,9 +43307,6 @@
           "amount": {
             "type": "string"
           },
-          "billing_entity_id": {
-            "type": "string"
-          },
           "currency": {
             "type": "string"
           },
@@ -43561,9 +43527,6 @@
           "attempt": {
             "type": "integer"
           },
-          "billing_entity_id": {
-            "type": "string"
-          },
           "credit_note_id": {
             "type": "string"
           },
@@ -43703,9 +43666,6 @@
         "properties": {
           "billing_cadence": {
             "$ref": "#/components/schemas/types.BillingCadence"
-          },
-          "billing_entity_id": {
-            "type": "string"
           },
           "billing_period": {
             "$ref": "#/components/schemas/types.BillingPeriod"
@@ -44009,9 +43969,6 @@
         "type": "object",
         "properties": {
           "balance": {
-            "type": "string"
-          },
-          "billing_entity_id": {
             "type": "string"
           },
           "conversion_rate": {

@@ -49,9 +49,6 @@ type Repository interface {
 	// The prefix is recorded on the period's counter row and printed in the number.
 	GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig, prefix string) (string, error)
 
-	// CustomerIDsByInvoiceIDs maps each found invoice ID to its customer ID.
-	CustomerIDsByInvoiceIDs(ctx context.Context, ids []string) (map[string]string, error)
-
 	// GetNextBillingSequence returns the next billing sequence number for a subscription
 	GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error)
 

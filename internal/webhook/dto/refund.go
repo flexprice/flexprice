@@ -16,7 +16,6 @@ type InternalRefundEvent struct {
 type Refund struct {
 	ID                  string                  `json:"id"`
 	InvoiceID           string                  `json:"invoice_id"`
-	BillingEntityID     *string                 `json:"billing_entity_id"`
 	PaymentID           *string                 `json:"payment_id,omitempty"`
 	CreditNoteID        *string                 `json:"credit_note_id,omitempty"`
 	Amount              decimal.Decimal         `json:"amount" swaggertype:"string"`
@@ -40,7 +39,6 @@ func NewRefund(resp *dto.RefundResponse) *Refund {
 		return nil
 	}
 	return &Refund{
-		BillingEntityID:     resp.BillingEntityID,
 		ID:                  resp.ID,
 		InvoiceID:           resp.InvoiceID,
 		PaymentID:           resp.PaymentID,

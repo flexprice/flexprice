@@ -23077,10 +23077,6 @@
         "CreditNoteResponse": {
             "type": "object",
             "properties": {
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
-                    "type": "string"
-                },
                 "created_at": {
                     "type": "string"
                 },
@@ -26408,10 +26404,6 @@
                         "$ref": "#/definitions/PaymentAttemptResponse"
                     }
                 },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
-                    "type": "string"
-                },
                 "created_at": {
                     "type": "string"
                 },
@@ -27140,10 +27132,6 @@
                 },
                 "attempt": {
                     "type": "integer"
-                },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
-                    "type": "string"
                 },
                 "cancelled_at": {
                     "type": "string"
@@ -29397,10 +29385,6 @@
                     "description": "BillingCycle is the cycle of the billing anchor.\nThis is used to determine the billing date for the subscription (i.e set the billing anchor)\nIf not set, the default value is anniversary. Possible values are anniversary and calendar.\nAnniversary billing means the billing anchor will be the start date of the subscription.\nCalendar billing means the billing anchor will be the appropriate date based on the billing period.\nFor example, if the billing period is month and the start date is 2025-04-15 then in case of\ncalendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.",
                     "$ref": "#/definitions/types.BillingCycle"
                 },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
-                    "type": "string"
-                },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
@@ -29640,10 +29624,6 @@
                 "billing_cycle": {
                     "description": "BillingCycle is the cycle of the billing anchor.\nThis is used to determine the billing date for the subscription (i.e set the billing anchor)\nIf not set, the default value is anniversary. Possible values are anniversary and calendar.\nAnniversary billing means the billing anchor will be the start date of the subscription.\nCalendar billing means the billing anchor will be the appropriate date based on the billing period.\nFor example, if the billing period is month and the start date is 2025-04-15 then in case of\ncalendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.",
                     "$ref": "#/definitions/types.BillingCycle"
-                },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
-                    "type": "string"
                 },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
@@ -31909,10 +31889,6 @@
                 "balance_updated_at": {
                     "type": "string"
                 },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the wallet's customer; set on customer wallet lists in environments with billing entities",
-                    "type": "string"
-                },
                 "config": {
                     "$ref": "#/definitions/types.WalletConfig"
                 },
@@ -32006,10 +31982,6 @@
                     "$ref": "#/definitions/types.AutoTopup"
                 },
                 "balance": {
-                    "type": "string"
-                },
-                "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
                 },
                 "config": {
@@ -39316,9 +39288,6 @@
         "webhookDto.CreditNote": {
             "type": "object",
             "properties": {
-                "billing_entity_id": {
-                    "type": "string"
-                },
                 "credit_note_number": {
                     "type": "string"
                 },
@@ -39797,9 +39766,6 @@
                 "amount": {
                     "type": "string"
                 },
-                "billing_entity_id": {
-                    "type": "string"
-                },
                 "currency": {
                     "type": "string"
                 },
@@ -40015,9 +39981,6 @@
                 "attempt": {
                     "type": "integer"
                 },
-                "billing_entity_id": {
-                    "type": "string"
-                },
                 "credit_note_id": {
                     "type": "string"
                 },
@@ -40154,9 +40117,6 @@
             "properties": {
                 "billing_cadence": {
                     "$ref": "#/definitions/types.BillingCadence"
-                },
-                "billing_entity_id": {
-                    "type": "string"
                 },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
@@ -40451,9 +40411,6 @@
             "type": "object",
             "properties": {
                 "balance": {
-                    "type": "string"
-                },
-                "billing_entity_id": {
                     "type": "string"
                 },
                 "conversion_rate": {

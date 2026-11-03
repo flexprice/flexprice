@@ -687,11 +687,7 @@ func (s *refundService) GetRefund(ctx context.Context, id string) (*dto.RefundRe
 	if err != nil {
 		return nil, err
 	}
-	resp := dto.NewRefundResponse(row)
-	if err := fillRefundBillingEntityIDs(ctx, s.ServiceParams, resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
+	return dto.NewRefundResponse(row), nil
 }
 
 func (s *refundService) GetRefundByGatewayRefundID(ctx context.Context, gateway, gatewayRefundID string) (*dto.RefundResponse, error) {
@@ -761,9 +757,6 @@ func (s *refundService) ListRefunds(ctx context.Context, filter *types.RefundFil
 	items := lo.Map(rows, func(r *refund.Refund, _ int) *dto.RefundResponse {
 		return dto.NewRefundResponse(r)
 	})
-	if err := fillRefundBillingEntityIDs(ctx, s.ServiceParams, items...); err != nil {
-		return nil, err
-	}
 	resp := types.NewListResponse(items, total, filter.GetLimit(), filter.GetOffset())
 	return &resp, nil
 }

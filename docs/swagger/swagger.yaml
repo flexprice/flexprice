@@ -4348,10 +4348,6 @@ definitions:
     type: object
   CreditNoteResponse:
     properties:
-      billing_entity_id:
-        description: billing_entity_id is the billing entity of the record's customer;
-          null when the environment has no billing entities
-        type: string
       created_at:
         type: string
       created_by:
@@ -6889,10 +6885,6 @@ definitions:
         items:
           $ref: '#/definitions/PaymentAttemptResponse'
         type: array
-      billing_entity_id:
-        description: billing_entity_id is the billing entity of the record's customer;
-          null when the environment has no billing entities
-        type: string
       created_at:
         type: string
       created_by:
@@ -7417,10 +7409,6 @@ definitions:
         type: string
       attempt:
         type: integer
-      billing_entity_id:
-        description: billing_entity_id is the billing entity of the record's customer;
-          null when the environment has no billing entities
-        type: string
       cancelled_at:
         type: string
       created_at:
@@ -9141,10 +9129,6 @@ definitions:
           Calendar billing means the billing anchor will be the appropriate date based on the billing period.
           For example, if the billing period is month and the start date is 2025-04-15 then in case of
           calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
-      billing_entity_id:
-        description: billing_entity_id is the billing entity of the record's customer;
-          null when the environment has no billing entities
-        type: string
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
       billing_period_count:
@@ -9363,10 +9347,6 @@ definitions:
           Calendar billing means the billing anchor will be the appropriate date based on the billing period.
           For example, if the billing period is month and the start date is 2025-04-15 then in case of
           calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
-      billing_entity_id:
-        description: billing_entity_id is the billing entity of the record's customer;
-          null when the environment has no billing entities
-        type: string
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
       billing_period_count:
@@ -11099,10 +11079,6 @@ definitions:
         type: string
       balance_updated_at:
         type: string
-      billing_entity_id:
-        description: billing_entity_id is the billing entity of the wallet's customer;
-          set on customer wallet lists in environments with billing entities
-        type: string
       config:
         $ref: '#/definitions/types.WalletConfig'
       conversion_rate:
@@ -11178,10 +11154,6 @@ definitions:
       auto_topup:
         $ref: '#/definitions/types.AutoTopup'
       balance:
-        type: string
-      billing_entity_id:
-        description: billing_entity_id is the billing entity of the record's customer;
-          null when the environment has no billing entities
         type: string
       config:
         $ref: '#/definitions/types.WalletConfig'
@@ -16768,8 +16740,6 @@ definitions:
     type: object
   webhookDto.CreditNote:
     properties:
-      billing_entity_id:
-        type: string
       credit_note_number:
         type: string
       credit_note_status:
@@ -17089,8 +17059,6 @@ definitions:
     properties:
       amount:
         type: string
-      billing_entity_id:
-        type: string
       currency:
         type: string
       destination_id:
@@ -17232,8 +17200,6 @@ definitions:
         type: string
       attempt:
         type: integer
-      billing_entity_id:
-        type: string
       credit_note_id:
         type: string
       currency:
@@ -17324,8 +17290,6 @@ definitions:
     properties:
       billing_cadence:
         $ref: '#/definitions/types.BillingCadence'
-      billing_entity_id:
-        type: string
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
       billing_period_count:
@@ -17533,8 +17497,6 @@ definitions:
   webhookDto.Wallet:
     properties:
       balance:
-        type: string
-      billing_entity_id:
         type: string
       conversion_rate:
         type: string

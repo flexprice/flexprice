@@ -22,7 +22,6 @@ type InternalSubscriptionEvent struct {
 type Subscription struct {
 	ID                   string                   `json:"id"`
 	CustomerID           string                   `json:"customer_id"`
-	BillingEntityID      *string                  `json:"billing_entity_id"`
 	InvoicingCustomerID  *string                  `json:"invoicing_customer_id,omitempty"`
 	PlanID               string                   `json:"plan_id"`
 	LookupKey            string                   `json:"lookup_key,omitempty"`
@@ -81,7 +80,6 @@ func NewSubscription(resp *dto.SubscriptionResponse) *Subscription {
 		return nil
 	}
 	return &Subscription{
-		BillingEntityID:      resp.BillingEntityID,
 		ID:                   resp.ID,
 		CustomerID:           resp.CustomerID,
 		InvoicingCustomerID:  resp.InvoicingCustomerID,

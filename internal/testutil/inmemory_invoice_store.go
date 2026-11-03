@@ -834,18 +834,3 @@ func (s *InMemoryInvoiceStore) Clear() {
 		s.lineItemStore.Clear()
 	}
 }
-
-func (s *InMemoryInvoiceStore) CustomerIDsByInvoiceIDs(ctx context.Context, ids []string) (map[string]string, error) {
-	result := make(map[string]string, len(ids))
-	for _, id := range ids {
-		inv, err := s.InMemoryStore.Get(ctx, id)
-		if err != nil {
-			if ierr.IsNotFound(err) {
-				continue
-			}
-			return nil, err
-		}
-		result[id] = inv.CustomerID
-	}
-	return result, nil
-}

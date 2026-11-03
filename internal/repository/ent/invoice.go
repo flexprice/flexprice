@@ -1580,36 +1580,3 @@ func (r *invoiceRepository) GetInvoicePaymentStatus(ctx context.Context) (*types
 	SetSpanSuccess(span)
 	return &result, nil
 }
-
-func (r *invoiceRepository) CustomerIDsByInvoiceIDs(ctx context.Context, ids []string) (map[string]string, error) {
-	result := make(map[string]string, len(ids))
-	if len(ids) == 0 {
-		return result, nil
-	}
-
-	span := StartRepositorySpan(ctx, "invoice", "customer_ids_by_invoice_ids", map[string]interface{}{
-		"count": len(ids),
-	})
-	defer FinishSpan(span)
-
-	rows, err := r.client.Reader(ctx).Invoice.Query().
-		Where(
-			invoice.IDIn(ids...),
-			invoice.TenantID(types.GetTenantID(ctx)),
-			invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		Select(invoice.FieldID, invoice.FieldCustomerID).
-		All(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to read invoice customers").
-			Mark(ierr.ErrDatabase)
-	}
-
-	for _, row := range rows {
-		result[row.ID] = row.CustomerID
-	}
-	SetSpanSuccess(span)
-	return result, nil
-}
