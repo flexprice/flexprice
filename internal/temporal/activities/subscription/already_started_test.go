@@ -22,7 +22,10 @@ import (
 	"go.temporal.io/sdk/testsuite"
 )
 
-var startErr error
+// Global stub outlives tests; unarmed calls fail.
+var errStubUnarmed = errors.New("temporal stub called without useStartErr")
+
+var startErr = errStubUnarmed
 
 type stubClient struct {
 	temporalclient.TemporalClient
@@ -35,7 +38,7 @@ func (stubClient) StartWorkflow(context.Context, models.StartWorkflowOptions, in
 func useStartErr(t *testing.T, err error) {
 	temporalService.InitializeGlobalTemporalService(stubClient{}, nil, logger.NewNoopLogger(), nil, &config.TemporalConfig{})
 	startErr = err
-	t.Cleanup(func() { startErr = nil })
+	t.Cleanup(func() { startErr = errStubUnarmed })
 }
 
 var errAlreadyStarted = serviceerror.NewWorkflowExecutionAlreadyStarted("running", "", "run_1")

@@ -7815,12 +7815,9 @@ func (s *subscriptionService) TriggerSubscriptionWorkflow(ctx context.Context, s
 		types.TemporalProcessSubscriptionBillingWorkflow,
 		workflowInput,
 	)
+	// Conflict error already carries workflow_id.
 	if ierr.IsAlreadyExists(err) {
-		s.Logger.Info(ctx, "subscription billing workflow already running",
-			"subscription_id", subscriptionID)
-		return &dto.TriggerSubscriptionWorkflowResponse{
-			Message: fmt.Sprintf("Subscription billing workflow already running for subscription %s", subscriptionID),
-		}, nil
+		return nil, err
 	}
 	if err != nil {
 		s.Logger.Error(ctx, "failed to trigger subscription billing workflow",
