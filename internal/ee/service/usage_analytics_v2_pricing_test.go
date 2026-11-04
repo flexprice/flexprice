@@ -130,7 +130,8 @@ func TestClassifyAnalyticsV2InvoiceLines(t *testing.T) {
 	got := classifyAnalyticsV2InvoiceLines("sub_1", "usd", rows)
 
 	byLine := lo.SliceToMap(got.lines, func(l *analyticsV2LineCost) (string, *analyticsV2LineCost) { return l.key.lineItemID, l })
-	require.Len(t, byLine, 4, "zero-amount rows are skipped")
+	require.Len(t, byLine, 5, "zero-amount line rows are kept so unsupported meters can be reported")
+	require.True(t, byLine["li_zero"].total().IsZero())
 
 	require.Equal(t, "6000", byLine["li_ai"].cost.Usage.String())
 	require.Equal(t, "1000", byLine["li_ai"].freeQuantity.String())
@@ -173,33 +174,44 @@ func TestSplitAnalyticsV2Excluded(t *testing.T) {
 	sumMeter := &meter.Meter{ID: "m_sum", Aggregation: meter.Aggregation{Type: types.AggregationSum}}
 	maxMeter := &meter.Meter{ID: "m_max", Aggregation: meter.Aggregation{Type: types.AggregationMax}}
 	uniqueMeter := &meter.Meter{ID: "m_users", Aggregation: meter.Aggregation{Type: types.AggregationCountUnique}}
+	nov, dec := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
 	line := func(id, meterID, cost string) *analyticsV2LineCost {
 		return &analyticsV2LineCost{
-			key:     analyticsV2LineKey{lineItemID: id},
+			key:     analyticsV2LineKey{lineItemID: id, windowStart: nov, windowEnd: dec},
 			meterID: meterID,
 			priceID: "p_" + meterID,
 			cost:    dto.AnalyticsV2Cost{Usage: decimal.RequireFromString(cost)},
 		}
 	}
 
-	kept, excluded := splitAnalyticsV2Excluded(
-		[]*analyticsV2LineCost{
-			line("l1", "m_sum", "100"),
-			line("l2", "m_max", "50"),
-			line("l3", "m_users", "30"),
-			line("l4", "m_users", "20"),
-			line("l5", "m_unknown", "5"),
-		},
-		map[string]*meter.Meter{"m_sum": sumMeter, "m_max": maxMeter, "m_users": uniqueMeter},
-		map[string]*price.Price{},
-	)
+	lines := []*analyticsV2LineCost{
+		line("l1", "m_sum", "100"),
+		line("l2", "m_max", "50"),
+		line("l3", "m_users", "30"),
+		line("l4", "m_users", "20"),
+		line("l5", "m_unknown", "5"),
+		line("l6", "m_sum", "0"),
+		line("l7", "m_free_users", "0"),
+	}
+	meters := map[string]*meter.Meter{"m_sum": sumMeter, "m_max": maxMeter, "m_users": uniqueMeter,
+		"m_free_users": {ID: "m_free_users", Aggregation: meter.Aggregation{Type: types.AggregationCountUnique}}}
+	kept, excluded := splitAnalyticsV2Excluded(lines, meters, map[string]*price.Price{}, nov, dec)
 
 	require.Equal(t, []string{"l1", "l2"}, lo.Map(kept, func(l *analyticsV2LineCost, _ int) string { return l.key.lineItemID }))
-	require.Len(t, excluded, 2)
+	require.Len(t, excluded, 3, "a $0 unsupported meter is still reported; a $0 supported line is dropped")
+	require.Equal(t, "m_free_users", excluded[2].MeterID)
+	require.Equal(t, "0", excluded[2].Cost.String())
 	require.Equal(t, "m_users", excluded[0].MeterID)
 	require.Equal(t, types.AggregationCountUnique, excluded[0].Aggregation)
 	require.Equal(t, "50", excluded[0].Cost.String(), "cost is summed per meter")
 	require.Equal(t, "m_unknown", excluded[1].MeterID, "a line whose meter is missing is excluded, not dropped")
+
+	// Splitting the month in two halves the excluded cost in each half, so slices add up.
+	mid := time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC)
+	_, first := splitAnalyticsV2Excluded(lines, meters, map[string]*price.Price{}, nov, mid)
+	_, second := splitAnalyticsV2Excluded(lines, meters, map[string]*price.Price{}, mid, dec)
+	require.Equal(t, "25", first[0].Cost.String())
+	require.Equal(t, "50", first[0].Cost.Add(*second[0].Cost).String())
 }
 
 func TestRejectAnalyticsV2Families(t *testing.T) {
@@ -208,5 +220,39 @@ func TestRejectAnalyticsV2Families(t *testing.T) {
 		err := rejectAnalyticsV2Families([]*subscription.Subscription{{ID: "s", SubscriptionType: st}})
 		require.Error(t, err)
 		require.True(t, ierr.IsValidation(err))
+	}
+}
+
+func TestAnalyticsV2PriceUnit(t *testing.T) {
+	credits := func(id, unit, rate string) *price.Price {
+		r := decimal.RequireFromString(rate)
+		return &price.Price{ID: id, PriceUnitType: types.PRICE_UNIT_TYPE_CUSTOM, PriceUnit: lo.ToPtr(unit), ConversionRate: &r}
+	}
+	line := func(priceID, cost string) *analyticsV2LineCost {
+		return &analyticsV2LineCost{priceID: priceID, cost: dto.AnalyticsV2Cost{Usage: decimal.RequireFromString(cost)}}
+	}
+	prices := map[string]*price.Price{
+		"p_mac": credits("p_mac", "mac", "0.0015"), "p_mac2": credits("p_mac2", "mac", "0.0015"),
+		"p_other_rate": credits("p_other_rate", "mac", "0.002"), "p_usd": {ID: "p_usd", PriceUnitType: types.PRICE_UNIT_TYPE_FIAT},
+	}
+	ac := &analyticsV2Context{currency: "usd", prices: prices}
+
+	// A $0 fiat line (e.g. a free sessions meter) doesn't stop costs being shown in credits.
+	ac.setPriceUnit([]*analyticsV2LineCost{line("p_mac", "1"), line("p_mac2", "2"), line("p_usd", "0")}, false)
+	require.Equal(t, "mac", ac.priceUnit)
+	require.Equal(t, "398", ac.priceUnitCost(decimal.RequireFromString("0.597002985")).String(), "converted before rounding to cents")
+
+	for name, tc := range map[string]struct {
+		lines    []*analyticsV2LineCost
+		unlinked bool
+	}{
+		"billed fiat line":    {lines: []*analyticsV2LineCost{line("p_mac", "1"), line("p_usd", "1")}},
+		"two rates":           {lines: []*analyticsV2LineCost{line("p_mac", "1"), line("p_other_rate", "1")}},
+		"charge with no line": {lines: []*analyticsV2LineCost{line("p_mac", "1")}, unlinked: true},
+	} {
+		ac := &analyticsV2Context{currency: "usd", prices: prices}
+		ac.setPriceUnit(tc.lines, tc.unlinked)
+		require.Empty(t, ac.priceUnit, name)
+		require.Nil(t, ac.priceUnitCost(decimal.NewFromInt(1)), name)
 	}
 }

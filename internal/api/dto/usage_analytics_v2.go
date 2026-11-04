@@ -7,11 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/domain/addon"
-	"github.com/flexprice/flexprice/internal/domain/feature"
-	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/domain/plan"
-	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -28,6 +23,8 @@ const (
 	AnalyticsV2MaxMetrics      = 3
 	AnalyticsV2MaxSearchLength = 100
 	AnalyticsV2DefaultRange    = 7 * 24 * time.Hour
+	// AnalyticsV2MaxRange bounds a request because every billing period in range is priced with the invoice code.
+	AnalyticsV2MaxRange = 366 * 24 * time.Hour
 
 	// AnalyticsV2KeyMonth is the time column key: one column per calendar month in the range.
 	AnalyticsV2KeyMonth = "month"
@@ -128,6 +125,9 @@ func (r *GetUsageAnalyticsV2Request) Validate() error {
 	if !r.EndTime.After(r.StartTime) {
 		return analyticsV2Error("end_time must be after start_time", nil)
 	}
+	if r.EndTime.Sub(r.StartTime) > AnalyticsV2MaxRange {
+		return analyticsV2Error("the range between start_time and end_time is limited to 366 days", nil)
+	}
 	if err := r.validateKeys(); err != nil {
 		return err
 	}
@@ -168,6 +168,11 @@ func (r *GetUsageAnalyticsV2Request) validateKeys() error {
 		if !isAnalyticsV2Key(k) {
 			return analyticsV2Error(fmt.Sprintf("group_by key %q is not supported", k), map[string]any{"key": k})
 		}
+	}
+	// Rows name their values without the "properties." prefix, so "source" and "properties.source" would collide.
+	names := lo.Map(r.GroupBy, func(k string, _ int) string { return strings.TrimPrefix(k, "properties.") })
+	if len(lo.Uniq(names)) != len(names) {
+		return analyticsV2Error("group_by keys must have distinct names once the properties. prefix is dropped", map[string]any{"group_by": r.GroupBy})
 	}
 	if r.Columns == "" {
 		return nil
@@ -294,7 +299,10 @@ func analyticsV2Error(msg string, details map[string]any) error {
 
 // GetUsageAnalyticsV2Response is one sorted page of rows plus totals over the full filtered set.
 type GetUsageAnalyticsV2Response struct {
-	Currency   string `json:"currency"`
+	Currency string `json:"currency"`
+	// PriceUnit is the custom price unit (e.g. credits) when every billed line is priced in it; rows and
+	// totals then also carry price_unit_cost.
+	PriceUnit  string `json:"price_unit,omitempty"`
 	TotalCount int64  `json:"total_count"`
 	// DataThrough is the instant the data was read up to: events received later are not included.
 	DataThrough time.Time `json:"data_through"`
@@ -305,12 +313,12 @@ type GetUsageAnalyticsV2Response struct {
 	Unattributed   AnalyticsV2Unattributed    `json:"unattributed"`
 	ExcludedMeters []AnalyticsV2ExcludedMeter `json:"excluded_meters"`
 	// Object maps are filled only for the values requested in expand.
-	Meters        map[string]*meter.Meter               `json:"meters,omitempty"`
-	Prices        map[string]*PriceResponse             `json:"prices,omitempty"`
-	Features      map[string]*feature.Feature           `json:"features,omitempty"`
-	Plans         map[string]*plan.Plan                 `json:"plans,omitempty"`
-	Addons        map[string]*addon.Addon               `json:"addons,omitempty"`
-	Subscriptions map[string]*subscription.Subscription `json:"subscriptions,omitempty"`
+	Meters        map[string]*MeterResponse        `json:"meters,omitempty"`
+	Prices        map[string]*PriceResponse        `json:"prices,omitempty"`
+	Features      map[string]*FeatureResponse      `json:"features,omitempty"`
+	Plans         map[string]*PlanResponse         `json:"plans,omitempty"`
+	Addons        map[string]*AddonResponse        `json:"addons,omitempty"`
+	Subscriptions map[string]*SubscriptionResponse `json:"subscriptions,omitempty"`
 }
 
 // AnalyticsV2Totals: Cost = RowsCost + UnattributedCost + ExcludedCost = Subtotal - Discount,
@@ -322,6 +330,7 @@ type AnalyticsV2Totals struct {
 	RowsCost         decimal.Decimal              `json:"rows_cost" swaggertype:"string"`
 	UnattributedCost decimal.Decimal              `json:"unattributed_cost" swaggertype:"string"`
 	ExcludedCost     decimal.Decimal              `json:"excluded_cost" swaggertype:"string"`
+	PriceUnitCost    *decimal.Decimal             `json:"price_unit_cost,omitempty" swaggertype:"string"`
 	Breakdown        AnalyticsV2Cost              `json:"breakdown"`
 	Usage            *decimal.Decimal             `json:"usage,omitempty" swaggertype:"string"`
 	FreeUsage        *decimal.Decimal             `json:"free_usage,omitempty" swaggertype:"string"`
@@ -338,11 +347,13 @@ type AnalyticsV2Cost struct {
 }
 
 type AnalyticsV2Item struct {
-	Group     map[string]string `json:"group"`
-	Cost      decimal.Decimal   `json:"cost" swaggertype:"string"`
-	Subtotal  decimal.Decimal   `json:"subtotal" swaggertype:"string"`
-	Discount  decimal.Decimal   `json:"discount" swaggertype:"string"`
-	Breakdown AnalyticsV2Cost   `json:"breakdown"`
+	Group    map[string]string `json:"group"`
+	Cost     decimal.Decimal   `json:"cost" swaggertype:"string"`
+	Subtotal decimal.Decimal   `json:"subtotal" swaggertype:"string"`
+	Discount decimal.Decimal   `json:"discount" swaggertype:"string"`
+	// PriceUnitCost is Cost in the response's price_unit, converted before rounding.
+	PriceUnitCost *decimal.Decimal `json:"price_unit_cost,omitempty" swaggertype:"string"`
+	Breakdown     AnalyticsV2Cost  `json:"breakdown"`
 	// Usage and FreeUsage are set only when the row holds a single meter.
 	Usage      *decimal.Decimal             `json:"usage,omitempty" swaggertype:"string"`
 	FreeUsage  *decimal.Decimal             `json:"free_usage,omitempty" swaggertype:"string"`
@@ -366,12 +377,18 @@ type AnalyticsV2Column struct {
 	Usage *decimal.Decimal `json:"usage,omitempty" swaggertype:"string"`
 }
 
+// AnalyticsV2Point is one window of a row (or of all rows): Cost = Subtotal - Discount, and the Breakdown
+// parts add up to Subtotal.
 type AnalyticsV2Point struct {
-	WindowStart time.Time                    `json:"window_start"`
-	Cost        decimal.Decimal              `json:"cost" swaggertype:"string"`
-	Usage       *decimal.Decimal             `json:"usage,omitempty" swaggertype:"string"`
-	Breakdown   *AnalyticsV2Cost             `json:"breakdown,omitempty"`
-	Columns     map[string]AnalyticsV2Column `json:"columns,omitempty"`
+	WindowStart time.Time       `json:"window_start"`
+	Cost        decimal.Decimal `json:"cost" swaggertype:"string"`
+	Subtotal    decimal.Decimal `json:"subtotal" swaggertype:"string"`
+	Discount    decimal.Decimal `json:"discount" swaggertype:"string"`
+	Breakdown   AnalyticsV2Cost `json:"breakdown"`
+	// Usage is set only when the row holds a single meter.
+	Usage      *decimal.Decimal             `json:"usage,omitempty" swaggertype:"string"`
+	EventCount uint64                       `json:"event_count"`
+	Columns    map[string]AnalyticsV2Column `json:"columns,omitempty"`
 }
 
 // AnalyticsV2Unattributed is invoice cost no row's usage can carry, e.g. unused commitment.
@@ -380,7 +397,6 @@ type AnalyticsV2Unattributed struct {
 	Breakdown AnalyticsV2Cost `json:"breakdown"`
 	// Charges lists each billed charge no row carries, e.g. one per unused commitment.
 	Charges []AnalyticsV2UnattributedCharge `json:"charges,omitempty"`
-	Points  []AnalyticsV2Point              `json:"points,omitempty"`
 }
 
 type AnalyticsV2UnattributedReason string

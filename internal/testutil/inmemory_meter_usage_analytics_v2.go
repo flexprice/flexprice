@@ -380,28 +380,43 @@ func (s *InMemoryMeterUsageStore) GetAnalyticsV2Detail(_ context.Context, params
 		rowPeak[rowLine(c)] = decimal.Max(rowPeak[rowLine(c)], c.pk)
 		cellPeakSum[rowLine(c)] = cellPeakSum[rowLine(c)].Add(c.pk)
 	}
-	totals := map[string]*events.AnalyticsV2PointCell{}
+	// Cells are priced per line, then summed per (row, window, column, additive or MAX).
+	priced := map[string]*events.AnalyticsV2PointCell{}
+	add := func(row int, c *cell, a events.AnalyticsV2Amounts) {
+		isMax := p.Lines[c.line].IsMax
+		k := fmt.Sprintf("%d\x01%d\x01%s\x01%v", row, c.w.Unix(), c.col, isMax)
+		pc := priced[k]
+		if pc == nil {
+			pc = &events.AnalyticsV2PointCell{Row: row, WindowStart: c.w, Column: c.col, IsMax: isMax, Peak: c.pk}
+			priced[k] = pc
+		}
+		pc.Amounts = events.AnalyticsV2Amounts{
+			Usage: pc.Amounts.Usage.Add(a.Usage), CommitmentUtilized: pc.Amounts.CommitmentUtilized.Add(a.CommitmentUtilized),
+			Overage: pc.Amounts.Overage.Add(a.Overage), TrueUp: pc.Amounts.TrueUp.Add(a.TrueUp), Discount: pc.Amounts.Discount.Add(a.Discount),
+		}
+		pc.Quantity, pc.EventCount = pc.Quantity.Add(c.q), pc.EventCount+c.n
+		pc.Peak = decimal.Max(pc.Peak, c.pk)
+	}
 	for _, c := range cells {
-		weight := decimal.Zero
-		if p.Lines[c.line].IsMax && cellPeakSum[rowLine(c)].IsPositive() {
-			weight = rowPeak[rowLine(c)].Mul(c.pk).Div(cellPeakSum[rowLine(c)])
+		weight := c.q
+		if p.Lines[c.line].IsMax {
+			weight = decimal.Zero
+			if cellPeakSum[rowLine(c)].IsPositive() {
+				weight = rowPeak[rowLine(c)].Mul(c.pk).Div(cellPeakSum[rowLine(c)])
+			}
+		}
+		r := p.Rates[c.line]
+		a := events.AnalyticsV2Amounts{
+			Usage: weight.Mul(r.Usage), CommitmentUtilized: weight.Mul(r.CommitmentUtilized), Overage: weight.Mul(r.Overage),
+			TrueUp: weight.Mul(r.TrueUp), Discount: weight.Mul(r.Discount),
 		}
 		if row, ok := page[c.rk]; ok {
-			detail.Points = append(detail.Points, events.AnalyticsV2PointCell{
-				Row: row, WindowStart: c.w, Column: c.col, Line: c.line, Quantity: c.q, PeakWeight: weight, Peak: c.pk, EventCount: c.n,
-			})
+			add(row, c, a)
 		}
-		tk := fmt.Sprintf("%d\x01%s\x01%d", c.w.Unix(), c.col, c.line)
-		t := totals[tk]
-		if t == nil {
-			t = &events.AnalyticsV2PointCell{Row: -1, WindowStart: c.w, Column: c.col, Line: c.line}
-			totals[tk] = t
-		}
-		t.Quantity, t.PeakWeight, t.EventCount = t.Quantity.Add(c.q), t.PeakWeight.Add(weight), t.EventCount+c.n
-		t.Peak = decimal.Max(t.Peak, c.pk)
+		add(-1, c, a)
 	}
-	for _, t := range totals {
-		detail.Points = append(detail.Points, *t)
+	for _, pc := range priced {
+		detail.Points = append(detail.Points, *pc)
 	}
 	return detail, nil
 }

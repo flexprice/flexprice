@@ -159,18 +159,18 @@ type AnalyticsV2DetailParams struct {
 	DistinctKeys []string
 }
 
-// AnalyticsV2PointCell is one (row, window, column, line) aggregate. Row is the index into the
-// request's Rows, or -1 for the cell summed over every matching row.
+// AnalyticsV2PointCell is one priced (row, window, column) point. Row is the index into the request's Rows,
+// or -1 for the point summed over every matching row. Additive and MAX lines come as separate cells (IsMax),
+// because usage adds up for additive lines and is a peak for MAX lines.
 type AnalyticsV2PointCell struct {
 	Row         int
 	WindowStart time.Time
 	Column      string
-	Line        int
-	Quantity    decimal.Decimal
-	// PeakWeight, for MAX lines only, is the cell's part of its row's peak: row peak x cell peak / sum of the
-	// row's cell peaks. A MAX line's cell costs rate x PeakWeight, so a row's cells add up to rate x row peak.
-	PeakWeight decimal.Decimal
-	// Peak is the highest event value in the cell.
+	IsMax       bool
+	// Amounts prices the cell at its lines' rates: usage, commitment, true-up and discount (Free is unused).
+	Amounts AnalyticsV2Amounts
+	// Quantity sums the cell's events; Peak is its highest event value.
+	Quantity   decimal.Decimal
 	Peak       decimal.Decimal
 	EventCount uint64
 }

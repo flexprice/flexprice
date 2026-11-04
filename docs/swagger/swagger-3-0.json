@@ -21471,6 +21471,10 @@
               "type": "string"
             }
           },
+          "price_unit_cost": {
+            "type": "string",
+            "description": "PriceUnitCost is Cost in the response's price_unit, converted before rounding."
+          },
           "reporting_unit": {
             "$ref": "#/components/schemas/types.ReportingUnit"
           },
@@ -21524,8 +21528,18 @@
           "cost": {
             "type": "string"
           },
-          "usage": {
+          "discount": {
             "type": "string"
+          },
+          "event_count": {
+            "type": "integer"
+          },
+          "subtotal": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "string",
+            "description": "Usage is set only when the row holds a single meter."
           },
           "window_start": {
             "type": "string",
@@ -21595,6 +21609,9 @@
               "$ref": "#/components/schemas/AnalyticsV2Point"
             }
           },
+          "price_unit_cost": {
+            "type": "string"
+          },
           "rows_cost": {
             "type": "string"
           },
@@ -21624,12 +21641,6 @@
           },
           "cost": {
             "type": "string"
-          },
-          "points": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AnalyticsV2Point"
-            }
           }
         }
       },
@@ -26804,7 +26815,7 @@
           "addons": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/Addon"
+              "$ref": "#/components/schemas/AddonResponse"
             }
           },
           "column_values": {
@@ -26830,7 +26841,7 @@
           "features": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/Feature"
+              "$ref": "#/components/schemas/FeatureResponse"
             }
           },
           "items": {
@@ -26842,15 +26853,19 @@
           "meters": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/Meter"
+              "$ref": "#/components/schemas/MeterResponse"
             },
             "description": "Object maps are filled only for the values requested in expand."
           },
           "plans": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/Plan"
+              "$ref": "#/components/schemas/PlanResponse"
             }
+          },
+          "price_unit": {
+            "type": "string",
+            "description": "PriceUnit is the custom price unit (e.g. credits) when every billed line is priced in it; rows and\ntotals then also carry price_unit_cost."
           },
           "prices": {
             "type": "object",
@@ -26861,7 +26876,7 @@
           "subscriptions": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/Subscription"
+              "$ref": "#/components/schemas/SubscriptionResponse"
             }
           },
           "total_count": {
@@ -35023,215 +35038,6 @@
           },
           "updated_by": {
             "type": "string"
-          }
-        }
-      },
-      "Subscription": {
-        "type": "object",
-        "properties": {
-          "active_pause_id": {
-            "type": "string",
-            "description": "ActivePauseID references the current active pause configuration\nThis will be null if no pause is active or scheduled"
-          },
-          "auto_invoice_threshold": {
-            "type": "string",
-            "description": "AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers\nan intermediate invoice. Overrides the plan-level threshold when set.\nNil means: inherit from the plan's threshold (which may also be nil = disabled)."
-          },
-          "billing_anchor": {
-            "type": "string",
-            "description": "BillingAnchor is the reference point that aligns future billing cycle dates.\nIt sets the day of week for week intervals, the day of month for month and year intervals,\nand the month of year for year intervals. The timestamp is in UTC format.",
-            "format": "date-time"
-          },
-          "billing_cadence": {
-            "$ref": "#/components/schemas/types.BillingCadence"
-          },
-          "billing_cycle": {
-            "$ref": "#/components/schemas/types.BillingCycle"
-          },
-          "billing_period": {
-            "$ref": "#/components/schemas/types.BillingPeriod"
-          },
-          "billing_period_count": {
-            "type": "integer",
-            "description": "BillingPeriodCount is the total number units of the billing period."
-          },
-          "cancel_at": {
-            "type": "string",
-            "description": "CancelAt is the date the subscription will be canceled",
-            "format": "date-time"
-          },
-          "cancel_at_period_end": {
-            "type": "boolean",
-            "description": "CancelAtPeriodEnd is whether the subscription was canceled at the end of the current period"
-          },
-          "cancelled_at": {
-            "type": "string",
-            "description": "CanceledAt is the date the subscription was canceled",
-            "format": "date-time"
-          },
-          "collection_method": {
-            "type": "string",
-            "description": "CollectionMethod determines how invoices are collected"
-          },
-          "commitment_amount": {
-            "type": "string",
-            "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period"
-          },
-          "commitment_duration": {
-            "$ref": "#/components/schemas/types.BillingPeriod"
-          },
-          "coupon_associations": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/coupon_association.CouponAssociation"
-            }
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "created_by": {
-            "type": "string"
-          },
-          "currency": {
-            "type": "string",
-            "description": "Currency is the currency of the subscription in lowercase 3 digit ISO codes"
-          },
-          "current_period_end": {
-            "type": "string",
-            "description": "CurrentPeriodEnd is the end of the current period that the subscription has been invoiced for.\nAt the end of this period, a new invoice will be created.",
-            "format": "date-time"
-          },
-          "current_period_start": {
-            "type": "string",
-            "description": "CurrentPeriodStart is the end of the current period that the subscription has been invoiced for.\nAt the end of this period, a new invoice will be created.",
-            "format": "date-time"
-          },
-          "customer_id": {
-            "type": "string",
-            "description": "CustomerID is the identifier for the customer in our system"
-          },
-          "enable_true_up": {
-            "type": "boolean"
-          },
-          "end_date": {
-            "type": "string",
-            "description": "EndDate is the end date of the subscription",
-            "format": "date-time"
-          },
-          "environment_id": {
-            "type": "string",
-            "description": "EnvironmentID is the environment identifier for the subscription"
-          },
-          "gateway_payment_method_id": {
-            "type": "string",
-            "description": "GatewayPaymentMethodID is the gateway payment method ID for this subscription"
-          },
-          "id": {
-            "type": "string",
-            "description": "ID is the unique identifier for the subscription"
-          },
-          "invoicing_customer_id": {
-            "type": "string",
-            "description": "InvoicingCustomerID is the customer ID to use for invoicing\nThis can differ from the subscription customer (e.g., parent company invoicing for child company)"
-          },
-          "line_item_grouping": {
-            "$ref": "#/components/schemas/types.LineItemGrouping"
-          },
-          "line_items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/subscription.SubscriptionLineItem"
-            }
-          },
-          "lookup_key": {
-            "type": "string",
-            "description": "LookupKey is the key used to lookup the subscription in our system"
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/types.Metadata"
-          },
-          "overage_factor": {
-            "type": "string",
-            "description": "OverageFactor is a multiplier applied to usage beyond the commitment amount"
-          },
-          "parent_subscription_id": {
-            "type": "string",
-            "description": "ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)"
-          },
-          "pause_status": {
-            "$ref": "#/components/schemas/types.PauseStatus"
-          },
-          "pauses": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/subscription.SubscriptionPause"
-            }
-          },
-          "payment_behavior": {
-            "type": "string",
-            "description": "PaymentBehavior determines how subscription payments are handled"
-          },
-          "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms"
-          },
-          "phases": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/subscription.SubscriptionPhase"
-            }
-          },
-          "plan_id": {
-            "type": "string",
-            "description": "PlanID is the identifier for the plan in our system"
-          },
-          "proration_behavior": {
-            "$ref": "#/components/schemas/types.ProrationBehavior"
-          },
-          "start_date": {
-            "type": "string",
-            "description": "StartDate is the start date of the subscription",
-            "format": "date-time"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "subscription_status": {
-            "$ref": "#/components/schemas/types.SubscriptionStatus"
-          },
-          "subscription_type": {
-            "$ref": "#/components/schemas/types.SubscriptionType"
-          },
-          "synced_price_sequence": {
-            "type": "integer",
-            "description": "SyncedPriceSequence is the plan-price sequence up to which this\nsubscription's line items have been reconciled. Bumped by the\nplan-price sync after a successful pass."
-          },
-          "tenant_id": {
-            "type": "string"
-          },
-          "timezone": {
-            "type": "string"
-          },
-          "trial_end": {
-            "type": "string",
-            "description": "TrialEnd is the end date of the trial period",
-            "format": "date-time"
-          },
-          "trial_start": {
-            "type": "string",
-            "description": "TrialStart is the start date of the trial period",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_by": {
-            "type": "string"
-          },
-          "version": {
-            "type": "integer",
-            "description": "Version is used for optimistic locking"
           }
         }
       },

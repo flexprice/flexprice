@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"golang.org/x/sync/errgroup"
 )
 
 // analyticsV2Scale is the decimal scale analytics v2 money math is rounded to.
@@ -146,18 +148,20 @@ func writeAnalyticsV2Events(
 	include []int,
 	from, to time.Time,
 	scanExtra string,
+	props []string,
 	selectExprs func(q *analyticsV2Query),
 	eventFilters func(q *analyticsV2Query),
 	joinedFilters func(q *analyticsV2Query),
 ) {
 	finalClause, _ := analyticsV2Settings(scope.UseFinal)
 	subset := lo.Map(include, func(i int, _ int) events.AnalyticsV2Line { return lines[i] })
-	meterIDs := q.param("Array(String)", analyticsV2StringArray(lo.Uniq(lo.Map(subset, func(l events.AnalyticsV2Line, _ int) string { return l.MeterID }))))
 
 	for n, layer := range analyticsV2Layers(subset) {
 		if n > 0 {
 			q.add("\n\t\tUNION ALL\n")
 		}
+		// Each layer reads only its own meters, so overlapping lines don't re-read every meter per layer.
+		meterIDs := q.param("Array(String)", analyticsV2StringArray(lo.Uniq(lo.Map(layer, func(s int, _ int) string { return subset[s].MeterID }))))
 		meters := make([]string, len(layer))
 		starts := make([]time.Time, len(layer))
 		ends := make([]time.Time, len(layer))
@@ -171,9 +175,13 @@ func writeAnalyticsV2Events(
 
 		q.add("\t\tSELECT ")
 		selectExprs(q)
-		q.add(fmt.Sprintf(`
-		FROM (
-			SELECT meter_id, timestamp, qty_total, source, properties%s
+		// Property keys are read from the JSON inside the scan, so the join carries short values,
+		// not the whole properties string.
+		q.add("\n\t\tFROM (\n\t\t\tSELECT meter_id, timestamp, qty_total, source")
+		for _, name := range props {
+			q.add(", JSONExtractString(properties, ?) AS "+analyticsV2PropAlias(name), name)
+		}
+		q.add(fmt.Sprintf(`%s
 			FROM meter_usage %s
 			WHERE tenant_id = ? AND environment_id = ? AND external_customer_id IN ?
 				AND meter_id IN %s AND timestamp >= ? AND timestamp < ? AND ingested_at <= ?`, scanExtra, finalClause, meterIDs),
@@ -222,7 +230,7 @@ func (r *MeterUsageRepository) GetAnalyticsV2LineUsage(ctx context.Context, para
 	q := &analyticsV2Query{}
 	q.add("SELECT idx, sum(qty_total) AS quantity, sumIf(qty_total, ts >= ? AND ts < ?) AS range_quantity, count() AS events\n\tFROM (\n",
 		params.RangeStart.UTC(), params.RangeEnd.UTC())
-	writeAnalyticsV2Events(q, params.Scope, params.Lines, analyticsV2Lines(params.Lines, nil), from, to, "",
+	writeAnalyticsV2Events(q, params.Scope, params.Lines, analyticsV2Lines(params.Lines, nil), from, to, "", nil,
 		func(q *analyticsV2Query) { q.add("r.idx AS idx, e.qty_total AS qty_total, e.timestamp AS ts") }, nil, nil)
 	q.add("\n\t)\n\tGROUP BY idx\n\t" + settings)
 
@@ -268,10 +276,28 @@ func analyticsV2KeyExpr(q *analyticsV2Query, key, prefix string, params *events.
 		features := lo.Map(meters, func(m string, _ int) string { return params.MeterFeatures[m] })
 		q.add("transform("+prefix+"meter_id, ?, ?, '')", meters, features)
 	case key == events.AnalyticsV2KeyMonth:
-		q.add("formatDateTime(toTimeZone("+prefix+"timestamp, ?), '%Y-%m')", lo.Ternary(params.Timezone == "", "UTC", params.Timezone))
+		q.add("formatDateTime(toTimeZone("+prefix+"timestamp, ?), '%Y-%m')", normalizeCHTimezone(params.Timezone))
 	default:
-		q.add("JSONExtractString("+prefix+"properties, ?)", strings.TrimPrefix(key, "properties."))
+		name := strings.TrimPrefix(key, "properties.")
+		if prefix == "" {
+			q.add("JSONExtractString(properties, ?)", name)
+		} else {
+			// After the join the key is a column the scan already extracted (see analyticsV2Props).
+			q.add(prefix + analyticsV2PropAlias(name))
+		}
 	}
+}
+
+// analyticsV2Props lists the property names among keys, for the scan to extract once.
+func analyticsV2Props(keys ...string) []string {
+	return lo.Uniq(lo.FilterMap(keys, func(k string, _ int) (string, bool) {
+		return strings.TrimPrefix(k, "properties."), strings.HasPrefix(k, "properties.")
+	}))
+}
+
+// analyticsV2PropAlias names the scan column holding a property; hex keeps any property name a valid identifier.
+func analyticsV2PropAlias(name string) string {
+	return "p_" + hex.EncodeToString([]byte(name))
 }
 
 // analyticsV2ScanFilters pushes line-independent filters into the event scan.
@@ -301,10 +327,12 @@ func analyticsV2Filters(q *analyticsV2Query, prefix string, params *events.Analy
 }
 
 // analyticsV2Components are the per-line rate arrays, in the order the queries read them.
-var analyticsV2Components = []struct {
+type analyticsV2Component struct {
 	rate, out string
 	pick      func(events.AnalyticsV2Amounts) decimal.Decimal
-}{
+}
+
+var analyticsV2Components = []analyticsV2Component{
 	{"r_usage", "usage", func(a events.AnalyticsV2Amounts) decimal.Decimal { return a.Usage }},
 	{"r_utilized", "utilized", func(a events.AnalyticsV2Amounts) decimal.Decimal { return a.CommitmentUtilized }},
 	{"r_overage", "overage", func(a events.AnalyticsV2Amounts) decimal.Decimal { return a.Overage }},
@@ -312,6 +340,9 @@ var analyticsV2Components = []struct {
 	{"r_discount", "discount", func(a events.AnalyticsV2Amounts) decimal.Decimal { return a.Discount }},
 	{"r_free", "free", func(a events.AnalyticsV2Amounts) decimal.Decimal { return a.Free }},
 }
+
+// analyticsV2PointComponents are the amounts a chart point carries; free units are not shown per point.
+var analyticsV2PointComponents = lo.Filter(analyticsV2Components, func(c analyticsV2Component, _ int) bool { return c.out != "free" })
 
 // writeAnalyticsV2Rates writes the WITH clause binding each rate array as a constant parameter.
 func writeAnalyticsV2Rates(q *analyticsV2Query, rates []events.AnalyticsV2Amounts) {
@@ -452,6 +483,7 @@ func buildAnalyticsV2RankQuery(params *events.AnalyticsV2RankParams) *analyticsV
 	keyList := strings.Join(keys, ", ")
 	additive := analyticsV2Lines(params.Lines, func(l events.AnalyticsV2Line) bool { return !l.IsMax })
 	maxLines := analyticsV2Lines(params.Lines, func(l events.AnalyticsV2Line) bool { return l.IsMax })
+	rowProps := analyticsV2Props(append([]string{params.Column}, params.GroupBy...)...)
 	_, settings := analyticsV2Settings(params.Scope.UseFinal)
 
 	q := &analyticsV2Query{}
@@ -492,7 +524,7 @@ FROM (
 			SELECT ` + keyList + `, col, idx, sum(qty_total) AS q, count() AS n
 			FROM (
 `)
-		writeAnalyticsV2Events(q, params.Scope, params.Lines, additive, params.StartTime, params.EndTime, "",
+		writeAnalyticsV2Events(q, params.Scope, params.Lines, additive, params.StartTime, params.EndTime, "", rowProps,
 			func(q *analyticsV2Query) {
 				analyticsV2RowSelect(q, params)
 				q.add("r.idx AS idx, e.qty_total AS qty_total")
@@ -523,7 +555,7 @@ FROM (
 					SELECT ` + keyList + `, col, idx, max(qty_total) AS pk, count() AS n
 					FROM (
 `)
-		writeAnalyticsV2Events(q, params.Scope, params.Lines, maxLines, params.StartTime, params.EndTime, "",
+		writeAnalyticsV2Events(q, params.Scope, params.Lines, maxLines, params.StartTime, params.EndTime, "", rowProps,
 			func(q *analyticsV2Query) {
 				analyticsV2RowSelect(q, params)
 				q.add("r.idx AS idx, e.qty_total AS qty_total")
@@ -600,7 +632,7 @@ func (r *MeterUsageRepository) GetAnalyticsV2LinePeaks(ctx context.Context, para
 	_, settings := analyticsV2Settings(params.Scope.UseFinal)
 	q := &analyticsV2Query{}
 	q.add("SELECT idx, sum(row_peak) FROM (\n\tSELECT rk, idx, max(qty_total) AS row_peak FROM (\n")
-	writeAnalyticsV2Events(q, params.Scope, params.Lines, maxLines, params.StartTime, params.EndTime, "",
+	writeAnalyticsV2Events(q, params.Scope, params.Lines, maxLines, params.StartTime, params.EndTime, "", analyticsV2Props(params.GroupBy...),
 		func(q *analyticsV2Query) {
 			writeAnalyticsV2RowKey(q, params.GroupBy, keyParams)
 			q.add("r.idx AS idx, e.qty_total AS qty_total")
@@ -640,19 +672,21 @@ func (r *MeterUsageRepository) GetAnalyticsV2Detail(ctx context.Context, params 
 	})
 	defer FinishSpan(span)
 
+	// Points and distinct metrics are independent reads of the same events; run them side by side.
+	g, gctx := errgroup.WithContext(ctx)
 	if params.WindowSize != "" {
-		points, err := r.analyticsV2Points(ctx, params)
-		if err != nil {
-			SetSpanError(span, err)
-			return nil, err
-		}
-		detail.Points = points
+		g.Go(func() error {
+			points, err := r.analyticsV2Points(gctx, params)
+			detail.Points = points
+			return err
+		})
 	}
 	if len(params.DistinctKeys) > 0 {
-		if err := r.analyticsV2Distinct(ctx, params, detail.Distinct); err != nil {
-			SetSpanError(span, err)
-			return nil, err
-		}
+		g.Go(func() error { return r.analyticsV2Distinct(gctx, params, detail.Distinct) })
+	}
+	if err := g.Wait(); err != nil {
+		SetSpanError(span, err)
+		return nil, err
 	}
 	SetSpanSuccess(span)
 	return detail, nil
@@ -664,9 +698,10 @@ func analyticsV2PageRow(pageKeys string) string {
 	return fmt.Sprintf("if(indexOf(%[1]s, rk) = 0, toUInt32(4294967295), toUInt32(indexOf(%[1]s, rk)))", pageKeys)
 }
 
-// analyticsV2Points returns per (page row, window, column, line) cells, plus the same cells summed over every
-// matching row (Row -1), using grouping sets. Additive lines need no per-row work for the all-rows cells;
-// only MAX lines are grouped by row to weight each cell by its row's peak.
+// analyticsV2Points returns priced (page row, window, column) points, plus the same points summed over every
+// matching row (Row -1), using grouping sets. Rates are applied in ClickHouse, so the result has no line
+// dimension and its size does not grow with the number of meters. Only MAX lines are grouped by row, to weight
+// each cell by its row's peak.
 func (r *MeterUsageRepository) analyticsV2Points(ctx context.Context, params *events.AnalyticsV2DetailParams) ([]events.AnalyticsV2PointCell, error) {
 	p := &params.Rank
 	bucket := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, p.Timezone)
@@ -675,11 +710,23 @@ func (r *MeterUsageRepository) analyticsV2Points(ctx context.Context, params *ev
 	_, settings := analyticsV2Settings(p.Scope.UseFinal)
 
 	q := &analyticsV2Query{}
+	writeAnalyticsV2Rates(q, p.Rates)
+	q.add("SELECT * FROM (\n")
+	// amounts prices each component per cell; weight is the cell's quantity (additive) or peak share (MAX).
+	amounts := func(weight string) string {
+		var parts []string
+		for _, c := range analyticsV2PointComponents {
+			parts = append(parts, fmt.Sprintf("toDecimal256(round(sum(%s * arrayElement(%s, idx)), %d), %d) AS a_%s",
+				weight, c.rate, analyticsV2Scale, analyticsV2Scale, c.out))
+		}
+		return strings.Join(parts, ",\n\t")
+	}
 	pageKeys := q.param("Array(String)", analyticsV2StringArray(lo.Map(params.Rows, func(row []string, _ int) string {
 		return strings.Join(row, analyticsV2RowSep)
 	})))
 	scan := func(include []int) {
 		writeAnalyticsV2Events(q, p.Scope, p.Lines, include, p.StartTime, p.EndTime, ", "+bucket+" AS bucket",
+			analyticsV2Props(append([]string{p.Column}, p.GroupBy...)...),
 			func(q *analyticsV2Query) {
 				writeAnalyticsV2RowKey(q, p.GroupBy, p)
 				q.add("e.bucket AS w, ")
@@ -698,28 +745,33 @@ func (r *MeterUsageRepository) analyticsV2Points(ctx context.Context, params *ev
 			q.add("\n\t\tWHERE positionCaseInsensitiveUTF8(row_text, ?) > 0", p.Search)
 		}
 	}
+	groupingSets := `
+GROUP BY GROUPING SETS ((page_row, w, col), (w, col))
+HAVING page_row != 4294967295
+`
 
 	if len(additive) > 0 {
-		q.add(`SELECT page_row, w, col, idx, sum(qty_total) AS quantity, toDecimal256(0, 30) AS peak_weight,
-	toDecimal128(max(qty_total), 15) AS peak, count() AS events
+		// Quantities are summed per (page row, window, column, line) first, so the rate multiplications run
+		// once per cell instead of once per event.
+		q.add(fmt.Sprintf(`SELECT page_row, w, col, toUInt8(0) AS is_max,
+	%[1]s,
+	sum(q) AS quantity, toDecimal128(max(pk), 15) AS peak, sum(n) AS events
 FROM (
-	SELECT ` + analyticsV2PageRow(pageKeys) + ` AS page_row, w, col, idx, qty_total
+	SELECT %[2]s AS page_row, w, col, idx, sum(qty_total) AS q, max(qty_total) AS pk, count() AS n
 	FROM (
-`)
+`, amounts("toDecimal256(q, 15)"), analyticsV2PageRow(pageKeys)))
 		scan(additive)
 		q.add("\n\t)")
 		search()
-		q.add(`
-)
-GROUP BY GROUPING SETS ((page_row, w, col, idx), (w, col, idx))
-HAVING page_row != 4294967295
-`)
+		q.add("\n\tGROUP BY page_row, w, col, idx\n)" + groupingSets)
 	}
 	if len(additive) > 0 && len(maxLines) > 0 {
 		q.add("UNION ALL\n")
 	}
 	if len(maxLines) > 0 {
-		q.add(`SELECT page_row, w, col, idx, sum(q) AS quantity, sum(weight) AS peak_weight, toDecimal128(max(pk), 15) AS peak, sum(n) AS events
+		q.add(fmt.Sprintf(`SELECT page_row, w, col, toUInt8(1) AS is_max,
+	%[1]s,
+	sum(q) AS quantity, toDecimal128(max(pk), 15) AS peak, sum(n) AS events
 FROM (
 	SELECT page_row, w, col, idx, q, pk, n,
 		if(cell_peak_sum = 0, toDecimal256(0, 30),
@@ -729,10 +781,10 @@ FROM (
 			max(pk) OVER (PARTITION BY rk, idx) AS row_peak,
 			sum(pk) OVER (PARTITION BY rk, idx) AS cell_peak_sum
 		FROM (
-			SELECT rk, ` + analyticsV2PageRow(pageKeys) + ` AS page_row,
+			SELECT rk, %[2]s AS page_row,
 				w, col, idx, sum(qty_total) AS q, max(qty_total) AS pk, count() AS n
 			FROM (
-`)
+`, amounts("weight"), analyticsV2PageRow(pageKeys)))
 		scan(maxLines)
 		q.add("\n\t\t\t)")
 		search()
@@ -740,12 +792,9 @@ FROM (
 			GROUP BY rk, w, col, idx
 		)
 	)
-)
-GROUP BY GROUPING SETS ((page_row, w, col, idx), (w, col, idx))
-HAVING page_row != 4294967295
-`)
+)` + groupingSets)
 	}
-	q.add(settings)
+	q.add(")\n" + settings)
 
 	rows, err := r.store.GetConn().Query(q.context(ctx), q.sql.String())
 	if err != nil {
@@ -755,17 +804,20 @@ HAVING page_row != 4294967295
 
 	var cells []events.AnalyticsV2PointCell
 	for rows.Next() {
-		var pageRow, idx uint32
+		var pageRow uint32
 		var w time.Time
 		var col string
-		var quantity, weight, peak decimal.Decimal
+		var isMax uint8
+		var a events.AnalyticsV2Amounts
+		var quantity, peak decimal.Decimal
 		var n uint64
-		if err := rows.Scan(&pageRow, &w, &col, &idx, &quantity, &weight, &peak, &n); err != nil {
+		if err := rows.Scan(&pageRow, &w, &col, &isMax, &a.Usage, &a.CommitmentUtilized, &a.Overage, &a.TrueUp, &a.Discount,
+			&quantity, &peak, &n); err != nil {
 			return nil, ierr.WithError(err).WithHint("Failed to scan analytics points").Mark(ierr.ErrDatabase)
 		}
 		cells = append(cells, events.AnalyticsV2PointCell{
-			Row: int(pageRow) - 1, WindowStart: w.UTC(), Column: col, Line: int(idx) - 1,
-			Quantity: quantity, PeakWeight: weight, Peak: peak, EventCount: n,
+			Row: int(pageRow) - 1, WindowStart: w.UTC(), Column: col, IsMax: isMax == 1,
+			Amounts: a, Quantity: quantity, Peak: peak, EventCount: n,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -789,6 +841,7 @@ func (r *MeterUsageRepository) analyticsV2Distinct(ctx context.Context, params *
 	}
 	q.add("\nFROM (\n")
 	writeAnalyticsV2Events(q, p.Scope, p.Lines, analyticsV2Lines(p.Lines, nil), p.StartTime, p.EndTime, "",
+		analyticsV2Props(append(append([]string{}, p.GroupBy...), params.DistinctKeys...)...),
 		func(q *analyticsV2Query) {
 			writeAnalyticsV2RowKey(q, p.GroupBy, p)
 			for i, k := range params.DistinctKeys {

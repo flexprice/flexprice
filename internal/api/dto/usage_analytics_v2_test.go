@@ -83,10 +83,16 @@ func TestGetUsageAnalyticsV2Request_Validate(t *testing.T) {
 		{"bad sort order", func(r *GetUsageAnalyticsV2Request) {
 			r.Sort = &AnalyticsV2Sort{By: AnalyticsV2SortByTotal, Order: "up"}
 		}, "sort order"},
-		{"too many daily windows", func(r *GetUsageAnalyticsV2Request) {
-			r.StartTime = r.EndTime.AddDate(-2, 0, 0)
-			r.WindowSize = types.WindowSizeDay
+		{"too many hourly windows", func(r *GetUsageAnalyticsV2Request) {
+			r.StartTime = r.EndTime.AddDate(0, 0, -30)
+			r.WindowSize = types.WindowSizeHour
 		}, "use a larger window_size"},
+		{"range over a year", func(r *GetUsageAnalyticsV2Request) {
+			r.StartTime = r.EndTime.AddDate(-2, 0, 0)
+		}, "limited to 366 days"},
+		{"group_by names collide without the properties prefix", func(r *GetUsageAnalyticsV2Request) {
+			r.GroupBy = []string{"source", "properties.source"}
+		}, "distinct names"},
 		{"valid expand of price, plan, addon, subscription on any rows", func(r *GetUsageAnalyticsV2Request) {
 			r.Expand = []string{"price", "plan", "addon", "subscription"}
 		}, ""},

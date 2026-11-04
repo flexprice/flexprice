@@ -303,8 +303,10 @@ func seedAnalyticsV2Events(t *testing.T, ctx context.Context, repo *MeterUsageRe
 // renderAnalyticsV2Points prints point cells sorted, at 9 decimals.
 func renderAnalyticsV2Points(cells []events.AnalyticsV2PointCell) []string {
 	out := lo.Map(cells, func(c events.AnalyticsV2PointCell, _ int) string {
-		return fmt.Sprintf("row=%d w=%s col=%s line=%d q=%s weight=%s peak=%s n=%d", c.Row, c.WindowStart.UTC().Format(time.RFC3339),
-			c.Column, c.Line, c.Quantity.Round(9), c.PeakWeight.Round(9), c.Peak.Round(9), c.EventCount)
+		a := c.Amounts
+		return fmt.Sprintf("row=%d w=%s col=%s max=%v usage=%s util=%s over=%s trueup=%s disc=%s q=%s peak=%s n=%d",
+			c.Row, c.WindowStart.UTC().Format(time.RFC3339), c.Column, c.IsMax, a.Usage.Round(9), a.CommitmentUtilized.Round(9),
+			a.Overage.Round(9), a.TrueUp.Round(9), a.Discount.Round(9), c.Quantity.Round(9), c.Peak.Round(9), c.EventCount)
 	})
 	sort.Strings(out)
 	return out

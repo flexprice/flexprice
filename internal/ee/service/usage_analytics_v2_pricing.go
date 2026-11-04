@@ -97,12 +97,13 @@ func classifyAnalyticsV2InvoiceLines(subscriptionID, currency string, rows []dto
 	out := &analyticsV2PricedPeriods{}
 
 	for _, row := range rows {
-		if row.Amount.IsZero() && lo.FromPtr(row.AdjustedEntitlementQuantity).IsZero() {
-			continue
-		}
-
+		// Zero rows on a line are kept so an unsupported meter is still reported when it costs nothing;
+		// splitAnalyticsV2Excluded drops the zero lines of supported meters.
 		lineID := lo.FromPtr(row.SubscriptionLineItemID)
 		if lineID == "" {
+			if row.Amount.IsZero() {
+				continue
+			}
 			out.unattributed = append(out.unattributed, &analyticsV2UnattributedCost{
 				subscriptionID: subscriptionID,
 				currency:       currency,
@@ -306,11 +307,13 @@ func analyticsV2Supported(m *meter.Meter, p *price.Price) bool {
 	}
 }
 
-// splitAnalyticsV2Excluded moves lines on unsupported meters out, summing their cost per meter.
+// splitAnalyticsV2Excluded moves lines on unsupported meters out, summing their cost per meter. Their usage
+// can't be split, so a partial range carries each line's cost in proportion to time.
 func splitAnalyticsV2Excluded(
 	lines []*analyticsV2LineCost,
 	meters map[string]*meter.Meter,
 	prices map[string]*price.Price,
+	start, end time.Time,
 ) ([]*analyticsV2LineCost, []dto.AnalyticsV2ExcludedMeter) {
 	kept := make([]*analyticsV2LineCost, 0, len(lines))
 	excludedByMeter := make(map[string]*dto.AnalyticsV2ExcludedMeter)
@@ -319,7 +322,9 @@ func splitAnalyticsV2Excluded(
 	for _, line := range lines {
 		m := meters[line.meterID]
 		if analyticsV2Supported(m, prices[line.priceID]) {
-			kept = append(kept, line)
+			if !line.total().IsZero() || !line.freeQuantity.IsZero() {
+				kept = append(kept, line)
+			}
 			continue
 		}
 		ex := excludedByMeter[line.meterID]
@@ -331,7 +336,8 @@ func splitAnalyticsV2Excluded(
 			excludedByMeter[line.meterID] = ex
 			order = append(order, line.meterID)
 		}
-		ex.Cost = lo.ToPtr(ex.Cost.Add(line.total().Sub(line.discount)))
+		f := analyticsV2Overlap(start, end, line.key.windowStart, line.key.windowEnd)
+		ex.Cost = lo.ToPtr(ex.Cost.Add(line.total().Sub(line.discount).Mul(f)))
 	}
 
 	excluded := make([]dto.AnalyticsV2ExcludedMeter, 0, len(order))
