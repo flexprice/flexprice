@@ -19090,7 +19090,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "bill_on": {
-                    "description": "BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now. Like\nstart_date and end_date, a date under a second past a period edge means the edge.",
+                    "description": "BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now (the\ncommitment start once its term has ended). A date under a second past a period edge means the edge.",
                     "type": "string"
                 },
                 "bill_trigger": {

@@ -637,19 +637,6 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		// Subscription stays TRIALING — trial start invoice does not gate activation.
 	}
 
-	// The opening invoice may have billed the commitments' first instalments.
-	for _, c := range commitments {
-		if len(c.Instalments) == 0 {
-			continue
-		}
-
-		current, err := commitmentSvc.GetBillingTerms(ctx, c.ID)
-		if err != nil {
-			return nil, err
-		}
-		c.Instalments = current.Instalments
-	}
-
 	// Inherited children must see the parent's final status/period fields after invoice + activation.
 	for _, childID := range childCustomerIDs {
 		if err := s.createInheritedSubscriptions(ctx, sub, childID); err != nil {
@@ -686,6 +673,25 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// The opening invoice may have billed the commitments' first instalments. It may also have charged a card, so a
+	// failed read keeps the created instalments instead of failing the request.
+	commitmentSvc := newCommitmentService(s.ServiceParams)
+	for _, c := range result.Commitments {
+		if len(c.Instalments) == 0 {
+			continue
+		}
+
+		current, err := commitmentSvc.GetBillingTerms(ctx, c.ID)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to refresh commitment instalments after subscription creation",
+				"error", err,
+				"subscription_id", result.Sub.ID,
+				"commitment_id", c.ID)
+			continue
+		}
+		c.Instalments = current.Instalments
 	}
 
 	// Grants were deferred while the subscription was incomplete; apply them after commit.
@@ -5472,7 +5478,10 @@ func (s *subscriptionService) buildAddonLineItems(
 func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, priceResponse *dto.PriceResponse, sub *subscription.Subscription, addonID, addonAssociationID string, addonRequestedStart time.Time) *subscription.SubscriptionLineItem {
 	price := priceResponse.Price
 
-	lineItemStart := price.LineItemStart(addonRequestedStart)
+	lineItemStart := addonRequestedStart
+	if price.StartDate != nil && price.StartDate.After(lineItemStart) {
+		lineItemStart = *price.StartDate
+	}
 
 	lineItem := &subscription.SubscriptionLineItem{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),

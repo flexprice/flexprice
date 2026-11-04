@@ -1259,8 +1259,8 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		r.StartDate = &now
 	}
 
-	if r.EndDate != nil && r.EndDate.Before(*r.StartDate) {
-		return ierr.NewError("end_date cannot be before start_date").
+	if r.EndDate != nil && !r.EndDate.After(*r.StartDate) {
+		return ierr.NewError("end_date must be after start_date").
 			WithHint("End date must be after start date").
 			WithReportableDetails(map[string]interface{}{
 				"start_date": *r.StartDate,

@@ -1471,8 +1471,8 @@ definitions:
     properties:
       bill_on:
         description: |-
-          BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now. Like
-          start_date and end_date, a date under a second past a period edge means the edge.
+          BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now (the
+          commitment start once its term has ended). A date under a second past a period edge means the edge.
         type: string
       bill_trigger:
         $ref: '#/definitions/types.InstalmentBillTrigger'

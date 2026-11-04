@@ -22,8 +22,8 @@ type BillingTermInput struct {
 
 	BillTrigger *types.InstalmentBillTrigger `json:"bill_trigger,omitempty"`
 
-	// BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now. Like
-	// start_date and end_date, a date under a second past a period edge means the edge.
+	// BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now (the
+	// commitment start once its term has ended). A date under a second past a period edge means the edge.
 	BillOn *time.Time `json:"bill_on,omitempty"`
 
 	// StartDate defaults like BillOn; EndDate defaults to the commitment end.
