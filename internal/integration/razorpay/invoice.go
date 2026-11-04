@@ -260,7 +260,7 @@ func (s *InvoiceSyncService) executeAutoCharge(
 		return nil
 	}
 
-	lock, err := payments.LockInvoiceCharge(ctx, s.locker, s.paymentRepo, inv.EnvironmentID, inv.ID)
+	lock, err := payments.LockInvoiceCharge(ctx, s.locker, s.paymentRepo, inv.EnvironmentID, inv.ID, "")
 	if ierr.IsAlreadyExists(err) {
 		s.logger.Info(ctx, "a charge is already in progress for this invoice, skipping",
 			"invoice_id", inv.ID)

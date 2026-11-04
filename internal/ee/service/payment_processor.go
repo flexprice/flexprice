@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/nomod"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -117,6 +118,18 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			processErr = p.handlePaymentLinkCreation(ctx, paymentObj)
 		}
 	case types.PaymentMethodTypeCard, types.PaymentMethodTypeUPI:
+		if paymentObj.DestinationType == types.PaymentDestinationTypeInvoice {
+			lock, lockErr := payments.LockInvoiceCharge(ctx, p.Locker, p.PaymentRepo, paymentObj.EnvironmentID, paymentObj.DestinationID, paymentObj.ID)
+			if lockErr != nil {
+				processErr = lockErr
+				break
+			}
+			defer func() {
+				if releaseErr := lock.Release(ctx); releaseErr != nil {
+					p.Logger.Error(ctx, "failed to release invoice charge lock", "invoice_id", paymentObj.DestinationID, "error", releaseErr)
+				}
+			}()
+		}
 		if lo.FromPtr(paymentObj.PaymentGateway) == string(types.PaymentGatewayTypeRazorpay) {
 			processErr = p.handleRazorpayTokenCharge(ctx, paymentObj)
 			settledByWebhook = true
