@@ -131,7 +131,7 @@ Both new tables use `BaseMixin` and `EnvironmentMixin`. Every query filters on `
 | `period_count` | int | yes | recurring | Commitment periods per step. Default 1. |
 | `invoice_cadence` | varchar(20) | yes | recurring | `ADVANCE` (bill at step start) or `ARREAR` (bill at step end). Reuses `types.InvoiceCadence`. |
 | `split` | varchar(20) | yes | recurring remainder | `even` (default) or `proportional` (each instalment matches its step's period amounts) |
-| `invoice_label` | varchar(255) | yes | all | Invoice line label, after the commitment's `invoice_label`. Default "Instalment {n} of {of}". `{n}` and `{of}` number all of the commitment's instalments together, once and recurring, in billing order. The line description is the commitment's `invoice_description`. |
+| `invoice_label` | varchar(255) | yes | all | Invoice line label, after the commitment's `invoice_label`. Default "Instalment {n} of {of}". `{n}` and `{of}` number all of the commitment's instalments together, once and recurring, in billing order; an edit numbers its new instalments after the invoiced ones, which keep their labels. The line description is the commitment's `invoice_description`. |
 | `metadata` | jsonb | yes | all | Free-form |
 
 `status` (from `BaseMixin`) is `published` for the current terms and `archived` after an edit replaces them.

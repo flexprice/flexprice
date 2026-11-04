@@ -18,7 +18,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// planInstalments expands terms into new instalments for what the invoiced ones leave of the total, numbered among
+// planInstalments expands terms into new instalments for what the invoiced ones leave of the total, numbered after
 // them; undated terms start at the billing period holding from, or at the commitment start once from is past its end.
 func (s *commitmentService) planInstalments(
 	ctx context.Context,
@@ -60,13 +60,16 @@ func (s *commitmentService) planInstalments(
 		return nil, err
 	}
 
-	plan := append(slices.Clone(invoiced), instalments...)
+	// Invoiced instalments keep the numbers they were billed with and are billed before any new one, so the new ones
+	// are numbered after them, in billing order.
+	planned := slices.Clone(instalments)
+	slices.SortStableFunc(planned, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) })
+	plan := append(slices.Clone(invoiced), planned...)
 	if len(plan) > billingterm.MaxInstalments {
 		return nil, ierr.Validationf("billing_terms: with the %d invoiced instalments the plan holds %d, more than the %d allowed",
 			len(invoiced), len(plan), billingterm.MaxInstalments)
 	}
 
-	slices.SortStableFunc(plan, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) })
 	billingterm.NumberLabels(plan)
 
 	return instalments, nil

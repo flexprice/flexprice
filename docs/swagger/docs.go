@@ -15260,7 +15260,7 @@ const docTemplate = `{
         },
         "/webhook-events/billing_instalment.updated": {
             "post": {
-                "description": "Fired when a billing instalment's bill date moves: a trigger bills it, or a voided invoice reschedules it. Doc-only for parsing.",
+                "description": "Fired when a trigger moves a billing instalment's bill date, or a voided invoice puts it back on schedule. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -39967,6 +39967,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "amount": {
+                    "type": "string"
+                },
+                "billing_instalment_id": {
                     "type": "string"
                 },
                 "commitment_info": {

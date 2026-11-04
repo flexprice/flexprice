@@ -410,6 +410,31 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_KeepsInvoicedInstalment
 	s.True(s.liveTotal().Equal(dec("1000")), "the plan still adds up to the total")
 }
 
+// Invoiced instalments keep the numbers they were billed with, so a new instalment dated between two of them still
+// takes the next number: it is billed after both.
+func (s *CommitmentServiceSuite) TestReplaceBillingTerms_NumbersNewInstalmentsAfterTheInvoiced() {
+	ctx := s.GetContext()
+	created, err := s.svc.Create(ctx, s.billingTermsRequest())
+	s.Require().NoError(err)
+
+	rows := s.storedInstalments()
+	slices.SortFunc(rows, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) })
+	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", []string{rows[0].ID, rows[1].ID})
+	s.Require().NoError(err)
+
+	between := rows[0].BillOn.AddDate(0, 0, 14)
+	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, dto.ReplaceBillingTermsRequest{BillingTerms: []dto.BillingTermInput{{
+		Kind:      types.BillingTermKindOnce,
+		ValueType: types.BillingTermValueRemainder,
+		BillOn:    &between,
+	}}})
+	s.Require().NoError(err)
+
+	added := s.addedSince(rows)
+	s.Require().Len(added, 1)
+	s.Equal("Instalment 3 of 3", added[0].InvoiceLabel)
+}
+
 func (s *CommitmentServiceSuite) TestReplaceBillingTerms_SizesThePlanAfterTheCancellation() {
 	ctx := s.GetContext()
 	created, err := s.svc.Create(ctx, s.billingTermsRequest())
