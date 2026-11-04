@@ -768,14 +768,15 @@ func (s *CommitmentServiceSuite) TestTerminate_RejectsFutureEffectiveAt() {
 	created, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
 
+	now := clock.Now().Truncate(time.Second)
 	tests := []struct {
 		name string
 		at   time.Time
 		fee  *dto.CancellationFeeInput
 	}{
-		{name: "an hour ahead", at: clock.Now().Add(time.Hour)},
-		{name: "a year ahead", at: clock.Now().AddDate(1, 0, 0)},
-		{name: "a year ahead with a fee", at: clock.Now().AddDate(1, 0, 0), fee: fixedFee("50")},
+		{name: "an hour ahead", at: now.Add(time.Hour)},
+		{name: "a year ahead", at: now.AddDate(1, 0, 0)},
+		{name: "a year ahead with a fee", at: now.AddDate(1, 0, 0), fee: fixedFee("50")},
 	}
 
 	for _, tt := range tests {

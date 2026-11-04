@@ -138,41 +138,42 @@ func TestReplaceBillingTermsRequest_Validate(t *testing.T) {
 	}
 }
 
-func TestBillingTermInput_ApplyDefaults(t *testing.T) {
+// Term and trigger dates are taken as given: a fraction of a second is rejected, never rounded.
+func TestBillingTermDates_MustBeWholeSeconds(t *testing.T) {
 	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-	in := BillingTermInput{
-		BillOn:    lo.ToPtr(jan.Add(750 * time.Millisecond)),
-		StartDate: lo.ToPtr(jan.Add(time.Second + 1)),
+	fraction := lo.ToPtr(jan.Add(750 * time.Millisecond))
+	term := func(edit func(*BillingTermInput)) ReplaceBillingTermsRequest {
+		in := BillingTermInput{Kind: types.BillingTermKindOnce, ValueType: types.BillingTermValueRemainder, BillOn: lo.ToPtr(jan)}
+		edit(&in)
+		return ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{in}}
 	}
 
-	in.ApplyDefaults()
+	tests := []struct {
+		name    string
+		request interface{ Validate() error }
+		wantErr bool
+	}{
+		{"whole-second dates", term(func(*BillingTermInput) {}), false},
+		{"bill_on", term(func(in *BillingTermInput) { in.BillOn = fraction }), true},
+		{"start_date", term(func(in *BillingTermInput) { in.StartDate = fraction }), true},
+		{"end_date", term(func(in *BillingTermInput) { in.EndDate = fraction }), true},
+		{"trigger at a whole second", TriggerInstalmentRequest{BillOn: lo.ToPtr(jan)}, false},
+		{"trigger without bill_on", TriggerInstalmentRequest{}, false},
+		{"trigger bill_on", TriggerInstalmentRequest{BillOn: fraction}, true},
+		{"termination effective_at", &TerminateCommitmentRequest{EffectiveAt: fraction}, true},
+	}
 
-	require.True(t, in.BillOn.Equal(jan))
-	require.True(t, in.StartDate.Equal(jan.Add(time.Second)))
-	require.Nil(t, in.EndDate)
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.request.Validate()
+			if !tc.wantErr {
+				require.NoError(t, err)
+				return
+			}
 
-func TestReplaceBillingTermsRequest_ApplyDefaults(t *testing.T) {
-	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-	req := ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{
-		{BillOn: lo.ToPtr(jan.Add(750 * time.Millisecond))},
-		{StartDate: lo.ToPtr(jan.Add(time.Second + 1))},
-	}}
-
-	req.ApplyDefaults()
-
-	require.True(t, req.BillingTerms[0].BillOn.Equal(jan))
-	require.True(t, req.BillingTerms[1].StartDate.Equal(jan.Add(time.Second)))
-}
-
-func TestTriggerInstalmentRequest_ApplyDefaults(t *testing.T) {
-	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-
-	req := TriggerInstalmentRequest{BillOn: lo.ToPtr(jan.Add(750 * time.Millisecond))}
-	req.ApplyDefaults()
-	require.True(t, req.BillOn.Equal(jan))
-
-	none := TriggerInstalmentRequest{}
-	none.ApplyDefaults()
-	require.Nil(t, none.BillOn)
+			require.Error(t, err)
+			require.True(t, ierr.IsValidation(err), "got %v", err)
+			require.ErrorContains(t, err, "whole_second")
+		})
+	}
 }

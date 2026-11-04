@@ -1471,8 +1471,8 @@ definitions:
     properties:
       bill_on:
         description: |-
-          BillOn defaults to the commitment start. On an edit it defaults to the start of the billing period holding now, or
-          to the commitment start once the term has ended.
+          BillOn is a whole second, the commitment start by default. On an edit it defaults to the start of the billing
+          period holding now, or to the commitment start once the term has ended.
         type: string
       bill_trigger:
         $ref: '#/definitions/types.InstalmentBillTrigger'
@@ -1495,8 +1495,8 @@ definitions:
       split:
         $ref: '#/definitions/types.BillingTermSplit'
       start_date:
-        description: StartDate defaults like BillOn; EndDate defaults to the commitment
-          end.
+        description: StartDate defaults like BillOn and EndDate to the commitment
+          end; both are whole seconds.
         type: string
       value:
         type: string
@@ -2667,6 +2667,7 @@ definitions:
       scope:
         $ref: '#/definitions/CommitmentScopeInput'
       start_date:
+        description: StartDate and EndDate must be whole seconds.
         type: string
       subscription_id:
         description: SubscriptionID is required on POST /commitments and set server-side
@@ -9841,6 +9842,7 @@ definitions:
       cancellation_fee:
         $ref: '#/definitions/CancellationFeeInput'
       effective_at:
+        description: EffectiveAt defaults to now; a given one must be a whole second.
         type: string
     type: object
   TopUpCoupon:
@@ -9982,6 +9984,7 @@ definitions:
   TriggerInstalmentRequest:
     properties:
       bill_on:
+        description: BillOn must be a whole second.
         type: string
     type: object
   UpdateAddonRequest:

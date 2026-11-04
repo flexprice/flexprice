@@ -60,7 +60,7 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
   - Gin's JSON, query and form bindings truncate client-supplied times at ingress (`internal/rest/middleware/binding.go`).
   - A Temporal activity interceptor truncates every activity argument (`internal/temporal/interceptor/time_precision_interceptor.go`) — `workflow.Now()` and schedule times carry nanoseconds, and workflows can't call `clock.Now()`.
   - An ent write hook truncates every time field as the storage backstop (`internal/postgres/ent_hooks.go`).
-- Whole-second alignment of business dates (billing period edges, commitment terms) is a DTO-layer rule (`ApplyDefaults`), not a precision concern.
+- Commitment and billing-term dates in requests must be whole seconds: the `whole_second` validator tag rejects a fraction of a second. Business dates are never rounded on the caller's behalf.
 - ClickHouse is deliberately its own precision domain and needs no normalization: raw events are `DateTime64(3)` (ms; the driver floors, never rounds up) and `meter_usage` timestamps are whole-second window starts by construction. Event timestamps are never exact-compared in memory against stored rows — keep it that way.
 
 ### Observability

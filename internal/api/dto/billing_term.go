@@ -8,12 +8,11 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-// BillingTermInput is one billing term as a request states it. The request checks that kind and value_type are set;
-// the other rules are checked when the terms are expanded.
+// BillingTermInput is one billing term as a request states it. The request checks that kind and value_type are set and
+// that its dates are whole seconds; the other rules are checked when the terms are expanded.
 type BillingTermInput struct {
 	Kind types.BillingTermKind `json:"kind" validate:"required"`
 
@@ -23,13 +22,13 @@ type BillingTermInput struct {
 
 	BillTrigger *types.InstalmentBillTrigger `json:"bill_trigger,omitempty"`
 
-	// BillOn defaults to the commitment start. On an edit it defaults to the start of the billing period holding now, or
-	// to the commitment start once the term has ended.
-	BillOn *time.Time `json:"bill_on,omitempty"`
+	// BillOn is a whole second, the commitment start by default. On an edit it defaults to the start of the billing
+	// period holding now, or to the commitment start once the term has ended.
+	BillOn *time.Time `json:"bill_on,omitempty" validate:"omitempty,whole_second"`
 
-	// StartDate defaults like BillOn; EndDate defaults to the commitment end.
-	StartDate      *time.Time              `json:"start_date,omitempty"`
-	EndDate        *time.Time              `json:"end_date,omitempty"`
+	// StartDate defaults like BillOn and EndDate to the commitment end; both are whole seconds.
+	StartDate      *time.Time              `json:"start_date,omitempty" validate:"omitempty,whole_second"`
+	EndDate        *time.Time              `json:"end_date,omitempty" validate:"omitempty,whole_second"`
 	PeriodCount    *int                    `json:"period_count,omitempty"`
 	InvoiceCadence *types.InvoiceCadence   `json:"invoice_cadence,omitempty"`
 	Split          *types.BillingTermSplit `json:"split,omitempty"`
@@ -38,22 +37,6 @@ type BillingTermInput struct {
 	// filled with each instalment's place among all of the commitment's instalments and their count.
 	InvoiceLabel *string        `json:"invoice_label,omitempty" validate:"omitempty,max=255"`
 	Metadata     types.Metadata `json:"metadata,omitempty"`
-}
-
-// ApplyDefaults aligns the term's dates to whole seconds, like the billing period edges they are compared with.
-func (in *BillingTermInput) ApplyDefaults() {
-	in.BillOn = wholeSecond(in.BillOn)
-	in.StartDate = wholeSecond(in.StartDate)
-	in.EndDate = wholeSecond(in.EndDate)
-}
-
-// wholeSecond truncates t to the second; nil stays nil.
-func wholeSecond(t *time.Time) *time.Time {
-	if t == nil {
-		return nil
-	}
-
-	return lo.ToPtr(t.Truncate(time.Second))
 }
 
 // ToTerm builds the term of the commitment ownerID with a new ID.
@@ -114,14 +97,7 @@ type ReplaceBillingTermsRequest struct {
 	BillingTerms []BillingTermInput `json:"billing_terms" validate:"required,min=1,max=20,dive"`
 }
 
-// ApplyDefaults aligns the dates of every term to whole seconds.
-func (r *ReplaceBillingTermsRequest) ApplyDefaults() {
-	for i := range r.BillingTerms {
-		r.BillingTerms[i].ApplyDefaults()
-	}
-}
-
-// Validate checks the rules that need only the request. Call ApplyDefaults first.
+// Validate checks the rules that need only the request.
 func (r ReplaceBillingTermsRequest) Validate() error {
 	return validator.ValidateRequest(r)
 }
@@ -134,12 +110,13 @@ type BillingTermsResponse struct {
 
 // TriggerInstalmentRequest triggers a manual instalment to be billed on BillOn, now by default.
 type TriggerInstalmentRequest struct {
-	BillOn *time.Time `json:"bill_on,omitempty"`
+	// BillOn must be a whole second.
+	BillOn *time.Time `json:"bill_on,omitempty" validate:"omitempty,whole_second"`
 }
 
-// ApplyDefaults aligns bill_on to whole seconds.
-func (r *TriggerInstalmentRequest) ApplyDefaults() {
-	r.BillOn = wholeSecond(r.BillOn)
+// Validate checks that bill_on is a whole second.
+func (r TriggerInstalmentRequest) Validate() error {
+	return validator.ValidateRequest(r)
 }
 
 // ListInstalmentsResponse is the instalments of a commitment in billing order.

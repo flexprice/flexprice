@@ -19090,7 +19090,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "bill_on": {
-                    "description": "BillOn defaults to the commitment start. On an edit it defaults to the start of the billing period holding now, or\nto the commitment start once the term has ended.",
+                    "description": "BillOn is a whole second, the commitment start by default. On an edit it defaults to the start of the billing\nperiod holding now, or to the commitment start once the term has ended.",
                     "type": "string"
                 },
                 "bill_trigger": {
@@ -19120,7 +19120,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.BillingTermSplit"
                 },
                 "start_date": {
-                    "description": "StartDate defaults like BillOn; EndDate defaults to the commitment end.",
+                    "description": "StartDate defaults like BillOn and EndDate to the commitment end; both are whole seconds.",
                     "type": "string"
                 },
                 "value": {
@@ -20828,6 +20828,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/CommitmentScopeInput"
                 },
                 "start_date": {
+                    "description": "StartDate and EndDate must be whole seconds.",
                     "type": "string"
                 },
                 "subscription_id": {
@@ -30647,6 +30648,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/CancellationFeeInput"
                 },
                 "effective_at": {
+                    "description": "EffectiveAt defaults to now; a given one must be a whole second.",
                     "type": "string"
                 }
             }
@@ -30825,6 +30827,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "bill_on": {
+                    "description": "BillOn must be a whole second.",
                     "type": "string"
                 }
             }

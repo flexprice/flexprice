@@ -487,10 +487,8 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_CanReplaceTwice() {
 	s.Len(s.storedTerms(created.ID), 2)
 }
 
-// A commitment that began three months ago and runs seven more, worth 1,000. An edit's undated terms start at the
-// period holding now: 300 on its start, then 700 over the seven periods left, billed at each one's end.
-// Term dates align to whole seconds, so a bill_on a fraction past a period start still bills on that period's invoice.
-func (s *CommitmentServiceSuite) TestReplaceBillingTerms_AlignsDatesToWholeSeconds() {
+// Term dates are taken as given, so one with a fraction of a second is rejected rather than rounded.
+func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsFractionalSeconds() {
 	ctx := s.GetContext()
 	req := s.billingTermsRequest()
 	created, err := s.svc.Create(ctx, req)
@@ -500,13 +498,14 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_AlignsDatesToWholeSecon
 	edit := halfUpfrontPlusRemainder()
 	edit.BillingTerms[0].BillOn = lo.ToPtr(req.StartDate.Add(500 * time.Millisecond))
 	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, edit)
-	s.Require().NoError(err)
-
-	added := s.addedSince(old)
-	s.Require().NotEmpty(added)
-	s.True(added[0].BillOn.Equal(req.StartDate), "bill_on aligns to the period start, got %s", added[0].BillOn)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+	s.Contains(err.Error(), "whole_second")
+	s.Empty(s.addedSince(old))
 }
 
+// A commitment that began three months ago and runs seven more, worth 1,000. An edit's undated terms start at the
+// period holding now: 300 on its start, then 700 over the seven periods left, billed at each one's end.
 func (s *CommitmentServiceSuite) TestReplaceBillingTerms_UndatedTermsStartAtTheCurrentPeriod() {
 	ctx := s.GetContext()
 	now := clock.Now().UTC()

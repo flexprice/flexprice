@@ -176,16 +176,18 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 		{"C21 label too long", func(r *dto.CreateCommitmentRequest) { r.InvoiceLabel = string(make([]byte, 256)) }, false},
 		{"C2 end before start", func(r *dto.CreateCommitmentRequest) { r.EndDate = lo.ToPtr(r.StartDate) }, false},
 		{"D8 open-ended without end_date", func(r *dto.CreateCommitmentRequest) { r.EndDate = nil }, true},
+		{"start_date with a fraction of a second", func(r *dto.CreateCommitmentRequest) {
+			r.StartDate = r.StartDate.Add(750 * time.Millisecond)
+		}, false},
+		{"end_date with a fraction of a second", func(r *dto.CreateCommitmentRequest) {
+			r.EndDate = lo.ToPtr(r.EndDate.Add(time.Microsecond))
+		}, false},
+		{"billing term bill_on with a fraction of a second", func(r *dto.CreateCommitmentRequest) {
+			r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
+			r.BillingTerms = upfrontPlusRemainder()
+			r.BillingTerms[0].BillOn = lo.ToPtr(r.StartDate.Add(500 * time.Millisecond))
+		}, false},
 	}
-
-	t.Run("term edges align to whole seconds", func(t *testing.T) {
-		r := validReq("subs_1", "price_1")
-		r.StartDate = r.StartDate.Add(750 * time.Millisecond)
-		r.EndDate = lo.ToPtr(r.EndDate.Add(250 * time.Millisecond))
-		r.ApplyDefaults("UTC")
-		require.True(t, r.StartDate.Equal(r.StartDate.Truncate(time.Second)))
-		require.True(t, r.EndDate.Equal(r.EndDate.Truncate(time.Second)))
-	})
 
 	t.Run("billing_terms default to the subscription invoice", func(t *testing.T) {
 		r := validReq("subs_1", "price_1")
@@ -391,9 +393,8 @@ func (s *CommitmentServiceSuite) TestValidation_OpenEndedOnSubscriptionWithEndDa
 	s.Require().NoError(err)
 }
 
-// A term starting at or after a scheduled subscription end has no billable period, whatever its own end.
-// A subscription starting mid-second accepts a commitment dated at its own start: ApplyDefaults
-// aligns term edges to whole seconds, and the sub-start bound compares at that granularity too.
+// A subscription starting mid-second, as one created without a start_date does, accepts a commitment starting at the
+// whole second holding its start.
 func (s *CommitmentServiceSuite) TestValidation_AcceptsStartMatchingAMidSecondSubscriptionStart() {
 	ctx := s.GetContext()
 	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.fx.sub.ID)
@@ -408,12 +409,13 @@ func (s *CommitmentServiceSuite) TestValidation_AcceptsStartMatchingAMidSecondSu
 	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, line))
 
 	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
-	req.StartDate = sub.StartDate // truncates to the second's start in ApplyDefaults
+	req.StartDate = sub.StartDate.Truncate(time.Second)
 	created, err := s.svc.Create(ctx, req)
 	s.Require().NoError(err)
 	s.True(created.StartDate.Equal(sub.StartDate.Truncate(time.Second)))
 }
 
+// A term starting at or after a scheduled subscription end has no billable period, whatever its own end.
 func (s *CommitmentServiceSuite) TestValidation_StartAtOrAfterSubscriptionEnd() {
 	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.fx.sub.ID)
 	s.Require().NoError(err)

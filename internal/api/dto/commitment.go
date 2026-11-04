@@ -103,18 +103,15 @@ type CreateCommitmentRequest struct {
 	BillingTerms []BillingTermInput `json:"billing_terms,omitempty" validate:"omitempty,max=20,dive"`
 	// InstalmentInvoicing applies only to collection_method billing_terms.
 	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
-	StartDate           time.Time                 `json:"start_date" validate:"required"`
+	// StartDate and EndDate must be whole seconds.
+	StartDate time.Time `json:"start_date" validate:"required,whole_second"`
 	// EndDate is exclusive; omit it for an open-ended commitment, which bills every period until terminated.
-	EndDate  *time.Time     `json:"end_date,omitempty"`
+	EndDate  *time.Time     `json:"end_date,omitempty" validate:"omitempty,whole_second"`
 	Metadata types.Metadata `json:"metadata,omitempty"`
 }
 
 // ApplyDefaults fills label, timezone and the binding-dependent settings.
 func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
-	// Term edges are whole seconds, like every computed billing date.
-	r.StartDate = r.StartDate.Truncate(time.Second)
-	r.EndDate = wholeSecond(r.EndDate)
-
 	if r.InvoiceLabel == "" {
 		r.InvoiceLabel = r.Name
 	}
@@ -133,10 +130,6 @@ func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
 
 	if lo.FromPtr(r.CollectionMethod) == types.CommitmentCollectionBillingTerms && r.InstalmentInvoicing == nil {
 		r.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySubscriptionInvoice)
-	}
-
-	for i := range r.BillingTerms {
-		r.BillingTerms[i].ApplyDefaults()
 	}
 
 	for _, p := range []*CommitmentPriceInput{r.CommittedPrice, r.OveragePrice} {
@@ -344,7 +337,8 @@ func (r *UpdateCommitmentRequest) Validate() error {
 // TerminateCommitmentRequest ends a commitment now. effective_at may not be in the future; cancellation_fee is billed
 // in the commitment currency.
 type TerminateCommitmentRequest struct {
-	EffectiveAt     *time.Time            `json:"effective_at,omitempty"`
+	// EffectiveAt defaults to now; a given one must be a whole second.
+	EffectiveAt     *time.Time            `json:"effective_at,omitempty" validate:"omitempty,whole_second"`
 	CancellationFee *CancellationFeeInput `json:"cancellation_fee,omitempty"`
 }
 

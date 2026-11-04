@@ -150,7 +150,6 @@ func (s *commitmentService) PreviewBillingTerms(
 		return nil, err
 	}
 
-	req.ApplyDefaults()
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -191,7 +190,6 @@ func (s *commitmentService) ReplaceBillingTerms(
 		return nil, err
 	}
 
-	req.ApplyDefaults()
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
