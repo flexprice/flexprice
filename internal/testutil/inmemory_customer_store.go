@@ -67,22 +67,8 @@ func (s *InMemoryCustomerStore) Create(ctx context.Context, c *customer.Customer
 	return s.InMemoryStore.Create(ctx, c.ID, copyCustomer(c))
 }
 
-// Unset status behaves as published, matching the column default
-func customerStatusOrDefault(s types.Status) string {
-	if s == "" {
-		return string(types.StatusPublished)
-	}
-	return string(s)
-}
-
 func customerStatusPublished(s types.Status) bool {
-	return customerStatusOrDefault(s) == string(types.StatusPublished)
-}
-
-// Mirrors readableCustomerStatuses in repository/ent
-func customerStatusReadable(s types.Status) bool {
-	status := customerStatusOrDefault(s)
-	return status == string(types.StatusPublished) || status == string(types.StatusArchived)
+	return types.CustomerStatusOrDefault(s) == string(types.StatusPublished)
 }
 
 func (s *InMemoryCustomerStore) Get(ctx context.Context, id string) (*customer.Customer, error) {
@@ -90,7 +76,7 @@ func (s *InMemoryCustomerStore) Get(ctx context.Context, id string) (*customer.C
 	if err != nil {
 		return nil, err
 	}
-	if !customerStatusReadable(c.Status) {
+	if !types.IsCustomerStatusReadable(c.Status) {
 		return nil, ierr.NewError("customer not found").
 			WithHintf("Customer with ID %s was not found", id).
 			WithReportableDetails(map[string]any{
@@ -219,9 +205,9 @@ func customerFilterFn(ctx context.Context, c *customer.Customer, filter interfac
 		}
 	}
 
-	cs := customerStatusOrDefault(c.Status)
+	cs := types.CustomerStatusOrDefault(c.Status)
 	// No filter may reach suppressed rows
-	if !customerStatusReadable(c.Status) {
+	if !types.IsCustomerStatusReadable(c.Status) {
 		return false
 	}
 	if status := f.GetStatus(); status != "" && cs != status {

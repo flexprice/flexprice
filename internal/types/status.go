@@ -22,3 +22,28 @@ const (
 	// Erasure requested; never readable, reversible
 	StatusSuppressed Status = "suppressed"
 )
+
+// Allowlist so new statuses stay hidden
+var ReadableCustomerStatuses = []string{
+	string(StatusPublished),
+	string(StatusArchived),
+}
+
+// Unset status behaves as published
+func CustomerStatusOrDefault(status Status) string {
+	if status == "" {
+		return string(StatusPublished)
+	}
+	return string(status)
+}
+
+// Single source for production and test doubles
+func IsCustomerStatusReadable(status Status) bool {
+	resolved := CustomerStatusOrDefault(status)
+	for _, allowed := range ReadableCustomerStatuses {
+		if resolved == allowed {
+			return true
+		}
+	}
+	return false
+}
