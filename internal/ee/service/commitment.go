@@ -734,9 +734,6 @@ func (s *commitmentService) billTermination(
 		return nil, err
 	}
 
-	// A settlement alone bills instalments only, as the separate-invoice run does. Marked a proration, it would match
-	// the subscription, period and reason that an immediate cancel's final invoice is deduplicated by.
-	reason := types.InvoiceBillingReasonBillingTerms
 	var lines []dto.CreateInvoiceLineItemRequest
 	if settlement != nil {
 		lines = append(lines, instalmentLine(c, settlement))
@@ -748,7 +745,6 @@ func (s *commitmentService) billTermination(
 			return nil, err
 		}
 
-		reason = types.InvoiceBillingReasonProration
 		lines = append(lines, line)
 	}
 
@@ -764,7 +760,7 @@ func (s *commitmentService) billTermination(
 		SubscriptionID: lo.ToPtr(sub.ID),
 		InvoiceType:    types.InvoiceTypeOneOff,
 		Currency:       c.Currency,
-		BillingReason:  reason,
+		BillingReason:  types.InvoiceBillingReasonCommitmentTermination,
 		AmountDue:      total,
 		Total:          total,
 		Subtotal:       total,

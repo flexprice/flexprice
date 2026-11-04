@@ -1100,7 +1100,7 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 			s.Require().NoError(err)
 			s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
 			s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
-			s.Equal(string(types.InvoiceBillingReasonBillingTerms), inv.BillingReason)
+			s.Equal(string(types.InvoiceBillingReasonCommitmentTermination), inv.BillingReason)
 			s.True(inv.AmountDue.Equal(dec(tt.wantSettlement)), "amount due %s", inv.AmountDue)
 			s.True(inv.PeriodStart.Equal(jan) && inv.PeriodEnd.Equal(tt.at), "the invoice covers the settlement")
 
@@ -1136,7 +1136,7 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_SettlementWithFee() 
 	inv, err := s.GetStores().InvoiceRepo.Get(ctx, *resp.TerminationInvoiceID)
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
-	s.Equal(string(types.InvoiceBillingReasonProration), inv.BillingReason)
+	s.Equal(string(types.InvoiceBillingReasonCommitmentTermination), inv.BillingReason)
 	s.True(inv.AmountDue.Equal(dec("650")), "amount due %s", inv.AmountDue)
 	s.True(inv.PeriodStart.Equal(jan) && inv.PeriodEnd.Equal(end), "period %v to %v", inv.PeriodStart, inv.PeriodEnd)
 

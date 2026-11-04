@@ -499,7 +499,7 @@ func (s *CommitmentE2ESuite) TestTerminateMidPeriod_ClipsTheFloorAndBillsTheFee(
 	fee, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), *terminated.TerminationInvoiceID)
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceTypeOneOff, fee.InvoiceType)
-	s.Equal(string(types.InvoiceBillingReasonProration), fee.BillingReason)
+	s.Equal(string(types.InvoiceBillingReasonCommitmentTermination), fee.BillingReason)
 	s.True(fee.AmountDue.Equal(dec("500")), "fee invoice %s", fee.AmountDue)
 	feeLines, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), fee.ID)
 	s.Require().NoError(err)
@@ -953,7 +953,8 @@ func (s *CommitmentE2ESuite) TestE2E_A4_Milestones() {
 }
 
 // A6: $100 a month for 2026, with a $300 deposit. The deposit is billed on 1 Jan, the first three months bill only
-// usage above the commitment, and from April each month's invoice carries its $100.
+// usage above the commitment, and from April each month's invoice carries its $100. The deposit's own label takes no
+// number, so the monthly instalments count 1 to 9.
 func (s *CommitmentE2ESuite) TestE2E_A6_Deposit() {
 	apr, end := s.jan.AddDate(0, 3, 0), s.jan.AddDate(1, 0, 0)
 	tokens := s.planWith("a6", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
