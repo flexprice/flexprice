@@ -41,6 +41,7 @@ func (s *EntityIntegrationMappingServiceSuite) setupService() {
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		TenantRepo:                   stores.TenantRepo,
 		EnvironmentRepo:              stores.EnvironmentRepo,
+		SettingsRepo:                 stores.SettingsRepo,
 	})
 }
 

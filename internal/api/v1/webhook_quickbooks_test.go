@@ -74,7 +74,7 @@ func setupQuickBooksWebhookHandler(t *testing.T, verifierToken string) *WebhookH
 		nil,
 	)
 
-	billingEntitySvc := service.NewBillingEntityService(service.ServiceParams{EnvironmentRepo: testutil.NewInMemoryEnvironmentStore()})
+	billingEntitySvc := service.NewBillingEntityService(service.ServiceParams{EnvironmentRepo: testutil.NewInMemoryEnvironmentStore(), SettingsRepo: testutil.NewInMemorySettingsStore()})
 	return NewWebhookHandler(cfg, nil, log, factory, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, billingEntitySvc)
 }
 

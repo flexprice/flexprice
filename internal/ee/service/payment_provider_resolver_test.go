@@ -30,6 +30,7 @@ func (s *PaymentProviderResolverSuite) SetupTest() {
 		ConnectionRepo:  s.GetStores().ConnectionRepo,
 		TenantRepo:      s.GetStores().TenantRepo,
 		EnvironmentRepo: s.GetStores().EnvironmentRepo,
+		SettingsRepo:    s.GetStores().SettingsRepo,
 	})
 }
 

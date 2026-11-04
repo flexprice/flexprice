@@ -58,7 +58,7 @@ func newConnectionServiceWithRealFactoryForTest(t *testing.T, cfg *config.Config
 		IntegrationFactory: factory,
 		DB:                 testutil.NewMockPostgresClient(log),
 		TenantRepo:         testutil.NewInMemoryTenantStore(),
-		EnvironmentRepo:    testutil.NewInMemoryEnvironmentStore(),
+		SettingsRepo:       testutil.NewInMemorySettingsStore(),
 	}
 
 	return NewConnectionService(params, encSvc), connRepo
@@ -82,12 +82,12 @@ func newConnectionServiceForTest(t *testing.T) (ConnectionService, *testutil.InM
 	connRepo := testutil.NewInMemoryConnectionStore()
 
 	params := ServiceParams{
-		Logger:          log,
-		Config:          cfg,
-		ConnectionRepo:  connRepo,
-		DB:              testutil.NewMockPostgresClient(log),
-		TenantRepo:      testutil.NewInMemoryTenantStore(),
-		EnvironmentRepo: testutil.NewInMemoryEnvironmentStore(),
+		Logger:         log,
+		Config:         cfg,
+		ConnectionRepo: connRepo,
+		DB:             testutil.NewMockPostgresClient(log),
+		TenantRepo:     testutil.NewInMemoryTenantStore(),
+		SettingsRepo:   testutil.NewInMemorySettingsStore(),
 	}
 
 	return NewConnectionService(params, encSvc), connRepo
@@ -150,12 +150,12 @@ func newConnectionServiceForTestWithConfig(t *testing.T, cfg *config.Configurati
 	connRepo := testutil.NewInMemoryConnectionStore()
 
 	params := ServiceParams{
-		Logger:          log,
-		Config:          cfg,
-		ConnectionRepo:  connRepo,
-		DB:              testutil.NewMockPostgresClient(log),
-		TenantRepo:      testutil.NewInMemoryTenantStore(),
-		EnvironmentRepo: testutil.NewInMemoryEnvironmentStore(),
+		Logger:         log,
+		Config:         cfg,
+		ConnectionRepo: connRepo,
+		DB:             testutil.NewMockPostgresClient(log),
+		TenantRepo:     testutil.NewInMemoryTenantStore(),
+		SettingsRepo:   testutil.NewInMemorySettingsStore(),
 	}
 
 	return NewConnectionService(params, encSvc), connRepo

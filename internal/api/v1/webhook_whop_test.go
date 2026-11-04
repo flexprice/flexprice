@@ -125,7 +125,7 @@ func setupWhopWebhookHandler(t *testing.T, webhookSecret string) (*WebhookHandle
 		nil, // refundService
 		nil, // db
 		nil, // webhookService
-		service.NewBillingEntityService(service.ServiceParams{EnvironmentRepo: testutil.NewInMemoryEnvironmentStore()}),
+		service.NewBillingEntityService(service.ServiceParams{EnvironmentRepo: testutil.NewInMemoryEnvironmentStore(), SettingsRepo: testutil.NewInMemorySettingsStore()}),
 	)
 
 	return handler, log

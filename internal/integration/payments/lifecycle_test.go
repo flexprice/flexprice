@@ -51,7 +51,7 @@ func (s *PaymentLifecycleSuite) setupLifecycle() {
 		CustomerRepo:        s.GetStores().CustomerRepo,
 		InvoiceRepo:         s.GetStores().InvoiceRepo,
 		EntitlementRepo:     s.GetStores().EntitlementRepo,
-		EnvironmentRepo:     s.GetStores().EnvironmentRepo,
+		SettingsRepo:        s.GetStores().SettingsRepo,
 		FeatureRepo:         s.GetStores().FeatureRepo,
 		TenantRepo:          s.GetStores().TenantRepo,
 		UserRepo:            s.GetStores().UserRepo,
