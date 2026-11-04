@@ -17,7 +17,7 @@ import (
 )
 
 // The analytics pricer must reproduce the invoice: each billing period in the range priced like billing.
-func (s *BillingServiceSuite) TestPriceAnalyticsV2Subscriptions_MatchesInvoicePerPeriod() {
+func (s *BillingServiceSuite) TestPriceSubscriptions_MatchesInvoicePerPeriod() {
 	s.BaseServiceTestSuite.ClearStores()
 	ctx := s.GetContext()
 	jan1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -67,12 +67,11 @@ func (s *BillingServiceSuite) TestPriceAnalyticsV2Subscriptions_MatchesInvoicePe
 	usageSvc := &meterUsageService{ServiceParams: billing.ServiceParams, repo: billing.MeterUsageRepo, logger: billing.Logger}
 
 	// Feb 10 - Mar 20 touches the February and March billing periods; January must not be priced.
-	priced, err := usageSvc.priceAnalyticsV2Subscriptions(ctx, []*subscription.Subscription{sub},
+	priced, err := usageSvc.priceSubscriptions(ctx, []*subscription.Subscription{sub},
 		time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC))
 	s.Require().NoError(err)
 	s.Require().Len(priced.lines, 2)
 	s.Equal(2, priced.periods)
-	s.Empty(priced.unattributed)
 
 	for i, period := range [][2]time.Time{{feb1, mar1}, {mar1, apr1}} {
 		invoice, err := billing.calculateMeterUsageCharges(ctx, sub, sub.LineItems, period[0], period[1], true, nil)
@@ -99,7 +98,7 @@ func (s *BillingServiceSuite) TestPriceAnalyticsV2Subscriptions_MatchesInvoicePe
 		StartDate: mar1.AddDate(0, 0, 1), EnvironmentID: types.GetEnvironmentID(ctx), Coupon: c, BaseModel: types.GetDefaultBaseModel(ctx),
 	}))
 
-	priced, err = usageSvc.priceAnalyticsV2Subscriptions(ctx, []*subscription.Subscription{sub},
+	priced, err = usageSvc.priceSubscriptions(ctx, []*subscription.Subscription{sub},
 		time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC))
 	s.Require().NoError(err)
 	s.True(priced.lines[0].discount.IsZero(), "February is before the coupon starts")

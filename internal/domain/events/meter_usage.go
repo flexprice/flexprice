@@ -284,9 +284,6 @@ type MeterUsageRepository interface {
 	// RankAnalyticsV2Rows prices events by their line's rates, groups them into rows and returns one sorted page.
 	RankAnalyticsV2Rows(ctx context.Context, params *AnalyticsV2RankParams) (*AnalyticsV2RankResult, error)
 
-	// GetAnalyticsV2LinePeaks returns, per line, the sum of every row's peak (zero for non-MAX lines), aligned with params.Lines.
-	GetAnalyticsV2LinePeaks(ctx context.Context, params *AnalyticsV2LinePeakParams) ([]decimal.Decimal, error)
-
 	// GetAnalyticsV2Detail returns time points and distinct-value metrics for the page rows.
 	GetAnalyticsV2Detail(ctx context.Context, params *AnalyticsV2DetailParams) (*AnalyticsV2Detail, error)
 

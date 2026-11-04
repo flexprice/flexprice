@@ -37,10 +37,10 @@ const (
 	AnalyticsV2MaxDistinctValues = 5
 )
 
-var analyticsV2PropertyName = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
+var propertyNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 
 // Keys that identify a line rather than an event property; grouping by one of them makes rows single-meter.
-var analyticsV2LineKeys = []string{"meter_id", "feature_id", "sub_line_item_id"}
+var lineKeys = []string{"meter_id", "feature_id", "sub_line_item_id"}
 
 type AnalyticsV2FilterOp string
 
@@ -130,10 +130,10 @@ func (r *GetUsageAnalyticsV2Request) Validate() error {
 		return err
 	}
 	if !r.EndTime.After(r.StartTime) {
-		return analyticsV2Error("end_time must be after start_time", nil)
+		return validationError("end_time must be after start_time", nil)
 	}
 	if r.EndTime.Sub(r.StartTime) > AnalyticsV2MaxRange {
-		return analyticsV2Error("the range between start_time and end_time is limited to 366 days", nil)
+		return validationError("the range between start_time and end_time is limited to 366 days", nil)
 	}
 	if err := r.validateFilters(); err != nil {
 		return err
@@ -158,59 +158,59 @@ func (r *GetUsageAnalyticsV2Request) SingleMeter() bool {
 	if len(r.MeterIDs)+len(r.FeatureIDs) == 1 {
 		return true
 	}
-	return lo.SomeBy(r.GroupBy, func(k string) bool { return lo.Contains(analyticsV2LineKeys, k) })
+	return lo.SomeBy(r.GroupBy, func(k string) bool { return lo.Contains(lineKeys, k) })
 }
 
 func (r *GetUsageAnalyticsV2Request) validateKeys() error {
 	if len(r.GroupBy) == 0 || len(r.GroupBy) > AnalyticsV2MaxRowKeys {
-		return analyticsV2Error(fmt.Sprintf("group_by needs 1 to %d keys", AnalyticsV2MaxRowKeys), map[string]any{"group_by": r.GroupBy})
+		return validationError(fmt.Sprintf("group_by needs 1 to %d keys", AnalyticsV2MaxRowKeys), map[string]any{"group_by": r.GroupBy})
 	}
 	if len(lo.Uniq(r.GroupBy)) != len(r.GroupBy) {
-		return analyticsV2Error("group_by has duplicate keys", map[string]any{"group_by": r.GroupBy})
+		return validationError("group_by has duplicate keys", map[string]any{"group_by": r.GroupBy})
 	}
 	for _, k := range r.GroupBy {
-		if !isAnalyticsV2Key(k) {
-			return analyticsV2Error(fmt.Sprintf("group_by key %q is not supported", k), map[string]any{"key": k})
+		if !isValidKey(k) {
+			return validationError(fmt.Sprintf("group_by key %q is not supported", k), map[string]any{"key": k})
 		}
 	}
 	// Rows name their values without the "properties." prefix, so "source" and "properties.source" would collide.
 	names := lo.Map(r.GroupBy, func(k string, _ int) string { return strings.TrimPrefix(k, "properties.") })
 	if len(lo.Uniq(names)) != len(names) {
-		return analyticsV2Error("group_by keys must have distinct names once the properties. prefix is dropped", map[string]any{"group_by": r.GroupBy})
+		return validationError("group_by keys must have distinct names once the properties. prefix is dropped", map[string]any{"group_by": r.GroupBy})
 	}
 	if r.Columns == "" {
 		return nil
 	}
-	if r.Columns != AnalyticsV2KeyMonth && !isAnalyticsV2Key(r.Columns) {
-		return analyticsV2Error(fmt.Sprintf("columns key %q is not supported", r.Columns), map[string]any{"columns": r.Columns})
+	if r.Columns != AnalyticsV2KeyMonth && !isValidKey(r.Columns) {
+		return validationError(fmt.Sprintf("columns key %q is not supported", r.Columns), map[string]any{"columns": r.Columns})
 	}
 	if lo.Contains(r.GroupBy, r.Columns) {
-		return analyticsV2Error("columns key cannot also be a group_by key", map[string]any{"columns": r.Columns})
+		return validationError("columns key cannot also be a group_by key", map[string]any{"columns": r.Columns})
 	}
 	return nil
 }
 
 func (r *GetUsageAnalyticsV2Request) validateFilters() error {
 	for _, f := range r.Filters {
-		if !isAnalyticsV2Key(f.Key) {
-			return analyticsV2Error(fmt.Sprintf("filter key %q is not supported", f.Key), map[string]any{"key": f.Key})
+		if !isValidKey(f.Key) {
+			return validationError(fmt.Sprintf("filter key %q is not supported", f.Key), map[string]any{"key": f.Key})
 		}
 		if f.Op != AnalyticsV2FilterOpIn && f.Op != AnalyticsV2FilterOpNotIn {
-			return analyticsV2Error(fmt.Sprintf("filter op %q is not supported (use in or not_in)", f.Op), map[string]any{"op": f.Op})
+			return validationError(fmt.Sprintf("filter op %q is not supported (use in or not_in)", f.Op), map[string]any{"op": f.Op})
 		}
 	}
 	if len(r.Search) > AnalyticsV2MaxSearchLength {
-		return analyticsV2Error(fmt.Sprintf("search is limited to %d characters", AnalyticsV2MaxSearchLength), nil)
+		return validationError(fmt.Sprintf("search is limited to %d characters", AnalyticsV2MaxSearchLength), nil)
 	}
 	return nil
 }
 
 func (r *GetUsageAnalyticsV2Request) validatePaging() error {
 	if r.Limit < 1 || r.Limit > AnalyticsV2MaxLimit {
-		return analyticsV2Error(fmt.Sprintf("limit must be between 1 and %d", AnalyticsV2MaxLimit), map[string]any{"limit": r.Limit})
+		return validationError(fmt.Sprintf("limit must be between 1 and %d", AnalyticsV2MaxLimit), map[string]any{"limit": r.Limit})
 	}
 	if r.Offset < 0 {
-		return analyticsV2Error("offset cannot be negative", map[string]any{"offset": r.Offset})
+		return validationError("offset cannot be negative", map[string]any{"offset": r.Offset})
 	}
 	return nil
 }
@@ -218,23 +218,23 @@ func (r *GetUsageAnalyticsV2Request) validatePaging() error {
 func (r *GetUsageAnalyticsV2Request) validateSort() error {
 	s := r.Sort
 	if s.Order != types.SortDirectionAsc && s.Order != types.SortDirectionDesc {
-		return analyticsV2Error(fmt.Sprintf("sort order %q is not supported (use asc or desc)", s.Order), nil)
+		return validationError(fmt.Sprintf("sort order %q is not supported (use asc or desc)", s.Order), nil)
 	}
 	switch s.By {
 	case AnalyticsV2SortByTotal, AnalyticsV2SortByName, AnalyticsV2SortByEventCount:
 		return nil
 	case AnalyticsV2SortByColumn:
 		if r.Columns == "" || s.Column == "" {
-			return analyticsV2Error("sort by column needs columns in the request and sort.column", nil)
+			return validationError("sort by column needs columns in the request and sort.column", nil)
 		}
 		return nil
 	case AnalyticsV2SortByUsage:
 		if !r.SingleMeter() {
-			return analyticsV2Error("sort by usage needs a single meter: pass one meter or feature id, or group by meter_id", nil)
+			return validationError("sort by usage needs a single meter: pass one meter or feature id, or group by meter_id", nil)
 		}
 		return nil
 	default:
-		return analyticsV2Error(fmt.Sprintf("sort by %q is not supported", s.By), nil)
+		return validationError(fmt.Sprintf("sort by %q is not supported", s.By), nil)
 	}
 }
 
@@ -247,23 +247,23 @@ func (r *GetUsageAnalyticsV2Request) validateWindows() error {
 	}
 	windows := math.Ceil(r.EndTime.Sub(r.StartTime).Minutes() / float64(r.WindowSize.ToMinutes()))
 	if windows > AnalyticsV2MaxWindows {
-		return analyticsV2Error(fmt.Sprintf("range has %d %s windows; the limit is %d, use a larger window_size", int(windows), r.WindowSize, AnalyticsV2MaxWindows),
+		return validationError(fmt.Sprintf("range has %d %s windows; the limit is %d, use a larger window_size", int(windows), r.WindowSize, AnalyticsV2MaxWindows),
 			map[string]any{"window_size": r.WindowSize})
 	}
 	return nil
 }
 
 func (r *GetUsageAnalyticsV2Request) validateExpand() error {
-	lineRows := lo.SomeBy(r.GroupBy, func(k string) bool { return lo.Contains(analyticsV2LineKeys, k) })
+	lineRows := lo.SomeBy(r.GroupBy, func(k string) bool { return lo.Contains(lineKeys, k) })
 	for _, e := range r.Expand {
 		switch e {
 		case "price", "plan", "addon", "subscription":
 		case "meter", "feature":
 			if !lineRows {
-				return analyticsV2Error(fmt.Sprintf("expand %q needs meter_id, feature_id or sub_line_item_id in group_by", e), nil)
+				return validationError(fmt.Sprintf("expand %q needs meter_id, feature_id or sub_line_item_id in group_by", e), nil)
 			}
 		default:
-			return analyticsV2Error(fmt.Sprintf("expand %q is not supported (use price, plan, addon, subscription, meter or feature)", e), nil)
+			return validationError(fmt.Sprintf("expand %q is not supported (use price, plan, addon, subscription, meter or feature)", e), nil)
 		}
 	}
 	return nil
@@ -271,29 +271,29 @@ func (r *GetUsageAnalyticsV2Request) validateExpand() error {
 
 func (r *GetUsageAnalyticsV2Request) validateMetrics() error {
 	if len(r.Metrics) > AnalyticsV2MaxMetrics {
-		return analyticsV2Error(fmt.Sprintf("at most %d metrics are allowed", AnalyticsV2MaxMetrics), nil)
+		return validationError(fmt.Sprintf("at most %d metrics are allowed", AnalyticsV2MaxMetrics), nil)
 	}
 	for _, m := range r.Metrics {
 		key, ok := strings.CutPrefix(m, AnalyticsV2MetricDistinctPrefix)
-		if !ok || !isAnalyticsV2Key(key) {
-			return analyticsV2Error(fmt.Sprintf("metric %q is not supported (use distinct:<key>)", m), nil)
+		if !ok || !isValidKey(key) {
+			return validationError(fmt.Sprintf("metric %q is not supported (use distinct:<key>)", m), nil)
 		}
 		if lo.Contains(r.GroupBy, key) {
-			return analyticsV2Error(fmt.Sprintf("metric %q counts a group_by key, which is always 1", m), nil)
+			return validationError(fmt.Sprintf("metric %q counts a group_by key, which is always 1", m), nil)
 		}
 	}
 	return nil
 }
 
-func isAnalyticsV2Key(k string) bool {
-	if k == "source" || lo.Contains(analyticsV2LineKeys, k) {
+func isValidKey(k string) bool {
+	if k == "source" || lo.Contains(lineKeys, k) {
 		return true
 	}
 	name, ok := strings.CutPrefix(k, "properties.")
-	return ok && analyticsV2PropertyName.MatchString(name)
+	return ok && propertyNamePattern.MatchString(name)
 }
 
-func analyticsV2Error(msg string, details map[string]any) error {
+func validationError(msg string, details map[string]any) error {
 	e := ierr.NewError(msg).WithHint(msg)
 	if details != nil {
 		e = e.WithReportableDetails(details)
@@ -313,11 +313,10 @@ type GetUsageAnalyticsV2Response struct {
 	// received during the request can be billed but not yet split.
 	DataThrough time.Time `json:"data_through"`
 	// ColumnValues lists every column across the full result, so every page has the same header.
-	ColumnValues   []string                   `json:"column_values,omitempty"`
-	Totals         AnalyticsV2Totals          `json:"totals"`
-	Items          []AnalyticsV2Item          `json:"items"`
-	Unattributed   AnalyticsV2Unattributed    `json:"unattributed"`
-	ExcludedMeters []AnalyticsV2ExcludedMeter `json:"excluded_meters"`
+	ColumnValues []string                `json:"column_values,omitempty"`
+	Totals       AnalyticsV2Totals       `json:"totals"`
+	Items        []AnalyticsV2Item       `json:"items"`
+	Unattributed AnalyticsV2Unattributed `json:"unattributed"`
 	// Object maps are filled only for the values requested in expand.
 	Meters        map[string]*MeterResponse        `json:"meters,omitempty"`
 	Prices        map[string]*PriceResponse        `json:"prices,omitempty"`
@@ -327,7 +326,7 @@ type GetUsageAnalyticsV2Response struct {
 	Subscriptions map[string]*SubscriptionResponse `json:"subscriptions,omitempty"`
 }
 
-// AnalyticsV2Totals: Cost = RowsCost + UnattributedCost + ExcludedCost = Subtotal - Discount,
+// AnalyticsV2Totals: Cost = RowsCost + UnattributedCost = Subtotal - Discount,
 // and the Breakdown parts add up to Subtotal.
 type AnalyticsV2Totals struct {
 	Cost             decimal.Decimal              `json:"cost" swaggertype:"string"`
@@ -335,7 +334,6 @@ type AnalyticsV2Totals struct {
 	Discount         decimal.Decimal              `json:"discount" swaggertype:"string"`
 	RowsCost         decimal.Decimal              `json:"rows_cost" swaggertype:"string"`
 	UnattributedCost decimal.Decimal              `json:"unattributed_cost" swaggertype:"string"`
-	ExcludedCost     decimal.Decimal              `json:"excluded_cost" swaggertype:"string"`
 	PriceUnitCost    *decimal.Decimal             `json:"price_unit_cost,omitempty" swaggertype:"string"`
 	Breakdown        AnalyticsV2Cost              `json:"breakdown"`
 	Usage            *decimal.Decimal             `json:"usage,omitempty" swaggertype:"string"`
@@ -409,8 +407,6 @@ type AnalyticsV2UnattributedReason string
 
 const (
 	AnalyticsV2ReasonUnusedCommitment AnalyticsV2UnattributedReason = "unused_commitment"
-	// AnalyticsV2ReasonUnlinkedCharge is a usage charge billing did not tie to a subscription line.
-	AnalyticsV2ReasonUnlinkedCharge AnalyticsV2UnattributedReason = "unlinked_charge"
 	// AnalyticsV2ReasonNoUsage is billed usage cost on a line with no usage in the visible events.
 	AnalyticsV2ReasonNoUsage AnalyticsV2UnattributedReason = "no_usage"
 )
@@ -425,21 +421,6 @@ type AnalyticsV2UnattributedCharge struct {
 	Cost           decimal.Decimal               `json:"cost" swaggertype:"string"`
 	Breakdown      AnalyticsV2Cost               `json:"breakdown"`
 	Reason         AnalyticsV2UnattributedReason `json:"reason"`
-}
-
-type AnalyticsV2ExcludedReason string
-
-const (
-	AnalyticsV2ReasonAggregationNotSupported AnalyticsV2ExcludedReason = "aggregation_not_supported"
-)
-
-// AnalyticsV2ExcludedMeter has usage but its cost isn't split across rows yet; Cost is nil when filters apply.
-type AnalyticsV2ExcludedMeter struct {
-	MeterID     string                    `json:"meter_id"`
-	FeatureID   string                    `json:"feature_id,omitempty"`
-	Aggregation types.AggregationType     `json:"aggregation"`
-	Cost        *decimal.Decimal          `json:"cost,omitempty" swaggertype:"string"`
-	Reason      AnalyticsV2ExcludedReason `json:"reason"`
 }
 
 // AnalyticsV2MetricValue holds one metric's result; distinct metrics set Count and, when small, Values.

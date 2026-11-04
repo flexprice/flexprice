@@ -4961,7 +4961,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when building spend dashboards: usage cost grouped by up to three keys (event properties, source, meter, feature or line item), sorted and paginated, with optional columns, filters, search, time points and per-row metrics.\nLine costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage, or by each row's peak for MAX meters. A partial range carries the full period's rate for additive meters; MAX meters, and lines with no usage, carry the range's share of the period's time.\ntotals.cost equals rows_cost + unattributed_cost + excluded_cost. Unused commitment is unattributed unless a row key is the meter, feature or line item. Meters whose cost cannot be split yet are listed in excluded_meters.\nEach request reads the latest data, so rows can shift between pages while events arrive; data_through in the response says how current the data is.",
+                "description": "Use when building spend dashboards: usage cost grouped by up to three keys (event properties, source, meter, feature or line item), sorted and paginated, with optional columns, filters, search, time points and per-row metrics.\nLine costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage. SUM, SUM_WITH_MULTIPLIER and COUNT meters are split by each row's quantity; bucketed MAX meters by bucket peaks, each billing bucket's peak going to the row of the event that set it (filters drop rows after peaks are chosen). Plain MAX and other aggregations are left out of rows and totals. A partial range carries the full period's rate; lines with no usage carry the range's share of the period's time.\ntotals.cost equals rows_cost + unattributed_cost. Unused commitment is unattributed unless a row key is the meter, feature or line item.\nEach request reads the latest data, so rows can shift between pages while events arrive; data_through in the response says how current the data is.",
                 "consumes": [
                     "application/json"
                 ],
@@ -18411,35 +18411,6 @@ const docTemplate = `{
                 }
             }
         },
-        "AnalyticsV2ExcludedMeter": {
-            "type": "object",
-            "properties": {
-                "aggregation": {
-                    "$ref": "#/definitions/types.AggregationType"
-                },
-                "cost": {
-                    "type": "string"
-                },
-                "feature_id": {
-                    "type": "string"
-                },
-                "meter_id": {
-                    "type": "string"
-                },
-                "reason": {
-                    "$ref": "#/definitions/AnalyticsV2ExcludedReason"
-                }
-            }
-        },
-        "AnalyticsV2ExcludedReason": {
-            "type": "string",
-            "enum": [
-                "aggregation_not_supported"
-            ],
-            "x-enum-varnames": [
-                "AnalyticsV2ReasonAggregationNotSupported"
-            ]
-        },
         "AnalyticsV2Filter": {
             "type": "object",
             "required": [
@@ -18678,9 +18649,6 @@ const docTemplate = `{
                 "discount": {
                     "type": "string"
                 },
-                "excluded_cost": {
-                    "type": "string"
-                },
                 "free_usage": {
                     "type": "string"
                 },
@@ -18761,12 +18729,10 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "unused_commitment",
-                "unlinked_charge",
                 "no_usage"
             ],
             "x-enum-varnames": [
                 "AnalyticsV2ReasonUnusedCommitment",
-                "AnalyticsV2ReasonUnlinkedCharge",
                 "AnalyticsV2ReasonNoUsage"
             ]
         },
@@ -24210,12 +24176,6 @@ const docTemplate = `{
                 "data_through": {
                     "description": "DataThrough is when the event scans were cut off: events received later are not split across rows.\nIt is a watermark, not a billing snapshot: invoice pricing reads usage as of the request, so events\nreceived during the request can be billed but not yet split.",
                     "type": "string"
-                },
-                "excluded_meters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/AnalyticsV2ExcludedMeter"
-                    }
                 },
                 "features": {
                     "type": "object",

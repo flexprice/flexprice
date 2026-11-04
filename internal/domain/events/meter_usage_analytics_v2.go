@@ -27,9 +27,16 @@ type AnalyticsV2Line struct {
 	MeterID string
 	Start   time.Time
 	End     time.Time
-	// IsMax prices a row by its own peak (rate x peak) instead of quantity x rate.
-	IsMax bool
+	// BucketSize is set for bucketed MAX lines: usage is the sum, over buckets (and BucketGroup values),
+	// of each bucket's highest event, and that event's row carries the bucket.
+	BucketSize types.WindowSize
+	// BucketGroup is the meter's group_by property: each value's peak counts separately within a bucket.
+	BucketGroup   string
+	BillingAnchor time.Time
 }
+
+// IsBucketed reports whether the line is a bucketed MAX line.
+func (l AnalyticsV2Line) IsBucketed() bool { return l.BucketSize != "" }
 
 // AnalyticsV2LineUsageParams asks for every line's full-window quantity, used to turn line costs into rates,
 // and its quantity inside [RangeStart, RangeEnd), used to prorate cost no row carries.
@@ -90,7 +97,7 @@ type AnalyticsV2Sort struct {
 }
 
 // AnalyticsV2RankParams ranks rows of events priced by their line's rates.
-// Rates[i] belongs to Lines[i]: per unit of quantity for additive lines, per unit of row peak for MAX lines.
+// Rates[i] belongs to Lines[i], per unit of quantity.
 type AnalyticsV2RankParams struct {
 	Scope     AnalyticsV2Scope
 	StartTime time.Time
@@ -112,9 +119,8 @@ type AnalyticsV2RankParams struct {
 // AnalyticsV2Measure is what a row or column adds up to.
 type AnalyticsV2Measure struct {
 	Amounts AnalyticsV2Amounts
-	// Quantity sums additive lines; Peak is the highest MAX-line value. Meaningful only for single-meter rows.
+	// Quantity is meaningful only for single-meter rows.
 	Quantity   decimal.Decimal
-	Peak       decimal.Decimal
 	EventCount uint64
 }
 
@@ -135,18 +141,6 @@ type AnalyticsV2RankResult struct {
 	ColumnTotals map[string]AnalyticsV2Measure
 }
 
-// AnalyticsV2LinePeakParams asks, per MAX line, for the sum over all rows of each row's peak in the range.
-// Filters are ignored on purpose, so a row's MAX cost is the same filtered or not.
-type AnalyticsV2LinePeakParams struct {
-	Scope     AnalyticsV2Scope
-	StartTime time.Time
-	EndTime   time.Time
-	Lines     []AnalyticsV2Line
-	GroupBy   []string
-	// MeterFeatures maps meter ID to feature ID for the feature_id key.
-	MeterFeatures map[string]string
-}
-
 // AnalyticsV2DetailParams asks for time points and distinct-value metrics of the page rows,
 // plus per-window points across every matching row. Sort, Limit and Offset in Rank are unused.
 type AnalyticsV2DetailParams struct {
@@ -160,18 +154,14 @@ type AnalyticsV2DetailParams struct {
 }
 
 // AnalyticsV2PointCell is one priced (row, window, column) point. Row is the index into the request's Rows,
-// or -1 for the point summed over every matching row. Additive and MAX lines come as separate cells (IsMax),
-// because usage adds up for additive lines and is a peak for MAX lines.
+// or -1 for the point summed over every matching row.
 type AnalyticsV2PointCell struct {
 	Row         int
 	WindowStart time.Time
 	Column      string
-	IsMax       bool
 	// Amounts prices the cell at its lines' rates: usage, commitment, true-up and discount (Free is unused).
-	Amounts AnalyticsV2Amounts
-	// Quantity sums the cell's events; Peak is its highest event value.
+	Amounts    AnalyticsV2Amounts
 	Quantity   decimal.Decimal
-	Peak       decimal.Decimal
 	EventCount uint64
 }
 

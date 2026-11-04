@@ -12,9 +12,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// analyticsV2Visible returns the scope's records: received by DataThrough and, with UseFinal,
+// visibleUsage returns the scope's records: received by DataThrough and, with UseFinal,
 // one record per (meter, id) keeping the latest received, as ReplacingMergeTree FINAL does.
-func (s *InMemoryMeterUsageStore) analyticsV2Visible(scope events.AnalyticsV2Scope) []*events.MeterUsage {
+func (s *InMemoryMeterUsageStore) visibleUsage(scope events.AnalyticsV2Scope) []*events.MeterUsage {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -44,27 +44,107 @@ func inLine(r *events.MeterUsage, line events.AnalyticsV2Line) bool {
 	return r.MeterID == line.MeterID && !r.Timestamp.Before(line.Start) && r.Timestamp.Before(line.End)
 }
 
+// bucketOf is an event's billing bucket and group value on a bucketed MAX line, as one key.
+func bucketOf(r *events.MeterUsage, li int, line events.AnalyticsV2Line) string {
+	anchor := line.BillingAnchor
+	grp, _ := r.Properties[line.BucketGroup].(string)
+	return fmt.Sprintf("%d\x01%d\x01%s", li, truncateToWindow(r.Timestamp, line.BucketSize, &anchor).Unix(), grp)
+}
+
+// bucketMember is one cell's events within one bucket of a bucketed MAX line.
+type bucketMember struct {
+	key  string // the cell, including whether its events pass the filters
+	pass bool
+	max  decimal.Decimal
+	n    uint64
+}
+
+// bucketPeaks collects bucket members and hands each passing member its share: the bucket's peak for the
+// member holding it (no ties in test data), and the member's own event count.
+type bucketPeaks map[string]map[string]*bucketMember
+
+func (b bucketPeaks) add(bucket, key string, pass bool, qty decimal.Decimal) {
+	if b[bucket] == nil {
+		b[bucket] = map[string]*bucketMember{}
+	}
+	mk := fmt.Sprintf("%s\x02%v", key, pass)
+	m := b[bucket][mk]
+	if m == nil {
+		m = &bucketMember{key: key, pass: pass, max: qty}
+		b[bucket][mk] = m
+	}
+	m.max = decimal.Max(m.max, qty)
+	if pass {
+		m.n++
+	}
+}
+
+func (b bucketPeaks) each(fn func(key string, q decimal.Decimal, n uint64)) {
+	for _, members := range b {
+		var owner *bucketMember
+		for _, m := range members {
+			if owner == nil || m.max.GreaterThan(owner.max) {
+				owner = m
+			}
+		}
+		for _, m := range members {
+			if !m.pass {
+				continue
+			}
+			q := decimal.Zero
+			if m == owner {
+				q = m.max
+			}
+			fn(m.key, q, m.n)
+		}
+	}
+}
+
 func (s *InMemoryMeterUsageStore) GetAnalyticsV2LineUsage(_ context.Context, params *events.AnalyticsV2LineUsageParams) ([]events.AnalyticsV2LineUsage, error) {
 	if params == nil || len(params.Lines) == 0 {
 		return nil, nil
 	}
 	out := make([]events.AnalyticsV2LineUsage, len(params.Lines))
-	for _, r := range s.analyticsV2Visible(params.Scope) {
+	type peak struct {
+		line       int
+		all, inner decimal.Decimal
+	}
+	peaks := map[string]*peak{}
+	for _, r := range s.visibleUsage(params.Scope) {
 		for i, line := range params.Lines {
-			if inLine(r, line) {
-				out[i].Quantity = out[i].Quantity.Add(r.QtyTotal)
-				out[i].EventCount++
-				if !r.Timestamp.Before(params.RangeStart) && r.Timestamp.Before(params.RangeEnd) {
-					out[i].RangeQuantity = out[i].RangeQuantity.Add(r.QtyTotal)
+			if !inLine(r, line) {
+				continue
+			}
+			out[i].EventCount++
+			inRange := !r.Timestamp.Before(params.RangeStart) && r.Timestamp.Before(params.RangeEnd)
+			if line.IsBucketed() {
+				k := bucketOf(r, i, line)
+				pk := peaks[k]
+				if pk == nil {
+					pk = &peak{line: i, all: r.QtyTotal}
+					peaks[k] = pk
 				}
+				pk.all = decimal.Max(pk.all, r.QtyTotal)
+				if inRange {
+					pk.inner = decimal.Max(pk.inner, r.QtyTotal)
+				}
+				continue
+			}
+			out[i].Quantity = out[i].Quantity.Add(r.QtyTotal)
+			if inRange {
+				out[i].RangeQuantity = out[i].RangeQuantity.Add(r.QtyTotal)
 			}
 		}
+	}
+	for _, pk := range peaks {
+		out[pk.line].Quantity = out[pk.line].Quantity.Add(pk.all)
+		out[pk.line].RangeQuantity = out[pk.line].RangeQuantity.Add(pk.inner)
 	}
 	return out, nil
 }
 
-// analyticsV2Key is the record's value for a row, column or filter key; JSON properties that are not strings read as "".
-func analyticsV2Key(r *events.MeterUsage, line events.AnalyticsV2Line, key string, p *events.AnalyticsV2RankParams, loc *time.Location) string {
+// keyValue is the record's value for a row, column or filter key; JSON properties that are not strings read as "".
+func keyValue(r *events.MeterUsage, line events.AnalyticsV2Line, key string, p *events.AnalyticsV2RankParams, loc *time.Location) string {
 	switch {
 	case key == "source":
 		return r.Source
@@ -92,16 +172,32 @@ func (s *InMemoryMeterUsageStore) RankAnalyticsV2Rows(_ context.Context, p *even
 		return nil, err
 	}
 
-	// Per (row, column, line): quantity, peak and event count.
+	// Per (row, column, line): quantity and event count.
 	type cell struct {
 		group []string
 		col   string
 		line  int
-		q, pk decimal.Decimal
+		q     decimal.Decimal
 		n     uint64
 	}
 	cells := map[string]*cell{}
-	for _, r := range s.analyticsV2Visible(p.Scope) {
+	cellAt := func(group []string, col string, li int) *cell {
+		k := fmt.Sprintf("%s\x01%s\x01%d", strings.Join(group, "\x00"), col, li)
+		c := cells[k]
+		if c == nil {
+			c = &cell{group: group, col: col, line: li}
+			cells[k] = c
+		}
+		return c
+	}
+	type cellRef struct {
+		group []string
+		col   string
+		line  int
+	}
+	refs := map[string]cellRef{}
+	peaks := bucketPeaks{}
+	for _, r := range s.visibleUsage(p.Scope) {
 		if r.Timestamp.Before(p.StartTime) || !r.Timestamp.Before(p.EndTime) {
 			continue
 		}
@@ -109,36 +205,34 @@ func (s *InMemoryMeterUsageStore) RankAnalyticsV2Rows(_ context.Context, p *even
 			if !inLine(r, line) {
 				continue
 			}
-			if lo.SomeBy(p.Filters, func(f events.AnalyticsV2Filter) bool {
-				return lo.Contains(f.Values, analyticsV2Key(r, line, f.Key, p, loc)) == f.Exclude
-			}) {
-				continue
-			}
-			group := lo.Map(p.GroupBy, func(k string, _ int) string { return analyticsV2Key(r, line, k, p, loc) })
+			pass := !lo.SomeBy(p.Filters, func(f events.AnalyticsV2Filter) bool {
+				return lo.Contains(f.Values, keyValue(r, line, f.Key, p, loc)) == f.Exclude
+			})
+			group := lo.Map(p.GroupBy, func(k string, _ int) string { return keyValue(r, line, k, p, loc) })
 			col := ""
 			if p.Column != "" {
-				col = analyticsV2Key(r, line, p.Column, p, loc)
+				col = keyValue(r, line, p.Column, p, loc)
 			}
-			k := fmt.Sprintf("%s\x01%s\x01%d", strings.Join(group, "\x00"), col, li)
-			c := cells[k]
-			if c == nil {
-				c = &cell{group: group, col: col, line: li, pk: r.QtyTotal}
-				cells[k] = c
+			if line.IsBucketed() {
+				// The bucket's peak is chosen among all events; filtered-out cells are dropped afterwards.
+				key := fmt.Sprintf("%s\x01%s\x01%d", strings.Join(group, "\x00"), col, li)
+				refs[key] = cellRef{group: group, col: col, line: li}
+				peaks.add(bucketOf(r, li, line), key, pass, r.QtyTotal)
+				continue
 			}
+			if !pass {
+				continue
+			}
+			c := cellAt(group, col, li)
 			c.q = c.q.Add(r.QtyTotal)
-			c.pk = decimal.Max(c.pk, r.QtyTotal)
 			c.n++
 		}
 	}
-
-	// MAX lines: a row is priced by its peak, split across columns by column peak.
-	rowLine := func(c *cell) string { return fmt.Sprintf("%s\x01%d", strings.Join(c.group, "\x00"), c.line) }
-	rowPeak, colPeakSum := map[string]decimal.Decimal{}, map[string]decimal.Decimal{}
-	for _, c := range cells {
-		rl := rowLine(c)
-		rowPeak[rl] = decimal.Max(rowPeak[rl], c.pk)
-		colPeakSum[rl] = colPeakSum[rl].Add(c.pk)
-	}
+	peaks.each(func(key string, q decimal.Decimal, n uint64) {
+		ref := refs[key]
+		c := cellAt(ref.group, ref.col, ref.line)
+		c.q, c.n = c.q.Add(q), c.n+n
+	})
 
 	type row struct {
 		group   []string
@@ -155,31 +249,17 @@ func (s *InMemoryMeterUsageStore) RankAnalyticsV2Rows(_ context.Context, p *even
 			a = &row{group: c.group, cols: map[string]events.AnalyticsV2Measure{}, lines: map[int]bool{}}
 			rows[gk] = a
 		}
-		line, rate := p.Lines[c.line], p.Rates[c.line]
-		amount := func(v decimal.Decimal) decimal.Decimal {
-			if !line.IsMax {
-				return c.q.Mul(v)
-			}
-			rl := rowLine(c)
-			if colPeakSum[rl].IsZero() {
-				return decimal.Zero
-			}
-			return v.Mul(rowPeak[rl]).Mul(c.pk).Div(colPeakSum[rl])
-		}
+		rate := p.Rates[c.line]
+		amount := c.q.Mul
 		am := events.AnalyticsV2Amounts{
 			Usage: amount(rate.Usage), CommitmentUtilized: amount(rate.CommitmentUtilized), Overage: amount(rate.Overage),
 			TrueUp: amount(rate.TrueUp), Discount: amount(rate.Discount), Free: amount(rate.Free),
 		}
-		addAnalyticsV2Amounts(&a.m.Amounts, am)
+		addAmounts(&a.m.Amounts, am)
 		col := a.cols[c.col]
 		col.Amounts.Usage = col.Amounts.Usage.Add(am.Cost())
-		if line.IsMax {
-			a.m.Peak = decimal.Max(a.m.Peak, c.pk)
-			col.Peak = decimal.Max(col.Peak, c.pk)
-		} else {
-			a.m.Quantity = a.m.Quantity.Add(c.q)
-			col.Quantity = col.Quantity.Add(c.q)
-		}
+		a.m.Quantity = a.m.Quantity.Add(c.q)
+		col.Quantity = col.Quantity.Add(c.q)
 		a.m.EventCount += c.n
 		col.EventCount += c.n
 		a.cols[c.col] = col
@@ -200,7 +280,7 @@ func (s *InMemoryMeterUsageStore) RankAnalyticsV2Rows(_ context.Context, p *even
 		case events.AnalyticsV2SortByColumn:
 			return a.sortCol
 		case events.AnalyticsV2SortByUsage:
-			return a.m.Quantity.Add(a.m.Peak)
+			return a.m.Quantity
 		case events.AnalyticsV2SortByEventCount:
 			return decimal.NewFromInt(int64(a.m.EventCount))
 		default:
@@ -232,9 +312,8 @@ func (s *InMemoryMeterUsageStore) RankAnalyticsV2Rows(_ context.Context, p *even
 		out.ColumnTotals = map[string]events.AnalyticsV2Measure{}
 	}
 	for _, a := range list {
-		addAnalyticsV2Amounts(&out.Totals.Amounts, a.m.Amounts)
+		addAmounts(&out.Totals.Amounts, a.m.Amounts)
 		out.Totals.Quantity = out.Totals.Quantity.Add(a.m.Quantity)
-		out.Totals.Peak = decimal.Max(out.Totals.Peak, a.m.Peak)
 		out.Totals.EventCount += a.m.EventCount
 		for k, c := range a.cols {
 			if out.ColumnTotals == nil {
@@ -243,7 +322,6 @@ func (s *InMemoryMeterUsageStore) RankAnalyticsV2Rows(_ context.Context, p *even
 			t := out.ColumnTotals[k]
 			t.Amounts.Usage = t.Amounts.Usage.Add(c.Amounts.Usage)
 			t.Quantity = t.Quantity.Add(c.Quantity)
-			t.Peak = decimal.Max(t.Peak, c.Peak)
 			out.ColumnTotals[k] = t
 		}
 	}
@@ -259,40 +337,13 @@ func (s *InMemoryMeterUsageStore) RankAnalyticsV2Rows(_ context.Context, p *even
 	return out, nil
 }
 
-func addAnalyticsV2Amounts(dst *events.AnalyticsV2Amounts, a events.AnalyticsV2Amounts) {
+func addAmounts(dst *events.AnalyticsV2Amounts, a events.AnalyticsV2Amounts) {
 	dst.Usage = dst.Usage.Add(a.Usage)
 	dst.CommitmentUtilized = dst.CommitmentUtilized.Add(a.CommitmentUtilized)
 	dst.Overage = dst.Overage.Add(a.Overage)
 	dst.TrueUp = dst.TrueUp.Add(a.TrueUp)
 	dst.Discount = dst.Discount.Add(a.Discount)
 	dst.Free = dst.Free.Add(a.Free)
-}
-
-func (s *InMemoryMeterUsageStore) GetAnalyticsV2LinePeaks(_ context.Context, p *events.AnalyticsV2LinePeakParams) ([]decimal.Decimal, error) {
-	out := make([]decimal.Decimal, len(p.Lines))
-	keyParams := &events.AnalyticsV2RankParams{MeterFeatures: p.MeterFeatures}
-	rowPeak := map[string]decimal.Decimal{}
-	for _, r := range s.analyticsV2Visible(p.Scope) {
-		if r.Timestamp.Before(p.StartTime) || !r.Timestamp.Before(p.EndTime) {
-			continue
-		}
-		for li, line := range p.Lines {
-			if !line.IsMax || !inLine(r, line) {
-				continue
-			}
-			group := lo.Map(p.GroupBy, func(k string, _ int) string { return analyticsV2Key(r, line, k, keyParams, time.UTC) })
-			k := fmt.Sprintf("%s\x01%d", strings.Join(group, "\x00"), li)
-			if prev, ok := rowPeak[k]; !ok || r.QtyTotal.GreaterThan(prev) {
-				rowPeak[k] = r.QtyTotal
-			}
-		}
-	}
-	for k, pk := range rowPeak {
-		var li int
-		fmt.Sscan(k[strings.LastIndex(k, "\x01")+1:], &li)
-		out[li] = out[li].Add(pk)
-	}
-	return out, nil
 }
 
 // GetAnalyticsV2Detail is the reference for page points and distinct metrics. Windows are bucketed in UTC.
@@ -308,27 +359,60 @@ func (s *InMemoryMeterUsageStore) GetAnalyticsV2Detail(_ context.Context, params
 	}
 
 	type cell struct {
-		rk    string
-		w     time.Time
-		col   string
-		line  int
-		q, pk decimal.Decimal
-		n     uint64
+		rk   string
+		w    time.Time
+		col  string
+		line int
+		q    decimal.Decimal
+		n    uint64
 	}
 	cells := map[string]*cell{}
+	cellAt := func(rk string, w time.Time, col string, li int) *cell {
+		k := fmt.Sprintf("%s\x01%d\x01%s\x01%d", rk, w.Unix(), col, li)
+		c := cells[k]
+		if c == nil {
+			c = &cell{rk: rk, w: w, col: col, line: li}
+			cells[k] = c
+		}
+		return c
+	}
+	type cellRef struct {
+		rk, text, col string
+		w             time.Time
+		line          int
+	}
+	refs := map[string]cellRef{}
+	peaks := bucketPeaks{}
+	searched := func(text string) bool {
+		return p.Search == "" || strings.Contains(strings.ToLower(text), strings.ToLower(p.Search))
+	}
 	distinct := make([]map[string]map[string]bool, len(params.Rows))
-	for _, r := range s.analyticsV2Visible(p.Scope) {
+	for _, r := range s.visibleUsage(p.Scope) {
 		if r.Timestamp.Before(p.StartTime) || !r.Timestamp.Before(p.EndTime) {
 			continue
 		}
 		for li, line := range p.Lines {
-			if !inLine(r, line) || lo.SomeBy(p.Filters, func(f events.AnalyticsV2Filter) bool {
-				return lo.Contains(f.Values, analyticsV2Key(r, line, f.Key, p, time.UTC)) == f.Exclude
-			}) {
+			if !inLine(r, line) {
 				continue
 			}
-			group := lo.Map(p.GroupBy, func(k string, _ int) string { return analyticsV2Key(r, line, k, p, time.UTC) })
+			pass := !lo.SomeBy(p.Filters, func(f events.AnalyticsV2Filter) bool {
+				return lo.Contains(f.Values, keyValue(r, line, f.Key, p, time.UTC)) == f.Exclude
+			})
+			group := lo.Map(p.GroupBy, func(k string, _ int) string { return keyValue(r, line, k, p, time.UTC) })
 			rk := strings.Join(group, "\x1f")
+			if line.IsBucketed() && params.WindowSize != "" {
+				col := ""
+				if p.Column != "" {
+					col = keyValue(r, line, p.Column, p, time.UTC)
+				}
+				w := truncateToWindow(r.Timestamp, params.WindowSize, params.BillingAnchor)
+				key := fmt.Sprintf("%s\x01%d\x01%s\x01%d", rk, w.Unix(), col, li)
+				refs[key] = cellRef{rk: rk, text: strings.Join(group, " "), col: col, w: w, line: li}
+				peaks.add(bucketOf(r, li, line), key, pass, r.QtyTotal)
+			}
+			if !pass {
+				continue
+			}
 			if row, ok := page[rk]; ok {
 				if distinct[row] == nil {
 					distinct[row] = map[string]map[string]bool{}
@@ -337,26 +421,28 @@ func (s *InMemoryMeterUsageStore) GetAnalyticsV2Detail(_ context.Context, params
 					if distinct[row][k] == nil {
 						distinct[row][k] = map[string]bool{}
 					}
-					distinct[row][k][analyticsV2Key(r, line, k, p, time.UTC)] = true
+					distinct[row][k][keyValue(r, line, k, p, time.UTC)] = true
 				}
 			}
-			if params.WindowSize == "" || (p.Search != "" && !strings.Contains(strings.ToLower(strings.Join(group, " ")), strings.ToLower(p.Search))) {
+			if line.IsBucketed() || params.WindowSize == "" || !searched(strings.Join(group, " ")) {
 				continue
 			}
 			col := ""
 			if p.Column != "" {
-				col = analyticsV2Key(r, line, p.Column, p, time.UTC)
+				col = keyValue(r, line, p.Column, p, time.UTC)
 			}
-			w := truncateToWindow(r.Timestamp, params.WindowSize, params.BillingAnchor)
-			k := fmt.Sprintf("%s\x01%d\x01%s\x01%d", rk, w.Unix(), col, li)
-			c := cells[k]
-			if c == nil {
-				c = &cell{rk: rk, w: w, col: col, line: li, pk: r.QtyTotal}
-				cells[k] = c
-			}
-			c.q, c.pk, c.n = c.q.Add(r.QtyTotal), decimal.Max(c.pk, r.QtyTotal), c.n+1
+			c := cellAt(rk, truncateToWindow(r.Timestamp, params.WindowSize, params.BillingAnchor), col, li)
+			c.q, c.n = c.q.Add(r.QtyTotal), c.n+1
 		}
 	}
+	peaks.each(func(key string, q decimal.Decimal, n uint64) {
+		ref := refs[key]
+		if !searched(ref.text) {
+			return
+		}
+		c := cellAt(ref.rk, ref.w, ref.col, ref.line)
+		c.q, c.n = c.q.Add(q), c.n+n
+	})
 
 	for row, keys := range distinct {
 		if keys == nil {
@@ -373,21 +459,13 @@ func (s *InMemoryMeterUsageStore) GetAnalyticsV2Detail(_ context.Context, params
 		}
 	}
 
-	// Peak weight: row peak x cell peak / sum of the row's cell peaks, per (row, line).
-	rowLine := func(c *cell) string { return fmt.Sprintf("%s\x01%d", c.rk, c.line) }
-	rowPeak, cellPeakSum := map[string]decimal.Decimal{}, map[string]decimal.Decimal{}
-	for _, c := range cells {
-		rowPeak[rowLine(c)] = decimal.Max(rowPeak[rowLine(c)], c.pk)
-		cellPeakSum[rowLine(c)] = cellPeakSum[rowLine(c)].Add(c.pk)
-	}
-	// Cells are priced per line, then summed per (row, window, column, additive or MAX).
+	// Cells are priced per line, then summed per (row, window, column).
 	priced := map[string]*events.AnalyticsV2PointCell{}
 	add := func(row int, c *cell, a events.AnalyticsV2Amounts) {
-		isMax := p.Lines[c.line].IsMax
-		k := fmt.Sprintf("%d\x01%d\x01%s\x01%v", row, c.w.Unix(), c.col, isMax)
+		k := fmt.Sprintf("%d\x01%d\x01%s", row, c.w.Unix(), c.col)
 		pc := priced[k]
 		if pc == nil {
-			pc = &events.AnalyticsV2PointCell{Row: row, WindowStart: c.w, Column: c.col, IsMax: isMax, Peak: c.pk}
+			pc = &events.AnalyticsV2PointCell{Row: row, WindowStart: c.w, Column: c.col}
 			priced[k] = pc
 		}
 		pc.Amounts = events.AnalyticsV2Amounts{
@@ -395,20 +473,12 @@ func (s *InMemoryMeterUsageStore) GetAnalyticsV2Detail(_ context.Context, params
 			Overage: pc.Amounts.Overage.Add(a.Overage), TrueUp: pc.Amounts.TrueUp.Add(a.TrueUp), Discount: pc.Amounts.Discount.Add(a.Discount),
 		}
 		pc.Quantity, pc.EventCount = pc.Quantity.Add(c.q), pc.EventCount+c.n
-		pc.Peak = decimal.Max(pc.Peak, c.pk)
 	}
 	for _, c := range cells {
-		weight := c.q
-		if p.Lines[c.line].IsMax {
-			weight = decimal.Zero
-			if cellPeakSum[rowLine(c)].IsPositive() {
-				weight = rowPeak[rowLine(c)].Mul(c.pk).Div(cellPeakSum[rowLine(c)])
-			}
-		}
 		r := p.Rates[c.line]
 		a := events.AnalyticsV2Amounts{
-			Usage: weight.Mul(r.Usage), CommitmentUtilized: weight.Mul(r.CommitmentUtilized), Overage: weight.Mul(r.Overage),
-			TrueUp: weight.Mul(r.TrueUp), Discount: weight.Mul(r.Discount),
+			Usage: c.q.Mul(r.Usage), CommitmentUtilized: c.q.Mul(r.CommitmentUtilized), Overage: c.q.Mul(r.Overage),
+			TrueUp: c.q.Mul(r.TrueUp), Discount: c.q.Mul(r.Discount),
 		}
 		if row, ok := page[c.rk]; ok {
 			add(row, c, a)

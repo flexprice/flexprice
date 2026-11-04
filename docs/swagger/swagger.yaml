@@ -1300,25 +1300,6 @@ definitions:
       usage:
         type: string
     type: object
-  AnalyticsV2ExcludedMeter:
-    properties:
-      aggregation:
-        $ref: '#/definitions/types.AggregationType'
-      cost:
-        type: string
-      feature_id:
-        type: string
-      meter_id:
-        type: string
-      reason:
-        $ref: '#/definitions/AnalyticsV2ExcludedReason'
-    type: object
-  AnalyticsV2ExcludedReason:
-    enum:
-    - aggregation_not_supported
-    type: string
-    x-enum-varnames:
-    - AnalyticsV2ReasonAggregationNotSupported
   AnalyticsV2Filter:
     properties:
       key:
@@ -1483,8 +1464,6 @@ definitions:
         type: string
       discount:
         type: string
-      excluded_cost:
-        type: string
       free_usage:
         type: string
       points:
@@ -1539,12 +1518,10 @@ definitions:
   AnalyticsV2UnattributedReason:
     enum:
     - unused_commitment
-    - unlinked_charge
     - no_usage
     type: string
     x-enum-varnames:
     - AnalyticsV2ReasonUnusedCommitment
-    - AnalyticsV2ReasonUnlinkedCharge
     - AnalyticsV2ReasonNoUsage
   AttributedToCustomerResult:
     properties:
@@ -5508,10 +5485,6 @@ definitions:
           It is a watermark, not a billing snapshot: invoice pricing reads usage as of the request, so events
           received during the request can be billed but not yet split.
         type: string
-      excluded_meters:
-        items:
-          $ref: '#/definitions/AnalyticsV2ExcludedMeter'
-        type: array
       features:
         additionalProperties:
           $ref: '#/definitions/FeatureResponse'
@@ -20640,8 +20613,8 @@ paths:
       - application/json
       description: |-
         Use when building spend dashboards: usage cost grouped by up to three keys (event properties, source, meter, feature or line item), sorted and paginated, with optional columns, filters, search, time points and per-row metrics.
-        Line costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage, or by each row's peak for MAX meters. A partial range carries the full period's rate for additive meters; MAX meters, and lines with no usage, carry the range's share of the period's time.
-        totals.cost equals rows_cost + unattributed_cost + excluded_cost. Unused commitment is unattributed unless a row key is the meter, feature or line item. Meters whose cost cannot be split yet are listed in excluded_meters.
+        Line costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage. SUM, SUM_WITH_MULTIPLIER and COUNT meters are split by each row's quantity; bucketed MAX meters by bucket peaks, each billing bucket's peak going to the row of the event that set it (filters drop rows after peaks are chosen). Plain MAX and other aggregations are left out of rows and totals. A partial range carries the full period's rate; lines with no usage carry the range's share of the period's time.
+        totals.cost equals rows_cost + unattributed_cost. Unused commitment is unattributed unless a row key is the meter, feature or line item.
         Each request reads the latest data, so rows can shift between pages while events arrive; data_through in the response says how current the data is.
       operationId: queryUsageAnalytics
       parameters:

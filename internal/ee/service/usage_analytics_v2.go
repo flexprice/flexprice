@@ -17,14 +17,13 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
-	"golang.org/x/sync/errgroup"
 )
 
-// analyticsV2RateScale is the precision rates are carried at between the app and ClickHouse.
-const analyticsV2RateScale = 20
+// rateScale is the precision rates are carried at between the app and ClickHouse.
+const rateScale = 20
 
-// analyticsV2Context is what the request resolves to before ClickHouse is queried.
-type analyticsV2Context struct {
+// analyticsCtx is what the request resolves to before ClickHouse is queried.
+type analyticsCtx struct {
 	req          *dto.GetUsageAnalyticsV2Request
 	currency     string
 	timezone     string
@@ -33,11 +32,8 @@ type analyticsV2Context struct {
 	meters       map[string]*meter.Meter
 	prices       map[string]*price.Price
 	features     map[string]*feature.Feature // by meter ID
-	lines        []*analyticsV2LineCost
-	ranked       []events.AnalyticsV2Line
-	rates        []events.AnalyticsV2Amounts
+	lines        []*pricedLine
 	unattributed []dto.AnalyticsV2UnattributedCharge
-	excluded     []dto.AnalyticsV2ExcludedMeter
 	// priceUnit is set when every billed line is priced in one custom unit (e.g. credits) at one rate.
 	priceUnit     string
 	priceUnitRate decimal.Decimal
@@ -47,7 +43,7 @@ type analyticsV2Context struct {
 // the invoice code; ClickHouse splits them across rows by usage. req must already be defaulted and validated.
 func (s *meterUsageService) GetUsageAnalyticsV2(ctx context.Context, req *dto.GetUsageAnalyticsV2Request) (*dto.GetUsageAnalyticsV2Response, error) {
 	dataThrough := clock.Now().Truncate(time.Millisecond)
-	empty := &dto.GetUsageAnalyticsV2Response{DataThrough: dataThrough, Items: []dto.AnalyticsV2Item{}, ExcludedMeters: []dto.AnalyticsV2ExcludedMeter{}}
+	empty := &dto.GetUsageAnalyticsV2Response{DataThrough: dataThrough, Items: []dto.AnalyticsV2Item{}}
 
 	cust, subs, err := s.resolveCustomerAndSubscriptions(ctx, req.ExternalCustomerID)
 	if err != nil {
@@ -56,7 +52,7 @@ func (s *meterUsageService) GetUsageAnalyticsV2(ctx context.Context, req *dto.Ge
 	if len(subs) == 0 {
 		return empty, nil
 	}
-	if err := rejectAnalyticsV2Families(subs); err != nil {
+	if err := rejectSubscriptionFamilies(subs); err != nil {
 		return nil, err
 	}
 	if currencies := lo.Uniq(lo.Map(subs, func(sub *subscription.Subscription, _ int) string { return strings.ToLower(sub.Currency) })); len(currencies) > 1 {
@@ -66,7 +62,7 @@ func (s *meterUsageService) GetUsageAnalyticsV2(ctx context.Context, req *dto.Ge
 			Mark(ierr.ErrValidation)
 	}
 
-	ac := &analyticsV2Context{
+	ac := &analyticsCtx{
 		req:      req,
 		currency: subs[0].Currency,
 		timezone: cust.Timezone,
@@ -81,23 +77,23 @@ func (s *meterUsageService) GetUsageAnalyticsV2(ctx context.Context, req *dto.Ge
 	}
 	empty.Currency = ac.currency
 
-	priced, err := s.priceAnalyticsV2Subscriptions(ctx, subs, req.StartTime, req.EndTime)
+	priced, err := s.priceSubscriptions(ctx, subs, req.StartTime, req.EndTime)
 	if err != nil {
 		return nil, err
 	}
 	s.logger.Debug(ctx, "analytics v2 priced lines", "periods", priced.periods, "lines", len(priced.lines), "elapsed_ms", priced.elapsed.Milliseconds())
 
-	if err := s.loadAnalyticsV2Catalog(ctx, ac, priced); err != nil {
+	if err := s.loadCatalog(ctx, ac, priced); err != nil {
 		return nil, err
 	}
-	if err := s.selectAnalyticsV2Lines(ctx, ac, priced); err != nil {
+	if err := s.selectLines(ctx, ac, priced); err != nil {
 		return nil, err
 	}
-	if err := s.buildAnalyticsV2Rates(ctx, ac); err != nil {
+	if err := s.buildLineRates(ctx, ac); err != nil {
 		return nil, err
 	}
-	if len(ac.ranked) == 0 {
-		return s.assembleAnalyticsV2(ctx, ac, &events.AnalyticsV2RankResult{}, nil)
+	if len(ac.lines) == 0 {
+		return s.assembleResponse(ctx, ac, &events.AnalyticsV2RankResult{}, nil)
 	}
 
 	rank := ac.rankParams()
@@ -136,13 +132,13 @@ func (s *meterUsageService) GetUsageAnalyticsV2(ctx context.Context, req *dto.Ge
 			return nil, err
 		}
 	}
-	return s.assembleAnalyticsV2(ctx, ac, result, detail)
+	return s.assembleResponse(ctx, ac, result, detail)
 }
 
-// loadAnalyticsV2Catalog loads the meters, prices and features of every priced line.
-func (s *meterUsageService) loadAnalyticsV2Catalog(ctx context.Context, ac *analyticsV2Context, priced *analyticsV2PricedPeriods) error {
-	meterIDs := lo.Uniq(lo.FilterMap(priced.lines, func(l *analyticsV2LineCost, _ int) (string, bool) { return l.meterID, l.meterID != "" }))
-	priceIDs := lo.Uniq(lo.FilterMap(priced.lines, func(l *analyticsV2LineCost, _ int) (string, bool) { return l.priceID, l.priceID != "" }))
+// loadCatalog loads the meters, prices and features of every priced line.
+func (s *meterUsageService) loadCatalog(ctx context.Context, ac *analyticsCtx, priced *pricedPeriods) error {
+	meterIDs := lo.Uniq(lo.FilterMap(priced.lines, func(l *pricedLine, _ int) (string, bool) { return l.meterID, l.meterID != "" }))
+	priceIDs := lo.Uniq(lo.FilterMap(priced.lines, func(l *pricedLine, _ int) (string, bool) { return l.priceID, l.priceID != "" }))
 
 	ac.meters, ac.prices, ac.features = map[string]*meter.Meter{}, map[string]*price.Price{}, map[string]*feature.Feature{}
 	if len(meterIDs) > 0 {
@@ -170,8 +166,8 @@ func (s *meterUsageService) loadAnalyticsV2Catalog(ctx context.Context, ac *anal
 	return nil
 }
 
-// selectAnalyticsV2Lines keeps the requested meters' lines and moves unsupported meters to excluded.
-func (s *meterUsageService) selectAnalyticsV2Lines(ctx context.Context, ac *analyticsV2Context, priced *analyticsV2PricedPeriods) error {
+// selectLines keeps the lines of requested, supported meters; lines on other meters are left out entirely.
+func (s *meterUsageService) selectLines(ctx context.Context, ac *analyticsCtx, priced *pricedPeriods) error {
 	selected := map[string]bool{}
 	if len(ac.req.FeatureIDs) > 0 {
 		ids, err := featureMeterIDs(ctx, s.FeatureRepo, ac.req.FeatureIDs)
@@ -183,142 +179,95 @@ func (s *meterUsageService) selectAnalyticsV2Lines(ctx context.Context, ac *anal
 	lo.ForEach(ac.req.MeterIDs, func(id string, _ int) { selected[id] = true })
 	narrowed := len(ac.req.FeatureIDs) > 0 || len(ac.req.MeterIDs) > 0
 
-	lines := lo.Filter(priced.lines, func(l *analyticsV2LineCost, _ int) bool { return !narrowed || selected[l.meterID] })
-	ac.lines, ac.excluded = splitAnalyticsV2Excluded(lines, ac.meters, ac.prices, ac.req.StartTime, ac.req.EndTime)
-	for i := range ac.excluded {
-		if f := ac.features[ac.excluded[i].MeterID]; f != nil {
-			ac.excluded[i].FeatureID = f.ID
+	ac.lines = lo.Filter(priced.lines, func(l *pricedLine, _ int) bool {
+		return (!narrowed || selected[l.meterID]) && isSupportedPricing(ac.meters[l.meterID], ac.prices[l.priceID])
+	})
+	anchors := lo.SliceToMap(ac.subs, func(s *subscription.Subscription) (string, time.Time) { return s.ID, s.BillingAnchor })
+	for _, l := range ac.lines {
+		m, p := ac.meters[l.meterID], ac.prices[l.priceID]
+		if price.IsBucketedMax(p, m) {
+			// Bucket exactly as billing does, so the bucket peaks add up to the billed quantity.
+			l.bucket = &lineBucket{size: price.ResolveBucketSize(p, m), group: price.BucketedGroupBy(p, m), billingAnchor: anchors[l.subscriptionID]}
 		}
 	}
 
-	for _, u := range priced.unattributed {
-		if narrowed && !selected[u.charge.MeterID] {
-			continue
-		}
-		// A charge with no line has no usage to share by, so a partial range carries it in proportion to time.
-		f := analyticsV2Overlap(ac.req.StartTime, ac.req.EndTime, u.windowStart, u.windowEnd)
-		charge := u.charge
-		charge.Cost, charge.Breakdown = charge.Cost.Mul(f), scaleAnalyticsV2Cost(charge.Breakdown, f)
-		netAnalyticsV2Charge(&charge, u.discount.Mul(f))
-		ac.unattributed = append(ac.unattributed, charge)
-	}
-	// Only the selected unlinked charges (in ac.unattributed so far) can rule out the price unit.
-	ac.setPriceUnit(lines, len(ac.unattributed) > 0)
+	ac.setPriceUnit(ac.lines)
 	return nil
 }
 
-// netAnalyticsV2Charge takes a discount off a charge and its (single-component) breakdown.
-func netAnalyticsV2Charge(c *dto.AnalyticsV2UnattributedCharge, discount decimal.Decimal) {
+// netCharge takes a discount off a charge and its (single-component) breakdown.
+func netCharge(c *dto.AnalyticsV2UnattributedCharge, discount decimal.Decimal) {
 	if discount.IsZero() || c.Cost.IsZero() {
 		return
 	}
 	factor := c.Cost.Sub(discount).Div(c.Cost)
 	c.Cost = c.Cost.Sub(discount)
-	c.Breakdown = scaleAnalyticsV2Cost(c.Breakdown, factor)
+	c.Breakdown = scaleCost(c.Breakdown, factor)
 }
 
-func scaleAnalyticsV2Cost(c dto.AnalyticsV2Cost, f decimal.Decimal) dto.AnalyticsV2Cost {
+func scaleCost(c dto.AnalyticsV2Cost, f decimal.Decimal) dto.AnalyticsV2Cost {
 	return dto.AnalyticsV2Cost{
 		Usage: c.Usage.Mul(f), CommitmentUtilized: c.CommitmentUtilized.Mul(f), Overage: c.Overage.Mul(f), TrueUp: c.TrueUp.Mul(f),
 	}
 }
 
-// buildAnalyticsV2Rates turns each line's cost into rates: per unit of quantity for additive lines, per unit of
-// row peak for MAX lines. Cost no row can carry (true-up on property rows, lines with no usage) becomes unattributed.
-func (s *meterUsageService) buildAnalyticsV2Rates(ctx context.Context, ac *analyticsV2Context) error {
+// buildLineRates turns each line's cost into per-unit rates. Cost no row can carry (true-up on property rows,
+// lines with no usage) becomes unattributed.
+func (s *meterUsageService) buildLineRates(ctx context.Context, ac *analyticsCtx) error {
 	if len(ac.lines) == 0 {
 		return nil
 	}
-	lines := lo.Map(ac.lines, func(l *analyticsV2LineCost, _ int) events.AnalyticsV2Line {
-		return events.AnalyticsV2Line{
-			ID: l.key.lineItemID, MeterID: l.meterID, Start: l.key.windowStart, End: l.key.windowEnd,
-			IsMax: ac.meters[l.meterID] != nil && ac.meters[l.meterID].Aggregation.Type == types.AggregationMax,
-		}
+	usage, err := s.repo.GetAnalyticsV2LineUsage(ctx, &events.AnalyticsV2LineUsageParams{
+		Scope: ac.scope, Lines: lo.Map(ac.lines, func(l *pricedLine, _ int) events.AnalyticsV2Line { return l.window() }),
+		RangeStart: ac.req.StartTime, RangeEnd: ac.req.EndTime,
 	})
-	// Quantities and MAX peaks are independent reads; run them side by side.
-	var usage []events.AnalyticsV2LineUsage
-	var peaks []decimal.Decimal
-	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		var err error
-		usage, err = s.repo.GetAnalyticsV2LineUsage(gctx, &events.AnalyticsV2LineUsageParams{
-			Scope: ac.scope, Lines: lines, RangeStart: ac.req.StartTime, RangeEnd: ac.req.EndTime,
-		})
-		return err
-	})
-	g.Go(func() error {
-		var err error
-		peaks, err = s.repo.GetAnalyticsV2LinePeaks(gctx, &events.AnalyticsV2LinePeakParams{
-			Scope: ac.scope, StartTime: ac.req.StartTime, EndTime: ac.req.EndTime, Lines: lines,
-			GroupBy: ac.req.GroupBy, MeterFeatures: ac.meterFeatures(),
-		})
-		return err
-	})
-	if err := g.Wait(); err != nil {
+	if err != nil {
 		return err
 	}
 
 	lineRows := lo.SomeBy(ac.req.GroupBy, func(k string) bool {
 		return k == "meter_id" || k == "feature_id" || k == "sub_line_item_id"
 	})
-	// kept stays aligned with ac.ranked and ac.rates, so a row's line indexes resolve to line metadata.
-	var kept []*analyticsV2LineCost
+	// Only lines with usage are kept: the queries price events by line, and a row's line indexes point into ac.lines.
+	var kept []*pricedLine
 	for i, l := range ac.lines {
 		cost, discount := l.cost, l.discount
-		if lines[i].IsMax {
-			// MAX has no per-unit rate; a partial range carries the window's cost in proportion to time.
-			f := analyticsV2Overlap(ac.req.StartTime, ac.req.EndTime, l.key.windowStart, l.key.windowEnd)
-			cost, discount = scaleAnalyticsV2Cost(cost, f), discount.Mul(f)
-		}
 		if !lineRows && cost.TrueUp.IsPositive() {
 			// The true-up is the line's current value (it moves while the period is open). A partial range
 			// carries the share the line-keyed rows would carry: the range's share of the line's usage.
-			trueUpDiscount := analyticsV2Share(discount, cost.TrueUp, l.total())
-			share := decimal.NewFromInt(1)
-			if !lines[i].IsMax {
-				share = analyticsV2UsageShare(usage[i], ac.req.StartTime, ac.req.EndTime, l)
-			}
-			ac.unattributed = append(ac.unattributed, analyticsV2LineCharge(l, dto.AnalyticsV2Cost{TrueUp: cost.TrueUp.Sub(trueUpDiscount).Mul(share)}))
+			trueUpDiscount := proportionalShare(discount, cost.TrueUp, l.total())
+			share := usageShare(usage[i], ac.req.StartTime, ac.req.EndTime, l)
+			ac.unattributed = append(ac.unattributed, lineCharge(l, dto.AnalyticsV2Cost{TrueUp: cost.TrueUp.Sub(trueUpDiscount).Mul(share)}))
 			discount = discount.Sub(trueUpDiscount)
 			cost.TrueUp = decimal.Zero
 		}
 
 		denom := usage[i].Quantity
-		if lines[i].IsMax {
-			denom = peaks[i]
-		}
 		if !denom.IsPositive() {
-			if !lines[i].IsMax {
-				// No usage to share by: a partial range carries the cost in proportion to time (MAX already is).
-				f := analyticsV2Overlap(ac.req.StartTime, ac.req.EndTime, l.key.windowStart, l.key.windowEnd)
-				cost, discount = scaleAnalyticsV2Cost(cost, f), discount.Mul(f)
-			}
+			// No usage to share by: a partial range carries the cost in proportion to time.
+			f := timeOverlap(ac.req.StartTime, ac.req.EndTime, l.key.windowStart, l.key.windowEnd)
+			cost, discount = scaleCost(cost, f), discount.Mul(f)
 			total := cost.Usage.Add(cost.CommitmentUtilized).Add(cost.Overage).Add(cost.TrueUp)
 			if total.IsPositive() {
-				charge := analyticsV2LineCharge(l, cost)
-				netAnalyticsV2Charge(&charge, discount)
+				charge := lineCharge(l, cost)
+				netCharge(&charge, discount)
 				ac.unattributed = append(ac.unattributed, charge)
 			}
 			continue
 		}
 
-		rate := func(v decimal.Decimal) decimal.Decimal { return v.DivRound(denom, analyticsV2RateScale) }
-		r := events.AnalyticsV2Amounts{
+		rate := func(v decimal.Decimal) decimal.Decimal { return v.DivRound(denom, rateScale) }
+		l.rate = events.AnalyticsV2Amounts{
 			Usage: rate(cost.Usage), CommitmentUtilized: rate(cost.CommitmentUtilized), Overage: rate(cost.Overage),
-			TrueUp: rate(cost.TrueUp), Discount: rate(discount),
+			TrueUp: rate(cost.TrueUp), Discount: rate(discount), Free: rate(l.freeQuantity),
 		}
-		if !lines[i].IsMax {
-			r.Free = rate(l.freeQuantity)
-		}
-		ac.ranked = append(ac.ranked, lines[i])
-		ac.rates = append(ac.rates, r)
 		kept = append(kept, l)
 	}
 	ac.lines = kept
 	return nil
 }
 
-func analyticsV2LineCharge(l *analyticsV2LineCost, cost dto.AnalyticsV2Cost) dto.AnalyticsV2UnattributedCharge {
+func lineCharge(l *pricedLine, cost dto.AnalyticsV2Cost) dto.AnalyticsV2UnattributedCharge {
 	return dto.AnalyticsV2UnattributedCharge{
 		SubscriptionID: l.subscriptionID, PlanID: l.planID, AddonID: l.addonID, MeterID: l.meterID,
 		SubLineItemID: l.key.lineItemID, PriceID: l.priceID,
@@ -329,24 +278,24 @@ func analyticsV2LineCharge(l *analyticsV2LineCost, cost dto.AnalyticsV2Cost) dto
 	}
 }
 
-// analyticsV2UsageShare is the range's share of a line window's usage, or of its time when the window has no usage.
-func analyticsV2UsageShare(u events.AnalyticsV2LineUsage, start, end time.Time, l *analyticsV2LineCost) decimal.Decimal {
+// usageShare is the range's share of a line window's usage, or of its time when the window has no usage.
+func usageShare(u events.AnalyticsV2LineUsage, start, end time.Time, l *pricedLine) decimal.Decimal {
 	if u.Quantity.IsPositive() {
 		return u.RangeQuantity.Div(u.Quantity)
 	}
-	return analyticsV2Overlap(start, end, l.key.windowStart, l.key.windowEnd)
+	return timeOverlap(start, end, l.key.windowStart, l.key.windowEnd)
 }
 
-// analyticsV2Share is part's proportional share of amount, where part is out of whole.
-func analyticsV2Share(amount, part, whole decimal.Decimal) decimal.Decimal {
+// proportionalShare is part's proportional share of amount, where part is out of whole.
+func proportionalShare(amount, part, whole decimal.Decimal) decimal.Decimal {
 	if whole.IsZero() {
 		return decimal.Zero
 	}
 	return amount.Mul(part).Div(whole)
 }
 
-// analyticsV2Overlap is the fraction of [ws, we) covered by [start, end).
-func analyticsV2Overlap(start, end, ws, we time.Time) decimal.Decimal {
+// timeOverlap is the fraction of [ws, we) covered by [start, end).
+func timeOverlap(start, end, ws, we time.Time) decimal.Decimal {
 	from, to := lo.Latest(start, ws), lo.Earliest(end, we)
 	if !to.After(from) || !we.After(ws) {
 		return decimal.Zero
@@ -355,11 +304,8 @@ func analyticsV2Overlap(start, end, ws, we time.Time) decimal.Decimal {
 }
 
 // setPriceUnit records the custom price unit when every billed line uses the same one at the same rate, so
-// costs can also be shown in that unit. Charges without a line (unlinked) have no unit, so they rule it out.
-func (ac *analyticsV2Context) setPriceUnit(lines []*analyticsV2LineCost, hasUnlinked bool) {
-	if hasUnlinked {
-		return
-	}
+// costs can also be shown in that unit.
+func (ac *analyticsCtx) setPriceUnit(lines []*pricedLine) {
 	var unit string
 	var rate decimal.Decimal
 	for _, l := range lines {
@@ -381,7 +327,7 @@ func (ac *analyticsV2Context) setPriceUnit(lines []*analyticsV2LineCost, hasUnli
 
 // priceUnitCost converts an unrounded fiat cost to the custom price unit (same formula as
 // priceunit.ConvertToPriceUnitAmount), or nil when there is none.
-func (ac *analyticsV2Context) priceUnitCost(fiat decimal.Decimal) *decimal.Decimal {
+func (ac *analyticsCtx) priceUnitCost(fiat decimal.Decimal) *decimal.Decimal {
 	if ac.priceUnit == "" {
 		return nil
 	}
@@ -390,7 +336,7 @@ func (ac *analyticsV2Context) priceUnitCost(fiat decimal.Decimal) *decimal.Decim
 }
 
 // billingAnchor aligns MONTH windows to billing periods when every subscription shares one anchor.
-func (ac *analyticsV2Context) billingAnchor() *time.Time {
+func (ac *analyticsCtx) billingAnchor() *time.Time {
 	anchor := ac.subs[0].BillingAnchor
 	if lo.EveryBy(ac.subs, func(sub *subscription.Subscription) bool { return sub.BillingAnchor.Equal(anchor) }) {
 		return &anchor
@@ -398,7 +344,7 @@ func (ac *analyticsV2Context) billingAnchor() *time.Time {
 	return nil
 }
 
-func (ac *analyticsV2Context) meterFeatures() map[string]string {
+func (ac *analyticsCtx) meterFeatures() map[string]string {
 	out := make(map[string]string, len(ac.features))
 	for meterID, f := range ac.features {
 		out[meterID] = f.ID
@@ -406,24 +352,24 @@ func (ac *analyticsV2Context) meterFeatures() map[string]string {
 	return out
 }
 
-func (ac *analyticsV2Context) distinctKeys() []string {
+func (ac *analyticsCtx) distinctKeys() []string {
 	return lo.FilterMap(ac.req.Metrics, func(m string, _ int) (string, bool) {
 		return strings.CutPrefix(m, dto.AnalyticsV2MetricDistinctPrefix)
 	})
 }
 
-func (ac *analyticsV2Context) filtered() bool {
+func (ac *analyticsCtx) filtered() bool {
 	return len(ac.req.Filters) > 0 || ac.req.Search != ""
 }
 
-func (ac *analyticsV2Context) rankParams() *events.AnalyticsV2RankParams {
+func (ac *analyticsCtx) rankParams() *events.AnalyticsV2RankParams {
 	req := ac.req
 	return &events.AnalyticsV2RankParams{
 		Scope:         ac.scope,
 		StartTime:     req.StartTime,
 		EndTime:       req.EndTime,
-		Lines:         ac.ranked,
-		Rates:         ac.rates,
+		Lines:         lo.Map(ac.lines, func(l *pricedLine, _ int) events.AnalyticsV2Line { return l.window() }),
+		Rates:         lo.Map(ac.lines, func(l *pricedLine, _ int) events.AnalyticsV2Amounts { return l.rate }),
 		MeterFeatures: ac.meterFeatures(),
 		GroupBy:       req.GroupBy,
 		Column:        req.Columns,
@@ -442,21 +388,20 @@ func (ac *analyticsV2Context) rankParams() *events.AnalyticsV2RankParams {
 	}
 }
 
-// assembleAnalyticsV2 builds the response: rows, totals that reconcile to the invoice, unattributed, excluded, expand.
-func (s *meterUsageService) assembleAnalyticsV2(
+// assembleResponse builds the response: rows, totals that reconcile to the invoice, unattributed, excluded, expand.
+func (s *meterUsageService) assembleResponse(
 	ctx context.Context,
-	ac *analyticsV2Context,
+	ac *analyticsCtx,
 	result *events.AnalyticsV2RankResult,
 	detail *events.AnalyticsV2Detail,
 ) (*dto.GetUsageAnalyticsV2Response, error) {
 	req := ac.req
 	singleMeter := req.SingleMeter()
 	resp := &dto.GetUsageAnalyticsV2Response{
-		Currency:       ac.currency,
-		TotalCount:     result.TotalCount,
-		DataThrough:    ac.scope.DataThrough,
-		Items:          make([]dto.AnalyticsV2Item, 0, len(result.Rows)),
-		ExcludedMeters: ac.excluded,
+		Currency:    ac.currency,
+		TotalCount:  result.TotalCount,
+		DataThrough: ac.scope.DataThrough,
+		Items:       make([]dto.AnalyticsV2Item, 0, len(result.Rows)),
 	}
 
 	cellsByRow := map[int][]events.AnalyticsV2PointCell{}
@@ -482,17 +427,17 @@ func (s *meterUsageService) assembleAnalyticsV2(
 
 	resp.PriceUnit = ac.priceUnit
 	ac.totals(resp, result, cellsByRow[-1], singleMeter)
-	if err := s.expandAnalyticsV2(ctx, ac, resp); err != nil {
+	if err := s.expandEntities(ctx, ac, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
-func (ac *analyticsV2Context) round(v decimal.Decimal) decimal.Decimal {
+func (ac *analyticsCtx) round(v decimal.Decimal) decimal.Decimal {
 	return types.RoundToCurrencyPrecision(v, ac.currency)
 }
 
-func (ac *analyticsV2Context) cost(a events.AnalyticsV2Amounts) dto.AnalyticsV2Cost {
+func (ac *analyticsCtx) cost(a events.AnalyticsV2Amounts) dto.AnalyticsV2Cost {
 	return dto.AnalyticsV2Cost{
 		Usage: ac.round(a.Usage), CommitmentUtilized: ac.round(a.CommitmentUtilized),
 		Overage: ac.round(a.Overage), TrueUp: ac.round(a.TrueUp),
@@ -500,7 +445,7 @@ func (ac *analyticsV2Context) cost(a events.AnalyticsV2Amounts) dto.AnalyticsV2C
 }
 
 // groupMap names a row's values by key, dropping the "properties." prefix.
-func (ac *analyticsV2Context) groupMap(values []string) map[string]string {
+func (ac *analyticsCtx) groupMap(values []string) map[string]string {
 	out := make(map[string]string, len(values))
 	for i, k := range ac.req.GroupBy {
 		out[strings.TrimPrefix(k, "properties.")] = values[i]
@@ -508,7 +453,7 @@ func (ac *analyticsV2Context) groupMap(values []string) map[string]string {
 	return out
 }
 
-func (ac *analyticsV2Context) item(row events.AnalyticsV2Row, singleMeter bool) dto.AnalyticsV2Item {
+func (ac *analyticsCtx) item(row events.AnalyticsV2Row, singleMeter bool) dto.AnalyticsV2Item {
 	a := row.Measure.Amounts
 	item := dto.AnalyticsV2Item{
 		Group:      ac.groupMap(row.Group),
@@ -519,7 +464,7 @@ func (ac *analyticsV2Context) item(row events.AnalyticsV2Row, singleMeter bool) 
 		EventCount: row.Measure.EventCount,
 	}
 	if singleMeter {
-		item.Usage = lo.ToPtr(row.Measure.Quantity.Add(row.Measure.Peak))
+		item.Usage = lo.ToPtr(row.Measure.Quantity)
 		item.FreeUsage = lo.ToPtr(a.Free)
 		if f := ac.rowFeature(row); f != nil {
 			item.Unit, item.UnitPlural, item.ReportingUnit = f.UnitSingular, f.UnitPlural, f.ReportingUnit
@@ -530,11 +475,11 @@ func (ac *analyticsV2Context) item(row events.AnalyticsV2Row, singleMeter bool) 
 		for name, c := range row.Columns {
 			col := dto.AnalyticsV2Column{Cost: ac.round(c.Amounts.Usage)}
 			if singleMeter {
-				col.Usage = lo.ToPtr(c.Quantity.Add(c.Peak))
+				col.Usage = lo.ToPtr(c.Quantity)
 			}
 			item.Columns[name] = col
 		}
-		reconcileAnalyticsV2Columns(item.Columns, item.Cost)
+		reconcileColumns(item.Columns, item.Cost)
 	}
 
 	var priceIDs, subIDs, planIDs, addonIDs []string
@@ -566,7 +511,7 @@ func sortedUniq(v []string) []string {
 }
 
 // rowMeters lists the distinct meters of a row's lines.
-func (ac *analyticsV2Context) rowMeters(row events.AnalyticsV2Row) []string {
+func (ac *analyticsCtx) rowMeters(row events.AnalyticsV2Row) []string {
 	return lo.Uniq(lo.FilterMap(row.LineIndexes, func(idx int, _ int) (string, bool) {
 		if idx < 0 || idx >= len(ac.lines) {
 			return "", false
@@ -576,7 +521,7 @@ func (ac *analyticsV2Context) rowMeters(row events.AnalyticsV2Row) []string {
 }
 
 // rowFeature is the feature of a single-meter row's meter.
-func (ac *analyticsV2Context) rowFeature(row events.AnalyticsV2Row) *feature.Feature {
+func (ac *analyticsCtx) rowFeature(row events.AnalyticsV2Row) *feature.Feature {
 	meters := ac.rowMeters(row)
 	if len(meters) != 1 {
 		return nil
@@ -586,28 +531,23 @@ func (ac *analyticsV2Context) rowFeature(row events.AnalyticsV2Row) *feature.Fea
 
 // points rolls one row's cells (or the all-rows cells) up to one point per window, with columns.
 // Rounded point costs add up to target, the already-rounded cost they split.
-func (ac *analyticsV2Context) points(cells []events.AnalyticsV2PointCell, singleMeter bool, target decimal.Decimal) []dto.AnalyticsV2Point {
+func (ac *analyticsCtx) points(cells []events.AnalyticsV2PointCell, singleMeter bool, target decimal.Decimal) []dto.AnalyticsV2Point {
 	byWindow := map[time.Time]*dto.AnalyticsV2Point{}
 	amounts := map[time.Time]events.AnalyticsV2Amounts{}
-	// Usage adds up for additive lines; for MAX lines a window's usage is its highest peak.
-	usage, peak := map[time.Time]decimal.Decimal{}, map[time.Time]decimal.Decimal{}
+	usage := map[time.Time]decimal.Decimal{}
 	colUsage := map[time.Time]map[string]decimal.Decimal{}
 	for _, c := range cells {
-		// Cells arrive priced; usage is a quantity for additive lines and a peak for MAX lines.
-		cost, qty := c.Amounts.Cost(), lo.Ternary(c.IsMax, c.Peak, c.Quantity)
+		// Cells arrive priced.
+		cost, qty := c.Amounts.Cost(), c.Quantity
 		p := byWindow[c.WindowStart]
 		if p == nil {
 			p = &dto.AnalyticsV2Point{WindowStart: c.WindowStart}
 			byWindow[c.WindowStart] = p
 			colUsage[c.WindowStart] = map[string]decimal.Decimal{}
 		}
-		amounts[c.WindowStart] = addAnalyticsV2Amounts(amounts[c.WindowStart], c.Amounts)
+		amounts[c.WindowStart] = addAmounts(amounts[c.WindowStart], c.Amounts)
 		p.EventCount += c.EventCount
-		if c.IsMax {
-			peak[c.WindowStart] = decimal.Max(peak[c.WindowStart], qty)
-		} else {
-			usage[c.WindowStart] = usage[c.WindowStart].Add(qty)
-		}
+		usage[c.WindowStart] = usage[c.WindowStart].Add(qty)
 		if ac.req.Columns != "" {
 			if p.Columns == nil {
 				p.Columns = map[string]dto.AnalyticsV2Column{}
@@ -624,7 +564,7 @@ func (ac *analyticsV2Context) points(cells []events.AnalyticsV2PointCell, single
 		a := amounts[w]
 		p.Cost, p.Discount, p.Breakdown = ac.round(a.Cost()), ac.round(a.Discount), ac.cost(a)
 		if singleMeter {
-			p.Usage = lo.ToPtr(usage[w].Add(peak[w]))
+			p.Usage = lo.ToPtr(usage[w])
 		}
 		for name, col := range p.Columns {
 			col.Cost = ac.round(col.Cost)
@@ -636,23 +576,23 @@ func (ac *analyticsV2Context) points(cells []events.AnalyticsV2PointCell, single
 		out = append(out, *p)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].WindowStart.Before(out[j].WindowStart) })
-	reconcileAnalyticsV2Rounding(lo.Map(out, func(_ dto.AnalyticsV2Point, i int) *decimal.Decimal { return &out[i].Cost }), target)
+	reconcileRounding(lo.Map(out, func(_ dto.AnalyticsV2Point, i int) *decimal.Decimal { return &out[i].Cost }), target)
 	for i := range out {
 		out[i].Subtotal = out[i].Cost.Add(out[i].Discount)
-		reconcileAnalyticsV2Columns(out[i].Columns, out[i].Cost)
+		reconcileColumns(out[i].Columns, out[i].Cost)
 	}
 	return out
 }
 
-func addAnalyticsV2Amounts(a, b events.AnalyticsV2Amounts) events.AnalyticsV2Amounts {
+func addAmounts(a, b events.AnalyticsV2Amounts) events.AnalyticsV2Amounts {
 	return events.AnalyticsV2Amounts{
 		Usage: a.Usage.Add(b.Usage), CommitmentUtilized: a.CommitmentUtilized.Add(b.CommitmentUtilized),
 		Overage: a.Overage.Add(b.Overage), TrueUp: a.TrueUp.Add(b.TrueUp), Discount: a.Discount.Add(b.Discount), Free: a.Free.Add(b.Free),
 	}
 }
 
-// reconcileAnalyticsV2Columns makes rounded column costs add up to cost, in a stable column order.
-func reconcileAnalyticsV2Columns(columns map[string]dto.AnalyticsV2Column, cost decimal.Decimal) {
+// reconcileColumns makes rounded column costs add up to cost, in a stable column order.
+func reconcileColumns(columns map[string]dto.AnalyticsV2Column, cost decimal.Decimal) {
 	if len(columns) == 0 {
 		return
 	}
@@ -662,7 +602,7 @@ func reconcileAnalyticsV2Columns(columns map[string]dto.AnalyticsV2Column, cost 
 	for i, n := range names {
 		costs[i] = columns[n].Cost
 	}
-	reconcileAnalyticsV2Rounding(lo.Map(costs, func(_ decimal.Decimal, i int) *decimal.Decimal { return &costs[i] }), cost)
+	reconcileRounding(lo.Map(costs, func(_ decimal.Decimal, i int) *decimal.Decimal { return &costs[i] }), cost)
 	for i, n := range names {
 		col := columns[n]
 		col.Cost = costs[i]
@@ -670,8 +610,8 @@ func reconcileAnalyticsV2Columns(columns map[string]dto.AnalyticsV2Column, cost 
 	}
 }
 
-// reconcileAnalyticsV2Rounding puts the cents lost to rounding on the largest value, so the values add up to target.
-func reconcileAnalyticsV2Rounding(values []*decimal.Decimal, target decimal.Decimal) {
+// reconcileRounding puts the cents lost to rounding on the largest value, so the values add up to target.
+func reconcileRounding(values []*decimal.Decimal, target decimal.Decimal) {
 	if len(values) == 0 {
 		return
 	}
@@ -685,9 +625,9 @@ func reconcileAnalyticsV2Rounding(values []*decimal.Decimal, target decimal.Deci
 	*values[largest] = values[largest].Add(target.Sub(sum))
 }
 
-// totals fills totals so that cost = rows + unattributed + excluded. With filters or search the view is a
-// slice of rows, so unattributed is left out and excluded meters carry no cost.
-func (ac *analyticsV2Context) totals(resp *dto.GetUsageAnalyticsV2Response, result *events.AnalyticsV2RankResult, allRowCells []events.AnalyticsV2PointCell, singleMeter bool) {
+// totals fills totals so that cost = rows + unattributed. With filters or search the view is a
+// slice of rows, so unattributed is left out.
+func (ac *analyticsCtx) totals(resp *dto.GetUsageAnalyticsV2Response, result *events.AnalyticsV2RankResult, allRowCells []events.AnalyticsV2PointCell, singleMeter bool) {
 	rows := result.Totals.Amounts
 	t := &resp.Totals
 	t.RowsCost = ac.round(rows.Cost())
@@ -697,45 +637,31 @@ func (ac *analyticsV2Context) totals(resp *dto.GetUsageAnalyticsV2Response, resu
 	if !ac.filtered() {
 		for _, c := range ac.unattributed {
 			resp.Unattributed.Cost = resp.Unattributed.Cost.Add(c.Cost)
-			resp.Unattributed.Breakdown = addAnalyticsV2Cost(resp.Unattributed.Breakdown, c.Breakdown)
+			resp.Unattributed.Breakdown = addCost(resp.Unattributed.Breakdown, c.Breakdown)
 		}
 		resp.Unattributed.Cost = ac.round(resp.Unattributed.Cost)
-		resp.Unattributed.Breakdown = roundAnalyticsV2Cost(ac, resp.Unattributed.Breakdown)
+		resp.Unattributed.Breakdown = roundCost(ac, resp.Unattributed.Breakdown)
 		resp.Unattributed.Charges = lo.Map(ac.unattributed, func(c dto.AnalyticsV2UnattributedCharge, _ int) dto.AnalyticsV2UnattributedCharge {
-			c.Cost, c.Breakdown = ac.round(c.Cost), roundAnalyticsV2Cost(ac, c.Breakdown)
+			c.Cost, c.Breakdown = ac.round(c.Cost), roundCost(ac, c.Breakdown)
 			return c
 		})
-		reconcileAnalyticsV2Rounding(lo.Map(resp.Unattributed.Charges, func(_ dto.AnalyticsV2UnattributedCharge, i int) *decimal.Decimal {
+		reconcileRounding(lo.Map(resp.Unattributed.Charges, func(_ dto.AnalyticsV2UnattributedCharge, i int) *decimal.Decimal {
 			return &resp.Unattributed.Charges[i].Cost
 		}), resp.Unattributed.Cost)
 		t.UnattributedCost = resp.Unattributed.Cost
-		t.Breakdown = addAnalyticsV2Cost(t.Breakdown, resp.Unattributed.Breakdown)
+		t.Breakdown = addCost(t.Breakdown, resp.Unattributed.Breakdown)
 
 		exact := rows.Cost()
 		for _, c := range ac.unattributed {
 			exact = exact.Add(c.Cost)
 		}
-		for i, ex := range resp.ExcludedMeters {
-			exact = exact.Add(lo.FromPtr(ex.Cost))
-			t.ExcludedCost = t.ExcludedCost.Add(lo.FromPtr(ex.Cost))
-			resp.ExcludedMeters[i].Cost = lo.ToPtr(ac.round(lo.FromPtr(ex.Cost)))
-		}
-		t.ExcludedCost = ac.round(t.ExcludedCost)
-		reconcileAnalyticsV2Rounding(lo.FilterMap(resp.ExcludedMeters, func(ex dto.AnalyticsV2ExcludedMeter, _ int) (*decimal.Decimal, bool) {
-			return ex.Cost, ex.Cost != nil
-		}), t.ExcludedCost)
 		t.PriceUnitCost = ac.priceUnitCost(exact)
-		t.Breakdown.Usage = t.Breakdown.Usage.Add(t.ExcludedCost)
-	} else {
-		for i := range resp.ExcludedMeters {
-			resp.ExcludedMeters[i].Cost = nil
-		}
 	}
-	t.Cost = t.RowsCost.Add(t.UnattributedCost).Add(t.ExcludedCost)
+	t.Cost = t.RowsCost.Add(t.UnattributedCost)
 	t.Subtotal = t.Cost.Add(t.Discount)
 
 	if singleMeter {
-		t.Usage = lo.ToPtr(result.Totals.Quantity.Add(result.Totals.Peak))
+		t.Usage = lo.ToPtr(result.Totals.Quantity)
 		t.FreeUsage = lo.ToPtr(rows.Free)
 	}
 	if result.ColumnTotals != nil {
@@ -743,7 +669,7 @@ func (ac *analyticsV2Context) totals(resp *dto.GetUsageAnalyticsV2Response, resu
 		for name, c := range result.ColumnTotals {
 			col := dto.AnalyticsV2Column{Cost: ac.round(c.Amounts.Usage)}
 			if singleMeter {
-				col.Usage = lo.ToPtr(c.Quantity.Add(c.Peak))
+				col.Usage = lo.ToPtr(c.Quantity)
 			}
 			t.Columns[name] = col
 			resp.ColumnValues = append(resp.ColumnValues, name)
@@ -755,22 +681,22 @@ func (ac *analyticsV2Context) totals(resp *dto.GetUsageAnalyticsV2Response, resu
 	}
 }
 
-func addAnalyticsV2Cost(a, b dto.AnalyticsV2Cost) dto.AnalyticsV2Cost {
+func addCost(a, b dto.AnalyticsV2Cost) dto.AnalyticsV2Cost {
 	return dto.AnalyticsV2Cost{
 		Usage: a.Usage.Add(b.Usage), CommitmentUtilized: a.CommitmentUtilized.Add(b.CommitmentUtilized),
 		Overage: a.Overage.Add(b.Overage), TrueUp: a.TrueUp.Add(b.TrueUp),
 	}
 }
 
-func roundAnalyticsV2Cost(ac *analyticsV2Context, c dto.AnalyticsV2Cost) dto.AnalyticsV2Cost {
+func roundCost(ac *analyticsCtx, c dto.AnalyticsV2Cost) dto.AnalyticsV2Cost {
 	return dto.AnalyticsV2Cost{
 		Usage: ac.round(c.Usage), CommitmentUtilized: ac.round(c.CommitmentUtilized),
 		Overage: ac.round(c.Overage), TrueUp: ac.round(c.TrueUp),
 	}
 }
 
-// expandAnalyticsV2 fills the object maps requested in expand, for objects the response references.
-func (s *meterUsageService) expandAnalyticsV2(ctx context.Context, ac *analyticsV2Context, resp *dto.GetUsageAnalyticsV2Response) error {
+// expandEntities fills the object maps requested in expand, for objects the response references.
+func (s *meterUsageService) expandEntities(ctx context.Context, ac *analyticsCtx, resp *dto.GetUsageAnalyticsV2Response) error {
 	want := lo.SliceToMap(ac.req.Expand, func(e string) (string, bool) { return e, true })
 	if len(want) == 0 {
 		return nil
