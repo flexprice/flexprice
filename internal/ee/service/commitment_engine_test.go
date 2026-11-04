@@ -1161,7 +1161,7 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 		want         []wantLine
 	}{
 		{
-			name:         "usage before the commitment starts bills at the line's price, beyond capacity at the overage price",
+			name:         "usage before the commitment starts bills as plain usage, beyond capacity at the overage price",
 			usage:        []string{"20", "50"},
 			poolOf:       []int{-1, 0},
 			capacities:   []string{"30"},
@@ -1170,11 +1170,11 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 			want: []wantLine{
 				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
 				{types.CommitmentLineOverage, "Usage a", "20", "60"},
-				{types.CommitmentLineOverage, "Usage a", "20", "20"},
+				{"", "Usage a", "20", "20"},
 			},
 		},
 		{
-			name:         "usage after a mid-period end bills at the line's price, beyond capacity at the overage price",
+			name:         "usage after a mid-period end bills as plain usage, beyond capacity at the overage price",
 			usage:        []string{"50", "20"},
 			poolOf:       []int{0, -1},
 			capacities:   []string{"30"},
@@ -1183,11 +1183,11 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 			want: []wantLine{
 				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
 				{types.CommitmentLineOverage, "Usage a", "20", "60"},
-				{types.CommitmentLineOverage, "Usage a", "20", "20"},
+				{"", "Usage a", "20", "20"},
 			},
 		},
 		{
-			name:         "with capacity to spare only the out-of-force usage is left, at the line's price",
+			name:         "with capacity to spare only the out-of-force usage is left, as plain usage",
 			usage:        []string{"20", "30"},
 			poolOf:       []int{-1, 0},
 			capacities:   []string{"30"},
@@ -1195,7 +1195,7 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 			overagePrice: overagePrice,
 			want: []wantLine{
 				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
-				{types.CommitmentLineOverage, "Usage a", "20", "20"},
+				{"", "Usage a", "20", "20"},
 			},
 		},
 		{
@@ -1210,18 +1210,19 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 			want: []wantLine{
 				{types.CommitmentLineUtilized, "Label c1", "15", "15"},
 				{types.CommitmentLineOverage, "Usage a", "5", "15"},
-				{types.CommitmentLineOverage, "Usage a", "130", "140"},
+				{"", "Usage a", "130", "140"},
 			},
 		},
 		{
-			name:        "without an overage price every leftover unit bills at the line's price in one row",
+			name:        "without an overage price overage bills at the line's price, apart from the plain usage",
 			usage:       []string{"20", "50"},
 			poolOf:      []int{-1, 0},
 			capacities:  []string{"30"},
 			measurement: types.CommitmentMeasurementBillingPeriod,
 			want: []wantLine{
 				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
-				{types.CommitmentLineOverage, "Usage a", "40", "40"},
+				{types.CommitmentLineOverage, "Usage a", "20", "20"},
+				{"", "Usage a", "20", "20"},
 			},
 		},
 	}
@@ -1246,4 +1247,25 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 			requireLines(t, tt.want, lines)
 		})
 	}
+}
+
+// On an amount stack, money left in windows the commitment covers is overage; usage in windows it does not cover bills
+// as plain usage.
+func TestCommitmentInvoiceLinesAmountStackBillsUncoveredUsageAsPlainUsage(t *testing.T) {
+	line := invoiceLine("a", "70", "70", "20", "50")
+	lines := renderStack(t, &commitmentStack{
+		Type:        types.COMMITMENT_TYPE_AMOUNT,
+		Measurement: types.CommitmentMeasurementBillingPeriod,
+		Windows:     engineWindows(2),
+		Lines:       []*usageLine{line},
+		Commitments: []*stackedCommitment{committed("c1", false, "30", []int{-1, 0}, []*usageLine{line}, "30")},
+	}, func(_ *price.Price, qty decimal.Decimal) decimal.Decimal { return qty })
+
+	requireLines(t, []wantLine{
+		{types.CommitmentLineUtilized, "Label c1", "30", "30"},
+		{types.CommitmentLineOverage, "Usage a", "20", "20"},
+		{"", "Usage a", "20", "20"},
+	}, lines)
+	require.Nil(t, lines[2].Metadata, "plain usage carries no commitment metadata")
+	require.Nil(t, lines[2].CommitmentID)
 }
