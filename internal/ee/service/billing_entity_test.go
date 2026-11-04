@@ -51,7 +51,7 @@ func (s *BillingEntityServiceSuite) setMode(mode types.BillingEntityMode) {
 	_ = s.GetStores().TenantRepo.Create(ctx, t)
 	env := &environment.Environment{ID: types.GetEnvironmentID(ctx), Name: "Test", Type: types.EnvironmentDevelopment}
 	_ = s.GetStores().EnvironmentRepo.Create(ctx, env)
-	s.Require().NoError(s.GetStores().EnvironmentRepo.SetBillingEntityMode(ctx, env.ID, mode))
+	s.Require().NoError(s.service.(*billingEntityService).setMode(ctx, mode))
 }
 
 func (s *BillingEntityServiceSuite) addEntity(id, environmentID, prefix string, isDefault bool) *billingentity.BillingEntity {

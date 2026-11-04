@@ -29,8 +29,6 @@ const (
 	FieldName = "name"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
-	// FieldBillingEntityMode holds the string denoting the billing_entity_mode field in the database.
-	FieldBillingEntityMode = "billing_entity_mode"
 	// Table holds the table name of the environment in the database.
 	Table = "environments"
 )
@@ -46,7 +44,6 @@ var Columns = []string{
 	FieldUpdatedBy,
 	FieldName,
 	FieldType,
-	FieldBillingEntityMode,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -74,8 +71,6 @@ var (
 	NameValidator func(string) error
 	// TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	TypeValidator func(string) error
-	// DefaultBillingEntityMode holds the default value on creation for the "billing_entity_mode" field.
-	DefaultBillingEntityMode string
 )
 
 // OrderOption defines the ordering options for the Environment queries.
@@ -124,9 +119,4 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByType orders the results by the type field.
 func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
-}
-
-// ByBillingEntityMode orders the results by the billing_entity_mode field.
-func ByBillingEntityMode(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldBillingEntityMode, opts...).ToFunc()
 }

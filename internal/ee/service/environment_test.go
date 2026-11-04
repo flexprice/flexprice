@@ -41,7 +41,6 @@ func (s *EnvironmentServiceSuite) SetupTest() {
 	settingsRepo := testutil.NewInMemorySettingsStore()
 	serviceParams := ServiceParams{
 		SettingsRepo: settingsRepo,
-		TenantRepo:   testutil.NewInMemoryTenantStore(),
 	}
 	realSettingsService := NewSettingsService(serviceParams)
 

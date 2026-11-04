@@ -6,9 +6,11 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 )
 
@@ -49,7 +51,47 @@ func errBillingEntitiesNotEnabled() error {
 }
 
 func (s *billingEntityService) mode(ctx context.Context) (types.BillingEntityMode, error) {
-	return s.EnvironmentRepo.GetBillingEntityMode(ctx, types.GetEnvironmentID(ctx))
+	return s.modeOf(ctx, types.GetEnvironmentID(ctx))
+}
+
+// modeOf reads an environment's mode from the database; an environment without the setting is off.
+func (s *billingEntityService) modeOf(ctx context.Context, environmentID string) (types.BillingEntityMode, error) {
+	stored, err := s.SettingsRepo.GetByKeyUncached(ctx, environmentID, types.SettingKeyBillingEntityConfig)
+	if ierr.IsNotFound(err) {
+		return types.BillingEntityModeOff, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	cfg, err := utils.ToStruct[types.BillingEntityConfig](stored.Value)
+	if err != nil {
+		return "", err
+	}
+	return cfg.Mode.Normalize(), nil
+}
+
+// setMode stores the request environment's mode; only enablement calls it.
+func (s *billingEntityService) setMode(ctx context.Context, mode types.BillingEntityMode) error {
+	value, err := utils.ToMap(types.BillingEntityConfig{Mode: mode})
+	if err != nil {
+		return err
+	}
+	environmentID := types.GetEnvironmentID(ctx)
+	stored, err := s.SettingsRepo.GetByKeyUncached(ctx, environmentID, types.SettingKeyBillingEntityConfig)
+	if ierr.IsNotFound(err) {
+		return s.SettingsRepo.Create(ctx, &settings.Setting{
+			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+			EnvironmentID: environmentID,
+			Key:           types.SettingKeyBillingEntityConfig,
+			Value:         value,
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		})
+	}
+	if err != nil {
+		return err
+	}
+	stored.Value = value
+	return s.SettingsRepo.Update(ctx, stored)
 }
 
 func (s *billingEntityService) requireEnabled(ctx context.Context) error {

@@ -1459,10 +1459,6 @@ func init() {
 	environmentDescType := environmentFields[2].Descriptor()
 	// environment.TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	environment.TypeValidator = environmentDescType.Validators[0].(func(string) error)
-	// environmentDescBillingEntityMode is the schema descriptor for billing_entity_mode field.
-	environmentDescBillingEntityMode := environmentFields[3].Descriptor()
-	// environment.DefaultBillingEntityMode holds the default value on creation for the billing_entity_mode field.
-	environment.DefaultBillingEntityMode = environmentDescBillingEntityMode.Default.(string)
 	eventdeletionrequestMixin := schema.EventDeletionRequest{}.Mixin()
 	eventdeletionrequestMixinFields0 := eventdeletionrequestMixin[0].Fields()
 	_ = eventdeletionrequestMixinFields0

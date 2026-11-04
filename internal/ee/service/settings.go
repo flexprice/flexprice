@@ -78,6 +78,16 @@ func (s *settingsService) requireSAMLEnabled(key types.SettingKey) error {
 	return nil
 }
 
+// rejectSystemOwnedSetting refuses API writes to a setting only Flexprice changes.
+func rejectSystemOwnedSetting(key types.SettingKey) error {
+	if key != types.SettingKeyBillingEntityConfig {
+		return nil
+	}
+	return ierr.NewError("billing_entity_config cannot be changed through the settings API").
+		WithHint("The billing entities mode changes only by enabling billing entities").
+		Mark(ierr.ErrValidation)
+}
+
 // requireSuperAdminToReadSAMLConfig keeps the identity provider configuration
 // away from callers who may not administer it.
 //
@@ -380,6 +390,8 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.CommitmentsV2Config](s, ctx, key)
 	case types.SettingKeyRevenueRecognitionConfig:
 		return getSettingByKey[types.RevenueRecognitionConfig](s, ctx, key)
+	case types.SettingKeyBillingEntityConfig:
+		return getSettingByKey[types.BillingEntityConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -400,6 +412,9 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 //   - Don't call repository methods directly - always use service methods
 func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error) {
 	if err := s.requireSAMLEnabled(key); err != nil {
+		return nil, err
+	}
+	if err := rejectSystemOwnedSetting(key); err != nil {
 		return nil, err
 	}
 
@@ -467,6 +482,9 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 //   - Don't call repository methods directly - always use service methods
 func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.SettingKey) error {
 	if err := s.requireSAMLEnabled(key); err != nil {
+		return err
+	}
+	if err := rejectSystemOwnedSetting(key); err != nil {
 		return err
 	}
 

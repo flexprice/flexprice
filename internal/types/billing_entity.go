@@ -9,7 +9,7 @@ const (
 	BillingEntityModeEnabled  BillingEntityMode = "enabled"
 )
 
-// Normalize reads an empty mode, as found in stale cached environments, as off.
+// Normalize reads an empty mode as off.
 func (m BillingEntityMode) Normalize() BillingEntityMode {
 	if m == "" {
 		return BillingEntityModeOff

@@ -159,7 +159,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 | Customer `external_id` is unique per environment. | Existing schema | A buyer billed by two entities is two customers with different external IDs. |
 | Invoice numbers are unique per environment. | Existing unique index | Distinct prefixes per counter keep entities from colliding (FR-16, NFR-3). |
 | There is no database-wide statement or transaction timeout. | Database configuration | "Wait for in-flight creates" cannot be proven; enablement uses a lock instead (FR-3, NFR-4). |
-| Environments are cached in memory. | Existing environment cache | Every decision that affects stored data reads the data or the database, never the cached mode. |
+| Settings are cached in memory. | Existing settings cache | Every decision that affects stored data reads the mode from the database, never the cached setting. |
 | Customers are cached. | Existing customer cache | Enablement clears the cache of each customer it assigns. |
 | Every write to a recorded entity goes into the activity log. | Activity log | The enable backfill is a system update that is not recorded per customer. |
 | Tenant name and billing details are also the tenant's buyer details in Flexprice's own billing. | Self-billing | They stay editable after enable; only their seller role ends. |
@@ -231,8 +231,10 @@ erDiagram
   BILLING_ENTITY ||--o{ TAX_ASSOCIATION : "default rates"
   CUSTOMER ||--o{ INVOICE : receives
   ENVIRONMENT ||--o{ INVOICE_SEQUENCE : numbers
-  ENVIRONMENT {
-    string billing_entity_mode "new: off, enabling, enabled"
+  ENVIRONMENT ||--o{ SETTING : configures
+  SETTING {
+    string key "new key: billing_entity_config"
+    jsonb value "mode: off, enabling, enabled"
   }
   BILLING_ENTITY {
     string id PK "be_"
@@ -270,7 +272,7 @@ Changed tables:
 
 | Table | Column / change | Type | Null | Why |
 |---|---|---|---|---|
-| `environments` | `billing_entity_mode` | varchar(20) | no, default `off` | FR-1 |
+| `settings` | new key `billing_entity_config`, value `{"mode": "off" \| "enabling" \| "enabled"}` | | | FR-1. No row means `off`; only enablement writes it |
 | `customers` | `billing_entity_id` | varchar(50) | yes | NULL only while the environment is off or before the backfill reaches the row; immutable once set. Index (tenant, environment, `billing_entity_id`) built concurrently |
 | `invoices` | `seller_snapshot` | jsonb | yes | Written at finalization for customers with an entity (FR-17) |
 | `invoice_sequences` | `prefix` | varchar(20) | see migration | Counter key becomes (tenant, environment, prefix, period) |
@@ -344,6 +346,7 @@ and `entity_id` set to the entity.
 | Update `invoice_config` setting | Prefix change rejected from `enabling` on (FR-11) |
 | Create, update or delete tenant-level tax association | Rejected from `enabling` on (FR-11) |
 | Update `tax_config` setting | External provider rejected from `enabling` on (FR-8) |
+| Update or delete `billing_entity_config` setting | Always rejected; only enablement changes the mode (FR-1) |
 
 | Error | Status | When |
 |---|---|---|
@@ -405,7 +408,7 @@ sequenceDiagram
   participant DB as Database
   Client->>API: Create customer (optional entity)
   API->>DB: Begin, take the environment's shared enable lock
-  API->>DB: Read environment mode (database, not cache)
+  API->>DB: Read the mode (database, not cache)
   alt off
     API->>DB: Store customer with no entity, copy tenant-level tax rates
   else enabling

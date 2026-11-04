@@ -1365,7 +1365,6 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "billing_entity_mode", Type: field.TypeString, Default: "off", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 	}
 	// EnvironmentsTable holds the schema information for the "environments" table.
 	EnvironmentsTable = &schema.Table{

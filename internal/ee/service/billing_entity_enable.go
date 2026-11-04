@@ -80,11 +80,10 @@ func (s *billingEntityService) PrepareEnable(ctx context.Context) error {
 			return err
 		}
 
-		environmentID := types.GetEnvironmentID(txCtx)
-		if err := s.EnvironmentRepo.SetBillingEntityMode(txCtx, environmentID, types.BillingEntityModeEnabling); err != nil {
+		if err := s.setMode(txCtx, types.BillingEntityModeEnabling); err != nil {
 			return err
 		}
-		s.Logger.Info(txCtx, "billing entities enabling", "tenant_id", types.GetTenantID(txCtx), "environment_id", environmentID)
+		s.Logger.Info(txCtx, "billing entities enabling", "tenant_id", types.GetTenantID(txCtx), "environment_id", types.GetEnvironmentID(txCtx))
 		return nil
 	})
 }
@@ -133,7 +132,7 @@ func (s *billingEntityService) CompleteEnable(ctx context.Context) error {
 			return err
 		}
 
-		if err := s.EnvironmentRepo.SetBillingEntityMode(txCtx, environmentID, types.BillingEntityModeEnabled); err != nil {
+		if err := s.setMode(txCtx, types.BillingEntityModeEnabled); err != nil {
 			return err
 		}
 		s.Logger.Info(txCtx, "billing entities enabled",
