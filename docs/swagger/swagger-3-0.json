@@ -14921,7 +14921,7 @@
           {
             "name": "expand",
             "in": "query",
-            "description": "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan')",
+            "description": "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan,commitments')",
             "schema": {
               "type": "string"
             }
@@ -20644,7 +20644,7 @@
           },
           "invoice_label": {
             "type": "string",
-            "description": "InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number\nall of the owner's instalments together."
+            "description": "InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number\nthe owner's instalments whose labels use them."
           },
           "kind": {
             "$ref": "#/components/schemas/types.BillingTermKind"
@@ -22107,7 +22107,7 @@
           "invoice_label": {
             "maxLength": 255,
             "type": "string",
-            "description": "InvoiceLabel names the term's instalments on the invoice, \"Instalment {n} of {of}\" by default. {n} and {of} are\nfilled with each instalment's place among all of the commitment's instalments and their count."
+            "description": "InvoiceLabel names the term's instalments on the invoice, \"Instalment {n} of {of}\" by default. {n} and {of} are\nfilled with each instalment's place among the commitment's numbered instalments, those whose labels use them,\nand their count; a label without them takes no number."
           },
           "kind": {
             "$ref": "#/components/schemas/types.BillingTermKind"
@@ -32239,6 +32239,13 @@
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
+          "commitments": {
+            "type": "array",
+            "description": "Commitments are included when \"commitments\" is in expand parameter",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentResponse"
+            }
+          },
           "coupon_associations": {
             "type": "array",
             "description": "CouponAssociations are included when \"coupon_associations\" is in expand parameter",
@@ -37477,7 +37484,8 @@
           "WALLET_AUTO_TOPUP",
           "SUBSCRIPTION_PAUSED",
           "SUBSCRIPTION_RESUME",
-          "BILLING_TERMS"
+          "BILLING_TERMS",
+          "COMMITMENT_TERMINATION"
         ],
         "x-enum-varnames": [
           "InvoiceBillingReasonSubscriptionCreate",
@@ -37491,7 +37499,8 @@
           "InvoiceBillingReasonWalletAutoTopup",
           "InvoiceBillingReasonSubscriptionPaused",
           "InvoiceBillingReasonSubscriptionResume",
-          "InvoiceBillingReasonBillingTerms"
+          "InvoiceBillingReasonBillingTerms",
+          "InvoiceBillingReasonCommitmentTermination"
         ],
         "x-speakeasy-name-override": "InvoiceBillingReason"
       },

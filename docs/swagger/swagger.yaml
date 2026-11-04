@@ -489,7 +489,7 @@ definitions:
       invoice_label:
         description: |-
           InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number
-          all of the owner's instalments together.
+          the owner's instalments whose labels use them.
         type: string
       kind:
         $ref: '#/definitions/types.BillingTermKind'
@@ -1483,7 +1483,8 @@ definitions:
       invoice_label:
         description: |-
           InvoiceLabel names the term's instalments on the invoice, "Instalment {n} of {of}" by default. {n} and {of} are
-          filled with each instalment's place among all of the commitment's instalments and their count.
+          filled with each instalment's place among the commitment's numbered instalments, those whose labels use them,
+          and their count; a label without them takes no number.
         maxLength: 255
         type: string
       kind:
@@ -9266,6 +9267,11 @@ definitions:
         - $ref: '#/definitions/types.BillingPeriod'
         description: CommitmentDuration is the time frame of the commitment (e.g.,
           ANNUAL commitment on a MONTHLY subscription)
+      commitments:
+        description: Commitments are included when "commitments" is in expand parameter
+        items:
+          $ref: '#/definitions/CommitmentResponse'
+        type: array
       coupon_associations:
         description: CouponAssociations are included when "coupon_associations" is
           in expand parameter
@@ -13102,6 +13108,7 @@ definitions:
     - SUBSCRIPTION_PAUSED
     - SUBSCRIPTION_RESUME
     - BILLING_TERMS
+    - COMMITMENT_TERMINATION
     type: string
     x-enum-varnames:
     - InvoiceBillingReasonSubscriptionCreate
@@ -13116,6 +13123,7 @@ definitions:
     - InvoiceBillingReasonSubscriptionPaused
     - InvoiceBillingReasonSubscriptionResume
     - InvoiceBillingReasonBillingTerms
+    - InvoiceBillingReasonCommitmentTermination
   types.InvoiceCadence:
     enum:
     - ARREAR
@@ -25195,7 +25203,7 @@ paths:
         name: id
         required: true
         type: string
-      - description: Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan')
+      - description: Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan,commitments')
         in: query
         name: expand
         type: string

@@ -105,7 +105,7 @@ then returns the commitment's lines, which are appended to the usage charges.
 
 Analytics and previews use `newProjectedCommitmentLoader`, which prices a window inside the open period as if through
 the period's end but reads usage only up to the window's end: `attachCommitmentBreakdown`
-([subscription.go:6701](../../internal/ee/service/subscription.go#L6701)) and `calculateLineItemCommitments`
+([subscription.go:6716](../../internal/ee/service/subscription.go#L6716)) and `calculateLineItemCommitments`
 ([meter_usage.go:2869](../../internal/ee/service/meter_usage.go#L2869)).
 
 ### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:58](../../internal/ee/service/billing_commitments.go#L58))
@@ -160,8 +160,11 @@ This file has no I/O.
   absorbed units once on the committed price, so tiers walk the total, and splits that by line.
 - **True-up**, binding only: floor minus utilized, as a fixed line on the committed price (`trueUpRow`). On a clipped
   period, utilized value is capped at the partial floor.
-- **Overage** rows per line: the overage price when set, otherwise the line's own price at its marginal cost, so
-  tiers continue from where the commitment stopped (`overageLines`, `marginalCost`).
+- **Overage** rows per line, for usage left in windows a commitment covers: the overage price when set, otherwise the
+  line's own price at its marginal cost, so tiers continue from where the commitment stopped (`overageLines`,
+  `marginalCost`).
+- **Plain usage** rows per line, for usage in windows no commitment covers (before its start, after its end or
+  termination, outside its active windows): the line's own price, with no commitment metadata.
 - `absorbDrift` makes individually rounded rows add up to their rounded target.
 
 `BillingLines` then runs `coverWithBillingTerms` ([billing_commitments.go:374](../../internal/ee/service/billing_commitments.go#L374)).
@@ -250,10 +253,12 @@ Other flows call these inside their own transaction:
    - `resolveAmounts` gives the remainder term whatever the fixed terms leave.
    - `instalmentAmounts` splits each term over its instalments: evenly, or in proportion to the period values; the
      last absorbs rounding.
-4. `NumberLabels` ([schedule.go:113](../../internal/domain/billingterm/schedule.go#L113)) fills `{n}` and `{of}`. The plan
-   is the invoiced instalments first, which keep their labels, then the new ones in billing order.
+4. `NumberLabels` ([schedule.go:113](../../internal/domain/billingterm/schedule.go#L113)) fills `{n}` and `{of}` in the
+   new instalments, in billing order. Only labels that use them take a number, so a custom label such as a
+   milestone's leaves no gap. On an edit the new ones are numbered after the invoiced instalments that took a number;
+   `numberedInstalments` reads those instalments' terms in any status, since an earlier edit may have archived them.
 
-### 9.2 Editing — `ReplaceBillingTerms` ([commitment_billing_terms.go:188](../../internal/ee/service/commitment_billing_terms.go#L188))
+### 9.2 Editing — `ReplaceBillingTerms` ([commitment_billing_terms.go:213](../../internal/ee/service/commitment_billing_terms.go#L213))
 
 The edit runs in one transaction:
 1. Take the commitment lock (`commitment:<id>`).
@@ -304,12 +309,12 @@ under the commitment lock:
 1. Refuse unless the commitment is active and `effective_at` is before its end; a fee needs a binding commitment.
 2. Under billing terms, `settle` cancels the scheduled instalments. When `earnedAmount` at `effective_at` exceeds the
    invoiced instalments, it adds a settlement instalment for the difference. Nothing is refunded.
-3. `billTermination` issues one immediate one-off invoice carrying the settlement and the cancellation fee
-   (`cancellationFeeLine`).
+3. `billTermination` issues one immediate one-off invoice, `billing_reason: COMMITMENT_TERMINATION`, carrying the
+   settlement and the cancellation fee (`cancellationFeeLine`).
 4. Set the status to terminated with `terminated_at`. Later invoices clip the floor at `terminated_at`.
 
-Cancelling a subscription calls `TerminateForSubscription` (`CancelSubscription` [subscription.go:2273](../../internal/ee/service/subscription.go#L2273),
-`TerminateSubscriptionResources` [subscription.go:5232](../../internal/ee/service/subscription.go#L5232)). A billing-terms commitment
+Cancelling a subscription calls `TerminateForSubscription` (`CancelSubscription` [subscription.go:2288](../../internal/ee/service/subscription.go#L2288),
+`TerminateSubscriptionResources` [subscription.go:5247](../../internal/ee/service/subscription.go#L5247)). A billing-terms commitment
 that already ended still has its scheduled instalments billed (`settleEnded`), since no later subscription invoice
 will carry them.
 

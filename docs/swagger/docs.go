@@ -12369,7 +12369,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan')",
+                        "description": "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan,commitments')",
                         "name": "expand",
                         "in": "query"
                     }
@@ -17647,7 +17647,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.InvoiceCadence"
                 },
                 "invoice_label": {
-                    "description": "InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number\nall of the owner's instalments together.",
+                    "description": "InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number\nthe owner's instalments whose labels use them.",
                     "type": "string"
                 },
                 "kind": {
@@ -19103,7 +19103,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.InvoiceCadence"
                 },
                 "invoice_label": {
-                    "description": "InvoiceLabel names the term's instalments on the invoice, \"Instalment {n} of {of}\" by default. {n} and {of} are\nfilled with each instalment's place among all of the commitment's instalments and their count.",
+                    "description": "InvoiceLabel names the term's instalments on the invoice, \"Instalment {n} of {of}\" by default. {n} and {of} are\nfilled with each instalment's place among the commitment's numbered instalments, those whose labels use them,\nand their count; a label without them takes no number.",
                     "type": "string",
                     "maxLength": 255
                 },
@@ -29830,6 +29830,13 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "commitments": {
+                    "description": "Commitments are included when \"commitments\" is in expand parameter",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CommitmentResponse"
+                    }
+                },
                 "coupon_associations": {
                     "description": "CouponAssociations are included when \"coupon_associations\" is in expand parameter",
                     "type": "array",
@@ -35124,7 +35131,8 @@ const docTemplate = `{
                 "WALLET_AUTO_TOPUP",
                 "SUBSCRIPTION_PAUSED",
                 "SUBSCRIPTION_RESUME",
-                "BILLING_TERMS"
+                "BILLING_TERMS",
+                "COMMITMENT_TERMINATION"
             ],
             "x-enum-varnames": [
                 "InvoiceBillingReasonSubscriptionCreate",
@@ -35138,7 +35146,8 @@ const docTemplate = `{
                 "InvoiceBillingReasonWalletAutoTopup",
                 "InvoiceBillingReasonSubscriptionPaused",
                 "InvoiceBillingReasonSubscriptionResume",
-                "InvoiceBillingReasonBillingTerms"
+                "InvoiceBillingReasonBillingTerms",
+                "InvoiceBillingReasonCommitmentTermination"
             ]
         },
         "types.InvoiceCadence": {
