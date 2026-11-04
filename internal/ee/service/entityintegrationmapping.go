@@ -214,7 +214,7 @@ func (s *entityIntegrationMappingService) setProviderConnection(ctx context.Cont
 		return nil
 	}
 	if types.GetBillingEntityID(ctx) == "" && types.GetConnectionID(ctx) == "" {
-		mode, err := s.EnvironmentRepo.GetBillingEntityMode(ctx, types.GetEnvironmentID(ctx))
+		mode, err := (&billingEntityService{ServiceParams: s.ServiceParams}).mode(ctx)
 		if err != nil {
 			return err
 		}

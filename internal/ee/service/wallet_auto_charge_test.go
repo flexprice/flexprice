@@ -100,6 +100,7 @@ func (s *WalletAutoChargeSuite) buildParams() ServiceParams {
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		TenantRepo:                   stores.TenantRepo,
 		EnvironmentRepo:              stores.EnvironmentRepo,
+		SettingsRepo:                 stores.SettingsRepo,
 	}
 }
 

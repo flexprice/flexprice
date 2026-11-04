@@ -49,6 +49,7 @@ func (s *MarketplaceServiceSuite) setupService() {
 		ConnectionRepo:               stores.ConnectionRepo,
 		TenantRepo:                   stores.TenantRepo,
 		EnvironmentRepo:              stores.EnvironmentRepo,
+		SettingsRepo:                 stores.SettingsRepo,
 	})
 }
 
