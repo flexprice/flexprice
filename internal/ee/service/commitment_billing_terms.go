@@ -34,7 +34,8 @@ func (s *commitmentService) planInstalments(
 		return nil, ierr.Validationf("billing_terms: the commitment is fully invoiced; nothing is left to plan")
 	}
 
-	periods, err := commitmentPeriods(c, cc.Sub, amountOf, bucketFor(c, cc), c.StartDate, *c.EndDate)
+	term := types.Period{Start: c.StartDate, End: *c.EndDate}
+	periods, err := commitmentPeriods(c, cc.Sub, amountOf, bucketFor(c, cc), term)
 	if err != nil {
 		return nil, err
 	}

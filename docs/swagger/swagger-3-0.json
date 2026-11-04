@@ -18392,7 +18392,7 @@
           "Webhook Events"
         ],
         "summary": "billing_instalment.created",
-        "description": "Fired when a billing instalment is added to a commitment. Doc-only for parsing.",
+        "description": "Fired when a billing instalment is scheduled for an entity (like a commitment). Doc-only for parsing.",
         "responses": {
           "200": {
             "description": "Webhook payload",
@@ -18455,7 +18455,7 @@
           "Webhook Events"
         ],
         "summary": "billing_terms.created",
-        "description": "Fired when billing terms are saved with a new commitment. Doc-only for parsing.",
+        "description": "Fired when billing terms are saved against an entity (like a commitment). Doc-only for parsing.",
         "responses": {
           "200": {
             "description": "Webhook payload",
@@ -18476,7 +18476,7 @@
           "Webhook Events"
         ],
         "summary": "billing_terms.updated",
-        "description": "Fired when an edit replaces a commitment's billing terms. Doc-only for parsing.",
+        "description": "Fired when an entity's (like a commitment's) billing terms are replaced. Doc-only for parsing.",
         "responses": {
           "200": {
             "description": "Webhook payload",

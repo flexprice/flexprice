@@ -981,14 +981,14 @@ func partialHalves(t *testing.T, binding bool, used ...string) [][]dto.CreateInv
 		StartDate:   apr,
 		EndDate:     lo.ToPtr(may),
 	}
-	periods, err := commitmentPeriods(c, monthlySub(apr), amountOf, "", apr, may)
+	periods, err := commitmentPeriods(c, monthlySub(apr), amountOf, "", types.Period{Start: apr, End: may})
 	require.NoError(t, err)
 	require.Len(t, periods, 1)
 
 	edges := []time.Time{apr, split, may}
 	out := make([][]dto.CreateInvoiceLineItemRequest, len(used))
 	for i, u := range used {
-		part := clipCommitmentPeriod(c, periods[0], edges[i], edges[i+1], amountOf, "", apr)
+		part := clipCommitmentPeriod(c, periods[0], types.Period{Start: edges[i], End: edges[i+1]}, amountOf, "", apr)
 		line := invoiceLine("a", u, "0", u)
 		sc := committed("c1", binding, "0", []int{0}, []*usageLine{line}, part.Capacity.String())
 		sc.CommittedPrice, sc.Period = committedPrice, part

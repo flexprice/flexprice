@@ -204,12 +204,13 @@ func (l *commitmentLoader) load(
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	periods, err := commitmentPeriods(c, l.sub, amountOf, bucket, l.periodStart, l.periodEnd)
+	window := types.Period{Start: l.periodStart, End: l.periodEnd}
+	periods, err := commitmentPeriods(c, l.sub, amountOf, bucket, window)
 	if err != nil {
 		return err
 	}
 
-	period, ok := containingPeriod(periods, l.periodStart, l.periodEnd)
+	period, ok := containingPeriod(periods, window)
 	if !ok {
 		l.billing.Logger.Debug(ctx, "commitment.skipped",
 			"operation", "commitment.skipped",
@@ -223,11 +224,11 @@ func (l *commitmentLoader) load(
 	}
 
 	// A partial invoice or a mid-period termination bills a prorated share of the period's value.
-	until := l.periodEnd
+	billed := window
 	if c.TerminatedAt != nil {
-		until = minTime(until, *c.TerminatedAt)
+		billed.End = minTime(billed.End, *c.TerminatedAt)
 	}
-	clipped := clipCommitmentPeriod(c, period, l.periodStart, until, amountOf, bucket, l.sub.BillingAnchor)
+	clipped := clipCommitmentPeriod(c, period, billed, amountOf, bucket, l.sub.BillingAnchor)
 
 	for _, item := range scopedItems {
 		l.handledLineIDs[item.ID] = true
@@ -566,7 +567,8 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 	for _, sc := range stack.Commitments {
 		sc.PoolOf = make([]int, len(stack.Windows))
 		for w, t := range stack.Windows {
-			if !l.accrues(sc.Commitment, t, l.periodStart) {
+			// A bucket starting before the period belongs to the period before it, which counted its capacity.
+			if t.Before(l.periodStart) || !l.appliesAt(sc.Commitment, t) {
 				sc.PoolOf[w] = noPool
 				continue
 			}
@@ -576,8 +578,9 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 		}
 
 		scope := l.scopeByCommitment[sc.ID]
-		before := l.activeBuckets(sc.Commitment, scope.accrualStart, l.periodStart, bucket)
-		sc.Period.ActiveBuckets = l.activeBuckets(sc.Commitment, l.periodStart, l.periodEnd, bucket)
+		elapsed := types.Period{Start: scope.accrualStart, End: l.periodStart}
+		before := l.activeBuckets(sc.Commitment, elapsed, bucket)
+		sc.Period.ActiveBuckets = l.activeBuckets(sc.Commitment, types.Period{Start: l.periodStart, End: l.periodEnd}, bucket)
 		sc.Period.Capacity = sc.Value.Mul(decimal.NewFromInt(sc.Period.ActiveBuckets))
 		sc.Period.Amount = accruedAmount(
 			scope.amountOf,
@@ -590,20 +593,16 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 	return nil
 }
 
-// activeBuckets counts the buckets of the usage grid starting in [from, to) that hold the commitment's capacity.
-func (l *commitmentLoader) activeBuckets(c *commitment.Commitment, from, to time.Time, bucket types.WindowSize) int64 {
-	starts := generateBucketStarts(from.UTC(), to.UTC(), bucket, &l.sub.BillingAnchor)
-	return int64(lo.CountBy(starts, func(t time.Time) bool { return l.accrues(c, t, from) }))
+// activeBuckets counts the buckets of the usage grid starting within span that the commitment's capacity applies to.
+func (l *commitmentLoader) activeBuckets(c *commitment.Commitment, span types.Period, bucket types.WindowSize) int64 {
+	starts := generateBucketStarts(span.Start.UTC(), span.End.UTC(), bucket, &l.sub.BillingAnchor)
+	return int64(lo.CountBy(starts, func(t time.Time) bool { return !t.Before(span.Start) && l.appliesAt(c, t) }))
 }
 
-// accrues reports whether the bucket starting at t holds the commitment's capacity in a span starting at from: within
-// its term, which ends with the subscription for an open-ended one. A bucket starting before the span belongs to the
-// span before it, which already counted it.
-func (l *commitmentLoader) accrues(c *commitment.Commitment, t, from time.Time) bool {
-	return !t.Before(from) &&
-		c.IsActiveAt(t) &&
-		!endReached(termEnd(l.sub, c), t) &&
-		c.ActiveWindows.Contains(t, c.Location())
+// appliesAt reports whether the commitment's capacity applies at t: within its term, which ends with the subscription
+// when it is open-ended, and inside its active windows.
+func (l *commitmentLoader) appliesAt(c *commitment.Commitment, t time.Time) bool {
+	return !t.Before(c.StartDate) && !endReached(termEnd(l.sub, c), t) && c.ActiveWindows.Contains(t, c.Location())
 }
 
 // windowOf returns the index of the window holding max(t, line start), or of the first window for an earlier one.
@@ -705,8 +704,7 @@ func (l *commitmentLoader) buildPeriodStack(ctx context.Context, stack *commitme
 		sc.Pools = []decimal.Decimal{sc.Period.Capacity}
 		sc.PoolOf = make([]int, len(stack.Windows))
 		for w, t := range stack.Windows {
-			// A commitment holds no capacity before its start (whole seconds) or once its term ends.
-			if sc.StartDate.Truncate(time.Second).After(t) || endReached(termEnd(l.sub, sc.Commitment), t) {
+			if !l.appliesAt(sc.Commitment, t) {
 				sc.PoolOf[w] = noPool
 			}
 		}
@@ -1022,10 +1020,11 @@ func spreadCost(weights []decimal.Decimal, total decimal.Decimal) []decimal.Deci
 	return out
 }
 
-// containingPeriod returns the commitment period whose uncut billing period contains [start, end).
-// Compared at whole seconds, because computed billing dates drop sub-second precision.
-func containingPeriod(periods []commitmentPeriod, start, end time.Time) (commitmentPeriod, bool) {
-	start, end = start.Truncate(time.Second), end.Truncate(time.Second)
+// containingPeriod returns the commitment period whose regular billing period contains window, so a period that the
+// commitment's start or end cuts short still holds its whole billing period's invoice. Edges compare at whole seconds:
+// the period grid keeps a mid-second billing anchor's fraction, which the subscription's stored period edges drop.
+func containingPeriod(periods []commitmentPeriod, window types.Period) (commitmentPeriod, bool) {
+	start, end := window.Start.Truncate(time.Second), window.End.Truncate(time.Second)
 	for _, p := range periods {
 		if !p.FullStart.Truncate(time.Second).After(start) && !end.After(p.FullEnd.Truncate(time.Second)) {
 			return p, true

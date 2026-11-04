@@ -26,29 +26,34 @@ type commitmentPeriod struct {
 // amountFn values a commitment's capacity in money.
 type amountFn func(capacity decimal.Decimal) decimal.Decimal
 
-// commitmentPeriods returns the billing periods clipped to the commitment term from the one holding `from`, valued
-// by amountOf; with no end_date they run through the period holding `through`.
+// commitmentPeriods returns the subscription billing periods overlapping span, each cut to the commitment's term and
+// valued by amountOf. The term ends at the commitment's end_date, or with the subscription when it has none.
 func commitmentPeriods(
 	c *commitment.Commitment,
 	sub *subscription.Subscription,
 	amountOf amountFn,
 	bucket types.WindowSize,
-	from time.Time,
-	through time.Time,
+	span types.Period,
 ) ([]commitmentPeriod, error) {
-	horizon, err := periodsHorizon(c, sub, through)
+	first, err := periodAt(sub, maxTime(span.Start, c.StartDate))
 	if err != nil {
 		return nil, err
 	}
 
-	first, err := periodAt(sub, maxTime(from, c.StartDate))
+	last, err := periodAt(sub, span.End)
 	if err != nil {
 		return nil, err
+	}
+
+	// The period starting at span.End lies outside span.
+	until := last.End
+	if !last.Start.Before(span.End) {
+		until = span.End
 	}
 
 	full, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
 		InitialPeriodStart: first.Start,
-		EndDate:            &horizon,
+		EndDate:            &until,
 		Anchor:             sub.BillingAnchor,
 		PeriodCount:        sub.BillingPeriodCount,
 		BillingPeriod:      sub.BillingPeriod,
@@ -68,21 +73,30 @@ func commitmentPeriods(
 			Mark(ierr.ErrInternal)
 	}
 
+	termEnd := c.EndDate
+	if termEnd == nil {
+		termEnd = sub.EndDate
+	}
+
 	out := make([]commitmentPeriod, 0, len(full))
 	for _, p := range full {
-		start, end := maxTime(p.Start, c.StartDate), minTime(p.End, horizon)
-		if !start.Before(end) {
+		cut := types.Period{Start: maxTime(p.Start, c.StartDate), End: p.End}
+		if termEnd != nil {
+			cut.End = minTime(cut.End, *termEnd)
+		}
+
+		if !cut.Start.Before(cut.End) {
 			continue
 		}
 
 		regular := types.FullBillingPeriod(p.Start, grid)
 		cp := commitmentPeriod{
-			Start:     start,
-			End:       end,
+			Start:     cut.Start,
+			End:       cut.End,
 			FullStart: regular.Start,
 			FullEnd:   regular.End,
 		}
-		cp.ActiveBuckets, cp.Capacity = periodCapacity(c, cp, start, end, bucket, sub.BillingAnchor)
+		cp.ActiveBuckets, cp.Capacity = periodCapacity(c, cp, cut, bucket, sub.BillingAnchor)
 		cp.Amount = amountOf(cp.Capacity)
 		out = append(out, cp)
 	}
@@ -90,42 +104,23 @@ func commitmentPeriods(
 	return out, nil
 }
 
-// periodsHorizon returns where c's periods stop: its end_date, or with none the end of the billing period holding
-// through, never past the subscription's end.
-func periodsHorizon(c *commitment.Commitment, sub *subscription.Subscription, through time.Time) (time.Time, error) {
-	if c.EndDate != nil {
-		return *c.EndDate, nil
-	}
-
-	horizon, err := periodEndAt(sub, through)
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	if sub.EndDate != nil {
-		return minTime(horizon, *sub.EndDate), nil
-	}
-
-	return horizon, nil
-}
-
-// clipCommitmentPeriod returns p cut to [from, until), with its capacity and amount recomputed.
+// clipCommitmentPeriod returns p cut to span, with its capacity and amount recomputed.
 // Bounds within the same second as p's edges leave it whole, since computed billing dates drop sub-seconds.
 func clipCommitmentPeriod(
 	c *commitment.Commitment,
 	p commitmentPeriod,
-	from, until time.Time,
+	span types.Period,
 	amountOf amountFn,
 	bucket types.WindowSize,
 	anchor time.Time,
 ) commitmentPeriod {
 	out := p
-	if from.Truncate(time.Second).After(p.Start.Truncate(time.Second)) {
-		out.Start = minTime(from, p.End)
+	if span.Start.Truncate(time.Second).After(p.Start.Truncate(time.Second)) {
+		out.Start = minTime(span.Start, p.End)
 	}
 
-	if until.Truncate(time.Second).Before(p.End.Truncate(time.Second)) {
-		out.End = maxTime(until, out.Start)
+	if span.End.Truncate(time.Second).Before(p.End.Truncate(time.Second)) {
+		out.End = maxTime(span.End, out.Start)
 	}
 
 	if out.Start.Equal(p.Start) && out.End.Equal(p.End) {
@@ -133,9 +128,9 @@ func clipCommitmentPeriod(
 	}
 
 	out.Clipped = true
-	out.ActiveBuckets, out.Capacity = periodCapacity(c, p, out.Start, out.End, bucket, anchor)
-	_, before := periodCapacity(c, p, p.Start, out.Start, bucket, anchor)
-	_, through := periodCapacity(c, p, p.Start, out.End, bucket, anchor)
+	out.ActiveBuckets, out.Capacity = periodCapacity(c, p, types.Period{Start: out.Start, End: out.End}, bucket, anchor)
+	_, before := periodCapacity(c, p, types.Period{Start: p.Start, End: out.Start}, bucket, anchor)
+	_, through := periodCapacity(c, p, types.Period{Start: p.Start, End: out.End}, bucket, anchor)
 	out.Amount = accruedAmount(amountOf, before, through, c.Currency)
 	return out
 }
@@ -155,35 +150,36 @@ func accruedAmount(
 	return amount
 }
 
-// periodCapacity returns the buckets and capacity cp accrues in [from, to): its active buckets for window
-// measurement, otherwise its share of the regular billing period.
+// periodCapacity returns the buckets and capacity cp accrues within span: its active buckets for window measurement,
+// otherwise its share of the regular billing period.
 func periodCapacity(
 	c *commitment.Commitment,
 	cp commitmentPeriod,
-	from, to time.Time,
+	span types.Period,
 	bucket types.WindowSize,
 	anchor time.Time,
 ) (int64, decimal.Decimal) {
 	if c.Measurement != types.CommitmentMeasurementWindow {
-		fraction := decimal.NewFromInt(int64(to.Sub(from))).Div(decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart))))
+		fraction := decimal.NewFromInt(int64(span.End.Sub(span.Start))).
+			Div(decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart))))
 		return 0, c.Value.Mul(fraction)
 	}
 
 	// A bucket starting before the span belongs to the span that already counted it.
-	first := truncateToBucketStart(from, bucket, &anchor)
-	if first.Before(from) {
+	first := truncateToBucketStart(span.Start, bucket, &anchor)
+	if first.Before(span.Start) {
 		first = nextBucketStart(first, bucket, &anchor)
 	}
 
 	var buckets int64
 	if dur, fixed := bucketDuration(bucket); fixed && len(c.ActiveWindows) == 0 {
 		// Count clock-aligned buckets arithmetically; walking a long term minute by minute is too slow.
-		if first.Before(to) {
-			buckets = int64(to.Sub(first)-1)/int64(dur) + 1
+		if first.Before(span.End) {
+			buckets = int64(span.End.Sub(first)-1)/int64(dur) + 1
 		}
 	} else {
 		loc := c.Location()
-		for b := first; b.Before(to); b = nextBucketStart(b, bucket, &anchor) {
+		for b := first; b.Before(span.End); b = nextBucketStart(b, bucket, &anchor) {
 			if c.ActiveWindows.Contains(b, loc) {
 				buckets++
 			}
@@ -215,7 +211,7 @@ func termValue(
 		return nil, nil
 	}
 
-	periods, err := commitmentPeriods(c, sub, amountOf, bucket, c.StartDate, *c.EndDate)
+	periods, err := commitmentPeriods(c, sub, amountOf, bucket, types.Period{Start: c.StartDate, End: *c.EndDate})
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +231,7 @@ func earnedAmount(
 		return decimal.Zero, nil
 	}
 
-	periods, err := commitmentPeriods(c, sub, amountOf, bucket, c.StartDate, at)
+	periods, err := commitmentPeriods(c, sub, amountOf, bucket, types.Period{Start: c.StartDate, End: at})
 	if err != nil {
 		return decimal.Zero, err
 	}
@@ -248,7 +244,8 @@ func earnedAmount(
 		}
 
 		if p.Start.Before(at) {
-			earned = earned.Add(clipCommitmentPeriod(c, p, p.Start, at, amountOf, bucket, sub.BillingAnchor).Amount)
+			upToAt := types.Period{Start: p.Start, End: at}
+			earned = earned.Add(clipCommitmentPeriod(c, p, upToAt, amountOf, bucket, sub.BillingAnchor).Amount)
 		}
 
 		break

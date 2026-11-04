@@ -90,7 +90,7 @@ func TestCommitmentPeriods(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			periods, err := commitmentPeriods(tc.c, monthlySub(jan), tc.amountOf, tc.bucket, tc.c.StartDate, *tc.c.EndDate)
+			periods, err := commitmentPeriods(tc.c, monthlySub(jan), tc.amountOf, tc.bucket, types.Period{Start: tc.c.StartDate, End: *tc.c.EndDate})
 			require.NoError(t, err)
 			require.Len(t, periods, tc.wantPeriods)
 			require.True(
@@ -136,8 +136,7 @@ func TestCommitmentPeriods_ActiveWindowsIST(t *testing.T) {
 		sub,
 		mulFn(decimal.RequireFromString("0.0491667")),
 		types.WindowSizeMinute,
-		c.StartDate,
-		*c.EndDate,
+		types.Period{Start: c.StartDate, End: *c.EndDate},
 	)
 	require.NoError(t, err)
 	require.Len(t, periods, 1)
@@ -188,7 +187,7 @@ func TestCommitmentPeriods_ProratesAgainstTheFullBillingPeriod(t *testing.T) {
 				EndDate:     lo.ToPtr(tc.end),
 			}
 
-			periods, err := commitmentPeriods(c, tc.sub, mulFn(decimal.NewFromInt(1)), "", c.StartDate, *c.EndDate)
+			periods, err := commitmentPeriods(c, tc.sub, mulFn(decimal.NewFromInt(1)), "", types.Period{Start: c.StartDate, End: *c.EndDate})
 			require.NoError(t, err)
 			require.Len(t, periods, 1)
 			require.True(
@@ -217,8 +216,7 @@ func TestCommitmentPeriods_SkipsBucketsBeforeStart(t *testing.T) {
 		monthlySub(jan),
 		mulFn(decimal.NewFromInt(1)),
 		types.WindowSizeHour,
-		c.StartDate,
-		*c.EndDate,
+		types.Period{Start: c.StartDate, End: *c.EndDate},
 	)
 	require.NoError(t, err)
 	require.Len(t, periods, 1)
@@ -238,7 +236,7 @@ func TestCommitmentPeriods_BucketStraddlingAPeriodBoundaryCountsOnce(t *testing.
 		EndDate:     lo.ToPtr(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)),
 	}
 
-	periods, err := commitmentPeriods(c, monthlySub(jan), mulFn(decimal.NewFromInt(1)), types.WindowSizeWeek, c.StartDate, *c.EndDate)
+	periods, err := commitmentPeriods(c, monthlySub(jan), mulFn(decimal.NewFromInt(1)), types.WindowSizeWeek, types.Period{Start: c.StartDate, End: *c.EndDate})
 	require.NoError(t, err)
 	require.Len(t, periods, 2)
 	require.Equal(t, int64(4), periods[0].ActiveBuckets) // Mondays 5, 12, 19, 26 Jan; 29 Dec starts before the term
@@ -258,7 +256,7 @@ func TestCommitmentPeriods_CountsPartialEdgeBuckets(t *testing.T) {
 		EndDate:     lo.ToPtr(jan.Add(12*time.Hour + 10*time.Second)),
 	}
 
-	periods, err := commitmentPeriods(c, monthlySub(jan), mulFn(decimal.NewFromInt(1)), types.WindowSizeMinute, c.StartDate, *c.EndDate)
+	periods, err := commitmentPeriods(c, monthlySub(jan), mulFn(decimal.NewFromInt(1)), types.WindowSizeMinute, types.Period{Start: c.StartDate, End: *c.EndDate})
 	require.NoError(t, err)
 	require.Len(t, periods, 1)
 	// 10:01 through 12:00 inclusive: the 10:00 bucket starts before the term, 12:00 starts before its end.
@@ -334,14 +332,14 @@ func TestClipCommitmentPeriod_PartialFloorsSumToTheRoundedWhole(t *testing.T) {
 				StartDate:   tc.month,
 				EndDate:     lo.ToPtr(end),
 			}
-			periods, err := commitmentPeriods(c, monthlySub(tc.month), tc.amountOf, "", c.StartDate, *c.EndDate)
+			periods, err := commitmentPeriods(c, monthlySub(tc.month), tc.amountOf, "", types.Period{Start: c.StartDate, End: *c.EndDate})
 			require.NoError(t, err)
 			require.Len(t, periods, 1)
 
 			edges := append(append([]time.Time{tc.month}, tc.bounds...), end)
 			sum := decimal.Zero
 			for i, want := range tc.want {
-				part := clipCommitmentPeriod(c, periods[0], edges[i], edges[i+1], tc.amountOf, "", tc.month)
+				part := clipCommitmentPeriod(c, periods[0], types.Period{Start: edges[i], End: edges[i+1]}, tc.amountOf, "", tc.month)
 				require.True(t, part.Amount.Equal(decimal.RequireFromString(want)), "part %d: want %s, got %s", i, want, part.Amount)
 				sum = sum.Add(part.Amount)
 			}
@@ -368,7 +366,7 @@ func TestCommitmentPeriods_MidPeriodEndProratesTheLastPeriod(t *testing.T) {
 		EndDate:     lo.ToPtr(end),
 	}
 
-	periods, err := commitmentPeriods(c, monthlySub(jan), identityAmount, "", c.StartDate, *c.EndDate)
+	periods, err := commitmentPeriods(c, monthlySub(jan), identityAmount, "", types.Period{Start: c.StartDate, End: *c.EndDate})
 	require.NoError(t, err)
 	require.Len(t, periods, 13)
 	last := periods[12]
@@ -382,8 +380,8 @@ func TestCommitmentPeriods_MidPeriodEndProratesTheLastPeriod(t *testing.T) {
 	require.True(t, commitmentValue(periods).Round(8).Equal(decimal.NewFromInt(1200)), "total=%s", commitmentValue(periods))
 
 	split := time.Date(2028, 1, 10, 0, 0, 0, 0, time.UTC)
-	before := clipCommitmentPeriod(c, last, lastMonth, split, identityAmount, "", jan)
-	after := clipCommitmentPeriod(c, last, split, lastMonth.AddDate(0, 1, 0), identityAmount, "", jan)
+	before := clipCommitmentPeriod(c, last, types.Period{Start: lastMonth, End: split}, identityAmount, "", jan)
+	after := clipCommitmentPeriod(c, last, types.Period{Start: split, End: lastMonth.AddDate(0, 1, 0)}, identityAmount, "", jan)
 	require.True(t, before.Clipped)
 	require.True(t, before.Amount.Equal(decimal.RequireFromString("29.03")), "before=%s", before.Amount)
 	require.True(t, after.Clipped)
@@ -393,7 +391,7 @@ func TestCommitmentPeriods_MidPeriodEndProratesTheLastPeriod(t *testing.T) {
 
 	daily := *c
 	daily.Type, daily.Measurement, daily.Value = types.COMMITMENT_TYPE_QUANTITY, types.CommitmentMeasurementWindow, decimal.NewFromInt(1)
-	periods, err = commitmentPeriods(&daily, monthlySub(jan), identityAmount, types.WindowSizeDay, daily.StartDate, *daily.EndDate)
+	periods, err = commitmentPeriods(&daily, monthlySub(jan), identityAmount, types.WindowSizeDay, types.Period{Start: daily.StartDate, End: *daily.EndDate})
 	require.NoError(t, err)
 	require.Len(t, periods, 13)
 	require.Equal(t, int64(17), periods[0].ActiveBuckets)
@@ -448,7 +446,7 @@ func TestCommitmentPeriods_OpenEndedRunsThroughTheWindow(t *testing.T) {
 				StartDate:   tc.start,
 			}
 
-			periods, err := commitmentPeriods(c, monthlySub(jan), identityAmount, "", c.StartDate, tc.through)
+			periods, err := commitmentPeriods(c, monthlySub(jan), identityAmount, "", types.Period{Start: c.StartDate, End: tc.through})
 			require.NoError(t, err)
 			require.Len(t, periods, tc.wantCount)
 			require.True(t, periods[0].Amount.Round(8).Equal(decimal.RequireFromString(tc.wantFirst)), "first=%s", periods[0].Amount)
@@ -462,6 +460,26 @@ func TestCommitmentPeriods_OpenEndedRunsThroughTheWindow(t *testing.T) {
 			require.Equal(t, tc.wantLast.AddDate(0, 1, 0), last.End)
 		})
 	}
+}
+
+// A commitment with an end_date returns only the periods overlapping the span, the last one whole.
+func TestCommitmentPeriods_StopAtTheSpan(t *testing.T) {
+	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	c := &commitment.Commitment{
+		Type:        types.COMMITMENT_TYPE_AMOUNT,
+		Value:       decimal.NewFromInt(100),
+		Measurement: types.CommitmentMeasurementBillingPeriod,
+		Timezone:    "UTC",
+		StartDate:   jan,
+		EndDate:     lo.ToPtr(jan.AddDate(1, 0, 0)),
+	}
+
+	span := types.Period{Start: jan.AddDate(0, 1, 0), End: time.Date(2027, 3, 10, 0, 0, 0, 0, time.UTC)}
+	periods, err := commitmentPeriods(c, monthlySub(jan), identityAmount, "", span)
+	require.NoError(t, err)
+	require.Len(t, periods, 2)
+	require.Equal(t, jan.AddDate(0, 1, 0), periods[0].Start)
+	require.Equal(t, jan.AddDate(0, 3, 0), periods[1].End)
 }
 
 // An open-ended commitment's floor stops at its subscription's scheduled end: the last period is
@@ -478,7 +496,7 @@ func TestCommitmentPeriods_OpenEndedStopsAtTheSubscriptionEnd(t *testing.T) {
 		StartDate:   jan,
 	}
 
-	periods, err := commitmentPeriods(c, sub, identityAmount, "", c.StartDate, jan.AddDate(0, 6, 0))
+	periods, err := commitmentPeriods(c, sub, identityAmount, "", types.Period{Start: c.StartDate, End: jan.AddDate(0, 6, 0)})
 	require.NoError(t, err)
 	require.Len(t, periods, 3)
 	require.True(t, periods[0].Amount.Equal(decimal.NewFromInt(100)))
@@ -694,13 +712,13 @@ func TestCommitmentPeriods_FromWindowMatchesFullGeneration(t *testing.T) {
 					c.EndDate = lo.ToPtr(through)
 				}
 
-				all, err := commitmentPeriods(c, sub, identityAmount, "", c.StartDate, through)
+				all, err := commitmentPeriods(c, sub, identityAmount, "", types.Period{Start: c.StartDate, End: through})
 				require.NoError(t, err)
 				require.Greater(t, len(all), 3)
 
 				for _, i := range []int{1, len(all) / 3, len(all) - 1} {
 					from := all[i].Start.Add(time.Hour)
-					got, err := commitmentPeriods(c, sub, identityAmount, "", from, through)
+					got, err := commitmentPeriods(c, sub, identityAmount, "", types.Period{Start: from, End: through})
 					require.NoError(t, err)
 					require.Equal(t, all[i:], got, "from %s", from)
 				}
