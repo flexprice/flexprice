@@ -18,8 +18,8 @@ type Repository interface {
 	Update(ctx context.Context, inv *Invoice) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.InvoiceFilter) ([]*Invoice, error)
-	// ListAllTenant retrieves invoices across all tenants (for scheduled jobs only).
-	ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*Invoice, error)
+	// ListFinalizationCandidates pages computed drafts across all tenants by id (scheduled jobs only).
+	ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*Invoice, error)
 	Count(ctx context.Context, filter *types.InvoiceFilter) (int, error)
 
 	// Edge-specific operations

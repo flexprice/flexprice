@@ -352,8 +352,23 @@ func (s *InMemoryInvoiceStore) List(ctx context.Context, filter *types.InvoiceFi
 	return s.InMemoryStore.List(ctx, filter, invoiceFilterFn, sortFn)
 }
 
-func (s *InMemoryInvoiceStore) ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*invoice.Invoice, error) {
-	return s.List(ctx, filter)
+func (s *InMemoryInvoiceStore) ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*invoice.Invoice, error) {
+	candidate := func(_ context.Context, inv *invoice.Invoice, _ interface{}) bool {
+		earlyCycle := inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCycle) &&
+			inv.LastComputedAt != nil && inv.PeriodEnd != nil && inv.LastComputedAt.Before(*inv.PeriodEnd)
+		return inv.Status == types.StatusPublished &&
+			inv.InvoiceStatus == types.InvoiceStatusDraft &&
+			inv.LastComputedAt != nil &&
+			inv.ID > afterID &&
+			inv.BillingReason != string(types.InvoiceBillingReasonSubscriptionCreate) &&
+			!earlyCycle
+	}
+	byID := func(a, b *invoice.Invoice) bool { return a.ID < b.ID }
+	items, err := s.InMemoryStore.List(ctx, nil, candidate, byID)
+	if err != nil {
+		return nil, err
+	}
+	return items[:min(limit, len(items))], nil
 }
 
 func (s *InMemoryInvoiceStore) Count(ctx context.Context, filter *types.InvoiceFilter) (int, error) {
