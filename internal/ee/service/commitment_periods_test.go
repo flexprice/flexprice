@@ -726,3 +726,34 @@ func TestCommitmentPeriods_FromWindowMatchesFullGeneration(t *testing.T) {
 		}
 	}
 }
+
+// A weekly subscription created before starts were whole seconds has a mid-second anchor, while its stored period
+// edges after the first drop the fraction. Every period still finds its commitment period, with its whole capacity.
+func TestCommitmentPeriods_MidSecondWeeklyAnchorMatchesTheStoredEdges(t *testing.T) {
+	anchor := time.Date(2026, 11, 4, 11, 31, 0, 512_000_000, time.UTC)
+	sub := &subscription.Subscription{
+		StartDate:          anchor,
+		BillingAnchor:      anchor,
+		BillingPeriod:      types.BILLING_PERIOD_WEEKLY,
+		BillingPeriodCount: 1,
+		Timezone:           "UTC",
+	}
+	c := &commitment.Commitment{
+		Type:        types.COMMITMENT_TYPE_AMOUNT,
+		Value:       decimal.NewFromInt(20),
+		Measurement: types.CommitmentMeasurementBillingPeriod,
+		Timezone:    "UTC",
+		StartDate:   anchor.Truncate(time.Second),
+	}
+
+	second := types.Period{Start: time.Date(2026, 11, 11, 11, 31, 0, 0, time.UTC), End: time.Date(2026, 11, 18, 11, 31, 0, 0, time.UTC)}
+	periods, err := commitmentPeriods(c, sub, identityAmount, "", second)
+	require.NoError(t, err)
+	require.Len(t, periods, 1, "no sliver period at the anchor's fraction")
+
+	got, ok := containingPeriod(periods, second)
+	require.True(t, ok)
+	require.True(t, got.Start.Equal(second.Start) && got.End.Equal(second.End), "period %s to %s", got.Start, got.End)
+	require.True(t, got.Capacity.Equal(decimal.NewFromInt(20)), "capacity %s", got.Capacity)
+}
+

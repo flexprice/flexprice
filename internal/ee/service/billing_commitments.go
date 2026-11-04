@@ -1021,8 +1021,8 @@ func spreadCost(weights []decimal.Decimal, total decimal.Decimal) []decimal.Deci
 }
 
 // containingPeriod returns the commitment period whose regular billing period contains window, so a period that the
-// commitment's start or end cuts short still holds its whole billing period's invoice. Edges compare at whole seconds:
-// the period grid keeps a mid-second billing anchor's fraction, which the subscription's stored period edges drop.
+// commitment's start or end cuts short still holds its whole billing period's invoice. Edges compare at whole seconds,
+// so the first period of a subscription created before starts were whole seconds still matches.
 func containingPeriod(periods []commitmentPeriod, window types.Period) (commitmentPeriod, bool) {
 	start, end := window.Start.Truncate(time.Second), window.End.Truncate(time.Second)
 	for _, p := range periods {

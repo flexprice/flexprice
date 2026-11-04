@@ -65,8 +65,9 @@ func commitmentPeriods(
 			Mark(ierr.ErrInternal)
 	}
 
-	// Periods cut short by the subscription's start or end prorate against the regular period around them.
-	grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor, sub.BillingPeriod, sub.BillingPeriodCount, sub.Timezone)
+	// Periods cut short by the subscription's start or end prorate against the regular period around them. The grid is
+	// on whole seconds, like the stored period edges, even under an anchor from before starts were whole seconds.
+	grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor.Truncate(time.Second), sub.BillingPeriod, sub.BillingPeriodCount, sub.Timezone)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to compute billing periods for commitment").
@@ -280,8 +281,8 @@ func periodAt(sub *subscription.Subscription, t time.Time) (types.Period, error)
 		return walkToPeriodAt(sub, t)
 	}
 
-	// Every later edge is a billing date on the anchor grid.
-	grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor, sub.BillingPeriod, sub.BillingPeriodCount, sub.Timezone)
+	// Every later edge is a billing date on the anchor grid, on whole seconds like the stored edges.
+	grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor.Truncate(time.Second), sub.BillingPeriod, sub.BillingPeriodCount, sub.Timezone)
 	if err != nil {
 		return types.Period{}, ierr.WithError(err).
 			WithHint("Failed to compute billing periods for commitment").
