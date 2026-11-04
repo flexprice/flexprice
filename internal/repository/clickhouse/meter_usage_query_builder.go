@@ -265,6 +265,14 @@ func (qb *MeterUsageQueryBuilder) BuildFinalClause(useFinal bool) (finalClause s
 	return "", ""
 }
 
+// FINAL rows are unique; count suffices.
+func eventCountExpr(useFinal bool) string {
+	if useFinal {
+		return "count()"
+	}
+	return "COUNT(DISTINCT id)"
+}
+
 // BuildBucketedQuery constructs a windowed aggregation query for bucketed meters (MAX/SUM with bucket_size).
 // Mirrors the feature_usage getWindowedQuery logic but operates on the meter_usage table.
 //
@@ -318,7 +326,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 					%s as bucket_start,
 					%s,
 					%s(qty_total) as group_value,
-					COUNT(DISTINCT id) as group_event_count
+					%s as group_event_count
 				FROM %s
 				WHERE %s
 				GROUP BY bucket_start, %s
@@ -332,7 +340,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 			FROM per_group
 			ORDER BY bucket_start, %s
 			%s
-		`, bucketWindow, dimSelects, aggFunc, tableRef, where, dimGroupBy, dimGroupBy, settings)
+		`, bucketWindow, dimSelects, aggFunc, eventCountExpr(params.UseFinal), tableRef, where, dimGroupBy, dimGroupBy, settings)
 
 		return query, args
 	}
@@ -343,7 +351,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 			SELECT
 				%s as bucket_start,
 				%s(qty_total) as %s,
-				COUNT(DISTINCT id) as bucket_event_count
+				%s as bucket_event_count
 			FROM %s
 			WHERE %s
 			GROUP BY bucket_start
@@ -360,7 +368,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 		%s
 	`,
 		bucketTableName,
-		bucketWindow, aggFunc, bucketColumnName,
+		bucketWindow, aggFunc, bucketColumnName, eventCountExpr(params.UseFinal),
 		tableRef, where,
 		bucketColumnName, bucketTableName,
 		bucketTableName,
@@ -417,7 +425,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedAggregateQuery(params *events.Met
 				%s as bucket_start,
 				%s,
 				%s(qty_total) as bucket_value,
-				COUNT(DISTINCT id) as bucket_event_count
+				%s as bucket_event_count
 			FROM %s
 			WHERE %s
 			GROUP BY bucket_start, %s
@@ -431,7 +439,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedAggregateQuery(params *events.Met
 		ORDER BY %s
 		%s
 	`,
-		bucketWindow, dimSelects, aggFunc, tableRef, where, dimAliases,
+		bucketWindow, dimSelects, aggFunc, eventCountExpr(params.UseFinal), tableRef, where, dimAliases,
 		dimAliases, dimAliases, dimAliases, settings)
 
 	return query, args, dims
@@ -482,13 +490,13 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedPointsQuery(
 		SELECT
 			%s as bucket_start,
 			%s(qty_total) as bucket_value,
-			COUNT(DISTINCT id) as bucket_event_count
+			%s as bucket_event_count
 		FROM %s
 		WHERE %s
 		GROUP BY bucket_start
 		ORDER BY bucket_start
 		%s
-	`, bucketWindow, aggFunc, tableRef, extraWhere, settings)
+	`, bucketWindow, aggFunc, eventCountExpr(params.UseFinal), tableRef, extraWhere, settings)
 
 	return query, args
 }
@@ -616,7 +624,7 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 		return "", nil
 	}
 
-	aggColumns := buildMeterUsageAggregationColumns(params.AggregationTypes)
+	aggColumns := buildMeterUsageAggregationColumns(params.AggregationTypes, params.UseFinal)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 	where, args := qb.BuildDetailedWhereClause(params)
 
