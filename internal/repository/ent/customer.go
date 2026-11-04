@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type customerRepository struct {
@@ -134,7 +135,11 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 
 	// Try to get from cache first
 	if cachedCustomer := r.GetCache(ctx, id); cachedCustomer != nil {
-		return cachedCustomer, nil
+		// Stale cache must not outlive suppression
+		if isCustomerReadable(cachedCustomer.Status) {
+			return cachedCustomer, nil
+		}
+		r.DeleteCache(ctx, cachedCustomer)
 	}
 
 	client := r.client.Reader(ctx)
@@ -145,6 +150,7 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 			customer.ID(id),
 			customer.TenantID(types.GetTenantID(ctx)),
 			customer.EnvironmentID(types.GetEnvironmentID(ctx)),
+			customer.StatusIn(readableCustomerStatuses...),
 		).
 		Only(ctx)
 
@@ -458,6 +464,16 @@ func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainC
 // CustomerQuery type alias for better readability
 type CustomerQuery = *ent.CustomerQuery
 
+// Allowlist so new statuses stay hidden
+var readableCustomerStatuses = []string{
+	string(types.StatusPublished),
+	string(types.StatusArchived),
+}
+
+func isCustomerReadable(status types.Status) bool {
+	return lo.Contains(readableCustomerStatuses, string(status))
+}
+
 // CustomerQueryOptions implements BaseQueryOptions for customer queries
 type CustomerQueryOptions struct{}
 
@@ -480,7 +496,10 @@ func (o CustomerQueryOptions) ApplyStatusFilter(query CustomerQuery, status stri
 			string(types.StatusArchived),
 		))
 	}
-	return query.Where(customer.Status(status))
+	return query.Where(
+		customer.Status(status),
+		customer.StatusIn(readableCustomerStatuses...),
+	)
 }
 
 func (o CustomerQueryOptions) ApplySortFilter(query CustomerQuery, field string, order string) CustomerQuery {
@@ -566,6 +585,8 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 		if err != nil {
 			return nil, err
 		}
+		// DSL must not reach suppressed rows
+		query = query.Where(customer.StatusIn(readableCustomerStatuses...))
 	}
 
 	// Apply sorts using the generic function

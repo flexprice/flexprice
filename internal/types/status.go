@@ -18,4 +18,7 @@ const (
 	// This is typically used for data that is no longer in use but we want to keep for historical purposes
 	// These rows might be returned in queries and might be visible to users in some cases only
 	StatusArchived Status = "archived"
+
+	// Erasure requested; never readable, reversible
+	StatusSuppressed Status = "suppressed"
 )
