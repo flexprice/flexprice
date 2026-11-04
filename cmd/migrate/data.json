@@ -6,7 +6,7 @@
         },
         {
             "name": "billing_instalment.created",
-            "description": "Fired when a billing instalment is added to a commitment"
+            "description": "Fired when a billing instalment is scheduled for an entity (like a commitment)"
         },
         {
             "name": "billing_instalment.invoiced",
@@ -18,11 +18,11 @@
         },
         {
             "name": "billing_terms.created",
-            "description": "Fired when billing terms are saved with a new commitment"
+            "description": "Fired when billing terms are saved against an entity (like a commitment)"
         },
         {
             "name": "billing_terms.updated",
-            "description": "Fired when an edit replaces a commitment's billing terms"
+            "description": "Fired when an entity's (like a commitment's) billing terms are replaced"
         },
         {
             "name": "checkout.session.completed",

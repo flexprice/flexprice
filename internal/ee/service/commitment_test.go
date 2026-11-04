@@ -622,6 +622,88 @@ func (s *CommitmentServiceSuite) TestUpdate_OnlyLabelsAndMetadata() {
 
 	_, err = s.svc.Update(s.GetContext(), created.ID, dto.UpdateCommitmentRequest{Name: lo.ToPtr("")})
 	s.True(ierr.IsValidation(err), "got %v", err)
+
+	_, err = s.svc.Update(s.GetContext(), created.ID, dto.UpdateCommitmentRequest{EndDate: lo.ToPtr(created.StartDate)})
+	s.True(ierr.IsValidation(err), "an end date change is refused, not ignored: got %v", err)
+}
+
+// A commitment backdated before computed invoices recomputes them: February's draft and March's skipped invoice both
+// bill the floor.
+func (s *CommitmentE2ESuite) TestCreate_RecomputesLaterDrafts() {
+	ctx := s.GetContext()
+	feb, mar, apr := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0), s.jan.AddDate(0, 3, 0)
+	tokens := s.planWith("create_drafts", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan)
+	s.record(s.tokens, feb.AddDate(0, 0, 9), "100")
+
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	february := s.computedDraft(invoices, sub.ID, types.Period{Start: feb, End: mar})
+	s.Require().True(february.AmountDue.Equal(dec("10")), "only the usage is billed, got %s", february.AmountDue)
+	march := s.computedDraft(invoices, sub.ID, types.Period{Start: mar, End: apr})
+	s.Require().Equal(types.InvoiceStatusSkipped, march.InvoiceStatus)
+
+	s.commit(sub.ID, floorRequest("Floor", tokens.ID, "100", s.jan, s.jan.AddDate(1, 0, 0)))
+
+	for _, inv := range []*invoice.Invoice{february, march} {
+		stored, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+		s.Require().NoError(err)
+		s.Equal(types.InvoiceStatusDraft, stored.InvoiceStatus)
+		s.True(stored.AmountDue.Equal(dec("100")), "%s bills the floor, got %s", stored.PeriodStart, stored.AmountDue)
+	}
+}
+
+// A grouped child's charges go on its parent's invoices, so a backdated commitment on the child recomputes those.
+func (s *CommitmentE2ESuite) TestCreate_RecomputesTheParentsInvoicesForAGroupedChild() {
+	ctx := s.GetContext()
+	feb, mar := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0)
+	tokens := s.planWith("grouped_recompute", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	parent := s.groupSubscription(s.subscribe(tokens, s.jan).ID, types.SubscriptionTypeParent, nil)
+	child := s.groupSubscription(s.subscribe(tokens, s.jan).ID, types.SubscriptionTypeGroupedInvoicing, lo.ToPtr(parent.ID))
+
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	february := s.computedDraft(invoices, parent.ID, types.Period{Start: feb, End: mar})
+	s.Require().True(february.AmountDue.IsZero(), "nothing billed yet, got %s", february.AmountDue)
+
+	s.commit(child.ID, floorRequest("Floor", tokens.ID, "100", s.jan, s.jan.AddDate(1, 0, 0)))
+
+	stored, err := s.GetStores().InvoiceRepo.Get(ctx, february.ID)
+	s.Require().NoError(err)
+	s.True(stored.AmountDue.Equal(dec("100")), "the parent's February invoice bills the child's floor, got %s", stored.AmountDue)
+}
+
+// computedDraft creates the subscription's invoice for period and computes it.
+func (s *CommitmentE2ESuite) computedDraft(invoices InvoiceService, subscriptionID string, period types.Period) *invoice.Invoice {
+	draft, err := invoices.CreateDraftInvoiceForSubscription(s.GetContext(), dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: subscriptionID,
+		PeriodStart:    period.Start,
+		PeriodEnd:      period.End,
+		ReferencePoint: types.ReferencePointPeriodEnd,
+	})
+	s.Require().NoError(err)
+
+	computed, _, err := invoices.ComputeInvoice(s.GetContext(), draft.ID, nil)
+	s.Require().NoError(err)
+	return computed
+}
+
+// A termination dated before a computed draft recomputes it, so the draft stops billing the commitment.
+func (s *CommitmentE2ESuite) TestTerminate_RecomputesLaterDrafts() {
+	ctx := s.GetContext()
+	feb, mar := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0)
+	tokens := s.planWith("terminate_drafts", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan)
+	committed := s.commit(sub.ID, floorRequest("Floor", tokens.ID, "100", s.jan, s.jan.AddDate(1, 0, 0)))
+
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	draft := s.computedDraft(invoices, sub.ID, types.Period{Start: feb, End: mar})
+	s.Require().True(draft.AmountDue.Equal(dec("100")), "the unused floor is billed, got %s", draft.AmountDue)
+
+	_, err := s.commitments.Terminate(ctx, committed.ID, dto.TerminateCommitmentRequest{EffectiveAt: &feb})
+	s.Require().NoError(err)
+
+	stored, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.True(stored.AmountDue.IsZero(), "the draft no longer bills the commitment, got %s", stored.AmountDue)
 }
 
 func (s *CommitmentServiceSuite) TestWrites_PublishCommitmentWebhooks() {
@@ -853,7 +935,7 @@ func (s *CommitmentServiceSuite) TestTerminate_FixedFeeObject() {
 	inv, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), *resp.TerminationInvoiceID)
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
-	s.Equal(string(types.InvoiceBillingReasonProration), inv.BillingReason)
+	s.Equal(string(types.InvoiceBillingReasonCommitmentTermination), inv.BillingReason)
 	s.Equal(s.fx.customer.ID, inv.CustomerID)
 	s.True(inv.AmountDue.Equal(dec("250.5")), "got %s", inv.AmountDue)
 	lines := s.invoiceLines(inv.ID)
@@ -1585,4 +1667,43 @@ func (s *CommitmentServiceSuite) TestValidation_OverlapAcceptsMatchingBucketSize
 	s.splitAPILinesAt(feb, "")
 	_, err = s.svc.Create(s.GetContext(), s.windowMeterCommitment(1, feb))
 	s.Require().NoError(err)
+}
+
+// Two dates within the same second after a period edge both mean the edge, which leaves no term.
+func (s *CommitmentServiceSuite) TestCreate_RejectsATermAlignedToNothing() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	edge := req.StartDate
+	req.StartDate = edge.Add(200 * time.Millisecond)
+	req.EndDate = lo.ToPtr(edge.Add(700 * time.Millisecond))
+
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.requireValidation(err, "start_date must be before end_date")
+}
+
+// A term derived from a mid-second subscription start ends a fraction past a period edge, which it is taken as: the
+// year holds twelve periods, not a thirteenth half-second one.
+func (s *CommitmentServiceSuite) TestCreate_TakesDatesJustPastAPeriodEdgeAsTheEdge() {
+	ctx := s.GetContext()
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.fx.sub.ID)
+	s.Require().NoError(err)
+	sub.StartDate = sub.StartDate.Add(500 * time.Millisecond)
+	sub.BillingAnchor = sub.StartDate
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	line, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.fx.lineAPI.ID)
+	s.Require().NoError(err)
+	line = subscription.NewSubscriptionLineItemBuilder(line).WithStartDate(sub.StartDate).Build()
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, line))
+
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.StartDate = sub.StartDate.AddDate(0, 1, 0)
+	req.EndDate = lo.ToPtr(sub.StartDate.AddDate(1, 0, 0))
+	created, err := s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+
+	edge := sub.StartDate.Truncate(time.Second)
+	s.True(created.StartDate.Equal(edge.AddDate(0, 1, 0)), "start %s", created.StartDate)
+	s.True(created.EndDate.Equal(edge.AddDate(1, 0, 0)), "end %s", created.EndDate)
+	// Eleven whole periods of 8 units at 0.048; a half-second sliver would add a fraction of a cent.
+	s.True(created.CommitmentValue.Equal(decimal.RequireFromString("4.224")), "value %s", created.CommitmentValue)
 }

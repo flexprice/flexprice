@@ -23,10 +23,6 @@ func (s *commitmentService) TriggerInstalment(
 		return nil, err
 	}
 
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
 	var triggered *billingterm.Instalment
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.lockCommitment(txCtx, id); err != nil {
@@ -65,8 +61,17 @@ func (s *commitmentService) TriggerInstalment(
 				Mark(ierr.ErrInvalidOperation)
 		}
 
+		sub, err := s.SubRepo.Get(txCtx, c.SubscriptionID)
+		if err != nil {
+			return err
+		}
+
 		term := c.CollectionPeriod()
-		billOn := lo.FromPtrOr(req.BillOn, clock.Now())
+		billOn, err := atPeriodEdge(sub, lo.FromPtrOr(req.BillOn, clock.Now()))
+		if err != nil {
+			return err
+		}
+
 		if billOn.Before(term.Start) || billOn.After(term.End) {
 			return ierr.Validation("bill_on: must fall within the commitment term")
 		}

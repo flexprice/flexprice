@@ -484,12 +484,17 @@ definitions:
         type: string
       id:
         type: string
+      instalment_invoicing:
+        allOf:
+        - $ref: '#/definitions/types.InstalmentDelivery'
+        description: InstalmentInvoicing delivers its instalments, the owner's delivery
+          by default.
       invoice_cadence:
         $ref: '#/definitions/types.InvoiceCadence'
       invoice_label:
         description: |-
           InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number
-          all of the owner's instalments together.
+          the owner's instalments whose labels use them.
         type: string
       kind:
         $ref: '#/definitions/types.BillingTermKind'
@@ -1471,19 +1476,24 @@ definitions:
     properties:
       bill_on:
         description: |-
-          BillOn is a whole second, the commitment start by default. On an edit it defaults to the start of the billing
-          period holding now, or to the commitment start once the term has ended.
+          BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now (the
+          commitment start once its term has ended). A manual term omits it and waits at the commitment end.
         type: string
       bill_trigger:
         $ref: '#/definitions/types.InstalmentBillTrigger'
       end_date:
         type: string
+      instalment_invoicing:
+        allOf:
+        - $ref: '#/definitions/types.InstalmentDelivery'
+        description: InstalmentInvoicing delivers this term's instalments, the commitment's
+          instalment_invoicing by default.
       invoice_cadence:
         $ref: '#/definitions/types.InvoiceCadence'
       invoice_label:
         description: |-
-          InvoiceLabel names the term's instalments on the invoice, "Instalment {n} of {of}" by default. {n} and {of} are
-          filled with each instalment's place among all of the commitment's instalments and their count.
+          InvoiceLabel names the term's instalments, "Instalment {n} of {of}" by default. {n} and {of} count only the
+          commitment's instalments whose labels use them.
         maxLength: 255
         type: string
       kind:
@@ -1495,8 +1505,9 @@ definitions:
       split:
         $ref: '#/definitions/types.BillingTermSplit'
       start_date:
-        description: StartDate defaults like BillOn; EndDate defaults to the commitment
-          end. Both are whole seconds.
+        description: |-
+          StartDate and EndDate are edges of the periods the term steps on: billing periods, or anniversary ones when it is
+          invoiced separately; by default, the period holding the commitment start (now, on an edit) to the commitment end.
         type: string
       value:
         type: string
@@ -2627,7 +2638,7 @@ definitions:
           requires at least one.
         items:
           $ref: '#/definitions/BillingTermInput'
-        maxItems: 20
+        maxItems: 100
         minItems: 1
         type: array
       binding:
@@ -2647,7 +2658,8 @@ definitions:
       instalment_invoicing:
         allOf:
         - $ref: '#/definitions/types.InstalmentDelivery'
-        description: InstalmentInvoicing applies only to collection_method billing_terms.
+        description: InstalmentInvoicing applies only to collection_method billing_terms;
+          a billing term may set its own.
       invoice_description:
         maxLength: 500
         type: string
@@ -2668,7 +2680,8 @@ definitions:
       scope:
         $ref: '#/definitions/CommitmentScopeInput'
       start_date:
-        description: StartDate and EndDate must be whole seconds.
+        description: StartDate and EndDate within a second after a billing period
+          edge are taken as that edge.
         type: string
       subscription_id:
         description: SubscriptionID is required on POST /commitments and set server-side
@@ -7427,7 +7440,7 @@ definitions:
       billing_terms:
         items:
           $ref: '#/definitions/BillingTermInput'
-        maxItems: 20
+        maxItems: 100
         minItems: 1
         type: array
     required:
@@ -9050,6 +9063,12 @@ definitions:
         - $ref: '#/definitions/types.BillingPeriod'
         description: CommitmentDuration is the time frame of the commitment (e.g.,
           ANNUAL commitment on a MONTHLY subscription)
+      commitments:
+        description: Commitments are the commitments created with the subscription;
+          set on create only.
+        items:
+          $ref: '#/definitions/CommitmentResponse'
+        type: array
       coupon_associations:
         description: CouponAssociations are the coupon associations for this subscription
         items:
@@ -9260,6 +9279,11 @@ definitions:
         - $ref: '#/definitions/types.BillingPeriod'
         description: CommitmentDuration is the time frame of the commitment (e.g.,
           ANNUAL commitment on a MONTHLY subscription)
+      commitments:
+        description: Commitments are included when "commitments" is in expand parameter
+        items:
+          $ref: '#/definitions/CommitmentResponse'
+        type: array
       coupon_associations:
         description: CouponAssociations are included when "coupon_associations" is
           in expand parameter
@@ -9843,7 +9867,8 @@ definitions:
       cancellation_fee:
         $ref: '#/definitions/CancellationFeeInput'
       effective_at:
-        description: EffectiveAt defaults to now; a given one must be a whole second.
+        description: EffectiveAt defaults to now; within a second after a billing
+          period edge it is taken as that edge.
         type: string
     type: object
   TopUpCoupon:
@@ -9985,7 +10010,8 @@ definitions:
   TriggerInstalmentRequest:
     properties:
       bill_on:
-        description: BillOn must be a whole second.
+        description: BillOn within a second after a billing period edge is taken as
+          that edge.
         type: string
     type: object
   UpdateAddonRequest:
@@ -10007,6 +10033,10 @@ definitions:
     type: object
   UpdateCommitmentRequest:
     properties:
+      end_date:
+        description: EndDate can't be changed yet; terminate the commitment to end
+          it.
+        type: string
       invoice_description:
         maxLength: 500
         type: string
@@ -13096,6 +13126,7 @@ definitions:
     - SUBSCRIPTION_PAUSED
     - SUBSCRIPTION_RESUME
     - BILLING_TERMS
+    - COMMITMENT_TERMINATION
     type: string
     x-enum-varnames:
     - InvoiceBillingReasonSubscriptionCreate
@@ -13110,6 +13141,7 @@ definitions:
     - InvoiceBillingReasonSubscriptionPaused
     - InvoiceBillingReasonSubscriptionResume
     - InvoiceBillingReasonBillingTerms
+    - InvoiceBillingReasonCommitmentTermination
   types.InvoiceCadence:
     enum:
     - ARREAR
@@ -18765,10 +18797,11 @@ paths:
       description: Bills a manual instalment of an active commitment on bill_on, now
         by default, which must fall within the commitment term. The instalment goes
         on the first subscription invoice at or after that date, or on its own invoice
-        once due when the commitment's instalment_invoicing is separate_invoice. Either
-        way it waits while the subscription is trialing or paused. Until it is triggered,
-        a manual instalment waits at the end of the term, and bill_on can only move
-        earlier; edit the billing terms to bill it later.
+        once due when its instalment_invoicing, the term's or else the commitment's,
+        is separate_invoice. Either way it waits while the subscription is trialing
+        or paused. Until it is triggered, a manual instalment waits at the end of
+        the term, and bill_on can only move earlier; edit the billing terms to bill
+        it later.
       operationId: triggerCommitmentInstalment
       parameters:
       - description: Commitment ID
@@ -25189,7 +25222,7 @@ paths:
         name: id
         required: true
         type: string
-      - description: Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan')
+      - description: Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan,commitments')
         in: query
         name: expand
         type: string
@@ -27503,8 +27536,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Fired when a billing instalment is added to a commitment. Doc-only
-        for parsing.
+      description: Fired when a billing instalment is scheduled for an entity (like
+        a commitment). Doc-only for parsing.
       produces:
       - application/json
       responses:
@@ -27551,8 +27584,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Fired when billing terms are saved with a new commitment. Doc-only
-        for parsing.
+      description: Fired when billing terms are saved against an entity (like a commitment).
+        Doc-only for parsing.
       produces:
       - application/json
       responses:
@@ -27567,8 +27600,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Fired when an edit replaces a commitment's billing terms. Doc-only
-        for parsing.
+      description: Fired when an entity's (like a commitment's) billing terms are
+        replaced. Doc-only for parsing.
       produces:
       - application/json
       responses:

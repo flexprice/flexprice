@@ -3620,6 +3620,56 @@ func (s *InvoiceServiceSuite) TestPublishInvoiceSyncWebhook_IgnoresOtherProvider
 	}))
 }
 
+// A commitment renders overage and plain usage for one line item and period without a commitment id, so a recompute
+// tells them apart by kind; a duplicate an earlier compute left behind is archived.
+func (s *InvoiceServiceSuite) TestReconcileLineItems_KeysUncommittedRowsByKind() {
+	ctx := s.GetContext()
+	start, end := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
+	row := func(metadata types.Metadata, amount int64) dto.CreateInvoiceLineItemRequest {
+		return dto.CreateInvoiceLineItemRequest{
+			SubscriptionLineItemID: lo.ToPtr("subs_line_reconcile"),
+			Amount:                 decimal.NewFromInt(amount),
+			Quantity:               decimal.NewFromInt(1),
+			PeriodStart:            &start,
+			PeriodEnd:              &end,
+			Metadata:               metadata,
+		}
+	}
+	overage := row(types.Metadata{types.MetadataKeyCommitmentLineKind: string(types.CommitmentLineOverage)}, 6)
+	plain := row(nil, 10)
+
+	draft := &invoice.Invoice{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:     s.testData.customer.ID,
+		SubscriptionID: &s.testData.subscription.ID,
+		InvoiceType:    types.InvoiceTypeSubscription,
+		InvoiceStatus:  types.InvoiceStatusDraft,
+		Currency:       "usd",
+		PeriodStart:    &start,
+		PeriodEnd:      &end,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	draft.LineItems = []*invoice.InvoiceLineItem{
+		overage.ToInvoiceLineItem(ctx, draft),
+		overage.ToInvoiceLineItem(ctx, draft),
+		plain.ToInvoiceLineItem(ctx, draft),
+	}
+	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
+	inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+
+	got, err := s.service.(*invoiceService).reconcileLineItems(ctx, inv, []dto.CreateInvoiceLineItemRequest{overage, plain})
+	s.Require().NoError(err)
+	s.Len(got, 2)
+	for _, item := range got {
+		s.Contains([]string{draft.LineItems[1].ID, draft.LineItems[2].ID}, item.ID, "each computed row reuses its stored row")
+	}
+
+	after, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Len(after.LineItems, 2, "the duplicate left by an earlier compute is archived")
+}
+
 func (s *InvoiceServiceSuite) TestHasMarketplaceMapping() {
 	tests := []struct {
 		name     string

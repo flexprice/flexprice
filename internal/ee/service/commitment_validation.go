@@ -202,7 +202,7 @@ func validateTerm(c *commitment.Commitment, sub *subscription.Subscription, opts
 		return ierr.Validation("subscription has a legacy subscription-level commitment; remove it before adding a commitment")
 	}
 
-	// Term edges are whole seconds, so a subscription starting mid-second accepts a term aligned to that second.
+	// A subscription created before starts were whole seconds may start mid-second; a term may start at that second.
 	if c.StartDate.Before(sub.StartDate.Truncate(time.Second)) {
 		return ierr.Validationf("start_date cannot be before the subscription start %s", sub.StartDate.Format(time.RFC3339))
 	}

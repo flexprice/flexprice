@@ -52,6 +52,8 @@ const (
 	FieldInvoiceCadence = "invoice_cadence"
 	// FieldSplit holds the string denoting the split field in the database.
 	FieldSplit = "split"
+	// FieldInstalmentInvoicing holds the string denoting the instalment_invoicing field in the database.
+	FieldInstalmentInvoicing = "instalment_invoicing"
 	// FieldInvoiceLabel holds the string denoting the invoice_label field in the database.
 	FieldInvoiceLabel = "invoice_label"
 	// FieldMetadata holds the string denoting the metadata field in the database.
@@ -82,6 +84,7 @@ var Columns = []string{
 	FieldPeriodCount,
 	FieldInvoiceCadence,
 	FieldSplit,
+	FieldInstalmentInvoicing,
 	FieldInvoiceLabel,
 	FieldMetadata,
 }
@@ -222,6 +225,11 @@ func ByInvoiceCadence(opts ...sql.OrderTermOption) OrderOption {
 // BySplit orders the results by the split field.
 func BySplit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSplit, opts...).ToFunc()
+}
+
+// ByInstalmentInvoicing orders the results by the instalment_invoicing field.
+func ByInstalmentInvoicing(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInstalmentInvoicing, opts...).ToFunc()
 }
 
 // ByInvoiceLabel orders the results by the invoice_label field.

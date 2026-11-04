@@ -100,7 +100,7 @@ func TestReplaceBillingTermsRequest_Validate(t *testing.T) {
 		{"one term", ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{remainder}}, ""},
 		{"no terms", ReplaceBillingTermsRequest{}, "BillingTerms"},
 		{"empty terms", ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{}}, "BillingTerms"},
-		{"21 terms", ReplaceBillingTermsRequest{BillingTerms: lo.Times(21, func(int) BillingTermInput { return remainder })}, "BillingTerms"},
+		{"101 terms", ReplaceBillingTermsRequest{BillingTerms: lo.Times(101, func(int) BillingTermInput { return remainder })}, "BillingTerms"},
 		{
 			"no kind",
 			ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{{ValueType: types.BillingTermValueRemainder}}},
@@ -134,46 +134,6 @@ func TestReplaceBillingTermsRequest_Validate(t *testing.T) {
 
 			require.True(t, ierr.IsValidation(err), "got %v", err)
 			require.ErrorContains(t, err, tc.wantErr)
-		})
-	}
-}
-
-// Term and trigger dates are taken as given: a fraction of a second is rejected, never rounded.
-func TestBillingTermDates_MustBeWholeSeconds(t *testing.T) {
-	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-	fraction := lo.ToPtr(jan.Add(750 * time.Millisecond))
-	term := func(edit func(*BillingTermInput)) ReplaceBillingTermsRequest {
-		in := BillingTermInput{Kind: types.BillingTermKindOnce, ValueType: types.BillingTermValueRemainder, BillOn: lo.ToPtr(jan)}
-		edit(&in)
-		return ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{in}}
-	}
-
-	tests := []struct {
-		name    string
-		request interface{ Validate() error }
-		wantErr bool
-	}{
-		{"whole-second dates", term(func(*BillingTermInput) {}), false},
-		{"bill_on", term(func(in *BillingTermInput) { in.BillOn = fraction }), true},
-		{"start_date", term(func(in *BillingTermInput) { in.StartDate = fraction }), true},
-		{"end_date", term(func(in *BillingTermInput) { in.EndDate = fraction }), true},
-		{"trigger at a whole second", TriggerInstalmentRequest{BillOn: lo.ToPtr(jan)}, false},
-		{"trigger without bill_on", TriggerInstalmentRequest{}, false},
-		{"trigger bill_on", TriggerInstalmentRequest{BillOn: fraction}, true},
-		{"termination effective_at", &TerminateCommitmentRequest{EffectiveAt: fraction}, true},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.request.Validate()
-			if !tc.wantErr {
-				require.NoError(t, err)
-				return
-			}
-
-			require.Error(t, err)
-			require.True(t, ierr.IsValidation(err), "got %v", err)
-			require.ErrorContains(t, err, "whole_second")
 		})
 	}
 }

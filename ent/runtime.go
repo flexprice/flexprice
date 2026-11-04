@@ -490,7 +490,7 @@ func init() {
 	// billingterm.ValueTypeValidator is a validator for the "value_type" field. It is called by the builders before save.
 	billingterm.ValueTypeValidator = billingtermDescValueType.Validators[0].(func(string) error)
 	// billingtermDescMetadata is the schema descriptor for metadata field.
-	billingtermDescMetadata := billingtermFields[14].Descriptor()
+	billingtermDescMetadata := billingtermFields[15].Descriptor()
 	// billingterm.DefaultMetadata holds the default value on creation for the metadata field.
 	billingterm.DefaultMetadata = billingtermDescMetadata.Default.(types.Metadata)
 	checkoutsessionMixin := schema.CheckoutSession{}.Mixin()

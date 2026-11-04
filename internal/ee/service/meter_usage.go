@@ -2936,7 +2936,8 @@ func (s *meterUsageService) calculateLineItemCommitments(
 			continue
 		}
 
-		if kind == types.CommitmentLineOverage {
+		// Overage and plain usage both bill outside any commitment's capacity.
+		if kind == types.CommitmentLineOverage || kind == types.CommitmentLinePlain {
 			lineBreakdown.ComputedOverageAmount = lineBreakdown.ComputedOverageAmount.Add(line.Amount)
 			continue
 		}

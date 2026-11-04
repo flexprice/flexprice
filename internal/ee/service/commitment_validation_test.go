@@ -178,31 +178,31 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 		{"D8 open-ended without end_date", func(r *dto.CreateCommitmentRequest) { r.EndDate = nil }, true},
 		{"start_date with a fraction of a second", func(r *dto.CreateCommitmentRequest) {
 			r.StartDate = r.StartDate.Add(750 * time.Millisecond)
-		}, false},
+		}, true},
 		{"end_date with a fraction of a second", func(r *dto.CreateCommitmentRequest) {
 			r.EndDate = lo.ToPtr(r.EndDate.Add(time.Microsecond))
-		}, false},
+		}, true},
 		{"billing term bill_on with a fraction of a second", func(r *dto.CreateCommitmentRequest) {
 			r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
 			r.BillingTerms = upfrontPlusRemainder()
 			r.BillingTerms[0].BillOn = lo.ToPtr(r.StartDate.Add(500 * time.Millisecond))
-		}, false},
+		}, true},
 	}
 
 	t.Run("billing_terms default to the subscription invoice", func(t *testing.T) {
 		r := validReq("subs_1", "price_1")
 		r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
-		r.ApplyDefaults("UTC")
+		r.ApplyDefaults()
 		require.Equal(t, types.InstalmentDeliverySubscriptionInvoice, lo.FromPtr(r.InstalmentInvoicing))
 
 		r.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
-		r.ApplyDefaults("UTC")
+		r.ApplyDefaults()
 		require.Equal(t, types.InstalmentDeliverySeparateInvoice, lo.FromPtr(r.InstalmentInvoicing), "a chosen delivery is kept")
 	})
 
 	t.Run("per_period leaves instalment_invoicing unset", func(t *testing.T) {
 		r := validReq("subs_1", "price_1")
-		r.ApplyDefaults("UTC")
+		r.ApplyDefaults()
 		require.Nil(t, r.InstalmentInvoicing)
 	})
 
@@ -210,7 +210,7 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := validReq("subs_1", "price_1")
 			tc.mutate(&r)
-			r.ApplyDefaults("UTC")
+			r.ApplyDefaults()
 			err := r.Validate()
 			if tc.ok {
 				require.NoError(t, err)

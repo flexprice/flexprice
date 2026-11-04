@@ -104,6 +104,9 @@ const (
 	CommitmentLineInstalment      CommitmentLineKind = "instalment"
 	CommitmentLineSettlement      CommitmentLineKind = "settlement"
 	CommitmentLineCancellationFee CommitmentLineKind = "cancellation_fee"
+
+	// CommitmentLinePlain is usage no commitment covers; its rows carry no commitment metadata.
+	CommitmentLinePlain CommitmentLineKind = ""
 )
 
 func validateEnum[T ~string](field string, v T, allowed []T) error {

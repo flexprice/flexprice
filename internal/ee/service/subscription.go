@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -73,6 +74,7 @@ type subscriptionCoreResult struct {
 	Plan        *plan.Plan
 	ValidPrices []*dto.PriceResponse
 	Customer    *customer.Customer
+	Commitments []*dto.CommitmentResponse
 	// ActivatedOnCreate is set when a gated subscription was activated because nothing was owed.
 	ActivatedOnCreate bool
 }
@@ -213,18 +215,18 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
-	// Setup subscription dates
+	// A subscription starts on a whole second, like every later billing period edge.
 	if sub.StartDate.IsZero() {
-		sub.StartDate = clock.Now().Truncate(time.Millisecond)
+		sub.StartDate = clock.Now().Truncate(time.Second)
 	} else {
-		sub.StartDate = sub.StartDate.UTC().Truncate(time.Millisecond)
+		sub.StartDate = sub.StartDate.UTC()
 	}
 	if sub.BillingPeriodCount == 0 {
 		sub.BillingPeriodCount = 1
 	}
 
 	if req.BillingAnchor != nil {
-		sub.BillingAnchor = lo.FromPtr(req.BillingAnchor).UTC().Truncate(time.Millisecond)
+		sub.BillingAnchor = lo.FromPtr(req.BillingAnchor).UTC()
 		// Stripe imports keep Stripe's anchor so the schedule matches Stripe's; an anchor before the start
 		// only sets the schedule (start Nov 16, anchor Nov 1 → first bill Dec 1).
 		if lo.FromPtr(req.Workflow) != types.TemporalStripeIntegrationWorkflow && sub.BillingAnchor.After(sub.StartDate) {
@@ -317,10 +319,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			lineItemBucketCfgs[item.ID] = cfg
 		}
 
-		if priceResponse.Price.StartDate != nil && priceResponse.Price.StartDate.After(startDate) {
-			startDate = lo.FromPtr(priceResponse.Price.StartDate)
-		}
-		item.StartDate = startDate
+		item.StartDate = priceResponse.Price.LineItemStart(startDate)
 
 		// A price that has ended by the time the line item starts gets no line item. A price
 		// ending later ends the line item at the earlier of its own end and the line item's end.
@@ -548,6 +547,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	}
 
 	// Inline commitments run once every line item exists, so they can scope overridden and phase-one prices.
+	commitments := make([]*dto.CommitmentResponse, 0, len(req.Commitments))
 	for _, commitmentReq := range req.Commitments {
 		commitmentReq.SubscriptionID = sub.ID
 		switch commitmentReq.Scope.EntityType {
@@ -565,9 +565,12 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			}
 		}
 
-		if _, err = commitmentSvc.create(ctx, commitmentReq, commitmentCreateOptions{allowPendingSubscription: true}); err != nil {
+		created, _, err := commitmentSvc.create(ctx, commitmentReq, commitmentCreateOptions{allowPendingSubscription: true})
+		if err != nil {
 			return nil, err
 		}
+
+		commitments = append(commitments, created)
 	}
 
 	// Skip: draft/trialing (trial conversion invoice is created at trial end), and
@@ -655,6 +658,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		Plan:              plan,
 		ValidPrices:       validPrices,
 		Customer:          customer,
+		Commitments:       commitments,
 		ActivatedOnCreate: activatedOnCreate,
 	}, nil
 }
@@ -669,6 +673,25 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// The opening invoice may have billed the commitments' first instalments. It may also have charged a card, so a
+	// failed read keeps the created instalments instead of failing the request.
+	commitmentSvc := newCommitmentService(s.ServiceParams)
+	for _, c := range result.Commitments {
+		if len(c.Instalments) == 0 {
+			continue
+		}
+
+		current, err := commitmentSvc.GetBillingTerms(ctx, c.ID)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to refresh commitment instalments after subscription creation",
+				"error", err,
+				"subscription_id", result.Sub.ID,
+				"commitment_id", c.ID)
+			continue
+		}
+		c.Instalments = current.Instalments
 	}
 
 	// Grants were deferred while the subscription was incomplete; apply them after commit.
@@ -686,7 +709,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
-	response := &dto.SubscriptionResponse{Subscription: result.Sub}
+	response := &dto.SubscriptionResponse{Subscription: result.Sub, Commitments: result.Commitments}
 	if result.Invoice != nil {
 		response.LatestInvoice = result.Invoice
 	}
@@ -789,8 +812,8 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 			Mark(ierr.ErrValidation)
 	}
 
-	// Recalculate all dates with new start date
-	newStartDate := req.StartDate.UTC()
+	// Recalculate all dates with new start date, on a whole second like every billing period edge
+	newStartDate := req.StartDate.UTC().Truncate(time.Second)
 	hasCustomAnchor := sub.BillingCycle == types.BillingCycleAnniversary && !sub.BillingAnchor.Equal(sub.StartDate)
 	startShift := newStartDate.Sub(sub.StartDate)
 	sub.StartDate = newStartDate
@@ -844,12 +867,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 		if err != nil {
 			return nil, err
 		}
-		// Set start date to the price start date if it is after the subscription start date
-		if price.StartDate != nil && price.StartDate.After(sub.StartDate) {
-			item.StartDate = lo.FromPtr(price.StartDate)
-		} else {
-			item.StartDate = sub.StartDate
-		}
+		item.StartDate = price.LineItemStart(sub.StartDate)
 	}
 
 	invoiceService := NewInvoiceService(s.ServiceParams)
@@ -1241,10 +1259,7 @@ func (s *subscriptionService) handleSubscriptionPhases(
 
 		// Validate all line item requests before creating them
 		for _, priceResp := range validPrices {
-			startDate := phaseReq.StartDate
-			if priceResp.Price.StartDate != nil && priceResp.Price.StartDate.After(phaseReq.StartDate) {
-				startDate = lo.FromPtr(priceResp.Price.StartDate)
-			}
+			startDate := priceResp.Price.LineItemStart(phaseReq.StartDate)
 			req := dto.CreateSubscriptionLineItemRequest{
 				PriceID:             priceResp.Price.ID,
 				SubscriptionPhaseID: lo.ToPtr(phase.ID),
@@ -1267,10 +1282,7 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			}
 
 			// Create request with phase dates
-			startDate := phaseReq.StartDate
-			if priceResp.Price.StartDate != nil && priceResp.Price.StartDate.After(phaseReq.StartDate) {
-				startDate = lo.FromPtr(priceResp.Price.StartDate)
-			}
+			startDate := priceResp.Price.LineItemStart(phaseReq.StartDate)
 
 			req := dto.CreateSubscriptionLineItemRequest{
 				PriceID:             priceResp.Price.ID,
@@ -1921,6 +1933,14 @@ func (s *subscriptionService) GetSubscriptionV2(ctx context.Context, id string, 
 			return nil, err
 		}
 		response.Customer = customer
+	}
+
+	if expand.Has(types.ExpandCommitments) {
+		commitments, err := NewCommitmentService(s.ServiceParams).List(ctx, commitment.NewSubscriptionFilter(id))
+		if err != nil {
+			return nil, err
+		}
+		response.Commitments = commitments.Items
 	}
 
 	// Conditionally expand line items with prices

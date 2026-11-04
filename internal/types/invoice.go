@@ -314,6 +314,10 @@ const (
 
 	// InvoiceBillingReasonBillingTerms is an invoice that carries only billing-term instalments (separate delivery).
 	InvoiceBillingReasonBillingTerms InvoiceBillingReason = "BILLING_TERMS"
+
+	// InvoiceBillingReasonCommitmentTermination bills what terminating a commitment owes: its cancellation fee, its
+	// billing-terms settlement, or both.
+	InvoiceBillingReasonCommitmentTermination InvoiceBillingReason = "COMMITMENT_TERMINATION"
 )
 
 func (r InvoiceBillingReason) String() string {
@@ -334,6 +338,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonSubscriptionPaused,
 		InvoiceBillingReasonSubscriptionResume,
 		InvoiceBillingReasonBillingTerms,
+		InvoiceBillingReasonCommitmentTermination,
 	}
 
 	if r != "" && !lo.Contains(allowed, r) {
