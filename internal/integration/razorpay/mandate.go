@@ -11,6 +11,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -154,6 +155,20 @@ func SelectUsableToken(
 	return lo.MaxBy(usable, func(a, b *interfaces.ProviderPaymentMethod) bool {
 		return a.CreatedAt.After(b.CreatedAt)
 	}), true
+}
+
+// NoUsableTokenError reports that the customer has no mandate that can pay p.
+func NoUsableTokenError(p *payment.Payment, customerID string) error {
+	return ierr.NewError("no usable razorpay token for payment method").
+		WithHintf("No active %s mandate covering this amount was found at Razorpay, or the customer is not synced to Razorpay. Collect one first, or use payment_method_type PAYMENT_LINK.", p.PaymentMethodType).
+		WithReportableDetails(map[string]interface{}{
+			"payment_id":          p.ID,
+			"invoice_id":          p.DestinationID,
+			"customer_id":         customerID,
+			"payment_method_type": p.PaymentMethodType,
+			"amount":              p.Amount.String(),
+		}).
+		Mark(ierr.ErrValidation)
 }
 
 // razorpaySubscriptionMethod maps a FlexPrice PaymentMethodType to the Razorpay

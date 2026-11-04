@@ -224,19 +224,6 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	return dto.NewPaymentResponse(p), nil
 }
 
-func errNoRazorpayMandate(p *payment.Payment, customerID string) error {
-	return ierr.NewError("no usable razorpay token for payment method").
-		WithHintf("No active %s mandate covering this amount was found at Razorpay, or the customer is not synced to Razorpay. Collect one first, or use payment_method_type PAYMENT_LINK.", p.PaymentMethodType).
-		WithReportableDetails(map[string]interface{}{
-			"payment_id":          p.ID,
-			"invoice_id":          p.DestinationID,
-			"customer_id":         customerID,
-			"payment_method_type": p.PaymentMethodType,
-			"amount":              p.Amount.String(),
-		}).
-		Mark(ierr.ErrValidation)
-}
-
 func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, invoice *invoice.Invoice, p *dto.CreatePaymentRequest) error {
 	// A gated draft already has a live payment link; a second payment here would double-charge
 	// and settle the invoice outside FinalizeInvoice, leaving it finalized with no number.

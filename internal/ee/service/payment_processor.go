@@ -438,7 +438,7 @@ func (p *paymentProcessor) handleRazorpayTokenCharge(ctx context.Context, paymen
 		return err
 	}
 	if !charged || result == nil {
-		return errNoRazorpayMandate(paymentObj, inv.CustomerID)
+		return razorpay.NoUsableTokenError(paymentObj, inv.CustomerID)
 	}
 	if result.AlreadySubmitted {
 		return ierr.NewError("razorpay charge already submitted for this invoice").
