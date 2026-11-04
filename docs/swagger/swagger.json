@@ -2253,7 +2253,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; edit the billing terms to bill it later.",
+                "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when its instalment_invoicing, the term's or else the commitment's, is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; edit the billing terms to bill it later.",
                 "consumes": [
                     "application/json"
                 ],
@@ -19030,7 +19030,7 @@
             ],
             "properties": {
                 "bill_on": {
-                    "description": "BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now (the\ncommitment start once its term has ended). A date under a second past a period edge means the edge.",
+                    "description": "BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now (the\ncommitment start once its term has ended). A manual term omits it and waits at the commitment end.",
                     "type": "string"
                 },
                 "bill_trigger": {
@@ -19064,7 +19064,7 @@
                     "$ref": "#/definitions/types.BillingTermSplit"
                 },
                 "start_date": {
-                    "description": "StartDate defaults like BillOn, or to the anniversary period holding it when the term is invoiced separately,\nwhose edges it must then hit exactly; EndDate defaults to the commitment end.",
+                    "description": "StartDate and EndDate are edges of the periods the term steps on: billing periods, or anniversary ones when it is\ninvoiced separately; by default, the period holding the commitment start (now, on an edit) to the commitment end.",
                     "type": "string"
                 },
                 "value": {

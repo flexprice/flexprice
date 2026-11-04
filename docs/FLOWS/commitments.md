@@ -273,7 +273,8 @@ The edit runs in one transaction:
 
 ### 9.3 Billing an instalment
 
-Each instalment carries its delivery: its term's `instalment_invoicing`, or the commitment's when the term sets none.
+Each planned instalment carries its delivery: its term's `instalment_invoicing`, or the commitment's when the term sets
+none. A termination's settlement always goes on a separate invoice.
 
 | Delivery | How it is billed |
 |---|---|

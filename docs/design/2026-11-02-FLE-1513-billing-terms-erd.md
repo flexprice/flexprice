@@ -282,6 +282,7 @@ Every operation locks the commitment row and runs in one transaction. All of the
 
 - Cancelled at period end or on a scheduled date: the commitment and its instalments keep billing per the terms until the cancellation takes effect. When it takes effect, every instalment not yet on a finalized invoice is cancelled; those already due are billed through the settlement, on its own invoice, and the open period draft drops their lines when it is recomputed.
 - Cancelled immediately: the commitment is terminated at once. The settlement is billed even when the cancel uses the default `skip` invoice policy, because it goes on its own invoice, not the skipped period invoice.
+- A commitment that already ended before the cancellation is not terminated: its instalments still scheduled are settled at its own end (`settleEnded`), since no later subscription invoice will carry them.
 
 **Steps.** `POST /v1/commitments/{id}/terminate` `{effective_at?, cancellation_fee?}`, subscription cancellation and plan change all follow the same steps under `billing_terms`:
 

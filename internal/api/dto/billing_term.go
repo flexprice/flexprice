@@ -11,8 +11,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// BillingTermInput is one billing term as a request states it. The request checks that kind and value_type are set;
-// the other rules are checked when the terms are expanded.
+// BillingTermInput is one billing term as a request states it; rules beyond kind and value_type are checked when the
+// terms are expanded. A date under a second past a billing period edge means the edge.
 type BillingTermInput struct {
 	Kind types.BillingTermKind `json:"kind" validate:"required"`
 
@@ -23,11 +23,11 @@ type BillingTermInput struct {
 	BillTrigger *types.InstalmentBillTrigger `json:"bill_trigger,omitempty"`
 
 	// BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now (the
-	// commitment start once its term has ended). A date under a second past a period edge means the edge.
+	// commitment start once its term has ended). A manual term omits it and waits at the commitment end.
 	BillOn *time.Time `json:"bill_on,omitempty"`
 
-	// StartDate defaults like BillOn, or to the anniversary period holding it when the term is invoiced separately,
-	// whose edges it must then hit exactly; EndDate defaults to the commitment end.
+	// StartDate and EndDate are edges of the periods the term steps on: billing periods, or anniversary ones when it is
+	// invoiced separately; by default, the period holding the commitment start (now, on an edit) to the commitment end.
 	StartDate      *time.Time              `json:"start_date,omitempty"`
 	EndDate        *time.Time              `json:"end_date,omitempty"`
 	PeriodCount    *int                    `json:"period_count,omitempty"`
