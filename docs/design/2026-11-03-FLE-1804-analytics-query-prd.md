@@ -338,3 +338,33 @@ Later, separate design: tenant-wide breakdowns across all customers.
 - No result cache in v1.
 - Step 0 ships first, on its own.
 - No typed key columns; the scale path is the hourly rollup (v2).
+
+## 11. Known limitations & tech debt
+
+Living list, updated as testing and review continue. Each entry: what happens, why it's accepted for now, the fix.
+
+### TD-1. Partial ranges use the period's average rate, so past slices can change
+
+**What happens.** A range that covers part of a billing period prices its usage at the *full period's* average
+rate. Tiers and free units are really consumed in time order, so averaging moves cost from the start of the
+period to the end, and a past slice changes once the period fills in.
+
+Example: tokens at $0.02 for the first 1,000 per month, then $0.01; $60 monthly commitment. October usage
+3,141 tokens (1,878 in Oct 1–15, 1,263 in Oct 16–31) → $41.41 usage + $18.59 true-up.
+
+| Oct 1–15, tokens usage cost | Viewed on Oct 15 (period open) | Viewed after Oct 31 |
+|---|---|---|
+| Averaged (v1) | 1,878 × ($28.78 ÷ 1,878) = **$28.78** | 1,878 × ($41.41 ÷ 3,141) = **$24.76** |
+| In time order | **$28.78** | **$28.78** (Oct 16–31 = $12.63) |
+
+Both add up to the invoice; only averaging changes a slice that is already over. Free units behave the same way:
+averaging spreads them across the period instead of the start where they were used.
+
+**Why accepted for v1.** Totals and every slice still add up to the invoice; it matches today's usage-share
+split; and it keeps pricing to one rate per line per period.
+
+**Fix (v1.1).** Price a partial range in time order: slice cost = cost(period start → range end) − cost(period
+start → range start), then rate = slice cost ÷ slice usage. Still one rate per line per request, so the
+ClickHouse queries don't change; the usage before the range start comes from the same line-usage scan. True-up
+keeps the usage share (it exists only at period end). Open item: points *within* a request still use the
+request's average unless each window is priced in time order.
