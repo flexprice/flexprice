@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -33,7 +34,7 @@ type Term struct {
 	Split          *types.BillingTermSplit `json:"split,omitempty"`
 
 	// InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number
-	// all of the owner's instalments together.
+	// the owner's instalments whose labels use them.
 	InvoiceLabel *string        `json:"invoice_label,omitempty"`
 	Metadata     types.Metadata `json:"metadata,omitempty" activity:"drop"`
 
@@ -43,6 +44,11 @@ type Term struct {
 }
 
 // recurringOnlyField names the first field set on the term that only recurring terms use, or returns "".
+// LabelTemplate is the label its instalments take before numbering: its invoice_label, or the default.
+func (t *Term) LabelTemplate() string {
+	return lo.CoalesceOrEmpty(lo.FromPtr(t.InvoiceLabel), DefaultInvoiceLabel)
+}
+
 func (t *Term) recurringOnlyField() string {
 	switch {
 	case t.StartDate != nil:

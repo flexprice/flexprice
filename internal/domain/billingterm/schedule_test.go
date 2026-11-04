@@ -181,7 +181,7 @@ func TestExpand(t *testing.T) {
 			),
 			check: func(t *testing.T, terms []*Term, got []*Instalment) {
 				require.Equal(t, DefaultInvoiceLabel, got[0].InvoiceLabel, "Expand leaves the numbering to NumberLabels")
-				NumberLabels(got)
+				NumberLabels(got, 0)
 				require.Equal(t, "Instalment 1 of 11", got[0].InvoiceLabel, "a once term is numbered with the recurring ones")
 				require.Equal(t, "Instalment 3 of 11", got[2].InvoiceLabel)
 				require.Equal(t, "Instalment 11 of 11", got[10].InvoiceLabel)
@@ -204,7 +204,7 @@ func TestExpand(t *testing.T) {
 				monthlyWants(jan2027, repeat("70", 10), types.InvoiceCadenceArrear)...,
 			),
 			check: func(t *testing.T, _ []*Term, got []*Instalment) {
-				NumberLabels(got)
+				NumberLabels(got, 0)
 				require.Equal(t, "Instalment 1 of 11", got[0].InvoiceLabel)
 				require.Equal(t, "Payment 2/11", got[1].InvoiceLabel)
 				require.Equal(t, "Payment 11/11", got[10].InvoiceLabel)
@@ -743,8 +743,42 @@ func TestNumberLabels_CountsEveryTermInBillingOrder(t *testing.T) {
 	require.Len(t, got, 13)
 	require.True(t, got[6].BillOn.Equal(midJune))
 
-	NumberLabels(got)
+	NumberLabels(got, 0)
 	require.Equal(t, "Instalment 6 of 13", got[5].InvoiceLabel)
 	require.Equal(t, "Instalment 7 of 13", got[6].InvoiceLabel, "the once instalment takes its place among the recurring ones")
 	require.Equal(t, "Instalment 8 of 13", got[7].InvoiceLabel)
+}
+
+// A label without {n} or {of}, such as a milestone's, takes no number, so the numbered instalments run without a gap.
+func TestNumberLabels_SkipsLabelsWithoutNumbers(t *testing.T) {
+	jan2027 := date(2027, time.January, 1)
+	terms := []*Term{
+		with(onceFixed("60"), func(t *Term) {
+			t.BillTrigger = lo.ToPtr(types.InstalmentBillTriggerManual)
+			t.InvoiceLabel = lo.ToPtr("Go-live milestone")
+		}),
+		recurringRemainder(types.InvoiceCadenceArrear),
+	}
+
+	got, err := Expand(context.Background(), usd("300", jan2027, date(2027, time.April, 1)), monthly(jan2027, 3, "100"), terms)
+	require.NoError(t, err)
+	require.Len(t, got, 4)
+
+	NumberLabels(got, 0)
+	labels := lo.Map(got, func(i *Instalment, _ int) string { return i.InvoiceLabel })
+	require.ElementsMatch(t, []string{"Go-live milestone", "Instalment 1 of 3", "Instalment 2 of 3", "Instalment 3 of 3"}, labels)
+}
+
+// An edit numbers its new instalments after the numbered ones already invoiced.
+func TestNumberLabels_ContinuesAfterTheInvoiced(t *testing.T) {
+	planned := []*Instalment{
+		{InvoiceLabel: DefaultInvoiceLabel},
+		{InvoiceLabel: "Final settlement"},
+		{InvoiceLabel: "Payment {n}/{of}"},
+	}
+
+	NumberLabels(planned, 2)
+	require.Equal(t, "Instalment 3 of 4", planned[0].InvoiceLabel)
+	require.Equal(t, "Final settlement", planned[1].InvoiceLabel)
+	require.Equal(t, "Payment 4/4", planned[2].InvoiceLabel)
 }

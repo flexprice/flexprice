@@ -34,7 +34,8 @@ type BillingTermInput struct {
 	Split          *types.BillingTermSplit `json:"split,omitempty"`
 
 	// InvoiceLabel names the term's instalments on the invoice, "Instalment {n} of {of}" by default. {n} and {of} are
-	// filled with each instalment's place among all of the commitment's instalments and their count.
+	// filled with each instalment's place among the commitment's numbered instalments, those whose labels use them,
+	// and their count; a label without them takes no number.
 	InvoiceLabel *string        `json:"invoice_label,omitempty" validate:"omitempty,max=255"`
 	Metadata     types.Metadata `json:"metadata,omitempty"`
 }

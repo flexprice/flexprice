@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -433,6 +434,41 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_NumbersNewInstalmentsAf
 	added := s.addedSince(rows)
 	s.Require().Len(added, 1)
 	s.Equal("Instalment 3 of 3", added[0].InvoiceLabel)
+}
+
+// An invoiced instalment whose label took no number, such as a milestone's, leaves no number behind: the edit's
+// instalments count only the numbered ones, even once the edit archived the milestone's term.
+func (s *CommitmentServiceSuite) TestReplaceBillingTerms_NumbersOnlyAfterNumberedInvoicedInstalments() {
+	ctx := s.GetContext()
+	req := s.billingTermsRequest()
+	req.BillingTerms[0].InvoiceLabel = lo.ToPtr("Go-live milestone")
+	created, err := s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+
+	rows := s.storedInstalments()
+	milestone, ok := lo.Find(rows, func(i *billingterm.Instalment) bool { return i.InvoiceLabel == "Go-live milestone" })
+	s.Require().True(ok)
+	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", []string{milestone.ID})
+	s.Require().NoError(err)
+
+	edit := dto.ReplaceBillingTermsRequest{BillingTerms: upfrontPlusRemainder()[1:]}
+	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, edit)
+	s.Require().NoError(err)
+
+	byBillOn := func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) }
+	first := s.addedSince(rows)
+	slices.SortFunc(first, byBillOn)
+	s.Require().NotEmpty(first)
+	s.Equal(fmt.Sprintf("Instalment 1 of %d", len(first)), first[0].InvoiceLabel)
+
+	// A second edit reads the milestone's archived term.
+	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, edit)
+	s.Require().NoError(err)
+
+	second := s.addedSince(append(rows, first...))
+	slices.SortFunc(second, byBillOn)
+	s.Require().NotEmpty(second)
+	s.Equal(fmt.Sprintf("Instalment 1 of %d", len(second)), second[0].InvoiceLabel)
 }
 
 func (s *CommitmentServiceSuite) TestReplaceBillingTerms_SizesThePlanAfterTheCancellation() {

@@ -110,14 +110,20 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 	return instalments, nil
 }
 
-// NumberLabels fills {n} and {of} in the labels of plan, all of an owner's instalments in the order they are billed:
-// each label's place in plan and the plan's length. Labels already numbered keep their numbers. Within MaxInstalments,
-// a numbered label is never longer than its template.
-func NumberLabels(plan []*Instalment) {
-	of := strconv.Itoa(len(plan))
-	for n, i := range plan {
-		i.InvoiceLabel = strings.NewReplacer("{n}", strconv.Itoa(n+1), "{of}", of).Replace(i.InvoiceLabel)
+// NumberLabels fills {n} and {of} in the labels of planned, an owner's new instalments in billing order, numbering
+// them after the invoiced instalments that took a number. Only labels using {n} or {of} take one, so a custom label
+// such as a milestone's leaves no gap. Within MaxInstalments, a numbered label is never longer than its template.
+func NumberLabels(planned []*Instalment, invoiced int) {
+	numbered := lo.Filter(planned, func(i *Instalment, _ int) bool { return IsNumbered(i.InvoiceLabel) })
+	of := strconv.Itoa(invoiced + len(numbered))
+	for n, i := range numbered {
+		i.InvoiceLabel = strings.NewReplacer("{n}", strconv.Itoa(invoiced+n+1), "{of}", of).Replace(i.InvoiceLabel)
 	}
+}
+
+// IsNumbered reports whether a label template takes a number: it uses {n} or {of}.
+func IsNumbered(template string) bool {
+	return strings.Contains(template, "{n}") || strings.Contains(template, "{of}")
 }
 
 // resolveTerm validates one term against the collection period and applies the defaults of its kind; a term without
@@ -346,7 +352,7 @@ func (r *resolvedTerm) instalments(ctx context.Context, owner Owner) ([]*Instalm
 		}
 	}
 
-	label := lo.CoalesceOrEmpty(lo.FromPtr(r.term.InvoiceLabel), DefaultInvoiceLabel)
+	label := r.term.LabelTemplate()
 	amounts := r.instalmentAmounts(owner.BillingCurrency())
 	out := make([]*Instalment, 0, len(builders))
 	for n, b := range builders {

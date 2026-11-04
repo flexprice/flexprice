@@ -61,19 +61,44 @@ func (s *commitmentService) planInstalments(
 		return nil, err
 	}
 
-	// Invoiced instalments keep the numbers they were billed with and are billed before any new one, so the new ones
-	// are numbered after them, in billing order.
-	planned := slices.Clone(instalments)
-	slices.SortStableFunc(planned, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) })
-	plan := append(slices.Clone(invoiced), planned...)
-	if len(plan) > billingterm.MaxInstalments {
+	if count := len(invoiced) + len(instalments); count > billingterm.MaxInstalments {
 		return nil, ierr.Validationf("billing_terms: with the %d invoiced instalments the plan holds %d, more than the %d allowed",
-			len(invoiced), len(plan), billingterm.MaxInstalments)
+			len(invoiced), count, billingterm.MaxInstalments)
 	}
 
-	billingterm.NumberLabels(plan)
+	// Invoiced instalments keep the numbers they were billed with and are billed before any new one, so the new ones
+	// are numbered after them, in billing order.
+	numbered, err := s.numberedInstalments(ctx, invoiced)
+	if err != nil {
+		return nil, err
+	}
+
+	planned := slices.Clone(instalments)
+	slices.SortStableFunc(planned, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) })
+	billingterm.NumberLabels(planned, numbered)
 
 	return instalments, nil
+}
+
+// numberedInstalments counts the instalments whose label took a number: those whose term's label template uses one.
+func (s *commitmentService) numberedInstalments(ctx context.Context, instalments []*billingterm.Instalment) (int, error) {
+	ids := lo.Uniq(lo.FilterMap(instalments, func(i *billingterm.Instalment, _ int) (string, bool) {
+		return lo.FromPtr(i.BillingTermID), i.BillingTermID != nil
+	}))
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	terms, err := s.BillingTermRepo.ListByIDs(ctx, ids)
+	if err != nil {
+		return 0, err
+	}
+
+	termByID := lo.KeyBy(terms, func(t *billingterm.Term) string { return t.ID })
+	return lo.CountBy(instalments, func(i *billingterm.Instalment) bool {
+		t, ok := termByID[lo.FromPtr(i.BillingTermID)]
+		return ok && billingterm.IsNumbered(t.LabelTemplate())
+	}), nil
 }
 
 // plannedOwner is a commitment as a new plan sees it: its instalments collect only what the invoiced ones leave of the

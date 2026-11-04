@@ -991,7 +991,7 @@ func (s *CommitmentE2ESuite) TestE2E_A6_Deposit() {
 	s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, 2, 0)), "0")
 
 	for month := 3; month < 12; month++ {
-		want := []wantLine{{types.CommitmentLineInstalment, fmt.Sprintf("Platform - Instalment %d of 10", month-1), "1", "100"}}
+		want := []wantLine{{types.CommitmentLineInstalment, fmt.Sprintf("Platform - Instalment %d of 9", month-2), "1", "100"}}
 		if month == 3 {
 			want = append(want, wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "1000", "0"})
 		}

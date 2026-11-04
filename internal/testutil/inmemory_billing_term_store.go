@@ -63,6 +63,18 @@ func (s *InMemoryBillingTermStore) List(ctx context.Context, ownerType types.Bil
 	return lo.Map(rows, func(t *billingterm.Term, _ int) *billingterm.Term { return lo.ToPtr(*t) }), nil
 }
 
+func (s *InMemoryBillingTermStore) ListByIDs(ctx context.Context, ids []string) ([]*billingterm.Term, error) {
+	rows, err := s.InMemoryStore.List(ctx, nil, func(ctx context.Context, t *billingterm.Term, _ interface{}) bool {
+		return t != nil && CheckTenantFilter(ctx, t.TenantID) && CheckEnvironmentFilter(ctx, t.EnvironmentID) &&
+			lo.Contains(ids, t.ID)
+	}, billingTermSortFn)
+	if err != nil {
+		return nil, err
+	}
+
+	return lo.Map(rows, func(t *billingterm.Term, _ int) *billingterm.Term { return lo.ToPtr(*t) }), nil
+}
+
 func (s *InMemoryBillingTermStore) Archive(ctx context.Context, ownerType types.BillingTermOwnerType, ownerID string) ([]*billingterm.Term, error) {
 	rows, err := s.List(ctx, ownerType, ownerID)
 	if err != nil {
