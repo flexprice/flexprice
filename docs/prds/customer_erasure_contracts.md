@@ -216,9 +216,21 @@ carry no status predicate. Follow that.
 | Postgres, purge | Row count by `(tenant_id, environment_id, customer_id)`, no status predicate, taken after commit, expected 0 |
 | Postgres, redact | The sentinel is present **and** `customers.updated_at` is not later than the recorded `redacted_at`. Sentinel presence alone is not evidence — see rule 3 |
 | Postgres, purged JSON field | `contact_persons` and `metadata` are purged as whole fields (§5.1), so neither a row count nor the `[redacted]` sentinel applies. Evidence is that the column is SQL `NULL` or an empty container (`[]` / `{}`) — the operation must write one agreed form, and verification must assert that exact form. An empty-string or `"null"` string value is a failure, not a pass |
-| ClickHouse | Row count by **that table's own customer key** (`external_customer_id` for `events`, `raw_events`, `meter_usage`, `deleted_events_logs`; **`customer_id` for `activity_logs`**, which has no `external_customer_id` column), **bounded by `ingested_at < requested_at`**, with `FINAL`, taken after the mutation reports done — not after it is submitted (§6.2). The bound is mandatory: events arriving after the request are outside its scope (§4), so an unbounded count fails as soon as the tenant sends one more event (§9.8) |
+| ClickHouse | Row count by **that table's own customer key** (`external_customer_id` for `events`, `raw_events`, `meter_usage`, `deleted_events_logs`; **`customer_id` for `activity_logs`**, which has no `external_customer_id` column), **bounded by that table's own cutoff column** (see below — it is not `ingested_at` everywhere), with `FINAL` where the engine requires it, taken after the mutation reports done — not after it is submitted (§6.2). The bound is mandatory: events arriving after the request are outside its scope (§4), so an unbounded count fails as soon as the tenant sends one more event (§9.8) |
 | File storage | Per-object existence check for every known key, **not** a prefix listing. `GetInvoicePDFUrl` (`internal/ee/service/invoice.go`) stores PDFs under `{tenant_id}/{invoice_id}`, so no customer-scoped prefix exists and an empty customer-prefix listing would be vacuously true. The key set must be derived from the subject's invoice IDs before `invoices_pg` removes them (§2.5) |
 | Cache | Not verifiable by count; verified by the absence of the key, with the TTL and the repopulation race stated (§7) |
+
+**The cutoff column differs per table.** A single `ingested_at < requested_at` predicate
+does not compile against every ClickHouse table, so the operation and its verification
+must name the column per table and use the same one in both.
+
+| Table | Cutoff column | Note |
+|---|---|---|
+| `events` | `ingested_at` | — |
+| `raw_events` | `ingested_at` | — |
+| `meter_usage` | `ingested_at` of the **source event**, not of the derived row | A derived row is written when usage is processed, so its own `ingested_at` can fall after `requested_at` for a pre-request event. Erasure follows the originating event; §9.15 |
+| `activity_logs` | `ingested_at` | `DEFAULT now64(3)`, so a row written *during* suppression is outside the cutoff by design — see §9.16 for the post-request row |
+| `deleted_events_logs` | `deleted_at` | The table has **no** `ingested_at`. `event_ingested_at` is the original event's time and is the wrong scope — an audit row written today for an event ingested last month would read as pre-request. `deleted_at` is the audit row's own write time |
 
 `FINAL` is required because `events`, `raw_events`, `meter_usage` and `activity_logs` are
 all `ReplacingMergeTree`: a count without it collapses nothing and can report rows a
@@ -272,9 +284,9 @@ tickets get reworked.
 | `grants_pg` | redaction | — | no |
 | `usage_derived_pg` | redaction | Blocked on §9.2 — retain or delete is undecided | no |
 | `integrations_pg` | suppression | Must stop **future** disclosure before redaction runs (§7, webhooks) | no |
-| `events_ch` | redaction | — | **yes** |
-| `raw_events_ch` | redaction | — | **yes** |
-| `meter_usage_ch` | redaction | — | **yes** |
+| `events_ch` | redaction | — | no (§9.8 resolved: the ingestion-time cutoff removes the race) |
+| `raw_events_ch` | redaction | — | no (§9.8 resolved: the ingestion-time cutoff removes the race) |
+| `meter_usage_ch` | redaction | — | no (§9.8 resolved: the ingestion-time cutoff removes the race) |
 | `activity_logs_ch` | redaction | Blocked on §6.3 — the minimal retained record must be defined first | no |
 | `deleted_events_ch` | redaction | — | no |
 | `invoice_pdfs` | suppression (revoke), redaction (delete) | Dispute window must be quantified (§8 line 7) | no |
@@ -296,7 +308,8 @@ redaction touchpoints, not an implementation detail of them, and it is tracked a
 by customer ID, so eviction does propagate across replicas — but a concurrent read that
 misses can repopulate it afterwards, including through `GetByLookupKey`, which is itself
 uncached but warms the ID-keyed entry on a successful database read. The exposure is a
-read already in flight across the commit, bounded by the 30-minute TTL. Caching also
+read already in flight across the commit, bounded by that request's duration rather
+than by a TTL, since eviction itself propagates. Caching also
 ships disabled by default. The sibling spec documents this race and recommends accepting
 the bounded window; this document does not get to state a flat "evicted" and leave the
 race to be rediscovered.
@@ -374,6 +387,32 @@ holding the `external_id` and the request's `requested_at`. That row is the reco
 **not** be unique. A customer may be erased, re-onboard with the same external ID, and
 request erasure again — each request is a separate row with its own cutoff. A unique
 index rejects the second request, which is itself a compliance failure.
+
+**This contradicts the shipped schema, and the schema is what must change.** The tables
+on FLE-1887 were written against the superseded design and still enforce it:
+
+| Where | What it does |
+|---|---|
+| `migrations/versioned/postgres/20261030120000_create_customer_deletion_tables.sql` | `CREATE UNIQUE INDEX` on `(tenant_id, environment_id, external_id)` and on `(tenant_id, environment_id, customer_id)` |
+| `ent/schema/customerdeletionrequest.go` | the same two `Unique()` indexes, commented "retirement is permanent"; `external_id` also carries field-level `Unique().Immutable()` |
+
+Both indexes have to go, for different reasons. The `external_id` one rejects a second
+request after re-onboarding, which is the failure above. The `customer_id` one is
+commented "one open request per customer" but carries **no partial predicate**, so it
+enforces one request *ever* — and a customer erased, re-onboarded under the same internal
+ID, and erased again hits it. If per-customer idempotency is wanted, it needs a partial
+index over non-terminal states or an application-level check, not a blanket unique index.
+`Immutable()` on `external_id` is fine and arguably right; `Unique()` is not.
+
+Two consumers assume one row per identifier and change with the index:
+`GetByExternalID` (`internal/repository/ent/customerdeletion.go`) returns a single row,
+and must either return the latest by `requested_at` or return a list. Any
+`IsExternalIDRetired`-shaped check must return a cutoff timestamp rather than a boolean,
+since "has this ID ever been erased" is no longer the question — "what is in scope for
+this request" is.
+
+This is a prerequisite, not a follow-up: the migration has not shipped, so it is an edit
+to that migration rather than a second one. Tracked on FLE-1887 / #3300, flagged there.
 
 **The cutoff is ingestion time.** An erasure deletes data for the customer that was
 **ingested before `requested_at`**, compared against `ingested_at`, not against the
@@ -652,6 +691,17 @@ The erasure's own audit record must be written so it never contains PII in the f
 place, rather than written fully and redacted later. A record that has to be erased to
 be compliant is not an audit record.
 
+**That record is keyed by the same column the deletion matches on.** `activity_logs` is
+erased by `customer_id` (§2.4), and the audit row carries `customer_id` so the erasure is
+attributable. A retry, or a re-erasure after re-onboarding, therefore matches the audit
+row written by the previous attempt and deletes the evidence of it — or, if the predicate
+is written to spare it, risks sparing real activity rows that happen to share its shape.
+
+The operation must distinguish them explicitly, by activity type rather than by key, and
+the verification predicate must use the same exclusion so the expected count accounts for
+the audit row that is supposed to remain. §9.16 covers the related problem that this row
+is written after `requested_at` and so falls outside the cutoff.
+
 ---
 
 ## 7. Other stores
@@ -684,7 +734,8 @@ rationale, not legal advice.
 | 6 | Revenue facts, meter usage checkpoints | **Open — §9.2** | Financial summary or usage derivative, depending on whether the figure is reconstructible |
 | 7 | Invoice PDFs | **Open — unquantified** | Evidence during a dispute; no basis afterwards. "Dispute window" is not a retention period until it carries a number, and the contents claim is unverified (§7) |
 | 8 | Erasure audit record | Permanent | Demonstrating the erasure happened. A **newly written** minimal row, not a filtered existing one — see §6.3, which is why this line is deliverable at all |
-| 9 | Deletion request + category rows | Permanent | The evidence itself |
+| 9 | Deletion **category** rows | Open — bounded, pending counsel (§9.13) | The evidence itself |
+| 9a | Deletion **request** row (holds the external ID) | Open — bounded, pending counsel (§9.13) | The evidence itself. Must not be stated as permanent: the row holds the external ID, so "permanent" would retain an identifier indefinitely, which is the thing this document exists to bound |
 | 10 | Tax treatment, billing currency | Permanent, with the financial record | Required to interpret a retained invoice |
 
 Line 1 is the one a regulator will ask about first. It must not be left implicit, and it
@@ -787,6 +838,15 @@ API in Phase 4.
 (`ent/schema/event_deletion_request.go`), so no Ent update can clear it, yet §5.2
 requires it redacted. Options: drop `Immutable()` on that field, or write a raw SQL
 update outside Ent for this one column. Both touch the event-deletion team's schema.
+There is a second half to this, independent of mutability. Rule 1 (§2.4) requires every
+erasure read and write to key on `(tenant_id, environment_id, customer_id)` with no
+status predicate, and this table has **no `customer_id` column** — only the immutable
+`external_customer_id` plus tenant and environment. So this touchpoint needs a stated,
+named exception to Rule 1 (query by external ID here, and why that is safe) or a
+`customer_id` added to the table. The fixed touchpoint registry (§2.2) also names no
+category for it, so today it is required to be redacted while belonging to nothing that
+would carry the disposition.
+
 **Needs:** an owner on that team, and a decision before `events_ch` claims a complete
 disposition.
 
@@ -806,6 +866,45 @@ before any retention change, since such a change is not retroactive. If retentio
 exceeds the 30-day redaction commitment, those histories are a PII copy outstanding past
 the commitment. **Needs:** an owner with Temporal namespace access.
 
+### 9.15 Which clock bounds derived usage
+`meter_usage` rows are written when usage is processed, not when the source event
+arrived, and `ingested_at` records the derived row's own write. A pre-request event
+processed after `requested_at` therefore produces a row whose `ingested_at` falls outside
+the cutoff, so a cutoff applied naively to the derived row leaves usage derived from
+in-scope data in place.
+
+The erasure must follow the **originating event**, since that is what the subject's data
+actually is. Two ways to get there: carry the source event's `ingested_at` onto the
+derived row so one predicate works, or scope the deletion by the source event IDs
+resolved before deletion. The first is a schema change on a ~60M-rows/day/tenant table;
+the second needs the event set materialised before `events` is erased, which constrains
+ordering. **Needs:** a decision, and it changes the §2.5 ordering if the second is taken.
+
+### 9.16 The post-request activity row erases itself out of scope
+§6.3 requires deleting the `CustomerArchived` activity row because its `state` and
+`entity_label` carry the external ID. But that row is written *during* suppression, so
+with `activity_logs.ingested_at DEFAULT now64(3)` its `ingested_at` is later than
+`requested_at` and the §2.4 cutoff excludes it. The cutoff and §6.3 therefore contradict
+each other: follow the cutoff and the row survives with the identifier in it; delete the
+row and the operation has reached outside its own stated scope.
+
+The clean resolution is to stop writing the identifier there — emit the suppression
+activity row with the internal `customer_id` only, so nothing needs deleting out of
+scope. Failing that, §6.3 needs an explicit named exception to the cutoff for this one
+row, with its own verification predicate, rather than relying on the general rule.
+**Needs:** a decision; the no-PII-written option is preferred and cheaper.
+
+### 9.17 `invoice.description` has no disposition
+§5.2 lists `invoice.description` as caller-supplied free text on a retained row. §5.3
+states `invoice` carries no PII snapshot — no customer name, no billing address — which
+is true of the *columns we populate* and says nothing about what a tenant may have typed
+into a free-text field. Purging `metadata` does not cover it.
+
+It needs one of: purged like `metadata`, redacted, or retained under a stated legal basis
+with matching verification evidence. Until then a retained invoice cannot be claimed
+PII-free. The same question applies to `commitment.invoice_description` (§5.2).
+**Needs:** a decision, and it is cheap — this is one column's disposition.
+
 ---
 
 ## 10. What this unblocks
@@ -814,7 +913,7 @@ the commitment. **Needs:** an owner with Temporal namespace access.
   implementing §2's contract and its §5/§6 disposition. Tickets are parallelizable
   **only within the constraints of §2.5**: `customer_pg` redaction runs last,
   `payments_pg` depends on `invoices_pg`, and the three event-table touchpoints are
-  blocked on the ingest fence (§9.8). The three ClickHouse tables with no deletion path
+  unblocked: §9.8 is resolved and no fence is to be built. The three ClickHouse tables with no deletion path
   (§6.2) are three of those tickets.
 - **FLE-1885 (Phase 3)** — orchestration against the §2.2 result contract and §2.3
   retry rules.
