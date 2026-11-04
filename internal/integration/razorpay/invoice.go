@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -31,11 +32,6 @@ const razorpayMinExpireByBuffer = 15 * time.Minute
 // since Razorpay checks the bound on receipt and a timestamp landing exactly on the
 // floor arrives under it.
 const razorpayExpireBySafetyMargin = 2 * time.Minute
-
-// autoChargeLockTTL is the Redis distributed lock TTL for auto-charge operations.
-// Set longer than a typical HTTP timeout since gateway errors are treated as
-// ambiguous (network timeout vs. definitive failure can't be reliably told apart).
-const autoChargeLockTTL = 15 * time.Minute
 
 // SyncInvoiceResult carries data the caller must persist (e.g. payment-link
 // URLs) back to invoice metadata; done by the caller to avoid a circular
@@ -264,6 +260,22 @@ func (s *InvoiceSyncService) executeAutoCharge(
 		return nil
 	}
 
+	lock, err := payments.LockInvoiceCharge(ctx, s.locker, s.paymentRepo, inv.EnvironmentID, inv.ID, "")
+	if ierr.IsAlreadyExists(err) {
+		s.logger.Info(ctx, "a charge is already in progress for this invoice, skipping",
+			"invoice_id", inv.ID)
+		return nil
+	}
+	if err != nil {
+		s.logger.Error(ctx, "failed to acquire auto-charge lock", "invoice_id", inv.ID, "error", err)
+		return err
+	}
+	defer func() {
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			s.logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", inv.ID, "error", releaseErr)
+		}
+	}()
+
 	pymnt, skip, err := s.findOrCreateAutoChargePayment(ctx, inv, paymentMethodType)
 	if err != nil {
 		return err
@@ -273,23 +285,6 @@ func (s *InvoiceSyncService) executeAutoCharge(
 			"invoice_id", inv.ID)
 		return nil
 	}
-
-	lockKey := fmt.Sprintf("razorpay:autocharge:%s:%s:%s", types.GetTenantID(ctx), inv.EnvironmentID, inv.ID)
-	lock, err := s.locker.AcquireLock(ctx, lockKey, autoChargeLockTTL)
-	if err != nil {
-		s.logger.Error(ctx, "failed to acquire auto-charge lock", "invoice_id", inv.ID, "error", err)
-		return err
-	}
-	if !lock.AcquiredSuccessfully() {
-		s.logger.Info(ctx, "auto-charge already in progress for this invoice, skipping",
-			"invoice_id", inv.ID)
-		return nil
-	}
-	defer func() {
-		if releaseErr := lock.Release(ctx); releaseErr != nil {
-			s.logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", inv.ID, "error", releaseErr)
-		}
-	}()
 
 	freshInv, err := s.invoiceRepo.Get(ctx, inv.ID)
 	if err != nil {

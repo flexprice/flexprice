@@ -11,7 +11,9 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -155,6 +157,20 @@ func SelectUsableToken(
 	}), true
 }
 
+// NoUsableTokenError reports that the customer has no mandate that can pay p.
+func NoUsableTokenError(p *payment.Payment, customerID string) error {
+	return ierr.NewError("no usable razorpay token for payment method").
+		WithHintf("No active %s mandate covering this amount was found at Razorpay, or the customer is not synced to Razorpay. Collect one first, or use payment_method_type PAYMENT_LINK.", p.PaymentMethodType).
+		WithReportableDetails(map[string]interface{}{
+			"payment_id":          p.ID,
+			"invoice_id":          p.DestinationID,
+			"customer_id":         customerID,
+			"payment_method_type": p.PaymentMethodType,
+			"amount":              p.Amount.String(),
+		}).
+		Mark(ierr.ErrValidation)
+}
+
 // razorpaySubscriptionMethod maps a FlexPrice PaymentMethodType to the Razorpay
 // subscription_registration "method" value. Empty input defaults to "upi".
 func razorpaySubscriptionMethod(pm types.PaymentMethodType) (string, error) {
@@ -265,6 +281,16 @@ func (a *CheckoutAdapter) TryAutoChargingSavedMethod(
 			"customer_id", req.CustomerID, "error", err)
 		return nil, false, nil
 	}
+
+	lock, err := payments.LockInvoiceCharge(ctx, a.Svc.locker, a.Svc.invoiceSyncSvc.paymentRepo, custResp.Customer.EnvironmentID, req.InvoiceID, "")
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() {
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			a.Svc.logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", req.InvoiceID, "error", releaseErr)
+		}
+	}()
 
 	result, charged, err := a.Svc.ChargeSavedToken(ctx, ChargeSavedTokenRequest{
 		Customer:           custResp.Customer,

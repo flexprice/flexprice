@@ -172,6 +172,11 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	// — this matters for subscription card charges where the caller doesn't set
 	// payment_gateway (gets resolved later in ProcessPayment). Callers can pass
 	// their own IdempotencyKey to opt out (installments, etc).
+	// Card and UPI invoice charges are guarded by the per-invoice charge lock, so each request is its own payment.
+	if p.IdempotencyKey == "" && req.ProcessPayment && p.DestinationType == types.PaymentDestinationTypeInvoice &&
+		(p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI) {
+		p.IdempotencyKey = p.ID
+	}
 	if p.IdempotencyKey == "" {
 		p.IdempotencyKey = s.idempGen.GenerateKey(idempotency.ScopePayment, map[string]interface{}{
 			"invoice_id":          p.DestinationID,

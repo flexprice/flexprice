@@ -126,7 +126,7 @@ func (p *Payment) Validate() error {
 				WithHint("Payment method id is invalid for payment links").
 				Mark(ierr.ErrValidation)
 		}
-	} else if p.PaymentMethodType == types.PaymentMethodTypeCard {
+	} else if p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI {
 		// For card payments, payment method ID is optional - it will be fetched automatically if empty
 		// No validation needed here as the payment processor will handle fetching the saved payment method
 	} else if p.PaymentMethodID == "" {
