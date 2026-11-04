@@ -167,6 +167,14 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     models.SelfBillingHourlyWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
+		{
+			// Always declared; BillDueInstalments only visits environments that enable commitments_v2.
+			ID:        types.ScheduleIDBillingInstalmentsDue,
+			Interval:  15 * time.Minute,
+			Workflow:  cronWorkflows.BillingInstalmentsDueWorkflow,
+			Input:     models.BillingInstalmentsDueWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
 	}
 }
 

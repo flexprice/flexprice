@@ -24,6 +24,9 @@ const (
 	SystemEntityTypePrice           SystemEntityType = "price"
 	SystemEntityTypeEvent           SystemEntityType = "event"
 	SystemEntityTypeCommitment      SystemEntityType = "commitment"
+
+	SystemEntityTypeBillingTerm       SystemEntityType = "billing_term"
+	SystemEntityTypeBillingInstalment SystemEntityType = "billing_instalment"
 )
 
 type EntityCreationStatus string

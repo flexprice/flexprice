@@ -510,6 +510,39 @@ func TestTermValue(t *testing.T) {
 	require.True(t, value.Equal(decimal.NewFromInt(600)), "value=%s", value)
 }
 
+// $100 a month for 2027 earns each whole month and the elapsed share of the month holding `at`.
+func TestEarnedAmount(t *testing.T) {
+	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	c := &commitment.Commitment{
+		Type:        types.COMMITMENT_TYPE_AMOUNT,
+		Value:       decimal.NewFromInt(100),
+		Currency:    "usd",
+		Measurement: types.CommitmentMeasurementBillingPeriod,
+		Timezone:    "UTC",
+		StartDate:   jan,
+		EndDate:     lo.ToPtr(jan.AddDate(1, 0, 0)),
+	}
+
+	tests := []struct {
+		name string
+		at   time.Time
+		want string
+	}{
+		{name: "before the start", at: jan.AddDate(0, 0, -10), want: "0"},
+		{name: "at the start", at: jan, want: "0"},
+		{name: "mid-April, 14 of 30 days", at: time.Date(2027, 4, 15, 0, 0, 0, 0, time.UTC), want: "346.67"},
+		{name: "on the 1 May boundary", at: time.Date(2027, 5, 1, 0, 0, 0, 0, time.UTC), want: "400"},
+		{name: "at the end", at: *c.EndDate, want: "1200"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			earned, err := earnedAmount(c, monthlySub(jan), identityAmount, "", tc.at)
+			require.NoError(t, err)
+			require.True(t, earned.Equal(decimal.RequireFromString(tc.want)), "want %s, got %s", tc.want, earned)
+		})
+	}
+}
+
 // periodGenerationFixtures are multi-year subscriptions across cadences, anchors and timezones.
 func periodGenerationFixtures(t *testing.T) map[string]*subscription.Subscription {
 	ny, err := time.LoadLocation("America/New_York")

@@ -89,6 +89,8 @@ func (s *MeterUsageServiceSuite) SetupTest() {
 		AuthRepo:                 s.GetStores().AuthRepo,
 		SettingsRepo:             s.GetStores().SettingsRepo,
 		CommitmentRepo:           s.GetStores().CommitmentRepo,
+		BillingTermRepo:          s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:    s.GetStores().BillingInstalmentRepo,
 		CouponAssociationRepo:    s.GetStores().CouponAssociationRepo,
 	})
 }

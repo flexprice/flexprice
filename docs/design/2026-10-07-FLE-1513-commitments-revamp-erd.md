@@ -4,7 +4,7 @@
 - **Scenarios:** [2026-10-07-FLE-1513-commitments-scenarios.md](./2026-10-07-FLE-1513-commitments-scenarios.md): every supported situation, how to set it up, and what gets invoiced.
 - **Date:** 2026-10-09 · Status updated 2026-10-26
 - **Author:** Ankit Malik
-- **Status:** Phase 1 (commitments, `per_period`) shipped — PRs #3211, #3212, #3214, #3215. Billing terms (§7) designed, not implemented. §0.1 lists what shipped and where it differs from this document.
+- **Status:** Phase 1 (commitments, `per_period`) shipped — PRs #3211, #3212, #3214, #3215. Billing terms (§5.2, §5.3, §7) are superseded by [2026-11-02-FLE-1513-billing-terms-erd.md](./2026-11-02-FLE-1513-billing-terms-erd.md). §0.1 lists what shipped and where it differs from this document.
 
 ---
 
@@ -502,6 +502,8 @@ All failures return `ErrValidation`, with a hint naming the field.
 
 ## 7. Billing terms and instalments in detail
 
+> **Superseded by [2026-11-02-FLE-1513-billing-terms-erd.md](./2026-11-02-FLE-1513-billing-terms-erd.md).** Kept for history; build from the new document.
+>
 > **Not implemented.** This whole section is design only — no tables, expansion, delivery or termination handling exist yet. The phase-2 API contract supersedes the request shapes here: `docs/design/2026-10-24-FLE-1513-billing-terms-api-contract.md`. One ruling to carry into implementation: under `billing_terms`, within-commitment usage must appear at **$0** ("covered by commitment") — skipping only the true-up would double-collect.
 
 ### 7.1 Input and storage

@@ -735,6 +735,11 @@ func NewRouter(
 			commitments.GET("/:id", read(types.EntityCommitment, types.ActionRead), handlers.Commitment.GetCommitment)
 			commitments.PUT("/:id", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.UpdateCommitment)
 			commitments.POST("/:id/terminate", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.TerminateCommitment)
+			commitments.GET("/:id/billing-terms", read(types.EntityCommitment, types.ActionRead), handlers.Commitment.GetBillingTerms)
+			commitments.PUT("/:id/billing-terms", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.ReplaceBillingTerms)
+			commitments.POST("/:id/billing-terms/preview", read(types.EntityCommitment, types.ActionRead), handlers.Commitment.PreviewBillingTerms)
+			commitments.GET("/:id/instalments", read(types.EntityCommitment, types.ActionRead), handlers.Commitment.ListInstalments)
+			commitments.POST("/:id/instalments/:instalment_id/trigger", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.TriggerInstalment)
 		}
 
 		// Coupon routes

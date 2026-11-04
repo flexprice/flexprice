@@ -2866,19 +2866,16 @@ func (s *meterUsageService) calculateLineItemCommitments(
 	}
 
 	// Price commitments through the period end so an incomplete query window does not reduce their capacity.
-	projectedEnd := projectedCommitmentEnd(usage.Subscription, params.StartTime, end)
-	loader, err := newBillingService(s.ServiceParams).newCommitmentLoader(
-		ctx, usage.Subscription, params.StartTime, projectedEnd, projectedEnd, commitmentCharges, usage.MeterMap, types.UsageSourceAnalytics,
+	loader, err := newBillingService(s.ServiceParams).newProjectedCommitmentLoader(
+		ctx, usage.Subscription, params.StartTime, end, commitmentCharges, usage.MeterMap, types.UsageSourceAnalytics,
 	)
 	if err != nil || len(loader.commitments) == 0 {
 		return nil, err
 	}
 
-	loader.usageEnd = end
-
 	scopeLines := lo.UniqBy(
 		lo.FlatMap(loader.commitments, func(sc *stackedCommitment, _ int) []*subscription.SubscriptionLineItem {
-			return loader.scopeByCommitment[sc.C.ID].lineItems
+			return loader.scopeByCommitment[sc.ID].lineItems
 		}),
 		func(item *subscription.SubscriptionLineItem) string { return item.ID },
 	)
@@ -2903,24 +2900,24 @@ func (s *meterUsageService) calculateLineItemCommitments(
 		commitmentCharges[lineID] = []*dto.SubscriptionUsageByMetersResponse{charge}
 	}
 
-	lines, _, err := loader.InvoiceLines(ctx)
+	lines, err := loader.usageLines(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	breakdownByLine := map[string]*types.CommitmentInfo{}
 	for _, sc := range loader.commitments {
-		for _, item := range loader.scopeByCommitment[sc.C.ID].lineItems {
+		for _, item := range loader.scopeByCommitment[sc.ID].lineItems {
 			lineBreakdown := breakdownByLine[item.ID]
 			if lineBreakdown == nil {
 				lineBreakdown = &types.CommitmentInfo{
-					Type:       sc.C.Type,
-					IsWindowed: sc.C.Measurement == types.CommitmentMeasurementWindow,
+					Type:       sc.Type,
+					IsWindowed: sc.Measurement == types.CommitmentMeasurementWindow,
 				}
 				breakdownByLine[item.ID] = lineBreakdown
 			}
 
-			lineBreakdown.TrueUpEnabled = lineBreakdown.TrueUpEnabled || sc.C.Binding
+			lineBreakdown.TrueUpEnabled = lineBreakdown.TrueUpEnabled || sc.Binding
 		}
 	}
 

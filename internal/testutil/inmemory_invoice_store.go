@@ -94,6 +94,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			AdjustedEntitlementQuantity: item.AdjustedEntitlementQuantity,
 			SubscriptionLineItemID:      item.SubscriptionLineItemID,
 			CommitmentID:                item.CommitmentID,
+			BillingInstalmentID:         item.BillingInstalmentID,
 			ParentLineItemID:            item.ParentLineItemID,
 			EnvironmentID:               item.EnvironmentID,
 			BaseModel:                   item.BaseModel,
@@ -532,6 +533,10 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 
 	// Apply environment filter
 	if !CheckEnvironmentFilter(ctx, inv.EnvironmentID) {
+		return false
+	}
+
+	if len(f.InvoiceIDs) > 0 && !lo.Contains(f.InvoiceIDs, inv.ID) {
 		return false
 	}
 

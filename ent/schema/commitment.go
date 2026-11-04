@@ -138,7 +138,8 @@ func (Commitment) Fields() []ent.Field {
 			SchemaType(varchar("30")).
 			Optional().
 			Nillable().
-			Immutable(),
+			Immutable().
+			GoType(types.InstalmentDelivery("")),
 
 		field.Time("start_date").
 			Immutable(),

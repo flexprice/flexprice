@@ -610,7 +610,7 @@ func (s *addonChangeService) persistRemovals(ctx context.Context, config *addonC
 func (s *addonChangeService) checkRemovalCommitments(ctx context.Context, config *addonChangeConfig) error {
 	for _, detach := range config.getDetaches() {
 		for _, lineItem := range detach.getLineItems() {
-			if err := checkLineItemCommitmentDetach(ctx, s.ServiceParams, config.getSubscription(), lineItem, detach.getEffectiveDate()); err != nil {
+			if err := checkLineDetach(ctx, s.ServiceParams, config.getSubscription(), lineItem, detach.getEffectiveDate()); err != nil {
 				return err
 			}
 		}
@@ -658,7 +658,7 @@ func (s *addonChangeService) persistAttaches(ctx context.Context, config *addonC
 	}
 
 	for _, li := range lineItems {
-		if err := checkLineItemCommitmentAttach(ctx, s.ServiceParams, sub, li); err != nil {
+		if err := checkLineAttach(ctx, s.ServiceParams, sub, li); err != nil {
 			return err
 		}
 	}

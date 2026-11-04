@@ -69,6 +69,7 @@ type cronActivityBundle struct {
 	revenueRollup                *cronActivities.RevenueRollupActivities
 	revenueRecognition           *cronActivities.RevenueRecognitionActivities
 	selfBillingHourly            *cronActivities.SelfBillingHourlyActivities
+	commitment                   *cronActivities.CommitmentCronActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -329,6 +330,7 @@ func RegisterWorkflowsAndActivities(
 		revenueRollup:                cronActivities.NewRevenueRollupActivities(revenue.New(params), params.Config, params.Logger),
 		revenueRecognition:           cronActivities.NewRevenueRecognitionActivities(params.JournalService, params.Logger),
 		selfBillingHourly:            cronActivities.NewSelfBillingHourlyActivities(selfbilling.New(params), params.Logger),
+		commitment:                   cronActivities.NewCommitmentCronActivities(service.NewCommitmentService(params), params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -578,6 +580,7 @@ func buildWorkerConfig(
 			cronWorkflows.RevenueRecognitionWorkflow,
 			cronWorkflows.RevenueRecognitionBackfillWorkflow,
 			cronWorkflows.SelfBillingHourlyWorkflow,
+			cronWorkflows.BillingInstalmentsDueWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -601,6 +604,7 @@ func buildWorkerConfig(
 			cron.revenueRecognition.RecognizeRevenueActivity,
 			cron.revenueRecognition.BackfillRevenueActivity,
 			cron.selfBillingHourly.SelfBillingHourlyActivity,
+			cron.commitment.BillDueInstalmentsActivity,
 		)
 
 	case types.TemporalTaskQueueBilling:
