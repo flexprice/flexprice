@@ -15833,6 +15833,29 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/invoice.payment.failed": {
+            "post": {
+                "description": "Fired when a payment of an invoice does not succeed. ` + "`" + `reason` + "`" + ` is ` + "`" + `payment_method_unavailable` + "`" + `, ` + "`" + `provider_error` + "`" + ` or ` + "`" + `declined` + "`" + `; ` + "`" + `is_auto_charge_attempt` + "`" + ` is true when Flexprice charged the saved payment method. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.payment.failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoicePaymentFailedWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/invoice.payment.overdue": {
             "post": {
                 "description": "Fired when an invoice payment is overdue past the due date. ` + "`" + `invoice.line_items` + "`" + ` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and ` + "`" + `invoice.subscription.plan.prices` + "`" + ` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.",
@@ -37703,6 +37726,7 @@ const docTemplate = `{
                 "invoice.update.voided",
                 "invoice.update",
                 "invoice.payment.overdue",
+                "invoice.payment.failed",
                 "invoice.sync.success",
                 "invoice.sync.failed",
                 "wallet.credit_balance.dropped",
@@ -37777,6 +37801,7 @@ const docTemplate = `{
                 "WebhookEventInvoiceUpdateVoided",
                 "WebhookEventInvoiceUpdate",
                 "WebhookEventInvoicePaymentOverdue",
+                "WebhookEventInvoicePaymentFailed",
                 "WebhookEventInvoiceSyncSuccess",
                 "WebhookEventInvoiceSyncFailed",
                 "WebhookEventWalletCreditBalanceDropped",
@@ -39151,6 +39176,19 @@ const docTemplate = `{
                 "InstalmentStatusCancelled"
             ]
         },
+        "types.InvoicePaymentFailureReason": {
+            "type": "string",
+            "enum": [
+                "payment_method_unavailable",
+                "provider_error",
+                "declined"
+            ],
+            "x-enum-varnames": [
+                "InvoicePaymentFailureReasonPaymentMethodUnavailable",
+                "InvoicePaymentFailureReasonProviderError",
+                "InvoicePaymentFailureReasonDeclined"
+            ]
+        },
         "types.JournalDirection": {
             "type": "string",
             "enum": [
@@ -40042,6 +40080,32 @@ const docTemplate = `{
                 },
                 "subscription_line_item_id": {
                     "type": "string"
+                }
+            }
+        },
+        "webhookDto.InvoicePaymentFailedWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "invoice": {
+                    "$ref": "#/definitions/webhookDto.Invoice"
+                },
+                "is_auto_charge_attempt": {
+                    "type": "boolean"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.SecretProvider"
+                },
+                "reason": {
+                    "$ref": "#/definitions/types.InvoicePaymentFailureReason"
                 }
             }
         },

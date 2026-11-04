@@ -58,6 +58,12 @@ const (
 	MetadataValueTrue = "true"
 )
 
+// Payment metadata marking which flow created the payment.
+const (
+	MetadataKeyPaymentSource       = "payment_source"
+	PaymentSourceInvoiceAutoCharge = "invoice_auto_charge"
+)
+
 // GetBool nil-safely reports whether key holds the canonical truthy value.
 func (m Metadata) GetBool(key string) bool {
 	if m == nil {

@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
@@ -121,6 +122,13 @@ func (s *webhookTestPaymentService) failedAttempts() []dto.RecordAttemptRequest 
 
 type webhookTestInvoiceService struct {
 	interfaces.InvoiceService
+	published *[]webhookDto.InternalInvoicePaymentFailedEvent
+}
+
+func (s webhookTestInvoiceService) PublishInvoicePaymentFailed(_ context.Context, event webhookDto.InternalInvoicePaymentFailedEvent) {
+	if s.published != nil {
+		*s.published = append(*s.published, event)
+	}
 }
 
 func (webhookTestInvoiceService) GetInvoice(_ context.Context, id string) (*dto.InvoiceResponse, error) {
@@ -558,4 +566,46 @@ func TestHandleWebhookEvent_UnhandledTypeCountedAsOther(t *testing.T) {
 	require.NoError(t, h.HandleWebhookEvent(types.SetEnvironmentID(types.SetTenantID(context.Background(), "ten_gw_rzp"), "env_gw"), &RazorpayWebhookEvent{Event: "attacker.chosen"}, "env_gw", nil))
 
 	require.Equal(t, int64(1), r.Sum("gateway.webhooks", map[string]string{"tenant_id": "ten_gw_rzp", "provider": "razorpay", "event_type": "other", "outcome": "ignored"}))
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_AutoChargeDeclinePublishesInvoicePaymentFailed() {
+	autoCharge := types.Metadata{types.MetadataKeyPaymentSource: types.PaymentSourceInvoiceAutoCharge}
+	tests := []struct {
+		name          string
+		metadata      types.Metadata
+		priorStatus   types.PaymentStatus
+		wantPublished bool
+	}{
+		{name: "auto-charge decline", metadata: autoCharge, priorStatus: types.PaymentStatusProcessing, wantPublished: true},
+		{name: "redelivered decline", metadata: autoCharge, priorStatus: types.PaymentStatusFailed},
+		{name: "not an auto-charge payment", priorStatus: types.PaymentStatusProcessing},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			var published []webhookDto.InternalInvoicePaymentFailedEvent
+			s.services.InvoiceService = webhookTestInvoiceService{published: &published}
+			s.paymentSvc.payment.PaymentMethodType = types.PaymentMethodTypeCard
+			s.paymentSvc.payment.PaymentStatus = tt.priorStatus
+			s.paymentSvc.payment.DestinationID = "inv_001"
+			s.paymentSvc.payment.Metadata = tt.metadata
+
+			s.NoError(s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services))
+
+			if !tt.wantPublished {
+				s.Empty(published)
+				return
+			}
+			s.Require().Len(published, 1)
+			s.Equal(webhookDto.InternalInvoicePaymentFailedEvent{
+				InvoiceID:           "inv_001",
+				Provider:            types.SecretProviderRazorpay,
+				Reason:              types.InvoicePaymentFailureReasonDeclined,
+				PaymentID:           "pay_flex_001",
+				Error:               "card declined",
+				IsAutoChargeAttempt: true,
+			}, published[0])
+		})
+	}
 }

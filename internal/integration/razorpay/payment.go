@@ -827,6 +827,31 @@ func selectAutoChargeToken(
 	return nil, false
 }
 
+// SelectSavedToken returns the customer's Razorpay ID and a recurring token able to pay amount; ok is false when there is none.
+func (s *PaymentService) SelectSavedToken(
+	ctx context.Context,
+	customerID string,
+	amount decimal.Decimal,
+	preferred types.PaymentMethodType,
+) (razorpayCustomerID string, token *interfaces.ProviderPaymentMethod, ok bool) {
+	razorpayCustomerID, tokens, err := s.customerSvc.ListCustomerTokens(ctx, customerID)
+	if err != nil {
+		s.logger.Info(ctx, "list Razorpay tokens failed, no saved token to charge",
+			"customer_id", customerID, "error", err)
+		return "", nil, false
+	}
+
+	token, ok = selectAutoChargeToken(tokens, preferred, amount)
+	if !ok {
+		s.logger.Info(ctx, "no usable Razorpay token",
+			"customer_id", customerID,
+			"amount", amount.String(),
+			"preferred_method", preferred,
+			"tokens_inspected", len(tokens))
+	}
+	return razorpayCustomerID, token, ok
+}
+
 // ChargeSavedToken selects a confirmed token for an already-mapped Razorpay
 // customer and submits AutoCharge.
 func (s *PaymentService) ChargeSavedToken(
@@ -837,21 +862,8 @@ func (s *PaymentService) ChargeSavedToken(
 		return nil, false, nil
 	}
 
-	razorpayCustomerID, tokens, err := s.customerSvc.ListCustomerTokens(ctx, req.Customer.ID)
-	if err != nil {
-		s.logger.Info(ctx, "charge saved token: list tokens failed",
-			"customer_id", req.Customer.ID, "invoice_id", req.InvoiceID, "error", err)
-		return nil, false, nil
-	}
-
-	token, ok := selectAutoChargeToken(tokens, req.PreferredMethod, req.Amount)
+	razorpayCustomerID, token, ok := s.SelectSavedToken(ctx, req.Customer.ID, req.Amount, req.PreferredMethod)
 	if !ok {
-		s.logger.Info(ctx, "charge saved token: no usable token",
-			"customer_id", req.Customer.ID,
-			"invoice_id", req.InvoiceID,
-			"amount", req.Amount.String(),
-			"preferred_method", req.PreferredMethod,
-			"tokens_inspected", len(tokens))
 		return nil, false, nil
 	}
 
