@@ -1864,6 +1864,86 @@ func (s *BillingServiceSuite) TestCommitmentWiring_PrefersNewCommitmentOverLegac
 	s.True(total.Equal(dec("100")), "total %s", total)
 }
 
+// A legacy line-item commitment on one line and a new commitment on another bill side by side: the legacy line bills as
+// it does with the setting off, and the new commitment bills only its own line.
+func (s *BillingServiceSuite) TestCommitmentWiring_LegacyAndNewCommitmentsOnDifferentLines() {
+	s.setupTestData()
+	legacyPrice := s.usagePriceFor("price_side_legacy", s.testData.meters.apiCalls, "1")
+	coveredPrice := s.usagePriceFor("price_side_covered", s.testData.meters.apiCalls, "1")
+	legacy := &subscription.SubscriptionLineItem{
+		ID:                      "subs_line_side_legacy",
+		PriceID:                 legacyPrice.ID,
+		MeterID:                 s.testData.meters.apiCalls.ID,
+		DisplayName:             "Legacy",
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentAmount:        lo.ToPtr(dec("50")),
+		CommitmentTrueUpEnabled: true,
+	}
+	covered := &subscription.SubscriptionLineItem{
+		ID:          "subs_line_side_covered",
+		PriceID:     coveredPrice.ID,
+		MeterID:     s.testData.meters.apiCalls.ID,
+		DisplayName: "Covered",
+	}
+	sub := s.fixedDateSub("sub_side_by_side", legacy, covered)
+	usage := func() *dto.GetUsageBySubscriptionResponse {
+		return &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{
+			{SubscriptionLineItemID: legacy.ID, Price: legacyPrice, Quantity: 20, Amount: 20},
+			{SubscriptionLineItemID: covered.ID, Price: coveredPrice, Quantity: 30, Amount: 30},
+		}}
+	}
+
+	type charged struct {
+		lines []dto.CreateInvoiceLineItemRequest
+		total decimal.Decimal
+	}
+	charge := func() map[string]charged {
+		raw, err := s.service.CalculateUsageCharges(s.GetContext(), &dto.CalculateUsageChargesParams{
+			Subscription: sub,
+			Usage:        usage(),
+			PeriodStart:  sub.CurrentPeriodStart,
+			PeriodEnd:    sub.CurrentPeriodEnd,
+		})
+		s.Require().NoError(err)
+
+		lines, total, err := s.service.CalculateMeterUsageCharges(
+			s.GetContext(), sub, usage(), sub.CurrentPeriodStart, sub.CurrentPeriodEnd, types.UsageSourceInvoiceCreation, nil,
+		)
+		s.Require().NoError(err)
+		return map[string]charged{"raw usage": {raw.LineItems, raw.TotalAmount}, "meter usage": {lines, total}}
+	}
+	linesOf := func(lines []dto.CreateInvoiceLineItemRequest, lineID string) []dto.CreateInvoiceLineItemRequest {
+		return lo.Filter(lines, func(l dto.CreateInvoiceLineItemRequest, _ int) bool {
+			return lo.FromPtr(l.SubscriptionLineItemID) == lineID
+		})
+	}
+
+	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
+	before := charge()
+
+	s.enableCommitmentsV2()
+	c := s.newTestCommitment(
+		"cmt_side_by_side", sub, types.COMMITMENT_TYPE_AMOUNT, "100", coveredPrice.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd,
+	)
+	s.storeCommitment(c)
+	after := charge()
+
+	for path, got := range after {
+		// The legacy commitment trues the line's 20 up to 50, exactly as without the new commitment.
+		legacyLines := linesOf(got.lines, legacy.ID)
+		s.requireSameBytes(linesOf(before[path].lines, legacy.ID), legacyLines)
+		s.Require().Len(legacyLines, 1, path)
+		s.NotNil(legacyLines[0].CommitmentInfo, path)
+		s.True(legacyLines[0].Amount.Equal(dec("50")), "%s legacy line %s", path, legacyLines[0].Amount)
+
+		// The new commitment bills the covered line's 30 and trues it up to 100.
+		s.True(s.loaderLine(got.lines, types.CommitmentLineUtilized, c.ID).Amount.Equal(dec("30")), path)
+		s.True(s.loaderLine(got.lines, types.CommitmentLineTrueUp, c.ID).Amount.Equal(dec("70")), path)
+		s.Len(got.lines, 3, path)
+		s.True(got.total.Equal(dec("150")), "%s total %s", path, got.total)
+	}
+}
+
 // A commitment whose scoped lines bill on another cadence group contributes nothing to this call.
 func (s *BillingServiceSuite) TestCommitmentWiring_OtherCadenceGroupContributesNothing() {
 	s.setupTestData()
