@@ -66,6 +66,44 @@ In the pilot mode, Zoho invoice lines book to the account mapped to `deferred_re
 
 ## 2. ERP Provider
 
+### Interface
+
+
+| Method                      | Purpose                                                                   |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `ListAccounts`              | The chart of accounts: ERP ID, name, type, status                         |
+| `ListItems`                 | ERP items, used for the Product mapping                                   |
+| `CreateJournal(entry, key)` | Posts one entry. `key` is the Flexprice journal entry ID                  |
+| `GetJournalResult(key)`     | Returns the outcome of an earlier create, after a timeout or an async job |
+| `Capabilities`              | What this provider supports for this ERP (below)                          |
+
+
+Capabilities shape posting, so they are reported rather than assumed. Each value below was tested against a Zoho Books sandbox.
+
+
+| Capability                        | Rutter on Zoho                  | Apideck on Zoho                               |
+| --------------------------------- | ------------------------------- | --------------------------------------------- |
+| Idempotent create                 | Yes, `Idempotency-Key` (async)  | No; Apideck rejects the key for Zoho journals |
+| Customer required on every line   | Yes                             | No                                            |
+| Update or delete a posted journal | No                              | Yes                                           |
+| Account on each invoice line      | Not yet readable (sync pending) | Yes                                           |
+| Read freshness                    | Rutter's synced copy            | Live                                          |
+
+
+
+
+### Rules that follow
+
+- **Posted journals are never edited in the ERP.** A correction is a new reversing entry, matching Flexprice's immutable journal.
+- **Retries never duplicate.** Where the provider takes an idempotency key, the Flexprice entry ID is the key; nothing Flexprice-specific is written into the ERP journal.
+- **An unknown outcome is never retried automatically** where the provider has no idempotency (Apideck on Zoho). The entry waits for review: the reviewer either links the ERP journal it created, or confirms it is absent and Flexprice resends it. Flexprice lists likely matches (same date, amount, accounts, customer) to speed this up, but never decides alone.
+- **Every line carries the customer** when the provider requires it: the Zoho contact of the entry's customer.
+- **Errors fall into three outcomes:**
+  - Rejected (unbalanced, unknown account): blocked until a mapping changes.
+  - Connection needs attention (disconnected, not ready): paused for the whole connection.
+  - Throttled or ERP unavailable: retried later.
+- **Flexprice shows its own journal, invoice entries included.** Each entry shows how it reached the ERP: through the synced invoice or as a posted journal, with the ERP record. The ERP's own invoice postings are not read back as journals; when needed they are checked per invoice from the invoice's line accounts.
+
 
 
 ## 3. Product to ERP mapping
