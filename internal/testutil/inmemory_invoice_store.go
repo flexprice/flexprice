@@ -536,6 +536,10 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		return false
 	}
 
+	if len(f.InvoiceIDs) > 0 && !lo.Contains(f.InvoiceIDs, inv.ID) {
+		return false
+	}
+
 	// Filter by customer ID
 	if f.CustomerID != "" && inv.CustomerID != f.CustomerID {
 		return false

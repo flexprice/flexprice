@@ -213,6 +213,10 @@ func (s *commitmentService) ReplaceBillingTerms(
 			return err
 		}
 
+		if err := NewInvoiceService(s.ServiceParams).(*invoiceService).requireNoDraftPayment(txCtx, c.ID); err != nil {
+			return err
+		}
+
 		// Cancelling first fixes what is invoiced: a finalize cannot claim a cancelled instalment.
 		scheduled := []types.InstalmentStatus{types.InstalmentStatusScheduled}
 		if cancelled, err = s.BillingInstalmentRepo.Cancel(txCtx, types.BillingTermOwnerCommitment, c.ID, scheduled); err != nil {

@@ -229,28 +229,53 @@ func (s *CommitmentE2ESuite) TestFinalize_ManuallyEditedDraftLeavesADueInstalmen
 	s.Equal(types.InstalmentStatusScheduled, milestone.InstalmentStatus)
 }
 
-// A payment created without processing is charged later through ProcessPayment, which refuses a stale draft before
-// the payment leaves pending.
-func (s *CommitmentE2ESuite) TestProcessPayment_RefusesAStaleDraft() {
-	ctx := s.GetContext()
-	params := fullServiceParams(&s.BaseServiceTestSuite)
-	draft, commitmentID := s.januaryDraft(NewInvoiceService(params), "process_stale")
-
-	pending := &payment.Payment{
+// draftPayment stores a payment for the whole draft in the given status.
+func (s *CommitmentE2ESuite) draftPayment(draft *invoice.Invoice, status types.PaymentStatus) *payment.Payment {
+	p := &payment.Payment{
 		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
 		DestinationType:   types.PaymentDestinationTypeInvoice,
 		DestinationID:     draft.ID,
 		PaymentMethodType: types.PaymentMethodTypeOffline,
 		Amount:            draft.AmountDue,
 		Currency:          draft.Currency,
-		PaymentStatus:     types.PaymentStatusPending,
-		BaseModel:         types.GetDefaultBaseModel(ctx),
+		PaymentStatus:     status,
+		BaseModel:         types.GetDefaultBaseModel(s.GetContext()),
 	}
-	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, pending))
+	s.Require().NoError(s.GetStores().PaymentRepo.Create(s.GetContext(), p))
+	return p
+}
+
+// An edit waits while a payment on a draft billing the commitment's instalments is in progress, since that payment
+// would finalize the draft with instalments the edit cancels. Once the payment fails, the edit goes through.
+func (s *CommitmentE2ESuite) TestReplaceBillingTerms_WaitsForADraftPayment() {
+	ctx := s.GetContext()
+	draft, commitmentID := s.januaryDraft(NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite)), "draft_payment")
+	charging := s.draftPayment(draft, types.PaymentStatusProcessing)
+
+	_, err := s.commitments.ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
+	s.Require().Error(err)
+	s.True(ierr.IsInvalidOperation(err), "got %v", err)
+	for _, inst := range s.billedInstalments(draft.ID) {
+		s.Equal(types.InstalmentStatusScheduled, inst.InstalmentStatus, "the refused edit cancels nothing")
+	}
+
+	charging.PaymentStatus = types.PaymentStatusFailed
+	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, charging))
+	_, err = s.commitments.ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
+	s.Require().NoError(err)
+}
+
+// A payment recorded without processing after an edit is charged later through ProcessPayment, which refuses the stale
+// draft before the payment leaves pending.
+func (s *CommitmentE2ESuite) TestProcessPayment_RefusesAStaleDraft() {
+	ctx := s.GetContext()
+	params := fullServiceParams(&s.BaseServiceTestSuite)
+	draft, commitmentID := s.januaryDraft(NewInvoiceService(params), "process_stale")
 
 	_, err := s.commitments.ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
 	s.Require().NoError(err)
 
+	pending := s.draftPayment(draft, types.PaymentStatusPending)
 	_, err = NewPaymentProcessorService(params).ProcessPayment(ctx, pending.ID)
 	s.Require().ErrorIs(err, errStaleDraft)
 
@@ -511,17 +536,7 @@ func (s *CommitmentE2ESuite) TestPaymentFinalize_StaleDraftKeepsPayment() {
 	}), "a payment a gateway already collected is recorded")
 
 	// A payment taken before the edit still lands.
-	paid := &payment.Payment{
-		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
-		DestinationType:   types.PaymentDestinationTypeInvoice,
-		DestinationID:     draft.ID,
-		PaymentMethodType: types.PaymentMethodTypeOffline,
-		Amount:            draft.AmountDue,
-		Currency:          draft.Currency,
-		PaymentStatus:     types.PaymentStatusSucceeded,
-		BaseModel:         types.GetDefaultBaseModel(ctx),
-	}
-	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
+	paid := s.draftPayment(draft, types.PaymentStatusSucceeded)
 
 	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
 	processor := &paymentProcessor{ServiceParams: params}

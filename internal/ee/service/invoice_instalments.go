@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -159,6 +160,58 @@ func (s *invoiceService) requireFreshDraft(ctx context.Context, inv *invoice.Inv
 	}
 
 	return staleDraftError(inv.ID, stale, "Recompute the invoice before paying it")
+}
+
+// requireNoDraftPayment refuses to change a commitment's instalments while a payment is in progress on a draft billing
+// them: the payment would finalize the draft with instalments the change cancels, so they would be billed twice.
+func (s *invoiceService) requireNoDraftPayment(ctx context.Context, commitmentID string) error {
+	lineFilter := types.NewNoLimitInvoiceLineItemFilter()
+	lineFilter.EntityType = lo.ToPtr(string(types.InvoiceLineItemEntityTypeCommitment))
+	lineFilter.EntityIDs = []string{commitmentID}
+	lines, err := s.InvoiceLineItemRepo.List(ctx, lineFilter)
+	if err != nil {
+		return err
+	}
+
+	invoiceIDs := lo.Uniq(lo.FilterMap(lines, func(line *invoice.InvoiceLineItem, _ int) (string, bool) {
+		return line.InvoiceID, line.BillingInstalmentID != nil
+	}))
+	if len(invoiceIDs) == 0 {
+		return nil
+	}
+
+	invoiceFilter := types.NewNoLimitInvoiceFilter()
+	invoiceFilter.InvoiceIDs = invoiceIDs
+	invoiceFilter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+	drafts, err := s.InvoiceRepo.List(ctx, invoiceFilter)
+	if err != nil {
+		return err
+	}
+
+	for _, draft := range drafts {
+		paymentFilter := types.NewNoLimitPaymentFilter()
+		paymentFilter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+		paymentFilter.DestinationID = lo.ToPtr(draft.ID)
+		payments, err := s.PaymentRepo.List(ctx, paymentFilter)
+		if err != nil {
+			return err
+		}
+
+		charging, found := lo.Find(payments, func(p *payment.Payment) bool {
+			return p.PaymentStatus == types.PaymentStatusPending || p.PaymentStatus == types.PaymentStatusProcessing
+		})
+		if found {
+			return ierr.NewErrorf("payment %s on draft invoice %s is in progress", charging.ID, draft.ID).
+				WithHint("Change the billing terms once the payment succeeds or fails").
+				WithReportableDetails(map[string]any{
+					"invoice_id": draft.ID,
+					"payment_id": charging.ID,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+	}
+
+	return nil
 }
 
 // staleDraftError refuses a draft that bills the given instalments, which are no longer scheduled.
