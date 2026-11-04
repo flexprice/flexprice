@@ -113,29 +113,32 @@ func (s *commitmentService) Create(
 	ctx context.Context,
 	req dto.CreateCommitmentRequest,
 ) (*dto.CommitmentResponse, error) {
-	resp, err := s.create(ctx, req, commitmentCreateOptions{})
+	resp, inserted, err := s.create(ctx, req, commitmentCreateOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	s.recomputeDrafts(ctx, resp.SubscriptionID, resp.StartDate)
+	if inserted {
+		s.recomputeDrafts(ctx, resp.SubscriptionID, resp.StartDate)
+	}
 	return resp, nil
 }
 
 // create runs under the subscription's commitments lock so the overlap checks see committed rows; a key replayed
-// while waiting for the lock returns the original commitment (first write wins).
+// while waiting for the lock returns the original commitment (first write wins). It reports whether it inserted one.
 func (s *commitmentService) create(
 	ctx context.Context,
 	req dto.CreateCommitmentRequest,
 	opts commitmentCreateOptions,
-) (*dto.CommitmentResponse, error) {
+) (*dto.CommitmentResponse, bool, error) {
 	replayed, err := s.findReplay(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if replayed != nil {
-		return s.replayResponse(ctx, replayed)
+		resp, err := s.replayResponse(ctx, replayed)
+		return resp, false, err
 	}
 
 	var created *dto.CommitmentResponse
@@ -158,16 +161,17 @@ func (s *commitmentService) create(
 		// transaction the failed insert has already aborted that transaction.
 		var replayErr error
 		if replayed, replayErr = s.findReplay(ctx, req); replayErr != nil {
-			return nil, replayErr
+			return nil, false, replayErr
 		}
 	}
 
 	if replayed != nil {
-		return s.replayResponse(ctx, replayed)
+		resp, err := s.replayResponse(ctx, replayed)
+		return resp, false, err
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	c := created.Commitment
@@ -184,11 +188,11 @@ func (s *commitmentService) create(
 
 	resp, err := s.valuedResponse(ctx, c, cc.Sub, bucketFor(c, cc))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	resp.BillingTerms, resp.Instalments = created.BillingTerms, created.Instalments
-	return resp, nil
+	return resp, true, nil
 }
 
 // insert validates req and writes the commitment with its rate prices, billing terms and instalments. It must run
@@ -656,40 +660,59 @@ func (s *commitmentService) publishSystemEvent(ctx context.Context, eventName ty
 	publishAfterCommit(ctx, s.ServiceParams, event)
 }
 
-// recomputeDrafts recomputes the subscription's drafts and skipped period invoices for periods ending after from, which
-// a backdated commitment change leaves stale. It runs after commit and only logs a failure; finalizing recomputes a
-// draft that still predates the change.
+// recomputeDrafts recomputes the drafts and skipped period invoices billing the subscription's periods that end after
+// from, which a backdated commitment change leaves stale. It runs after commit and only logs a failure; finalizing
+// recomputes a draft that still predates the change.
 func (s *commitmentService) recomputeDrafts(ctx context.Context, subscriptionID string, from time.Time) {
+	// A client gone mid-request must not stop the recompute halfway.
+	ctx = context.WithoutCancel(ctx)
+	if err := s.recomputePeriodInvoices(ctx, subscriptionID, from); err != nil {
+		s.Logger.Error(ctx, "failed to recompute the invoices a commitment change left stale",
+			"error", err,
+			"subscription_id", subscriptionID)
+	}
+}
+
+// recomputePeriodInvoices recomputes the period invoices that carry the subscription's charges, its parent's for a
+// grouped child, for periods ending after from; manually edited ones are left alone.
+func (s *commitmentService) recomputePeriodInvoices(ctx context.Context, subscriptionID string, from time.Time) error {
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	invoiced, err := invoicingSubscription(ctx, s.ServiceParams, sub)
+	if err != nil {
+		return err
+	}
+
 	filter := types.NewNoLimitInvoiceFilter()
-	filter.SubscriptionID = subscriptionID
+	filter.SubscriptionID = invoiced.ID
 	filter.InvoiceType = types.InvoiceTypeSubscription
+	filter.BillingReason = types.InvoiceBillingReasonSubscriptionCycle
 	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft, types.InvoiceStatusSkipped}
 	filter.PeriodEndGT = lo.ToPtr(from)
 	filter.SkipLineItems = true
-	drafts, err := s.InvoiceRepo.List(ctx, filter)
+	stale, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
-		s.Logger.Error(ctx, "failed to list the drafts a commitment change left stale",
-			"error", err,
-			"subscription_id", subscriptionID)
-		return
+		return err
 	}
 
-	invoices := NewInvoiceService(s.ServiceParams)
-	for _, draft := range drafts {
-		// A skipped opening or proration invoice stays skipped; what it would now bill goes on the next invoice.
-		skippedOneOff := draft.InvoiceStatus == types.InvoiceStatusSkipped &&
-			draft.BillingReason != string(types.InvoiceBillingReasonSubscriptionCycle)
-		if draft.IsManuallyEdited || skippedOneOff {
+	invoicing := NewInvoiceService(s.ServiceParams)
+	for _, inv := range stale {
+		if inv.IsManuallyEdited {
 			continue
 		}
 
-		if _, _, err := invoices.ComputeInvoice(ctx, draft.ID, nil); err != nil {
-			s.Logger.Error(ctx, "failed to recompute a draft after a commitment change",
+		if _, _, err := invoicing.ComputeInvoice(ctx, inv.ID, nil); err != nil {
+			s.Logger.Error(ctx, "failed to recompute an invoice after a commitment change",
 				"error", err,
 				"subscription_id", subscriptionID,
-				"invoice_id", draft.ID)
+				"invoice_id", inv.ID)
 		}
 	}
+
+	return nil
 }
 
 // lockCommitment serialises writes to one commitment and must run inside a transaction.

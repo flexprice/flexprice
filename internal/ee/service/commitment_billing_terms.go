@@ -35,12 +35,8 @@ func (s *commitmentService) planInstalments(
 		return nil, ierr.Validationf("billing_terms: the commitment is fully invoiced; nothing is left to plan")
 	}
 
-	periods, err := commitmentPeriods(c, cc.Sub, amountOf, bucketFor(c, cc), c.CollectionPeriod())
-	if err != nil {
-		return nil, err
-	}
-
-	anniversary, err := anniversaryPeriods(c, cc.Sub, periods, amountOf, bucketFor(c, cc))
+	bucket := bucketFor(c, cc)
+	periods, err := commitmentPeriods(c, cc.Sub, amountOf, bucket, c.CollectionPeriod())
 	if err != nil {
 		return nil, err
 	}
@@ -52,16 +48,21 @@ func (s *commitmentService) planInstalments(
 				Amount: p.Amount,
 			}
 		}),
-		Anniversary: anniversary,
+	}
+	if stepsOnAnniversaries(c, terms) {
+		if values.Anniversary, err = anniversaryPeriods(c, cc.Sub, periods, amountOf, bucket); err != nil {
+			return nil, err
+		}
 	}
 
+	term := c.CollectionPeriod()
 	owner := plannedOwner{
 		Commitment: c,
 		left:       left,
-		termStart:  c.StartDate,
+		termStart:  term.Start,
 	}
-	if current, ok := lo.Find(periods, func(p commitmentPeriod) bool { return p.End.After(from) }); ok {
-		owner.termStart = current.Start
+	if from.After(term.Start) && from.Before(term.End) {
+		owner.termStart = from
 	}
 
 	instalments, err := billingterm.Expand(ctx, owner, values, terms)
@@ -109,8 +110,6 @@ func (s *commitmentService) countNumbered(ctx context.Context, instalments []*bi
 	}), nil
 }
 
-// plannedOwner is a commitment as a new plan sees it: its instalments collect only what the invoiced ones leave of the
-// total, and its terms start by default at termStart.
 // anniversaryPeriods cuts the commitment's term into billing-period lengths counted from its start, each valued by the
 // parts of the commitment periods it spans.
 func anniversaryPeriods(
@@ -155,6 +154,17 @@ func anniversaryPeriods(
 	return out, nil
 }
 
+// stepsOnAnniversaries reports whether a recurring term among terms is invoiced separately, so steps on anniversary
+// periods.
+func stepsOnAnniversaries(c *commitment.Commitment, terms []*billingterm.Term) bool {
+	return lo.SomeBy(terms, func(t *billingterm.Term) bool {
+		return t.Kind == types.BillingTermKindRecurring &&
+			lo.FromPtrOr(t.InstalmentInvoicing, c.InstalmentDelivery()) == types.InstalmentDeliverySeparateInvoice
+	})
+}
+
+// plannedOwner is a commitment as a new plan sees it: its instalments collect only what the invoiced ones leave of the
+// total, and its undated terms start at the period holding termStart.
 type plannedOwner struct {
 	*commitment.Commitment
 	left      decimal.Decimal

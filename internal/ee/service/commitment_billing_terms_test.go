@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -20,6 +21,7 @@ import (
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 )
 
 // upfrontPlusRemainder is the A3 shape: 300 on the start date, the rest in arrear instalments.
@@ -1712,27 +1714,123 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_SettlesTheOpenDra
 	s.True(finalized.AmountDue.Equal(dec("50")), "only the overage past the $100 floor, got %s", finalized.AmountDue)
 }
 
-// On a subscription billed from the 1st, a separately invoiced monthly term from 15 Jan bills on the 15th, each
-// instalment valued by the parts of the two billing periods it spans.
+// On a subscription billed from the 1st, a monthly term from 15 Jan invoiced separately, by the commitment or by the
+// term itself, bills on the 15th, each instalment valued by the parts of the two billing periods it spans.
 func (s *CommitmentE2ESuite) TestBillingTerms_SeparateRecurringTermBillsOnTheAnniversary() {
 	start := s.jan.AddDate(0, 0, 14)
-	tokens := s.planWith("anniversary", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	separate := lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
+	tests := []struct {
+		name           string
+		commitmentWide *types.InstalmentDelivery
+		termOnly       *types.InstalmentDelivery
+	}{
+		{name: "the commitment invoices separately", commitmentWide: separate},
+		{name: "only the term invoices separately", termOnly: separate},
+	}
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			tokens := s.planWith(fmt.Sprintf("anniversary_%d", i), types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+			sub := s.subscribe(tokens, s.jan)
+			req := termsRequest("Platform", tokens.ID, "100", start, start.AddDate(1, 0, 0), dto.BillingTermInput{
+				Kind:                types.BillingTermKindRecurring,
+				ValueType:           types.BillingTermValueRemainder,
+				InvoiceCadence:      lo.ToPtr(types.InvoiceCadenceAdvance),
+				Split:               lo.ToPtr(types.BillingTermSplitProportional),
+				InstalmentInvoicing: tt.termOnly,
+			})
+			req.InstalmentInvoicing = tt.commitmentWide
+			committed := s.commit(sub.ID, req)
+
+			s.Require().Len(committed.Instalments, 12)
+			for n, inst := range committed.Instalments {
+				s.True(inst.BillOn.Equal(start.AddDate(0, n, 0)), "instalment %d bills on %s", n, inst.BillOn)
+				s.Equal(types.InstalmentDeliverySeparateInvoice, inst.Delivery)
+			}
+
+			// 15 Jan to 15 Feb: 17 of January's 31 days and 14 of February's 28.
+			s.True(committed.Instalments[0].Amount.Equal(dec("104.84")), "first %s", committed.Instalments[0].Amount)
+			s.True(sumInstalments(committed.Instalments).Equal(dec("1200")), "total %s", sumInstalments(committed.Instalments))
+		})
+	}
+}
+
+// An edit on 5 Mar, after the 3 Mar anniversary but in the billing period from 1 Mar, starts a separately invoiced
+// monthly term at 3 Mar, not at the anniversary period holding 1 Mar, which has passed.
+func (s *CommitmentE2ESuite) TestPlanInstalments_AnEditStartsAtTheAnniversaryPeriodHoldingIt() {
+	ctx := s.GetContext()
+	start := s.jan.AddDate(0, 0, 2)
+	tokens := s.planWith("edit_anniversary", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	sub := s.subscribe(tokens, s.jan)
-	req := termsRequest("Platform", tokens.ID, "100", start, start.AddDate(1, 0, 0), dto.BillingTermInput{
+	monthlyAdvance := dto.BillingTermInput{
 		Kind:           types.BillingTermKindRecurring,
 		ValueType:      types.BillingTermValueRemainder,
 		InvoiceCadence: lo.ToPtr(types.InvoiceCadenceAdvance),
-		Split:          lo.ToPtr(types.BillingTermSplitProportional),
-	})
+	}
+	req := termsRequest("Platform", tokens.ID, "100", start, start.AddDate(1, 0, 0), monthlyAdvance)
 	req.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
 	committed := s.commit(sub.ID, req)
 
-	s.Require().Len(committed.Instalments, 12)
-	for i, inst := range committed.Instalments {
-		s.True(inst.BillOn.Equal(start.AddDate(0, i, 0)), "instalment %d bills on %s", i, inst.BillOn)
-	}
+	commitments := s.commitments.(*commitmentService)
+	c, err := s.GetStores().CommitmentRepo.Get(ctx, committed.ID)
+	s.Require().NoError(err)
+	cc, err := commitments.loadCommitmentContext(ctx, sub.ID)
+	s.Require().NoError(err)
+	amountOf, err := commitments.committedAmountFn(ctx, c)
+	s.Require().NoError(err)
 
-	// 15 Jan to 15 Feb: 17 of January's 31 days and 14 of February's 28.
-	s.True(committed.Instalments[0].Amount.Equal(dec("104.84")), "first %s", committed.Instalments[0].Amount)
-	s.True(sumInstalments(committed.Instalments).Equal(dec("1200")), "total %s", sumInstalments(committed.Instalments))
+	edit := time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)
+	planned, err := commitments.planInstalments(ctx, c, cc, amountOf,
+		[]*billingterm.Term{monthlyAdvance.ToTerm(ctx, c.ID)}, nil, edit)
+	s.Require().NoError(err)
+	s.Require().Len(planned, 10)
+	s.True(planned[0].BillOn.Equal(time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)), "starts on %s", planned[0].BillOn)
+}
+
+// Anniversary periods count from the commitment start in billing-period lengths and add up to its value: a month-end
+// start clamps to shorter months, and a start in another timezone keeps its local day.
+func TestAnniversaryPeriods(t *testing.T) {
+	kolkata, err := time.LoadLocation("Asia/Kolkata")
+	require.NoError(t, err)
+	utc := func(month time.Month, day int) time.Time { return time.Date(2027, month, day, 0, 0, 0, 0, time.UTC) }
+	ist := func(month time.Month, day int) time.Time { return time.Date(2027, month, day, 0, 0, 0, 0, kolkata) }
+
+	tests := []struct {
+		name      string
+		timezone  string
+		start     time.Time
+		wantEdges []time.Time // the first periods' starts
+	}{
+		{name: "31 Jan clamps to 28 Feb", timezone: "UTC", start: utc(time.January, 31),
+			wantEdges: []time.Time{utc(time.January, 31), utc(time.February, 28), utc(time.March, 31)}},
+		{name: "15 Jan in Kolkata", timezone: "Asia/Kolkata", start: ist(time.January, 15),
+			wantEdges: []time.Time{ist(time.January, 15), ist(time.February, 15), ist(time.March, 15)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sub := monthlySub(utc(time.January, 1))
+			sub.Timezone = tt.timezone
+			c := &commitment.Commitment{
+				Type:        types.COMMITMENT_TYPE_AMOUNT,
+				Value:       decimal.NewFromInt(100),
+				Currency:    "usd",
+				Measurement: types.CommitmentMeasurementBillingPeriod,
+				Timezone:    types.DefaultTimezone,
+				StartDate:   tt.start,
+				EndDate:     lo.ToPtr(tt.start.AddDate(1, 0, 0)),
+			}
+			periods, err := commitmentPeriods(c, sub, identityAmount, "", c.CollectionPeriod())
+			require.NoError(t, err)
+
+			got, err := anniversaryPeriods(c, sub, periods, identityAmount, "")
+			require.NoError(t, err)
+			require.Len(t, got, 12)
+			for i, want := range tt.wantEdges {
+				require.True(t, got[i].Start.Equal(want), "period %d starts %s, want %s", i, got[i].Start, want)
+			}
+			require.True(t, got[11].End.Equal(*c.EndDate))
+
+			sum := decimal.Sum(decimal.Zero, lo.Map(got, func(p billingterm.PeriodValue, _ int) decimal.Decimal { return p.Amount })...)
+			require.True(t, sum.Equal(commitmentValue(periods)), "anniversary periods add up to %s, want %s", sum, commitmentValue(periods))
+		})
+	}
 }

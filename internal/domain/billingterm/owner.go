@@ -29,8 +29,8 @@ type Owner interface {
 	// CollectionTotal is the value the instalments add up to, rounded to the currency.
 	CollectionTotal() decimal.Decimal
 
-	// TermStart is where a term without a start_date or bill_on starts: a billing period start in the collection
-	// period.
+	// TermStart is the instant a term without a start_date or bill_on starts from, in the collection period; the term
+	// starts at the period holding it.
 	TermStart() time.Time
 }
 
@@ -52,7 +52,7 @@ type Periods struct {
 // invoiced separately, billing ones when they go on the subscription invoice.
 func (p Periods) stepsFor(delivery types.InstalmentDelivery) ([]PeriodValue, string) {
 	if delivery == types.InstalmentDeliverySeparateInvoice {
-		return p.Anniversary, "a period counted from the term start"
+		return p.Anniversary, "an anniversary period"
 	}
 
 	return p.Billing, "a billing period"

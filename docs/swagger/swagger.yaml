@@ -1505,8 +1505,9 @@ definitions:
       split:
         $ref: '#/definitions/types.BillingTermSplit'
       start_date:
-        description: StartDate defaults like BillOn; EndDate defaults to the commitment
-          end.
+        description: |-
+          StartDate defaults like BillOn, or to the anniversary period holding it when the term is invoiced separately,
+          whose edges it must then hit exactly; EndDate defaults to the commitment end.
         type: string
       value:
         type: string

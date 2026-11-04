@@ -26,7 +26,8 @@ type BillingTermInput struct {
 	// commitment start once its term has ended). A date under a second past a period edge means the edge.
 	BillOn *time.Time `json:"bill_on,omitempty"`
 
-	// StartDate defaults like BillOn; EndDate defaults to the commitment end.
+	// StartDate defaults like BillOn, or to the anniversary period holding it when the term is invoiced separately,
+	// whose edges it must then hit exactly; EndDate defaults to the commitment end.
 	StartDate      *time.Time              `json:"start_date,omitempty"`
 	EndDate        *time.Time              `json:"end_date,omitempty"`
 	PeriodCount    *int                    `json:"period_count,omitempty"`

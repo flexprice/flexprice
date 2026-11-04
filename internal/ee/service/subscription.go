@@ -565,7 +565,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			}
 		}
 
-		created, err := commitmentSvc.create(ctx, commitmentReq, commitmentCreateOptions{allowPendingSubscription: true})
+		created, _, err := commitmentSvc.create(ctx, commitmentReq, commitmentCreateOptions{allowPendingSubscription: true})
 		if err != nil {
 			return nil, err
 		}

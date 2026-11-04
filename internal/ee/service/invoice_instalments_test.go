@@ -504,7 +504,7 @@ func (s *CommitmentE2ESuite) TestFinalize_RecomputesADraftOlderThanACommitment()
 	// create, unlike Create, does not recompute the drafts, as when that recompute fails.
 	req := floorRequest("Floor", tokens.ID, "100", s.jan, s.jan.AddDate(1, 0, 0))
 	req.SubscriptionID = sub.ID
-	_, err := s.commitments.(*commitmentService).create(ctx, req, commitmentCreateOptions{})
+	_, _, err := s.commitments.(*commitmentService).create(ctx, req, commitmentCreateOptions{})
 	s.Require().NoError(err)
 
 	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))

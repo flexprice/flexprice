@@ -652,6 +652,25 @@ func (s *CommitmentE2ESuite) TestCreate_RecomputesLaterDrafts() {
 	}
 }
 
+// A grouped child's charges go on its parent's invoices, so a backdated commitment on the child recomputes those.
+func (s *CommitmentE2ESuite) TestCreate_RecomputesTheParentsInvoicesForAGroupedChild() {
+	ctx := s.GetContext()
+	feb, mar := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0)
+	tokens := s.planWith("grouped_recompute", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	parent := s.groupSubscription(s.subscribe(tokens, s.jan).ID, types.SubscriptionTypeParent, nil)
+	child := s.groupSubscription(s.subscribe(tokens, s.jan).ID, types.SubscriptionTypeGroupedInvoicing, lo.ToPtr(parent.ID))
+
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	february := s.computedDraft(invoices, parent.ID, types.Period{Start: feb, End: mar})
+	s.Require().True(february.AmountDue.IsZero(), "nothing billed yet, got %s", february.AmountDue)
+
+	s.commit(child.ID, floorRequest("Floor", tokens.ID, "100", s.jan, s.jan.AddDate(1, 0, 0)))
+
+	stored, err := s.GetStores().InvoiceRepo.Get(ctx, february.ID)
+	s.Require().NoError(err)
+	s.True(stored.AmountDue.Equal(dec("100")), "the parent's February invoice bills the child's floor, got %s", stored.AmountDue)
+}
+
 // computedDraft creates the subscription's invoice for period and computes it.
 func (s *CommitmentE2ESuite) computedDraft(invoices InvoiceService, subscriptionID string, period types.Period) *invoice.Invoice {
 	draft, err := invoices.CreateDraftInvoiceForSubscription(s.GetContext(), dto.CreateSubscriptionDraftInvoiceRequest{

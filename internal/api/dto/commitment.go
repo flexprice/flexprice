@@ -117,7 +117,7 @@ func (r *CreateCommitmentRequest) ApplyDefaults() {
 	}
 
 	if r.Timezone == "" {
-		r.Timezone = "UTC"
+		r.Timezone = types.DefaultTimezone
 	}
 
 	if r.Binding == nil {

@@ -46,14 +46,28 @@ func (s *invoiceService) refreshStaleDraft(
 		return err
 	}
 
-	missing, err := s.missingInstalments(ctx, inv, billed)
+	enabled, err := newCommitmentService(s.ServiceParams).IsEnabled(ctx)
 	if err != nil {
 		return err
 	}
 
-	changed, err := s.commitmentChangedSince(ctx, *inv.SubscriptionID, inv.LastComputedAt)
-	if err != nil {
-		return err
+	var missing []string
+	var changed bool
+	if enabled {
+		subscriptionIDs, err := s.invoicedSubscriptionIDs(ctx, *inv.SubscriptionID)
+		if err != nil {
+			return err
+		}
+
+		if missing, err = s.missingInstalments(ctx, subscriptionIDs, inv, billed); err != nil {
+			return err
+		}
+
+		if inv.LastComputedAt != nil {
+			if changed, err = s.commitmentChangedSince(ctx, subscriptionIDs, *inv.LastComputedAt); err != nil {
+				return err
+			}
+		}
 	}
 
 	if len(stale) == 0 && len(missing) == 0 && !changed {
@@ -77,24 +91,36 @@ func (s *invoiceService) refreshStaleDraft(
 	return nil
 }
 
-// commitmentChangedSince reports whether a commitment of the subscription was written after computedAt, which a draft
-// computed then does not reflect. A draft never computed has nothing to compare.
-func (s *invoiceService) commitmentChangedSince(ctx context.Context, subscriptionID string, computedAt *time.Time) (bool, error) {
-	if computedAt == nil {
-		return false, nil
+// invoicedSubscriptionIDs returns the subscriptions whose charges the subscription's invoices carry: itself and, for a
+// parent, its grouped children.
+func (s *invoiceService) invoicedSubscriptionIDs(ctx context.Context, subscriptionID string) ([]string, error) {
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
 	}
 
-	enabled, err := newCommitmentService(s.ServiceParams).IsEnabled(ctx)
-	if err != nil || !enabled {
-		return false, err
+	children, err := getGroupedInvoicingChildren(ctx, s.ServiceParams, sub, false)
+	if err != nil {
+		return nil, err
 	}
 
-	listed, err := s.CommitmentRepo.List(ctx, commitment.NewSubscriptionFilter(subscriptionID))
+	return append([]string{sub.ID}, lo.Map(children, func(child *subscription.Subscription, _ int) string {
+		return child.ID
+	})...), nil
+}
+
+// commitmentChangedSince reports whether a commitment of the subscriptions was written after computedAt, which a draft
+// computed then does not reflect. A compute overlapping the write can still stamp a later time; the post-commit
+// recompute covers that.
+func (s *invoiceService) commitmentChangedSince(ctx context.Context, subscriptionIDs []string, computedAt time.Time) (bool, error) {
+	filter := commitment.NewNoLimitFilter()
+	filter.SubscriptionIDs = subscriptionIDs
+	listed, err := s.CommitmentRepo.List(ctx, filter)
 	if err != nil {
 		return false, err
 	}
 
-	return lo.SomeBy(listed, func(c *commitment.Commitment) bool { return c.UpdatedAt.After(*computedAt) }), nil
+	return lo.SomeBy(listed, func(c *commitment.Commitment) bool { return c.UpdatedAt.After(computedAt) }), nil
 }
 
 // staleInstalments returns those of the billed instalments that are no longer scheduled.
@@ -114,9 +140,14 @@ func (s *invoiceService) staleInstalments(ctx context.Context, billed []string) 
 	return lo.Without(billed, lo.Map(scheduled, func(inst *billingterm.Instalment, _ int) string { return inst.ID })...), nil
 }
 
-// missingInstalments returns the scheduled instalments due within a subscription draft that it does not bill; a
-// parent's draft also bills its grouped children's.
-func (s *invoiceService) missingInstalments(ctx context.Context, inv *invoice.Invoice, billed []string) ([]string, error) {
+// missingInstalments returns the scheduled instalments of the subscriptions due within a subscription draft that it
+// does not bill.
+func (s *invoiceService) missingInstalments(
+	ctx context.Context,
+	subscriptionIDs []string,
+	inv *invoice.Invoice,
+	billed []string,
+) ([]string, error) {
 	// A trial-start invoice drops its instalments and a paused period's invoice is never computed.
 	reason := types.InvoiceBillingReason(inv.BillingReason)
 	if reason == types.InvoiceBillingReasonSubscriptionTrialStart || reason == types.InvoiceBillingReasonSubscriptionPaused ||
@@ -129,24 +160,6 @@ func (s *invoiceService) missingInstalments(ctx context.Context, inv *invoice.In
 		return nil, nil
 	}
 
-	enabled, err := newCommitmentService(s.ServiceParams).IsEnabled(ctx)
-	if err != nil || !enabled {
-		return nil, err
-	}
-
-	sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	children, err := getGroupedInvoicingChildren(ctx, s.ServiceParams, sub, false)
-	if err != nil {
-		return nil, err
-	}
-
-	subscriptionIDs := append([]string{sub.ID}, lo.Map(children, func(child *subscription.Subscription, _ int) string {
-		return child.ID
-	})...)
 	due, err := dueInstalments(ctx, s.ServiceParams, subscriptionIDs, billAt)
 	if err != nil {
 		return nil, err

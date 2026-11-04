@@ -212,8 +212,8 @@ func (p *Price) CopyWith(ctx context.Context, overrides *PriceCloneOverrides) *P
 	return lo.ToPtr(out)
 }
 
-// LineItemStart returns when a line item of this price starting at the period edge from begins: the price's start if
-// it falls in a later second than from, else from.
+// LineItemStart returns the start of a line item of this price opening at the period edge from: the price's start when
+// it falls in a later second, else from.
 func (p *Price) LineItemStart(from time.Time) time.Time {
 	if p == nil || p.StartDate == nil || !p.StartDate.Truncate(time.Second).After(from) {
 		return from
