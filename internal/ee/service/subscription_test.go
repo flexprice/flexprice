@@ -11475,3 +11475,32 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_NoneAddonDatedMidPerio
 	s.True(addonCharge(time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC), time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)).Equal(decimal.NewFromInt(31)),
 		"addon is billed in full from Feb 1")
 }
+
+// A subscription starts on a whole second, like every later billing period edge, so dates derived from its start land
+// on its edges; its line items start with it.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_StartsOnAWholeSecond() {
+	ctx := s.GetContext()
+	start := s.testData.now.Truncate(time.Second).Add(750 * time.Millisecond)
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(start),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+	})
+	s.Require().NoError(err)
+
+	whole := start.Truncate(time.Second)
+	s.True(resp.StartDate.Equal(whole), "start %s", resp.StartDate)
+	s.True(resp.BillingAnchor.Equal(whole), "anchor %s", resp.BillingAnchor)
+	s.True(resp.CurrentPeriodEnd.Equal(whole.AddDate(0, 1, 0)), "first period end %s", resp.CurrentPeriodEnd)
+
+	_, items, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, resp.ID)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(items)
+	for _, item := range items {
+		s.False(item.StartDate.After(whole), "line item %s starts %s", item.ID, item.StartDate)
+	}
+}

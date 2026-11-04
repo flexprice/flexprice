@@ -215,18 +215,19 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
-	// Setup subscription dates
+	// Billing period edges are whole seconds: every edge after the first drops the fraction (NextBillingDate), so the
+	// start and anchor drop it too, and dates derived from them land on the edges.
 	if sub.StartDate.IsZero() {
-		sub.StartDate = clock.Now().Truncate(time.Millisecond)
+		sub.StartDate = clock.Now().Truncate(time.Second)
 	} else {
-		sub.StartDate = sub.StartDate.UTC().Truncate(time.Millisecond)
+		sub.StartDate = sub.StartDate.UTC().Truncate(time.Second)
 	}
 	if sub.BillingPeriodCount == 0 {
 		sub.BillingPeriodCount = 1
 	}
 
 	if req.BillingAnchor != nil {
-		sub.BillingAnchor = lo.FromPtr(req.BillingAnchor).UTC().Truncate(time.Millisecond)
+		sub.BillingAnchor = lo.FromPtr(req.BillingAnchor).UTC().Truncate(time.Second)
 		// Stripe imports keep Stripe's anchor so the schedule matches Stripe's; an anchor before the start
 		// only sets the schedule (start Nov 16, anchor Nov 1 → first bill Dec 1).
 		if lo.FromPtr(req.Workflow) != types.TemporalStripeIntegrationWorkflow && sub.BillingAnchor.After(sub.StartDate) {
@@ -319,10 +320,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			lineItemBucketCfgs[item.ID] = cfg
 		}
 
-		if priceResponse.Price.StartDate != nil && priceResponse.Price.StartDate.After(startDate) {
-			startDate = lo.FromPtr(priceResponse.Price.StartDate)
-		}
-		item.StartDate = startDate
+		item.StartDate = priceResponse.Price.LineItemStart(startDate)
 
 		// A price that has ended by the time the line item starts gets no line item. A price
 		// ending later ends the line item at the earlier of its own end and the line item's end.
@@ -796,8 +794,8 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 			Mark(ierr.ErrValidation)
 	}
 
-	// Recalculate all dates with new start date
-	newStartDate := req.StartDate.UTC()
+	// Recalculate all dates with new start date, on a whole second like every billing period edge
+	newStartDate := req.StartDate.UTC().Truncate(time.Second)
 	hasCustomAnchor := sub.BillingCycle == types.BillingCycleAnniversary && !sub.BillingAnchor.Equal(sub.StartDate)
 	startShift := newStartDate.Sub(sub.StartDate)
 	sub.StartDate = newStartDate
@@ -851,12 +849,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 		if err != nil {
 			return nil, err
 		}
-		// Set start date to the price start date if it is after the subscription start date
-		if price.StartDate != nil && price.StartDate.After(sub.StartDate) {
-			item.StartDate = lo.FromPtr(price.StartDate)
-		} else {
-			item.StartDate = sub.StartDate
-		}
+		item.StartDate = price.LineItemStart(sub.StartDate)
 	}
 
 	invoiceService := NewInvoiceService(s.ServiceParams)
@@ -1248,10 +1241,7 @@ func (s *subscriptionService) handleSubscriptionPhases(
 
 		// Validate all line item requests before creating them
 		for _, priceResp := range validPrices {
-			startDate := phaseReq.StartDate
-			if priceResp.Price.StartDate != nil && priceResp.Price.StartDate.After(phaseReq.StartDate) {
-				startDate = lo.FromPtr(priceResp.Price.StartDate)
-			}
+			startDate := priceResp.Price.LineItemStart(phaseReq.StartDate)
 			req := dto.CreateSubscriptionLineItemRequest{
 				PriceID:             priceResp.Price.ID,
 				SubscriptionPhaseID: lo.ToPtr(phase.ID),
@@ -1274,10 +1264,7 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			}
 
 			// Create request with phase dates
-			startDate := phaseReq.StartDate
-			if priceResp.Price.StartDate != nil && priceResp.Price.StartDate.After(phaseReq.StartDate) {
-				startDate = lo.FromPtr(priceResp.Price.StartDate)
-			}
+			startDate := priceResp.Price.LineItemStart(phaseReq.StartDate)
 
 			req := dto.CreateSubscriptionLineItemRequest{
 				PriceID:             priceResp.Price.ID,
@@ -5467,10 +5454,7 @@ func (s *subscriptionService) buildAddonLineItems(
 func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, priceResponse *dto.PriceResponse, sub *subscription.Subscription, addonID, addonAssociationID string, addonRequestedStart time.Time) *subscription.SubscriptionLineItem {
 	price := priceResponse.Price
 
-	lineItemStart := addonRequestedStart
-	if price.StartDate != nil && price.StartDate.After(lineItemStart) {
-		lineItemStart = *price.StartDate
-	}
+	lineItemStart := price.LineItemStart(addonRequestedStart)
 
 	lineItem := &subscription.SubscriptionLineItem{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),

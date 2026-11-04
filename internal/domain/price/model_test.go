@@ -2,8 +2,10 @@ package price
 
 import (
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 )
@@ -58,4 +60,25 @@ func TestBillsIdenticallyTo_SeparatesPricesThatOnlyLookAlike(t *testing.T) {
 
 	assert.False(t, (*Price)(nil).BillsIdenticallyTo(base()))
 	assert.False(t, base().BillsIdenticallyTo(nil))
+}
+
+func TestLineItemStart(t *testing.T) {
+	start := time.Date(2026, 11, 4, 11, 31, 0, 0, time.UTC)
+	tests := []struct {
+		name       string
+		priceStart *time.Time
+		want       time.Time
+	}{
+		{"a price without a start starts with the line item", nil, start},
+		{"a price that started earlier starts with the line item", lo.ToPtr(start.Add(-time.Hour)), start},
+		{"a price created within the same second counts as started", lo.ToPtr(start.Add(600 * time.Millisecond)), start},
+		{"a price starting a second later starts the line item", lo.ToPtr(start.Add(1200 * time.Millisecond)), start.Add(1200 * time.Millisecond)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Price{StartDate: tt.priceStart}
+			assert.True(t, p.LineItemStart(start).Equal(tt.want), "got %s", p.LineItemStart(start))
+		})
+	}
 }
