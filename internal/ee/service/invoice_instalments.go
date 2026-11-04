@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
@@ -11,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -162,8 +164,9 @@ func (s *invoiceService) requireFreshDraft(ctx context.Context, inv *invoice.Inv
 	return staleDraftError(inv.ID, stale, "Recompute the invoice before paying it")
 }
 
-// requireNoDraftPayment refuses to change a commitment's instalments while a payment is in progress on a draft billing
-// them: the payment would finalize the draft with instalments the change cancels, so they would be billed twice.
+// requireNoDraftPayment refuses to change a commitment's instalments while a draft billing them is being paid: the
+// payment would finalize the draft with instalments the change cancels, so they would be billed twice. It locks each
+// draft, as a charge does before it starts, for the rest of the caller's transaction.
 func (s *invoiceService) requireNoDraftPayment(ctx context.Context, commitmentID string) error {
 	lineFilter := types.NewNoLimitInvoiceLineItemFilter()
 	lineFilter.EntityType = lo.ToPtr(string(types.InvoiceLineItemEntityTypeCommitment))
@@ -188,7 +191,12 @@ func (s *invoiceService) requireNoDraftPayment(ctx context.Context, commitmentID
 		return err
 	}
 
+	slices.SortFunc(drafts, func(a, b *invoice.Invoice) int { return strings.Compare(a.ID, b.ID) })
 	for _, draft := range drafts {
+		if err := s.lockInvoice(ctx, draft.ID); err != nil {
+			return err
+		}
+
 		paymentFilter := types.NewNoLimitPaymentFilter()
 		paymentFilter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
 		paymentFilter.DestinationID = lo.ToPtr(draft.ID)
@@ -197,18 +205,35 @@ func (s *invoiceService) requireNoDraftPayment(ctx context.Context, commitmentID
 			return err
 		}
 
+		// A succeeded payment counts until the draft is finalized: it is about to finalize it, or paid part of it.
 		charging, found := lo.Find(payments, func(p *payment.Payment) bool {
-			return p.PaymentStatus == types.PaymentStatusPending || p.PaymentStatus == types.PaymentStatusProcessing
+			return lo.Contains([]types.PaymentStatus{
+				types.PaymentStatusPending,
+				types.PaymentStatusProcessing,
+				types.PaymentStatusSucceeded,
+			}, p.PaymentStatus)
 		})
 		if found {
-			return ierr.NewErrorf("payment %s on draft invoice %s is in progress", charging.ID, draft.ID).
-				WithHint("Change the billing terms once the payment succeeds or fails").
+			return ierr.NewErrorf("draft invoice %s is being paid by payment %s", draft.ID, charging.ID).
+				WithHint("Change the billing terms once the invoice is finalized or the payment fails").
 				WithReportableDetails(map[string]any{
 					"invoice_id": draft.ID,
 					"payment_id": charging.ID,
 				}).
 				Mark(ierr.ErrInvalidOperation)
 		}
+	}
+
+	return nil
+}
+
+// lockInvoice serialises starting a charge on an invoice with changes to what it bills. It must run inside a
+// transaction.
+func (s *invoiceService) lockInvoice(ctx context.Context, id string) error {
+	if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "invoice:" + id}); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to lock invoice").
+			Mark(ierr.ErrInternal)
 	}
 
 	return nil

@@ -15260,7 +15260,7 @@ const docTemplate = `{
         },
         "/webhook-events/billing_instalment.updated": {
             "post": {
-                "description": "Fired when a billing instalment's date or amount changes, or a voided invoice reschedules it. Doc-only for parsing.",
+                "description": "Fired when a billing instalment's bill date moves: a trigger bills it, or a voided invoice reschedules it. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -19120,7 +19120,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.BillingTermSplit"
                 },
                 "start_date": {
-                    "description": "StartDate defaults like BillOn and EndDate to the commitment end; both are whole seconds.",
+                    "description": "StartDate defaults like BillOn; EndDate defaults to the commitment end. Both are whole seconds.",
                     "type": "string"
                 },
                 "value": {

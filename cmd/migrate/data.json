@@ -14,7 +14,7 @@
         },
         {
             "name": "billing_instalment.updated",
-            "description": "Fired when a billing instalment's date or amount changes, or a voided invoice reschedules it"
+            "description": "Fired when a billing instalment's bill date moves: a trigger bills it, or a voided invoice reschedules it"
         },
         {
             "name": "billing_terms.created",

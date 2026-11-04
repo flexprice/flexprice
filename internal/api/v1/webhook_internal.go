@@ -525,7 +525,7 @@ func WebhookEventBillingInstalmentCreated() {}
 
 // WebhookEventBillingInstalmentUpdated godoc
 // @Summary billing_instalment.updated
-// @Description Fired when a billing instalment's date or amount changes, or a voided invoice reschedules it. Doc-only for parsing.
+// @Description Fired when a billing instalment's bill date moves: a trigger bills it, or a voided invoice reschedules it. Doc-only for parsing.
 // @Tags Webhook Events
 // @Accept json
 // @Produce json

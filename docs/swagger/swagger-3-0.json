@@ -18434,7 +18434,7 @@
           "Webhook Events"
         ],
         "summary": "billing_instalment.updated",
-        "description": "Fired when a billing instalment's date or amount changes, or a voided invoice reschedules it. Doc-only for parsing.",
+        "description": "Fired when a billing instalment's bill date moves: a trigger bills it, or a voided invoice reschedules it. Doc-only for parsing.",
         "responses": {
           "200": {
             "description": "Webhook payload",
@@ -22123,7 +22123,7 @@
           },
           "start_date": {
             "type": "string",
-            "description": "StartDate defaults like BillOn and EndDate to the commitment end; both are whole seconds.",
+            "description": "StartDate defaults like BillOn; EndDate defaults to the commitment end. Both are whole seconds.",
             "format": "date-time"
           },
           "value": {

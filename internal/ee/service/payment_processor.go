@@ -74,38 +74,42 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		}
 	}
 
-	if paymentObj.DestinationType == types.PaymentDestinationTypeInvoice {
-		inv, err := p.InvoiceRepo.Get(ctx, paymentObj.DestinationID)
-		if err != nil {
-			return paymentObj, err
+	// A payment link already PENDING is out with the customer; any other payment moves to processing here.
+	// TODO: take a lock on the payment object here to avoid race conditions
+	statusBefore := paymentObj.PaymentStatus
+	starting := paymentObj.PaymentMethodType != types.PaymentMethodTypePaymentLink ||
+		paymentObj.PaymentStatus == types.PaymentStatusInitiated
+	// The invoice lock makes a billing-terms edit either change the draft before this freshness check or see this
+	// payment and wait.
+	err = p.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if paymentObj.DestinationType == types.PaymentDestinationTypeInvoice {
+			invoices := NewInvoiceService(p.ServiceParams).(*invoiceService)
+			if err := invoices.lockInvoice(txCtx, paymentObj.DestinationID); err != nil {
+				return err
+			}
+
+			inv, err := p.InvoiceRepo.Get(txCtx, paymentObj.DestinationID)
+			if err != nil {
+				return err
+			}
+
+			if err := invoices.requireFreshDraft(txCtx, inv); err != nil {
+				return err
+			}
 		}
 
-		if err := NewInvoiceService(p.ServiceParams).(*invoiceService).requireFreshDraft(ctx, inv); err != nil {
-			return paymentObj, err
+		if !starting {
+			return nil
 		}
+
+		paymentObj.PaymentStatus = types.PaymentStatusProcessing
+		paymentObj.UpdatedAt = clock.Now()
+		return p.PaymentRepo.Update(txCtx, paymentObj)
+	})
+	if err != nil {
+		return paymentObj, err
 	}
-
-	// For payment links, if status is INITIATED, we need to create the payment link
-	// If status is already PENDING, we don't need to do anything more
-	if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink && paymentObj.PaymentStatus == types.PaymentStatusInitiated {
-		// Update payment status to processing temporarily
-		statusBefore := paymentObj.PaymentStatus
-		paymentObj.PaymentStatus = types.PaymentStatusProcessing
-		paymentObj.UpdatedAt = clock.Now()
-		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
-			return paymentObj, err
-		}
-		recordPaymentTransition(ctx, paymentObj, statusBefore)
-		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
-	} else if paymentObj.PaymentMethodType != types.PaymentMethodTypePaymentLink {
-		// Update payment status to processing and fire pending event
-		// TODO: take a lock on the payment object here to avoid race conditions
-		statusBefore := paymentObj.PaymentStatus
-		paymentObj.PaymentStatus = types.PaymentStatusProcessing
-		paymentObj.UpdatedAt = clock.Now()
-		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
-			return paymentObj, err
-		}
+	if starting {
 		recordPaymentTransition(ctx, paymentObj, statusBefore)
 		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 	}

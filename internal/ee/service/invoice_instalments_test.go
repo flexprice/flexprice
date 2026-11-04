@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -245,24 +246,81 @@ func (s *CommitmentE2ESuite) draftPayment(draft *invoice.Invoice, status types.P
 	return p
 }
 
-// An edit waits while a payment on a draft billing the commitment's instalments is in progress, since that payment
-// would finalize the draft with instalments the edit cancels. Once the payment fails, the edit goes through.
+// An edit waits while a draft billing the commitment's instalments is being paid, since the payment would finalize the
+// draft with instalments the edit cancels. A payment that has not started or has failed does not hold it.
 func (s *CommitmentE2ESuite) TestReplaceBillingTerms_WaitsForADraftPayment() {
-	ctx := s.GetContext()
-	draft, commitmentID := s.januaryDraft(NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite)), "draft_payment")
-	charging := s.draftPayment(draft, types.PaymentStatusProcessing)
-
-	_, err := s.commitments.ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
-	s.Require().Error(err)
-	s.True(ierr.IsInvalidOperation(err), "got %v", err)
-	for _, inst := range s.billedInstalments(draft.ID) {
-		s.Equal(types.InstalmentStatusScheduled, inst.InstalmentStatus, "the refused edit cancels nothing")
+	tests := []struct {
+		status  types.PaymentStatus
+		refused bool
+	}{
+		{types.PaymentStatusInitiated, false},
+		{types.PaymentStatusPending, true},
+		{types.PaymentStatusProcessing, true},
+		{types.PaymentStatusSucceeded, true},
+		{types.PaymentStatusFailed, false},
 	}
+	for _, tt := range tests {
+		s.Run(string(tt.status), func() {
+			ctx := s.GetContext()
+			draft, commitmentID := s.januaryDraft(NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite)), "draft_payment_"+string(tt.status))
+			s.draftPayment(draft, tt.status)
 
-	charging.PaymentStatus = types.PaymentStatusFailed
-	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, charging))
-	_, err = s.commitments.ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
+			_, err := s.commitments.ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
+			if !tt.refused {
+				s.Require().NoError(err)
+				return
+			}
+
+			s.Require().Error(err)
+			s.True(ierr.IsInvalidOperation(err), "got %v", err)
+			for _, inst := range s.billedInstalments(draft.ID) {
+				s.Equal(types.InstalmentStatusScheduled, inst.InstalmentStatus, "the refused edit cancels nothing")
+			}
+		})
+	}
+}
+
+// An edit locks each draft billing the commitment's instalments, under the commitment lock, before it reads the
+// draft's payments.
+func (s *CommitmentE2ESuite) TestReplaceBillingTerms_LocksTheDrafts() {
+	ctx := s.GetContext()
+	var events []string
+	params := fullServiceParams(&s.BaseServiceTestSuite)
+	params.DB = &recordingDB{IClient: s.GetDB(), events: &events}
+	draft, commitmentID := s.januaryDraft(NewInvoiceService(params), "edit_lock")
+
+	events = events[:0]
+	_, err := NewCommitmentService(params).ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
 	s.Require().NoError(err)
+	s.Equal([]string{"tx", "lock:commitment:" + commitmentID, "lock:invoice:" + draft.ID}, events[:3])
+}
+
+// Starting a charge locks the invoice and checks the draft is fresh in the transaction that moves the payment to
+// processing, so an edit either changes the draft first and the charge is refused, or sees the payment and waits.
+func (s *CommitmentE2ESuite) TestProcessPayment_LocksTheDraftBeforeCharging() {
+	ctx := s.GetContext()
+	var events []string
+	params := fullServiceParams(&s.BaseServiceTestSuite)
+	params.DB = &recordingDB{IClient: s.GetDB(), events: &events}
+	params.PaymentRepo = &recordingPaymentRepo{Repository: params.PaymentRepo, events: &events}
+	draft, _ := s.januaryDraft(NewInvoiceService(params), "charge_lock")
+	pending := s.draftPayment(draft, types.PaymentStatusPending)
+
+	events = events[:0]
+	_, err := NewPaymentProcessorService(params).ProcessPayment(ctx, pending.ID)
+	s.Require().NoError(err)
+	s.Equal([]string{"tx", "lock:invoice:" + draft.ID, "update:" + string(types.PaymentStatusProcessing), "tx_end"}, events[:4])
+}
+
+// recordingPaymentRepo records each payment update with the status it writes.
+type recordingPaymentRepo struct {
+	payment.Repository
+	events *[]string
+}
+
+func (r *recordingPaymentRepo) Update(ctx context.Context, p *payment.Payment) error {
+	*r.events = append(*r.events, "update:"+string(p.PaymentStatus))
+	return r.Repository.Update(ctx, p)
 }
 
 // A payment recorded without processing after an edit is charged later through ProcessPayment, which refuses the stale

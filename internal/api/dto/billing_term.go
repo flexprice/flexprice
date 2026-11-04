@@ -26,7 +26,7 @@ type BillingTermInput struct {
 	// period holding now, or to the commitment start once the term has ended.
 	BillOn *time.Time `json:"bill_on,omitempty" validate:"omitempty,whole_second"`
 
-	// StartDate defaults like BillOn and EndDate to the commitment end; both are whole seconds.
+	// StartDate defaults like BillOn; EndDate defaults to the commitment end. Both are whole seconds.
 	StartDate      *time.Time              `json:"start_date,omitempty" validate:"omitempty,whole_second"`
 	EndDate        *time.Time              `json:"end_date,omitempty" validate:"omitempty,whole_second"`
 	PeriodCount    *int                    `json:"period_count,omitempty"`
