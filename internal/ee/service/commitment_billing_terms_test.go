@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -1174,6 +1175,23 @@ func (s *CommitmentE2ESuite) instalmentStatus(id string) *billingterm.Instalment
 	inst, err := s.commitments.GetInstalment(s.GetContext(), id)
 	s.Require().NoError(err)
 	return inst
+}
+
+// An environment whose commitments_v2 setting cannot be read fails the run, and the other environments are still billed.
+func (s *CommitmentE2ESuite) TestBillDueInstalments_ReportsAnUnreadableSetting() {
+	sub, _ := s.separateInvoiceCommitment("unreadable")
+	other := types.SetEnvironmentID(s.GetContext(), "env_unreadable")
+	s.Require().NoError(s.GetStores().SettingsRepo.Create(other, &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix("setting"),
+		Key:           types.SettingKeyCommitmentsV2,
+		Value:         map[string]interface{}{"enabled": "yes"},
+		EnvironmentID: "env_unreadable",
+		BaseModel:     types.GetDefaultBaseModel(other),
+	}))
+
+	err := s.commitments.BillDueInstalments(s.GetContext())
+	s.Require().ErrorContains(err, "env_unreadable")
+	s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), 1)
 }
 
 // B1: the upfront instalment is due, so one run bills it on a finalized one-off invoice and claims it; the milestone

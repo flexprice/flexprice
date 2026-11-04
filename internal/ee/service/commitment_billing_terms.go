@@ -429,7 +429,11 @@ func (s *commitmentService) BillDueInstalments(ctx context.Context) error {
 	var errs []error
 	for _, env := range configs {
 		cfg, err := utils.ToStruct[types.CommitmentsV2Config](env.Config)
-		if err != nil || !cfg.Enabled {
+		if err != nil {
+			errs = append(errs, fmt.Errorf("decoding commitments_v2 setting for environment %s: %w", env.EnvironmentID, err))
+			continue
+		}
+		if !cfg.Enabled {
 			continue
 		}
 

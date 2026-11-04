@@ -172,7 +172,7 @@ func TestCommitmentHandler(t *testing.T) {
 		{"replace billing terms bad json", nil, http.MethodPut, "/v1/commitments/cmt_2/billing-terms", `{`, http.StatusBadRequest, ""},
 		{"replace billing terms inactive", ierr.NewError("terminated").
 			Mark(ierr.ErrInvalidOperation), http.MethodPut, "/v1/commitments/cmt_2/billing-terms", `{"billing_terms":[]}`, http.StatusBadRequest, ""},
-		{"preview billing terms ok", nil, http.MethodPost, "/v1/commitments/cmt_3/billing-terms/preview", `{"billing_terms":[{"kind":"once","value_type":"percentage","percentage":"30"}]}`, http.StatusOK, "cmt_3"},
+		{"preview billing terms ok", nil, http.MethodPost, "/v1/commitments/cmt_3/billing-terms/preview", `{"billing_terms":[{"kind":"once","value_type":"fixed","value":"30"}]}`, http.StatusOK, "cmt_3"},
 		{"preview billing terms bad json", nil, http.MethodPost, "/v1/commitments/cmt_3/billing-terms/preview", `not json`, http.StatusBadRequest, ""},
 		{"list instalments ok", nil, http.MethodGet, "/v1/commitments/cmt_4/instalments", ``, http.StatusOK, "cmt_4"},
 		{"list instalments not found", ierr.NewError("missing").

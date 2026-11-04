@@ -64,6 +64,17 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 				Mark(ierr.ErrNotFound)
 		}
 
+		// Finalizing records the instalment as billed at its planned amount, so the line must keep that amount.
+		if existingItem.BillingInstalmentID != nil && (req.Amount != nil || req.Quantity != nil) {
+			return ierr.NewError("an instalment line's amount comes from the commitment's billing terms").
+				WithHint("Edit the commitment's billing terms to change what an instalment bills").
+				WithReportableDetails(map[string]any{
+					"line_item_id":          existingItem.ID,
+					"billing_instalment_id": *existingItem.BillingInstalmentID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
 		builder := invoice.NewInvoiceLineItemBuilder(existingItem).
 			WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)).
 			WithParentLineItemID(lo.ToPtr(existingItem.ID)).

@@ -1064,6 +1064,25 @@ func (s *BillingServiceSuite) TestCommitmentLoader_WindowFloorMatchesPoolCapacit
 	s.True(within.Amount.Add(trueUp.Amount).Equal(dec("45")), "floor %s", within.Amount.Add(trueUp.Amount))
 }
 
+// An open-ended window commitment ends with its subscription: ending at 20:00 UTC on 9 Aug leaves the same nine daily
+// buckets of capacity as a commitment terminated then.
+func (s *BillingServiceSuite) TestCommitmentLoader_OpenEndedWindowEndsWithTheSubscription() {
+	ctx := s.GetContext()
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	sub, c, usage := s.istDailyWindowFixture()
+	c.EndDate = nil
+	_, err := s.GetStores().CommitmentRepo.Update(ctx, c)
+	s.Require().NoError(err)
+	sub.EndDate = lo.ToPtr(time.Date(2026, 8, 9, 20, 0, 0, 0, time.UTC))
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	l := s.loaderFor(sub, usage, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	_, allocs, err := l.Stacks(ctx)
+	s.Require().NoError(err)
+	s.True(allocs[0].Commitments[0].Capacity.Equal(dec("90")), "capacity %s", allocs[0].Commitments[0].Capacity)
+}
+
 // An instant off the grid lands in the window containing it; one past the elapsed period is left out.
 func (s *BillingServiceSuite) TestCommitmentLoader_BucketsJoinTheWindowContainingThem() {
 	ctx := s.GetContext()

@@ -12,8 +12,9 @@ type Owner interface {
 	OwnerType() types.BillingTermOwnerType
 	OwnerID() string
 
-	// BilledCustomerID and BilledSubscriptionID are the customer and subscription its instalments bill; the
-	// subscription is empty for an owner billed without one.
+	// BilledCustomerID and BilledSubscriptionID are the owner's own customer and subscription, copied onto its
+	// instalments; invoices go to the subscription's invoicing customer. The subscription is empty for an owner billed
+	// without one.
 	BilledCustomerID() string
 	BilledSubscriptionID() string
 

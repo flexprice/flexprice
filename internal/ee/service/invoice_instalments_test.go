@@ -346,6 +346,24 @@ func (s *CommitmentE2ESuite) TestProcessPayment_RefusesAStaleDraft() {
 	s.Equal(types.InvoiceStatusDraft, unpaid.InvoiceStatus)
 }
 
+// An instalment line keeps its amount and quantity, since finalizing records the instalment as billed at its planned
+// amount. Its other fields stay editable.
+func (s *CommitmentE2ESuite) TestUpdateLineItem_KeepsAnInstalmentLinesAmount() {
+	ctx := s.GetContext()
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	draft, _ := s.januaryDraft(invoices, "line_edit")
+	line := s.storedInstalmentLines(draft.ID)[0]
+
+	for _, req := range []dto.UpdateLineItemRequest{{Amount: lo.ToPtr(dec("1"))}, {Quantity: lo.ToPtr(dec("2"))}} {
+		_, err := invoices.UpdateLineItem(ctx, draft.ID, line.ID, req)
+		s.Require().Error(err)
+		s.True(ierr.IsValidation(err), "got %v", err)
+	}
+
+	_, err := invoices.UpdateLineItem(ctx, draft.ID, line.ID, dto.UpdateLineItemRequest{DisplayName: lo.ToPtr("Upfront")})
+	s.Require().NoError(err)
+}
+
 // A manually edited draft is never recomputed, so a stale instalment still fails its finalization.
 func (s *CommitmentE2ESuite) TestFinalize_ManuallyEditedStaleDraftFails() {
 	ctx := s.GetContext()

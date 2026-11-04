@@ -34,8 +34,9 @@ func (f *fakeBillingTermsService) GetBillingTerms(ctx context.Context, id string
 	return f.terms, nil
 }
 
-func (f *fakeBillingTermsService) GetInstalment(_ context.Context, id string) (*billingterm.Instalment, error) {
+func (f *fakeBillingTermsService) GetInstalment(ctx context.Context, id string) (*billingterm.Instalment, error) {
 	f.gotInstalmentID = id
+	f.gotTenantID = types.GetTenantID(ctx)
 	return f.instalment, nil
 }
 
@@ -181,7 +182,8 @@ func TestBillingInstalmentPayloadBuilder(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			out, err := b.BuildPayload(context.Background(), types.WebhookEventBillingInstalmentInvoiced, data)
+			ctx := context.WithValue(context.Background(), types.CtxTenantID, "ten_1")
+			out, err := b.BuildPayload(ctx, types.WebhookEventBillingInstalmentInvoiced, data)
 			if tt.wantErr {
 				require.Error(t, err)
 				require.True(t, ierr.IsInvalidOperation(err), "got %v", err)
@@ -191,6 +193,7 @@ func TestBillingInstalmentPayloadBuilder(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, "binst_1", svc.gotInstalmentID)
+			require.Equal(t, "ten_1", svc.gotTenantID, "the instalment is read under the event's tenant")
 
 			var payload map[string]any
 			require.NoError(t, json.Unmarshal(out, &payload))

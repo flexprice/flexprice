@@ -113,8 +113,9 @@ func (s *CommitmentServiceSuite) TestCheckPriceAttach_RejectsOverlappingCommitme
 	ca, err := s.svc.Create(s.GetContext(), a)
 	s.Require().NoError(err)
 
+	// Distinct priorities leave the type and measurement check as the only rejection.
 	b := validReq(s.fx.sub.ID, "")
-	b.Name = "Storage"
+	b.Name, b.Priority = "Storage", 1
 	b.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterStorage.ID}
 	cb, err := s.svc.Create(s.GetContext(), b)
 	s.Require().NoError(err)
@@ -122,6 +123,7 @@ func (s *CommitmentServiceSuite) TestCheckPriceAttach_RejectsOverlappingCommitme
 	err = s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, s.fx.priceOtherMeterInGroup, s.fx.sub.StartDate, nil)
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err), "got %v", err)
+	s.Contains(err.Error(), "differ in type or measurement")
 	s.Contains(err.Error(), ca.ID)
 	s.Contains(err.Error(), cb.ID)
 }

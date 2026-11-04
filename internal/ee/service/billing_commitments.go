@@ -566,7 +566,7 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 	for _, sc := range stack.Commitments {
 		sc.PoolOf = make([]int, len(stack.Windows))
 		for w, t := range stack.Windows {
-			if !accrues(sc.Commitment, t, l.periodStart) {
+			if !l.accrues(sc.Commitment, t, l.periodStart) {
 				sc.PoolOf[w] = noPool
 				continue
 			}
@@ -593,13 +593,17 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 // activeBuckets counts the buckets of the usage grid starting in [from, to) that hold the commitment's capacity.
 func (l *commitmentLoader) activeBuckets(c *commitment.Commitment, from, to time.Time, bucket types.WindowSize) int64 {
 	starts := generateBucketStarts(from.UTC(), to.UTC(), bucket, &l.sub.BillingAnchor)
-	return int64(lo.CountBy(starts, func(t time.Time) bool { return accrues(c, t, from) }))
+	return int64(lo.CountBy(starts, func(t time.Time) bool { return l.accrues(c, t, from) }))
 }
 
-// accrues reports whether the bucket starting at t holds the commitment's capacity in a span starting at from.
-// A bucket starting before the span belongs to the span before it, which already counted it.
-func accrues(c *commitment.Commitment, t, from time.Time) bool {
-	return !t.Before(from) && c.IsActiveAt(t) && c.ActiveWindows.Contains(t, c.Location())
+// accrues reports whether the bucket starting at t holds the commitment's capacity in a span starting at from: within
+// its term, which ends with the subscription for an open-ended one. A bucket starting before the span belongs to the
+// span before it, which already counted it.
+func (l *commitmentLoader) accrues(c *commitment.Commitment, t, from time.Time) bool {
+	return !t.Before(from) &&
+		c.IsActiveAt(t) &&
+		!endReached(termEnd(l.sub, c), t) &&
+		c.ActiveWindows.Contains(t, c.Location())
 }
 
 // windowOf returns the index of the window holding max(t, line start), or of the first window for an earlier one.

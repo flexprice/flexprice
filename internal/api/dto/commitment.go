@@ -100,7 +100,7 @@ type CreateCommitmentRequest struct {
 	Binding            *bool                             `json:"binding,omitempty"` // default false
 	CollectionMethod   *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
 	// BillingTerms apply only to collection_method billing_terms, which requires at least one.
-	BillingTerms []BillingTermInput `json:"billing_terms,omitempty" validate:"omitempty,max=20,dive"`
+	BillingTerms []BillingTermInput `json:"billing_terms,omitempty" validate:"omitempty,min=1,max=20,dive"`
 	// InstalmentInvoicing applies only to collection_method billing_terms.
 	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
 	// StartDate and EndDate must be whole seconds.

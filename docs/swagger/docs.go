@@ -20770,6 +20770,7 @@ const docTemplate = `{
                     "description": "BillingTerms apply only to collection_method billing_terms, which requires at least one.",
                     "type": "array",
                     "maxItems": 20,
+                    "minItems": 1,
                     "items": {
                         "$ref": "#/definitions/BillingTermInput"
                     }

@@ -2628,6 +2628,7 @@ definitions:
         items:
           $ref: '#/definitions/BillingTermInput'
         maxItems: 20
+        minItems: 1
         type: array
       binding:
         description: default false
