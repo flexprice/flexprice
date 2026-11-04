@@ -9,9 +9,11 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/customerdeletion"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/settings"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -459,6 +461,46 @@ func TestResolveCustomerForUsageEvent(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, cust)
 		assert.Equal(t, existing.ID, cust.ID)
+	})
+
+	t.Run("skips a retired external id without erroring", func(t *testing.T) {
+		deletionStore := testutil.NewInMemoryCustomerDeletionStore()
+		now := time.Now().UTC()
+		require.NoError(t, deletionStore.Create(ctx, &customerdeletion.CustomerDeletionRequest{
+			ID:           "cdr_retired",
+			CustomerID:   "cust_gone",
+			ExternalID:   "ext_retired",
+			State:        customerdeletion.StateSuppressed,
+			RequestedAt:  now,
+			SuppressedAt: &now,
+			RequestedVia: customerdeletion.RequestedViaAPI,
+			BaseModel:    types.GetDefaultBaseModel(ctx),
+		}, []*customerdeletion.CustomerDeletionCategory{
+			{
+				ID:          "cdc_retired",
+				Category:    customerdeletion.CategoryCustomerPG,
+				Disposition: customerdeletion.DispositionPending,
+				BaseModel:   types.GetDefaultBaseModel(ctx),
+			},
+		}))
+
+		retiredParams := ServiceParams{
+			Logger:               logger.NewNoopLogger(),
+			CustomerRepo:         customerStore,
+			CustomerDeletionRepo: deletionStore,
+		}
+
+		cust, err := ResolveCustomerForUsageEvent(ctx, retiredParams, &events.Event{
+			ID:                 "evt_retired",
+			ExternalCustomerID: "ext_retired",
+		})
+
+		// An error here would retry an event that can never succeed
+		require.NoError(t, err)
+		assert.Nil(t, cust)
+
+		_, lookupErr := customerStore.GetByLookupKey(ctx, "ext_retired")
+		assert.True(t, ierr.IsNotFound(lookupErr), "no customer may be created for a retired external ID")
 	})
 }
 

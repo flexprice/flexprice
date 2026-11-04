@@ -3,13 +3,17 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
+	cockroachErrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/customerdeletion"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -63,8 +67,99 @@ func (s *CustomerServiceSuite) SetupTest() {
 		FXRateRepo:          s.GetStores().FXRateRepo,
 		CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
 		IntegrationFactory:  s.GetIntegrationFactory(),
+
+		CustomerDeletionRepo: s.GetStores().CustomerDeletionRepo,
 	})
 
+}
+
+func (s *CustomerServiceSuite) retireExternalID(ctx context.Context, externalID string) {
+	now := time.Now().UTC()
+	request := &customerdeletion.CustomerDeletionRequest{
+		ID:           types.GenerateUUID(),
+		CustomerID:   types.GenerateUUID(),
+		ExternalID:   externalID,
+		State:        customerdeletion.StateSuppressed,
+		RequestedAt:  now,
+		SuppressedAt: &now,
+		RequestedVia: customerdeletion.RequestedViaAPI,
+		BaseModel:    types.GetDefaultBaseModel(ctx),
+	}
+	categories := []*customerdeletion.CustomerDeletionCategory{
+		{
+			ID:          types.GenerateUUID(),
+			Category:    customerdeletion.CategoryCustomerPG,
+			Disposition: customerdeletion.DispositionPending,
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		},
+	}
+	s.NoError(s.GetStores().CustomerDeletionRepo.Create(ctx, request, categories))
+}
+
+// Reads details as the HTTP error handler does
+func (s *CustomerServiceSuite) retirementReason(err error) string {
+	const jsonDetailsPrefix = "__json__:"
+	for _, sdp := range cockroachErrors.GetAllSafeDetails(err) {
+		for _, payload := range sdp.SafeDetails {
+			if !strings.HasPrefix(payload, jsonDetailsPrefix) {
+				continue
+			}
+			var details map[string]any
+			if json.Unmarshal([]byte(payload[len(jsonDetailsPrefix):]), &details) == nil {
+				if reason, ok := details["reason"].(string); ok {
+					return reason
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func (s *CustomerServiceSuite) TestCreateCustomerRejectsRetiredExternalID() {
+	s.retireExternalID(s.ctx, "ext-retired")
+
+	_, err := s.service.CreateCustomer(s.ctx, dto.CreateCustomerRequest{
+		ExternalID: "ext-retired",
+		Name:       "Reincarnated Customer",
+	})
+
+	s.Error(err)
+	s.True(ierr.IsAlreadyExists(err), "expected ErrAlreadyExists, got %v", err)
+	s.Equal("retired", s.retirementReason(err), "caller must be able to tell retired from in-use")
+}
+
+func (s *CustomerServiceSuite) TestUpdateCustomerRejectsRenameToRetiredExternalID() {
+	created, err := s.service.CreateCustomer(s.ctx, dto.CreateCustomerRequest{
+		ExternalID: "ext-live",
+		Name:       "Live Customer",
+	})
+	s.NoError(err)
+
+	s.retireExternalID(s.ctx, "ext-retired")
+
+	_, err = s.service.UpdateCustomer(s.ctx, created.ID, dto.UpdateCustomerRequest{
+		ExternalID: lo.ToPtr("ext-retired"),
+	})
+
+	s.Error(err)
+	s.True(ierr.IsAlreadyExists(err), "expected ErrAlreadyExists, got %v", err)
+	s.Equal("retired", s.retirementReason(err))
+
+	unchanged, err := s.service.GetCustomer(s.ctx, created.ID)
+	s.NoError(err)
+	s.Equal("ext-live", unchanged.ExternalID)
+}
+
+func (s *CustomerServiceSuite) TestCreateCustomerAllowsUnretiredExternalID() {
+	s.retireExternalID(s.ctx, "ext-retired")
+
+	created, err := s.service.CreateCustomer(s.ctx, dto.CreateCustomerRequest{
+		ExternalID: "ext-fresh",
+		Name:       "Fresh Customer",
+	})
+
+	s.NoError(err)
+	s.Equal("ext-fresh", created.ExternalID)
 }
 
 func (s *CustomerServiceSuite) TestCreateCustomer() {

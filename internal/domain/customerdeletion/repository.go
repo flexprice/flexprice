@@ -13,6 +13,9 @@ type Repository interface {
 	// GetByExternalID retrieves the deletion request for a retired external ID
 	GetByExternalID(ctx context.Context, externalID string) (*CustomerDeletionRequest, error)
 
+	// IsExternalIDRetired reports permanent, never-reusable retirement
+	IsExternalIDRetired(ctx context.Context, externalID string) (bool, error)
+
 	// ListCategories retrieves the category rows of a request
 	ListCategories(ctx context.Context, requestID string) ([]*CustomerDeletionCategory, error)
 
