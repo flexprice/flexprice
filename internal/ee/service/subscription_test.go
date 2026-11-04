@@ -2134,6 +2134,15 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitment() {
 	s.Require().Len(resp.Commitments, 1)
 	s.Equal(items[0].ID, resp.Commitments[0].ID)
 	s.True(resp.Commitments[0].CommitmentValue.Equal(decimal.RequireFromString("4.608")))
+
+	plain, err := s.service.GetSubscriptionV2(ctx, resp.ID, types.NewExpand(""))
+	s.Require().NoError(err)
+	s.Empty(plain.Commitments, "v2 lists commitments only when expanded")
+
+	expanded, err := s.service.GetSubscriptionV2(ctx, resp.ID, types.NewExpand("commitments"))
+	s.Require().NoError(err)
+	s.Require().Len(expanded.Commitments, 1)
+	s.Equal(items[0].ID, expanded.Commitments[0].ID)
 }
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentOnIncompleteSubscription() {

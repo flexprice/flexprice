@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -1927,6 +1928,14 @@ func (s *subscriptionService) GetSubscriptionV2(ctx context.Context, id string, 
 			return nil, err
 		}
 		response.Customer = customer
+	}
+
+	if expand.Has(types.ExpandCommitments) {
+		commitments, err := NewCommitmentService(s.ServiceParams).List(ctx, commitment.NewSubscriptionFilter(id))
+		if err != nil {
+			return nil, err
+		}
+		response.Commitments = commitments.Items
 	}
 
 	// Conditionally expand line items with prices
