@@ -22092,7 +22092,7 @@
         "properties": {
           "bill_on": {
             "type": "string",
-            "description": "BillOn is a whole second, the commitment start by default. On an edit it defaults to the start of the billing\nperiod holding now, or to the commitment start once the term has ended."
+            "description": "BillOn is the commitment start by default. On an edit it defaults to the start of the billing period holding\nnow, or to the commitment start once the term has ended. A date within a second after a billing period edge is\ntaken as that edge, here and in start_date and end_date."
           },
           "bill_trigger": {
             "$ref": "#/components/schemas/types.InstalmentBillTrigger"
@@ -22123,7 +22123,7 @@
           },
           "start_date": {
             "type": "string",
-            "description": "StartDate defaults like BillOn; EndDate defaults to the commitment end. Both are whole seconds.",
+            "description": "StartDate defaults like BillOn; EndDate defaults to the commitment end.",
             "format": "date-time"
           },
           "value": {
@@ -23713,7 +23713,7 @@
           },
           "start_date": {
             "type": "string",
-            "description": "StartDate and EndDate must be whole seconds.",
+            "description": "StartDate and EndDate within a second after a billing period edge are taken as that edge.",
             "format": "date-time"
           },
           "subscription_id": {
@@ -33032,7 +33032,7 @@
           },
           "effective_at": {
             "type": "string",
-            "description": "EffectiveAt defaults to now; a given one must be a whole second.",
+            "description": "EffectiveAt defaults to now; within a second after a billing period edge it is taken as that edge.",
             "format": "date-time"
           }
         }
@@ -33192,7 +33192,7 @@
         "properties": {
           "bill_on": {
             "type": "string",
-            "description": "BillOn must be a whole second."
+            "description": "BillOn within a second after a billing period edge is taken as that edge."
           }
         }
       },

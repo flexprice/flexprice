@@ -64,8 +64,9 @@ so it must not be flipped back.
 
 API: `POST /v1/commitments` ([router.go:730](../../internal/api/router.go#L730)) → `CreateCommitmentRequest`.
 
-1. **DTO** (`dto/commitment.go`). `Validate` checks field-level rules: required fields, the `whole_second` dates,
-   `active_windows` only with `measurement: window`, billing terms only with `collection_method: billing_terms`.
+1. **DTO** (`dto/commitment.go`). `Validate` checks field-level rules: required fields, `active_windows` only with
+   `measurement: window`, billing terms only with `collection_method: billing_terms`. `prepare` then moves the start,
+   end and term dates that fall within a second after a billing period edge to that edge (`atPeriodEdge`), and
    `ToCommitment` builds the domain model.
 2. **`Create` → `create`** ([commitment.go:112](../../internal/ee/service/commitment.go#L112)). In a transaction it takes the
    subscription's commitments lock (`commitments:<subscription_id>`), so concurrent creates and scope changes on one
@@ -105,7 +106,7 @@ then returns the commitment's lines, which are appended to the usage charges.
 
 Analytics and previews use `newProjectedCommitmentLoader`, which prices a window inside the open period as if through
 the period's end but reads usage only up to the window's end: `attachCommitmentBreakdown`
-([subscription.go:6716](../../internal/ee/service/subscription.go#L6716)) and `calculateLineItemCommitments`
+([subscription.go:6700](../../internal/ee/service/subscription.go#L6700)) and `calculateLineItemCommitments`
 ([meter_usage.go:2869](../../internal/ee/service/meter_usage.go#L2869)).
 
 ### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:58](../../internal/ee/service/billing_commitments.go#L58))
@@ -217,17 +218,15 @@ The first and last periods match through their regular period. The check only fa
 billing periods, such as an analytics window from 20 Jan to 20 Feb, or lies outside the term. The commitment is then
 skipped for that window and logged at debug.
 
-The edges compare at whole seconds because two billing-date generators disagree on sub-seconds:
-- `types.NextBillingDate` builds dates with `time.Date(..., sec, 0, ...)` and drops them. Stored period edges come from it.
-- The period grid (`types.FullBillingPeriod`) adds months to the anchor with `AddDate` and keeps them.
+Billing period edges are whole seconds. `types.NextBillingDate` builds every edge after the first with
+`time.Date(..., sec, 0, ...)`, and subscription creation drops the fraction from the start and anchor too, so a new
+subscription's edges are all whole seconds. Commitment code builds its period grid on the anchor's whole second, so it
+lands on the stored edges even for a subscription created before that, whose start and anchor may sit mid-second.
 
-A subscription created without `start_date` starts at `clock.Now()`, so its anchor carries microseconds, and the regular
-period's edges sit a fraction of a second after the stored ones. Without rounding, every period after the first fails
-containment and the commitment is skipped. Removing the rounding fails 16 billing tests whose fixtures start at
-`time.Now()`.
-
-The other whole-second tolerances have the same cause: `clipCommitmentPeriod`, `periodSplits`, `validateTerm` and
-`scopeLinesAtStart`. Starting subscriptions on a whole second would remove all of them.
+Edges still compare at whole seconds here, and in `clipCommitmentPeriod`, `periodSplits`, `validateTerm` and
+`scopeLinesAtStart`, for those older subscriptions' mid-second first period. Commitment and billing-term dates may carry
+a fraction; `atPeriodEdge` takes one within a second after a period edge as the edge, so a date derived from a
+mid-second start does not leave a half-second sliver period behind.
 
 ## 8. Changing a subscription under a commitment — `commitment_guards.go`
 
@@ -304,7 +303,7 @@ Instalments wait while the subscription is trialing or paused. `TriggerInstalmen
 
 ## 10. Terminating
 
-`POST /v1/commitments/{id}/terminate` → `Terminate` → `terminate` ([commitment.go:664](../../internal/ee/service/commitment.go#L664)),
+`POST /v1/commitments/{id}/terminate` → `Terminate` → `terminate` ([commitment.go:677](../../internal/ee/service/commitment.go#L677)),
 under the commitment lock:
 1. Refuse unless the commitment is active and `effective_at` is before its end; a fee needs a binding commitment.
 2. Under billing terms, `settle` cancels the scheduled instalments. When `earnedAmount` at `effective_at` exceeds the
@@ -313,8 +312,8 @@ under the commitment lock:
    settlement and the cancellation fee (`cancellationFeeLine`).
 4. Set the status to terminated with `terminated_at`. Later invoices clip the floor at `terminated_at`.
 
-Cancelling a subscription calls `TerminateForSubscription` (`CancelSubscription` [subscription.go:2288](../../internal/ee/service/subscription.go#L2288),
-`TerminateSubscriptionResources` [subscription.go:5247](../../internal/ee/service/subscription.go#L5247)). A billing-terms commitment
+Cancelling a subscription calls `TerminateForSubscription` (`CancelSubscription` [subscription.go:2275](../../internal/ee/service/subscription.go#L2275),
+`TerminateSubscriptionResources` [subscription.go:5234](../../internal/ee/service/subscription.go#L5234)). A billing-terms commitment
 that already ended still has its scheduled instalments billed (`settleEnded`), since no later subscription invoice
 will carry them.
 

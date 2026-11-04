@@ -19090,7 +19090,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "bill_on": {
-                    "description": "BillOn is a whole second, the commitment start by default. On an edit it defaults to the start of the billing\nperiod holding now, or to the commitment start once the term has ended.",
+                    "description": "BillOn is the commitment start by default. On an edit it defaults to the start of the billing period holding\nnow, or to the commitment start once the term has ended. A date within a second after a billing period edge is\ntaken as that edge, here and in start_date and end_date.",
                     "type": "string"
                 },
                 "bill_trigger": {
@@ -19120,7 +19120,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.BillingTermSplit"
                 },
                 "start_date": {
-                    "description": "StartDate defaults like BillOn; EndDate defaults to the commitment end. Both are whole seconds.",
+                    "description": "StartDate defaults like BillOn; EndDate defaults to the commitment end.",
                     "type": "string"
                 },
                 "value": {
@@ -20829,7 +20829,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/CommitmentScopeInput"
                 },
                 "start_date": {
-                    "description": "StartDate and EndDate must be whole seconds.",
+                    "description": "StartDate and EndDate within a second after a billing period edge are taken as that edge.",
                     "type": "string"
                 },
                 "subscription_id": {
@@ -30663,7 +30663,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/CancellationFeeInput"
                 },
                 "effective_at": {
-                    "description": "EffectiveAt defaults to now; a given one must be a whole second.",
+                    "description": "EffectiveAt defaults to now; within a second after a billing period edge it is taken as that edge.",
                     "type": "string"
                 }
             }
@@ -30842,7 +30842,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "bill_on": {
-                    "description": "BillOn must be a whole second.",
+                    "description": "BillOn within a second after a billing period edge is taken as that edge.",
                     "type": "string"
                 }
             }
