@@ -340,6 +340,11 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 			},
 			int(processInvoiceStartDelay/time.Second),
 		)
+		if ierr.IsAlreadyExists(err) {
+			s.logger.Info(ctx, "invoice workflow already scheduled, skipping",
+				"invoice_id", invoiceID)
+			continue
+		}
 		if err != nil {
 			s.logger.Error(ctx, "failed to trigger invoice workflow",
 				"invoice_id", invoiceID,
