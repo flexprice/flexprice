@@ -3619,3 +3619,75 @@ func (s *InvoiceServiceSuite) TestPublishInvoiceSyncWebhook_IgnoresOtherProvider
 		return e.EntityID == "inv_razorpay_only"
 	}))
 }
+
+// A commitment renders overage and plain usage for one line item and period without a commitment of their own, so a
+// recompute tells them apart by kind. A duplicate an earlier compute left behind is archived, not kept.
+func (s *InvoiceServiceSuite) TestReconcileLineItems_KeysUncommittedRowsByKind() {
+	ctx := s.GetContext()
+	start, end := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
+	subLineID := "subs_line_reconcile"
+	metadataOf := func(kind types.CommitmentLineKind) types.Metadata {
+		if kind == "" {
+			return nil
+		}
+
+		return types.Metadata{types.MetadataKeyCommitmentLineKind: string(kind)}
+	}
+	stored := func(kind types.CommitmentLineKind, amount int64) *invoice.InvoiceLineItem {
+		return &invoice.InvoiceLineItem{
+			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+			CustomerID:             s.testData.customer.ID,
+			SubscriptionID:         &s.testData.subscription.ID,
+			SubscriptionLineItemID: lo.ToPtr(subLineID),
+			Amount:                 decimal.NewFromInt(amount),
+			Quantity:               decimal.NewFromInt(1),
+			Currency:               "usd",
+			PeriodStart:            &start,
+			PeriodEnd:              &end,
+			Metadata:               metadataOf(kind),
+			BaseModel:              types.GetDefaultBaseModel(ctx),
+		}
+	}
+	computed := func(kind types.CommitmentLineKind, amount int64) dto.CreateInvoiceLineItemRequest {
+		return dto.CreateInvoiceLineItemRequest{
+			SubscriptionLineItemID: lo.ToPtr(subLineID),
+			Amount:                 decimal.NewFromInt(amount),
+			Quantity:               decimal.NewFromInt(1),
+			PeriodStart:            &start,
+			PeriodEnd:              &end,
+			Metadata:               metadataOf(kind),
+		}
+	}
+
+	draft := &invoice.Invoice{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:     s.testData.customer.ID,
+		SubscriptionID: &s.testData.subscription.ID,
+		InvoiceType:    types.InvoiceTypeSubscription,
+		InvoiceStatus:  types.InvoiceStatusDraft,
+		Currency:       "usd",
+		PeriodStart:    &start,
+		PeriodEnd:      &end,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			stored(types.CommitmentLineOverage, 6),
+			stored(types.CommitmentLineOverage, 6),
+			stored("", 10),
+		},
+	}
+	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
+	inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+
+	got, err := s.service.(*invoiceService).reconcileLineItems(ctx, inv,
+		[]dto.CreateInvoiceLineItemRequest{computed(types.CommitmentLineOverage, 6), computed("", 10)})
+	s.Require().NoError(err)
+	s.Len(got, 2)
+	for _, item := range got {
+		s.Contains([]string{draft.LineItems[1].ID, draft.LineItems[2].ID}, item.ID, "each computed row reuses its stored row")
+	}
+
+	after, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Len(after.LineItems, 2, "the duplicate left by an earlier compute is archived")
+}
