@@ -308,8 +308,14 @@ redaction touchpoints, not an implementation detail of them, and it is tracked a
 by customer ID, so eviction does propagate across replicas — but a concurrent read that
 misses can repopulate it afterwards, including through `GetByLookupKey`, which is itself
 uncached but warms the ID-keyed entry on a successful database read. The exposure is a
-read already in flight across the commit, bounded by that request's duration rather
-than by a TTL, since eviction itself propagates. Caching also
+read already in flight across the commit. Note what the bound is **not**: a repopulating
+read writes a cache entry that outlives the request which wrote it, so if a suppressed
+customer can be repopulated at all the exposure is the full TTL, not the request. The
+bound therefore depends entirely on the read paths refusing to cache a suppressed row —
+with the FLE-1889 guards in place both do (`Get` only reaches `SetCache` after a query
+filtered by the readable-status allowlist, and `GetByLookupKey` filters `published`), so
+a suppressed customer cannot be written back and the window is the in-flight read. Without
+those guards it would be the TTL. Caching also
 ships disabled by default. The sibling spec documents this race and recommends accepting
 the bounded window; this document does not get to state a flat "evicted" and leave the
 race to be rediscovered.
