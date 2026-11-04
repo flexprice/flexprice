@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -34,8 +35,9 @@ func FixLineItemPriceEndDates() error {
 	tenantID := os.Getenv("TENANT_ID")
 	environmentID := os.Getenv("ENVIRONMENT_ID")
 	userID := os.Getenv("USER_ID")
-	// Writes only on APPLY=true, since scripts/main.go always sets DRY_RUN=false from its -dry-run default
-	dryRun := os.Getenv("APPLY") != "true"
+	// Writes only on APPLY=true, since scripts/main.go always sets DRY_RUN=false from its -dry-run default.
+	// An explicit -dry-run=true still wins over APPLY=true.
+	dryRun := os.Getenv("APPLY") != "true" || os.Getenv("DRY_RUN") == "true"
 	outputFile := os.Getenv("OUTPUT_FILE")
 
 	if tenantID == "" || environmentID == "" || userID == "" {
@@ -62,12 +64,12 @@ func FixLineItemPriceEndDates() error {
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	defer out.Close()
 	writer := csv.NewWriter(out)
-	defer writer.Flush()
 
 	log.Printf("Report: %s\n", outputFile) // #nosec G706 -- operator tooling
-	return script.run(ctx, writer, userID, dryRun)
+	runErr := script.run(ctx, writer, userID, dryRun)
+	writer.Flush()
+	return errors.Join(runErr, writer.Error(), out.Close())
 }
 
 // run walks every published plan and writes one report row per line item on a price with an end date.
@@ -135,6 +137,10 @@ func (s *fixLineItemPriceEndDatesScript) run(ctx context.Context, writer *csv.Wr
 				if item.EndDate.IsZero() {
 					action = "dry_run"
 					lineItemEndDate = *endingPrice.EndDate
+					// Same clamp as plan price sync: a price that ended before the line started ends it at its start
+					if lineItemEndDate.Before(item.StartDate) {
+						lineItemEndDate = item.StartDate
+					}
 					if !dryRun {
 						baseModel := item.BaseModel
 						baseModel.UpdatedBy = userID
