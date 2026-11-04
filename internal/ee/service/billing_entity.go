@@ -345,7 +345,14 @@ func requireSameBillingEntity(ctx context.Context, params ServiceParams, custome
 	if customerID == otherCustomerID {
 		return nil
 	}
-	beService := NewBillingEntityService(params)
+	beService := &billingEntityService{ServiceParams: params}
+	mode, err := beService.mode(ctx)
+	if err != nil {
+		return err
+	}
+	if mode == types.BillingEntityModeOff {
+		return nil
+	}
 	entityIDs := make([]string, 0, 2)
 	for _, id := range []string{customerID, otherCustomerID} {
 		cust, err := params.CustomerRepo.Get(ctx, id)
