@@ -31,7 +31,7 @@ type Commitment struct {
 	Binding             bool                              `json:"binding"`
 	CollectionMethod    *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
 	TotalAmount         *decimal.Decimal                  `json:"total_amount,omitempty" swaggertype:"string"`
-	InstalmentInvoicing *string                           `json:"instalment_invoicing,omitempty"`
+	InstalmentInvoicing *types.InstalmentDelivery         `json:"instalment_invoicing,omitempty"`
 	StartDate           time.Time                         `json:"start_date"`
 	// EndDate is exclusive; nil for an open-ended commitment, which runs until terminated.
 	EndDate            *time.Time                        `json:"end_date,omitempty"`
@@ -49,8 +49,8 @@ func (c *Commitment) IsActiveAt(t time.Time) bool {
 	return c != nil && !t.Before(c.StartDate) && !c.EndedBy(t)
 }
 
-// EffectiveEnd is the end of the billed term: terminated_at when it cuts the term short, otherwise end_date.
-// It is nil for an open-ended commitment: open-ended and not terminated.
+// EffectiveEnd is the end of the billed term: terminated_at when it cuts the term short, otherwise end_date; nil while
+// open-ended.
 func (c *Commitment) EffectiveEnd() *time.Time {
 	if c.TerminatedAt != nil && (c.EndDate == nil || c.TerminatedAt.Before(*c.EndDate)) {
 		return lo.ToPtr(*c.TerminatedAt)
@@ -77,8 +77,8 @@ func (c *Commitment) Until(latest time.Time) time.Time {
 	return latest
 }
 
-// EndedBy reports whether the commitment has no term left after t: its effective end is at or before t, or it
-// was terminated before it ever started. An unending commitment never ends.
+// EndedBy reports whether the commitment has no term left after t: its effective end is at or before t, or it was
+// terminated before it started. An open-ended commitment never ends.
 func (c *Commitment) EndedBy(t time.Time) bool {
 	end := c.EffectiveEnd()
 	return end != nil && (!end.After(t) || !end.After(c.StartDate))
@@ -184,7 +184,15 @@ func NewNoLimitFilter() *Filter {
 	}
 }
 
-func (f Filter) Validate() error {
+// NewSubscriptionFilter selects every commitment of the subscription in the given statuses.
+func NewSubscriptionFilter(subscriptionID string, statuses ...types.CommitmentStatus) *Filter {
+	f := NewNoLimitFilter()
+	f.SubscriptionIDs = []string{subscriptionID}
+	f.Statuses = statuses
+	return f
+}
+
+func (f *Filter) Validate() error {
 	if f.QueryFilter != nil {
 		if err := f.QueryFilter.Validate(); err != nil {
 			return err
@@ -222,7 +230,6 @@ func (f Filter) Validate() error {
 	return nil
 }
 
-// GetLimit implements BaseFilter interface.
 func (f *Filter) GetLimit() int {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetLimit()
@@ -231,7 +238,6 @@ func (f *Filter) GetLimit() int {
 	return f.QueryFilter.GetLimit()
 }
 
-// GetOffset implements BaseFilter interface.
 func (f *Filter) GetOffset() int {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetOffset()
@@ -240,7 +246,6 @@ func (f *Filter) GetOffset() int {
 	return f.QueryFilter.GetOffset()
 }
 
-// GetSort implements BaseFilter interface.
 func (f *Filter) GetSort() string {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetSort()
@@ -249,7 +254,6 @@ func (f *Filter) GetSort() string {
 	return f.QueryFilter.GetSort()
 }
 
-// GetOrder implements BaseFilter interface.
 func (f *Filter) GetOrder() string {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetOrder()
@@ -258,7 +262,7 @@ func (f *Filter) GetOrder() string {
 	return f.QueryFilter.GetOrder()
 }
 
-// GetStatus implements BaseFilter — row-level status, not the commitment status.
+// GetStatus returns the row status, not the commitment status.
 func (f *Filter) GetStatus() string {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetStatus()
@@ -267,7 +271,6 @@ func (f *Filter) GetStatus() string {
 	return f.QueryFilter.GetStatus()
 }
 
-// GetExpand implements BaseFilter interface.
 func (f *Filter) GetExpand() types.Expand {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetExpand()

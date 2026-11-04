@@ -40,6 +40,8 @@ type PaymentService interface {
 	// RecordAttempt appends the gateway's outcome for one charge attempt, leaving the
 	// parent payment's status untouched.
 	RecordAttempt(ctx context.Context, paymentID string, req dto.RecordAttemptRequest) error
+	// GetAttempt reads one attempt from the primary, so a just-recorded attempt is visible.
+	GetAttempt(ctx context.Context, attemptID string) (*dto.PaymentAttemptResponse, error)
 	// CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
 	// session without triggering payment lifecycle processing.
 	// TODO: migrate to full payment lifecycle method when payment lifecycle service is released
@@ -135,6 +137,8 @@ type SubscriptionService interface {
 	HandleSubscriptionActivatingInvoicePaid(ctx context.Context, inv *invoice.Invoice) error
 	// MarkSubscriptionIncomplete moves an active payment-gated subscription to incomplete when its renewal invoice is unpaid.
 	MarkSubscriptionIncomplete(ctx context.Context, invoiceID string) error
+	// HasMarketplaceMapping reports whether the subscription is linked to a marketplace, in any mapping status.
+	HasMarketplaceMapping(ctx context.Context, subscriptionID string) (bool, error)
 	ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
 	GetSubscriptionsForCustomer(ctx context.Context, externalCustomerID string, expand types.Expand) (*dto.ListSubscriptionsResponse, error)
 

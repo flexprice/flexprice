@@ -115,3 +115,68 @@ func TestSelfBillingRepository_SumInvoicesByTenantHour(t *testing.T) {
 		})
 	}
 }
+
+func createSelfBillingTestEnvironment(t *testing.T, client postgres.IClient, tenantID string, envType types.EnvironmentType, status types.Status) string {
+	t.Helper()
+
+	ctx := types.SetTenantID(context.Background(), tenantID)
+	base := types.GetDefaultBaseModel(ctx)
+	id := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENVIRONMENT)
+
+	_, err := client.Writer(ctx).Environment.Create().
+		SetID(id).
+		SetTenantID(tenantID).
+		SetName(envType.DisplayTitle()).
+		SetType(string(envType)).
+		SetStatus(string(status)).
+		SetCreatedBy(base.CreatedBy).
+		SetUpdatedBy(base.UpdatedBy).
+		Save(ctx)
+	require.NoError(t, err)
+	return id
+}
+
+func TestSelfBillingRepository_ListEnvironmentTypes(t *testing.T) {
+	client := newRealPostgresTestClient(t)
+	log, err := logger.NewLogger(&config.Configuration{
+		Logging: config.LoggingConfig{Level: types.LogLevelInfo},
+	})
+	require.NoError(t, err)
+	repo := NewSelfBillingRepository(client, log)
+
+	tenantA := types.GenerateUUIDWithPrefix("tenant")
+	tenantB := types.GenerateUUIDWithPrefix("tenant")
+	prodA := createSelfBillingTestEnvironment(t, client, tenantA, types.EnvironmentProduction, types.StatusPublished)
+	sandboxA := createSelfBillingTestEnvironment(t, client, tenantA, types.EnvironmentDevelopment, types.StatusPublished)
+	archivedB := createSelfBillingTestEnvironment(t, client, tenantB, types.EnvironmentDevelopment, types.StatusArchived)
+	notRequested := createSelfBillingTestEnvironment(t, client, tenantB, types.EnvironmentProduction, types.StatusPublished)
+
+	tests := []struct {
+		name string
+		ids  []string
+		want map[string]types.EnvironmentType
+	}{
+		{
+			name: "types_across_tenants_and_statuses",
+			ids:  []string{prodA, sandboxA, archivedB, "env_missing"},
+			want: map[string]types.EnvironmentType{
+				prodA:     types.EnvironmentProduction,
+				sandboxA:  types.EnvironmentDevelopment,
+				archivedB: types.EnvironmentDevelopment,
+			},
+		},
+		{
+			name: "no_ids_reads_nothing",
+			ids:  nil,
+			want: map[string]types.EnvironmentType{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := repo.ListEnvironmentTypes(context.Background(), tt.ids)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+			assert.NotContains(t, got, notRequested)
+		})
+	}
+}

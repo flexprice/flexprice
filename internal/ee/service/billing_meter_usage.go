@@ -447,7 +447,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 	var commitmentLines []dto.CreateInvoiceLineItemRequest
 	commitmentTotal := decimal.Zero
 	if len(handledByCommitments) > 0 {
-		commitmentLines, commitmentTotal, err = commitments.InvoiceLines(ctx)
+		commitmentLines, commitmentTotal, err = commitments.BillingLines(ctx)
 		if err != nil {
 			return nil, decimal.Zero, err
 		}

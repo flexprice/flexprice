@@ -29,6 +29,7 @@ import (
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
+	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -628,6 +629,22 @@ func (s *invoiceService) ListOpenCycleDrafts(ctx context.Context, subscriptionID
 	return drafts, nil
 }
 
+// subscriptionReferencePoint is the reference point a subscription invoice with this billing reason is computed at.
+func subscriptionReferencePoint(reason types.InvoiceBillingReason) types.InvoiceReferencePoint {
+	switch reason {
+	case types.InvoiceBillingReasonSubscriptionCreate,
+		types.InvoiceBillingReasonSubscriptionTrialEnd,
+		types.InvoiceBillingReasonSubscriptionTrialStart,
+		types.InvoiceBillingReasonSubscriptionUpdate,
+		types.InvoiceBillingReasonSubscriptionResume:
+		return types.ReferencePointPeriodStart
+	case types.InvoiceBillingReasonProration:
+		return types.ReferencePointCancel
+	default:
+		return types.ReferencePointPeriodEnd
+	}
+}
+
 // ComputeInvoice computes a draft (or previously-skipped) invoice: computes line items (subscription),
 // applies credits/coupons/taxes, or marks SKIPPED if zero-dollar. Re-runnable on draft and skipped invoices.
 // Invoice number is NOT assigned here — it is assigned during FinalizeInvoice.
@@ -708,20 +725,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if err != nil {
 			return nil, false, err
 		}
-		refPoint := types.ReferencePointPeriodEnd
-		switch types.InvoiceBillingReason(inv.BillingReason) {
-		case types.InvoiceBillingReasonSubscriptionCreate,
-			types.InvoiceBillingReasonSubscriptionTrialEnd,
-			types.InvoiceBillingReasonSubscriptionTrialStart,
-			types.InvoiceBillingReasonSubscriptionUpdate,
-			types.InvoiceBillingReasonSubscriptionResume:
-
-			// for create, trial end, trial start, update, and resume, we use the period start as the reference point
-			refPoint = types.ReferencePointPeriodStart
-
-		case types.InvoiceBillingReasonProration:
-			refPoint = types.ReferencePointCancel
-		}
+		refPoint := subscriptionReferencePoint(types.InvoiceBillingReason(inv.BillingReason))
 		if req != nil && req.ProrationBehavior != nil {
 			sub.ProrationBehavior = *req.ProrationBehavior
 		}
@@ -745,7 +749,11 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		// Trial start invoices preview the first period's charges at $0. Amounts are
 		// computed normally so line item structure is accurate, then forced to zero.
+		// Instalments wait for the first invoice after the trial, so they are dropped.
 		if types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionTrialStart {
+			subInvReq.LineItems = lo.Filter(subInvReq.LineItems, func(item dto.CreateInvoiceLineItemRequest, _ int) bool {
+				return item.BillingInstalmentID == nil
+			})
 			subInvReq.ZeroOutAmounts()
 		}
 		computeReq := subInvReq.ToComputeRequest()
@@ -1325,6 +1333,10 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 		return err
 	}
 
+	if err := s.refreshDraftInstalments(ctx, inv, req.InvoiceStateChangeSource); err != nil {
+		return err
+	}
+
 	if err := s.performFinalizeInvoiceActions(ctx, inv, req.SourceID()); err != nil {
 		return err
 	}
@@ -1545,6 +1557,14 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		lockedInv.FinalizedAt = &now
 		if err := issueSubscriptionInvoice(txCtx, s.ServiceParams, lockedInv, now); err != nil {
 			return err
+		}
+		// An instalment cancelled or claimed since the draft was refreshed fails the finalize, so it is never billed twice.
+		unclaimed, err := s.claimInstalments(txCtx, lockedInv)
+		if err != nil {
+			return err
+		}
+		if len(unclaimed) > 0 {
+			return staleDraftError(lockedInv.ID, unclaimed, "Recompute the invoice and finalize again")
 		}
 
 		if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {
@@ -1865,6 +1885,9 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 			inv.PaymentStatus = types.PaymentStatusRefunded
 		}
 
+		if err := s.rescheduleInstalments(tx, inv.ID); err != nil {
+			return err
+		}
 		return s.InvoiceRepo.Update(tx, inv)
 	})
 	if err != nil {
@@ -1935,6 +1958,15 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		return ierr.NewError("invoice has not been computed").WithHint("Invoice must be computed before processing").Mark(ierr.ErrValidation)
 	}
 
+	if err := s.refreshDraftInstalments(ctx, inv, dto.InvoiceStateChangeSource{}); err != nil {
+		return err
+	}
+
+	// Recomputing can leave the draft nothing to bill.
+	if inv.InvoiceStatus == types.InvoiceStatusSkipped {
+		return nil
+	}
+
 	// try to finalize the invoice
 	if err := s.performFinalizeInvoiceActions(ctx, inv, ""); err != nil {
 		return err
@@ -1986,6 +2018,20 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 			"invoice_id", inv.ID,
 			"payment_status", inv.PaymentStatus)
 		return nil
+	}
+
+	// The marketplace collects for its subscriptions, so pushing to Stripe would charge the buyer twice.
+	if inv.SubscriptionID != nil {
+		mapped, err := NewSubscriptionService(s.ServiceParams).HasMarketplaceMapping(ctx, *inv.SubscriptionID)
+		if err != nil {
+			return err
+		}
+		if mapped {
+			s.Logger.Info(ctx, "marketplace subscription, skipping Stripe invoice sync",
+				"invoice_id", inv.ID,
+				"subscription_id", *inv.SubscriptionID)
+			return nil
+		}
 	}
 
 	// Keep Stripe sync working for both subscription and non-subscription invoices.
@@ -2086,8 +2132,8 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 	return nil
 }
 
-// SyncInvoiceToRazorpayIfEnabled syncs the invoice to Razorpay unless it's already
-// paid, has zero balance, or Razorpay sync isn't enabled for the tenant.
+// SyncInvoiceToRazorpayIfEnabled auto-charges the saved mandate for charge_automatically
+// subscriptions, then syncs the invoice to Razorpay if outbound sync is enabled.
 func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, invoiceID string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
@@ -2113,11 +2159,6 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 			"invoice_id", inv.ID, "error", err)
 		return nil
 	}
-	if !conn.IsInvoiceOutboundEnabled() {
-		s.Logger.Debug(ctx, "invoice sync disabled for Razorpay connection, skipping",
-			"invoice_id", inv.ID, "connection_id", conn.ID)
-		return nil
-	}
 
 	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
@@ -2126,14 +2167,23 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 		return nil
 	}
 
+	// A submitted auto-charge skips the sync so the customer gets no payable link for it.
+	charged, err := s.autoChargeRazorpayInvoice(ctx, inv, razorpayIntegration.InvoiceSyncSvc)
+	if err != nil || charged {
+		return err
+	}
+
+	if !conn.IsInvoiceOutboundEnabled() {
+		return nil
+	}
+
 	customerService := NewCustomerService(s.ServiceParams)
-	result, err := razorpayIntegration.InvoiceSyncSvc.SyncInvoice(ctx, inv, customerService)
+	result, err := razorpayIntegration.InvoiceSyncSvc.SyncInvoiceToRazorpay(ctx, razorpay.RazorpayInvoiceSyncRequest{InvoiceID: inv.ID}, customerService)
 	if err != nil {
 		return err
 	}
 
-	// Only the send-invoice path needs the URL persisted; auto-charge is reconciled via webhook.
-	if !result.AutoCharged && result.ShortURL != "" {
+	if result.ShortURL != "" {
 		metadata := inv.Metadata
 		if metadata == nil {
 			metadata = types.Metadata{}
@@ -2149,6 +2199,23 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 	}
 
 	return nil
+}
+
+// autoChargeRazorpayInvoice charges the saved Razorpay mandate when the invoice's subscription collects automatically.
+func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *invoice.Invoice, syncSvc *razorpay.InvoiceSyncService) (bool, error) {
+	if inv.SubscriptionID == nil {
+		return false, nil
+	}
+
+	sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
+	if err != nil {
+		return false, err
+	}
+	if sub.CollectionMethod != string(types.CollectionMethodChargeAutomatically) {
+		return false, nil
+	}
+
+	return syncSvc.TryAutoCharge(ctx, inv)
 }
 
 // SyncInvoiceToChargebeeIfEnabled syncs the invoice to Chargebee if Chargebee connection is enabled.
@@ -4239,14 +4306,16 @@ func (s *invoiceService) reconcileLineItems(
 	// producing duplicate persisted lines. Key by (sub-line-item, window) to
 	// give each fanned-out line item its own reconcile identity.
 	type reconcileKey struct {
-		SubLineItemID  string
-		CommitmentID   string
-		CommitmentKind string
-		PeriodStart    time.Time
-		PeriodEnd      time.Time
+		SubLineItemID       string
+		CommitmentID        string
+		CommitmentKind      string
+		BillingInstalmentID string
+		PeriodStart         time.Time
+		PeriodEnd           time.Time
 	}
 	// Commitment lines are keyed by commitment and line kind too: stacked commitments and overage
-	// share a subscription line item, and true-up or settlement lines have none.
+	// share a subscription line item, and true-up or settlement lines have none. Instalment lines are
+	// keyed by their instalment, since two instalments of a commitment can cover the same period.
 	keyOf := func(item *invoice.InvoiceLineItem) (reconcileKey, bool) {
 		if item.PeriodStart == nil || item.PeriodEnd == nil {
 			return reconcileKey{}, false
@@ -4259,6 +4328,7 @@ func (s *invoiceService) reconcileLineItems(
 		if item.CommitmentID != nil {
 			k.CommitmentID = *item.CommitmentID
 			k.CommitmentKind = item.Metadata[types.MetadataKeyCommitmentLineKind]
+			k.BillingInstalmentID = lo.FromPtr(item.BillingInstalmentID)
 			k.SubLineItemID = lo.FromPtr(item.SubscriptionLineItemID)
 			return k, true
 		}

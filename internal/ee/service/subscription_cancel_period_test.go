@@ -216,6 +216,50 @@ func (s *SubscriptionServiceSuite) TestCalculateBillingPeriods_InvertedStoredPer
 	s.Contains(err.Error(), "inverted")
 }
 
+func (s *SubscriptionServiceSuite) TestUpdateSubscription_ProrationBehavior() {
+	periodStart := s.testData.now.Add(-5 * 24 * time.Hour)
+	periodEnd := s.testData.now.Add(25 * 24 * time.Hour)
+	sub := &subscription.Subscription{
+		ID:                 "sub_update_proration",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          periodStart,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		BillingAnchor:      periodStart,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		Timezone:           types.DefaultTimezone,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub))
+
+	behavior := types.ProrationBehaviorCreateProrations
+	_, err := s.service.UpdateSubscription(s.GetContext(), sub.ID, dto.UpdateSubscriptionRequest{
+		ProrationBehavior: &behavior,
+	})
+	s.NoError(err)
+
+	updated, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), sub.ID)
+	s.NoError(err)
+	s.Equal(types.ProrationBehaviorCreateProrations, updated.ProrationBehavior)
+
+	_, err = s.service.UpdateSubscription(s.GetContext(), sub.ID, dto.UpdateSubscriptionRequest{})
+	s.NoError(err)
+	updated, err = s.GetStores().SubscriptionRepo.Get(s.GetContext(), sub.ID)
+	s.NoError(err)
+	s.Equal(types.ProrationBehaviorCreateProrations, updated.ProrationBehavior)
+
+	bad := types.ProrationBehavior("sometimes")
+	_, err = s.service.UpdateSubscription(s.GetContext(), sub.ID, dto.UpdateSubscriptionRequest{
+		ProrationBehavior: &bad,
+	})
+	s.Error(err)
+}
+
 // PUT cancel_at inside the current period must shorten current_period_end to cancel_at.
 func (s *SubscriptionServiceSuite) TestUpdateSubscription_CancelAtInsidePeriodShortensCurrentPeriodEnd() {
 	periodStart := s.testData.now.Add(-5 * 24 * time.Hour)

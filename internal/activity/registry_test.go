@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/billinginstalment"
+	"github.com/flexprice/flexprice/ent/billingterm"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/customer"
@@ -29,18 +31,20 @@ import (
 )
 
 var entColumns = map[types.SystemEntityType][]string{
-	types.SystemEntityTypeCustomer:        customer.Columns,
-	types.SystemEntityTypeSubscription:    subscription.Columns,
-	types.SystemEntityTypeInvoice:         invoice.Columns,
-	types.SystemEntityTypeCreditNote:      creditnote.Columns,
-	types.SystemEntityTypeWallet:          wallet.Columns,
-	types.SystemEntityTypePayment:         payment.Columns,
-	types.SystemEntityTypePaymentMethod:   paymentmethod.Columns,
-	types.SystemEntityTypeRefund:          refund.Columns,
-	types.SystemEntityTypeCheckoutSession: checkoutsession.Columns,
-	types.SystemEntityTypePlan:            plan.Columns,
-	types.SystemEntityTypePrice:           price.Columns,
-	types.SystemEntityTypeFeature:         feature.Columns,
+	types.SystemEntityTypeCustomer:          customer.Columns,
+	types.SystemEntityTypeSubscription:      subscription.Columns,
+	types.SystemEntityTypeInvoice:           invoice.Columns,
+	types.SystemEntityTypeCreditNote:        creditnote.Columns,
+	types.SystemEntityTypeWallet:            wallet.Columns,
+	types.SystemEntityTypePayment:           payment.Columns,
+	types.SystemEntityTypePaymentMethod:     paymentmethod.Columns,
+	types.SystemEntityTypeRefund:            refund.Columns,
+	types.SystemEntityTypeCheckoutSession:   checkoutsession.Columns,
+	types.SystemEntityTypePlan:              plan.Columns,
+	types.SystemEntityTypePrice:             price.Columns,
+	types.SystemEntityTypeFeature:           feature.Columns,
+	types.SystemEntityTypeBillingTerm:       billingterm.Columns,
+	types.SystemEntityTypeBillingInstalment: billinginstalment.Columns,
 }
 
 // bareRow returns an empty ent row for the registration, as a RETURNING write produces (no edges).
@@ -51,6 +55,7 @@ func bareRow(t *testing.T, name string) any {
 		"CreditNote": &ent.CreditNote{ID: "x"}, "Wallet": &ent.Wallet{ID: "x"}, "Payment": &ent.Payment{ID: "x"},
 		"PaymentMethod": &ent.PaymentMethod{ID: "x"}, "Refund": &ent.Refund{ID: "x"}, "CheckoutSession": &ent.CheckoutSession{ID: "x"},
 		"Plan": &ent.Plan{ID: "x"}, "Price": &ent.Price{ID: "x"}, "Feature": &ent.Feature{ID: "x"},
+		"BillingTerm": &ent.BillingTerm{ID: "x"}, "BillingInstalment": &ent.BillingInstalment{ID: "x"},
 	}
 	row, ok := rows[name]
 	require.True(t, ok, name)

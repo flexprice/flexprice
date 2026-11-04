@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type commitmentBuilder struct {
@@ -44,13 +45,25 @@ func (b *commitmentBuilder) WithMetadata(m types.Metadata) *commitmentBuilder {
 	return b
 }
 
-func (b *commitmentBuilder) WithStatus(s types.CommitmentStatus) *commitmentBuilder {
+func (b *commitmentBuilder) WithCommitmentStatus(s types.CommitmentStatus) *commitmentBuilder {
 	b.c.CommitmentStatus = s
 	return b
 }
 
 func (b *commitmentBuilder) WithTerminatedAt(t time.Time) *commitmentBuilder {
 	b.c.TerminatedAt = &t
+	return b
+}
+
+// WithTotalAmount sets the total the billing terms split into instalments.
+func (b *commitmentBuilder) WithTotalAmount(v decimal.Decimal) *commitmentBuilder {
+	b.c.TotalAmount = &v
+	return b
+}
+
+// WithInstalmentInvoicing sets how the commitment's instalments are delivered.
+func (b *commitmentBuilder) WithInstalmentInvoicing(v types.InstalmentDelivery) *commitmentBuilder {
+	b.c.InstalmentInvoicing = &v
 	return b
 }
 

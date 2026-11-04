@@ -322,6 +322,8 @@ func (r *SubscriptionCouponInput) Validate() error {
 type GroupedInvoicingChildRequest struct {
 	PlanID             string `json:"plan_id" validate:"required"`
 	ExternalCustomerID string `json:"external_customer_id" validate:"required"`
+	// ProrationBehavior is stored on the child. Empty defaults to none.
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 	SubscriptionCreationConfig
 }
 
@@ -759,6 +761,9 @@ type UpdateSubscriptionRequest struct {
 
 	// ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send "" to clear.
 	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
+
+	// ProrationBehavior updates the stored behavior. Omit to leave it unchanged.
+	ProrationBehavior *types.ProrationBehavior `json:"proration_behavior,omitempty"`
 }
 
 // Validate checks UpdateSubscriptionRequest fields for basic structural validity.
@@ -766,6 +771,12 @@ func (r *UpdateSubscriptionRequest) Validate() error {
 
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.ProrationBehavior != nil {
+		if err := r.ProrationBehavior.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil

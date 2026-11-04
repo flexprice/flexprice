@@ -349,13 +349,20 @@ func (s *WebhookCheckoutBranchingSuite) pendingSession() {
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_PendingSession_RecordsAttemptAndLeavesPaymentOpen() {
 	s.pendingSession()
 	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+	event := s.makeFailedEvent()
+	event.Payload.Payment.Entity.ErrorCode = "BAD_REQUEST_ERROR"
+	event.Payload.Payment.Entity.ErrorReason = "incorrect_card_details"
 
-	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+	err := s.handler.handlePaymentFailed(s.ctx, event, s.services)
 
 	s.NoError(err)
 	s.Require().Len(s.paymentSvc.failedAttempts(), 1)
 	s.Equal("card declined", s.paymentSvc.failedAttempts()[0].ErrorMessage)
 	s.Equal("pay_rzp_001", s.paymentSvc.failedAttempts()[0].GatewayAttemptID)
+	s.Equal(types.Metadata{
+		"error_code":   "BAD_REQUEST_ERROR",
+		"error_reason": "incorrect_card_details",
+	}, s.paymentSvc.failedAttempts()[0].Metadata)
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
 		"a decline on an open checkout session must not seal the payment")
 }
@@ -380,6 +387,16 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_UPITokenCharge_SealsPa
 	s.NoError(err)
 	s.Empty(s.paymentSvc.failedAttempts())
 	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RedeliveredDecline_RecordsNoAttempt() {
+	s.pendingSession()
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+	s.paymentSvc.payment.Attempts = []*dto.PaymentAttemptResponse{{GatewayAttemptID: lo.ToPtr("pay_rzp_001")}}
+
+	s.NoError(s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services))
+
+	s.Empty(s.paymentSvc.failedAttempts())
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_StandaloneLink_LeavesPaymentOpen() {

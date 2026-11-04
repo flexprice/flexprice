@@ -321,6 +321,7 @@ jobs:
     # `vars` and not `env`: the env context is not available in a job-level `if`.
     if: >-
       ${{ always() &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v')) &&
           vars.DB_MIGRATIONS_ENABLED == 'true' &&
           github.event.inputs.skip_migrations != 'true' &&
           needs.build.result == 'success' &&
@@ -381,6 +382,7 @@ jobs:
     # which registers a task definition referencing an image that was never pushed.
     if: >-
       ${{ always() &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v')) &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&

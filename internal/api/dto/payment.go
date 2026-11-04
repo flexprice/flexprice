@@ -95,6 +95,7 @@ type RecordAttemptRequest struct {
 	PaymentStatus    types.PaymentStatus `json:"payment_status"`
 	ErrorMessage     string              `json:"error_message,omitempty"`
 	GatewayAttemptID string              `json:"gateway_attempt_id,omitempty"`
+	Metadata         types.Metadata      `json:"metadata,omitempty"`
 }
 
 // PaymentResponse represents a payment response
@@ -167,16 +168,17 @@ func (p *PaymentResponse) ToPayment() *payment.Payment {
 
 // PaymentAttemptResponse represents a payment attempt response
 type PaymentAttemptResponse struct {
-	ID            string         `json:"id"`
-	PaymentID     string         `json:"payment_id"`
-	AttemptNumber int            `json:"attempt_number"`
-	ErrorMessage  *string        `json:"error_message,omitempty"`
-	Metadata      types.Metadata `json:"metadata,omitempty"`
-	TenantID      string         `json:"tenant_id"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	CreatedBy     string         `json:"created_by"`
-	UpdatedBy     string         `json:"updated_by"`
+	ID               string         `json:"id"`
+	PaymentID        string         `json:"payment_id"`
+	AttemptNumber    int            `json:"attempt_number"`
+	GatewayAttemptID *string        `json:"gateway_attempt_id,omitempty"`
+	ErrorMessage     *string        `json:"error_message,omitempty"`
+	Metadata         types.Metadata `json:"metadata,omitempty"`
+	TenantID         string         `json:"tenant_id"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	CreatedBy        string         `json:"created_by"`
+	UpdatedBy        string         `json:"updated_by"`
 }
 
 // ListPaymentsResponse represents a paginated list of payments
@@ -242,16 +244,17 @@ func NewPaymentResponse(p *payment.Payment) *PaymentResponse {
 // NewPaymentAttemptResponse creates a new payment attempt response from a payment attempt
 func NewPaymentAttemptResponse(a *payment.PaymentAttempt) *PaymentAttemptResponse {
 	return &PaymentAttemptResponse{
-		ID:            a.ID,
-		PaymentID:     a.PaymentID,
-		AttemptNumber: a.AttemptNumber,
-		ErrorMessage:  a.ErrorMessage,
-		Metadata:      a.Metadata,
-		TenantID:      a.TenantID,
-		CreatedAt:     a.CreatedAt,
-		UpdatedAt:     a.UpdatedAt,
-		CreatedBy:     a.CreatedBy,
-		UpdatedBy:     a.UpdatedBy,
+		ID:               a.ID,
+		PaymentID:        a.PaymentID,
+		AttemptNumber:    a.AttemptNumber,
+		GatewayAttemptID: a.GatewayAttemptID,
+		ErrorMessage:     a.ErrorMessage,
+		Metadata:         a.Metadata,
+		TenantID:         a.TenantID,
+		CreatedAt:        a.CreatedAt,
+		UpdatedAt:        a.UpdatedAt,
+		CreatedBy:        a.CreatedBy,
+		UpdatedBy:        a.UpdatedBy,
 	}
 }
 

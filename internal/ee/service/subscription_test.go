@@ -1140,6 +1140,8 @@ func (s *SubscriptionServiceSuite) setupService() {
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
 		AddonPriceSyncRepo:         s.GetStores().AddonPriceSyncRepo,
 		CommitmentRepo:             s.GetStores().CommitmentRepo,
+		BillingTermRepo:            s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:      s.GetStores().BillingInstalmentRepo,
 		// Read on cancellation to decide whether a marketplace usage flush is needed.
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 	})
@@ -10654,6 +10656,129 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 	s.Require().NoError(err)
 	s.Require().Len(associations, 1)
 	s.Equal(addonID, associations[0].AddonID)
+}
+
+// A child's proration_behavior is stored and prices its opening charges. An omitted value stays none.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_ChildProrationBehavior() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	addonID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ADDON)
+	addonPriceID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+	s.Require().NoError(s.GetStores().AddonRepo.Create(ctx, &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Child Proration Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+		ID:                 addonPriceID,
+		Amount:             decimal.NewFromInt(30),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}))
+
+	proratedExternal := "ext_child_prorate"
+	omittedExternal := "ext_child_omit"
+	for _, spec := range []struct{ externalID, name, email string }{
+		{proratedExternal, "Prorated Child", "prorated-child@example.com"},
+		{omittedExternal, "Omitted Child", "omitted-child@example.com"},
+	} {
+		s.NoError(s.GetStores().CustomerRepo.Create(ctx, &customer.Customer{
+			ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+			ExternalID: spec.externalID,
+			Name:       spec.name,
+			Email:      spec.email,
+			BaseModel:  types.GetDefaultBaseModel(ctx),
+		}))
+	}
+
+	addonStart := s.testData.now.AddDate(0, 0, 3)
+	addonReq := dto.AddAddonToSubscriptionRequest{AddonID: addonID, StartDate: lo.ToPtr(addonStart)}
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{
+					PlanID:             seatPlan.ID,
+					ExternalCustomerID: proratedExternal,
+					ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+					SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+						Addons: []dto.AddAddonToSubscriptionRequest{addonReq},
+					},
+				},
+				{
+					PlanID:             seatPlan.ID,
+					ExternalCustomerID: omittedExternal,
+					SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+						Addons: []dto.AddAddonToSubscriptionRequest{addonReq},
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.Require().NotNil(resp.LatestInvoice)
+
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{resp.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+	children, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Require().Len(children, 2)
+
+	customerExternal := map[string]string{}
+	for _, externalID := range []string{proratedExternal, omittedExternal} {
+		c, err := s.GetStores().CustomerRepo.GetByLookupKey(ctx, externalID)
+		s.Require().NoError(err)
+		customerExternal[c.ID] = externalID
+	}
+	childByExternal := map[string]string{}
+	for _, child := range children {
+		childByExternal[customerExternal[child.CustomerID]] = child.ID
+		switch customerExternal[child.CustomerID] {
+		case proratedExternal:
+			s.Equal(types.ProrationBehaviorCreateProrations, child.ProrationBehavior)
+		case omittedExternal:
+			s.Equal(types.ProrationBehaviorNone, child.ProrationBehavior)
+		}
+	}
+
+	var proratedAmount decimal.Decimal
+	var sawProrated bool
+	for _, li := range resp.LatestInvoice.LineItems {
+		if li.PriceID == nil || *li.PriceID != addonPriceID || li.SubscriptionID == nil {
+			continue
+		}
+		switch *li.SubscriptionID {
+		case childByExternal[proratedExternal]:
+			sawProrated = true
+			proratedAmount = li.Amount
+		case childByExternal[omittedExternal]:
+			s.Fail("mid-period addon must be skipped when the child omits proration_behavior")
+		}
+	}
+	s.True(sawProrated, "parent invoice must include the prorated child addon")
+	s.True(proratedAmount.GreaterThan(decimal.Zero) && proratedAmount.LessThan(decimal.NewFromInt(30)),
+		"expected a partial addon charge, got %s", proratedAmount)
 }
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_Phases() {

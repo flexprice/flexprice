@@ -68,6 +68,7 @@ type SystemEventPayload struct {
 	BuildVariant  string          `json:"build_variant"`
 	Platform      string          `json:"platform"`
 	Cloud         string          `json:"cloud"`
+	InstallLabel  string          `json:"install_label,omitempty"`
 	EventPayload  json.RawMessage `json:"event_payload,omitempty"`
 }
 
@@ -82,6 +83,7 @@ func newSystemEventPayload(r *Reporter, event *systemEventInput) SystemEventPayl
 		BuildVariant:  buildinfo.BuildVariant,
 		Platform:      detectPlatform(),
 		Cloud:         r.cloud.Load().(string),
+		InstallLabel:  r.cfg.Telemetry.InstallLabel,
 		EventPayload:  event.Payload,
 	}
 }

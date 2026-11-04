@@ -20,6 +20,14 @@
     {
       "url": "https://api.cloud.flexprice.io/v1",
       "description": "India Region"
+    },
+    {
+      "url": "https://canada.api.flexprice.io/v1",
+      "description": "Canada Region"
+    },
+    {
+      "url": "https://eu.api.flexprice.io/v1",
+      "description": "EU Region"
     }
   ],
   "paths": {
@@ -2398,13 +2406,412 @@
         "x-codegen-request-body-name": "commitment"
       }
     },
+    "/commitments/{id}/billing-terms": {
+      "get": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Get billing terms",
+        "description": "Returns the commitment's current billing terms with its scheduled and invoiced instalments in billing order. Invoiced instalments may come from terms an edit replaced. Cancelled instalments are listed by the instalments endpoint.",
+        "operationId": "getCommitmentBillingTerms",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingTermsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      },
+      "put": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Edit billing terms",
+        "description": "Replaces the whole set of billing terms of an active commitment. Its scheduled instalments are cancelled and the new terms generate instalments for what the invoiced ones leave of the commitment total; invoiced instalments and their invoices are kept. A term without bill_on or start_date starts at the billing period holding now, or at the commitment start once its term has ended. Returns the new terms with the scheduled and invoiced instalments in billing order.",
+        "operationId": "replaceCommitmentBillingTerms",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Billing terms",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceBillingTermsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingTermsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "billing_terms"
+      }
+    },
+    "/commitments/{id}/billing-terms/preview": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Preview billing terms edit",
+        "description": "Returns what editing the billing terms would produce, without saving anything: the new terms with the invoiced and new instalments in billing order.",
+        "operationId": "previewCommitmentBillingTerms",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Billing terms",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceBillingTermsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingTermsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "billing_terms"
+      }
+    },
+    "/commitments/{id}/instalments": {
+      "get": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "List instalments",
+        "description": "Lists the instalments of the commitment in billing order. Without a status filter every instalment is listed, cancelled ones included.",
+        "operationId": "listCommitmentInstalments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only instalments in these statuses (scheduled, invoiced, cancelled)",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListInstalmentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
+    "/commitments/{id}/instalments/{instalment_id}/trigger": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Trigger instalment",
+        "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; edit the billing terms to bill it later.",
+        "operationId": "triggerCommitmentInstalment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "instalment_id",
+            "in": "path",
+            "description": "Instalment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Trigger request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerInstalmentRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/billingterm.Instalment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "trigger"
+      }
+    },
     "/commitments/{id}/terminate": {
       "post": {
         "tags": [
           "Commitments"
         ],
         "summary": "Terminate commitment",
-        "description": "Ends a commitment early, effective at the given time or now.",
+        "description": "Ends a commitment immediately. effective_at defaults to now and cannot be in the future. Under billing terms, its scheduled instalments are cancelled and any amount it earned beyond what is already invoiced is billed as a settlement. The settlement and a fixed cancellation fee, when given, are billed together on one one-off invoice.",
         "operationId": "terminateCommitment",
         "parameters": [
           {
@@ -17958,6 +18365,132 @@
         ]
       }
     },
+    "/webhook-events/billing_instalment.cancelled": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_instalment.cancelled",
+        "description": "Fired when a billing instalment is cancelled. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingInstalmentWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/billing_instalment.created": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_instalment.created",
+        "description": "Fired when a billing instalment is added to a commitment. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingInstalmentWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/billing_instalment.invoiced": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_instalment.invoiced",
+        "description": "Fired when the invoice carrying a billing instalment is finalized. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingInstalmentWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/billing_instalment.updated": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_instalment.updated",
+        "description": "Fired when a trigger moves a billing instalment's bill date, or a voided invoice puts it back on schedule. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingInstalmentWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/billing_terms.created": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_terms.created",
+        "description": "Fired when billing terms are saved with a new commitment. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingTermsWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/billing_terms.updated": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_terms.updated",
+        "description": "Fired when an edit replaces a commitment's billing terms. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingTermsWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook-events/checkout.session.completed": {
       "post": {
         "tags": [
@@ -18560,6 +19093,27 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/webhookDto.InvoiceWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/payment.attempt.failed": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "payment.attempt.failed",
+        "description": "Fired when one charge attempt is declined and the payment stays open for retry. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.PaymentAttemptWebhookPayload"
                 }
               }
             }
@@ -19971,6 +20525,172 @@
           }
         }
       },
+      "billingterm.Instalment": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "bill_on": {
+            "type": "string"
+          },
+          "bill_trigger": {
+            "$ref": "#/components/schemas/types.InstalmentBillTrigger"
+          },
+          "billing_term_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/types.InstalmentDelivery"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "instalment_status": {
+            "$ref": "#/components/schemas/types.InstalmentStatus"
+          },
+          "invoice_id": {
+            "type": "string"
+          },
+          "invoice_label": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/types.InstalmentKind"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "owner_type": {
+            "$ref": "#/components/schemas/types.BillingTermOwnerType"
+          },
+          "service_period_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "service_period_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_id": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "triggered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "billingterm.Term": {
+        "type": "object",
+        "properties": {
+          "bill_on": {
+            "type": "string"
+          },
+          "bill_trigger": {
+            "$ref": "#/components/schemas/types.InstalmentBillTrigger"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoice_cadence": {
+            "$ref": "#/components/schemas/types.InvoiceCadence"
+          },
+          "invoice_label": {
+            "type": "string",
+            "description": "InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number\nall of the owner's instalments together."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/types.BillingTermKind"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "owner_type": {
+            "$ref": "#/components/schemas/types.BillingTermOwnerType"
+          },
+          "period_count": {
+            "type": "integer"
+          },
+          "split": {
+            "$ref": "#/components/schemas/types.BillingTermSplit"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "Recurring terms.",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "description": "Value is the amount of a fixed term, per instalment on a recurring one; it is nil for a remainder term."
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/types.BillingTermValueType"
+          }
+        }
+      },
       "commitment.Filter": {
         "type": "object",
         "properties": {
@@ -21363,6 +22083,74 @@
           }
         }
       },
+      "BillingTermInput": {
+        "required": [
+          "kind",
+          "value_type"
+        ],
+        "type": "object",
+        "properties": {
+          "bill_on": {
+            "type": "string",
+            "description": "BillOn is a whole second, the commitment start by default. On an edit it defaults to the start of the billing\nperiod holding now, or to the commitment start once the term has ended."
+          },
+          "bill_trigger": {
+            "$ref": "#/components/schemas/types.InstalmentBillTrigger"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "invoice_cadence": {
+            "$ref": "#/components/schemas/types.InvoiceCadence"
+          },
+          "invoice_label": {
+            "maxLength": 255,
+            "type": "string",
+            "description": "InvoiceLabel names the term's instalments on the invoice, \"Instalment {n} of {of}\" by default. {n} and {of} are\nfilled with each instalment's place among all of the commitment's instalments and their count."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/types.BillingTermKind"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "period_count": {
+            "type": "integer"
+          },
+          "split": {
+            "$ref": "#/components/schemas/types.BillingTermSplit"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "StartDate defaults like BillOn; EndDate defaults to the commitment end. Both are whole seconds.",
+            "format": "date-time"
+          },
+          "value": {
+            "type": "string"
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/types.BillingTermValueType"
+          }
+        }
+      },
+      "BillingTermsResponse": {
+        "type": "object",
+        "properties": {
+          "billing_terms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Term"
+            }
+          },
+          "instalments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Instalment"
+            }
+          }
+        }
+      },
       "BucketSummary": {
         "type": "object",
         "properties": {
@@ -21516,6 +22304,21 @@
             "description": "Basic cancellation info"
           },
           "total_credit_amount": {
+            "type": "string"
+          }
+        }
+      },
+      "CancellationFeeInput": {
+        "required": [
+          "type",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/types.CancellationFeeType"
+          },
+          "value": {
             "type": "string"
           }
         }
@@ -21963,6 +22766,13 @@
               "$ref": "#/components/schemas/types.ActiveWindow"
             }
           },
+          "billing_terms": {
+            "type": "array",
+            "description": "BillingTerms and Instalments are set by create and preview.",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Term"
+            }
+          },
           "binding": {
             "type": "boolean"
           },
@@ -22006,7 +22816,13 @@
             "type": "string"
           },
           "instalment_invoicing": {
-            "type": "string"
+            "$ref": "#/components/schemas/types.InstalmentDelivery"
+          },
+          "instalments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Instalment"
+            }
           },
           "invoice_description": {
             "type": "string"
@@ -22837,6 +23653,15 @@
               "$ref": "#/components/schemas/types.ActiveWindow"
             }
           },
+          "billing_terms": {
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array",
+            "description": "BillingTerms apply only to collection_method billing_terms, which requires at least one.",
+            "items": {
+              "$ref": "#/components/schemas/BillingTermInput"
+            }
+          },
           "binding": {
             "type": "boolean",
             "description": "default false"
@@ -22855,6 +23680,9 @@
           "idempotency_key": {
             "maxLength": 128,
             "type": "string"
+          },
+          "instalment_invoicing": {
+            "$ref": "#/components/schemas/types.InstalmentDelivery"
           },
           "invoice_description": {
             "maxLength": 500,
@@ -22885,6 +23713,7 @@
           },
           "start_date": {
             "type": "string",
+            "description": "StartDate and EndDate must be whole seconds.",
             "format": "date-time"
           },
           "subscription_id": {
@@ -26721,6 +27550,9 @@
           "plan_id": {
             "type": "string"
           },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
           "subscription_coupons": {
             "type": "array",
             "description": "SubscriptionCoupons is the preferred way to attach coupons at creation.\nAccepts coupon_code; optionally targets a line item via price_id.",
@@ -26924,6 +27756,10 @@
           },
           "amount": {
             "type": "string"
+          },
+          "billing_instalment_id": {
+            "type": "string",
+            "description": "billing_instalment_id links this line item to the billing instalment it bills."
           },
           "commitment_id": {
             "type": "string",
@@ -27714,6 +28550,17 @@
           }
         }
       },
+      "ListInstalmentsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Instalment"
+            }
+          }
+        }
+      },
       "ListPaymentsResponse": {
         "type": "object",
         "properties": {
@@ -28082,6 +28929,9 @@
             "type": "string"
           },
           "error_message": {
+            "type": "string"
+          },
+          "gateway_attempt_id": {
             "type": "string"
           },
           "id": {
@@ -29042,6 +29892,22 @@
           },
           "reason": {
             "type": "string"
+          }
+        }
+      },
+      "ReplaceBillingTermsRequest": {
+        "required": [
+          "billing_terms"
+        ],
+        "type": "object",
+        "properties": {
+          "billing_terms": {
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BillingTermInput"
+            }
           }
         }
       },
@@ -32148,10 +33014,11 @@
         "type": "object",
         "properties": {
           "cancellation_fee": {
-            "type": "string"
+            "$ref": "#/components/schemas/CancellationFeeInput"
           },
           "effective_at": {
             "type": "string",
+            "description": "EffectiveAt defaults to now; a given one must be a whole second.",
             "format": "date-time"
           }
         }
@@ -32306,6 +33173,15 @@
           }
         }
       },
+      "TriggerInstalmentRequest": {
+        "type": "object",
+        "properties": {
+          "bill_on": {
+            "type": "string",
+            "description": "BillOn must be a whole second."
+          }
+        }
+      },
       "UpdateAddonRequest": {
         "type": "object",
         "properties": {
@@ -32341,6 +33217,7 @@
           },
           "invoice_label": {
             "maxLength": 255,
+            "minLength": 1,
             "type": "string"
           },
           "metadata": {
@@ -32348,6 +33225,7 @@
           },
           "name": {
             "maxLength": 255,
+            "minLength": 1,
             "type": "string"
           }
         }
@@ -32962,6 +33840,9 @@
           "parent_subscription_id": {
             "type": "string",
             "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear."
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
           },
           "status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"
@@ -36588,7 +37469,8 @@
           "AUTO_INVOICE_THRESHOLD",
           "WALLET_AUTO_TOPUP",
           "SUBSCRIPTION_PAUSED",
-          "SUBSCRIPTION_RESUME"
+          "SUBSCRIPTION_RESUME",
+          "BILLING_TERMS"
         ],
         "x-enum-varnames": [
           "InvoiceBillingReasonSubscriptionCreate",
@@ -36601,7 +37483,8 @@
           "InvoiceBillingReasonAutoInvoiceThreshold",
           "InvoiceBillingReasonWalletAutoTopup",
           "InvoiceBillingReasonSubscriptionPaused",
-          "InvoiceBillingReasonSubscriptionResume"
+          "InvoiceBillingReasonSubscriptionResume",
+          "InvoiceBillingReasonBillingTerms"
         ],
         "x-speakeasy-name-override": "InvoiceBillingReason"
       },
@@ -39193,6 +40076,12 @@
           "commitment.created",
           "commitment.updated",
           "commitment.terminated",
+          "billing_terms.created",
+          "billing_terms.updated",
+          "billing_instalment.created",
+          "billing_instalment.updated",
+          "billing_instalment.cancelled",
+          "billing_instalment.invoiced",
           "wallet.created",
           "wallet.updated",
           "wallet.terminated",
@@ -39201,6 +40090,7 @@
           "payment.created",
           "payment.updated",
           "payment.failed",
+          "payment.attempt.failed",
           "payment.success",
           "payment.pending",
           "refund.created",
@@ -39260,6 +40150,12 @@
           "WebhookEventCommitmentCreated",
           "WebhookEventCommitmentUpdated",
           "WebhookEventCommitmentTerminated",
+          "WebhookEventBillingTermsCreated",
+          "WebhookEventBillingTermsUpdated",
+          "WebhookEventBillingInstalmentCreated",
+          "WebhookEventBillingInstalmentUpdated",
+          "WebhookEventBillingInstalmentCancelled",
+          "WebhookEventBillingInstalmentInvoiced",
           "WebhookEventWalletCreated",
           "WebhookEventWalletUpdated",
           "WebhookEventWalletTerminated",
@@ -39268,6 +40164,7 @@
           "WebhookEventPaymentCreated",
           "WebhookEventPaymentUpdated",
           "WebhookEventPaymentFailed",
+          "WebhookEventPaymentAttemptFailed",
           "WebhookEventPaymentSuccess",
           "WebhookEventPaymentPending",
           "WebhookEventRefundCreated",
@@ -39461,6 +40358,10 @@
           },
           "amount": {
             "type": "string"
+          },
+          "billing_instalment_id": {
+            "type": "string",
+            "description": "billing_instalment_id links this line item to the billing instalment it bills."
           },
           "commitment_id": {
             "type": "string",
@@ -40429,6 +41330,68 @@
         ],
         "x-speakeasy-name-override": "AmortizationMethod"
       },
+      "types.BillingTermKind": {
+        "type": "string",
+        "enum": [
+          "once",
+          "recurring"
+        ],
+        "x-enum-varnames": [
+          "BillingTermKindOnce",
+          "BillingTermKindRecurring"
+        ],
+        "x-speakeasy-name-override": "BillingTermKind"
+      },
+      "types.BillingTermOwnerType": {
+        "type": "string",
+        "enum": [
+          "commitment"
+        ],
+        "x-enum-varnames": [
+          "BillingTermOwnerCommitment"
+        ],
+        "x-speakeasy-name-override": "BillingTermOwnerType"
+      },
+      "types.BillingTermSplit": {
+        "type": "string",
+        "enum": [
+          "even",
+          "proportional"
+        ],
+        "x-enum-varnames": [
+          "BillingTermSplitEven",
+          "BillingTermSplitProportional"
+        ],
+        "x-speakeasy-name-override": "BillingTermSplit"
+      },
+      "types.BillingTermValueType": {
+        "type": "string",
+        "description": "fixed or remainder; percentage is reserved and rejected as not supported yet",
+        "enum": [
+          "fixed",
+          "percentage",
+          "remainder"
+        ],
+        "x-enum-varnames": [
+          "BillingTermValueFixed",
+          "BillingTermValuePercentage",
+          "BillingTermValueRemainder"
+        ],
+        "x-speakeasy-name-override": "BillingTermValueType"
+      },
+      "types.CancellationFeeType": {
+        "type": "string",
+        "description": "fixed; percentage is reserved and rejected as not supported yet",
+        "enum": [
+          "fixed",
+          "percentage"
+        ],
+        "x-enum-varnames": [
+          "CancellationFeeFixed",
+          "CancellationFeePercentage"
+        ],
+        "x-speakeasy-name-override": "CancellationFeeType"
+      },
       "types.CommitmentCollectionMethod": {
         "type": "string",
         "enum": [
@@ -40538,6 +41501,56 @@
           "ImprovementLower"
         ],
         "x-speakeasy-name-override": "ImprovementDirection"
+      },
+      "types.InstalmentBillTrigger": {
+        "type": "string",
+        "enum": [
+          "date",
+          "manual"
+        ],
+        "x-enum-varnames": [
+          "InstalmentBillTriggerDate",
+          "InstalmentBillTriggerManual"
+        ],
+        "x-speakeasy-name-override": "InstalmentBillTrigger"
+      },
+      "types.InstalmentDelivery": {
+        "type": "string",
+        "enum": [
+          "subscription_invoice",
+          "separate_invoice"
+        ],
+        "x-enum-varnames": [
+          "InstalmentDeliverySubscriptionInvoice",
+          "InstalmentDeliverySeparateInvoice"
+        ],
+        "x-speakeasy-name-override": "InstalmentDelivery"
+      },
+      "types.InstalmentKind": {
+        "type": "string",
+        "enum": [
+          "instalment",
+          "settlement"
+        ],
+        "x-enum-varnames": [
+          "InstalmentKindInstalment",
+          "InstalmentKindSettlement"
+        ],
+        "x-speakeasy-name-override": "InstalmentKind"
+      },
+      "types.InstalmentStatus": {
+        "type": "string",
+        "enum": [
+          "scheduled",
+          "invoiced",
+          "cancelled"
+        ],
+        "x-enum-varnames": [
+          "InstalmentStatusScheduled",
+          "InstalmentStatusInvoiced",
+          "InstalmentStatusCancelled"
+        ],
+        "x-speakeasy-name-override": "InstalmentStatus"
       },
       "types.JournalDirection": {
         "type": "string",
@@ -40827,6 +41840,37 @@
           },
           "wallet_id": {
             "type": "string"
+          }
+        }
+      },
+      "webhookDto.BillingInstalmentWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "instalment": {
+            "$ref": "#/components/schemas/billingterm.Instalment"
+          }
+        }
+      },
+      "webhookDto.BillingTermsWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "billing_terms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Term"
+            }
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "owner_type": {
+            "$ref": "#/components/schemas/types.BillingTermOwnerType"
           }
         }
       },
@@ -41348,6 +42392,9 @@
           "amount": {
             "type": "string"
           },
+          "billing_instalment_id": {
+            "type": "string"
+          },
           "commitment_info": {
             "$ref": "#/components/schemas/types.CommitmentInfo"
           },
@@ -41514,6 +42561,47 @@
           "voided_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "webhookDto.PaymentAttempt": {
+        "type": "object",
+        "properties": {
+          "attempt_number": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "gateway_attempt_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          }
+        }
+      },
+      "webhookDto.PaymentAttemptWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "attempt": {
+            "$ref": "#/components/schemas/webhookDto.PaymentAttempt"
+          },
+          "checkout_session": {
+            "$ref": "#/components/schemas/webhookDto.CheckoutSession"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/webhookDto.Payment"
           }
         }
       },

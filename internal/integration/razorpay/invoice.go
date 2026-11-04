@@ -95,7 +95,7 @@ func (s *InvoiceSyncService) SyncInvoice(
 	inv *invoice.Invoice,
 	customerService interfaces.CustomerService,
 ) (*SyncInvoiceResult, error) {
-	charged, err := s.tryAutoCharge(ctx, inv)
+	charged, err := s.TryAutoCharge(ctx, inv)
 	if err != nil {
 		return nil, err
 	}
@@ -191,12 +191,12 @@ func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 	return newPayment, false, nil
 }
 
-// tryAutoCharge resolves the customer's Razorpay tokens; if a usable token
+// TryAutoCharge resolves the customer's Razorpay tokens; if a usable token
 // exists it calls executeAutoCharge and returns (true, nil). If token probing
 // fails for any reason it logs and returns (false, nil) so the caller falls
 // through to SyncInvoiceToRazorpay. Only hard errors from executeAutoCharge are
 // propagated.
-func (s *InvoiceSyncService) tryAutoCharge(
+func (s *InvoiceSyncService) TryAutoCharge(
 	ctx context.Context,
 	inv *invoice.Invoice,
 ) (charged bool, err error) {
@@ -243,7 +243,7 @@ func (s *InvoiceSyncService) tryAutoCharge(
 
 // executeAutoCharge acquires a distributed lock, re-validates invoice/payment state,
 // submits the charge to Razorpay via PaymentSvc.AutoCharge, and marks the payment
-// as PROCESSING. Called only after tryAutoCharge has confirmed a usable token.
+// as PROCESSING. Called only after TryAutoCharge has confirmed a usable token.
 func (s *InvoiceSyncService) executeAutoCharge(
 	ctx context.Context,
 	inv *invoice.Invoice,

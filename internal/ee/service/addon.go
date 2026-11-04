@@ -873,7 +873,7 @@ func (s *addonService) createAddonSyncLineItems(
 			// with commitments on it is checked and inserted under the commitments lock, and a violating price is logged and skipped.
 			if commitmentsOn && price.Type == types.PRICE_TYPE_USAGE {
 				found++
-				ok, err := createSyncLineItem(ctx, s.ServiceParams, sub, price, lineItem)
+				ok, err := createPriceSyncLine(ctx, s.ServiceParams, sub, price, lineItem)
 				if err != nil {
 					return found, created, err
 				}

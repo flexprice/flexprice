@@ -2003,6 +2003,324 @@ const docTemplate = `{
                 }
             }
         },
+        "/commitments/{id}/billing-terms": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the commitment's current billing terms with its scheduled and invoiced instalments in billing order. Invoiced instalments may come from terms an edit replaced. Cancelled instalments are listed by the instalments endpoint.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Get billing terms",
+                "operationId": "getCommitmentBillingTerms",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BillingTermsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Replaces the whole set of billing terms of an active commitment. Its scheduled instalments are cancelled and the new terms generate instalments for what the invoiced ones leave of the commitment total; invoiced instalments and their invoices are kept. A term without bill_on or start_date starts at the billing period holding now, or at the commitment start once its term has ended. Returns the new terms with the scheduled and invoiced instalments in billing order.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Edit billing terms",
+                "operationId": "replaceCommitmentBillingTerms",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Billing terms",
+                        "name": "billing_terms",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ReplaceBillingTermsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BillingTermsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/commitments/{id}/billing-terms/preview": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns what editing the billing terms would produce, without saving anything: the new terms with the invoiced and new instalments in billing order.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Preview billing terms edit",
+                "operationId": "previewCommitmentBillingTerms",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Billing terms",
+                        "name": "billing_terms",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ReplaceBillingTermsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BillingTermsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/commitments/{id}/instalments": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Lists the instalments of the commitment in billing order. Without a status filter every instalment is listed, cancelled ones included.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "List instalments",
+                "operationId": "listCommitmentInstalments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Only instalments in these statuses (scheduled, invoiced, cancelled)",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListInstalmentsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/commitments/{id}/instalments/{instalment_id}/trigger": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; edit the billing terms to bill it later.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Trigger instalment",
+                "operationId": "triggerCommitmentInstalment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Instalment ID",
+                        "name": "instalment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Trigger request",
+                        "name": "trigger",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/TriggerInstalmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/billingterm.Instalment"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/commitments/{id}/terminate": {
             "post": {
                 "security": [
@@ -2010,7 +2328,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Ends a commitment early, effective at the given time or now.",
+                "description": "Ends a commitment immediately. effective_at defaults to now and cannot be in the future. Under billing terms, its scheduled instalments are cancelled and any amount it earned beyond what is already invoiced is billed as a settlement. The settlement and a fixed cancellation fee, when given, are billed together on one one-off invoice.",
                 "consumes": [
                     "application/json"
                 ],
@@ -14871,6 +15189,144 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/billing_instalment.cancelled": {
+            "post": {
+                "description": "Fired when a billing instalment is cancelled. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_instalment.cancelled",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingInstalmentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/billing_instalment.created": {
+            "post": {
+                "description": "Fired when a billing instalment is added to a commitment. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_instalment.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingInstalmentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/billing_instalment.invoiced": {
+            "post": {
+                "description": "Fired when the invoice carrying a billing instalment is finalized. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_instalment.invoiced",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingInstalmentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/billing_instalment.updated": {
+            "post": {
+                "description": "Fired when a trigger moves a billing instalment's bill date, or a voided invoice puts it back on schedule. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_instalment.updated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingInstalmentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/billing_terms.created": {
+            "post": {
+                "description": "Fired when billing terms are saved with a new commitment. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_terms.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingTermsWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/billing_terms.updated": {
+            "post": {
+                "description": "Fired when an edit replaces a commitment's billing terms. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_terms.updated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingTermsWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/checkout.session.completed": {
             "post": {
                 "description": "Fired when payment is confirmed; the subscription is now active and the invoice is finalized. Doc-only for parsing.",
@@ -15533,6 +15989,29 @@ const docTemplate = `{
                         "description": "Webhook payload",
                         "schema": {
                             "$ref": "#/definitions/webhookDto.InvoiceWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/payment.attempt.failed": {
+            "post": {
+                "description": "Fired when one charge attempt is declined and the payment stays open for retry. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "payment.attempt.failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.PaymentAttemptWebhookPayload"
                         }
                     }
                 }
@@ -17052,6 +17531,168 @@ const docTemplate = `{
                 }
             }
         },
+        "billingterm.Instalment": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "bill_on": {
+                    "type": "string"
+                },
+                "bill_trigger": {
+                    "$ref": "#/definitions/types.InstalmentBillTrigger"
+                },
+                "billing_term_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "delivery": {
+                    "$ref": "#/definitions/types.InstalmentDelivery"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "instalment_status": {
+                    "$ref": "#/definitions/types.InstalmentStatus"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_label": {
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/types.InstalmentKind"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "owner_id": {
+                    "type": "string"
+                },
+                "owner_type": {
+                    "$ref": "#/definitions/types.BillingTermOwnerType"
+                },
+                "service_period_end": {
+                    "type": "string"
+                },
+                "service_period_start": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "triggered_at": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "billingterm.Term": {
+            "type": "object",
+            "properties": {
+                "bill_on": {
+                    "type": "string"
+                },
+                "bill_trigger": {
+                    "description": "Once terms.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InstalmentBillTrigger"
+                        }
+                    ]
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_cadence": {
+                    "$ref": "#/definitions/types.InvoiceCadence"
+                },
+                "invoice_label": {
+                    "description": "InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number\nall of the owner's instalments together.",
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/types.BillingTermKind"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "owner_id": {
+                    "type": "string"
+                },
+                "owner_type": {
+                    "$ref": "#/definitions/types.BillingTermOwnerType"
+                },
+                "period_count": {
+                    "type": "integer"
+                },
+                "split": {
+                    "$ref": "#/definitions/types.BillingTermSplit"
+                },
+                "start_date": {
+                    "description": "Recurring terms.",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                },
+                "value": {
+                    "description": "Value is the amount of a fixed term, per instalment on a recurring one; it is nil for a remainder term.",
+                    "type": "string"
+                },
+                "value_type": {
+                    "$ref": "#/definitions/types.BillingTermValueType"
+                }
+            }
+        },
         "commitment.Filter": {
             "type": "object",
             "properties": {
@@ -18441,6 +19082,77 @@ const docTemplate = `{
                 }
             }
         },
+        "BillingTermInput": {
+            "type": "object",
+            "required": [
+                "kind",
+                "value_type"
+            ],
+            "properties": {
+                "bill_on": {
+                    "description": "BillOn is a whole second, the commitment start by default. On an edit it defaults to the start of the billing\nperiod holding now, or to the commitment start once the term has ended.",
+                    "type": "string"
+                },
+                "bill_trigger": {
+                    "$ref": "#/definitions/types.InstalmentBillTrigger"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "invoice_cadence": {
+                    "$ref": "#/definitions/types.InvoiceCadence"
+                },
+                "invoice_label": {
+                    "description": "InvoiceLabel names the term's instalments on the invoice, \"Instalment {n} of {of}\" by default. {n} and {of} are\nfilled with each instalment's place among all of the commitment's instalments and their count.",
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "kind": {
+                    "$ref": "#/definitions/types.BillingTermKind"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "period_count": {
+                    "type": "integer"
+                },
+                "split": {
+                    "$ref": "#/definitions/types.BillingTermSplit"
+                },
+                "start_date": {
+                    "description": "StartDate defaults like BillOn; EndDate defaults to the commitment end. Both are whole seconds.",
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                },
+                "value_type": {
+                    "description": "ValueType is fixed or remainder; percentage is rejected as not supported yet.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingTermValueType"
+                        }
+                    ]
+                }
+            }
+        },
+        "BillingTermsResponse": {
+            "type": "object",
+            "properties": {
+                "billing_terms": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/billingterm.Term"
+                    }
+                },
+                "instalments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/billingterm.Instalment"
+                    }
+                }
+            }
+        },
         "BucketSummary": {
             "type": "object",
             "properties": {
@@ -18621,6 +19333,26 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "total_credit_amount": {
+                    "type": "string"
+                }
+            }
+        },
+        "CancellationFeeInput": {
+            "type": "object",
+            "required": [
+                "type",
+                "value"
+            ],
+            "properties": {
+                "type": {
+                    "description": "Type is fixed or percentage; a percentage fee is rejected as not supported yet.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CancellationFeeType"
+                        }
+                    ]
+                },
+                "value": {
                     "type": "string"
                 }
             }
@@ -19132,6 +19864,13 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.ActiveWindow"
                     }
                 },
+                "billing_terms": {
+                    "description": "BillingTerms and Instalments are set by create and preview.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/billingterm.Term"
+                    }
+                },
                 "binding": {
                     "type": "boolean"
                 },
@@ -19173,7 +19912,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "instalment_invoicing": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.InstalmentDelivery"
+                },
+                "instalments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/billingterm.Instalment"
+                    }
                 },
                 "invoice_description": {
                     "type": "string"
@@ -20021,6 +20766,15 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.ActiveWindow"
                     }
                 },
+                "billing_terms": {
+                    "description": "BillingTerms apply only to collection_method billing_terms, which requires at least one.",
+                    "type": "array",
+                    "maxItems": 20,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/BillingTermInput"
+                    }
+                },
                 "binding": {
                     "description": "default false",
                     "type": "boolean"
@@ -20038,6 +20792,14 @@ const docTemplate = `{
                 "idempotency_key": {
                     "type": "string",
                     "maxLength": 128
+                },
+                "instalment_invoicing": {
+                    "description": "InstalmentInvoicing applies only to collection_method billing_terms.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InstalmentDelivery"
+                        }
+                    ]
                 },
                 "invoice_description": {
                     "type": "string",
@@ -20067,6 +20829,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/CommitmentScopeInput"
                 },
                 "start_date": {
+                    "description": "StartDate and EndDate must be whole seconds.",
                     "type": "string"
                 },
                 "subscription_id": {
@@ -24089,6 +24852,14 @@ const docTemplate = `{
                 "plan_id": {
                     "type": "string"
                 },
+                "proration_behavior": {
+                    "description": "ProrationBehavior is stored on the child. Empty defaults to none.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
                 "subscription_coupons": {
                     "description": "SubscriptionCoupons is the preferred way to attach coupons at creation.\nAccepts coupon_code; optionally targets a line item via price_id.",
                     "type": "array",
@@ -24287,6 +25058,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "amount": {
+                    "type": "string"
+                },
+                "billing_instalment_id": {
+                    "description": "billing_instalment_id links this line item to the billing instalment it bills.",
                     "type": "string"
                 },
                 "commitment_id": {
@@ -25127,6 +25902,17 @@ const docTemplate = `{
                 }
             }
         },
+        "ListInstalmentsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/billingterm.Instalment"
+                    }
+                }
+            }
+        },
         "ListPaymentsResponse": {
             "type": "object",
             "properties": {
@@ -25510,6 +26296,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "error_message": {
+                    "type": "string"
+                },
+                "gateway_attempt_id": {
                     "type": "string"
                 },
                 "id": {
@@ -26482,6 +27271,22 @@ const docTemplate = `{
                 },
                 "reason": {
                     "type": "string"
+                }
+            }
+        },
+        "ReplaceBillingTermsRequest": {
+            "type": "object",
+            "required": [
+                "billing_terms"
+            ],
+            "properties": {
+                "billing_terms": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/BillingTermInput"
+                    }
                 }
             }
         },
@@ -29841,9 +30646,10 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "cancellation_fee": {
-                    "type": "string"
+                    "$ref": "#/definitions/CancellationFeeInput"
                 },
                 "effective_at": {
+                    "description": "EffectiveAt defaults to now; a given one must be a whole second.",
                     "type": "string"
                 }
             }
@@ -30018,6 +30824,15 @@ const docTemplate = `{
                 }
             }
         },
+        "TriggerInstalmentRequest": {
+            "type": "object",
+            "properties": {
+                "bill_on": {
+                    "description": "BillOn must be a whole second.",
+                    "type": "string"
+                }
+            }
+        },
         "UpdateAddonRequest": {
             "type": "object",
             "properties": {
@@ -30053,14 +30868,16 @@ const docTemplate = `{
                 },
                 "invoice_label": {
                     "type": "string",
-                    "maxLength": 255
+                    "maxLength": 255,
+                    "minLength": 1
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
                 },
                 "name": {
                     "type": "string",
-                    "maxLength": 255
+                    "maxLength": 255,
+                    "minLength": 1
                 }
             }
         },
@@ -30708,6 +31525,14 @@ const docTemplate = `{
                 "parent_subscription_id": {
                     "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear.",
                     "type": "string"
+                },
+                "proration_behavior": {
+                    "description": "ProrationBehavior updates the stored behavior. Omit to leave it unchanged.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
                 },
                 "status": {
                     "$ref": "#/definitions/types.SubscriptionStatus"
@@ -34291,7 +35116,8 @@ const docTemplate = `{
                 "AUTO_INVOICE_THRESHOLD",
                 "WALLET_AUTO_TOPUP",
                 "SUBSCRIPTION_PAUSED",
-                "SUBSCRIPTION_RESUME"
+                "SUBSCRIPTION_RESUME",
+                "BILLING_TERMS"
             ],
             "x-enum-varnames": [
                 "InvoiceBillingReasonSubscriptionCreate",
@@ -34304,7 +35130,8 @@ const docTemplate = `{
                 "InvoiceBillingReasonAutoInvoiceThreshold",
                 "InvoiceBillingReasonWalletAutoTopup",
                 "InvoiceBillingReasonSubscriptionPaused",
-                "InvoiceBillingReasonSubscriptionResume"
+                "InvoiceBillingReasonSubscriptionResume",
+                "InvoiceBillingReasonBillingTerms"
             ]
         },
         "types.InvoiceCadence": {
@@ -36848,6 +37675,12 @@ const docTemplate = `{
                 "commitment.created",
                 "commitment.updated",
                 "commitment.terminated",
+                "billing_terms.created",
+                "billing_terms.updated",
+                "billing_instalment.created",
+                "billing_instalment.updated",
+                "billing_instalment.cancelled",
+                "billing_instalment.invoiced",
                 "wallet.created",
                 "wallet.updated",
                 "wallet.terminated",
@@ -36856,6 +37689,7 @@ const docTemplate = `{
                 "payment.created",
                 "payment.updated",
                 "payment.failed",
+                "payment.attempt.failed",
                 "payment.success",
                 "payment.pending",
                 "refund.created",
@@ -36915,6 +37749,12 @@ const docTemplate = `{
                 "WebhookEventCommitmentCreated",
                 "WebhookEventCommitmentUpdated",
                 "WebhookEventCommitmentTerminated",
+                "WebhookEventBillingTermsCreated",
+                "WebhookEventBillingTermsUpdated",
+                "WebhookEventBillingInstalmentCreated",
+                "WebhookEventBillingInstalmentUpdated",
+                "WebhookEventBillingInstalmentCancelled",
+                "WebhookEventBillingInstalmentInvoiced",
                 "WebhookEventWalletCreated",
                 "WebhookEventWalletUpdated",
                 "WebhookEventWalletTerminated",
@@ -36923,6 +37763,7 @@ const docTemplate = `{
                 "WebhookEventPaymentCreated",
                 "WebhookEventPaymentUpdated",
                 "WebhookEventPaymentFailed",
+                "WebhookEventPaymentAttemptFailed",
                 "WebhookEventPaymentSuccess",
                 "WebhookEventPaymentPending",
                 "WebhookEventRefundCreated",
@@ -37108,6 +37949,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "amount": {
+                    "type": "string"
+                },
+                "billing_instalment_id": {
+                    "description": "billing_instalment_id links this line item to the billing instalment it bills.",
                     "type": "string"
                 },
                 "commitment_id": {
@@ -38101,6 +38946,63 @@ const docTemplate = `{
                 "AmortizationPeriodEvenProrated"
             ]
         },
+        "types.BillingTermKind": {
+            "type": "string",
+            "enum": [
+                "once",
+                "recurring"
+            ],
+            "x-enum-varnames": [
+                "BillingTermKindOnce",
+                "BillingTermKindRecurring"
+            ]
+        },
+        "types.BillingTermOwnerType": {
+            "type": "string",
+            "enum": [
+                "commitment"
+            ],
+            "x-enum-varnames": [
+                "BillingTermOwnerCommitment"
+            ]
+        },
+        "types.BillingTermSplit": {
+            "type": "string",
+            "enum": [
+                "even",
+                "proportional"
+            ],
+            "x-enum-varnames": [
+                "BillingTermSplitEven",
+                "BillingTermSplitProportional"
+            ]
+        },
+        "types.BillingTermValueType": {
+            "description": "fixed or remainder; percentage is reserved and rejected as not supported yet",
+            "type": "string",
+            "enum": [
+                "fixed",
+                "percentage",
+                "remainder"
+            ],
+            "x-enum-varnames": [
+                "BillingTermValueFixed",
+                "BillingTermValuePercentage",
+                "BillingTermValueRemainder"
+            ]
+        },
+        "types.CancellationFeeType": {
+            "description": "fixed; percentage is reserved and rejected as not supported yet",
+            "type": "string",
+            "enum": [
+                "fixed",
+                "percentage"
+            ],
+            "x-enum-varnames": [
+                "CancellationFeeFixed",
+                "CancellationFeePercentage"
+            ]
+        },
         "types.CommitmentCollectionMethod": {
             "type": "string",
             "enum": [
@@ -38201,6 +39103,52 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "ImprovementHigher",
                 "ImprovementLower"
+            ]
+        },
+        "types.InstalmentBillTrigger": {
+            "type": "string",
+            "enum": [
+                "date",
+                "manual"
+            ],
+            "x-enum-varnames": [
+                "InstalmentBillTriggerDate",
+                "InstalmentBillTriggerManual"
+            ]
+        },
+        "types.InstalmentDelivery": {
+            "type": "string",
+            "enum": [
+                "subscription_invoice",
+                "separate_invoice"
+            ],
+            "x-enum-varnames": [
+                "InstalmentDeliverySubscriptionInvoice",
+                "InstalmentDeliverySeparateInvoice"
+            ]
+        },
+        "types.InstalmentKind": {
+            "type": "string",
+            "enum": [
+                "instalment",
+                "settlement"
+            ],
+            "x-enum-varnames": [
+                "InstalmentKindInstalment",
+                "InstalmentKindSettlement"
+            ]
+        },
+        "types.InstalmentStatus": {
+            "type": "string",
+            "enum": [
+                "scheduled",
+                "invoiced",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "InstalmentStatusScheduled",
+                "InstalmentStatusInvoiced",
+                "InstalmentStatusCancelled"
             ]
         },
         "types.JournalDirection": {
@@ -38480,6 +39428,37 @@ const docTemplate = `{
                 },
                 "wallet_id": {
                     "type": "string"
+                }
+            }
+        },
+        "webhookDto.BillingInstalmentWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "instalment": {
+                    "$ref": "#/definitions/billingterm.Instalment"
+                }
+            }
+        },
+        "webhookDto.BillingTermsWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "billing_terms": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/billingterm.Term"
+                    }
+                },
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "owner_id": {
+                    "type": "string"
+                },
+                "owner_type": {
+                    "$ref": "#/definitions/types.BillingTermOwnerType"
                 }
             }
         },
@@ -38990,6 +39969,9 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
+                "billing_instalment_id": {
+                    "type": "string"
+                },
                 "commitment_info": {
                     "$ref": "#/definitions/types.CommitmentInfo"
                 },
@@ -39155,6 +40137,46 @@ const docTemplate = `{
                 },
                 "voided_at": {
                     "type": "string"
+                }
+            }
+        },
+        "webhookDto.PaymentAttempt": {
+            "type": "object",
+            "properties": {
+                "attempt_number": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "error_message": {
+                    "type": "string"
+                },
+                "gateway_attempt_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                }
+            }
+        },
+        "webhookDto.PaymentAttemptWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "attempt": {
+                    "$ref": "#/definitions/webhookDto.PaymentAttempt"
+                },
+                "checkout_session": {
+                    "$ref": "#/definitions/webhookDto.CheckoutSession"
+                },
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "payment": {
+                    "$ref": "#/definitions/webhookDto.Payment"
                 }
             }
         },

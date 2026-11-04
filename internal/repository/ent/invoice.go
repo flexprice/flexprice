@@ -285,6 +285,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 					SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 					SetNillableCommitmentID(item.CommitmentID).
+					SetNillableBillingInstalmentID(item.BillingInstalmentID).
 					SetNillableParentLineItemID(item.ParentLineItemID).
 					SetCurrency(item.Currency).
 					SetNillablePeriodStart(item.PeriodStart).
@@ -382,6 +383,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 				SetNillableCommitmentID(item.CommitmentID).
+				SetNillableBillingInstalmentID(item.BillingInstalmentID).
 				SetNillableParentLineItemID(item.ParentLineItemID).
 				SetNillablePeriodStart(item.PeriodStart).
 				SetNillablePeriodEnd(item.PeriodEnd).

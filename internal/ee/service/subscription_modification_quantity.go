@@ -674,7 +674,7 @@ func (s *subscriptionModificationService) applyQuantityChange(
 				WithSuccessorLineItemID(nil).
 				Build()
 			clearLineItemMetadataIDs(newItem, lineageMetadataKeys...)
-			if err := checkLineItemCommitmentAttach(txCtx, sp, request.GetSubscription(), newItem); err != nil {
+			if err := checkLineAttach(txCtx, sp, request.GetSubscription(), newItem); err != nil {
 				return err
 			}
 			if err := sp.SubscriptionLineItemRepo.Create(txCtx, newItem); err != nil {

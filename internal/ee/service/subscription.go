@@ -2083,6 +2083,10 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 		}
 	}
 
+	if req.ProrationBehavior != nil {
+		subscription.ProrationBehavior = *req.ProrationBehavior
+	}
+
 	if req.CancelAtPeriodEnd != nil {
 		subscription.CancelAtPeriodEnd = *req.CancelAtPeriodEnd
 		// Explicit false with no cancel_at clears a pending cancellation; gated on an existing
@@ -2263,7 +2267,8 @@ func (s *subscriptionService) CancelSubscription(
 			req.CancellationType == types.CancellationTypeScheduledDate
 		shouldCreateInvoice := !isScheduled &&
 			invoicePolicy == types.CancelImmediatelyInvoicePolicyGenerateInvoice
-		// Commitments end before the final invoice is built, so it carries their prorated true-up and settlement.
+		// Commitments end before the final invoice is built, so it carries their prorated true-up. A billing-terms
+		// settlement goes on its own invoice instead.
 		if req.CancellationType == types.CancellationTypeImmediate {
 			if err := NewCommitmentService(s.ServiceParams).TerminateForSubscription(ctx, subscription.ID, effectiveDate); err != nil {
 				return err
@@ -2401,10 +2406,16 @@ func (s *subscriptionService) CancelSubscription(
 	// cancellation sets Cancelled here. end_of_period and scheduled_date both set CancelAt but leave
 	// the subscription active until the cancellation schedule processor fires, so flushing now would
 	// report a final usage window for a subscription that has not ended yet.
-	if subscription.SubscriptionStatus == types.SubscriptionStatusCancelled &&
-		subscription.CancelAt != nil &&
-		s.hasMarketplaceMapping(ctx, subscription.ID) {
-		s.triggerMarketplaceSubscriptionFinalUsageFlushWorkflow(ctx, subscription.ID, *subscription.CancelAt)
+	if subscription.SubscriptionStatus == types.SubscriptionStatusCancelled && subscription.CancelAt != nil {
+		mapped, err := s.HasMarketplaceMapping(ctx, subscription.ID)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to look up marketplace mappings for subscription flush",
+				"error", err,
+				"subscription_id", subscription.ID)
+		}
+		if mapped {
+			s.triggerMarketplaceSubscriptionFinalUsageFlushWorkflow(ctx, subscription.ID, *subscription.CancelAt)
+		}
 	}
 
 	// Step 11: Build response
@@ -8329,6 +8340,7 @@ func (s *subscriptionService) createGroupedInvoicingChildren(
 			BillingPeriodCount:         parent.BillingPeriodCount,
 			BillingCycle:               parent.BillingCycle,
 			BillingAnchor:              billingAnchor,
+			ProrationBehavior:          c.ProrationBehavior,
 			SubscriptionType:           types.SubscriptionTypeGroupedInvoicing,
 			SubscriptionCreationConfig: c.SubscriptionCreationConfig,
 			Checkout:                   checkout,
@@ -8690,13 +8702,9 @@ func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub
 		"checkout_url_present", sub.Metadata[paddleint.MetaKeyPaddleCheckoutURL] != "")
 }
 
-// hasMarketplaceMapping reports whether the subscription is linked to any marketplace. Most
-// cancellations are not, so this gates the flush at the call site rather than starting a workflow per
-// cancellation that would immediately find nothing to do. A lookup failure is logged and treated as
-// no mapping: the flush follows a cancellation that has already committed and must never fail it.
-func (s *subscriptionService) hasMarketplaceMapping(ctx context.Context, subscriptionID string) bool {
+func (s *subscriptionService) HasMarketplaceMapping(ctx context.Context, subscriptionID string) (bool, error) {
 	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
-		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
+		QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(1)},
 		EntityID:    subscriptionID,
 		EntityType:  types.IntegrationEntityTypeSubscription,
 		ProviderTypes: []string{
@@ -8706,12 +8714,9 @@ func (s *subscriptionService) hasMarketplaceMapping(ctx context.Context, subscri
 		},
 	})
 	if err != nil {
-		s.Logger.Error(ctx, "failed to look up marketplace mappings for subscription flush",
-			"error", err,
-			"subscription_id", subscriptionID)
-		return false
+		return false, err
 	}
-	return len(mappings) > 0
+	return len(mappings) > 0, nil
 }
 
 // triggerMarketplaceSubscriptionFinalUsageFlushWorkflow starts the cancellation flush, which reports

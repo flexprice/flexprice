@@ -110,3 +110,31 @@ func TestReportEvent_DisabledSendsNothing(t *testing.T) {
 		t.Fatalf("expected no requests while disabled, got %d", hitCount)
 	}
 }
+
+func TestReportEvent_CarriesInstallLabel(t *testing.T) {
+	got := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var decoded struct {
+			InstallLabel string `json:"install_label"`
+		}
+		_ = json.Unmarshal(body, &decoded)
+		got <- decoded.InstallLabel
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	r := newTestReporter(t, srv.URL)
+	r.cfg.Telemetry.InstallLabel = "acme"
+	ctx := context.WithValue(context.Background(), types.CtxTenantID, "tenant_01")
+	r.ReportEvent(ctx, &types.WebhookEvent{EventName: "customer.created", Payload: []byte(`{}`)})
+
+	select {
+	case label := <-got:
+		if label != "acme" {
+			t.Fatalf("install_label = %q, want acme", label)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no event sent")
+	}
+}

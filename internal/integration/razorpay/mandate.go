@@ -72,12 +72,6 @@ func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
 	}
 	out := &interfaces.ProviderRecurringPaymentDetails{Status: toRecurringPaymentStatus(status)}
 
-	// Razorpay declines charges on a card whose issuer no longer supports recurring,
-	// even while the mandate still reads confirmed.
-	if t.cardRecurringUnsupported() && out.Status == types.RecurringPaymentStatusActive {
-		out.Status = types.RecurringPaymentStatusRejected
-	}
-
 	if t.MaxAmount > 0 {
 		major := fromPaise(t.MaxAmount)
 		out.MaxAmount = &major
@@ -95,10 +89,6 @@ func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
 	}
 
 	return out
-}
-
-func (t Token) cardRecurringUnsupported() bool {
-	return t.Card != nil && t.Card.Flows != nil && t.Card.Flows.Recurring != nil && !*t.Card.Flows.Recurring
 }
 
 func (t Token) cardDetails() *interfaces.ProviderCardDetails {

@@ -86,6 +86,14 @@ func (s CommitmentStatus) Validate() error {
 	})
 }
 
+// CommitmentRate names a commitment's rate price: the committed rate or the overage rate.
+type CommitmentRate string
+
+const (
+	CommitmentRateCommitted CommitmentRate = "committed"
+	CommitmentRateOverage   CommitmentRate = "overage"
+)
+
 // CommitmentLineKind tags invoice lines produced for a commitment.
 type CommitmentLineKind string
 
