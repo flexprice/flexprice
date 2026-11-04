@@ -19026,7 +19026,7 @@
             ],
             "properties": {
                 "bill_on": {
-                    "description": "BillOn is the commitment start by default. On an edit it defaults to the start of the billing period holding\nnow, or to the commitment start once the term has ended. A date within a second after a billing period edge is\ntaken as that edge, here and in start_date and end_date.",
+                    "description": "BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now. Like\nstart_date and end_date, a date under a second past a period edge means the edge.",
                     "type": "string"
                 },
                 "bill_trigger": {
@@ -19039,7 +19039,7 @@
                     "$ref": "#/definitions/types.InvoiceCadence"
                 },
                 "invoice_label": {
-                    "description": "InvoiceLabel names the term's instalments on the invoice, \"Instalment {n} of {of}\" by default. {n} and {of} are\nfilled with each instalment's place among the commitment's numbered instalments, those whose labels use them,\nand their count; a label without them takes no number.",
+                    "description": "InvoiceLabel names the term's instalments, \"Instalment {n} of {of}\" by default. {n} and {of} count only the\ncommitment's instalments whose labels use them.",
                     "type": "string",
                     "maxLength": 255
                 },

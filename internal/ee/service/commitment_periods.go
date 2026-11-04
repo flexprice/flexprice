@@ -46,15 +46,15 @@ func commitmentPeriods(
 		return nil, err
 	}
 
-	// The period starting at span.End lies outside span.
-	until := last.End
+	// Run through the period holding span.End, or stop at span.End when a period starts there.
+	through := last.End
 	if !last.Start.Before(span.End) {
-		until = span.End
+		through = span.End
 	}
 
 	full, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
 		InitialPeriodStart: first.Start,
-		EndDate:            &until,
+		EndDate:            &through,
 		Anchor:             sub.BillingAnchor,
 		PeriodCount:        sub.BillingPeriodCount,
 		BillingPeriod:      sub.BillingPeriod,
@@ -66,8 +66,7 @@ func commitmentPeriods(
 			Mark(ierr.ErrInternal)
 	}
 
-	// Periods cut short by the subscription's start or end prorate against the regular period around them. The grid is
-	// on whole seconds, like the stored period edges, even under an anchor from before starts were whole seconds.
+	// Cut periods prorate against their regular period, on a whole-second grid matching the stored period edges.
 	grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor.Truncate(time.Second), sub.BillingPeriod, sub.BillingPeriodCount, sub.Timezone)
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -75,16 +74,12 @@ func commitmentPeriods(
 			Mark(ierr.ErrInternal)
 	}
 
-	termEnd := c.EndDate
-	if termEnd == nil {
-		termEnd = sub.EndDate
-	}
-
+	end := lo.CoalesceOrEmpty(c.EndDate, sub.EndDate)
 	out := make([]commitmentPeriod, 0, len(full))
 	for _, p := range full {
 		cut := types.Period{Start: maxTime(p.Start, c.StartDate), End: p.End}
-		if termEnd != nil {
-			cut.End = minTime(cut.End, *termEnd)
+		if end != nil {
+			cut.End = minTime(cut.End, *end)
 		}
 
 		if !cut.Start.Before(cut.End) {
@@ -213,7 +208,7 @@ func termValue(
 		return nil, nil
 	}
 
-	periods, err := commitmentPeriods(c, sub, amountOf, bucket, types.Period{Start: c.StartDate, End: *c.EndDate})
+	periods, err := commitmentPeriods(c, sub, amountOf, bucket, c.CollectionPeriod())
 	if err != nil {
 		return nil, err
 	}
@@ -246,8 +241,7 @@ func earnedAmount(
 		}
 
 		if p.Start.Before(at) {
-			upToAt := types.Period{Start: p.Start, End: at}
-			earned = earned.Add(clipCommitmentPeriod(c, p, upToAt, amountOf, bucket, sub.BillingAnchor).Amount)
+			earned = earned.Add(clipCommitmentPeriod(c, p, types.Period{Start: p.Start, End: at}, amountOf, bucket, sub.BillingAnchor).Amount)
 		}
 
 		break
@@ -293,9 +287,7 @@ func periodAt(sub *subscription.Subscription, t time.Time) (types.Period, error)
 	return types.FullBillingPeriod(t, grid), nil
 }
 
-// atPeriodEdge moves t back to the start of the subscription billing period holding it when t falls within that
-// period's first second. Period edges are whole seconds, so a date a fraction past one, as a date derived from a
-// mid-second subscription start is, means the edge.
+// atPeriodEdge returns the start of the billing period holding t when t is under a second past it, else t.
 func atPeriodEdge(sub *subscription.Subscription, t time.Time) (time.Time, error) {
 	holding, err := periodAt(sub, t)
 	if err != nil {
@@ -309,28 +301,34 @@ func atPeriodEdge(sub *subscription.Subscription, t time.Time) (time.Time, error
 	return t, nil
 }
 
-// alignToPeriodEdges points each set date at its atPeriodEdge value.
-func alignToPeriodEdges(sub *subscription.Subscription, dates ...**time.Time) error {
-	for _, d := range dates {
-		if *d == nil {
-			continue
-		}
-
-		aligned, err := atPeriodEdge(sub, **d)
-		if err != nil {
-			return err
-		}
-
-		*d = &aligned
+// atPeriodEdgePtr is the nil-safe form of atPeriodEdge.
+func atPeriodEdgePtr(sub *subscription.Subscription, t *time.Time) (*time.Time, error) {
+	if t == nil {
+		return nil, nil
 	}
 
-	return nil
+	aligned, err := atPeriodEdge(sub, *t)
+	if err != nil {
+		return nil, err
+	}
+
+	return &aligned, nil
 }
 
 // alignTermDates applies atPeriodEdge to each term's bill_on, start_date and end_date.
 func alignTermDates(sub *subscription.Subscription, terms []dto.BillingTermInput) error {
 	for i := range terms {
-		if err := alignToPeriodEdges(sub, &terms[i].BillOn, &terms[i].StartDate, &terms[i].EndDate); err != nil {
+		in := &terms[i]
+		var err error
+		if in.BillOn, err = atPeriodEdgePtr(sub, in.BillOn); err != nil {
+			return err
+		}
+
+		if in.StartDate, err = atPeriodEdgePtr(sub, in.StartDate); err != nil {
+			return err
+		}
+
+		if in.EndDate, err = atPeriodEdgePtr(sub, in.EndDate); err != nil {
 			return err
 		}
 	}

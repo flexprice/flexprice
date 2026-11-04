@@ -1006,25 +1006,19 @@ type SubscriptionResponseV2 struct {
 	PlanPricesOutOfSync bool `json:"plan_prices_out_of_sync"`
 }
 
-// ApplyDefaults fills the creation config's defaults and drops any fraction of a second from the start, anchor, trial
-// and phase dates: billing period edges are whole seconds, so dates derived from the start land on them.
+// ApplyDefaults fills the creation config's defaults, starts the subscription now unless given a start, and puts its
+// dates on whole seconds like every billing period edge.
 func (r *CreateSubscriptionRequest) ApplyDefaults() {
 	r.SubscriptionCreationConfig.ApplyDefaults()
 
-	wholeSecond := func(t *time.Time) *time.Time {
-		if t == nil {
-			return nil
-		}
-
-		return lo.ToPtr(t.Truncate(time.Second))
-	}
-	r.StartDate = wholeSecond(r.StartDate)
-	r.BillingAnchor = wholeSecond(r.BillingAnchor)
-	r.TrialStart = wholeSecond(r.TrialStart)
-	r.TrialEnd = wholeSecond(r.TrialEnd)
+	r.StartDate = types.WholeSecondPtr(lo.CoalesceOrEmpty(r.StartDate, lo.ToPtr(clock.Now())))
+	r.EndDate = types.WholeSecondPtr(r.EndDate)
+	r.BillingAnchor = types.WholeSecondPtr(r.BillingAnchor)
+	r.TrialStart = types.WholeSecondPtr(r.TrialStart)
+	r.TrialEnd = types.WholeSecondPtr(r.TrialEnd)
 	for i := range r.Phases {
 		r.Phases[i].StartDate = r.Phases[i].StartDate.Truncate(time.Second)
-		r.Phases[i].EndDate = wholeSecond(r.Phases[i].EndDate)
+		r.Phases[i].EndDate = types.WholeSecondPtr(r.Phases[i].EndDate)
 	}
 }
 

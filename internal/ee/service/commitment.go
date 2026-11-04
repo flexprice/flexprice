@@ -301,20 +301,21 @@ func (s *commitmentService) prepare(
 	}
 
 	req.ApplyDefaults(cc.Sub.Timezone)
-	if err := req.Validate(); err != nil {
-		return nil, nil, err
-	}
 
-	// A date within a second after a billing period edge means the edge.
+	// A date within a second after a billing period edge means the edge; validation sees the aligned dates.
 	if req.StartDate, err = atPeriodEdge(cc.Sub, req.StartDate); err != nil {
 		return nil, nil, err
 	}
 
-	if err := alignToPeriodEdges(cc.Sub, &req.EndDate); err != nil {
+	if req.EndDate, err = atPeriodEdgePtr(cc.Sub, req.EndDate); err != nil {
 		return nil, nil, err
 	}
 
 	if err := alignTermDates(cc.Sub, req.BillingTerms); err != nil {
+		return nil, nil, err
+	}
+
+	if err := req.Validate(); err != nil {
 		return nil, nil, err
 	}
 
@@ -719,7 +720,7 @@ func (s *commitmentService) terminate(
 		}
 	}
 
-	invoiceID, err := s.billTermination(ctx, c, effectiveAt, fee, settlement)
+	invoiceID, err := s.billTermination(ctx, c, sub, effectiveAt, fee, settlement)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -742,6 +743,7 @@ func (s *commitmentService) terminate(
 func (s *commitmentService) billTermination(
 	ctx context.Context,
 	c *commitment.Commitment,
+	sub *subscription.Subscription,
 	effectiveAt time.Time,
 	fee decimal.Decimal,
 	settlement *billingterm.Instalment,
@@ -749,11 +751,6 @@ func (s *commitmentService) billTermination(
 	fee = types.RoundToCurrencyPrecision(fee, c.Currency)
 	if settlement == nil && !fee.IsPositive() {
 		return nil, nil
-	}
-
-	sub, err := s.SubRepo.Get(ctx, c.SubscriptionID)
-	if err != nil {
-		return nil, err
 	}
 
 	var lines []dto.CreateInvoiceLineItemRequest

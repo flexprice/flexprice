@@ -464,7 +464,7 @@ func (s *CommitmentE2ESuite) TestQuarterlyCommitmentCreatedMidPeriod_ProratesIts
 	s.requireInvoice(s.invoiceFor(sub.ID, s.jan, s.jan.AddDate(0, 3, 0)), "650",
 		wantLine{types.CommitmentLineUtilized, "Quarterly floor", "300", "300"},
 		wantLine{types.CommitmentLineTrueUp, "Quarterly floor (unused)", "1", "150"},
-		wantLine{"", "Tokens", "200", "200"},
+		wantLine{types.CommitmentLinePlain, "Tokens", "200", "200"},
 	)
 }
 
@@ -513,7 +513,7 @@ func (s *CommitmentE2ESuite) TestTerminateMidPeriod_ClipsTheFloorAndBillsTheFee(
 	s.requireInvoice(s.invoiceFor(sub.ID, s.jan, s.jan.AddDate(0, 1, 0)), "130",
 		wantLine{types.CommitmentLineUtilized, "Platform floor", "400", "40"},
 		wantLine{types.CommitmentLineTrueUp, "Platform floor (unused)", "1", "60"},
-		wantLine{"", "Tokens", "300", "30"},
+		wantLine{types.CommitmentLinePlain, "Tokens", "300", "30"},
 	)
 }
 
@@ -537,7 +537,7 @@ func (s *CommitmentE2ESuite) TestOneYearCommitmentFromMidPeriod_ProratesItsFirst
 	s.requireInvoice(s.invoiceFor(sub.ID, s.jan, s.jan.AddDate(0, 1, 0)), "190",
 		wantLine{types.CommitmentLineUtilized, "Annual floor", "1000", "100"},
 		wantLine{types.CommitmentLineTrueUp, "Annual floor (unused)", "1", "70"},
-		wantLine{"", "Tokens", "200", "20"},
+		wantLine{types.CommitmentLinePlain, "Tokens", "200", "20"},
 	)
 
 	// June 2026: the full $310 floor against $200 used.
@@ -552,7 +552,7 @@ func (s *CommitmentE2ESuite) TestOneYearCommitmentFromMidPeriod_ProratesItsFirst
 	s.requireInvoice(s.invoiceFor(sub.ID, lastJan, lastJan.AddDate(0, 1, 0)), "190",
 		wantLine{types.CommitmentLineUtilized, "Annual floor", "600", "60"},
 		wantLine{types.CommitmentLineTrueUp, "Annual floor (unused)", "1", "80"},
-		wantLine{"", "Tokens", "500", "50"},
+		wantLine{types.CommitmentLinePlain, "Tokens", "500", "50"},
 	)
 }
 
@@ -977,6 +977,10 @@ func (s *CommitmentE2ESuite) TestE2E_A6_Deposit() {
 	opening := s.openingInvoice(sub.ID)
 	s.requireBilled(opening, "300", wantLine{types.CommitmentLineInstalment, "Platform - Deposit", "1", "300"})
 	deposit := s.billedInstalments(opening.ID)[0]
+	s.Require().Len(sub.Commitments, 1)
+	returned, ok := lo.Find(sub.Commitments[0].Instalments, func(i *billingterm.Instalment) bool { return i.ID == deposit.ID })
+	s.Require().True(ok)
+	s.Equal(types.InstalmentStatusInvoiced, returned.InstalmentStatus, "the response shows the deposit the opening invoice billed")
 	s.True(deposit.ServicePeriodStart.Equal(s.jan) && deposit.ServicePeriodEnd.Equal(end), "a once instalment's service period is the term")
 
 	// $80 of usage in January, $150 in February and $100 in April.
@@ -1068,7 +1072,7 @@ func (s *CommitmentE2ESuite) TestE2E_B1_SeparateInvoice() {
 	// The August invoice, issued on 1 Sep, carries no instalment although all three are due by then.
 	s.requireBilled(s.billPeriod(sub.ID, aug), "20",
 		wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "500", "0"},
-		wantLine{"", "Tokens", "200", "20"},
+		wantLine{types.CommitmentLinePlain, "Tokens", "200", "20"},
 	)
 
 	s.Require().NoError(s.commitments.BillDueInstalments(s.GetContext()))

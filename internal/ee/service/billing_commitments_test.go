@@ -775,7 +775,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodStartsMidPeriod(
 	lines, total, err := usageLinesWithTotal(ctx, l)
 	s.Require().NoError(err)
 	s.True(s.loaderLine(lines, types.CommitmentLineUtilized, c.ID).Quantity.Equal(dec("20")))
-	s.True(loaderLinesOfKind(lines, "")[0].Quantity.Equal(dec("20")), "pre-start usage bills as plain usage")
+	s.True(loaderLinesOfKind(lines, types.CommitmentLinePlain)[0].Quantity.Equal(dec("20")), "pre-start usage bills as plain usage")
 	// 20 within at $0.5, true-up of the $7 unused, and 20 plain usage at the $1 price.
 	s.True(total.Equal(dec("37")), "total %s", total)
 }
@@ -810,7 +810,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodEndsMidPeriod() 
 	s.Require().NoError(err)
 	s.True(s.loaderLine(lines, types.CommitmentLineUtilized, c.ID).Quantity.Equal(dec("20")))
 	s.True(s.loaderLine(lines, types.CommitmentLineTrueUp, c.ID).Amount.Equal(dec("4")))
-	s.True(loaderLinesOfKind(lines, "")[0].Quantity.Equal(dec("20")), "post-end usage bills as plain usage")
+	s.True(loaderLinesOfKind(lines, types.CommitmentLinePlain)[0].Quantity.Equal(dec("20")), "post-end usage bills as plain usage")
 	// 20 within at $0.5, true-up of the $4 unused, and 20 plain usage at the $1 price.
 	s.True(total.Equal(dec("34")), "total %s", total)
 }
@@ -868,7 +868,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_OveragePriceSkipsUsageOutside
 			s.True(overage[0].Quantity.Round(6).Equal(dec(tt.beyondCap)), "beyond-capacity overage %s", overage[0].Quantity)
 			s.True(overage[0].Amount.Equal(dec(tt.beyondCap).Mul(dec("3"))), "beyond-capacity overage %s", overage[0].Amount)
 
-			plain := loaderLinesOfKind(lines, "")
+			plain := loaderLinesOfKind(lines, types.CommitmentLinePlain)
 			s.Require().Len(plain, 1, "usage outside the commitment bills as plain usage")
 			s.True(plain[0].Quantity.Equal(dec("20")), "out-of-force usage %s", plain[0].Quantity)
 			s.True(plain[0].Amount.Equal(dec("20")), "out-of-force usage %s", plain[0].Amount)
@@ -1595,7 +1595,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_AmountSpansSpreadThePeriodCos
 	lines, total, err := usageLinesWithTotal(ctx, l)
 	s.Require().NoError(err)
 	s.True(s.loaderLine(lines, types.CommitmentLineUtilized, c.ID).Amount.Equal(dec("10")))
-	plain := loaderLinesOfKind(lines, "")
+	plain := loaderLinesOfKind(lines, types.CommitmentLinePlain)
 	s.Require().Len(plain, 1, "the 20 calls before the start bill as plain usage")
 	s.True(plain[0].Amount.Equal(dec("20")), "plain usage %s", plain[0].Amount)
 	// $100 for the 17 days from 15 Aug is $54.84, of which $10 is used.

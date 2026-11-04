@@ -77,8 +77,8 @@ func TestLineItemStart(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &Price{StartDate: tt.priceStart}
-			assert.True(t, p.LineItemStart(start).Equal(tt.want), "got %s", p.LineItemStart(start))
+			got := (&Price{StartDate: tt.priceStart}).LineItemStart(start)
+			assert.True(t, got.Equal(tt.want), "got %s", got)
 		})
 	}
 }

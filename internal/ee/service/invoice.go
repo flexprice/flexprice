@@ -4322,12 +4322,12 @@ func (s *invoiceService) reconcileLineItems(
 		}
 
 		k := reconcileKey{
-			PeriodStart: *item.PeriodStart,
-			PeriodEnd:   *item.PeriodEnd,
+			PeriodStart:    *item.PeriodStart,
+			PeriodEnd:      *item.PeriodEnd,
+			CommitmentKind: item.Metadata[types.MetadataKeyCommitmentLineKind],
 		}
 		if item.CommitmentID != nil {
 			k.CommitmentID = *item.CommitmentID
-			k.CommitmentKind = item.Metadata[types.MetadataKeyCommitmentLineKind]
 			k.BillingInstalmentID = lo.FromPtr(item.BillingInstalmentID)
 			k.SubLineItemID = lo.FromPtr(item.SubscriptionLineItemID)
 			return k, true
@@ -4337,14 +4337,12 @@ func (s *invoiceService) reconcileLineItems(
 			return reconcileKey{}, false
 		}
 		k.SubLineItemID = *item.SubscriptionLineItemID
-		k.CommitmentKind = item.Metadata[types.MetadataKeyCommitmentLineKind]
 		return k, true
 	}
 
 	// Items missing PeriodStart/PeriodEnd (legacy pre-migration or hand-crafted) are silently ignored here
 	// same contract as the pre-fan-out reconciler, which ignored items missing SubscriptionLineItemID. They stay in the DB untouched.
-	// A key held twice, left by a compute before uncommitted rows were keyed by kind, keeps its last row and
-	// archives the others.
+	// A key held twice keeps its last row; the others are archived.
 	var toArchiveIDs []string
 	existingByKey := make(map[reconcileKey]*invoice.InvoiceLineItem, len(existing))
 	for _, item := range existing {

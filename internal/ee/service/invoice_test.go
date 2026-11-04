@@ -3620,44 +3620,23 @@ func (s *InvoiceServiceSuite) TestPublishInvoiceSyncWebhook_IgnoresOtherProvider
 	}))
 }
 
-// A commitment renders overage and plain usage for one line item and period without a commitment of their own, so a
-// recompute tells them apart by kind. A duplicate an earlier compute left behind is archived, not kept.
+// A commitment renders overage and plain usage for one line item and period without a commitment id, so a recompute
+// tells them apart by kind; a duplicate an earlier compute left behind is archived.
 func (s *InvoiceServiceSuite) TestReconcileLineItems_KeysUncommittedRowsByKind() {
 	ctx := s.GetContext()
 	start, end := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
-	subLineID := "subs_line_reconcile"
-	metadataOf := func(kind types.CommitmentLineKind) types.Metadata {
-		if kind == "" {
-			return nil
-		}
-
-		return types.Metadata{types.MetadataKeyCommitmentLineKind: string(kind)}
-	}
-	stored := func(kind types.CommitmentLineKind, amount int64) *invoice.InvoiceLineItem {
-		return &invoice.InvoiceLineItem{
-			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
-			CustomerID:             s.testData.customer.ID,
-			SubscriptionID:         &s.testData.subscription.ID,
-			SubscriptionLineItemID: lo.ToPtr(subLineID),
-			Amount:                 decimal.NewFromInt(amount),
-			Quantity:               decimal.NewFromInt(1),
-			Currency:               "usd",
-			PeriodStart:            &start,
-			PeriodEnd:              &end,
-			Metadata:               metadataOf(kind),
-			BaseModel:              types.GetDefaultBaseModel(ctx),
-		}
-	}
-	computed := func(kind types.CommitmentLineKind, amount int64) dto.CreateInvoiceLineItemRequest {
+	row := func(metadata types.Metadata, amount int64) dto.CreateInvoiceLineItemRequest {
 		return dto.CreateInvoiceLineItemRequest{
-			SubscriptionLineItemID: lo.ToPtr(subLineID),
+			SubscriptionLineItemID: lo.ToPtr("subs_line_reconcile"),
 			Amount:                 decimal.NewFromInt(amount),
 			Quantity:               decimal.NewFromInt(1),
 			PeriodStart:            &start,
 			PeriodEnd:              &end,
-			Metadata:               metadataOf(kind),
+			Metadata:               metadata,
 		}
 	}
+	overage := row(types.Metadata{types.MetadataKeyCommitmentLineKind: string(types.CommitmentLineOverage)}, 6)
+	plain := row(nil, 10)
 
 	draft := &invoice.Invoice{
 		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
@@ -3669,18 +3648,17 @@ func (s *InvoiceServiceSuite) TestReconcileLineItems_KeysUncommittedRowsByKind()
 		PeriodStart:    &start,
 		PeriodEnd:      &end,
 		BaseModel:      types.GetDefaultBaseModel(ctx),
-		LineItems: []*invoice.InvoiceLineItem{
-			stored(types.CommitmentLineOverage, 6),
-			stored(types.CommitmentLineOverage, 6),
-			stored("", 10),
-		},
+	}
+	draft.LineItems = []*invoice.InvoiceLineItem{
+		overage.ToInvoiceLineItem(ctx, draft),
+		overage.ToInvoiceLineItem(ctx, draft),
+		plain.ToInvoiceLineItem(ctx, draft),
 	}
 	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
 	inv, err := s.invoiceRepo.Get(ctx, draft.ID)
 	s.Require().NoError(err)
 
-	got, err := s.service.(*invoiceService).reconcileLineItems(ctx, inv,
-		[]dto.CreateInvoiceLineItemRequest{computed(types.CommitmentLineOverage, 6), computed("", 10)})
+	got, err := s.service.(*invoiceService).reconcileLineItems(ctx, inv, []dto.CreateInvoiceLineItemRequest{overage, plain})
 	s.Require().NoError(err)
 	s.Len(got, 2)
 	for _, item := range got {

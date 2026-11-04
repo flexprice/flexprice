@@ -110,14 +110,13 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 	return instalments, nil
 }
 
-// NumberLabels fills {n} and {of} in the labels of planned, an owner's new instalments in billing order, numbering
-// them after the invoiced instalments that took a number. Only labels using {n} or {of} take one, so a custom label
-// such as a milestone's leaves no gap. Within MaxInstalments, a numbered label is never longer than its template.
-func NumberLabels(planned []*Instalment, invoiced int) {
+// NumberLabels fills {n} and {of} in planned, new instalments in billing order, counting on from numberedBefore; labels
+// without them take no number. Within MaxInstalments a label never outgrows its template.
+func NumberLabels(planned []*Instalment, numberedBefore int) {
 	numbered := lo.Filter(planned, func(i *Instalment, _ int) bool { return IsNumbered(i.InvoiceLabel) })
-	of := strconv.Itoa(invoiced + len(numbered))
+	of := strconv.Itoa(numberedBefore + len(numbered))
 	for n, i := range numbered {
-		i.InvoiceLabel = strings.NewReplacer("{n}", strconv.Itoa(invoiced+n+1), "{of}", of).Replace(i.InvoiceLabel)
+		i.InvoiceLabel = strings.NewReplacer("{n}", strconv.Itoa(numberedBefore+n+1), "{of}", of).Replace(i.InvoiceLabel)
 	}
 }
 

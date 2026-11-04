@@ -1586,3 +1586,42 @@ func (s *CommitmentServiceSuite) TestValidation_OverlapAcceptsMatchingBucketSize
 	_, err = s.svc.Create(s.GetContext(), s.windowMeterCommitment(1, feb))
 	s.Require().NoError(err)
 }
+
+// Two dates within the same second after a period edge both mean the edge, which leaves no term.
+func (s *CommitmentServiceSuite) TestCreate_RejectsATermAlignedToNothing() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	edge := req.StartDate
+	req.StartDate = edge.Add(200 * time.Millisecond)
+	req.EndDate = lo.ToPtr(edge.Add(700 * time.Millisecond))
+
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.requireValidation(err, "start_date must be before end_date")
+}
+
+// A term derived from a mid-second subscription start ends a fraction past a period edge, which it is taken as: the
+// year holds twelve periods, not a thirteenth half-second one.
+func (s *CommitmentServiceSuite) TestCreate_TakesDatesJustPastAPeriodEdgeAsTheEdge() {
+	ctx := s.GetContext()
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.fx.sub.ID)
+	s.Require().NoError(err)
+	sub.StartDate = sub.StartDate.Add(500 * time.Millisecond)
+	sub.BillingAnchor = sub.StartDate
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	line, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.fx.lineAPI.ID)
+	s.Require().NoError(err)
+	line = subscription.NewSubscriptionLineItemBuilder(line).WithStartDate(sub.StartDate).Build()
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, line))
+
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.StartDate = sub.StartDate.AddDate(0, 1, 0)
+	req.EndDate = lo.ToPtr(sub.StartDate.AddDate(1, 0, 0))
+	created, err := s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+
+	edge := sub.StartDate.Truncate(time.Second)
+	s.True(created.StartDate.Equal(edge.AddDate(0, 1, 0)), "start %s", created.StartDate)
+	s.True(created.EndDate.Equal(edge.AddDate(1, 0, 0)), "end %s", created.EndDate)
+	// Eleven whole periods of 8 units at 0.048; a half-second sliver would add a fraction of a cent.
+	s.True(created.CommitmentValue.Equal(decimal.RequireFromString("4.224")), "value %s", created.CommitmentValue)
+}

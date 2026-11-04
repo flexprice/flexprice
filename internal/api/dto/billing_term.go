@@ -11,8 +11,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// BillingTermInput is one billing term as a request states it. The request checks that kind and value_type are set and
-// that its dates are whole seconds; the other rules are checked when the terms are expanded.
+// BillingTermInput is one billing term as a request states it. The request checks that kind and value_type are set;
+// the other rules are checked when the terms are expanded.
 type BillingTermInput struct {
 	Kind types.BillingTermKind `json:"kind" validate:"required"`
 
@@ -22,9 +22,8 @@ type BillingTermInput struct {
 
 	BillTrigger *types.InstalmentBillTrigger `json:"bill_trigger,omitempty"`
 
-	// BillOn is the commitment start by default. On an edit it defaults to the start of the billing period holding
-	// now, or to the commitment start once the term has ended. A date within a second after a billing period edge is
-	// taken as that edge, here and in start_date and end_date.
+	// BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now. Like
+	// start_date and end_date, a date under a second past a period edge means the edge.
 	BillOn *time.Time `json:"bill_on,omitempty"`
 
 	// StartDate defaults like BillOn; EndDate defaults to the commitment end.
@@ -34,9 +33,8 @@ type BillingTermInput struct {
 	InvoiceCadence *types.InvoiceCadence   `json:"invoice_cadence,omitempty"`
 	Split          *types.BillingTermSplit `json:"split,omitempty"`
 
-	// InvoiceLabel names the term's instalments on the invoice, "Instalment {n} of {of}" by default. {n} and {of} are
-	// filled with each instalment's place among the commitment's numbered instalments, those whose labels use them,
-	// and their count; a label without them takes no number.
+	// InvoiceLabel names the term's instalments, "Instalment {n} of {of}" by default. {n} and {of} count only the
+	// commitment's instalments whose labels use them.
 	InvoiceLabel *string        `json:"invoice_label,omitempty" validate:"omitempty,max=255"`
 	Metadata     types.Metadata `json:"metadata,omitempty"`
 }
@@ -114,11 +112,6 @@ type BillingTermsResponse struct {
 type TriggerInstalmentRequest struct {
 	// BillOn within a second after a billing period edge is taken as that edge.
 	BillOn *time.Time `json:"bill_on,omitempty"`
-}
-
-// Validate checks that bill_on is a whole second.
-func (r TriggerInstalmentRequest) Validate() error {
-	return validator.ValidateRequest(r)
 }
 
 // ListInstalmentsResponse is the instalments of a commitment in billing order.

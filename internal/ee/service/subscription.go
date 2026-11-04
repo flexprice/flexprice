@@ -215,19 +215,18 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
-	// Billing period edges are whole seconds: every edge after the first drops the fraction (NextBillingDate), so the
-	// start and anchor drop it too, and dates derived from them land on the edges.
+	// A subscription starts on a whole second, like every later billing period edge.
 	if sub.StartDate.IsZero() {
 		sub.StartDate = clock.Now().Truncate(time.Second)
 	} else {
-		sub.StartDate = sub.StartDate.UTC().Truncate(time.Second)
+		sub.StartDate = sub.StartDate.UTC()
 	}
 	if sub.BillingPeriodCount == 0 {
 		sub.BillingPeriodCount = 1
 	}
 
 	if req.BillingAnchor != nil {
-		sub.BillingAnchor = lo.FromPtr(req.BillingAnchor).UTC().Truncate(time.Second)
+		sub.BillingAnchor = lo.FromPtr(req.BillingAnchor).UTC()
 		// Stripe imports keep Stripe's anchor so the schedule matches Stripe's; an anchor before the start
 		// only sets the schedule (start Nov 16, anchor Nov 1 → first bill Dec 1).
 		if lo.FromPtr(req.Workflow) != types.TemporalStripeIntegrationWorkflow && sub.BillingAnchor.After(sub.StartDate) {
@@ -636,6 +635,19 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			return nil, err
 		}
 		// Subscription stays TRIALING — trial start invoice does not gate activation.
+	}
+
+	// The opening invoice may have billed the commitments' first instalments.
+	for _, c := range commitments {
+		if len(c.Instalments) == 0 {
+			continue
+		}
+
+		current, err := commitmentSvc.GetBillingTerms(ctx, c.ID)
+		if err != nil {
+			return nil, err
+		}
+		c.Instalments = current.Instalments
 	}
 
 	// Inherited children must see the parent's final status/period fields after invoice + activation.

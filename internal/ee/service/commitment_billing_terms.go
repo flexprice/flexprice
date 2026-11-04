@@ -34,8 +34,7 @@ func (s *commitmentService) planInstalments(
 		return nil, ierr.Validationf("billing_terms: the commitment is fully invoiced; nothing is left to plan")
 	}
 
-	term := types.Period{Start: c.StartDate, End: *c.EndDate}
-	periods, err := commitmentPeriods(c, cc.Sub, amountOf, bucketFor(c, cc), term)
+	periods, err := commitmentPeriods(c, cc.Sub, amountOf, bucketFor(c, cc), c.CollectionPeriod())
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +67,7 @@ func (s *commitmentService) planInstalments(
 
 	// Invoiced instalments keep the numbers they were billed with and are billed before any new one, so the new ones
 	// are numbered after them, in billing order.
-	numbered, err := s.numberedInstalments(ctx, invoiced)
+	numbered, err := s.countNumbered(ctx, invoiced)
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +79,8 @@ func (s *commitmentService) planInstalments(
 	return instalments, nil
 }
 
-// numberedInstalments counts the instalments whose label took a number: those whose term's label template uses one.
-func (s *commitmentService) numberedInstalments(ctx context.Context, instalments []*billingterm.Instalment) (int, error) {
+// countNumbered counts the instalments whose label took a number: those whose term's label template uses one.
+func (s *commitmentService) countNumbered(ctx context.Context, instalments []*billingterm.Instalment) (int, error) {
 	ids := lo.Uniq(lo.FilterMap(instalments, func(i *billingterm.Instalment, _ int) (string, bool) {
 		return lo.FromPtr(i.BillingTermID), i.BillingTermID != nil
 	}))
@@ -449,7 +448,12 @@ func (s *commitmentService) settleEnded(ctx context.Context, c *commitment.Commi
 		return err
 	}
 
-	_, err = s.billTermination(ctx, c, end, decimal.Zero, settlement)
+	sub, err := s.SubRepo.Get(ctx, c.SubscriptionID)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.billTermination(ctx, c, sub, end, decimal.Zero, settlement)
 	return err
 }
 

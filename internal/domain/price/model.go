@@ -212,10 +212,8 @@ func (p *Price) CopyWith(ctx context.Context, overrides *PriceCloneOverrides) *P
 	return lo.ToPtr(out)
 }
 
-// IsUsage returns true if the price is a usage based price
-// LineItemStart is when a line item of this price starts if it would start at from: from, or the price's start when
-// that is later. A price starting within the second holding from counts as started by then, since billing period
-// edges are whole seconds and a subscription starting now drops the fraction its prices were created with.
+// LineItemStart returns when a line item of this price starting at from begins: the price's start if it falls in a
+// later second than from, else from.
 func (p *Price) LineItemStart(from time.Time) time.Time {
 	if p == nil || p.StartDate == nil || !p.StartDate.Truncate(time.Second).After(from) {
 		return from
@@ -224,6 +222,7 @@ func (p *Price) LineItemStart(from time.Time) time.Time {
 	return *p.StartDate
 }
 
+// IsUsage returns true if the price is a usage based price
 func (p *Price) IsUsage() bool {
 	return p.Type == types.PRICE_TYPE_USAGE && p.MeterID != ""
 }

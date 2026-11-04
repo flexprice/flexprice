@@ -773,11 +773,11 @@ func TestAtPeriodEdge(t *testing.T) {
 		{"just before an edge", feb.Add(-time.Millisecond), feb.Add(-time.Millisecond)},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := atPeriodEdge(monthlySub(jan), tt.at)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := atPeriodEdge(monthlySub(jan), tc.at)
 			require.NoError(t, err)
-			require.True(t, got.Equal(tt.want), "got %s", got)
+			require.True(t, got.Equal(tc.want), "got %s", got)
 		})
 	}
 }

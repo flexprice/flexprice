@@ -106,7 +106,7 @@ then returns the commitment's lines, which are appended to the usage charges.
 
 Analytics and previews use `newProjectedCommitmentLoader`, which prices a window inside the open period as if through
 the period's end but reads usage only up to the window's end: `attachCommitmentBreakdown`
-([subscription.go:6700](../../internal/ee/service/subscription.go#L6700)) and `calculateLineItemCommitments`
+([subscription.go:6712](../../internal/ee/service/subscription.go#L6712)) and `calculateLineItemCommitments`
 ([meter_usage.go:2869](../../internal/ee/service/meter_usage.go#L2869)).
 
 ### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:58](../../internal/ee/service/billing_commitments.go#L58))
@@ -128,7 +128,7 @@ the period's end but reads usage only up to the window's end: `attachCommitmentB
 
 Commitments are grouped into stacks by (type, measurement, bucket size). Each stack is laid out, then allocated.
 
-**Period measurement — `buildPeriodStack`** ([billing_commitments.go:652](../../internal/ee/service/billing_commitments.go#L652))
+**Period measurement — `buildPeriodStack`** ([billing_commitments.go:653](../../internal/ee/service/billing_commitments.go#L653))
 - Windows are the invoice period split at every commitment start and end, every line version edge, and every
   usage bucket key (`periodSplits`).
 - Bucketed prices put each bucket's usage in its own window (`splitLineIntoBuckets`). Other prices read their period
@@ -144,18 +144,18 @@ Commitments are grouped into stacks by (type, measurement, bucket size). Each st
 - The floor counts the applying buckets with `activeBuckets`. `accruedAmount` values it as a difference of cumulative
   rounded values, so the partial floors of a period always add up to its whole floor.
 
-`appliesAt(c, t)` ([billing_commitments.go:604](../../internal/ee/service/billing_commitments.go#L604)) is the single
+`appliesAt(c, t)` ([billing_commitments.go:605](../../internal/ee/service/billing_commitments.go#L605)) is the single
 question "does the commitment's capacity apply at t": within its term (ending with the subscription when open-ended),
 and inside its active windows.
 
-### 6.4 Allocating — `allocate` ([commitment_engine.go:132](../../internal/ee/service/commitment_engine.go#L132))
+### 6.4 Allocating — `allocate` ([commitment_engine.go:137](../../internal/ee/service/commitment_engine.go#L137))
 
 For each window, in time order, each commitment in priority order drains its pool across its lines in fill order
 (`sortLinesForFill`). The first commitment fills completely before the next receives anything. Usage left after the
 last commitment is overage. The result is, per commitment, used / unused / capacity, and per line and window, overage.
 This file has no I/O.
 
-### 6.5 Rendering — `commitmentInvoiceLines` ([commitment_engine.go:229](../../internal/ee/service/commitment_engine.go#L229))
+### 6.5 Rendering — `commitmentInvoiceLines` ([commitment_engine.go:234](../../internal/ee/service/commitment_engine.go#L234))
 
 - **Utilized** rows, one per line. An amount stack bills the usage cost it absorbed. A quantity stack prices the
   absorbed units once on the committed price, so tiers walk the total, and splits that by line.
@@ -255,9 +255,9 @@ Other flows call these inside their own transaction:
 4. `NumberLabels` ([schedule.go:113](../../internal/domain/billingterm/schedule.go#L113)) fills `{n}` and `{of}` in the
    new instalments, in billing order. Only labels that use them take a number, so a custom label such as a
    milestone's leaves no gap. On an edit the new ones are numbered after the invoiced instalments that took a number;
-   `numberedInstalments` reads those instalments' terms in any status, since an earlier edit may have archived them.
+   `countNumbered` reads those instalments' terms in any status, since an earlier edit may have archived them.
 
-### 9.2 Editing — `ReplaceBillingTerms` ([commitment_billing_terms.go:213](../../internal/ee/service/commitment_billing_terms.go#L213))
+### 9.2 Editing — `ReplaceBillingTerms` ([commitment_billing_terms.go:212](../../internal/ee/service/commitment_billing_terms.go#L212))
 
 The edit runs in one transaction:
 1. Take the commitment lock (`commitment:<id>`).
@@ -303,7 +303,7 @@ Instalments wait while the subscription is trialing or paused. `TriggerInstalmen
 
 ## 10. Terminating
 
-`POST /v1/commitments/{id}/terminate` → `Terminate` → `terminate` ([commitment.go:677](../../internal/ee/service/commitment.go#L677)),
+`POST /v1/commitments/{id}/terminate` → `Terminate` → `terminate` ([commitment.go:678](../../internal/ee/service/commitment.go#L678)),
 under the commitment lock:
 1. Refuse unless the commitment is active and `effective_at` is before its end; a fee needs a binding commitment.
 2. Under billing terms, `settle` cancels the scheduled instalments. When `earnedAmount` at `effective_at` exceeds the
@@ -312,8 +312,8 @@ under the commitment lock:
    settlement and the cancellation fee (`cancellationFeeLine`).
 4. Set the status to terminated with `terminated_at`. Later invoices clip the floor at `terminated_at`.
 
-Cancelling a subscription calls `TerminateForSubscription` (`CancelSubscription` [subscription.go:2275](../../internal/ee/service/subscription.go#L2275),
-`TerminateSubscriptionResources` [subscription.go:5234](../../internal/ee/service/subscription.go#L5234)). A billing-terms commitment
+Cancelling a subscription calls `TerminateForSubscription` (`CancelSubscription` [subscription.go:2287](../../internal/ee/service/subscription.go#L2287),
+`TerminateSubscriptionResources` [subscription.go:5246](../../internal/ee/service/subscription.go#L5246)). A billing-terms commitment
 that already ended still has its scheduled instalments billed (`settleEnded`), since no later subscription invoice
 will carry them.
 

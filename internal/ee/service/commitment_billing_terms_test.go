@@ -48,6 +48,11 @@ func (s *CommitmentServiceSuite) billingTermsRequest() dto.CreateCommitmentReque
 	return req
 }
 
+// byBillOn orders instalments by bill date.
+func byBillOn(a, b *billingterm.Instalment) int {
+	return a.BillOn.Compare(b.BillOn)
+}
+
 func (s *CommitmentServiceSuite) storedInstalments() []*billingterm.Instalment {
 	rows, err := s.GetStores().BillingInstalmentRepo.List(s.GetContext(), &billingterm.InstalmentFilter{})
 	s.Require().NoError(err)
@@ -419,7 +424,7 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_NumbersNewInstalmentsAf
 	s.Require().NoError(err)
 
 	rows := s.storedInstalments()
-	slices.SortFunc(rows, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) })
+	slices.SortFunc(rows, byBillOn)
 	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", []string{rows[0].ID, rows[1].ID})
 	s.Require().NoError(err)
 
@@ -455,7 +460,6 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_NumbersOnlyAfterNumbere
 	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, edit)
 	s.Require().NoError(err)
 
-	byBillOn := func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) }
 	first := s.addedSince(rows)
 	slices.SortFunc(first, byBillOn)
 	s.Require().NotEmpty(first)
@@ -775,12 +779,12 @@ func (s *CommitmentServiceSuite) TestGetBillingTerms_And_ListInstalments() {
 		lo.Map(got.BillingTerms, func(t *billingterm.Term, _ int) string { return t.ID }),
 	)
 	s.Require().Len(got.Instalments, 11, "cancelled instalments are not part of the current plan")
-	s.True(slices.IsSortedFunc(got.Instalments, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) }))
+	s.True(slices.IsSortedFunc(got.Instalments, byBillOn))
 
 	listed, err := s.svc.ListInstalments(ctx, created.ID, nil)
 	s.Require().NoError(err)
 	s.Len(listed.Items, 22, "history keeps the cancelled instalments")
-	s.True(slices.IsSortedFunc(listed.Items, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) }))
+	s.True(slices.IsSortedFunc(listed.Items, byBillOn))
 
 	cancelled := lo.Filter(listed.Items, func(i *billingterm.Instalment, _ int) bool {
 		return i.InstalmentStatus == types.InstalmentStatusCancelled

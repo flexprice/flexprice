@@ -204,13 +204,13 @@ func (l *commitmentLoader) load(
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	window := types.Period{Start: l.periodStart, End: l.periodEnd}
-	periods, err := commitmentPeriods(c, l.sub, amountOf, bucket, window)
+	invoiced := types.Period{Start: l.periodStart, End: l.periodEnd}
+	periods, err := commitmentPeriods(c, l.sub, amountOf, bucket, invoiced)
 	if err != nil {
 		return err
 	}
 
-	period, ok := containingPeriod(periods, window)
+	period, ok := containingPeriod(periods, invoiced)
 	if !ok {
 		l.billing.Logger.Debug(ctx, "commitment.skipped",
 			"operation", "commitment.skipped",
@@ -224,7 +224,7 @@ func (l *commitmentLoader) load(
 	}
 
 	// A partial invoice or a mid-period termination bills a prorated share of the period's value.
-	billed := window
+	billed := invoiced
 	if c.TerminatedAt != nil {
 		billed.End = minTime(billed.End, *c.TerminatedAt)
 	}
@@ -579,8 +579,9 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 
 		scope := l.scopeByCommitment[sc.ID]
 		elapsed := types.Period{Start: scope.accrualStart, End: l.periodStart}
+		current := types.Period{Start: l.periodStart, End: l.periodEnd}
 		before := l.activeBuckets(sc.Commitment, elapsed, bucket)
-		sc.Period.ActiveBuckets = l.activeBuckets(sc.Commitment, types.Period{Start: l.periodStart, End: l.periodEnd}, bucket)
+		sc.Period.ActiveBuckets = l.activeBuckets(sc.Commitment, current, bucket)
 		sc.Period.Capacity = sc.Value.Mul(decimal.NewFromInt(sc.Period.ActiveBuckets))
 		sc.Period.Amount = accruedAmount(
 			scope.amountOf,
@@ -1020,9 +1021,8 @@ func spreadCost(weights []decimal.Decimal, total decimal.Decimal) []decimal.Deci
 	return out
 }
 
-// containingPeriod returns the commitment period whose regular billing period contains window, so a period that the
-// commitment's start or end cuts short still holds its whole billing period's invoice. Edges compare at whole seconds,
-// so the first period of a subscription created before starts were whole seconds still matches.
+// containingPeriod returns the commitment period whose regular billing period contains window, comparing whole seconds
+// so an older subscription's mid-second first period still matches.
 func containingPeriod(periods []commitmentPeriod, window types.Period) (commitmentPeriod, bool) {
 	start, end := window.Start.Truncate(time.Second), window.End.Truncate(time.Second)
 	for _, p := range periods {

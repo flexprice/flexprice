@@ -43,12 +43,12 @@ type Term struct {
 	types.BaseModel
 }
 
-// recurringOnlyField names the first field set on the term that only recurring terms use, or returns "".
 // LabelTemplate is the label its instalments take before numbering: its invoice_label, or the default.
 func (t *Term) LabelTemplate() string {
 	return lo.CoalesceOrEmpty(lo.FromPtr(t.InvoiceLabel), DefaultInvoiceLabel)
 }
 
+// recurringOnlyField names the first field set on the term that only recurring terms use, or returns "".
 func (t *Term) recurringOnlyField() string {
 	switch {
 	case t.StartDate != nil:
