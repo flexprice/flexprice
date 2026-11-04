@@ -312,6 +312,10 @@ under the commitment lock:
    settlement and the cancellation fee (`cancellationFeeLine`).
 4. Set the status to terminated with `terminated_at`. Later invoices clip the floor at `terminated_at`.
 
+After the commit, `recomputeDrafts` recomputes the subscription's drafts for periods ending after `effective_at`, so a
+backdated termination stops billing the commitment on drafts computed before it. `Create` does the same from the
+commitment's start.
+
 Cancelling a subscription calls `TerminateForSubscription` (`CancelSubscription` [subscription.go:2287](../../internal/ee/service/subscription.go#L2287),
 `TerminateSubscriptionResources` [subscription.go:5246](../../internal/ee/service/subscription.go#L5246)). A billing-terms commitment
 that already ended still has its scheduled instalments billed (`settleEnded`), since no later subscription invoice

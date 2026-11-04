@@ -30876,6 +30876,10 @@ const docTemplate = `{
         "UpdateCommitmentRequest": {
             "type": "object",
             "properties": {
+                "end_date": {
+                    "description": "EndDate can't be changed yet; terminate the commitment to end it.",
+                    "type": "string"
+                },
                 "invoice_description": {
                     "type": "string",
                     "maxLength": 500

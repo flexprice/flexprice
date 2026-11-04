@@ -10021,6 +10021,10 @@ definitions:
     type: object
   UpdateCommitmentRequest:
     properties:
+      end_date:
+        description: EndDate can't be changed yet; terminate the commitment to end
+          it.
+        type: string
       invoice_description:
         maxLength: 500
         type: string

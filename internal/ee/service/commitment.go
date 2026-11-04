@@ -113,7 +113,13 @@ func (s *commitmentService) Create(
 	ctx context.Context,
 	req dto.CreateCommitmentRequest,
 ) (*dto.CommitmentResponse, error) {
-	return s.create(ctx, req, commitmentCreateOptions{})
+	resp, err := s.create(ctx, req, commitmentCreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	s.recomputeDrafts(ctx, resp.SubscriptionID, resp.StartDate)
+	return resp, nil
 }
 
 // create runs under the subscription's commitments lock so the overlap checks see committed rows; a key replayed
@@ -577,6 +583,7 @@ func (s *commitmentService) Terminate(
 		"termination_invoice_id", lo.FromPtr(invoiceID),
 	)
 	s.publishSystemEvent(ctx, types.WebhookEventCommitmentTerminated, out)
+	s.recomputeDrafts(ctx, out.SubscriptionID, effectiveAt)
 
 	resp, err := s.response(ctx, out)
 	if err != nil {
@@ -647,6 +654,38 @@ func (s *commitmentService) publishSystemEvent(ctx context.Context, eventName ty
 	}
 
 	publishAfterCommit(ctx, s.ServiceParams, event)
+}
+
+// recomputeDrafts recomputes the subscription's drafts for periods ending after from, which a backdated commitment
+// change leaves stale. It runs after commit and only logs a failure.
+func (s *commitmentService) recomputeDrafts(ctx context.Context, subscriptionID string, from time.Time) {
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = subscriptionID
+	filter.InvoiceType = types.InvoiceTypeSubscription
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+	filter.PeriodEndGT = lo.ToPtr(from)
+	filter.SkipLineItems = true
+	drafts, err := s.InvoiceRepo.List(ctx, filter)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to list the drafts a commitment change left stale",
+			"error", err,
+			"subscription_id", subscriptionID)
+		return
+	}
+
+	invoices := NewInvoiceService(s.ServiceParams)
+	for _, draft := range drafts {
+		if draft.IsManuallyEdited {
+			continue
+		}
+
+		if _, _, err := invoices.ComputeInvoice(ctx, draft.ID, nil); err != nil {
+			s.Logger.Error(ctx, "failed to recompute a draft after a commitment change",
+				"error", err,
+				"subscription_id", subscriptionID,
+				"invoice_id", draft.ID)
+		}
+	}
 }
 
 // lockCommitment serialises writes to one commitment and must run inside a transaction.

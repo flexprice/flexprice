@@ -33225,6 +33225,11 @@
       "UpdateCommitmentRequest": {
         "type": "object",
         "properties": {
+          "end_date": {
+            "type": "string",
+            "description": "EndDate can't be changed yet; terminate the commitment to end it.",
+            "format": "date-time"
+          },
           "invoice_description": {
             "maxLength": 500,
             "type": "string"

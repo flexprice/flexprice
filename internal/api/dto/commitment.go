@@ -328,9 +328,18 @@ type UpdateCommitmentRequest struct {
 	InvoiceLabel       *string        `json:"invoice_label,omitempty" validate:"omitempty,min=1,max=255"`
 	InvoiceDescription *string        `json:"invoice_description,omitempty" validate:"omitempty,max=500"`
 	Metadata           types.Metadata `json:"metadata,omitempty"`
+
+	// EndDate can't be changed yet; terminate the commitment to end it.
+	EndDate *time.Time `json:"end_date,omitempty"`
 }
 
 func (r *UpdateCommitmentRequest) Validate() error {
+	if r.EndDate != nil {
+		return ierr.NewError("changing end_date is not supported yet").
+			WithHint("Terminate the commitment to end it").
+			Mark(ierr.ErrValidation)
+	}
+
 	return validator.ValidateRequest(r)
 }
 

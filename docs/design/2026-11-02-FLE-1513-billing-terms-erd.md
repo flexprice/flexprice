@@ -446,3 +446,34 @@ These were not discussed explicitly. Review them first.
 - A term stores one `value` that `value_type` explains, so percentage terms need no new column.
 - Presets and the "covered by" display are left out.
 - The `cancellation_fee` change ships without a compatibility shim because `commitments_v2` isn't enabled for any customer.
+
+## 18. Supported, pending and deferred (2026-11-04)
+
+**Supported, with the convention to use**
+
+| Need | How |
+| --- | --- |
+| Full advance | One `once` term, `value_type: remainder`. |
+| Part upfront, the rest monthly | A `once` term for the upfront and a `recurring` remainder term. `split: proportional` sizes each instalment by the committed value of its period, so a 28-day month bills less than a 31-day month and the total is exact. `split: even` bills equal instalments. |
+| Fixed-day quarters or half-years, or a monthly schedule on the commitment's anniversary while the subscription bills on calendar months | One `once` term per payment with an explicit `bill_on`, at most 20 terms. Each instalment's service period is the whole term. |
+| Cancellation fee | A fixed amount chosen by the tenant, billed on top of the settlement (BT13). A fee meant to take back the discount is committed units × (on-demand rate − committed rate). The settlement already bills the earned-but-unbilled time at the committed rate. |
+| Taking back an instalment billed before a termination | A credit note. A void bills it again (BT11). |
+| Part upfront cancelled early | The settlement compares earned with invoiced, so an upfront paid for later months covers the months up to the end date, and their monthly instalments are cancelled, not billed. |
+
+**Pending**
+
+- **Recurring terms on the commitment's own anniversary.** A recurring step is a group of the subscription's billing periods (BT5). On a calendar-billed subscription, a monthly term from 15 Jan bills a 15 Jan–1 Feb stub, then 1 Feb, 1 Mar, and so on. Today the 15th needs `once` terms or a subscription anchored on the 15th. Billing on the term's own anniversary needs an option on the recurring term, and its steps valued from the commitment periods they cross.
+- **Delivery per term.** `instalment_invoicing` applies to every instalment of the commitment, so an upfront can't be billed on its own invoice at its start while the monthly instalments go on the subscription invoice. The subscription invoice is the common case.
+
+**Pending, not needed yet (cancellation)**
+
+- Recording a cancellation now with a later end date (BT15). Today it means terminating once the end date is reached; scheduled instalments due before then keep billing.
+- Billing the cancellation fee on the subscription invoice, which should be the default, and a fee with an `effective_at` before the current billing period. Today the fee goes on its own `ONE_OFF` invoice at termination.
+- A settlement option that bills the cancelled arrear instalments up to the end date instead of comparing earned with invoiced. Changing today's rule would change what a terminate bills, so it would come as an option.
+
+**Deferred**
+
+- Percentage terms (BT6) and percentage cancellation fees (BT14).
+- A split that keeps full periods equal and prorates only the first and last. Such amounts don't add up to the total by themselves, so a remainder term absorbs the difference.
+- Itemising unused capacity on billing-terms invoices (BT12). Utilisation and unused capacity are shown by the usage analytics only.
+- Renewal.

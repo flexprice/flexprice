@@ -53,6 +53,31 @@ Phase 1 shipped behind the `commitments_v2` environment setting as PRs [#3211](h
 - Before un-gating for a raw-events tenant: tag raw-path charges with `subscription_line_item_id` (line items sharing a price double-count usage on that path); guard entitlements added after a commitment exists (plan change / addon features).
 - Legacy commitment migration (§10, rollout phase 4).
 
+## 0.2 Supported, pending and deferred (2026-11-04)
+
+Billing-terms and termination items are in the [billing terms ERD](./2026-11-02-FLE-1513-billing-terms-erd.md) §18.
+
+**Supported, with the convention to use**
+
+| Need | How |
+| --- | --- |
+| "N units, all day" or "N units, 08:00–20:00" | A quantity commitment with `measurement: window` on an hourly-bucketed price. Capacity is per bucket, so per hour, and an unused hour is not carried over. A daily range is `active_windows`. |
+| Monthly until cancelled | No `end_date`, `collection_method: per_period`. Each period bills utilised plus true-up. |
+| Fixed-length terms (30, 90, 180, 364 days, several years) | Any `start_date` and `end_date`. There are no presets; the dates are computed by the tenant. |
+| Months and daily windows in different timezones | Billing periods follow the subscription's timezone. `active_windows` are read in the commitment's `timezone`, which defaults to the subscription's; UTC windows set `timezone: "UTC"`. |
+| End dates | Exclusive: a term "through 31 Aug" ends at `2026-09-01T00:00:00Z`. |
+| Several commitments on one price | Different `priority` values; the lowest fills first. Overlapping commitments share the type, measurement, bucket and overage price. |
+| Backdated create or termination | The subscription's drafts for later periods are recomputed after the change. Finalized and skipped invoices are untouched; they are recalculated or recomputed on request. |
+
+**Pending**
+
+- Changing `end_date` on an existing commitment. `PUT /commitments/{id}` rejects it as not supported yet; termination is the only way to end early.
+- Upcoming period amounts for open-ended commitments. Their total `commitment_value` is unknown, but each period's committed amount (capacity × buckets × rate) is known in advance and could be listed for the next periods.
+
+**Deferred**
+
+- Renewal (D9). Until then, an open-ended `per_period` commitment stands in for "monthly until cancelled".
+
 ---
 
 ## 1. Problem
