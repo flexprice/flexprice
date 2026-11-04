@@ -3,6 +3,7 @@ package service
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -290,6 +291,51 @@ func periodAt(sub *subscription.Subscription, t time.Time) (types.Period, error)
 	}
 
 	return types.FullBillingPeriod(t, grid), nil
+}
+
+// atPeriodEdge moves t back to the start of the subscription billing period holding it when t falls within that
+// period's first second. Period edges are whole seconds, so a date a fraction past one, as a date derived from a
+// mid-second subscription start is, means the edge.
+func atPeriodEdge(sub *subscription.Subscription, t time.Time) (time.Time, error) {
+	holding, err := periodAt(sub, t)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	if !t.Before(holding.Start) && t.Sub(holding.Start) < time.Second {
+		return holding.Start, nil
+	}
+
+	return t, nil
+}
+
+// alignToPeriodEdges points each set date at its atPeriodEdge value.
+func alignToPeriodEdges(sub *subscription.Subscription, dates ...**time.Time) error {
+	for _, d := range dates {
+		if *d == nil {
+			continue
+		}
+
+		aligned, err := atPeriodEdge(sub, **d)
+		if err != nil {
+			return err
+		}
+
+		*d = &aligned
+	}
+
+	return nil
+}
+
+// alignTermDates applies atPeriodEdge to each term's bill_on, start_date and end_date.
+func alignTermDates(sub *subscription.Subscription, terms []dto.BillingTermInput) error {
+	for i := range terms {
+		if err := alignToPeriodEdges(sub, &terms[i].BillOn, &terms[i].StartDate, &terms[i].EndDate); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // periodEndAt returns the end of the subscription billing period holding t, or t itself past the

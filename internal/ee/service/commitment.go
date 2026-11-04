@@ -305,6 +305,19 @@ func (s *commitmentService) prepare(
 		return nil, nil, err
 	}
 
+	// A date within a second after a billing period edge means the edge.
+	if req.StartDate, err = atPeriodEdge(cc.Sub, req.StartDate); err != nil {
+		return nil, nil, err
+	}
+
+	if err := alignToPeriodEdges(cc.Sub, &req.EndDate); err != nil {
+		return nil, nil, err
+	}
+
+	if err := alignTermDates(cc.Sub, req.BillingTerms); err != nil {
+		return nil, nil, err
+	}
+
 	c := req.ToCommitment(ctx, cc.Sub)
 	if err := s.validateAgainstSubscription(ctx, c, req.OveragePrice, cc, opts); err != nil {
 		return nil, nil, err
@@ -680,6 +693,15 @@ func (s *commitmentService) terminate(
 		return nil, nil, ierr.NewErrorf("commitment %s is %s", c.ID, c.CommitmentStatus).
 			WithHint("Only active commitments can be terminated").
 			Mark(ierr.ErrInvalidOperation)
+	}
+
+	sub, err := s.SubRepo.Get(ctx, c.SubscriptionID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if effectiveAt, err = atPeriodEdge(sub, effectiveAt); err != nil {
+		return nil, nil, err
 	}
 
 	if c.EndedBy(effectiveAt) {

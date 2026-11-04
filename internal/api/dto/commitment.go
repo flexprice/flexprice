@@ -103,10 +103,10 @@ type CreateCommitmentRequest struct {
 	BillingTerms []BillingTermInput `json:"billing_terms,omitempty" validate:"omitempty,min=1,max=20,dive"`
 	// InstalmentInvoicing applies only to collection_method billing_terms.
 	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
-	// StartDate and EndDate must be whole seconds.
-	StartDate time.Time `json:"start_date" validate:"required,whole_second"`
+	// StartDate and EndDate within a second after a billing period edge are taken as that edge.
+	StartDate time.Time `json:"start_date" validate:"required"`
 	// EndDate is exclusive; omit it for an open-ended commitment, which bills every period until terminated.
-	EndDate  *time.Time     `json:"end_date,omitempty" validate:"omitempty,whole_second"`
+	EndDate  *time.Time     `json:"end_date,omitempty"`
 	Metadata types.Metadata `json:"metadata,omitempty"`
 }
 
@@ -337,8 +337,8 @@ func (r *UpdateCommitmentRequest) Validate() error {
 // TerminateCommitmentRequest ends a commitment now. effective_at may not be in the future; cancellation_fee is billed
 // in the commitment currency.
 type TerminateCommitmentRequest struct {
-	// EffectiveAt defaults to now; a given one must be a whole second.
-	EffectiveAt     *time.Time            `json:"effective_at,omitempty" validate:"omitempty,whole_second"`
+	// EffectiveAt defaults to now; within a second after a billing period edge it is taken as that edge.
+	EffectiveAt     *time.Time            `json:"effective_at,omitempty"`
 	CancellationFee *CancellationFeeInput `json:"cancellation_fee,omitempty"`
 }
 

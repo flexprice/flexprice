@@ -321,6 +321,10 @@ func (s *commitmentService) planReplacement(
 		return nil, nil, err
 	}
 
+	if err := alignTermDates(cc.Sub, req.BillingTerms); err != nil {
+		return nil, nil, err
+	}
+
 	terms := lo.Map(req.BillingTerms, func(in dto.BillingTermInput, _ int) *billingterm.Term {
 		return in.ToTerm(ctx, c.ID)
 	})

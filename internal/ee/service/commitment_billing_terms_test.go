@@ -549,8 +549,9 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_CanReplaceTwice() {
 	s.Len(s.storedTerms(created.ID), 2)
 }
 
-// Term dates are taken as given, so one with a fraction of a second is rejected rather than rounded.
-func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsFractionalSeconds() {
+// A term date within a second after a billing period edge is taken as that edge, so the instalment bills on the
+// invoice issued at the edge.
+func (s *CommitmentServiceSuite) TestReplaceBillingTerms_TakesADateJustPastAnEdgeAsTheEdge() {
 	ctx := s.GetContext()
 	req := s.billingTermsRequest()
 	created, err := s.svc.Create(ctx, req)
@@ -560,10 +561,11 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsFractionalSecond
 	edit := halfUpfrontPlusRemainder()
 	edit.BillingTerms[0].BillOn = lo.ToPtr(req.StartDate.Add(500 * time.Millisecond))
 	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, edit)
-	s.Require().Error(err)
-	s.True(ierr.IsValidation(err), "got %v", err)
-	s.Contains(err.Error(), "whole_second")
-	s.Empty(s.addedSince(old))
+	s.Require().NoError(err)
+
+	upfront, ok := lo.Find(s.addedSince(old), func(i *billingterm.Instalment) bool { return i.Amount.Equal(dec("500")) })
+	s.Require().True(ok)
+	s.True(upfront.BillOn.Equal(req.StartDate), "bill_on %s", upfront.BillOn)
 }
 
 // A commitment that began three months ago and runs seven more, worth 1,000. An edit's undated terms start at the

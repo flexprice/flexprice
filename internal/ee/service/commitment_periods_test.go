@@ -757,3 +757,27 @@ func TestCommitmentPeriods_MidSecondWeeklyAnchorMatchesTheStoredEdges(t *testing
 	require.True(t, got.Capacity.Equal(decimal.NewFromInt(20)), "capacity %s", got.Capacity)
 }
 
+// A date within a second after a period edge is taken as the edge; any other date is kept.
+func TestAtPeriodEdge(t *testing.T) {
+	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	feb := jan.AddDate(0, 1, 0)
+	tests := []struct {
+		name string
+		at   time.Time
+		want time.Time
+	}{
+		{"on an edge", feb, feb},
+		{"half a second past an edge", feb.Add(500 * time.Millisecond), feb},
+		{"a second past an edge", feb.Add(time.Second), feb.Add(time.Second)},
+		{"mid-period", feb.AddDate(0, 0, 10), feb.AddDate(0, 0, 10)},
+		{"just before an edge", feb.Add(-time.Millisecond), feb.Add(-time.Millisecond)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := atPeriodEdge(monthlySub(jan), tt.at)
+			require.NoError(t, err)
+			require.True(t, got.Equal(tt.want), "got %s", got)
+		})
+	}
+}

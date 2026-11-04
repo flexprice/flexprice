@@ -22,13 +22,14 @@ type BillingTermInput struct {
 
 	BillTrigger *types.InstalmentBillTrigger `json:"bill_trigger,omitempty"`
 
-	// BillOn is a whole second, the commitment start by default. On an edit it defaults to the start of the billing
-	// period holding now, or to the commitment start once the term has ended.
-	BillOn *time.Time `json:"bill_on,omitempty" validate:"omitempty,whole_second"`
+	// BillOn is the commitment start by default. On an edit it defaults to the start of the billing period holding
+	// now, or to the commitment start once the term has ended. A date within a second after a billing period edge is
+	// taken as that edge, here and in start_date and end_date.
+	BillOn *time.Time `json:"bill_on,omitempty"`
 
-	// StartDate defaults like BillOn; EndDate defaults to the commitment end. Both are whole seconds.
-	StartDate      *time.Time              `json:"start_date,omitempty" validate:"omitempty,whole_second"`
-	EndDate        *time.Time              `json:"end_date,omitempty" validate:"omitempty,whole_second"`
+	// StartDate defaults like BillOn; EndDate defaults to the commitment end.
+	StartDate      *time.Time              `json:"start_date,omitempty"`
+	EndDate        *time.Time              `json:"end_date,omitempty"`
 	PeriodCount    *int                    `json:"period_count,omitempty"`
 	InvoiceCadence *types.InvoiceCadence   `json:"invoice_cadence,omitempty"`
 	Split          *types.BillingTermSplit `json:"split,omitempty"`
@@ -111,8 +112,8 @@ type BillingTermsResponse struct {
 
 // TriggerInstalmentRequest triggers a manual instalment to be billed on BillOn, now by default.
 type TriggerInstalmentRequest struct {
-	// BillOn must be a whole second.
-	BillOn *time.Time `json:"bill_on,omitempty" validate:"omitempty,whole_second"`
+	// BillOn within a second after a billing period edge is taken as that edge.
+	BillOn *time.Time `json:"bill_on,omitempty"`
 }
 
 // Validate checks that bill_on is a whole second.
