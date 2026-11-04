@@ -272,6 +272,8 @@ The edit runs in one transaction:
 
 ### 9.3 Billing an instalment
 
+Each instalment carries its delivery: its term's `instalment_invoicing`, or the commitment's when the term sets none.
+
 | Delivery | How it is billed |
 |---|---|
 | `subscription_invoice` | `PrepareSubscriptionInvoiceRequest` adds the scheduled instalments due by the invoice's boundary as fixed lines ([billing.go:1721](../../internal/ee/service/billing.go#L1721), `instalmentBillAt`, `dueInstalmentLines`). A grouped parent's draft also carries its children's. |

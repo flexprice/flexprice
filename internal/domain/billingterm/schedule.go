@@ -16,7 +16,7 @@ import (
 
 const (
 	// MaxTerms is the most billing terms an owner can have.
-	MaxTerms = 20
+	MaxTerms = 100
 
 	// MaxInstalments is the most instalments an owner's terms can expand to, and the most its plan can hold with the
 	// invoiced ones.
@@ -46,6 +46,8 @@ type resolvedTerm struct {
 
 	// total is the term's share of the owner's total, which its instalments split.
 	total decimal.Decimal
+
+	delivery types.InstalmentDelivery
 }
 
 // Expand validates the terms against the owner and its period values and returns their instalments in billing order.
@@ -79,6 +81,7 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 			return nil, err
 		}
 
+		r.delivery = lo.FromPtrOr(t.InstalmentInvoicing, delivery)
 		resolved = append(resolved, r)
 	}
 
@@ -152,6 +155,11 @@ func resolveTerm(
 		return nil, ierr.Validationf(termErrorFormat, index, "value_type", "percentage terms are not supported yet")
 	default:
 		return nil, ierr.Validationf(termErrorFormat, index, "value_type", "must be fixed or remainder")
+	}
+
+	if d := t.InstalmentInvoicing; d != nil &&
+		*d != types.InstalmentDeliverySubscriptionInvoice && *d != types.InstalmentDeliverySeparateInvoice {
+		return nil, ierr.Validationf(termErrorFormat, index, "instalment_invoicing", "must be subscription_invoice or separate_invoice")
 	}
 
 	switch t.Kind {
@@ -337,6 +345,7 @@ func (r *resolvedTerm) instalments(ctx context.Context, owner Owner) ([]*Instalm
 	var builders []*instalmentBuilder
 	if r.term.Kind == types.BillingTermKindOnce {
 		builders = append(builders, NewOwnerInstalment(ctx, owner).
+			WithDelivery(r.delivery).
 			WithBillTrigger(r.billTrigger).
 			WithBillOn(r.billOn).
 			WithServicePeriod(r.servicePeriod))
@@ -347,7 +356,10 @@ func (r *resolvedTerm) instalments(ctx context.Context, owner Owner) ([]*Instalm
 				billOn = step.Start
 			}
 
-			builders = append(builders, NewOwnerInstalment(ctx, owner).WithBillOn(billOn).WithServicePeriod(step.Period))
+			builders = append(builders, NewOwnerInstalment(ctx, owner).
+				WithDelivery(r.delivery).
+				WithBillOn(billOn).
+				WithServicePeriod(step.Period))
 		}
 	}
 

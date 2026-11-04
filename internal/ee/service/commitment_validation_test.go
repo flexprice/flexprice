@@ -192,17 +192,17 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 	t.Run("billing_terms default to the subscription invoice", func(t *testing.T) {
 		r := validReq("subs_1", "price_1")
 		r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
-		r.ApplyDefaults("UTC")
+		r.ApplyDefaults()
 		require.Equal(t, types.InstalmentDeliverySubscriptionInvoice, lo.FromPtr(r.InstalmentInvoicing))
 
 		r.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
-		r.ApplyDefaults("UTC")
+		r.ApplyDefaults()
 		require.Equal(t, types.InstalmentDeliverySeparateInvoice, lo.FromPtr(r.InstalmentInvoicing), "a chosen delivery is kept")
 	})
 
 	t.Run("per_period leaves instalment_invoicing unset", func(t *testing.T) {
 		r := validReq("subs_1", "price_1")
-		r.ApplyDefaults("UTC")
+		r.ApplyDefaults()
 		require.Nil(t, r.InstalmentInvoicing)
 	})
 
@@ -210,7 +210,7 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := validReq("subs_1", "price_1")
 			tc.mutate(&r)
-			r.ApplyDefaults("UTC")
+			r.ApplyDefaults()
 			err := r.Validate()
 			if tc.ok {
 				require.NoError(t, err)

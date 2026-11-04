@@ -1082,7 +1082,7 @@ func (r *CreateSubscriptionRequest) validateCommitments() error {
 			c.Scope.EntityID = "pending"
 		}
 
-		c.ApplyDefaults(lo.CoalesceOrEmpty(r.Timezone, types.DefaultTimezone))
+		c.ApplyDefaults()
 		if err := c.Validate(); err != nil {
 			return err
 		}

@@ -33,6 +33,9 @@ type BillingTermInput struct {
 	InvoiceCadence *types.InvoiceCadence   `json:"invoice_cadence,omitempty"`
 	Split          *types.BillingTermSplit `json:"split,omitempty"`
 
+	// InstalmentInvoicing delivers this term's instalments, the commitment's instalment_invoicing by default.
+	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
+
 	// InvoiceLabel names the term's instalments, "Instalment {n} of {of}" by default. {n} and {of} count only the
 	// commitment's instalments whose labels use them.
 	InvoiceLabel *string        `json:"invoice_label,omitempty" validate:"omitempty,max=255"`
@@ -59,6 +62,8 @@ func (in BillingTermInput) ToTerm(ctx context.Context, ownerID string) *billingt
 		PeriodCount:    in.PeriodCount,
 		InvoiceCadence: in.InvoiceCadence,
 		Split:          in.Split,
+
+		InstalmentInvoicing: in.InstalmentInvoicing,
 
 		InvoiceLabel: in.InvoiceLabel,
 		Metadata:     in.Metadata,
@@ -94,7 +99,7 @@ func (in CancellationFeeInput) Validate() error {
 
 // ReplaceBillingTermsRequest is the new set of terms of a commitment, which replaces the current set as a whole.
 type ReplaceBillingTermsRequest struct {
-	BillingTerms []BillingTermInput `json:"billing_terms" validate:"required,min=1,max=20,dive"`
+	BillingTerms []BillingTermInput `json:"billing_terms" validate:"required,min=1,max=100,dive"`
 }
 
 // Validate checks the rules that need only the request.

@@ -131,6 +131,7 @@ Both new tables use `BaseMixin` and `EnvironmentMixin`. Every query filters on `
 | `period_count` | int | yes | recurring | Commitment periods per step. Default 1. |
 | `invoice_cadence` | varchar(20) | yes | recurring | `ADVANCE` (bill at step start) or `ARREAR` (bill at step end). Reuses `types.InvoiceCadence`. |
 | `split` | varchar(20) | yes | recurring remainder | `even` (default) or `proportional` (each instalment matches its step's period amounts) |
+| `instalment_invoicing` | varchar(30) | yes | all | `subscription_invoice` or `separate_invoice` for this term's instalments. NULL takes the commitment's `instalment_invoicing`. |
 | `invoice_label` | varchar(255) | yes | all | Invoice line label, after the commitment's `invoice_label`. Default "Instalment {n} of {of}". `{n}` and `{of}` number all of the commitment's instalments together, once and recurring, in billing order; an edit numbers its new instalments after the invoiced ones, which keep their labels. The line description is the commitment's `invoice_description`. |
 | `metadata` | jsonb | yes | all | Free-form |
 
@@ -193,6 +194,7 @@ On an edit, "the term start" is the start of the billing period holding now, or 
 | `period_count` | not allowed | optional, default 1 |
 | `invoice_cadence` | not allowed | required |
 | `split` | not allowed | remainder only, default `even` |
+| `instalment_invoicing` | optional, default the commitment's | optional, default the commitment's |
 | `invoice_label` | optional | optional |
 
 ### 6.2 Validation
@@ -202,7 +204,7 @@ Every failure is `ErrValidation` naming the term's index and the field.
 | # | Rule |
 | --- | --- |
 | V1 | The commitment is binding, has an `end_date`, and uses `collection_method = billing_terms`. |
-| V2 | 1 to 20 terms. Fields not used by the kind (§6.1) are absent. |
+| V2 | 1 to 100 terms. Fields not used by the kind (§6.1) are absent. |
 | V3 | `value_type` is `fixed` or `remainder`; `percentage` is rejected as not supported yet. Fixed needs `value` > 0, rounded to currency precision; remainder has no `value`. |
 | V4 | At most one remainder term. |
 | V5 | Resolved fixed amounts add up to less than `total_amount` when there is a remainder term, and exactly to it when there isn't. |
@@ -455,7 +457,8 @@ These were not discussed explicitly. Review them first.
 | --- | --- |
 | Full advance | One `once` term, `value_type: remainder`. |
 | Part upfront, the rest monthly | A `once` term for the upfront and a `recurring` remainder term. `split: proportional` sizes each instalment by the committed value of its period, so a 28-day month bills less than a 31-day month and the total is exact. `split: even` bills equal instalments. |
-| Fixed-day quarters or half-years, or a monthly schedule on the commitment's anniversary while the subscription bills on calendar months | One `once` term per payment with an explicit `bill_on`, at most 20 terms. Each instalment's service period is the whole term. |
+| Fixed-day quarters or half-years, or a monthly schedule on the commitment's anniversary while the subscription bills on calendar months | One `once` term per payment with an explicit `bill_on`, at most 100 terms, so five years of monthly payments fit. Each instalment's service period is the whole term. |
+| Upfront billed on its own date, the rest on the subscription invoices | The upfront term sets `instalment_invoicing: separate_invoice`; the other terms take the commitment's `subscription_invoice`. |
 | Cancellation fee | A fixed amount chosen by the tenant, billed on top of the settlement (BT13). A fee meant to take back the discount is committed units × (on-demand rate − committed rate). The settlement already bills the earned-but-unbilled time at the committed rate. |
 | Taking back an instalment billed before a termination | A credit note. A void bills it again (BT11). |
 | Part upfront cancelled early | The settlement compares earned with invoiced, so an upfront paid for later months covers the months up to the end date, and their monthly instalments are cancelled, not billed. |
@@ -463,7 +466,6 @@ These were not discussed explicitly. Review them first.
 **Pending**
 
 - **Recurring terms on the commitment's own anniversary.** A recurring step is a group of the subscription's billing periods (BT5). On a calendar-billed subscription, a monthly term from 15 Jan bills a 15 Jan–1 Feb stub, then 1 Feb, 1 Mar, and so on. Today the 15th needs `once` terms or a subscription anchored on the 15th. Billing on the term's own anniversary needs an option on the recurring term, and its steps valued from the commitment periods they cross.
-- **Delivery per term.** `instalment_invoicing` applies to every instalment of the commitment, so an upfront can't be billed on its own invoice at its start while the monthly instalments go on the subscription invoice. The subscription invoice is the common case.
 
 **Pending, not needed yet (cancellation)**
 

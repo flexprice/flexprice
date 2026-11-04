@@ -100,8 +100,8 @@ type CreateCommitmentRequest struct {
 	Binding            *bool                             `json:"binding,omitempty"` // default false
 	CollectionMethod   *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
 	// BillingTerms apply only to collection_method billing_terms, which requires at least one.
-	BillingTerms []BillingTermInput `json:"billing_terms,omitempty" validate:"omitempty,min=1,max=20,dive"`
-	// InstalmentInvoicing applies only to collection_method billing_terms.
+	BillingTerms []BillingTermInput `json:"billing_terms,omitempty" validate:"omitempty,min=1,max=100,dive"`
+	// InstalmentInvoicing applies only to collection_method billing_terms; a billing term may set its own.
 	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
 	// StartDate and EndDate within a second after a billing period edge are taken as that edge.
 	StartDate time.Time `json:"start_date" validate:"required"`
@@ -110,14 +110,14 @@ type CreateCommitmentRequest struct {
 	Metadata types.Metadata `json:"metadata,omitempty"`
 }
 
-// ApplyDefaults fills label, timezone and the binding-dependent settings.
-func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
+// ApplyDefaults fills the label, the timezone active_windows are read in (UTC) and the binding-dependent settings.
+func (r *CreateCommitmentRequest) ApplyDefaults() {
 	if r.InvoiceLabel == "" {
 		r.InvoiceLabel = r.Name
 	}
 
 	if r.Timezone == "" {
-		r.Timezone = subTimezone
+		r.Timezone = "UTC"
 	}
 
 	if r.Binding == nil {

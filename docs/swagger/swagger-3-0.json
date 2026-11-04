@@ -20639,6 +20639,9 @@
           "id": {
             "type": "string"
           },
+          "instalment_invoicing": {
+            "$ref": "#/components/schemas/types.InstalmentDelivery"
+          },
           "invoice_cadence": {
             "$ref": "#/components/schemas/types.InvoiceCadence"
           },
@@ -22100,6 +22103,9 @@
           "end_date": {
             "type": "string",
             "format": "date-time"
+          },
+          "instalment_invoicing": {
+            "$ref": "#/components/schemas/types.InstalmentDelivery"
           },
           "invoice_cadence": {
             "$ref": "#/components/schemas/types.InvoiceCadence"
@@ -23654,7 +23660,7 @@
             }
           },
           "billing_terms": {
-            "maxItems": 20,
+            "maxItems": 100,
             "minItems": 1,
             "type": "array",
             "description": "BillingTerms apply only to collection_method billing_terms, which requires at least one.",
@@ -29902,7 +29908,7 @@
         "type": "object",
         "properties": {
           "billing_terms": {
-            "maxItems": 20,
+            "maxItems": 100,
             "minItems": 1,
             "type": "array",
             "items": {

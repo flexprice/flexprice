@@ -484,6 +484,11 @@ definitions:
         type: string
       id:
         type: string
+      instalment_invoicing:
+        allOf:
+        - $ref: '#/definitions/types.InstalmentDelivery'
+        description: InstalmentInvoicing delivers its instalments, the owner's delivery
+          by default.
       invoice_cadence:
         $ref: '#/definitions/types.InvoiceCadence'
       invoice_label:
@@ -1478,6 +1483,11 @@ definitions:
         $ref: '#/definitions/types.InstalmentBillTrigger'
       end_date:
         type: string
+      instalment_invoicing:
+        allOf:
+        - $ref: '#/definitions/types.InstalmentDelivery'
+        description: InstalmentInvoicing delivers this term's instalments, the commitment's
+          instalment_invoicing by default.
       invoice_cadence:
         $ref: '#/definitions/types.InvoiceCadence'
       invoice_label:
@@ -2627,7 +2637,7 @@ definitions:
           requires at least one.
         items:
           $ref: '#/definitions/BillingTermInput'
-        maxItems: 20
+        maxItems: 100
         minItems: 1
         type: array
       binding:
@@ -2647,7 +2657,8 @@ definitions:
       instalment_invoicing:
         allOf:
         - $ref: '#/definitions/types.InstalmentDelivery'
-        description: InstalmentInvoicing applies only to collection_method billing_terms.
+        description: InstalmentInvoicing applies only to collection_method billing_terms;
+          a billing term may set its own.
       invoice_description:
         maxLength: 500
         type: string
@@ -7428,7 +7439,7 @@ definitions:
       billing_terms:
         items:
           $ref: '#/definitions/BillingTermInput'
-        maxItems: 20
+        maxItems: 100
         minItems: 1
         type: array
     required:

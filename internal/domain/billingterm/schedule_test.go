@@ -436,14 +436,14 @@ func TestExpand_Validation(t *testing.T) {
 			name:    "no terms",
 			owner:   year,
 			periods: months,
-			wantMsg: "billing_terms: must hold 1 to 20 terms",
+			wantMsg: "billing_terms: must hold 1 to 100 terms",
 		},
 		{
-			name:    "21 terms",
+			name:    "101 terms",
 			owner:   year,
 			periods: months,
-			terms:   lo.Times(21, func(int) *Term { return onceFixed("1") }),
-			wantMsg: "billing_terms: must hold 1 to 20 terms",
+			terms:   lo.Times(101, func(int) *Term { return onceFixed("1") }),
+			wantMsg: "billing_terms: must hold 1 to 100 terms",
 		},
 		{
 			name:    "unknown kind",
@@ -451,6 +451,15 @@ func TestExpand_Validation(t *testing.T) {
 			periods: months,
 			terms:   []*Term{with(onceRemainder(), func(t *Term) { t.Kind = "weekly" })},
 			wantMsg: "billing_terms[0].kind:",
+		},
+		{
+			name:    "unknown instalment invoicing",
+			owner:   year,
+			periods: months,
+			terms: []*Term{with(onceRemainder(), func(t *Term) {
+				t.InstalmentInvoicing = lo.ToPtr(types.InstalmentDelivery("email"))
+			})},
+			wantMsg: "billing_terms[0].instalment_invoicing:",
 		},
 		{
 			name:    "percentage terms",
@@ -727,6 +736,24 @@ func TestExpand_DatedTermsMayStartBeforeTheTermStart(t *testing.T) {
 	require.Len(t, got, 12)
 	require.True(t, got[0].BillOn.Equal(feb2027))
 	require.True(t, got[1].BillOn.Equal(feb2027))
+}
+
+func TestExpand_TermDeliveryOverridesTheOwners(t *testing.T) {
+	jan2027 := date(2027, time.January, 1)
+	owner := usd("1200", jan2027, date(2028, time.January, 1))
+	upfront := with(onceFixed("300"), func(t *Term) {
+		t.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
+	})
+
+	got, err := Expand(context.Background(), owner, monthly(jan2027, 12, "100"),
+		[]*Term{upfront, recurringRemainder(types.InvoiceCadenceArrear)})
+
+	require.NoError(t, err)
+	require.Len(t, got, 13)
+	require.Equal(t, types.InstalmentDeliverySeparateInvoice, got[0].Delivery, "the upfront")
+	for _, monthly := range got[1:] {
+		require.Equal(t, types.InstalmentDeliverySubscriptionInvoice, monthly.Delivery)
+	}
 }
 
 func TestNumberLabels_CountsEveryTermInBillingOrder(t *testing.T) {

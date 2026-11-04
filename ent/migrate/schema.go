@@ -365,6 +365,7 @@ var (
 		{Name: "period_count", Type: field.TypeInt, Nullable: true},
 		{Name: "invoice_cadence", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "split", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "instalment_invoicing", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(30)"}},
 		{Name: "invoice_label", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}

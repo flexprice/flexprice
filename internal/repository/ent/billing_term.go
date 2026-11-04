@@ -64,6 +64,7 @@ func (r *billingTermRepository) CreateMany(ctx context.Context, terms []*billing
 			SetNillablePeriodCount(t.PeriodCount).
 			SetNillableInvoiceCadence(t.InvoiceCadence).
 			SetNillableSplit(t.Split).
+			SetNillableInstalmentInvoicing(t.InstalmentInvoicing).
 			SetNillableInvoiceLabel(t.InvoiceLabel).
 			SetMetadata(t.Metadata).
 			SetTenantID(t.TenantID).

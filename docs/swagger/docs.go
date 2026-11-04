@@ -17643,6 +17643,14 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "instalment_invoicing": {
+                    "description": "InstalmentInvoicing delivers its instalments, the owner's delivery by default.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InstalmentDelivery"
+                        }
+                    ]
+                },
                 "invoice_cadence": {
                     "$ref": "#/definitions/types.InvoiceCadence"
                 },
@@ -19098,6 +19106,14 @@ const docTemplate = `{
                 },
                 "end_date": {
                     "type": "string"
+                },
+                "instalment_invoicing": {
+                    "description": "InstalmentInvoicing delivers this term's instalments, the commitment's instalment_invoicing by default.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InstalmentDelivery"
+                        }
+                    ]
                 },
                 "invoice_cadence": {
                     "$ref": "#/definitions/types.InvoiceCadence"
@@ -20769,7 +20785,7 @@ const docTemplate = `{
                 "billing_terms": {
                     "description": "BillingTerms apply only to collection_method billing_terms, which requires at least one.",
                     "type": "array",
-                    "maxItems": 20,
+                    "maxItems": 100,
                     "minItems": 1,
                     "items": {
                         "$ref": "#/definitions/BillingTermInput"
@@ -20794,7 +20810,7 @@ const docTemplate = `{
                     "maxLength": 128
                 },
                 "instalment_invoicing": {
-                    "description": "InstalmentInvoicing applies only to collection_method billing_terms.",
+                    "description": "InstalmentInvoicing applies only to collection_method billing_terms; a billing term may set its own.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.InstalmentDelivery"
@@ -27282,7 +27298,7 @@ const docTemplate = `{
             "properties": {
                 "billing_terms": {
                     "type": "array",
-                    "maxItems": 20,
+                    "maxItems": 100,
                     "minItems": 1,
                     "items": {
                         "$ref": "#/definitions/BillingTermInput"

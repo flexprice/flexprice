@@ -306,7 +306,7 @@ func (s *commitmentService) prepare(
 		return nil, nil, err
 	}
 
-	req.ApplyDefaults(cc.Sub.Timezone)
+	req.ApplyDefaults()
 
 	// A date within a second after a billing period edge means the edge; validation sees the aligned dates.
 	if req.StartDate, err = atPeriodEdge(cc.Sub, req.StartDate); err != nil {

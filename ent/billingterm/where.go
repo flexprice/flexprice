@@ -167,6 +167,12 @@ func Split(v types.BillingTermSplit) predicate.BillingTerm {
 	return predicate.BillingTerm(sql.FieldEQ(FieldSplit, vc))
 }
 
+// InstalmentInvoicing applies equality check predicate on the "instalment_invoicing" field. It's identical to InstalmentInvoicingEQ.
+func InstalmentInvoicing(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldEQ(FieldInstalmentInvoicing, vc))
+}
+
 // InvoiceLabel applies equality check predicate on the "invoice_label" field. It's identical to InvoiceLabelEQ.
 func InvoiceLabel(v string) predicate.BillingTerm {
 	return predicate.BillingTerm(sql.FieldEQ(FieldInvoiceLabel, v))
@@ -1459,6 +1465,100 @@ func SplitEqualFold(v types.BillingTermSplit) predicate.BillingTerm {
 func SplitContainsFold(v types.BillingTermSplit) predicate.BillingTerm {
 	vc := string(v)
 	return predicate.BillingTerm(sql.FieldContainsFold(FieldSplit, vc))
+}
+
+// InstalmentInvoicingEQ applies the EQ predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingEQ(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldEQ(FieldInstalmentInvoicing, vc))
+}
+
+// InstalmentInvoicingNEQ applies the NEQ predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingNEQ(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldNEQ(FieldInstalmentInvoicing, vc))
+}
+
+// InstalmentInvoicingIn applies the In predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingIn(vs ...types.InstalmentDelivery) predicate.BillingTerm {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.BillingTerm(sql.FieldIn(FieldInstalmentInvoicing, v...))
+}
+
+// InstalmentInvoicingNotIn applies the NotIn predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingNotIn(vs ...types.InstalmentDelivery) predicate.BillingTerm {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.BillingTerm(sql.FieldNotIn(FieldInstalmentInvoicing, v...))
+}
+
+// InstalmentInvoicingGT applies the GT predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingGT(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldGT(FieldInstalmentInvoicing, vc))
+}
+
+// InstalmentInvoicingGTE applies the GTE predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingGTE(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldGTE(FieldInstalmentInvoicing, vc))
+}
+
+// InstalmentInvoicingLT applies the LT predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingLT(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldLT(FieldInstalmentInvoicing, vc))
+}
+
+// InstalmentInvoicingLTE applies the LTE predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingLTE(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldLTE(FieldInstalmentInvoicing, vc))
+}
+
+// InstalmentInvoicingContains applies the Contains predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingContains(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldContains(FieldInstalmentInvoicing, vc))
+}
+
+// InstalmentInvoicingHasPrefix applies the HasPrefix predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingHasPrefix(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldHasPrefix(FieldInstalmentInvoicing, vc))
+}
+
+// InstalmentInvoicingHasSuffix applies the HasSuffix predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingHasSuffix(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldHasSuffix(FieldInstalmentInvoicing, vc))
+}
+
+// InstalmentInvoicingIsNil applies the IsNil predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingIsNil() predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldIsNull(FieldInstalmentInvoicing))
+}
+
+// InstalmentInvoicingNotNil applies the NotNil predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingNotNil() predicate.BillingTerm {
+	return predicate.BillingTerm(sql.FieldNotNull(FieldInstalmentInvoicing))
+}
+
+// InstalmentInvoicingEqualFold applies the EqualFold predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingEqualFold(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldEqualFold(FieldInstalmentInvoicing, vc))
+}
+
+// InstalmentInvoicingContainsFold applies the ContainsFold predicate on the "instalment_invoicing" field.
+func InstalmentInvoicingContainsFold(v types.InstalmentDelivery) predicate.BillingTerm {
+	vc := string(v)
+	return predicate.BillingTerm(sql.FieldContainsFold(FieldInstalmentInvoicing, vc))
 }
 
 // InvoiceLabelEQ applies the EQ predicate on the "invoice_label" field.
