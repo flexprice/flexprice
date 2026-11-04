@@ -542,7 +542,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 			// A usage price joining a subscription can break an active commitment's scope rules (meter, bucket size, overage);
 			// with commitments on it is checked and inserted under the commitments lock, and a violating price is logged and skipped.
 			if commitmentsOn && price.Type == types.PRICE_TYPE_USAGE {
-				created, err := createSyncLineItem(ctx, s.ServiceParams, sub, price, lineItem)
+				created, err := createPriceSyncLine(ctx, s.ServiceParams, sub, price, lineItem)
 				if err != nil {
 					return nil, err
 				}
@@ -742,7 +742,7 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 				// A usage price joining a subscription can break an active commitment's scope rules (meter, bucket size, overage);
 				// with commitments on it is checked and inserted under the commitments lock, and a violating price is logged and skipped.
 				if commitmentsOn && price.Type == types.PRICE_TYPE_USAGE {
-					created, err := createSyncLineItem(ctx, s.ServiceParams, sub, price, lineItem)
+					created, err := createPriceSyncLine(ctx, s.ServiceParams, sub, price, lineItem)
 					if err != nil {
 						return nil, err
 					}

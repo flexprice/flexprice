@@ -81,14 +81,14 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
 		}
 
-		if err := NewCommitmentService(s.ServiceParams).CheckPriceAttach(txCtx, sub, price.Price, lineItem.StartDate, lo.EmptyableToPtr(lineItem.EndDate)); err != nil {
+		if err := NewCommitmentService(s.ServiceParams).CheckPriceAttach(txCtx, sub, price.Price, lineItem.StartDate, lineEnd(lineItem)); err != nil {
 			return err
 		}
 
 		if err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).validateWithSubscriptionScopedEntitlement(txCtx, sub, subscriptionEntitlementGrantChange{items: []*subscription.SubscriptionLineItem{lineItem}}); err != nil {
 			return err
 		}
-		if err := rejectLegacyCommitmentInScope(txCtx, s.ServiceParams, sub, lineItem); err != nil {
+		if err := checkLegacyLineFields(txCtx, s.ServiceParams, sub, lineItem); err != nil {
 			return err
 		}
 
@@ -421,7 +421,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 
 	var resp *dto.SubscriptionLineItemResponse
 	detach := func(ctx context.Context) error {
-		if err := checkLineItemCommitmentDetach(ctx, s.ServiceParams, sub, lineItem, endDate); err != nil {
+		if err := checkLineDetach(ctx, s.ServiceParams, sub, lineItem, endDate); err != nil {
 			return err
 		}
 
@@ -586,7 +586,7 @@ func (s *subscriptionService) cancelScheduledLineItem(
 		}
 
 		// The line never runs, so it is ended at its start; a reopened predecessor counts as cover.
-		return checkLineItemCommitmentDetach(ctx, s.ServiceParams, sub, lineItem, lineItem.StartDate)
+		return checkLineDetach(ctx, s.ServiceParams, sub, lineItem, lineItem.StartDate)
 	})
 	if err != nil {
 		return nil, err
@@ -889,7 +889,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return err
 			}
 
-			if err := checkLineItemCommitmentAttach(ctx, s.ServiceParams, sub, newLineItem); err != nil {
+			if err := checkLineAttach(ctx, s.ServiceParams, sub, newLineItem); err != nil {
 				return err
 			}
 
@@ -905,7 +905,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			if err != nil {
 				return err
 			}
-			if err := checkLineItemCommitmentDetach(ctx, s.ServiceParams, sub, &endedLineItem, endDate); err != nil {
+			if err := checkLineDetach(ctx, s.ServiceParams, sub, &endedLineItem, endDate); err != nil {
 				return err
 			}
 			predecessor.SuccessorLineItemID = lo.ToPtr(newLineItem.ID)
@@ -966,7 +966,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 		// The commitment guard takes an advisory lock, which needs a transaction.
 		err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-			if err := rejectLegacyCommitmentInScope(txCtx, s.ServiceParams, sub, existingLineItem); err != nil {
+			if err := checkLegacyLineFields(txCtx, s.ServiceParams, sub, existingLineItem); err != nil {
 				return err
 			}
 
