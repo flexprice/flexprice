@@ -2130,6 +2130,10 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitment() {
 	s.Require().NoError(err)
 	s.Require().Len(items, 1)
 	s.Equal(resp.ID, items[0].SubscriptionID)
+
+	s.Require().Len(resp.Commitments, 1)
+	s.Equal(items[0].ID, resp.Commitments[0].ID)
+	s.True(resp.Commitments[0].CommitmentValue.Equal(decimal.RequireFromString("4.608")))
 }
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentOnIncompleteSubscription() {

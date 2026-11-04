@@ -962,6 +962,9 @@ type SubscriptionResponse struct {
 	Entitlements []*AggregatedFeature `json:"entitlements,omitempty"`
 
 	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
+
+	// Commitments are the commitments created with the subscription; set on create only.
+	Commitments []*CommitmentResponse `json:"commitments,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions

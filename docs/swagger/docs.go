@@ -29569,6 +29569,13 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "commitments": {
+                    "description": "Commitments are the commitments created with the subscription; set on create only.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CommitmentResponse"
+                    }
+                },
                 "coupon_associations": {
                     "description": "CouponAssociations are the coupon associations for this subscription",
                     "type": "array",

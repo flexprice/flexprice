@@ -73,6 +73,7 @@ type subscriptionCoreResult struct {
 	Plan        *plan.Plan
 	ValidPrices []*dto.PriceResponse
 	Customer    *customer.Customer
+	Commitments []*dto.CommitmentResponse
 	// ActivatedOnCreate is set when a gated subscription was activated because nothing was owed.
 	ActivatedOnCreate bool
 }
@@ -548,6 +549,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	}
 
 	// Inline commitments run once every line item exists, so they can scope overridden and phase-one prices.
+	commitments := make([]*dto.CommitmentResponse, 0, len(req.Commitments))
 	for _, commitmentReq := range req.Commitments {
 		commitmentReq.SubscriptionID = sub.ID
 		switch commitmentReq.Scope.EntityType {
@@ -565,9 +567,12 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			}
 		}
 
-		if _, err = commitmentSvc.create(ctx, commitmentReq, commitmentCreateOptions{allowPendingSubscription: true}); err != nil {
+		created, err := commitmentSvc.create(ctx, commitmentReq, commitmentCreateOptions{allowPendingSubscription: true})
+		if err != nil {
 			return nil, err
 		}
+
+		commitments = append(commitments, created)
 	}
 
 	// Skip: draft/trialing (trial conversion invoice is created at trial end), and
@@ -655,6 +660,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		Plan:              plan,
 		ValidPrices:       validPrices,
 		Customer:          customer,
+		Commitments:       commitments,
 		ActivatedOnCreate: activatedOnCreate,
 	}, nil
 }
@@ -686,7 +692,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
-	response := &dto.SubscriptionResponse{Subscription: result.Sub}
+	response := &dto.SubscriptionResponse{Subscription: result.Sub, Commitments: result.Commitments}
 	if result.Invoice != nil {
 		response.LatestInvoice = result.Invoice
 	}

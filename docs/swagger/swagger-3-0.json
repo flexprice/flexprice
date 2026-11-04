@@ -31998,6 +31998,13 @@
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
+          "commitments": {
+            "type": "array",
+            "description": "Commitments are the commitments created with the subscription; set on create only.",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentResponse"
+            }
+          },
           "coupon_associations": {
             "type": "array",
             "description": "CouponAssociations are the coupon associations for this subscription",
