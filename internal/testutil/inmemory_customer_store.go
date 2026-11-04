@@ -67,10 +67,22 @@ func (s *InMemoryCustomerStore) Create(ctx context.Context, c *customer.Customer
 	return s.InMemoryStore.Create(ctx, c.ID, copyCustomer(c))
 }
 
+func customerStatusPublished(s types.Status) bool {
+	return types.CustomerStatusOrDefault(s) == string(types.StatusPublished)
+}
+
 func (s *InMemoryCustomerStore) Get(ctx context.Context, id string) (*customer.Customer, error) {
 	c, err := s.InMemoryStore.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if !types.IsCustomerStatusReadable(c.Status) {
+		return nil, ierr.NewError("customer not found").
+			WithHintf("Customer with ID %s was not found", id).
+			WithReportableDetails(map[string]any{
+				"customer_id": id,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 	return copyCustomer(c), nil
 }
@@ -80,6 +92,7 @@ func (s *InMemoryCustomerStore) GetByLookupKey(ctx context.Context, lookupKey st
 	filterFn := func(ctx context.Context, c *customer.Customer, _ interface{}) bool {
 		return c.ExternalID == lookupKey &&
 			c.TenantID == types.GetTenantID(ctx) &&
+			customerStatusPublished(c.Status) &&
 			CheckEnvironmentFilter(ctx, c.EnvironmentID)
 	}
 
@@ -192,17 +205,12 @@ func customerFilterFn(ctx context.Context, c *customer.Customer, filter interfac
 		}
 	}
 
-	// Mirror CustomerQueryOptions.ApplyStatusFilter: a non-empty GetStatus is an
-	// equality predicate. Empty means published+archived (search default).
-	cs := string(c.Status)
-	if cs == "" {
-		cs = string(types.StatusPublished)
+	cs := types.CustomerStatusOrDefault(c.Status)
+	// No filter may reach suppressed rows
+	if !types.IsCustomerStatusReadable(c.Status) {
+		return false
 	}
-	if status := f.GetStatus(); status != "" {
-		if cs != status {
-			return false
-		}
-	} else if cs != string(types.StatusPublished) && cs != string(types.StatusArchived) {
+	if status := f.GetStatus(); status != "" && cs != status {
 		return false
 	}
 

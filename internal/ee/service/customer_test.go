@@ -611,7 +611,8 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 				if tc.errorCode == ierr.ErrCodeNotFound {
 					s.True(ierr.IsNotFound(err), "Expected not found error")
 					if tc.name == "delete_unpublished_customer" {
-						s.Contains(err.Error(), "customer is not published")
+						// Repo allowlist rejects non-readable statuses first
+						s.Contains(err.Error(), "customer not found")
 					}
 				} else if tc.errorCode == ierr.ErrCodeInvalidOperation {
 					s.True(ierr.IsInvalidOperation(err), "Expected invalid operation error")
