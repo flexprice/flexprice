@@ -296,6 +296,10 @@ func (Invoice) Indexes() []ent.Index {
 		index.Fields("finalized_at").
 			StorageKey("idx_invoices_finalized_at_published").
 			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text))")),
+		// Draft finalization cron pages candidates by id.
+		index.Fields("id").
+			StorageKey("idx_invoices_computed_drafts_id").
+			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND ((invoice_status)::text = 'DRAFT'::text) AND (last_computed_at IS NOT NULL))")),
 		index.Fields("subscription_id", "period_start", "period_end").
 			StorageKey("idx_subscription_period_unique").
 			Annotations(entsql.IndexWhere("(((invoice_status)::text <> 'VOIDED'::text) AND (subscription_id IS NOT NULL))")),

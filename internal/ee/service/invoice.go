@@ -104,7 +104,7 @@ type InvoiceService interface {
 	PublishInvoiceSyncWebhook(ctx context.Context, invoiceID string, provider types.SecretProvider, syncErr string)
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
 	IsInvoiceFinalizationDue(ctx context.Context, inv *invoice.Invoice) (bool, error)
-	ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error)
+	ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*invoice.Invoice, error)
 
 	// ListSubscriptionsDueForDailyDraftCompute returns subscriptions due for daily processing.
 	ListSubscriptionsDueForDailyDraftCompute(ctx context.Context) ([]*subscription.Subscription, error)
@@ -1678,18 +1678,9 @@ func (s *invoiceService) IsInvoiceFinalizationDue(ctx context.Context, inv *invo
 	return clock.Now().After(dueAt), nil
 }
 
-// ListAllTenantDraftInvoices returns draft invoices across all tenants with LastComputedAt set.
-// Used by the scheduled finalization job to find invoices ready for finalization.
-func (s *invoiceService) ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error) {
-	filter := &types.InvoiceFilter{
-		QueryFilter: &types.QueryFilter{
-			Limit:  lo.ToPtr(batchSize),
-			Offset: lo.ToPtr(offset),
-			Status: lo.ToPtr(types.StatusPublished),
-		},
-		InvoiceStatus: []types.InvoiceStatus{types.InvoiceStatusDraft},
-	}
-	return s.InvoiceRepo.ListAllTenant(ctx, filter)
+// ListFinalizationCandidates pages computed drafts across all tenants by id for the finalization cron.
+func (s *invoiceService) ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*invoice.Invoice, error) {
+	return s.InvoiceRepo.ListFinalizationCandidates(ctx, afterID, limit)
 }
 
 // ListSubscriptionsDueForDailyDraftCompute skips invalid tenant environments.

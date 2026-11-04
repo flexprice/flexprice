@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/clock"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
 
@@ -824,44 +825,36 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 	return result, nil
 }
 
-// ListAllTenant retrieves invoices across all tenants (skips tenant/environment filters).
-// NOTE: This is a potentially expensive operation — use only for scheduled jobs.
-func (r *invoiceRepository) ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*domainInvoice.Invoice, error) {
-	span := StartRepositorySpan(ctx, "invoice", "list_all_tenant", map[string]interface{}{
-		"filter": filter,
+// ListFinalizationCandidates returns computed drafts across all tenants with id > afterID.
+// It pre-filters only; IsInvoiceFinalizationDue stays authoritative.
+func (r *invoiceRepository) ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*domainInvoice.Invoice, error) {
+	span := StartRepositorySpan(ctx, "invoice", "list_finalization_candidates", map[string]interface{}{
+		"after_id": afterID,
+		"limit":    limit,
 	})
 	defer FinishSpan(span)
 
-	if filter == nil {
-		filter = &types.InvoiceFilter{
-			QueryFilter: types.NewDefaultQueryFilter(),
-		}
-	}
-
-	if err := filter.Validate(); err != nil {
-		SetSpanError(span, err)
-		return nil, fmt.Errorf("invalid filter: %w", err)
-	}
-
-	client := r.client.Reader(ctx)
-	query := client.Invoice.Query()
-
-	if filter == nil || len(filter.Sort) == 0 {
-		query = ApplySorting(query, filter, r.queryOpts)
-	}
-	query = ApplyPagination(query, filter, r.queryOpts)
-	query = r.queryOpts.ApplyStatusFilter(query, filter.GetStatus())
-
-	// Apply entity-specific filters (status, type, etc.) but NOT tenant/environment
-	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to apply query options").
-			Mark(ierr.ErrDatabase)
-	}
-
-	invoices, err := query.All(ctx)
+	invoices, err := r.client.Reader(ctx).Invoice.Query().
+		Where(
+			invoice.Status(string(types.StatusPublished)),
+			invoice.InvoiceStatus(types.InvoiceStatusDraft),
+			invoice.LastComputedAtNotNil(),
+			invoice.IDGT(afterID),
+			func(s *sql.Selector) {
+				// Mirrors the cheap checks in IsInvoiceFinalizationDue.
+				s.Where(sql.ExprP(fmt.Sprintf(
+					"COALESCE(%[1]s, '') <> '%[2]s' AND NOT COALESCE(%[1]s = '%[3]s' AND %[4]s < %[5]s, false)",
+					s.C(invoice.FieldBillingReason),
+					types.InvoiceBillingReasonSubscriptionCreate,
+					types.InvoiceBillingReasonSubscriptionCycle,
+					s.C(invoice.FieldLastComputedAt),
+					s.C(invoice.FieldPeriodEnd),
+				)))
+			},
+		).
+		Order(ent.Asc(invoice.FieldID)).
+		Limit(limit).
+		All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).WithHint("invoice listing failed").Mark(ierr.ErrDatabase)
