@@ -36,7 +36,7 @@ jobs:
     steps:
       # Audits runner egress; job holds GHCR_PUBLISH_TOKEN.
       - name: Harden runner
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
 
@@ -95,7 +95,7 @@ jobs:
           cache-binary: false
 
       - name: Login to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           # PAT auth — default GITHUB_TOKEN can't push to the org's GHCR
