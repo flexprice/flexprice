@@ -5,9 +5,11 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -20,9 +22,10 @@ import (
 // errStaleDraft is the cause of refusing to finalize or charge a draft that bills instalments no longer scheduled.
 var errStaleDraft = errors.New("draft bills instalments that are no longer scheduled")
 
-// refreshDraftInstalments recomputes a subscription draft whose instalments changed since it was computed: it bills one
-// an edit cancelled or another invoice claimed, or misses one that fell due, like a triggered milestone.
-func (s *invoiceService) refreshDraftInstalments(
+// refreshStaleDraft recomputes a subscription draft that went stale since it was computed: it bills an instalment an
+// edit cancelled or another invoice claimed, misses one that fell due, like a triggered milestone, or predates a change
+// to one of the subscription's commitments.
+func (s *invoiceService) refreshStaleDraft(
 	ctx context.Context,
 	inv *invoice.Invoice,
 	source dto.InvoiceStateChangeSource,
@@ -48,15 +51,21 @@ func (s *invoiceService) refreshDraftInstalments(
 		return err
 	}
 
-	if len(stale) == 0 && len(missing) == 0 {
+	changed, err := s.commitmentChangedSince(ctx, *inv.SubscriptionID, inv.LastComputedAt)
+	if err != nil {
+		return err
+	}
+
+	if len(stale) == 0 && len(missing) == 0 && !changed {
 		return nil
 	}
 
-	s.Logger.Info(ctx, "invoice.instalments_recomputed",
-		"operation", "invoice.instalments_recomputed",
+	s.Logger.Info(ctx, "invoice.stale_draft_recomputed",
+		"operation", "invoice.stale_draft_recomputed",
 		"invoice_id", inv.ID,
 		"stale_instalment_ids", stale,
 		"missing_instalment_ids", missing,
+		"commitment_changed", changed,
 	)
 
 	recomputed, _, err := s.ComputeInvoice(ctx, inv.ID, &dto.InvoiceComputeRequest{InvoiceStateChangeSource: source})
@@ -66,6 +75,26 @@ func (s *invoiceService) refreshDraftInstalments(
 
 	*inv = *recomputed
 	return nil
+}
+
+// commitmentChangedSince reports whether a commitment of the subscription was written after computedAt, which a draft
+// computed then does not reflect. A draft never computed has nothing to compare.
+func (s *invoiceService) commitmentChangedSince(ctx context.Context, subscriptionID string, computedAt *time.Time) (bool, error) {
+	if computedAt == nil {
+		return false, nil
+	}
+
+	enabled, err := newCommitmentService(s.ServiceParams).IsEnabled(ctx)
+	if err != nil || !enabled {
+		return false, err
+	}
+
+	listed, err := s.CommitmentRepo.List(ctx, commitment.NewSubscriptionFilter(subscriptionID))
+	if err != nil {
+		return false, err
+	}
+
+	return lo.SomeBy(listed, func(c *commitment.Commitment) bool { return c.UpdatedAt.After(*computedAt) }), nil
 }
 
 // staleInstalments returns those of the billed instalments that are no longer scheduled.

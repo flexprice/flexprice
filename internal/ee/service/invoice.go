@@ -1333,7 +1333,7 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 		return err
 	}
 
-	if err := s.refreshDraftInstalments(ctx, inv, req.InvoiceStateChangeSource); err != nil {
+	if err := s.refreshStaleDraft(ctx, inv, req.InvoiceStateChangeSource); err != nil {
 		return err
 	}
 
@@ -1958,7 +1958,7 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		return ierr.NewError("invoice has not been computed").WithHint("Invoice must be computed before processing").Mark(ierr.ErrValidation)
 	}
 
-	if err := s.refreshDraftInstalments(ctx, inv, dto.InvoiceStateChangeSource{}); err != nil {
+	if err := s.refreshStaleDraft(ctx, inv, dto.InvoiceStateChangeSource{}); err != nil {
 		return err
 	}
 

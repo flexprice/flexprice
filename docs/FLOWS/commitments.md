@@ -288,8 +288,8 @@ Instalments wait while the subscription is trialing or paused. `TriggerInstalmen
 - **Claim on finalize.** `claimInstalments` moves `scheduled` → `invoiced` in the finalize transaction
   (`performFinalizeInvoiceActions` [invoice.go:1562](../../internal/ee/service/invoice.go#L1562), and payment-driven
   finalization [payment_processor.go:958](../../internal/ee/service/payment_processor.go#L958)). Computing a draft never claims.
-- **Refresh.** `refreshDraftInstalments` recomputes a subscription draft before it is finalized when it carries a
-  no-longer-scheduled instalment or misses a due one (`FinalizeInvoice` [invoice.go:1336](../../internal/ee/service/invoice.go#L1336),
+- **Refresh.** `refreshStaleDraft` recomputes a subscription draft before it is finalized when it carries a
+  no-longer-scheduled instalment, misses a due one, or was computed before a commitment of the subscription changed (`FinalizeInvoice` [invoice.go:1336](../../internal/ee/service/invoice.go#L1336),
   `ProcessDraftInvoice` [invoice.go:1961](../../internal/ee/service/invoice.go#L1961)). A manually edited draft is never
   recomputed, and an instalment line's amount can't be edited.
 - **Charging.** `requireFreshDraft` refuses to charge a stale draft, both when the payment is created
@@ -315,9 +315,9 @@ under the commitment lock:
    settlement and the cancellation fee (`cancellationFeeLine`).
 4. Set the status to terminated with `terminated_at`. Later invoices clip the floor at `terminated_at`.
 
-After the commit, `recomputeDrafts` recomputes the subscription's drafts for periods ending after `effective_at`, so a
-backdated termination stops billing the commitment on drafts computed before it. `Create` does the same from the
-commitment's start.
+After the commit, `recomputeDrafts` recomputes the subscription's drafts and skipped period invoices for periods ending after
+`effective_at`, so a backdated termination stops billing the commitment on drafts computed before it. `Create` does the
+same from the commitment's start. A recompute that fails is caught when the draft is finalized (`refreshStaleDraft`).
 
 Cancelling a subscription calls `TerminateForSubscription` (`CancelSubscription` [subscription.go:2287](../../internal/ee/service/subscription.go#L2287),
 `TerminateSubscriptionResources` [subscription.go:5246](../../internal/ee/service/subscription.go#L5246)). A billing-terms commitment

@@ -627,31 +627,44 @@ func (s *CommitmentServiceSuite) TestUpdate_OnlyLabelsAndMetadata() {
 	s.True(ierr.IsValidation(err), "an end date change is refused, not ignored: got %v", err)
 }
 
-// A commitment backdated before a computed draft recomputes it, so the draft bills the commitment.
+// A commitment backdated before computed invoices recomputes them: February's draft and March's skipped invoice both
+// bill the floor.
 func (s *CommitmentE2ESuite) TestCreate_RecomputesLaterDrafts() {
 	ctx := s.GetContext()
-	feb, mar := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0)
+	feb, mar, apr := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0), s.jan.AddDate(0, 3, 0)
 	tokens := s.planWith("create_drafts", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	sub := s.subscribe(tokens, s.jan)
 	s.record(s.tokens, feb.AddDate(0, 0, 9), "100")
 
 	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
-	draft, err := invoices.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
-		SubscriptionID: sub.ID,
-		PeriodStart:    feb,
-		PeriodEnd:      mar,
-		ReferencePoint: types.ReferencePointPeriodEnd,
-	})
-	s.Require().NoError(err)
-	computed, _, err := invoices.ComputeInvoice(ctx, draft.ID, nil)
-	s.Require().NoError(err)
-	s.Require().True(computed.AmountDue.Equal(dec("10")), "only the usage is billed, got %s", computed.AmountDue)
+	february := s.computedDraft(invoices, sub.ID, types.Period{Start: feb, End: mar})
+	s.Require().True(february.AmountDue.Equal(dec("10")), "only the usage is billed, got %s", february.AmountDue)
+	march := s.computedDraft(invoices, sub.ID, types.Period{Start: mar, End: apr})
+	s.Require().Equal(types.InvoiceStatusSkipped, march.InvoiceStatus)
 
 	s.commit(sub.ID, floorRequest("Floor", tokens.ID, "100", s.jan, s.jan.AddDate(1, 0, 0)))
 
-	stored, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
+	for _, inv := range []*invoice.Invoice{february, march} {
+		stored, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+		s.Require().NoError(err)
+		s.Equal(types.InvoiceStatusDraft, stored.InvoiceStatus)
+		s.True(stored.AmountDue.Equal(dec("100")), "%s bills the floor, got %s", stored.PeriodStart, stored.AmountDue)
+	}
+}
+
+// computedDraft creates the subscription's invoice for period and computes it.
+func (s *CommitmentE2ESuite) computedDraft(invoices InvoiceService, subscriptionID string, period types.Period) *invoice.Invoice {
+	draft, err := invoices.CreateDraftInvoiceForSubscription(s.GetContext(), dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: subscriptionID,
+		PeriodStart:    period.Start,
+		PeriodEnd:      period.End,
+		ReferencePoint: types.ReferencePointPeriodEnd,
+	})
 	s.Require().NoError(err)
-	s.True(stored.AmountDue.Equal(dec("100")), "the draft bills the floor, got %s", stored.AmountDue)
+
+	computed, _, err := invoices.ComputeInvoice(s.GetContext(), draft.ID, nil)
+	s.Require().NoError(err)
+	return computed
 }
 
 // A termination dated before a computed draft recomputes it, so the draft stops billing the commitment.
@@ -663,18 +676,10 @@ func (s *CommitmentE2ESuite) TestTerminate_RecomputesLaterDrafts() {
 	committed := s.commit(sub.ID, floorRequest("Floor", tokens.ID, "100", s.jan, s.jan.AddDate(1, 0, 0)))
 
 	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
-	draft, err := invoices.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
-		SubscriptionID: sub.ID,
-		PeriodStart:    feb,
-		PeriodEnd:      mar,
-		ReferencePoint: types.ReferencePointPeriodEnd,
-	})
-	s.Require().NoError(err)
-	computed, _, err := invoices.ComputeInvoice(ctx, draft.ID, nil)
-	s.Require().NoError(err)
-	s.Require().True(computed.AmountDue.Equal(dec("100")), "the unused floor is billed, got %s", computed.AmountDue)
+	draft := s.computedDraft(invoices, sub.ID, types.Period{Start: feb, End: mar})
+	s.Require().True(draft.AmountDue.Equal(dec("100")), "the unused floor is billed, got %s", draft.AmountDue)
 
-	_, err = s.commitments.Terminate(ctx, committed.ID, dto.TerminateCommitmentRequest{EffectiveAt: &feb})
+	_, err := s.commitments.Terminate(ctx, committed.ID, dto.TerminateCommitmentRequest{EffectiveAt: &feb})
 	s.Require().NoError(err)
 
 	stored, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)

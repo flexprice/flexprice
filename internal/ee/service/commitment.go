@@ -656,13 +656,14 @@ func (s *commitmentService) publishSystemEvent(ctx context.Context, eventName ty
 	publishAfterCommit(ctx, s.ServiceParams, event)
 }
 
-// recomputeDrafts recomputes the subscription's drafts for periods ending after from, which a backdated commitment
-// change leaves stale. It runs after commit and only logs a failure.
+// recomputeDrafts recomputes the subscription's drafts and skipped period invoices for periods ending after from, which
+// a backdated commitment change leaves stale. It runs after commit and only logs a failure; finalizing recomputes a
+// draft that still predates the change.
 func (s *commitmentService) recomputeDrafts(ctx context.Context, subscriptionID string, from time.Time) {
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.SubscriptionID = subscriptionID
 	filter.InvoiceType = types.InvoiceTypeSubscription
-	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft, types.InvoiceStatusSkipped}
 	filter.PeriodEndGT = lo.ToPtr(from)
 	filter.SkipLineItems = true
 	drafts, err := s.InvoiceRepo.List(ctx, filter)
@@ -675,7 +676,10 @@ func (s *commitmentService) recomputeDrafts(ctx context.Context, subscriptionID 
 
 	invoices := NewInvoiceService(s.ServiceParams)
 	for _, draft := range drafts {
-		if draft.IsManuallyEdited {
+		// A skipped opening or proration invoice stays skipped; what it would now bill goes on the next invoice.
+		skippedOneOff := draft.InvoiceStatus == types.InvoiceStatusSkipped &&
+			draft.BillingReason != string(types.InvoiceBillingReasonSubscriptionCycle)
+		if draft.IsManuallyEdited || skippedOneOff {
 			continue
 		}
 
