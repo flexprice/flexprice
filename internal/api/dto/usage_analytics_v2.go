@@ -22,6 +22,9 @@ const (
 	AnalyticsV2MaxColumns      = 50
 	AnalyticsV2MaxMetrics      = 3
 	AnalyticsV2MaxSearchLength = 100
+	// Filter count and values per filter are bounded by validate tags (max=20, max=1000) so the spec shows them.
+	AnalyticsV2MaxFilters      = 20
+	AnalyticsV2MaxFilterValues = 1000
 	AnalyticsV2DefaultRange    = 7 * 24 * time.Hour
 	// AnalyticsV2MaxRange bounds a request because every billing period in range is priced with the invoice code.
 	AnalyticsV2MaxRange = 366 * 24 * time.Hour
@@ -64,11 +67,11 @@ type GetUsageAnalyticsV2Request struct {
 	FeatureIDs         []string  `json:"feature_ids,omitempty"`
 	MeterIDs           []string  `json:"meter_ids,omitempty"`
 	// GroupBy lists 1-3 row keys: "source", "meter_id", "feature_id", "sub_line_item_id" or "properties.<name>".
-	GroupBy []string `json:"group_by" validate:"required" example:"properties.app"`
+	GroupBy []string `json:"group_by" validate:"required,min=1,max=3" example:"properties.app"`
 	// Columns spreads one key's values into columns on every row; also accepts "month".
 	Columns string `json:"columns,omitempty" example:"properties.type"`
 	// Filters include (in) or exclude (not_in) values of any key; entries are ANDed.
-	Filters []AnalyticsV2Filter `json:"filters,omitempty" validate:"omitempty,dive"`
+	Filters []AnalyticsV2Filter `json:"filters,omitempty" validate:"omitempty,max=20,dive"`
 	// Search is a case-insensitive contains match on the row key values.
 	Search     string           `json:"search,omitempty"`
 	Sort       *AnalyticsV2Sort `json:"sort,omitempty"`
@@ -84,7 +87,7 @@ type GetUsageAnalyticsV2Request struct {
 type AnalyticsV2Filter struct {
 	Key    string              `json:"key" validate:"required" example:"properties.app"`
 	Op     AnalyticsV2FilterOp `json:"op" validate:"required" example:"not_in"`
-	Values []string            `json:"values" validate:"required,min=1"`
+	Values []string            `json:"values" validate:"required,min=1,max=1000"`
 }
 
 type AnalyticsV2Sort struct {
@@ -119,6 +122,10 @@ func (r *GetUsageAnalyticsV2Request) ApplyDefaults(now time.Time) {
 }
 
 func (r *GetUsageAnalyticsV2Request) Validate() error {
+	// Keys first, so a wrong group_by gets its own message instead of the generic min/max tag error.
+	if err := r.validateKeys(); err != nil {
+		return err
+	}
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
@@ -127,9 +134,6 @@ func (r *GetUsageAnalyticsV2Request) Validate() error {
 	}
 	if r.EndTime.Sub(r.StartTime) > AnalyticsV2MaxRange {
 		return analyticsV2Error("the range between start_time and end_time is limited to 366 days", nil)
-	}
-	if err := r.validateKeys(); err != nil {
-		return err
 	}
 	if err := r.validateFilters(); err != nil {
 		return err
@@ -304,7 +308,9 @@ type GetUsageAnalyticsV2Response struct {
 	// totals then also carry price_unit_cost.
 	PriceUnit  string `json:"price_unit,omitempty"`
 	TotalCount int64  `json:"total_count"`
-	// DataThrough is the instant the data was read up to: events received later are not included.
+	// DataThrough is when the event scans were cut off: events received later are not split across rows.
+	// It is a watermark, not a billing snapshot: invoice pricing reads usage as of the request, so events
+	// received during the request can be billed but not yet split.
 	DataThrough time.Time `json:"data_through"`
 	// ColumnValues lists every column across the full result, so every page has the same header.
 	ColumnValues   []string                   `json:"column_values,omitempty"`

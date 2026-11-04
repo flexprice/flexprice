@@ -97,8 +97,8 @@ func classifyAnalyticsV2InvoiceLines(subscriptionID, currency string, rows []dto
 	out := &analyticsV2PricedPeriods{}
 
 	for _, row := range rows {
-		// Zero rows on a line are kept so an unsupported meter is still reported when it costs nothing;
-		// splitAnalyticsV2Excluded drops the zero lines of supported meters.
+		// Zero rows on a line are kept: a free meter still shows usage and event counts, and an
+		// unsupported meter is still reported when it costs nothing.
 		lineID := lo.FromPtr(row.SubscriptionLineItemID)
 		if lineID == "" {
 			if row.Amount.IsZero() {
@@ -322,9 +322,7 @@ func splitAnalyticsV2Excluded(
 	for _, line := range lines {
 		m := meters[line.meterID]
 		if analyticsV2Supported(m, prices[line.priceID]) {
-			if !line.total().IsZero() || !line.freeQuantity.IsZero() {
-				kept = append(kept, line)
-			}
+			kept = append(kept, line)
 			continue
 		}
 		ex := excludedByMeter[line.meterID]

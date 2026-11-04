@@ -299,7 +299,7 @@ func (s *InMemoryMeterUsageStore) GetAnalyticsV2LinePeaks(_ context.Context, p *
 func (s *InMemoryMeterUsageStore) GetAnalyticsV2Detail(_ context.Context, params *events.AnalyticsV2DetailParams) (*events.AnalyticsV2Detail, error) {
 	p := &params.Rank
 	detail := &events.AnalyticsV2Detail{Distinct: make([]map[string]events.AnalyticsV2Distinct, len(params.Rows))}
-	if len(params.Rows) == 0 {
+	if len(params.Rows) == 0 && params.WindowSize == "" {
 		return detail, nil
 	}
 	page := map[string]int{}

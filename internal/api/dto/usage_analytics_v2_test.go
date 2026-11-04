@@ -56,7 +56,7 @@ func TestGetUsageAnalyticsV2Request_Validate(t *testing.T) {
 		}, ""},
 		{"missing customer", func(r *GetUsageAnalyticsV2Request) { r.ExternalCustomerID = "" }, "ExternalCustomerID"},
 		{"end before start", func(r *GetUsageAnalyticsV2Request) { r.EndTime = r.StartTime }, "end_time must be after start_time"},
-		{"no group_by", func(r *GetUsageAnalyticsV2Request) { r.GroupBy = nil }, "GroupBy"},
+		{"no group_by", func(r *GetUsageAnalyticsV2Request) { r.GroupBy = nil }, "group_by needs"},
 		{"four group_by keys", func(r *GetUsageAnalyticsV2Request) {
 			r.GroupBy = []string{"source", "meter_id", "properties.a", "properties.b"}
 		}, "group_by needs 1 to 3 keys"},
@@ -87,6 +87,15 @@ func TestGetUsageAnalyticsV2Request_Validate(t *testing.T) {
 			r.StartTime = r.EndTime.AddDate(0, 0, -30)
 			r.WindowSize = types.WindowSizeHour
 		}, "use a larger window_size"},
+		{"too many filters", func(r *GetUsageAnalyticsV2Request) {
+			r.Filters = make([]AnalyticsV2Filter, AnalyticsV2MaxFilters+1)
+			for i := range r.Filters {
+				r.Filters[i] = AnalyticsV2Filter{Key: "source", Op: AnalyticsV2FilterOpIn, Values: []string{"api"}}
+			}
+		}, "'max' tag"},
+		{"too many filter values", func(r *GetUsageAnalyticsV2Request) {
+			r.Filters = []AnalyticsV2Filter{{Key: "source", Op: AnalyticsV2FilterOpIn, Values: make([]string, AnalyticsV2MaxFilterValues+1)}}
+		}, "'max' tag"},
 		{"range over a year", func(r *GetUsageAnalyticsV2Request) {
 			r.StartTime = r.EndTime.AddDate(-2, 0, 0)
 		}, "limited to 366 days"},

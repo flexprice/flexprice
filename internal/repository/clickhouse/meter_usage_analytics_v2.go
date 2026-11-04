@@ -48,6 +48,13 @@ func (q *analyticsV2Query) value(arg interface{}) string {
 	case []string:
 		return q.param("Array(String)", analyticsV2StringArray(v))
 	case time.Time:
+		// Event timestamps are whole seconds, so a fractional bound rounds up: ">= 12:00:00.5" and
+		// "< 12:00:00.5" select the same events as ">= 12:00:01" and "< 12:00:01".
+		if t := v.UTC(); t.Truncate(time.Second).Equal(t) {
+			v = t
+		} else {
+			v = t.Truncate(time.Second).Add(time.Second)
+		}
 		return q.param("DateTime('UTC')", v.UTC().Format("2006-01-02 15:04:05"))
 	default:
 		panic(fmt.Sprintf("analytics v2 query: unsupported parameter type %T", arg))
@@ -184,9 +191,10 @@ func writeAnalyticsV2Events(
 		q.add(fmt.Sprintf(`%s
 			FROM meter_usage %s
 			WHERE tenant_id = ? AND environment_id = ? AND external_customer_id IN ?
-				AND meter_id IN %s AND timestamp >= ? AND timestamp < ? AND ingested_at <= ?`, scanExtra, finalClause, meterIDs),
+				AND meter_id IN %s AND timestamp >= ? AND timestamp < ? AND ingested_at <= %s`, scanExtra, finalClause, meterIDs,
+			q.param("DateTime64(3, 'UTC')", scope.DataThrough.UTC().Format("2006-01-02 15:04:05.000"))),
 			scope.TenantID, scope.EnvironmentID, scope.ExternalCustomerIDs,
-			from.UTC(), to.UTC(), scope.DataThrough.UTC())
+			from.UTC(), to.UTC())
 		if eventFilters != nil {
 			eventFilters(q)
 		}
@@ -664,7 +672,8 @@ func (r *MeterUsageRepository) GetAnalyticsV2LinePeaks(ctx context.Context, para
 
 func (r *MeterUsageRepository) GetAnalyticsV2Detail(ctx context.Context, params *events.AnalyticsV2DetailParams) (*events.AnalyticsV2Detail, error) {
 	detail := &events.AnalyticsV2Detail{Distinct: make([]map[string]events.AnalyticsV2Distinct, len(params.Rows))}
-	if len(params.Rows) == 0 || len(params.Rank.Lines) == 0 {
+	// With no page rows (offset past the end) only the all-rows points are read.
+	if len(params.Rank.Lines) == 0 || (len(params.Rows) == 0 && params.WindowSize == "") {
 		return detail, nil
 	}
 	span := StartRepositorySpan(ctx, "meter_usage", "get_analytics_v2_detail", map[string]interface{}{
@@ -681,7 +690,7 @@ func (r *MeterUsageRepository) GetAnalyticsV2Detail(ctx context.Context, params 
 			return err
 		})
 	}
-	if len(params.DistinctKeys) > 0 {
+	if len(params.DistinctKeys) > 0 && len(params.Rows) > 0 {
 		g.Go(func() error { return r.analyticsV2Distinct(gctx, params, detail.Distinct) })
 	}
 	if err := g.Wait(); err != nil {

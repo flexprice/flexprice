@@ -15,7 +15,7 @@ type AnalyticsV2Scope struct {
 	TenantID            string
 	EnvironmentID       string
 	ExternalCustomerIDs []string
-	// DataThrough excludes events received after this instant, so every page reads the same data.
+	// DataThrough excludes events received after this instant, so every query of one request reads the same events.
 	DataThrough time.Time
 	UseFinal    bool
 }

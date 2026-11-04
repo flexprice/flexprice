@@ -456,7 +456,7 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 // @Summary Query usage analytics
 // @ID queryUsageAnalytics
 // @Description Use when building spend dashboards: usage cost grouped by up to three keys (event properties, source, meter, feature or line item), sorted and paginated, with optional columns, filters, search, time points and per-row metrics.
-// @Description Line costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage, or by each row's peak for MAX meters. A partial range carries the full period's rate.
+// @Description Line costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage, or by each row's peak for MAX meters. A partial range carries the full period's rate for additive meters; MAX meters, and lines with no usage, carry the range's share of the period's time.
 // @Description totals.cost equals rows_cost + unattributed_cost + excluded_cost. Unused commitment is unattributed unless a row key is the meter, feature or line item. Meters whose cost cannot be split yet are listed in excluded_meters.
 // @Description Each request reads the latest data, so rows can shift between pages while events arrive; data_through in the response says how current the data is.
 // @Tags Events

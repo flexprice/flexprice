@@ -197,8 +197,9 @@ func TestSplitAnalyticsV2Excluded(t *testing.T) {
 		"m_free_users": {ID: "m_free_users", Aggregation: meter.Aggregation{Type: types.AggregationCountUnique}}}
 	kept, excluded := splitAnalyticsV2Excluded(lines, meters, map[string]*price.Price{}, nov, dec)
 
-	require.Equal(t, []string{"l1", "l2"}, lo.Map(kept, func(l *analyticsV2LineCost, _ int) string { return l.key.lineItemID }))
-	require.Len(t, excluded, 3, "a $0 unsupported meter is still reported; a $0 supported line is dropped")
+	require.Equal(t, []string{"l1", "l2", "l6"}, lo.Map(kept, func(l *analyticsV2LineCost, _ int) string { return l.key.lineItemID }),
+		"a $0 supported line is kept so its usage still shows")
+	require.Len(t, excluded, 3, "a $0 unsupported meter is still reported")
 	require.Equal(t, "m_free_users", excluded[2].MeterID)
 	require.Equal(t, "0", excluded[2].Cost.String())
 	require.Equal(t, "m_users", excluded[0].MeterID)

@@ -2235,7 +2235,8 @@ func (s *meterUsageService) resolveCustomerAndSubscriptions(ctx context.Context,
 	}
 
 	subService := NewSubscriptionService(s.ServiceParams)
-	filter := types.NewSubscriptionFilter()
+	// Every subscription: a default page would silently drop usage from the 51st onwards.
+	filter := types.NewNoLimitSubscriptionFilter()
 	filter.CustomerID = cust.ID
 	filter.WithLineItems = true
 	filter.SubscriptionStatus = []types.SubscriptionStatus{

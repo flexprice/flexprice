@@ -4957,7 +4957,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when building spend dashboards: usage cost grouped by up to three keys (event properties, source, meter, feature or line item), sorted and paginated, with optional columns, filters, search, time points and per-row metrics.\nLine costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage, or by each row's peak for MAX meters. A partial range carries the full period's rate.\ntotals.cost equals rows_cost + unattributed_cost + excluded_cost. Unused commitment is unattributed unless a row key is the meter, feature or line item. Meters whose cost cannot be split yet are listed in excluded_meters.\nEach request reads the latest data, so rows can shift between pages while events arrive; data_through in the response says how current the data is.",
+                "description": "Use when building spend dashboards: usage cost grouped by up to three keys (event properties, source, meter, feature or line item), sorted and paginated, with optional columns, filters, search, time points and per-row metrics.\nLine costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage, or by each row's peak for MAX meters. A partial range carries the full period's rate for additive meters; MAX meters, and lines with no usage, carry the range's share of the period's time.\ntotals.cost equals rows_cost + unattributed_cost + excluded_cost. Unused commitment is unattributed unless a row key is the meter, feature or line item. Meters whose cost cannot be split yet are listed in excluded_meters.\nEach request reads the latest data, so rows can shift between pages while events arrive; data_through in the response says how current the data is.",
                 "consumes": [
                     "application/json"
                 ],
@@ -18406,6 +18406,7 @@
                 },
                 "values": {
                     "type": "array",
+                    "maxItems": 1000,
                     "minItems": 1,
                     "items": {
                         "type": "string"
@@ -23762,6 +23763,7 @@
                 "filters": {
                     "description": "Filters include (in) or exclude (not_in) values of any key; entries are ANDed.",
                     "type": "array",
+                    "maxItems": 20,
                     "items": {
                         "$ref": "#/definitions/AnalyticsV2Filter"
                     }
@@ -23769,6 +23771,8 @@
                 "group_by": {
                     "description": "GroupBy lists 1-3 row keys: \"source\", \"meter_id\", \"feature_id\", \"sub_line_item_id\" or \"properties.\u003cname\u003e\".",
                     "type": "array",
+                    "maxItems": 3,
+                    "minItems": 1,
                     "items": {
                         "type": "string"
                     },
@@ -23836,7 +23840,7 @@
                     "type": "string"
                 },
                 "data_through": {
-                    "description": "DataThrough is the instant the data was read up to: events received later are not included.",
+                    "description": "DataThrough is when the event scans were cut off: events received later are not split across rows.\nIt is a watermark, not a billing snapshot: invoice pricing reads usage as of the request, so events\nreceived during the request can be billed but not yet split.",
                     "type": "string"
                 },
                 "excluded_meters": {

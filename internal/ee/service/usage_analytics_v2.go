@@ -46,7 +46,7 @@ type analyticsV2Context struct {
 // GetUsageAnalyticsV2 returns one sorted page of usage cost grouped by the request's keys. Line costs come from
 // the invoice code; ClickHouse splits them across rows by usage. req must already be defaulted and validated.
 func (s *meterUsageService) GetUsageAnalyticsV2(ctx context.Context, req *dto.GetUsageAnalyticsV2Request) (*dto.GetUsageAnalyticsV2Response, error) {
-	dataThrough := clock.Now().Truncate(time.Second)
+	dataThrough := clock.Now().Truncate(time.Millisecond)
 	empty := &dto.GetUsageAnalyticsV2Response{DataThrough: dataThrough, Items: []dto.AnalyticsV2Item{}, ExcludedMeters: []dto.AnalyticsV2ExcludedMeter{}}
 
 	cust, subs, err := s.resolveCustomerAndSubscriptions(ctx, req.ExternalCustomerID)
@@ -123,7 +123,8 @@ func (s *meterUsageService) GetUsageAnalyticsV2(ctx context.Context, req *dto.Ge
 
 	var detail *events.AnalyticsV2Detail
 	distinctKeys := ac.distinctKeys()
-	if len(result.Rows) > 0 && (req.WindowSize != "" || len(distinctKeys) > 0) {
+	// An empty page still needs the all-rows points when the result has rows.
+	if (len(result.Rows) > 0 && len(distinctKeys) > 0) || (result.TotalCount > 0 && req.WindowSize != "") {
 		detail, err = s.repo.GetAnalyticsV2Detail(ctx, &events.AnalyticsV2DetailParams{
 			Rank:          *rank,
 			Rows:          lo.Map(result.Rows, func(r events.AnalyticsV2Row, _ int) []string { return r.Group }),
@@ -183,7 +184,6 @@ func (s *meterUsageService) selectAnalyticsV2Lines(ctx context.Context, ac *anal
 	narrowed := len(ac.req.FeatureIDs) > 0 || len(ac.req.MeterIDs) > 0
 
 	lines := lo.Filter(priced.lines, func(l *analyticsV2LineCost, _ int) bool { return !narrowed || selected[l.meterID] })
-	ac.setPriceUnit(lines, len(priced.unattributed) > 0)
 	ac.lines, ac.excluded = splitAnalyticsV2Excluded(lines, ac.meters, ac.prices, ac.req.StartTime, ac.req.EndTime)
 	for i := range ac.excluded {
 		if f := ac.features[ac.excluded[i].MeterID]; f != nil {
@@ -202,6 +202,8 @@ func (s *meterUsageService) selectAnalyticsV2Lines(ctx context.Context, ac *anal
 		netAnalyticsV2Charge(&charge, u.discount.Mul(f))
 		ac.unattributed = append(ac.unattributed, charge)
 	}
+	// Only the selected unlinked charges (in ac.unattributed so far) can rule out the price unit.
+	ac.setPriceUnit(lines, len(ac.unattributed) > 0)
 	return nil
 }
 
@@ -462,6 +464,8 @@ func (s *meterUsageService) assembleAnalyticsV2(
 		cellsByRow = lo.GroupBy(detail.Points, func(c events.AnalyticsV2PointCell) int { return c.Row })
 	}
 	for i, row := range result.Rows {
+		// A feature_id row of meters without a feature ("") can hold several meters; usage needs exactly one.
+		singleMeter := singleMeter && len(ac.rowMeters(row)) <= 1
 		item := ac.item(row, singleMeter)
 		item.PriceUnitCost = ac.priceUnitCost(row.Measure.Amounts.Cost())
 		if detail != nil {
@@ -530,18 +534,7 @@ func (ac *analyticsV2Context) item(row events.AnalyticsV2Row, singleMeter bool) 
 			}
 			item.Columns[name] = col
 		}
-		names := lo.Keys(item.Columns)
-		sort.Strings(names)
-		costs := make([]decimal.Decimal, len(names))
-		for i, n := range names {
-			costs[i] = item.Columns[n].Cost
-		}
-		reconcileAnalyticsV2Rounding(lo.Map(costs, func(_ decimal.Decimal, i int) *decimal.Decimal { return &costs[i] }), item.Cost)
-		for i, n := range names {
-			col := item.Columns[n]
-			col.Cost = costs[i]
-			item.Columns[n] = col
-		}
+		reconcileAnalyticsV2Columns(item.Columns, item.Cost)
 	}
 
 	var priceIDs, subIDs, planIDs, addonIDs []string
@@ -572,14 +565,19 @@ func sortedUniq(v []string) []string {
 	return out
 }
 
-// rowFeature is the feature of a single-meter row's meter.
-func (ac *analyticsV2Context) rowFeature(row events.AnalyticsV2Row) *feature.Feature {
-	meters := lo.Uniq(lo.FilterMap(row.LineIndexes, func(idx int, _ int) (string, bool) {
+// rowMeters lists the distinct meters of a row's lines.
+func (ac *analyticsV2Context) rowMeters(row events.AnalyticsV2Row) []string {
+	return lo.Uniq(lo.FilterMap(row.LineIndexes, func(idx int, _ int) (string, bool) {
 		if idx < 0 || idx >= len(ac.lines) {
 			return "", false
 		}
 		return ac.lines[idx].meterID, true
 	}))
+}
+
+// rowFeature is the feature of a single-meter row's meter.
+func (ac *analyticsV2Context) rowFeature(row events.AnalyticsV2Row) *feature.Feature {
+	meters := ac.rowMeters(row)
 	if len(meters) != 1 {
 		return nil
 	}
@@ -641,6 +639,7 @@ func (ac *analyticsV2Context) points(cells []events.AnalyticsV2PointCell, single
 	reconcileAnalyticsV2Rounding(lo.Map(out, func(_ dto.AnalyticsV2Point, i int) *decimal.Decimal { return &out[i].Cost }), target)
 	for i := range out {
 		out[i].Subtotal = out[i].Cost.Add(out[i].Discount)
+		reconcileAnalyticsV2Columns(out[i].Columns, out[i].Cost)
 	}
 	return out
 }
@@ -649,6 +648,25 @@ func addAnalyticsV2Amounts(a, b events.AnalyticsV2Amounts) events.AnalyticsV2Amo
 	return events.AnalyticsV2Amounts{
 		Usage: a.Usage.Add(b.Usage), CommitmentUtilized: a.CommitmentUtilized.Add(b.CommitmentUtilized),
 		Overage: a.Overage.Add(b.Overage), TrueUp: a.TrueUp.Add(b.TrueUp), Discount: a.Discount.Add(b.Discount), Free: a.Free.Add(b.Free),
+	}
+}
+
+// reconcileAnalyticsV2Columns makes rounded column costs add up to cost, in a stable column order.
+func reconcileAnalyticsV2Columns(columns map[string]dto.AnalyticsV2Column, cost decimal.Decimal) {
+	if len(columns) == 0 {
+		return
+	}
+	names := lo.Keys(columns)
+	sort.Strings(names)
+	costs := make([]decimal.Decimal, len(names))
+	for i, n := range names {
+		costs[i] = columns[n].Cost
+	}
+	reconcileAnalyticsV2Rounding(lo.Map(costs, func(_ decimal.Decimal, i int) *decimal.Decimal { return &costs[i] }), cost)
+	for i, n := range names {
+		col := columns[n]
+		col.Cost = costs[i]
+		columns[n] = col
 	}
 }
 

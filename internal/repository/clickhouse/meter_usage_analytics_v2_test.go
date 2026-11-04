@@ -215,6 +215,32 @@ func TestRankAnalyticsV2Rows_MatchesOracle_Integration(t *testing.T) {
 		})
 	}
 
+	t.Run("empty page still returns all-rows points", func(t *testing.T) {
+		rank := base()
+		rank.Timezone = "UTC"
+		dp := &events.AnalyticsV2DetailParams{Rank: *rank, WindowSize: types.WindowSizeDay, DistinctKeys: []string{"source"}}
+		got, err := repo.GetAnalyticsV2Detail(ctx, dp)
+		require.NoError(t, err)
+		want, err := ref.GetAnalyticsV2Detail(ctx, dp)
+		require.NoError(t, err)
+		require.NotEmpty(t, want.Points)
+		require.True(t, lo.EveryBy(want.Points, func(c events.AnalyticsV2PointCell) bool { return c.Row == -1 }))
+		require.Equal(t, renderAnalyticsV2Points(want.Points), renderAnalyticsV2Points(got.Points))
+	})
+
+	t.Run("fractional range bounds", func(t *testing.T) {
+		// Events are whole seconds; a bound half a second after an event's second must treat it like the
+		// in-memory reference does (excluded from a start, included before an end).
+		rank := base()
+		rank.StartTime = rank.StartTime.Add(500 * time.Millisecond)
+		rank.EndTime = rank.EndTime.Add(-500 * time.Millisecond)
+		got, err := repo.RankAnalyticsV2Rows(ctx, rank)
+		require.NoError(t, err)
+		want, err := ref.RankAnalyticsV2Rows(ctx, rank)
+		require.NoError(t, err)
+		require.Equal(t, renderAnalyticsV2Rows(want.Rows), renderAnalyticsV2Rows(got.Rows))
+	})
+
 	t.Run("line usage over full windows", func(t *testing.T) {
 		for _, final := range []bool{false, true} {
 			sc := scope
