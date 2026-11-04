@@ -52,7 +52,7 @@ type resolvedTerm struct {
 
 // Expand validates the terms against the owner and its period values and returns their instalments in billing order.
 // Their labels keep {n} and {of} until NumberLabels numbers them among the owner's other instalments.
-func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Term) ([]*Instalment, error) {
+func Expand(ctx context.Context, owner Owner, periods Periods, terms []*Term) ([]*Instalment, error) {
 	collection := owner.CollectionPeriod()
 	total := owner.CollectionTotal()
 	currency := owner.BillingCurrency()
@@ -76,12 +76,11 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 
 	resolved := make([]*resolvedTerm, 0, len(terms))
 	for i, t := range terms {
-		r, err := resolveTerm(i, t, collection, owner.TermStart(), currency, periods)
+		r, err := resolveTerm(i, t, collection, owner.TermStart(), currency, delivery, periods)
 		if err != nil {
 			return nil, err
 		}
 
-		r.delivery = lo.FromPtrOr(t.InstalmentInvoicing, delivery)
 		resolved = append(resolved, r)
 	}
 
@@ -136,7 +135,8 @@ func resolveTerm(
 	collection types.Period,
 	termStart time.Time,
 	currency string,
-	periods []PeriodValue,
+	ownerDelivery types.InstalmentDelivery,
+	periods Periods,
 ) (*resolvedTerm, error) {
 	switch t.ValueType {
 	case types.BillingTermValueFixed:
@@ -157,19 +157,28 @@ func resolveTerm(
 		return nil, ierr.Validationf(termErrorFormat, index, "value_type", "must be fixed or remainder")
 	}
 
-	if d := t.InstalmentInvoicing; d != nil &&
-		*d != types.InstalmentDeliverySubscriptionInvoice && *d != types.InstalmentDeliverySeparateInvoice {
+	delivery := lo.FromPtrOr(t.InstalmentInvoicing, ownerDelivery)
+	if delivery != types.InstalmentDeliverySubscriptionInvoice && delivery != types.InstalmentDeliverySeparateInvoice {
 		return nil, ierr.Validationf(termErrorFormat, index, "instalment_invoicing", "must be subscription_invoice or separate_invoice")
 	}
 
+	var r *resolvedTerm
+	var err error
 	switch t.Kind {
 	case types.BillingTermKindOnce:
-		return resolveOnce(index, t, collection, termStart)
+		r, err = resolveOnce(index, t, collection, termStart)
 	case types.BillingTermKindRecurring:
-		return resolveRecurring(index, t, collection, termStart, periods)
+		steps, unit := periods.stepsFor(delivery)
+		r, err = resolveRecurring(index, t, collection, termStart, steps, unit)
 	default:
 		return nil, ierr.Validationf(termErrorFormat, index, "kind", "must be once or recurring")
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	r.delivery = delivery
+	return r, nil
 }
 
 // resolveOnce checks a once term's dates; bill_on defaults to termStart. The collection period is the service period of
@@ -207,14 +216,15 @@ func resolveOnce(index int, t *Term, collection types.Period, termStart time.Tim
 	return r, nil
 }
 
-// resolveRecurring checks a recurring term and cuts its steps; start_date defaults to termStart and end_date to the end
-// of the collection period.
+// resolveRecurring checks a recurring term and cuts its steps from periods, named unit in errors; start_date defaults to
+// the start of the period holding termStart and end_date to the end of the collection period.
 func resolveRecurring(
 	index int,
 	t *Term,
 	collection types.Period,
 	termStart time.Time,
 	periods []PeriodValue,
+	unit string,
 ) (*resolvedTerm, error) {
 	if field := t.onceOnlyField(); field != "" {
 		return nil, ierr.Validationf(termErrorFormat, index, field, "is not used by recurring terms")
@@ -239,17 +249,22 @@ func resolveRecurring(
 		return nil, ierr.Validationf(termErrorFormat, index, "split", "must be even or proportional")
 	}
 
+	start := termStart
+	if holding, ok := lo.Find(periods, func(p PeriodValue) bool { return !p.Start.After(termStart) && p.End.After(termStart) }); ok {
+		start = holding.Start
+	}
+
 	span := types.Period{
-		Start: lo.FromPtrOr(t.StartDate, termStart),
+		Start: lo.FromPtrOr(t.StartDate, start),
 		End:   lo.FromPtrOr(t.EndDate, collection.End),
 	}
 
 	if !lo.ContainsBy(periods, func(p PeriodValue) bool { return p.Start.Equal(span.Start) }) {
-		return nil, ierr.Validationf(termErrorFormat, index, "start_date", "must be the start of a billing period")
+		return nil, ierr.Validationf(termErrorFormat, index, "start_date", "must be the start of "+unit)
 	}
 
 	if !lo.ContainsBy(periods, func(p PeriodValue) bool { return p.End.Equal(span.End) }) {
-		return nil, ierr.Validationf(termErrorFormat, index, "end_date", "must be the end of a billing period")
+		return nil, ierr.Validationf(termErrorFormat, index, "end_date", "must be the end of "+unit)
 	}
 
 	if !span.Start.Before(span.End) {
@@ -258,7 +273,7 @@ func resolveRecurring(
 
 	steps := cutSteps(periods, span, periodCount)
 	if split == types.BillingTermSplitProportional && !sumValues(steps).IsPositive() {
-		return nil, ierr.Validationf(termErrorFormat, index, "split", "proportional needs billing periods with a value")
+		return nil, ierr.Validationf(termErrorFormat, index, "split", "proportional needs periods with a value")
 	}
 
 	return &resolvedTerm{

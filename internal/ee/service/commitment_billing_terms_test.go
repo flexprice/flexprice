@@ -987,6 +987,15 @@ func (s *CommitmentServiceSuite) yearOfTermsRequest(terms ...dto.BillingTermInpu
 	return req
 }
 
+// monthlyArrearsTerm bills the commitment's value in arrears at the end of each month.
+func monthlyArrearsTerm() dto.BillingTermInput {
+	return dto.BillingTermInput{
+		Kind:           types.BillingTermKindRecurring,
+		ValueType:      types.BillingTermValueRemainder,
+		InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear),
+	}
+}
+
 // settlementsOf returns the commitment's settlement instalments.
 func (s *CommitmentServiceSuite) settlementsOf(commitmentID string) []*billingterm.Instalment {
 	return lo.Filter(s.storedInstalments(), func(inst *billingterm.Instalment, _ int) bool {
@@ -994,8 +1003,8 @@ func (s *CommitmentServiceSuite) settlementsOf(commitmentID string) []*billingte
 	})
 }
 
-// $1,200 for 2025 has earned $400 by 1 May. Terminating cancels every scheduled instalment and settles only what was
-// earned but never invoiced; invoiced instalments that bill more stay as they are.
+// Terminating cancels every scheduled instalment and settles those already due by the termination; later ones and
+// value earned between them are not billed, and invoiced instalments stay as they are.
 func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 	jan := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := jan.AddDate(1, 0, 0)
@@ -1014,6 +1023,8 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 		},
 	}
 
+	monthlyArrears := []dto.BillingTermInput{monthlyArrearsTerm()}
+
 	tests := []struct {
 		name           string
 		terms          []dto.BillingTermInput
@@ -1021,6 +1032,7 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 		at             time.Time
 		wantCancelled  int
 		wantSettlement string // empty when nothing is settled
+		wantService    types.Period
 	}{
 		{
 			name:     "all upfront, billed",
@@ -1036,18 +1048,26 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 			wantCancelled: 8,
 		},
 		{
-			name:           "everything at term end",
-			terms:          []dto.BillingTermInput{wholeValueUpfront(&end)},
-			at:             may,
-			wantCancelled:  1,
-			wantSettlement: "400",
+			name:          "everything at term end",
+			terms:         []dto.BillingTermInput{wholeValueUpfront(&end)},
+			at:            may,
+			wantCancelled: 1,
 		},
 		{
-			name:           "everything at term end, terminated mid-April",
-			terms:          []dto.BillingTermInput{wholeValueUpfront(&end)},
+			name:           "monthly arrears, none invoiced",
+			terms:          monthlyArrears,
+			at:             may,
+			wantCancelled:  12,
+			wantSettlement: "400",
+			wantService:    types.Period{Start: jan, End: may},
+		},
+		{
+			name:           "monthly arrears, terminated mid-April",
+			terms:          monthlyArrears,
 			at:             time.Date(2025, 4, 15, 0, 0, 0, 0, time.UTC),
-			wantCancelled:  1,
-			wantSettlement: "346.67",
+			wantCancelled:  12,
+			wantSettlement: "300",
+			wantService:    types.Period{Start: jan, End: time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
 	for _, tt := range tests {
@@ -1095,7 +1115,8 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 			s.Nil(settlement.BillingTermID)
 			s.Equal(types.InstalmentBillTriggerDate, settlement.BillTrigger)
 			s.True(settlement.BillOn.Equal(tt.at), "bill_on %s", settlement.BillOn)
-			s.True(settlement.ServicePeriodStart.Equal(jan) && settlement.ServicePeriodEnd.Equal(tt.at), "the term up to termination")
+			s.True(settlement.ServicePeriodStart.Equal(tt.wantService.Start) && settlement.ServicePeriodEnd.Equal(tt.wantService.End),
+				"the settled instalments' service periods")
 			s.Equal(types.InstalmentDeliverySeparateInvoice, settlement.Delivery)
 			s.Equal("Settlement", settlement.InvoiceLabel)
 			s.Equal(types.InstalmentStatusInvoiced, settlement.InstalmentStatus)
@@ -1108,7 +1129,7 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 			s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
 			s.Equal(string(types.InvoiceBillingReasonCommitmentTermination), inv.BillingReason)
 			s.True(inv.AmountDue.Equal(dec(tt.wantSettlement)), "amount due %s", inv.AmountDue)
-			s.True(inv.PeriodStart.Equal(jan) && inv.PeriodEnd.Equal(tt.at), "the invoice covers the settlement")
+			s.True(inv.PeriodStart.Equal(tt.wantService.Start) && inv.PeriodEnd.Equal(tt.wantService.End), "the invoice covers the settlement")
 
 			lines := s.invoiceLines(inv.ID)
 			s.Require().Len(lines, 1)
@@ -1129,7 +1150,7 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_SettlementWithFee() 
 	jan := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := jan.AddDate(1, 0, 0)
 	may := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
-	created, err := s.svc.Create(ctx, s.yearOfTermsRequest(wholeValueUpfront(&end)))
+	created, err := s.svc.Create(ctx, s.yearOfTermsRequest(monthlyArrearsTerm()))
 	s.Require().NoError(err)
 
 	resp, err := s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{
@@ -1173,7 +1194,6 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_SettlementWithFee() 
 // while the settlement alone is billed.
 func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_FeeBoundsLeaveTheSettlementAlone() {
 	may, jun := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
-	end := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name    string
 		fee     *dto.CancellationFeeInput
@@ -1186,7 +1206,7 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_FeeBoundsLeaveTheSet
 		s.Run(tt.name, func() {
 			s.SetupTest()
 			ctx := s.GetContext()
-			created, err := s.svc.Create(ctx, s.yearOfTermsRequest(wholeValueUpfront(&end)))
+			created, err := s.svc.Create(ctx, s.yearOfTermsRequest(monthlyArrearsTerm()))
 			s.Require().NoError(err)
 
 			sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.fx.sub.ID)
@@ -1435,9 +1455,9 @@ func (s *CommitmentE2ESuite) settlementOf(commitmentID string) *billingterm.Inst
 	return settlements[0]
 }
 
-// Cancelled at once on 11 Jan with the default skip policy, the subscription gets no final invoice, but the 10 days
-// the commitment ran are settled on their own invoice. The voided January draft only carried scheduled instalments,
-// which the termination cancelled, so voiding it reschedules none.
+// Cancelled at once on 11 Jan with the default skip policy, the subscription gets no final invoice, but the upfront due
+// on 1 Jan is settled on its own invoice; January's arrear, due on 1 Feb, is not. The voided January draft only carried
+// scheduled instalments, which the termination cancelled, so voiding it reschedules none.
 func (s *CommitmentE2ESuite) TestCancelSubscriptionImmediately_SkipPolicyBillsSettlement() {
 	ctx := s.GetContext()
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
@@ -1461,22 +1481,22 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionImmediately_SkipPolicyBillsSe
 	}
 	s.Empty(s.instalmentEvents(types.WebhookEventBillingInstalmentUpdated), "the void reschedules nothing")
 
-	// $100 a month for 10 of 31 days.
 	settlement := s.settlementOf(commitmentID)
-	s.True(settlement.Amount.Equal(dec("32.26")), "settlement %s", settlement.Amount)
-	s.True(settlement.ServicePeriodStart.Equal(s.jan) && settlement.ServicePeriodEnd.Equal(cancelAt))
+	s.True(settlement.Amount.Equal(dec("300")), "settlement %s", settlement.Amount)
+	s.True(settlement.ServicePeriodStart.Equal(s.jan) && settlement.ServicePeriodEnd.Equal(s.jan.AddDate(0, 10, 0)),
+		"the upfront's service period, the whole term")
 	s.Equal(types.InstalmentStatusInvoiced, settlement.InstalmentStatus)
 
 	inv, err := s.GetStores().InvoiceRepo.Get(ctx, lo.FromPtr(settlement.InvoiceID))
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
 	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
-	s.True(inv.AmountDue.Equal(dec("32.26")), "amount due %s", inv.AmountDue)
+	s.True(inv.AmountDue.Equal(dec("300")), "amount due %s", inv.AmountDue)
 	s.Equal([]string{settlement.ID}, s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
 }
 
 // Cancelled at the end of January and rolled over by processSubscriptionPeriod, which finalizes the January invoice
-// before terminating: that invoice bills the $30 due on 1 Jan, and the settlement only the other $70 January earned.
+// before terminating: that invoice bills the $30 due on 1 Jan, and the rest, due at term end, is cancelled unbilled.
 func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_KeepsBillingUntilEnd() {
 	ctx := s.GetContext()
 	feb, end := s.jan.AddDate(0, 1, 0), s.jan.AddDate(1, 0, 0)
@@ -1514,16 +1534,7 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_KeepsBillingUntil
 	s.True(january.PeriodStart.Equal(s.jan) && january.PeriodEnd.Equal(feb), "the final period invoice bills the upfront")
 
 	s.Equal(types.InstalmentStatusCancelled, s.instalmentStatus(rest.ID).InstalmentStatus)
-
-	settlement := s.settlementOf(committed.ID)
-	s.True(settlement.Amount.Equal(dec("70")), "settlement %s", settlement.Amount)
-	s.True(settlement.ServicePeriodStart.Equal(s.jan) && settlement.ServicePeriodEnd.Equal(feb))
-	s.Equal(types.InstalmentStatusInvoiced, settlement.InstalmentStatus)
-
-	inv, err := s.GetStores().InvoiceRepo.Get(ctx, lo.FromPtr(settlement.InvoiceID))
-	s.Require().NoError(err)
-	s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
-	s.True(inv.AmountDue.Equal(dec("70")), "amount due %s", inv.AmountDue)
+	s.Empty(s.invoicesWithReason(created.ID, types.InvoiceBillingReasonCommitmentTermination), "nothing is settled")
 
 	terminated, err := s.commitments.Get(ctx, committed.ID)
 	s.Require().NoError(err)
@@ -1532,14 +1543,14 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_KeepsBillingUntil
 }
 
 // Cancelled at once on 11 Jan with a final invoice and no open draft, the subscription's cancel invoice for 1 to 11 Jan
-// and the settlement for the same days are two invoices: the settlement is not a proration the cancel invoice could
-// mistake for its own.
+// and the settlement of the upfront due on 1 Jan are two invoices: the settlement is not a proration the cancel invoice
+// could mistake for its own.
 func (s *CommitmentE2ESuite) TestCancelSubscriptionImmediately_GenerateInvoicePolicyBillsSettlementApart() {
 	ctx := s.GetContext()
 	end := s.jan.AddDate(1, 0, 0)
 	tokens := s.planWith("cancel_with_invoice", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	created := s.subscribe(tokens, s.jan)
-	committed := s.commit(created.ID, termsRequest("Platform", tokens.ID, "100", s.jan, end, wholeValueUpfront(&end)))
+	committed := s.commit(created.ID, termsRequest("Platform", tokens.ID, "100", s.jan, end, wholeValueUpfront(nil)))
 	s.record(s.tokens, time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), "1000")
 
 	cancelAt := time.Date(2026, 1, 11, 0, 0, 0, 0, time.UTC)
@@ -1551,7 +1562,7 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionImmediately_GenerateInvoicePo
 	s.Require().NoError(err)
 
 	settlement := s.settlementOf(committed.ID)
-	s.True(settlement.Amount.Equal(dec("32.26")), "settlement %s", settlement.Amount)
+	s.True(settlement.Amount.Equal(dec("1200")), "the upfront due on 1 Jan, got %s", settlement.Amount)
 	s.Equal(types.InstalmentStatusInvoiced, settlement.InstalmentStatus)
 
 	cancelInvoices := s.invoicesWithReason(created.ID, types.InvoiceBillingReasonProration)
@@ -1603,7 +1614,7 @@ func (s *CommitmentE2ESuite) TestBillDueInstalments_RebillsAVoidedSettlement() {
 	end := s.jan.AddDate(1, 0, 0)
 	tokens := s.planWith("rebill_settlement", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	created := s.subscribe(tokens, s.jan)
-	committed := s.commit(created.ID, termsRequest("Platform", tokens.ID, "100", s.jan, end, wholeValueUpfront(&end)))
+	committed := s.commit(created.ID, termsRequest("Platform", tokens.ID, "100", s.jan, end, wholeValueUpfront(nil)))
 
 	cancelAt := time.Date(2026, 1, 11, 0, 0, 0, 0, time.UTC)
 	_, err := s.subscriptions.CancelSubscription(ctx, created.ID, &dto.CancelSubscriptionRequest{
@@ -1634,13 +1645,12 @@ func (s *CommitmentE2ESuite) TestBillDueInstalments_RebillsAVoidedSettlement() {
 	s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
 	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
 	s.Equal(string(types.InvoiceBillingReasonBillingTerms), inv.BillingReason)
-	s.True(inv.AmountDue.Equal(dec("32.26")), "amount due %s", inv.AmountDue)
+	s.True(inv.AmountDue.Equal(dec("1200")), "amount due %s", inv.AmountDue)
 }
 
 // A cancellation at period end fires before the period's draft is finalized, so the January draft still carries the
-// arrear instalment due at its end when the commitment terminates. Termination cancels it, and the settlement bills
-// what January earned less what finalized invoices billed. Recomputing the draft drops the cancelled line, so the
-// draft finalizes without billing it twice.
+// arrear instalment due at its end when the commitment terminates. Termination cancels it and the settlement bills it.
+// Recomputing the draft drops the cancelled line, so the draft finalizes without billing it twice.
 func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_SettlesTheOpenDraftsInstalments() {
 	ctx := s.GetContext()
 	feb, end := s.jan.AddDate(0, 1, 0), s.jan.AddDate(1, 0, 0)
@@ -1688,7 +1698,7 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_SettlesTheOpenDra
 
 	s.Equal(types.InstalmentStatusCancelled, s.instalmentStatus(arrear.ID).InstalmentStatus)
 	settlement := s.settlementOf(committed.ID)
-	s.True(settlement.Amount.Equal(dec("70")), "January earned 100, 30 of it already invoiced; got %s", settlement.Amount)
+	s.True(settlement.Amount.Equal(arrear.Amount), "the arrear due on 1 Feb, got %s", settlement.Amount)
 	s.Equal(types.InstalmentStatusInvoiced, settlement.InstalmentStatus)
 
 	_, _, err = invoices.ComputeInvoice(ctx, draft.ID, nil)
@@ -1700,4 +1710,29 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_SettlesTheOpenDra
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceStatusFinalized, finalized.InvoiceStatus)
 	s.True(finalized.AmountDue.Equal(dec("50")), "only the overage past the $100 floor, got %s", finalized.AmountDue)
+}
+
+// On a subscription billed from the 1st, a separately invoiced monthly term from 15 Jan bills on the 15th, each
+// instalment valued by the parts of the two billing periods it spans.
+func (s *CommitmentE2ESuite) TestBillingTerms_SeparateRecurringTermBillsOnTheAnniversary() {
+	start := s.jan.AddDate(0, 0, 14)
+	tokens := s.planWith("anniversary", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan)
+	req := termsRequest("Platform", tokens.ID, "100", start, start.AddDate(1, 0, 0), dto.BillingTermInput{
+		Kind:           types.BillingTermKindRecurring,
+		ValueType:      types.BillingTermValueRemainder,
+		InvoiceCadence: lo.ToPtr(types.InvoiceCadenceAdvance),
+		Split:          lo.ToPtr(types.BillingTermSplitProportional),
+	})
+	req.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
+	committed := s.commit(sub.ID, req)
+
+	s.Require().Len(committed.Instalments, 12)
+	for i, inst := range committed.Instalments {
+		s.True(inst.BillOn.Equal(start.AddDate(0, i, 0)), "instalment %d bills on %s", i, inst.BillOn)
+	}
+
+	// 15 Jan to 15 Feb: 17 of January's 31 days and 14 of February's 28.
+	s.True(committed.Instalments[0].Amount.Equal(dec("104.84")), "first %s", committed.Instalments[0].Amount)
+	s.True(sumInstalments(committed.Instalments).Equal(dec("1200")), "total %s", sumInstalments(committed.Instalments))
 }

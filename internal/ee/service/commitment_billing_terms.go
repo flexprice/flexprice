@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
@@ -19,7 +20,7 @@ import (
 )
 
 // planInstalments expands terms into new instalments for what the invoiced ones leave of the total, numbered after
-// them; undated terms start at the billing period holding from, or at the commitment start once from is past its end.
+// them; undated terms start at the period holding from, or at the commitment start once from is past its end.
 func (s *commitmentService) planInstalments(
 	ctx context.Context,
 	c *commitment.Commitment,
@@ -39,12 +40,20 @@ func (s *commitmentService) planInstalments(
 		return nil, err
 	}
 
-	values := lo.Map(periods, func(p commitmentPeriod, _ int) billingterm.PeriodValue {
-		return billingterm.PeriodValue{
-			Period: types.Period{Start: p.Start, End: p.End},
-			Amount: p.Amount,
-		}
-	})
+	anniversary, err := anniversaryPeriods(c, cc.Sub, periods, amountOf, bucketFor(c, cc))
+	if err != nil {
+		return nil, err
+	}
+
+	values := billingterm.Periods{
+		Billing: lo.Map(periods, func(p commitmentPeriod, _ int) billingterm.PeriodValue {
+			return billingterm.PeriodValue{
+				Period: types.Period{Start: p.Start, End: p.End},
+				Amount: p.Amount,
+			}
+		}),
+		Anniversary: anniversary,
+	}
 
 	owner := plannedOwner{
 		Commitment: c,
@@ -102,6 +111,50 @@ func (s *commitmentService) countNumbered(ctx context.Context, instalments []*bi
 
 // plannedOwner is a commitment as a new plan sees it: its instalments collect only what the invoiced ones leave of the
 // total, and its terms start by default at termStart.
+// anniversaryPeriods cuts the commitment's term into billing-period lengths counted from its start, each valued by the
+// parts of the commitment periods it spans.
+func anniversaryPeriods(
+	c *commitment.Commitment,
+	sub *subscription.Subscription,
+	periods []commitmentPeriod,
+	amountOf amountFn,
+	bucket types.WindowSize,
+) ([]billingterm.PeriodValue, error) {
+	term := c.CollectionPeriod()
+	steps, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
+		InitialPeriodStart: term.Start,
+		EndDate:            &term.End,
+		Anchor:             term.Start,
+		PeriodCount:        sub.BillingPeriodCount,
+		BillingPeriod:      sub.BillingPeriod,
+		Timezone:           sub.Timezone,
+	})
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to compute the commitment's anniversary periods").
+			Mark(ierr.ErrInternal)
+	}
+
+	out := make([]billingterm.PeriodValue, 0, len(steps))
+	for _, step := range steps {
+		step.End = minTime(step.End, term.End)
+		if !step.Start.Before(step.End) {
+			continue
+		}
+
+		amount := decimal.Zero
+		for _, p := range periods {
+			if p.Start.Before(step.End) && p.End.After(step.Start) {
+				amount = amount.Add(clipCommitmentPeriod(c, p, step, amountOf, bucket, sub.BillingAnchor).Amount)
+			}
+		}
+
+		out = append(out, billingterm.PeriodValue{Period: step, Amount: amount})
+	}
+
+	return out, nil
+}
+
 type plannedOwner struct {
 	*commitment.Commitment
 	left      decimal.Decimal
@@ -357,29 +410,14 @@ func requireActiveBillingTerms(c *commitment.Commitment) error {
 // settlementLabel is the invoice label of the instalment that settles a terminated commitment.
 const settlementLabel = "Settlement"
 
-// settle cancels the commitment's scheduled instalments and, when it earned more by effectiveAt than its invoiced
-// instalments bill, creates a settlement instalment for the difference and returns it. Nothing is refunded when they
-// bill more. It must run inside the terminate transaction, under the commitment lock.
+// settle cancels the commitment's scheduled instalments and returns a settlement instalment billing those already due
+// by effectiveAt, or nil when none were. Later instalments are not billed and nothing is refunded; anything more is the
+// cancellation fee. It must run inside the terminate transaction, under the commitment lock.
 func (s *commitmentService) settle(
 	ctx context.Context,
 	c *commitment.Commitment,
 	effectiveAt time.Time,
 ) (*billingterm.Instalment, error) {
-	cc, err := s.loadCommitmentContext(ctx, c.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	amountOf, err := s.committedAmountFn(ctx, c)
-	if err != nil {
-		return nil, err
-	}
-
-	earned, err := earnedAmount(c, cc.Sub, amountOf, bucketFor(c, cc), effectiveAt)
-	if err != nil {
-		return nil, err
-	}
-
 	// Cancelling first fixes what is invoiced: a finalize cannot claim a cancelled instalment.
 	scheduled := []types.InstalmentStatus{types.InstalmentStatusScheduled}
 	cancelled, err := s.BillingInstalmentRepo.Cancel(ctx, types.BillingTermOwnerCommitment, c.ID, scheduled)
@@ -389,28 +427,21 @@ func (s *commitmentService) settle(
 
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
 
-	invoiced, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
-		OwnerType: types.BillingTermOwnerCommitment,
-		OwnerIDs:  []string{c.ID},
-		Statuses:  []types.InstalmentStatus{types.InstalmentStatusInvoiced},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	unbilled := earned.Sub(sumInstalments(invoiced))
-	if !unbilled.IsPositive() {
+	due := lo.Filter(cancelled, func(inst *billingterm.Instalment, _ int) bool { return !inst.BillOn.After(effectiveAt) })
+	if len(due) == 0 {
 		return nil, nil
 	}
 
+	first := lo.MinBy(due, func(a, b *billingterm.Instalment) bool { return a.ServicePeriodStart.Before(b.ServicePeriodStart) })
+	last := lo.MaxBy(due, func(a, b *billingterm.Instalment) bool { return a.ServicePeriodEnd.After(b.ServicePeriodEnd) })
 	settlement := billingterm.NewOwnerInstalment(ctx, c).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)).
 		WithKind(types.InstalmentKindSettlement).
 		WithDelivery(types.InstalmentDeliverySeparateInvoice).
 		WithBillOn(effectiveAt).
-		WithAmount(unbilled).
+		WithAmount(sumInstalments(due)).
 		WithInvoiceLabel(settlementLabel).
-		WithServicePeriod(types.Period{Start: c.StartDate, End: effectiveAt}).
+		WithServicePeriod(types.Period{Start: first.ServicePeriodStart, End: last.ServicePeriodEnd}).
 		Build()
 
 	created, err := s.BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{settlement})

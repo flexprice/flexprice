@@ -34,9 +34,26 @@ type Owner interface {
 	TermStart() time.Time
 }
 
-// PeriodValue is an owner's value for one billing period.
+// PeriodValue is an owner's value for one period.
 type PeriodValue struct {
 	types.Period
 
 	Amount decimal.Decimal
+}
+
+// Periods are the owner's values over its collection period, cut two ways: Billing on the subscription's billing
+// periods, Anniversary in the same lengths counted from the collection start.
+type Periods struct {
+	Billing     []PeriodValue
+	Anniversary []PeriodValue
+}
+
+// stepsFor returns the periods a recurring term steps on and their name: anniversary ones when its instalments are
+// invoiced separately, billing ones when they go on the subscription invoice.
+func (p Periods) stepsFor(delivery types.InstalmentDelivery) ([]PeriodValue, string) {
+	if delivery == types.InstalmentDeliverySeparateInvoice {
+		return p.Anniversary, "a period counted from the term start"
+	}
+
+	return p.Billing, "a billing period"
 }

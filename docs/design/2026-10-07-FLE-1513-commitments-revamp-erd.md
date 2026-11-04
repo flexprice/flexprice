@@ -72,7 +72,7 @@ Billing-terms and termination items are in the [billing terms ERD](./2026-11-02-
 **Pending**
 
 - Changing `end_date` on an existing commitment. `PUT /commitments/{id}` rejects it as not supported yet; termination is the only way to end early.
-- Upcoming period amounts for open-ended commitments. Their total `commitment_value` is unknown, but each period's committed amount (capacity × buckets × rate) is known in advance and could be listed for the next periods.
+- Upcoming committed amounts and utilisation per subscription, with a per-commitment breakdown: each period's committed amount (capacity × buckets × rate, known in advance even for open-ended commitments) and, for past periods, how much was used. It belongs with the cost explorer's analytics, which report the same numbers, rather than as a commitment-only endpoint (§9.6).
 
 **Deferred**
 

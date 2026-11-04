@@ -30,7 +30,7 @@ usage within it is shown at $0 and no true-up is billed.
 | Waterfall | Per window, commitments in priority order drain their pools across their lines in fill order | `allocate` |
 | Billing terms | Rules (`once` / `recurring`, `fixed` / `remainder`) that expand into instalments | `domain/billingterm` |
 | Instalment | One scheduled bill of part of the commitment's total: `scheduled` → `invoiced` (or `cancelled`) | `domain/billingterm/instalment.go` |
-| Settlement | The instalment a termination adds when earned value exceeds what was invoiced | `settle` |
+| Settlement | The instalment a termination adds for the instalments already due but not yet billed | `settle` |
 | v1 / legacy | Commitment fields on a subscription line item, billed by `commitmentCalculator` | `billing_commitment.go` |
 
 ## 3. File map
@@ -40,7 +40,7 @@ usage within it is shown at $0 and no true-up is billed.
 | `commitment.go` | Service interface and lifecycle: enable gate, create (lock, replay, prepare, insert), update, terminate, fee line, overlap listing, valuation helpers, responses |
 | `commitment_validation.go` | Everything checked on a new commitment: loading the subscription's line history (`commitmentContext`), resolving scope lines, term, scope entity, scope lines, overlaps |
 | `commitment_guards.go` | Checks run by other flows when a subscription changes: a line or price joining or leaving a commitment's scope |
-| `commitment_periods.go` | Period math: commitment periods, proration, window bucket counting, term value, earned value |
+| `commitment_periods.go` | Period math: commitment periods, proration, window bucket counting, term value |
 | `billing_commitments.go` | The billing loader: picks the commitments for one invoice calculation, lays usage and capacity onto windows, and returns invoice lines |
 | `commitment_engine.go` | Pure allocation and rendering: the waterfall and the utilized / true-up / overage lines |
 | `commitment_billing_terms.go` | Planning instalments, get / preview / replace terms, settlement on termination, the due-instalments run for separate invoices |
@@ -193,12 +193,10 @@ Callers pass the span they need:
 | Billing loader | The invoice window |
 | `termValue` (create, preview, responses) | The whole term |
 | `planInstalments` | The whole term |
-| `earnedAmount` (termination) | Term start to the termination instant |
 
 ### 7.2 Other helpers
 
 - `clipCommitmentPeriod`: cuts a period to a span, recomputing capacity, with the amount from `accruedAmount`.
-- `earnedAmount`: whole periods before `at`, plus the period holding `at` cut there.
 - `periodAt`, `periodEndAt`, `walkToPeriodAt`: locate billing periods from the subscription start and anchor.
   Multi-day and multi-week cadences step from the first period's end, so they are walked.
 
@@ -244,11 +242,14 @@ Other flows call these inside their own transaction:
 ### 9.1 Planning — `planInstalments` ([commitment_billing_terms.go:23](../../internal/ee/service/commitment_billing_terms.go#L23))
 
 1. `left = total_amount − invoiced instalments` (all of it on create).
-2. The term's periods are valued (`commitmentPeriods` over the whole term) and handed to `billingterm.Expand` with a
-   `plannedOwner`, which collects only `left` and starts undated terms at the current period on an edit.
+2. The term's periods are valued (`commitmentPeriods` over the whole term), and so are its anniversary periods
+   (`anniversaryPeriods`: billing-period lengths from the commitment start, each the sum of the commitment periods'
+   parts it spans). Both go to `billingterm.Expand` with a `plannedOwner`, which collects only `left` and starts
+   undated terms at the current period on an edit.
 3. `Expand` (`domain/billingterm/schedule.go`):
    - `resolveTerm` applies each kind's defaults and checks dates: a once term's `bill_on`; a recurring term's
-     `start_date`, `end_date` and `period_count`, whose steps are cut by `cutSteps`.
+     `start_date`, `end_date` and `period_count`, whose steps are cut by `cutSteps` from the commitment periods when
+     its instalments go on the subscription invoice, or from the anniversary periods when invoiced separately.
    - `resolveAmounts` gives the remainder term whatever the fixed terms leave.
    - `instalmentAmounts` splits each term over its instalments: evenly, or in proportion to the period values; the
      last absorbs rounding.
@@ -308,8 +309,8 @@ Instalments wait while the subscription is trialing or paused. `TriggerInstalmen
 `POST /v1/commitments/{id}/terminate` → `Terminate` → `terminate` ([commitment.go:678](../../internal/ee/service/commitment.go#L678)),
 under the commitment lock:
 1. Refuse unless the commitment is active and `effective_at` is before its end; a fee needs a binding commitment.
-2. Under billing terms, `settle` cancels the scheduled instalments. When `earnedAmount` at `effective_at` exceeds the
-   invoiced instalments, it adds a settlement instalment for the difference. Nothing is refunded.
+2. Under billing terms, `settle` cancels the scheduled instalments and adds a settlement instalment for those already
+   due by `effective_at`. Later ones are not billed and nothing is refunded; the fee covers anything more.
 3. `billTermination` issues one immediate one-off invoice, `billing_reason: COMMITMENT_TERMINATION`, carrying the
    settlement and the cancellation fee (`cancellationFeeLine`).
 4. Set the status to terminated with `terminated_at`. Later invoices clip the floor at `terminated_at`.

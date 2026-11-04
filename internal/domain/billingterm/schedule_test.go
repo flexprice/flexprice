@@ -92,6 +92,12 @@ func monthlyWants(start time.Time, amounts []string, cadence types.InvoiceCadenc
 	return out
 }
 
+// aligned is the owner's periods for a collection period starting on a billing period edge, so that counting periods
+// from its start cuts them the same way.
+func aligned(periods []PeriodValue) Periods {
+	return Periods{Billing: periods, Anniversary: periods}
+}
+
 func usd(total string, start, end time.Time) testOwner {
 	return testOwner{
 		currency: "USD",
@@ -340,7 +346,7 @@ func TestExpand(t *testing.T) {
 			ctx := context.WithValue(context.Background(), types.CtxEnvironmentID, "env_1")
 			ctx = context.WithValue(ctx, types.CtxTenantID, "tenant_1")
 
-			got, err := Expand(ctx, tt.owner, tt.periods, tt.terms)
+			got, err := Expand(ctx, tt.owner, aligned(tt.periods), tt.terms)
 			require.NoError(t, err)
 
 			gotWants := lo.Map(got, func(i *Instalment, _ int) instalmentWant {
@@ -675,7 +681,7 @@ func TestExpand_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Expand(context.Background(), tt.owner, tt.periods, tt.terms)
+			got, err := Expand(context.Background(), tt.owner, aligned(tt.periods), tt.terms)
 
 			require.Error(t, err)
 			require.True(t, ierr.IsValidation(err), "want a validation error, got %v", err)
@@ -694,7 +700,7 @@ func TestExpand_OwnerWithoutSubscription(t *testing.T) {
 	jan2027 := date(2027, time.January, 1)
 	owner := unsubscribedOwner{usd("1200", jan2027, date(2028, time.January, 1))}
 
-	got, err := Expand(context.Background(), owner, monthly(jan2027, 12, "100"), []*Term{onceRemainder()})
+	got, err := Expand(context.Background(), owner, aligned(monthly(jan2027, 12, "100")), []*Term{onceRemainder()})
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
@@ -707,7 +713,7 @@ func TestExpand_UndatedTermsStartAtTheTermStart(t *testing.T) {
 	owner := usd("1200", jan2027, date(2028, time.January, 1))
 	owner.termStart = apr2027
 
-	got, err := Expand(context.Background(), owner, monthly(jan2027, 12, "100"),
+	got, err := Expand(context.Background(), owner, aligned(monthly(jan2027, 12, "100")),
 		[]*Term{onceFixed("300"), recurringRemainder(types.InvoiceCadenceAdvance)})
 
 	require.NoError(t, err)
@@ -730,7 +736,7 @@ func TestExpand_DatedTermsMayStartBeforeTheTermStart(t *testing.T) {
 		with(recurringRemainder(types.InvoiceCadenceAdvance), func(t *Term) { t.StartDate = lo.ToPtr(feb2027) }),
 	}
 
-	got, err := Expand(context.Background(), owner, monthly(jan2027, 12, "100"), terms)
+	got, err := Expand(context.Background(), owner, aligned(monthly(jan2027, 12, "100")), terms)
 
 	require.NoError(t, err)
 	require.Len(t, got, 12)
@@ -745,7 +751,7 @@ func TestExpand_TermDeliveryOverridesTheOwners(t *testing.T) {
 		t.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
 	})
 
-	got, err := Expand(context.Background(), owner, monthly(jan2027, 12, "100"),
+	got, err := Expand(context.Background(), owner, aligned(monthly(jan2027, 12, "100")),
 		[]*Term{upfront, recurringRemainder(types.InvoiceCadenceArrear)})
 
 	require.NoError(t, err)
@@ -756,6 +762,45 @@ func TestExpand_TermDeliveryOverridesTheOwners(t *testing.T) {
 	}
 }
 
+// A year from 15 Jan on calendar billing: a separately invoiced recurring term bills on the 15th, one on the
+// subscription invoice on the 1st, after a stub.
+func TestExpand_SeparateRecurringTermsStepFromTheTermStart(t *testing.T) {
+	jan15, feb1 := date(2027, time.January, 15), date(2027, time.February, 1)
+	jan2028, jan15of2028 := date(2028, time.January, 1), date(2028, time.January, 15)
+	billing := append(append([]PeriodValue{{Period: period(jan15, feb1), Amount: dec("55")}},
+		monthly(feb1, 11, "100")...),
+		PeriodValue{Period: period(jan2028, jan15of2028), Amount: dec("45")})
+	periods := Periods{Billing: billing, Anniversary: monthly(jan15, 12, "100")}
+	owner := usd("1200", jan15, jan15of2028)
+	monthlyAdvance := recurringRemainder(types.InvoiceCadenceAdvance)
+
+	owner.delivery = types.InstalmentDeliverySeparateInvoice
+	got, err := Expand(context.Background(), owner, periods, []*Term{monthlyAdvance})
+	require.NoError(t, err)
+	require.Len(t, got, 12)
+	for i, inst := range got {
+		require.True(t, inst.BillOn.Equal(jan15.AddDate(0, i, 0)), "instalment %d bills on %s", i, inst.BillOn)
+		require.True(t, inst.Amount.Equal(dec("100")))
+	}
+
+	owner.delivery = types.InstalmentDeliverySubscriptionInvoice
+	got, err = Expand(context.Background(), owner, periods, []*Term{monthlyAdvance})
+	require.NoError(t, err)
+	require.Len(t, got, 13)
+	require.True(t, got[0].BillOn.Equal(jan15) && got[1].BillOn.Equal(feb1), "a stub, then the 1st")
+
+	// An edit in March starts an undated separate term at the anniversary period holding the billing period it names.
+	owner.delivery = types.InstalmentDeliverySeparateInvoice
+	owner.termStart = date(2027, time.March, 1)
+	got, err = Expand(context.Background(), owner, periods, []*Term{monthlyAdvance})
+	require.NoError(t, err)
+	require.True(t, got[0].BillOn.Equal(date(2027, time.February, 15)), "starts on %s", got[0].BillOn)
+
+	dated := with(recurringRemainder(types.InvoiceCadenceAdvance), func(t *Term) { t.StartDate = lo.ToPtr(feb1) })
+	_, err = Expand(context.Background(), owner, periods, []*Term{dated})
+	require.ErrorContains(t, err, "billing_terms[0].start_date: must be the start of a period counted from the term start")
+}
+
 func TestNumberLabels_CountsEveryTermInBillingOrder(t *testing.T) {
 	jan2027 := date(2027, time.January, 1)
 	midJune := date(2027, time.June, 15)
@@ -764,7 +809,7 @@ func TestNumberLabels_CountsEveryTermInBillingOrder(t *testing.T) {
 		with(onceRemainder(), func(t *Term) { t.BillOn = lo.ToPtr(midJune) }),
 	}
 
-	got, err := Expand(context.Background(), usd("1200", jan2027, date(2028, time.January, 1)), monthly(jan2027, 12, "100"), terms)
+	got, err := Expand(context.Background(), usd("1200", jan2027, date(2028, time.January, 1)), aligned(monthly(jan2027, 12, "100")), terms)
 
 	require.NoError(t, err)
 	require.Len(t, got, 13)
@@ -787,7 +832,7 @@ func TestNumberLabels_SkipsLabelsWithoutNumbers(t *testing.T) {
 		recurringRemainder(types.InvoiceCadenceArrear),
 	}
 
-	got, err := Expand(context.Background(), usd("300", jan2027, date(2027, time.April, 1)), monthly(jan2027, 3, "100"), terms)
+	got, err := Expand(context.Background(), usd("300", jan2027, date(2027, time.April, 1)), aligned(monthly(jan2027, 3, "100")), terms)
 	require.NoError(t, err)
 	require.Len(t, got, 4)
 
