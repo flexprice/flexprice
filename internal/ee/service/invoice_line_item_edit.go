@@ -64,6 +64,17 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 				Mark(ierr.ErrNotFound)
 		}
 
+		// Finalizing records the instalment as billed at its planned amount, so the line must keep that amount.
+		if existingItem.BillingInstalmentID != nil && (req.Amount != nil || req.Quantity != nil) {
+			return ierr.NewError("an instalment line's amount comes from the commitment's billing terms").
+				WithHint("Edit the commitment's billing terms to change what an instalment bills").
+				WithReportableDetails(map[string]any{
+					"line_item_id":          existingItem.ID,
+					"billing_instalment_id": *existingItem.BillingInstalmentID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
 		builder := invoice.NewInvoiceLineItemBuilder(existingItem).
 			WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)).
 			WithParentLineItemID(lo.ToPtr(existingItem.ID)).
@@ -355,6 +366,14 @@ func rejectVoidedInvoiceEdit(inv *invoice.Invoice) error {
 // voidAndRecreateDraftForEdit voids a finalized invoice and creates a DRAFT copy of it
 // (data + line items, discount re-derived), linking the original to the copy. Run inside a transaction.
 func (s *invoiceService) voidAndRecreateDraftForEdit(ctx context.Context, inv *invoice.Invoice) (*invoice.Invoice, error) {
+	// The void reschedules the invoice's instalments, so a copy carrying them would bill them twice.
+	if lo.SomeBy(inv.LineItems, func(li *invoice.InvoiceLineItem) bool { return li.BillingInstalmentID != nil }) {
+		return nil, ierr.NewError("invoice carries commitment instalments and cannot be edited after finalization").
+			WithHint("Void and recalculate the invoice, or issue a credit note").
+			WithReportableDetails(map[string]any{"invoice_id": inv.ID}).
+			Mark(ierr.ErrValidation)
+	}
+
 	voided, err := s.VoidInvoice(ctx, inv.ID, dto.InvoiceVoidRequest{})
 	if err != nil {
 		return nil, err

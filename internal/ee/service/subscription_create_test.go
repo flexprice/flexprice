@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -1227,6 +1228,57 @@ func (s *SubscriptionServiceSuite) TestArchiveDraftCheckoutSubscription_Cascades
 		s.Equal(types.StatusArchived, archived.Status,
 			"an abandoned checkout must not leave the group behind (%s)", id)
 	}
+}
+
+// Archiving an abandoned checkout's subscription cancels its commitments' scheduled instalments and archives their
+// terms, so the separate-invoice run has nothing left to bill for it.
+func (s *SubscriptionServiceSuite) TestArchiveDraftCheckoutSubscription_CancelsBillingTerms() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	subService := s.service.(*subscriptionService)
+
+	req := s.inlineCommitmentRequest()
+	req.SubscriptionStatus = types.SubscriptionStatusDraft
+	committed := &req.Commitments[0]
+	committed.Type, committed.Value, committed.CommittedPrice = types.COMMITMENT_TYPE_AMOUNT, decimal.NewFromInt(100), nil
+	committed.Binding = lo.ToPtr(true)
+	committed.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
+	committed.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
+	committed.BillingTerms = upfrontPlusRemainder()
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+	s.Require().Equal(types.SubscriptionStatusDraft, resp.SubscriptionStatus)
+
+	commitments, err := s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
+	s.Require().NoError(err)
+	s.Require().Len(commitments, 1)
+	owner := commitments[0].ID
+
+	ownedBy := &billingterm.InstalmentFilter{OwnerType: types.BillingTermOwnerCommitment, OwnerIDs: []string{owner}}
+	scheduled, err := s.GetStores().BillingInstalmentRepo.List(ctx, ownedBy)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(scheduled)
+
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	publisher.Reset()
+	s.Require().NoError(subService.archiveDraftCheckoutSubscription(ctx, resp.ID))
+
+	instalments, err := s.GetStores().BillingInstalmentRepo.List(ctx, ownedBy)
+	s.Require().NoError(err)
+	s.Len(instalments, len(scheduled))
+	for _, inst := range instalments {
+		s.Equal(types.InstalmentStatusCancelled, inst.InstalmentStatus, inst.InvoiceLabel)
+	}
+
+	terms, err := s.GetStores().BillingTermRepo.List(ctx, types.BillingTermOwnerCommitment, owner)
+	s.Require().NoError(err)
+	s.Empty(terms, "the archived commitment's terms are archived with it")
+
+	cancelled := lo.FilterMap(publisher.Events(), func(event *types.WebhookEvent, _ int) (string, bool) {
+		return event.EntityID, event.EventName == types.WebhookEventBillingInstalmentCancelled
+	})
+	s.ElementsMatch(lo.Map(scheduled, func(inst *billingterm.Instalment, _ int) string { return inst.ID }), cancelled)
 }
 
 // The cascade must stay inert for the standalone subscriptions every existing gated create produces.

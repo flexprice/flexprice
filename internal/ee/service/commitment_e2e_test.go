@@ -1,12 +1,15 @@
 package service
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -198,6 +201,69 @@ func (s *CommitmentE2ESuite) invoiceFor(subscriptionID string, from, to time.Tim
 func (s *CommitmentE2ESuite) requireInvoice(req *dto.CreateInvoiceRequest, total string, want ...wantLine) {
 	requireLines(s.T(), want, req.LineItems)
 	s.True(req.AmountDue.Equal(dec(total)), "amount due: want %s, got %s", total, req.AmountDue)
+}
+
+// openingInvoice returns the invoice issued when the subscription was created.
+func (s *CommitmentE2ESuite) openingInvoice(subscriptionID string) *invoice.Invoice {
+	opening := s.invoicesWithReason(subscriptionID, types.InvoiceBillingReasonSubscriptionCreate)
+	s.Require().Len(opening, 1)
+	return opening[0]
+}
+
+// billPeriod bills the month starting at from as the renewal run does, claiming its instalments, and returns the
+// stored invoice. A month that bills nothing is skipped and keeps its lines.
+func (s *CommitmentE2ESuite) billPeriod(subscriptionID string, from time.Time) *invoice.Invoice {
+	to := from.AddDate(0, 1, 0)
+	_, _, err := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite)).CreateSubscriptionInvoice(
+		s.GetContext(),
+		&dto.CreateSubscriptionInvoiceRequest{
+			SubscriptionID: subscriptionID,
+			PeriodStart:    from,
+			PeriodEnd:      to,
+			ReferencePoint: types.ReferencePointPeriodEnd,
+		},
+		nil,
+		types.InvoiceFlowRenewal,
+		false,
+	)
+	s.Require().NoError(err)
+
+	billed, err := s.GetStores().InvoiceRepo.GetForPeriod(s.GetContext(), subscriptionID, from, to, string(types.InvoiceBillingReasonSubscriptionCycle))
+	s.Require().NoError(err)
+	return billed
+}
+
+// requireBilled checks a stored invoice's amount due and its lines, in any order.
+func (s *CommitmentE2ESuite) requireBilled(inv *invoice.Invoice, total string, want ...wantLine) {
+	stored, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), inv.ID)
+	s.Require().NoError(err)
+
+	describe := func(kind, name string, qty, amount decimal.Decimal) string {
+		return fmt.Sprintf("%s | %s | qty %s | amount %s", kind, name, qty, amount)
+	}
+	got := lo.Map(stored, func(line *invoice.InvoiceLineItem, _ int) string {
+		return describe(line.Metadata[types.MetadataKeyCommitmentLineKind], lo.FromPtr(line.DisplayName), line.Quantity, line.Amount)
+	})
+	expected := lo.Map(want, func(line wantLine, _ int) string {
+		return describe(string(line.kind), line.name, dec(line.qty), dec(line.amount))
+	})
+
+	s.ElementsMatch(expected, got, "invoice %s for %s", inv.ID, inv.PeriodStart)
+	s.True(inv.AmountDue.Equal(dec(total)), "amount due: want %s, got %s", total, inv.AmountDue)
+}
+
+// requireFullyBilled checks the subscription has count instalments, all invoiced and worth total together.
+func (s *CommitmentE2ESuite) requireFullyBilled(subscriptionID string, count int, total string) {
+	instalments, err := s.GetStores().BillingInstalmentRepo.List(s.GetContext(), &billingterm.InstalmentFilter{SubscriptionIDs: []string{subscriptionID}})
+	s.Require().NoError(err)
+	s.Require().Len(instalments, count)
+
+	sum := decimal.Zero
+	for _, inst := range instalments {
+		s.Equal(types.InstalmentStatusInvoiced, inst.InstalmentStatus, inst.InvoiceLabel)
+		sum = sum.Add(inst.Amount)
+	}
+	s.True(sum.Equal(dec(total)), "instalments total %s, want %s", sum, total)
 }
 
 // A $100 monthly floor bills its true-up when usage falls short and overage when it runs over.
@@ -425,7 +491,7 @@ func (s *CommitmentE2ESuite) TestTerminateMidPeriod_ClipsTheFloorAndBillsTheFee(
 	terminatedAt := time.Date(2026, 1, 11, 0, 0, 0, 0, time.UTC)
 	terminated, err := s.commitments.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
 		EffectiveAt:     lo.ToPtr(terminatedAt),
-		CancellationFee: lo.ToPtr(dec("500")),
+		CancellationFee: fixedFee("500"),
 	})
 	s.Require().NoError(err)
 	s.Require().NotNil(terminated.TerminationInvoiceID)
@@ -788,4 +854,276 @@ func (s *CommitmentE2ESuite) TestAnalytics_PointsSumToTheirSourceCost() {
 		}
 		s.True(pointsCost.Equal(item.TotalCost), "%s points sum to %s, item costs %s", item.Source, pointsCost, item.TotalCost)
 	}
+}
+
+// A2: $1,200 for 2026 is one instalment on the invoice issued when the subscription opens. The months after it show
+// usage within the commitment at $0, bill only the usage above it, and carry no true-up.
+func (s *CommitmentE2ESuite) TestE2E_A2_Upfront() {
+	end := s.jan.AddDate(1, 0, 0)
+	tokens := s.planWith("a2", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan, termsRequest("Platform", tokens.ID, "100", s.jan, end, wholeValueUpfront(nil)))
+
+	opening := s.openingInvoice(sub.ID)
+	s.requireBilled(opening, "1200", wantLine{types.CommitmentLineInstalment, "Platform - Instalment 1 of 1", "1", "1200"})
+	paid := s.billedInstalments(opening.ID)[0]
+	s.True(paid.ServicePeriodStart.Equal(s.jan) && paid.ServicePeriodEnd.Equal(end), "the instalment pays for the whole year")
+
+	// January uses $60 of the $100 a month, February $120 and March nothing.
+	s.record(s.tokens, time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), "600")
+	s.record(s.tokens, time.Date(2026, 2, 10, 12, 0, 0, 0, time.UTC), "1200")
+
+	january := s.billPeriod(sub.ID, s.jan)
+	s.Equal(types.InvoiceStatusSkipped, january.InvoiceStatus, "usage within the commitment bills nothing")
+	s.requireBilled(january, "0", wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "600", "0"})
+
+	s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, 1, 0)), "20",
+		wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "1000", "0"},
+		wantLine{types.CommitmentLineOverage, "Tokens", "200", "20"},
+	)
+	s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, 2, 0)), "0")
+
+	s.requireFullyBilled(sub.ID, 1, "1200")
+}
+
+// A3: $1,000 over ten months is $300 on the opening invoice, then $70 on each month's invoice. February's usage
+// is on the invoice that also bills February's instalment, at $0.
+func (s *CommitmentE2ESuite) TestE2E_A3_PartialUpfront() {
+	tokens := s.planWith("a3", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan, termsRequest("Platform", tokens.ID, "100", s.jan, s.jan.AddDate(0, 10, 0), upfrontPlusRemainder()...))
+
+	s.requireBilled(s.openingInvoice(sub.ID), "300", wantLine{types.CommitmentLineInstalment, "Platform - Instalment 1 of 11", "1", "300"})
+
+	s.record(s.tokens, time.Date(2026, 2, 10, 12, 0, 0, 0, time.UTC), "700")
+
+	for month := 0; month < 10; month++ {
+		want := []wantLine{{types.CommitmentLineInstalment, fmt.Sprintf("Platform - Instalment %d of 11", month+2), "1", "70"}}
+		if month == 1 {
+			want = append(want, wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "700", "0"})
+		}
+
+		s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, month, 0)), "70", want...)
+	}
+
+	s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, 10, 0)), "0")
+	s.requireFullyBilled(sub.ID, 11, "1000")
+}
+
+// A4: $1,200 for 2026 in milestones of 30%, 50% and the rest. Each is billed on its own invoice: 360 on 1 Jan, 600
+// on 1 Jul and 240 on the closing invoice of 1 Jan 2027.
+func (s *CommitmentE2ESuite) TestE2E_A4_Milestones() {
+	jul, end := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), s.jan.AddDate(1, 0, 0)
+	tokens := s.planWith("a4", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan, termsRequest("Platform", tokens.ID, "100", s.jan, end,
+		dto.BillingTermInput{
+			Kind:         types.BillingTermKindOnce,
+			ValueType:    types.BillingTermValueFixed,
+			Value:        lo.ToPtr(dec("360")),
+			InvoiceLabel: lo.ToPtr("Signing"),
+		},
+		dto.BillingTermInput{
+			Kind:         types.BillingTermKindOnce,
+			ValueType:    types.BillingTermValueFixed,
+			Value:        lo.ToPtr(dec("600")),
+			BillOn:       lo.ToPtr(jul),
+			InvoiceLabel: lo.ToPtr("Mid-year"),
+		},
+		dto.BillingTermInput{
+			Kind:         types.BillingTermKindOnce,
+			ValueType:    types.BillingTermValueRemainder,
+			BillOn:       lo.ToPtr(end),
+			InvoiceLabel: lo.ToPtr("Completion"),
+		},
+	))
+
+	s.requireBilled(s.openingInvoice(sub.ID), "360", wantLine{types.CommitmentLineInstalment, "Platform - Signing", "1", "360"})
+
+	for month := 0; month < 12; month++ {
+		inv := s.billPeriod(sub.ID, s.jan.AddDate(0, month, 0))
+		switch month {
+		case 5:
+			s.requireBilled(inv, "600", wantLine{types.CommitmentLineInstalment, "Platform - Mid-year", "1", "600"})
+		case 11:
+			s.requireBilled(inv, "240", wantLine{types.CommitmentLineInstalment, "Platform - Completion", "1", "240"})
+		default:
+			s.requireBilled(inv, "0")
+		}
+	}
+
+	s.requireFullyBilled(sub.ID, 3, "1200")
+}
+
+// A6: $100 a month for 2026, with a $300 deposit. The deposit is billed on 1 Jan, the first three months bill only
+// usage above the commitment, and from April each month's invoice carries its $100.
+func (s *CommitmentE2ESuite) TestE2E_A6_Deposit() {
+	apr, end := s.jan.AddDate(0, 3, 0), s.jan.AddDate(1, 0, 0)
+	tokens := s.planWith("a6", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan, termsRequest("Platform", tokens.ID, "100", s.jan, end,
+		dto.BillingTermInput{
+			Kind:         types.BillingTermKindOnce,
+			ValueType:    types.BillingTermValueFixed,
+			Value:        lo.ToPtr(dec("300")),
+			InvoiceLabel: lo.ToPtr("Deposit"),
+		},
+		dto.BillingTermInput{
+			Kind:           types.BillingTermKindRecurring,
+			ValueType:      types.BillingTermValueFixed,
+			Value:          lo.ToPtr(dec("100")),
+			StartDate:      lo.ToPtr(apr),
+			InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear),
+		},
+	))
+
+	opening := s.openingInvoice(sub.ID)
+	s.requireBilled(opening, "300", wantLine{types.CommitmentLineInstalment, "Platform - Deposit", "1", "300"})
+	deposit := s.billedInstalments(opening.ID)[0]
+	s.True(deposit.ServicePeriodStart.Equal(s.jan) && deposit.ServicePeriodEnd.Equal(end), "a once instalment's service period is the term")
+
+	// $80 of usage in January, $150 in February and $100 in April.
+	s.record(s.tokens, time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), "800")
+	s.record(s.tokens, time.Date(2026, 2, 10, 12, 0, 0, 0, time.UTC), "1500")
+	s.record(s.tokens, time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC), "1000")
+
+	s.requireBilled(s.billPeriod(sub.ID, s.jan), "0", wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "800", "0"})
+	s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, 1, 0)), "50",
+		wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "1000", "0"},
+		wantLine{types.CommitmentLineOverage, "Tokens", "500", "50"},
+	)
+	s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, 2, 0)), "0")
+
+	for month := 3; month < 12; month++ {
+		want := []wantLine{{types.CommitmentLineInstalment, fmt.Sprintf("Platform - Instalment %d of 10", month-1), "1", "100"}}
+		if month == 3 {
+			want = append(want, wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "1000", "0"})
+		}
+
+		s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, month, 0)), "100", want...)
+	}
+
+	s.requireFullyBilled(sub.ID, 10, "1200")
+}
+
+// A7: $1,200 for 2026 invoiced each quarter in advance. $300 is billed on the invoices issued on 1 Jan, 1 Apr, 1 Jul
+// and 1 Oct, and on no other.
+func (s *CommitmentE2ESuite) TestE2E_A7_QuarterlyAdvance() {
+	end := s.jan.AddDate(1, 0, 0)
+	tokens := s.planWith("a7", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan, termsRequest("Platform", tokens.ID, "100", s.jan, end, dto.BillingTermInput{
+		Kind:           types.BillingTermKindRecurring,
+		ValueType:      types.BillingTermValueFixed,
+		Value:          lo.ToPtr(dec("300")),
+		PeriodCount:    lo.ToPtr(3),
+		InvoiceCadence: lo.ToPtr(types.InvoiceCadenceAdvance),
+	}))
+
+	s.record(s.tokens, time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC), "500")
+
+	opening := s.openingInvoice(sub.ID)
+	s.requireBilled(opening, "300", wantLine{types.CommitmentLineInstalment, "Platform - Instalment 1 of 4", "1", "300"})
+	s.True(s.billedInstalments(opening.ID)[0].ServicePeriodEnd.Equal(s.jan.AddDate(0, 3, 0)), "the first instalment pays for the first quarter")
+
+	// A quarter's instalment is billed on the invoice issued as the quarter opens, which closes the month before it.
+	instalmentOf := map[int]int{2: 2, 5: 3, 8: 4}
+	for month := 0; month < 12; month++ {
+		inv := s.billPeriod(sub.ID, s.jan.AddDate(0, month, 0))
+		n, billsInstalment := instalmentOf[month]
+		switch {
+		case billsInstalment:
+			billed := s.billedInstalments(inv.ID)[0]
+			s.True(billed.ServicePeriodStart.Equal(s.jan.AddDate(0, 3*(n-1), 0)), "instalment %d pays for the quarter it opens", n)
+			s.requireBilled(inv, "300", wantLine{types.CommitmentLineInstalment, fmt.Sprintf("Platform - Instalment %d of 4", n), "1", "300"})
+		case month == 3:
+			s.requireBilled(inv, "0", wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "500", "0"})
+		default:
+			s.requireBilled(inv, "0")
+		}
+	}
+
+	s.requireFullyBilled(sub.ID, 4, "1200")
+}
+
+// B1: a term starting on 25 Aug bills its $300 upfront on a one-off invoice of its own, and each monthly instalment on
+// another, rather than on the 1 Sep subscription invoice.
+func (s *CommitmentE2ESuite) TestE2E_B1_SeparateInvoice() {
+	aug := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	start, end := time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC), aug.AddDate(0, 2, 0)
+
+	tokens := s.planWith("b1", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, aug)
+
+	// $310 a month is $70 for the 7 days of August the term covers, so the term is worth $380.
+	req := termsRequest("Platform", tokens.ID, "310", start, end,
+		dto.BillingTermInput{Kind: types.BillingTermKindOnce, ValueType: types.BillingTermValueFixed, Value: lo.ToPtr(dec("300"))},
+		dto.BillingTermInput{Kind: types.BillingTermKindRecurring, ValueType: types.BillingTermValueRemainder, InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear)},
+	)
+	req.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
+	committed := s.commit(sub.ID, req)
+	s.Require().Len(committed.Instalments, 3)
+	s.True(committed.Instalments[0].BillOn.Equal(start), "the upfront is due on the day the term starts")
+
+	// 200 tokens before the term and 500 within it.
+	s.record(s.tokens, time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC), "200")
+	s.record(s.tokens, time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC), "500")
+
+	// The August invoice, issued on 1 Sep, carries no instalment although all three are due by then.
+	s.requireBilled(s.billPeriod(sub.ID, aug), "20",
+		wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "500", "0"},
+		wantLine{types.CommitmentLineOverage, "Tokens", "200", "20"},
+	)
+
+	s.Require().NoError(s.commitments.BillDueInstalments(s.GetContext()))
+
+	for i, want := range []struct{ amount, label string }{
+		{"300", "Instalment 1 of 3"},
+		{"40", "Instalment 2 of 3"},
+		{"40", "Instalment 3 of 3"},
+	} {
+		billed := s.instalmentStatus(committed.Instalments[i].ID)
+		s.Equal(types.InstalmentStatusInvoiced, billed.InstalmentStatus, want.label)
+
+		inv, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), lo.FromPtr(billed.InvoiceID))
+		s.Require().NoError(err)
+		s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType, want.label)
+		s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus, want.label)
+		s.Equal(string(types.InvoiceBillingReasonBillingTerms), inv.BillingReason, want.label)
+		s.requireBilled(inv, want.amount, wantLine{types.CommitmentLineInstalment, "Platform - " + want.label, "1", want.amount})
+	}
+
+	upfront := s.instalmentStatus(committed.Instalments[0].ID)
+	s.True(upfront.ServicePeriodStart.Equal(start), "the upfront invoice pays for the term from 25 Aug")
+	s.requireFullyBilled(sub.ID, 3, "380")
+	s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), 3)
+}
+
+// A1: a per_period commitment of $100 a month keeps billing as before: usage within it, a true-up for the shortfall
+// and overage above it, with no instalments.
+func (s *CommitmentE2ESuite) TestE2E_PerPeriodUnchanged() {
+	tokens := s.planWith("a1", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	req := floorRequest("Platform", tokens.ID, "100", s.jan, s.jan.AddDate(1, 0, 0))
+	req.CollectionMethod = lo.ToPtr(types.CommitmentCollectionPerPeriod)
+	sub := s.subscribe(tokens, s.jan, req)
+
+	// $60 of usage in January and $120 in February.
+	s.record(s.tokens, time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), "600")
+	s.record(s.tokens, time.Date(2026, 2, 10, 12, 0, 0, 0, time.UTC), "1200")
+
+	january := s.billPeriod(sub.ID, s.jan)
+	s.Equal(types.InvoiceStatusFinalized, january.InvoiceStatus)
+	s.requireBilled(january, "100",
+		wantLine{types.CommitmentLineUtilized, "Platform", "600", "60"},
+		wantLine{types.CommitmentLineTrueUp, "Platform (unused)", "1", "40"},
+	)
+	s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, 1, 0)), "120",
+		wantLine{types.CommitmentLineUtilized, "Platform", "1000", "100"},
+		wantLine{types.CommitmentLineOverage, "Tokens", "200", "20"},
+	)
+
+	for month := 2; month < 12; month++ {
+		s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, month, 0)), "100",
+			wantLine{types.CommitmentLineTrueUp, "Platform (unused)", "1", "100"},
+		)
+	}
+
+	instalments, err := s.GetStores().BillingInstalmentRepo.List(s.GetContext(), &billingterm.InstalmentFilter{SubscriptionIDs: []string{sub.ID}})
+	s.Require().NoError(err)
+	s.Empty(instalments)
 }

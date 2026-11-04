@@ -108,6 +108,8 @@ func (s *BillingServiceSuite) setupService() {
 		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
 		MeterUsageRepo:           s.GetStores().MeterUsageRepo,
 		CommitmentRepo:           s.GetStores().CommitmentRepo,
+		BillingTermRepo:          s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:    s.GetStores().BillingInstalmentRepo,
 	})
 }
 

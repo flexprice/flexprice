@@ -394,6 +394,10 @@ func TestCreateSubscriptionRequestValidate_InlineCommitments(t *testing.T) {
 	}
 	subscriptionScope := CommitmentScopeInput{EntityType: types.CommitmentScopeSubscription}
 	priceScope := CommitmentScopeInput{EntityType: types.CommitmentScopePrice, EntityID: "price_a"}
+	longLabel := inline("", priceScope)
+	longLabel.BillingTerms = []BillingTermInput{
+		{ValueType: types.BillingTermValueRemainder, InvoiceLabel: lo.ToPtr(strings.Repeat("a", 256))},
+	}
 
 	tests := []struct {
 		name        string
@@ -421,6 +425,11 @@ func TestCreateSubscriptionRequestValidate_InlineCommitments(t *testing.T) {
 			name:        "duplicate idempotency keys rejected",
 			commitments: []CreateCommitmentRequest{inline("k1", priceScope), inline("k1", subscriptionScope)},
 			errSub:      "more than once",
+		},
+		{
+			name:        "billing term invoice_label over 255 characters",
+			commitments: []CreateCommitmentRequest{longLabel},
+			errSub:      "BillingTerms[0].InvoiceLabel",
 		},
 	}
 	for _, tc := range tests {

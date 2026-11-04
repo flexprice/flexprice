@@ -73,7 +73,7 @@ type Commitment struct {
 	// TotalAmount holds the value of the "total_amount" field.
 	TotalAmount *decimal.Decimal `json:"total_amount,omitempty"`
 	// InstalmentInvoicing holds the value of the "instalment_invoicing" field.
-	InstalmentInvoicing *string `json:"instalment_invoicing,omitempty"`
+	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
 	// StartDate holds the value of the "start_date" field.
 	StartDate time.Time `json:"start_date,omitempty"`
 	// EndDate holds the value of the "end_date" field.
@@ -300,8 +300,8 @@ func (_m *Commitment) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field instalment_invoicing", values[i])
 			} else if value.Valid {
-				_m.InstalmentInvoicing = new(string)
-				*_m.InstalmentInvoicing = value.String
+				_m.InstalmentInvoicing = new(types.InstalmentDelivery)
+				*_m.InstalmentInvoicing = types.InstalmentDelivery(value.String)
 			}
 		case commitment.FieldStartDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -475,7 +475,7 @@ func (_m *Commitment) String() string {
 	builder.WriteString(", ")
 	if v := _m.InstalmentInvoicing; v != nil {
 		builder.WriteString("instalment_invoicing=")
-		builder.WriteString(*v)
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("start_date=")

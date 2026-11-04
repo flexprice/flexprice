@@ -85,6 +85,7 @@ type InvoiceLineItem struct {
 	PeriodStart                 *time.Time            `json:"period_start,omitempty"`
 	PeriodEnd                   *time.Time            `json:"period_end,omitempty"`
 	SubscriptionLineItemID      *string               `json:"subscription_line_item_id,omitempty"`
+	BillingInstalmentID         *string               `json:"billing_instalment_id,omitempty"`
 	PriceUnit                   *string               `json:"price_unit,omitempty"`
 	PriceUnitAmount             *decimal.Decimal      `json:"price_unit_amount,omitempty" swaggertype:"string"`
 	PrepaidCreditsApplied       decimal.Decimal       `json:"prepaid_credits_applied" swaggertype:"string"`
@@ -233,6 +234,7 @@ func newInvoiceLineItem(item *dto.InvoiceLineItemResponse) *InvoiceLineItem {
 		PeriodStart:                 item.PeriodStart,
 		PeriodEnd:                   item.PeriodEnd,
 		SubscriptionLineItemID:      item.SubscriptionLineItemID,
+		BillingInstalmentID:         item.BillingInstalmentID,
 		PriceUnit:                   item.PriceUnit,
 		PriceUnitAmount:             item.PriceUnitAmount,
 		PrepaidCreditsApplied:       item.PrepaidCreditsApplied,

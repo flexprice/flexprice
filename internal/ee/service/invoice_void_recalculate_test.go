@@ -78,6 +78,7 @@ func (s *InvoiceVoidRecalculateSuite) setupService() {
 		InvoiceRepo:                  s.invoiceRepo,
 		HostedInvoiceTokenRepo:       s.GetStores().HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:          stores.InvoiceLineItemRepo,
+		BillingInstalmentRepo:        stores.BillingInstalmentRepo,
 		EntitlementRepo:              stores.EntitlementRepo,
 		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
 		EnvironmentRepo:              stores.EnvironmentRepo,

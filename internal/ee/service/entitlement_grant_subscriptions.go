@@ -193,7 +193,7 @@ func (s *entitlementGrantService) subscriptionEntitlementGrantStateAfter(ctx con
 // hasActiveCommitment reports a commitment live in the current period: its lines are priced
 // outside the per-line pass the grant reduces.
 func (s *entitlementGrantService) hasActiveCommitment(ctx context.Context, sub *subscription.Subscription) (bool, error) {
-	svc := &commitmentService{ServiceParams: s.ServiceParams}
+	svc := newCommitmentService(s.ServiceParams)
 	enabled, err := svc.IsEnabled(ctx)
 	if err != nil {
 		return false, err
@@ -201,7 +201,7 @@ func (s *entitlementGrantService) hasActiveCommitment(ctx context.Context, sub *
 	if !enabled {
 		return false, nil
 	}
-	active, err := svc.ActiveForPeriod(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	active, err := svc.ListOverlapping(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
 	if err != nil {
 		return false, err
 	}

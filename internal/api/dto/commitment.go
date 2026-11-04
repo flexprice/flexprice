@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -29,12 +30,12 @@ type CommitmentPriceInput struct {
 	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
 }
 
-// ToCreatePriceRequest builds the subscription-scoped usage price backing the rate; kind is committed or overage.
+// ToCreatePriceRequest builds the subscription-scoped usage price backing the commitment's rate.
 func (in *CommitmentPriceInput) ToCreatePriceRequest(
 	c *commitment.Commitment,
 	sub *subscription.Subscription,
 	meterID string,
-	kind string,
+	rate types.CommitmentRate,
 ) CreatePriceRequest {
 	return CreatePriceRequest{
 		Amount:               in.Amount,
@@ -51,11 +52,11 @@ func (in *CommitmentPriceInput) ToCreatePriceRequest(
 		TransformQuantity:    in.TransformQuantity,
 		InvoiceCadence:       types.InvoiceCadenceArrear,
 		MeterID:              meterID,
-		DisplayName:          c.Name + " (" + kind + ")",
+		DisplayName:          c.Name + " (" + string(rate) + ")",
 		SkipEntityValidation: true,
 		Metadata: map[string]string{
-			"commitment_id":   c.ID,
-			"commitment_rate": kind,
+			types.MetadataKeyCommitmentID:   c.ID,
+			types.MetadataKeyCommitmentRate: string(rate),
 		},
 	}
 }
@@ -98,21 +99,19 @@ type CreateCommitmentRequest struct {
 	Priority           int                               `json:"priority"`
 	Binding            *bool                             `json:"binding,omitempty"` // default false
 	CollectionMethod   *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
-	StartDate          time.Time                         `json:"start_date" validate:"required"`
+	// BillingTerms apply only to collection_method billing_terms, which requires at least one.
+	BillingTerms []BillingTermInput `json:"billing_terms,omitempty" validate:"omitempty,min=1,max=20,dive"`
+	// InstalmentInvoicing applies only to collection_method billing_terms.
+	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
+	// StartDate and EndDate must be whole seconds.
+	StartDate time.Time `json:"start_date" validate:"required,whole_second"`
 	// EndDate is exclusive; omit it for an open-ended commitment, which bills every period until terminated.
-	EndDate  *time.Time     `json:"end_date,omitempty"`
+	EndDate  *time.Time     `json:"end_date,omitempty" validate:"omitempty,whole_second"`
 	Metadata types.Metadata `json:"metadata,omitempty"`
 }
 
 // ApplyDefaults fills label, timezone and the binding-dependent settings.
 func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
-	// Term edges align to whole seconds, like every computed billing date; the loader's window grid
-	// and pool checks compare at that granularity.
-	r.StartDate = r.StartDate.Truncate(time.Second)
-	if r.EndDate != nil {
-		r.EndDate = lo.ToPtr(r.EndDate.Truncate(time.Second))
-	}
-
 	if r.InvoiceLabel == "" {
 		r.InvoiceLabel = r.Name
 	}
@@ -127,6 +126,10 @@ func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
 
 	if *r.Binding && r.CollectionMethod == nil {
 		r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionPerPeriod)
+	}
+
+	if lo.FromPtr(r.CollectionMethod) == types.CommitmentCollectionBillingTerms && r.InstalmentInvoicing == nil {
+		r.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySubscriptionInvoice)
 	}
 
 	for _, p := range []*CommitmentPriceInput{r.CommittedPrice, r.OveragePrice} {
@@ -193,41 +196,60 @@ func (r *CreateCommitmentRequest) Validate() error {
 		if err := r.CollectionMethod.Validate(); err != nil {
 			return err
 		}
-
-		if *r.CollectionMethod == types.CommitmentCollectionBillingTerms {
-			return ierr.Validation("collection_method billing_terms is not yet supported")
-		}
 	}
 
-	if len(r.Name) == 0 || len(r.Name) > 255 || len(r.InvoiceLabel) > 255 {
-		return ierr.Validation("name and invoice_label must be 1-255 characters")
-	}
-
-	if r.InvoiceDescription != nil && len(*r.InvoiceDescription) > 500 {
-		return ierr.Validation("invoice_description must be at most 500 characters")
+	if err := r.validateBillingTerms(); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+// validateBillingTerms ties billing_terms and instalment_invoicing to collection_method billing_terms, which needs an
+// end_date. Binding is already required by any collection_method.
+func (r *CreateCommitmentRequest) validateBillingTerms() error {
+	if lo.FromPtr(r.CollectionMethod) != types.CommitmentCollectionBillingTerms {
+		switch {
+		case len(r.BillingTerms) > 0:
+			return ierr.Validation("billing_terms require collection_method billing_terms")
+		case r.InstalmentInvoicing != nil:
+			return ierr.Validation("instalment_invoicing requires collection_method billing_terms")
+		}
+
+		return nil
+	}
+
+	switch {
+	case len(r.BillingTerms) == 0:
+		return ierr.Validation("collection_method billing_terms requires billing_terms")
+	case r.EndDate == nil:
+		return ierr.Validation("collection_method billing_terms requires an end_date")
+	}
+
+	return lo.FromPtr(r.InstalmentInvoicing).Validate()
 }
 
 // validatePrices checks each rate against its billing model; the price request's own validation covers tier and
 // package details once the scope meter is known.
 func (r *CreateCommitmentRequest) validatePrices() error {
 	if r.CommittedPrice != nil {
-		if err := r.CommittedPrice.validate("committed_price", true); err != nil {
+		if err := r.CommittedPrice.validate(types.CommitmentRateCommitted); err != nil {
 			return err
 		}
 	}
 
 	if r.OveragePrice != nil {
-		return r.OveragePrice.validate("overage_price", false)
+		return r.OveragePrice.validate(types.CommitmentRateOverage)
 	}
 
 	return nil
 }
 
-// validate checks the rate against its billing model; positive requires a FLAT_FEE or PACKAGE amount above zero.
-func (in *CommitmentPriceInput) validate(field string, positive bool) error {
+// validate checks the rate against its billing model; a committed rate needs a FLAT_FEE or PACKAGE amount above zero
+// and SLAB tiers.
+func (in *CommitmentPriceInput) validate(rate types.CommitmentRate) error {
+	field := string(rate) + "_price"
+	committed := rate == types.CommitmentRateCommitted
 	if in.BillingModel != types.BILLING_MODEL_TIERED && len(in.Tiers) > 0 {
 		return ierr.Validationf("%s.tiers can only be set on a TIERED price", field)
 	}
@@ -238,7 +260,7 @@ func (in *CommitmentPriceInput) validate(field string, positive bool) error {
 			return ierr.Validationf("%s.amount must be zero or greater", field)
 		}
 
-		if positive && !in.Amount.IsPositive() {
+		if committed && !in.Amount.IsPositive() {
 			return ierr.Validationf("%s.amount must be greater than zero", field)
 		}
 
@@ -254,7 +276,7 @@ func (in *CommitmentPriceInput) validate(field string, positive bool) error {
 			return err
 		}
 
-		if positive && in.TierMode == types.BILLING_TIER_VOLUME {
+		if committed && in.TierMode == types.BILLING_TIER_VOLUME {
 			return ierr.Validationf("%s.tier_mode must be SLAB: committed prices must price marginally so usage never exceeds the commitment's value", field)
 		}
 
@@ -302,16 +324,22 @@ func (r *CreateCommitmentRequest) ToCommitment(
 }
 
 type UpdateCommitmentRequest struct {
-	Name               *string        `json:"name,omitempty" validate:"omitempty,max=255"`
-	InvoiceLabel       *string        `json:"invoice_label,omitempty" validate:"omitempty,max=255"`
+	Name               *string        `json:"name,omitempty" validate:"omitempty,min=1,max=255"`
+	InvoiceLabel       *string        `json:"invoice_label,omitempty" validate:"omitempty,min=1,max=255"`
 	InvoiceDescription *string        `json:"invoice_description,omitempty" validate:"omitempty,max=500"`
 	Metadata           types.Metadata `json:"metadata,omitempty"`
 }
 
-// TerminateCommitmentRequest ends a commitment early; cancellation_fee is a flat amount in the commitment currency.
+func (r *UpdateCommitmentRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
+// TerminateCommitmentRequest ends a commitment now. effective_at may not be in the future; cancellation_fee is billed
+// in the commitment currency.
 type TerminateCommitmentRequest struct {
-	EffectiveAt     *time.Time       `json:"effective_at,omitempty"`
-	CancellationFee *decimal.Decimal `json:"cancellation_fee,omitempty" swaggertype:"string"`
+	// EffectiveAt defaults to now; a given one must be a whole second.
+	EffectiveAt     *time.Time            `json:"effective_at,omitempty" validate:"omitempty,whole_second"`
+	CancellationFee *CancellationFeeInput `json:"cancellation_fee,omitempty"`
 }
 
 func (r *TerminateCommitmentRequest) Validate() error {
@@ -319,8 +347,8 @@ func (r *TerminateCommitmentRequest) Validate() error {
 		return err
 	}
 
-	if r.CancellationFee != nil && !r.CancellationFee.IsPositive() {
-		return ierr.Validation("cancellation_fee must be greater than zero")
+	if r.CancellationFee != nil {
+		return r.CancellationFee.Validate()
 	}
 
 	return nil
@@ -330,6 +358,10 @@ type CommitmentResponse struct {
 	*commitment.Commitment `json:",inline"`
 	CommitmentValue        *decimal.Decimal `json:"commitment_value,omitempty" swaggertype:"string"`
 	TerminationInvoiceID   *string          `json:"termination_invoice_id,omitempty"`
+
+	// BillingTerms and Instalments are set by create and preview.
+	BillingTerms []*billingterm.Term       `json:"billing_terms,omitempty"`
+	Instalments  []*billingterm.Instalment `json:"instalments,omitempty"`
 }
 
 type ListCommitmentsResponse = types.ListResponse[*CommitmentResponse] // @name ListCommitmentsResponse

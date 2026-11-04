@@ -246,6 +246,14 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 		return errInvoiceEventDeletionGated(invoice.ID, gatedDeletion.RequestID)
 	}
 
+	// A payment a gateway already collected (process_payment false) is still recorded; ProcessPayment checks it if it
+	// is charged later.
+	if p.ProcessPayment {
+		if err := invSvc.requireFreshDraft(ctx, invoice); err != nil {
+			return err
+		}
+	}
+
 	// invoice validations
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 		return ierr.NewError("invoice is already paid").

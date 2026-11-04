@@ -1393,7 +1393,7 @@ func (s *billingService) CalculateUsageCharges(
 	}
 
 	if len(handledByCommitments) > 0 {
-		commitmentLines, commitmentTotal, err := commitments.InvoiceLines(ctx)
+		commitmentLines, commitmentTotal, err := commitments.BillingLines(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -1715,6 +1715,14 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		NextPeriodEnd:      nextPeriodEnd,
 	})
 
+	var instalments []dto.CreateInvoiceLineItemRequest
+	instalmentTotal := decimal.Zero
+	if billAt, ok := instalmentBillAt(referencePoint, periodStart, periodEnd); ok {
+		if instalments, instalmentTotal, err = s.dueInstalmentLines(ctx, sub, billAt); err != nil {
+			return nil, err
+		}
+	}
+
 	var calculationResult *dto.BillingCalculationResult
 	var metadata types.Metadata = make(types.Metadata)
 	var description string
@@ -1733,7 +1741,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return nil, err
 		}
 
-		if len(advanceLineItems) == 0 {
+		if len(advanceLineItems) == 0 && len(instalments) == 0 {
 			return zeroAmountInvoice, nil
 		}
 
@@ -1779,7 +1787,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 		// Combine both sets of line items
 		combinedLineItems := append(arrearLineItems, advanceLineItems...)
-		if len(combinedLineItems) == 0 {
+		if len(combinedLineItems) == 0 && len(instalments) == 0 {
 			return zeroAmountInvoice, nil
 		}
 
@@ -1947,6 +1955,9 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			WithHint(fmt.Sprintf("Reference point '%s' is not supported", referencePoint)).
 			Mark(ierr.ErrValidation)
 	}
+
+	calculationResult.FixedCharges = append(calculationResult.FixedCharges, instalments...)
+	calculationResult.TotalAmount = calculationResult.TotalAmount.Add(instalmentTotal)
 
 	// Create invoice request for the calculated charges
 	invReq, err := s.CreateInvoiceRequestForCharges(ctx, &dto.CreateInvoiceRequestForChargesParams{

@@ -128,6 +128,7 @@ func (s *InvoiceServiceSuite) setupService() {
 		InvoiceRepo:                  s.invoiceRepo,
 		HostedInvoiceTokenRepo:       s.GetStores().HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:          s.GetStores().InvoiceLineItemRepo,
+		BillingInstalmentRepo:        s.GetStores().BillingInstalmentRepo,
 		EntitlementRepo:              s.GetStores().EntitlementRepo,
 		EnvironmentRepo:              s.GetStores().EnvironmentRepo,
 		FeatureRepo:                  s.GetStores().FeatureRepo,

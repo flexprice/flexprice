@@ -2267,7 +2267,8 @@ func (s *subscriptionService) CancelSubscription(
 			req.CancellationType == types.CancellationTypeScheduledDate
 		shouldCreateInvoice := !isScheduled &&
 			invoicePolicy == types.CancelImmediatelyInvoicePolicyGenerateInvoice
-		// Commitments end before the final invoice is built, so it carries their prorated true-up and settlement.
+		// Commitments end before the final invoice is built, so it carries their prorated true-up. A billing-terms
+		// settlement goes on its own invoice instead.
 		if req.CancellationType == types.CancellationTypeImmediate {
 			if err := NewCommitmentService(s.ServiceParams).TerminateForSubscription(ctx, subscription.ID, effectiveDate); err != nil {
 				return err

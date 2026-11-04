@@ -49,6 +49,7 @@ const (
 	MetadataKeyCommitmentUtilized = "commitment_utilized"
 	MetadataKeyCommitmentLineKind = "commitment_line_kind"
 	MetadataKeyCommitmentID       = "commitment_id"
+	MetadataKeyCommitmentRate     = "commitment_rate"
 	MetadataKeyUsageResetPeriod   = "usage_reset_period"
 	MetadataKeyIsPreview          = "is_preview"
 	MetadataKeyDescription        = "description"

@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/go-playground/validator/v10"
@@ -19,7 +20,14 @@ var (
 func initValidator() {
 	once.Do(func() {
 		validate = validator.New()
+		_ = validate.RegisterValidation("whole_second", wholeSecond)
 	})
+}
+
+// wholeSecond is the whole_second tag: a time with no fraction of a second.
+func wholeSecond(fl validator.FieldLevel) bool {
+	t, ok := fl.Field().Interface().(time.Time)
+	return ok && t.Nanosecond() == 0
 }
 
 func NewValidator() *validator.Validate {

@@ -36,6 +36,8 @@ const (
 	ScheduleIDRevenueRecognition ScheduleID = "revenue-recognition"
 	// ScheduleIDSelfBillingHourly drives SelfBillingHourlyWorkflow; a no-op unless self-billing is enabled.
 	ScheduleIDSelfBillingHourly ScheduleID = "self-billing-hourly"
+	// ScheduleIDBillingInstalmentsDue drives BillingInstalmentsDueWorkflow; a no-op unless an environment enables commitments_v2.
+	ScheduleIDBillingInstalmentsDue ScheduleID = "billing-instalments-due"
 )
 
 // String returns the raw schedule id.
@@ -64,6 +66,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDRevenueRollup,
 		ScheduleIDRevenueRecognition,
 		ScheduleIDSelfBillingHourly,
+		ScheduleIDBillingInstalmentsDue,
 	}
 }
 

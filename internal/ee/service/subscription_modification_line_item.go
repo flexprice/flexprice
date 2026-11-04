@@ -584,7 +584,7 @@ func (s *subscriptionModificationService) applyLineItemChange(
 			clearLineItemMetadataIDs(newItem, lineageMetadataKeys...)
 
 			if mod.getNewPriceRequest() != nil {
-				if err := checkLineItemCommitmentAttach(txCtx, sp, request.GetSubscription(), newItem); err != nil {
+				if err := checkLineAttach(txCtx, sp, request.GetSubscription(), newItem); err != nil {
 					return err
 				}
 			}
@@ -594,7 +594,7 @@ func (s *subscriptionModificationService) applyLineItemChange(
 			}
 
 			if mod.getNewPriceRequest() != nil {
-				if err := checkLineItemCommitmentDetach(txCtx, sp, request.GetSubscription(), endedItem, effectiveDate); err != nil {
+				if err := checkLineDetach(txCtx, sp, request.GetSubscription(), endedItem, effectiveDate); err != nil {
 					return err
 				}
 			}

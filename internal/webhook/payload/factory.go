@@ -133,6 +133,26 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		}
 	}
 
+	for _, e := range []types.WebhookEventName{
+		types.WebhookEventBillingTermsCreated,
+		types.WebhookEventBillingTermsUpdated,
+	} {
+		f.builders[e] = func() PayloadBuilder {
+			return NewBillingTermsPayloadBuilder(f.services)
+		}
+	}
+
+	for _, e := range []types.WebhookEventName{
+		types.WebhookEventBillingInstalmentCreated,
+		types.WebhookEventBillingInstalmentUpdated,
+		types.WebhookEventBillingInstalmentCancelled,
+		types.WebhookEventBillingInstalmentInvoiced,
+	} {
+		f.builders[e] = func() PayloadBuilder {
+			return NewBillingInstalmentPayloadBuilder(f.services)
+		}
+	}
+
 	// wallet builders
 	f.builders[types.WebhookEventWalletCreated] = func() PayloadBuilder {
 		return NewWalletPayloadBuilder(f.services)
