@@ -2408,10 +2408,16 @@ func (s *subscriptionService) CancelSubscription(
 	// cancellation sets Cancelled here. end_of_period and scheduled_date both set CancelAt but leave
 	// the subscription active until the cancellation schedule processor fires, so flushing now would
 	// report a final usage window for a subscription that has not ended yet.
-	if subscription.SubscriptionStatus == types.SubscriptionStatusCancelled &&
-		subscription.CancelAt != nil &&
-		s.hasMarketplaceMapping(ctx, subscription.ID) {
-		s.triggerMarketplaceSubscriptionFinalUsageFlushWorkflow(ctx, subscription.ID, *subscription.CancelAt)
+	if subscription.SubscriptionStatus == types.SubscriptionStatusCancelled && subscription.CancelAt != nil {
+		mapped, err := s.HasMarketplaceMapping(ctx, subscription.ID)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to look up marketplace mappings for subscription flush",
+				"error", err,
+				"subscription_id", subscription.ID)
+		}
+		if mapped {
+			s.triggerMarketplaceSubscriptionFinalUsageFlushWorkflow(ctx, subscription.ID, *subscription.CancelAt)
+		}
 	}
 
 	// Step 11: Build response
@@ -8695,13 +8701,9 @@ func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub
 		"checkout_url_present", sub.Metadata[paddleint.MetaKeyPaddleCheckoutURL] != "")
 }
 
-// hasMarketplaceMapping reports whether the subscription is linked to any marketplace. Most
-// cancellations are not, so this gates the flush at the call site rather than starting a workflow per
-// cancellation that would immediately find nothing to do. A lookup failure is logged and treated as
-// no mapping: the flush follows a cancellation that has already committed and must never fail it.
-func (s *subscriptionService) hasMarketplaceMapping(ctx context.Context, subscriptionID string) bool {
+func (s *subscriptionService) HasMarketplaceMapping(ctx context.Context, subscriptionID string) (bool, error) {
 	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
-		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
+		QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(1)},
 		EntityID:    subscriptionID,
 		EntityType:  types.IntegrationEntityTypeSubscription,
 		ProviderTypes: []string{
@@ -8711,12 +8713,9 @@ func (s *subscriptionService) hasMarketplaceMapping(ctx context.Context, subscri
 		},
 	})
 	if err != nil {
-		s.Logger.Error(ctx, "failed to look up marketplace mappings for subscription flush",
-			"error", err,
-			"subscription_id", subscriptionID)
-		return false
+		return false, err
 	}
-	return len(mappings) > 0
+	return len(mappings) > 0, nil
 }
 
 // triggerMarketplaceSubscriptionFinalUsageFlushWorkflow starts the cancellation flush, which reports

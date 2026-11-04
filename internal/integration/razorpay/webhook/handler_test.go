@@ -378,6 +378,17 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RepeatedDeclines_Recor
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus)
 }
 
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_UPITokenCharge_SealsPayment() {
+	s.paymentSvc.payment.PaymentMethodType = types.PaymentMethodTypeUPI
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusProcessing
+
+	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+
+	s.NoError(err)
+	s.Empty(s.paymentSvc.failedAttempts())
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
+}
+
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RedeliveredDecline_RecordsNoAttempt() {
 	s.pendingSession()
 	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending

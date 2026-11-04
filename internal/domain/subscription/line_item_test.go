@@ -4,7 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -40,4 +42,23 @@ func TestGetPeriod(t *testing.T) {
 	s, e := li.GetPeriod(start, end)
 	assert.Equal(t, mid, s)
 	assert.Equal(t, end, e)
+}
+
+func TestSubscriptionLineItemFromEntPriceUnit(t *testing.T) {
+	tests := []struct {
+		name string
+		in   *string
+		want *string
+	}{
+		{"nil stays nil", nil, nil},
+		{"empty becomes nil", lo.ToPtr(""), nil},
+		{"code kept", lo.ToPtr("crd"), lo.ToPtr("crd")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := subscription.SubscriptionLineItemFromEnt(&ent.SubscriptionLineItem{PriceUnit: tt.in, PriceUnitID: tt.in})
+			assert.Equal(t, tt.want, got.PriceUnit)
+			assert.Equal(t, tt.want, got.PriceUnitID)
+		})
+	}
 }
