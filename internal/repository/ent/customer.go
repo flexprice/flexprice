@@ -142,7 +142,7 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 			customer.ID(id),
 			customer.TenantID(types.GetTenantID(ctx)),
 			customer.EnvironmentID(types.GetEnvironmentID(ctx)),
-			customer.StatusIn(types.ReadableCustomerStatuses...),
+			customer.StatusIn(types.ReadableCustomerStatuses()...),
 		).
 		Only(ctx)
 
@@ -475,7 +475,7 @@ func (o CustomerQueryOptions) ApplyStatusFilter(query CustomerQuery, status stri
 	}
 	return query.Where(
 		customer.Status(status),
-		customer.StatusIn(types.ReadableCustomerStatuses...),
+		customer.StatusIn(types.ReadableCustomerStatuses()...),
 	)
 }
 
@@ -559,7 +559,7 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 			return nil, err
 		}
 		// DSL must not reach suppressed rows
-		query = query.Where(customer.StatusIn(types.ReadableCustomerStatuses...))
+		query = query.Where(customer.StatusIn(types.ReadableCustomerStatuses()...))
 	}
 
 	// Apply sorts using the generic function

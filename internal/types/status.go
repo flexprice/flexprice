@@ -23,12 +23,6 @@ const (
 	StatusSuppressed Status = "suppressed"
 )
 
-// Allowlist so new statuses stay hidden
-var ReadableCustomerStatuses = []string{
-	string(StatusPublished),
-	string(StatusArchived),
-}
-
 // Unset status behaves as published
 func CustomerStatusOrDefault(status Status) string {
 	if status == "" {
@@ -39,11 +33,18 @@ func CustomerStatusOrDefault(status Status) string {
 
 // Single source for production and test doubles
 func IsCustomerStatusReadable(status Status) bool {
-	resolved := CustomerStatusOrDefault(status)
-	for _, allowed := range ReadableCustomerStatuses {
-		if resolved == allowed {
-			return true
-		}
+	switch CustomerStatusOrDefault(status) {
+	case string(StatusPublished), string(StatusArchived):
+		return true
+	default:
+		return false
 	}
-	return false
+}
+
+// Fresh slice so callers cannot widen the allowlist
+func ReadableCustomerStatuses() []string {
+	return []string{
+		string(StatusPublished),
+		string(StatusArchived),
+	}
 }
