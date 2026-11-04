@@ -27,6 +27,8 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/customerdeletioncategory"
+	"github.com/flexprice/flexprice/ent/customerdeletionrequest"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
@@ -1071,6 +1073,92 @@ func init() {
 	customer.DefaultTaxTreatment = types.TaxTreatment(customerDescTaxTreatment.Default.(string))
 	// customer.TaxTreatmentValidator is a validator for the "tax_treatment" field. It is called by the builders before save.
 	customer.TaxTreatmentValidator = customerDescTaxTreatment.Validators[0].(func(string) error)
+	customerdeletioncategoryMixin := schema.CustomerDeletionCategory{}.Mixin()
+	customerdeletioncategoryMixinFields0 := customerdeletioncategoryMixin[0].Fields()
+	_ = customerdeletioncategoryMixinFields0
+	customerdeletioncategoryMixinFields1 := customerdeletioncategoryMixin[1].Fields()
+	_ = customerdeletioncategoryMixinFields1
+	customerdeletioncategoryFields := schema.CustomerDeletionCategory{}.Fields()
+	_ = customerdeletioncategoryFields
+	// customerdeletioncategoryDescTenantID is the schema descriptor for tenant_id field.
+	customerdeletioncategoryDescTenantID := customerdeletioncategoryMixinFields0[0].Descriptor()
+	// customerdeletioncategory.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	customerdeletioncategory.TenantIDValidator = customerdeletioncategoryDescTenantID.Validators[0].(func(string) error)
+	// customerdeletioncategoryDescStatus is the schema descriptor for status field.
+	customerdeletioncategoryDescStatus := customerdeletioncategoryMixinFields0[1].Descriptor()
+	// customerdeletioncategory.DefaultStatus holds the default value on creation for the status field.
+	customerdeletioncategory.DefaultStatus = customerdeletioncategoryDescStatus.Default.(string)
+	// customerdeletioncategoryDescCreatedAt is the schema descriptor for created_at field.
+	customerdeletioncategoryDescCreatedAt := customerdeletioncategoryMixinFields0[2].Descriptor()
+	// customerdeletioncategory.DefaultCreatedAt holds the default value on creation for the created_at field.
+	customerdeletioncategory.DefaultCreatedAt = customerdeletioncategoryDescCreatedAt.Default.(func() time.Time)
+	// customerdeletioncategoryDescUpdatedAt is the schema descriptor for updated_at field.
+	customerdeletioncategoryDescUpdatedAt := customerdeletioncategoryMixinFields0[3].Descriptor()
+	// customerdeletioncategory.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	customerdeletioncategory.DefaultUpdatedAt = customerdeletioncategoryDescUpdatedAt.Default.(func() time.Time)
+	// customerdeletioncategory.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	customerdeletioncategory.UpdateDefaultUpdatedAt = customerdeletioncategoryDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// customerdeletioncategoryDescEnvironmentID is the schema descriptor for environment_id field.
+	customerdeletioncategoryDescEnvironmentID := customerdeletioncategoryMixinFields1[0].Descriptor()
+	// customerdeletioncategory.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	customerdeletioncategory.DefaultEnvironmentID = customerdeletioncategoryDescEnvironmentID.Default.(string)
+	// customerdeletioncategoryDescRequestID is the schema descriptor for request_id field.
+	customerdeletioncategoryDescRequestID := customerdeletioncategoryFields[1].Descriptor()
+	// customerdeletioncategory.RequestIDValidator is a validator for the "request_id" field. It is called by the builders before save.
+	customerdeletioncategory.RequestIDValidator = customerdeletioncategoryDescRequestID.Validators[0].(func(string) error)
+	// customerdeletioncategoryDescCategory is the schema descriptor for category field.
+	customerdeletioncategoryDescCategory := customerdeletioncategoryFields[2].Descriptor()
+	// customerdeletioncategory.CategoryValidator is a validator for the "category" field. It is called by the builders before save.
+	customerdeletioncategory.CategoryValidator = customerdeletioncategoryDescCategory.Validators[0].(func(string) error)
+	// customerdeletioncategoryDescDisposition is the schema descriptor for disposition field.
+	customerdeletioncategoryDescDisposition := customerdeletioncategoryFields[3].Descriptor()
+	// customerdeletioncategory.DispositionValidator is a validator for the "disposition" field. It is called by the builders before save.
+	customerdeletioncategory.DispositionValidator = customerdeletioncategoryDescDisposition.Validators[0].(func(string) error)
+	customerdeletionrequestMixin := schema.CustomerDeletionRequest{}.Mixin()
+	customerdeletionrequestMixinFields0 := customerdeletionrequestMixin[0].Fields()
+	_ = customerdeletionrequestMixinFields0
+	customerdeletionrequestMixinFields1 := customerdeletionrequestMixin[1].Fields()
+	_ = customerdeletionrequestMixinFields1
+	customerdeletionrequestFields := schema.CustomerDeletionRequest{}.Fields()
+	_ = customerdeletionrequestFields
+	// customerdeletionrequestDescTenantID is the schema descriptor for tenant_id field.
+	customerdeletionrequestDescTenantID := customerdeletionrequestMixinFields0[0].Descriptor()
+	// customerdeletionrequest.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	customerdeletionrequest.TenantIDValidator = customerdeletionrequestDescTenantID.Validators[0].(func(string) error)
+	// customerdeletionrequestDescStatus is the schema descriptor for status field.
+	customerdeletionrequestDescStatus := customerdeletionrequestMixinFields0[1].Descriptor()
+	// customerdeletionrequest.DefaultStatus holds the default value on creation for the status field.
+	customerdeletionrequest.DefaultStatus = customerdeletionrequestDescStatus.Default.(string)
+	// customerdeletionrequestDescCreatedAt is the schema descriptor for created_at field.
+	customerdeletionrequestDescCreatedAt := customerdeletionrequestMixinFields0[2].Descriptor()
+	// customerdeletionrequest.DefaultCreatedAt holds the default value on creation for the created_at field.
+	customerdeletionrequest.DefaultCreatedAt = customerdeletionrequestDescCreatedAt.Default.(func() time.Time)
+	// customerdeletionrequestDescUpdatedAt is the schema descriptor for updated_at field.
+	customerdeletionrequestDescUpdatedAt := customerdeletionrequestMixinFields0[3].Descriptor()
+	// customerdeletionrequest.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	customerdeletionrequest.DefaultUpdatedAt = customerdeletionrequestDescUpdatedAt.Default.(func() time.Time)
+	// customerdeletionrequest.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	customerdeletionrequest.UpdateDefaultUpdatedAt = customerdeletionrequestDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// customerdeletionrequestDescEnvironmentID is the schema descriptor for environment_id field.
+	customerdeletionrequestDescEnvironmentID := customerdeletionrequestMixinFields1[0].Descriptor()
+	// customerdeletionrequest.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	customerdeletionrequest.DefaultEnvironmentID = customerdeletionrequestDescEnvironmentID.Default.(string)
+	// customerdeletionrequestDescCustomerID is the schema descriptor for customer_id field.
+	customerdeletionrequestDescCustomerID := customerdeletionrequestFields[1].Descriptor()
+	// customerdeletionrequest.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	customerdeletionrequest.CustomerIDValidator = customerdeletionrequestDescCustomerID.Validators[0].(func(string) error)
+	// customerdeletionrequestDescExternalID is the schema descriptor for external_id field.
+	customerdeletionrequestDescExternalID := customerdeletionrequestFields[2].Descriptor()
+	// customerdeletionrequest.ExternalIDValidator is a validator for the "external_id" field. It is called by the builders before save.
+	customerdeletionrequest.ExternalIDValidator = customerdeletionrequestDescExternalID.Validators[0].(func(string) error)
+	// customerdeletionrequestDescState is the schema descriptor for state field.
+	customerdeletionrequestDescState := customerdeletionrequestFields[3].Descriptor()
+	// customerdeletionrequest.StateValidator is a validator for the "state" field. It is called by the builders before save.
+	customerdeletionrequest.StateValidator = customerdeletionrequestDescState.Validators[0].(func(string) error)
+	// customerdeletionrequestDescRequestedVia is the schema descriptor for requested_via field.
+	customerdeletionrequestDescRequestedVia := customerdeletionrequestFields[9].Descriptor()
+	// customerdeletionrequest.RequestedViaValidator is a validator for the "requested_via" field. It is called by the builders before save.
+	customerdeletionrequest.RequestedViaValidator = customerdeletionrequestDescRequestedVia.Validators[0].(func(string) error)
 	entitlementMixin := schema.Entitlement{}.Mixin()
 	entitlementMixinFields0 := entitlementMixin[0].Fields()
 	_ = entitlementMixinFields0
