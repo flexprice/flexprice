@@ -7,7 +7,7 @@ Links: FLE-1695 · Phase 0/1 ERD (`2026-10-27-billing-entities-p1-erd.md`, PR #3
 <!-- erd:locked -->
 
 **Today.** With billing entities enabled, each customer belongs to one entity and their invoices show
-that entity as the seller, with its own number prefix and default tax rates. Integrations have not
+that entity as the biller, with its own number prefix and default tax rates. Integrations have not
 followed: an environment holds at most one connection per provider (storage exports excepted), and that
 connection serves only the default entity. A non-default entity's customers are never auto-charged, get
 no checkout, payment links or saved payment methods, cannot pay from the hosted invoice page, and are not
