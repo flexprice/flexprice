@@ -24,8 +24,6 @@ const (
 	ErrCodeServiceUnavailable ErrorCode = "service_unavailable"
 	ErrCodeTooManyRequests    ErrorCode = "too_many_requests"
 	ErrCodeNotImplemented     ErrorCode = "not_implemented"
-
-	ErrCodeBillingEntitiesNotEnabled ErrorCode = "billing_entities_not_enabled"
 )
 
 // errorMapping holds both the HTTP status and machine-readable code for a
@@ -54,8 +52,6 @@ var (
 	ErrTooManyRequests    = new(ErrCodeTooManyRequests, "too many requests")
 	ErrNotImplemented     = new(ErrCodeNotImplemented, "not implemented")
 
-	ErrBillingEntitiesNotEnabled = new(ErrCodeBillingEntitiesNotEnabled, "billing entities not enabled")
-
 	// errMappings is the single map that ties sentinel → (HTTP status, error code).
 	// ResolveError iterates this once to get both values.
 	errMappings = map[error]errorMapping{
@@ -72,8 +68,6 @@ var (
 		ErrServiceUnavailable: {http.StatusServiceUnavailable, ErrCodeServiceUnavailable},
 		ErrTooManyRequests:    {http.StatusTooManyRequests, ErrCodeTooManyRequests},
 		ErrNotImplemented:     {http.StatusNotImplemented, ErrCodeNotImplemented},
-
-		ErrBillingEntitiesNotEnabled: {http.StatusBadRequest, ErrCodeBillingEntitiesNotEnabled},
 	}
 )
 

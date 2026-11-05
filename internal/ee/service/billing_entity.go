@@ -45,9 +45,9 @@ func billingEntityEnableLockKey(ctx context.Context) string {
 }
 
 func errBillingEntitiesNotEnabled() error {
-	return ierr.NewError("billing entities are not enabled").
+	return ierr.WithError(billingentity.ErrNotEnabled).
 		WithHint("Billing entities are not enabled in this environment").
-		Mark(ierr.ErrBillingEntitiesNotEnabled)
+		Mark(ierr.ErrValidation)
 }
 
 func (s *billingEntityService) mode(ctx context.Context) (types.BillingEntityMode, error) {
@@ -240,13 +240,13 @@ func (s *billingEntityService) ResolveForCreate(ctx context.Context, mode types.
 // entityInEnvironment returns the entity, or a validation error when it is not in this environment.
 func (s *billingEntityService) entityInEnvironment(ctx context.Context, id string) (*billingentity.BillingEntity, error) {
 	entity, err := s.BillingEntityRepo.Get(ctx, id)
+	if ierr.IsNotFound(err) {
+		return nil, ierr.NewErrorf("billing entity %s not found", id).
+			WithHintf("Billing entity %s was not found in this environment", id).
+			WithReportableDetails(map[string]any{"billing_entity_id": id}).
+			Mark(ierr.ErrValidation)
+	}
 	if err != nil {
-		if ierr.IsNotFound(err) {
-			return nil, ierr.WithError(err).
-				WithHintf("Billing entity %s was not found in this environment", id).
-				WithReportableDetails(map[string]any{"billing_entity_id": id}).
-				Mark(ierr.ErrValidation)
-		}
 		return nil, err
 	}
 	return entity, nil

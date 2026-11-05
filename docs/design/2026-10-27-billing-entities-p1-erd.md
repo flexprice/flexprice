@@ -116,7 +116,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 | FR-3 | Enabling assigns every existing customer of the environment to its default entity. | UC1 | After `enabled`, no customer of the environment has an empty entity. |
 | FR-4 | Enabling is idempotent. | UC1 | Calling enable during `enabling` or after `enabled` starts no second run and changes no data. |
 | FR-5 | A new environment starts `off`; cloning is rejected when the source or an existing target environment is `enabling` or `enabled`. | UC1 | Create an environment in a tenant with an enabled environment → it is `off` with no entities. Clone from or into an enabling or enabled environment → 400. |
-| FR-6 | Entities can be created, read, listed and edited in an `enabled` environment only. | UC2 | Entity endpoints in an off or enabling environment → 400 `billing_entities_not_enabled`. |
+| FR-6 | Entities can be created, read, listed and edited in an `enabled` environment only. | UC2 | Entity endpoints in an off or enabling environment → 400 "Billing entities are not enabled in this environment". |
 | FR-7 | Every entity has a non-empty invoice prefix that differs from every other entity's current prefix in the environment. | UC2 | Create or edit with another entity's current prefix → 409; with a free prefix → accepted. |
 | FR-8 | Billing entities and external tax engines exclude each other in an environment: enabling is rejected while the environment uses an external tax engine, and turning one on is rejected from `enabling` on. Turning it off is always allowed. | UC1, UC2 | Environment on Stripe Tax → enable → 400; enabled environment → set `tax_config` to an external provider → 400; set it disabled → saved. |
 | FR-9 | Entities cannot be disabled or deleted in this phase. | UC2 | No disable or delete endpoint exists for entities. |
@@ -125,7 +125,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 | FR-12 | Customer create accepts an optional `billing_entity_id`; absent means the default entity. | UC3 | Enabled environment: create with an entity → customer shows it; without → shows the default's ID. |
 | FR-13 | A customer's entity never changes. | UC3 | Update a customer with another `billing_entity_id` → rejected. |
 | FR-14 | A new customer gets its entity's auto-apply tax rates; a customer in an off environment gets the tenant-level rates as today. | UC3 | Create a customer of an entity linked to rate R → customer has R. |
-| FR-15 | `billing_entity_id` in a request body or filter is rejected unless the environment is `enabled`, and must name an entity of the request's environment. | UC3, UC5 | Off or enabling environment → 400 `billing_entities_not_enabled`; other environment's entity → 400. |
+| FR-15 | `billing_entity_id` in a request body or filter is rejected unless the environment is `enabled`, and must name an entity of the request's environment. | UC3, UC5 | Off or enabling environment → 400 "not enabled"; other environment's entity → 400. |
 | FR-16 | An invoice's number comes from the counter of its prefix and period: the customer's entity's prefix, or the environment prefix for a customer without one. | UC4, UC6 | Two entities with prefixes INV and EU finalize in one period → `INV-…` continues the existing series, `EU-…-00001` starts its own; no two invoices share a number. |
 | FR-17 | Finalizing the invoice of a customer with an entity stores a seller snapshot once: entity ID, legal name, seller details. | UC4 | Finalize → snapshot present; retry finalize → snapshot unchanged. |
 | FR-18 | The PDF and hosted invoice page show the snapshot for finalized invoices, the customer's entity for drafts, and the tenant for customers without an entity and for invoices issued before enablement. | UC4 | Edit entity after finalize, force PDF rebuild → old seller shown; invoice issued before enable → tenant shown. |
@@ -299,7 +299,7 @@ Errors: `403` not a super admin; `400` the environment uses an external tax engi
 
 **Status** — `GET /v1/billing-entities/status` → `{"mode": "off" | "enabling" | "enabled"}` for the request's environment
 
-**Entities** — environment-scoped, require `enabled` (else `400 billing_entities_not_enabled`)
+**Entities** — environment-scoped, require `enabled` (else 400 "not enabled")
 
 | Method | Path | Notes |
 |---|---|---|
@@ -346,7 +346,7 @@ and `entity_id` set to the entity.
 
 | Error | Status | When |
 |---|---|---|
-| `billing_entities_not_enabled` | 400 | Entity field, filter or endpoint while off or enabling; the mode is re-read from the database first |
+| Billing entities not enabled | 400 | Entity field, filter or endpoint while off or enabling; the mode is re-read from the database first |
 | Entity not found in this environment | 400 | Body or filter names another environment's entity |
 | Prefix in use | 409 | FR-7 |
 | External tax engine | 400 | Enable with an external engine, or external engine in an enabling or enabled environment (FR-8) |

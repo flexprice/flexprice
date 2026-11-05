@@ -80,9 +80,9 @@ func (s *BillingEntityServiceSuite) TestResolveForCreate() {
 		wantErr   error
 	}{
 		{name: "off_none", mode: types.BillingEntityModeOff, wantID: nil},
-		{name: "off_requested", mode: types.BillingEntityModeOff, requested: lo.ToPtr("be_eu"), wantErr: ierr.ErrBillingEntitiesNotEnabled},
+		{name: "off_requested", mode: types.BillingEntityModeOff, requested: lo.ToPtr("be_eu"), wantErr: billingentity.ErrNotEnabled},
 		{name: "enabling_none", mode: types.BillingEntityModeEnabling, wantID: lo.ToPtr("be_default")},
-		{name: "enabling_requested", mode: types.BillingEntityModeEnabling, requested: lo.ToPtr("be_eu"), wantErr: ierr.ErrBillingEntitiesNotEnabled},
+		{name: "enabling_requested", mode: types.BillingEntityModeEnabling, requested: lo.ToPtr("be_eu"), wantErr: billingentity.ErrNotEnabled},
 		{name: "enabled_none", mode: types.BillingEntityModeEnabled, wantID: lo.ToPtr("be_default")},
 		{name: "enabled_same_env", mode: types.BillingEntityModeEnabled, requested: lo.ToPtr("be_eu"), wantID: lo.ToPtr("be_eu")},
 		{name: "enabled_other_env", mode: types.BillingEntityModeEnabled, requested: lo.ToPtr("be_other"), wantErr: ierr.ErrValidation},

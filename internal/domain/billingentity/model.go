@@ -1,9 +1,14 @@
 package billingentity
 
 import (
+	"errors"
+
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/types"
 )
+
+// ErrNotEnabled marks an entity endpoint, field or filter used in an environment that is not enabled.
+var ErrNotEnabled = errors.New("billing entities not enabled")
 
 // BillingEntity is a legal entity of a tenant that bills customers in one environment.
 type BillingEntity struct {
