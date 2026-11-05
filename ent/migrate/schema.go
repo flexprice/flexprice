@@ -275,10 +275,9 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
-		{Name: "legal_name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "is_default", Type: field.TypeBool, Default: false},
 		{Name: "invoice_number_prefix", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "seller_details", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "billing_details", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// BillingEntitiesTable holds the schema information for the "billing_entities" table.
@@ -298,7 +297,7 @@ var (
 			{
 				Name:    "idx_billing_entity_tenant_env_prefix",
 				Unique:  true,
-				Columns: []*schema.Column{BillingEntitiesColumns[1], BillingEntitiesColumns[7], BillingEntitiesColumns[11]},
+				Columns: []*schema.Column{BillingEntitiesColumns[1], BillingEntitiesColumns[7], BillingEntitiesColumns[10]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((status)::text = 'published'::text)",
 				},
@@ -1668,7 +1667,7 @@ var (
 		{Name: "total", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "custom_currency", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "fx_conversion", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
-		{Name: "seller", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "billing_entity", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "description", Type: field.TypeString, Nullable: true},
 		{Name: "due_date", Type: field.TypeTime, Nullable: true},
 		{Name: "paid_at", Type: field.TypeTime, Nullable: true},

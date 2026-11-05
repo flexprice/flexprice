@@ -170,10 +170,9 @@ func (s *billingEntityService) createDefault(ctx context.Context) (*billingentit
 	entity := &billingentity.BillingEntity{
 		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_ENTITY),
 		Name:                t.Name,
-		LegalName:           t.Name,
 		IsDefault:           true,
 		InvoiceNumberPrefix: invoiceConfig.InvoiceNumberPrefix,
-		SellerDetails:       billingentity.SellerDetailsFromTenant(t.BillingDetails),
+		BillingDetails:      billingentity.BillingDetailsFromTenant(t.BillingDetails),
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
@@ -359,14 +358,11 @@ func (s *billingEntityService) Update(ctx context.Context, id string, req dto.Up
 	if req.Name != nil {
 		builder.WithName(*req.Name)
 	}
-	if req.LegalName != nil {
-		builder.WithLegalName(*req.LegalName)
-	}
 	if req.InvoiceNumberPrefix != nil {
 		builder.WithInvoiceNumberPrefix(*req.InvoiceNumberPrefix)
 	}
-	if req.SellerDetails != nil {
-		builder.WithSellerDetails(*req.SellerDetails)
+	if req.BillingDetails != nil {
+		builder.WithBillingDetails(*req.BillingDetails)
 	}
 	if req.Metadata != nil {
 		builder.WithMetadata(req.Metadata)

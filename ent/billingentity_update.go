@@ -83,20 +83,6 @@ func (_u *BillingEntityUpdate) SetNillableName(v *string) *BillingEntityUpdate {
 	return _u
 }
 
-// SetLegalName sets the "legal_name" field.
-func (_u *BillingEntityUpdate) SetLegalName(v string) *BillingEntityUpdate {
-	_u.mutation.SetLegalName(v)
-	return _u
-}
-
-// SetNillableLegalName sets the "legal_name" field if the given value is not nil.
-func (_u *BillingEntityUpdate) SetNillableLegalName(v *string) *BillingEntityUpdate {
-	if v != nil {
-		_u.SetLegalName(*v)
-	}
-	return _u
-}
-
 // SetInvoiceNumberPrefix sets the "invoice_number_prefix" field.
 func (_u *BillingEntityUpdate) SetInvoiceNumberPrefix(v string) *BillingEntityUpdate {
 	_u.mutation.SetInvoiceNumberPrefix(v)
@@ -111,16 +97,16 @@ func (_u *BillingEntityUpdate) SetNillableInvoiceNumberPrefix(v *string) *Billin
 	return _u
 }
 
-// SetSellerDetails sets the "seller_details" field.
-func (_u *BillingEntityUpdate) SetSellerDetails(v types.SellerDetails) *BillingEntityUpdate {
-	_u.mutation.SetSellerDetails(v)
+// SetBillingDetails sets the "billing_details" field.
+func (_u *BillingEntityUpdate) SetBillingDetails(v types.BillingDetails) *BillingEntityUpdate {
+	_u.mutation.SetBillingDetails(v)
 	return _u
 }
 
-// SetNillableSellerDetails sets the "seller_details" field if the given value is not nil.
-func (_u *BillingEntityUpdate) SetNillableSellerDetails(v *types.SellerDetails) *BillingEntityUpdate {
+// SetNillableBillingDetails sets the "billing_details" field if the given value is not nil.
+func (_u *BillingEntityUpdate) SetNillableBillingDetails(v *types.BillingDetails) *BillingEntityUpdate {
 	if v != nil {
-		_u.SetSellerDetails(*v)
+		_u.SetBillingDetails(*v)
 	}
 	return _u
 }
@@ -185,11 +171,6 @@ func (_u *BillingEntityUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "BillingEntity.name": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.LegalName(); ok {
-		if err := billingentity.LegalNameValidator(v); err != nil {
-			return &ValidationError{Name: "legal_name", err: fmt.Errorf(`ent: validator failed for field "BillingEntity.legal_name": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.InvoiceNumberPrefix(); ok {
 		if err := billingentity.InvoiceNumberPrefixValidator(v); err != nil {
 			return &ValidationError{Name: "invoice_number_prefix", err: fmt.Errorf(`ent: validator failed for field "BillingEntity.invoice_number_prefix": %w`, err)}
@@ -231,14 +212,11 @@ func (_u *BillingEntityUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(billingentity.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.LegalName(); ok {
-		_spec.SetField(billingentity.FieldLegalName, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.InvoiceNumberPrefix(); ok {
 		_spec.SetField(billingentity.FieldInvoiceNumberPrefix, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.SellerDetails(); ok {
-		_spec.SetField(billingentity.FieldSellerDetails, field.TypeJSON, value)
+	if value, ok := _u.mutation.BillingDetails(); ok {
+		_spec.SetField(billingentity.FieldBillingDetails, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(billingentity.FieldMetadata, field.TypeJSON, value)
@@ -320,20 +298,6 @@ func (_u *BillingEntityUpdateOne) SetNillableName(v *string) *BillingEntityUpdat
 	return _u
 }
 
-// SetLegalName sets the "legal_name" field.
-func (_u *BillingEntityUpdateOne) SetLegalName(v string) *BillingEntityUpdateOne {
-	_u.mutation.SetLegalName(v)
-	return _u
-}
-
-// SetNillableLegalName sets the "legal_name" field if the given value is not nil.
-func (_u *BillingEntityUpdateOne) SetNillableLegalName(v *string) *BillingEntityUpdateOne {
-	if v != nil {
-		_u.SetLegalName(*v)
-	}
-	return _u
-}
-
 // SetInvoiceNumberPrefix sets the "invoice_number_prefix" field.
 func (_u *BillingEntityUpdateOne) SetInvoiceNumberPrefix(v string) *BillingEntityUpdateOne {
 	_u.mutation.SetInvoiceNumberPrefix(v)
@@ -348,16 +312,16 @@ func (_u *BillingEntityUpdateOne) SetNillableInvoiceNumberPrefix(v *string) *Bil
 	return _u
 }
 
-// SetSellerDetails sets the "seller_details" field.
-func (_u *BillingEntityUpdateOne) SetSellerDetails(v types.SellerDetails) *BillingEntityUpdateOne {
-	_u.mutation.SetSellerDetails(v)
+// SetBillingDetails sets the "billing_details" field.
+func (_u *BillingEntityUpdateOne) SetBillingDetails(v types.BillingDetails) *BillingEntityUpdateOne {
+	_u.mutation.SetBillingDetails(v)
 	return _u
 }
 
-// SetNillableSellerDetails sets the "seller_details" field if the given value is not nil.
-func (_u *BillingEntityUpdateOne) SetNillableSellerDetails(v *types.SellerDetails) *BillingEntityUpdateOne {
+// SetNillableBillingDetails sets the "billing_details" field if the given value is not nil.
+func (_u *BillingEntityUpdateOne) SetNillableBillingDetails(v *types.BillingDetails) *BillingEntityUpdateOne {
 	if v != nil {
-		_u.SetSellerDetails(*v)
+		_u.SetBillingDetails(*v)
 	}
 	return _u
 }
@@ -435,11 +399,6 @@ func (_u *BillingEntityUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "BillingEntity.name": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.LegalName(); ok {
-		if err := billingentity.LegalNameValidator(v); err != nil {
-			return &ValidationError{Name: "legal_name", err: fmt.Errorf(`ent: validator failed for field "BillingEntity.legal_name": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.InvoiceNumberPrefix(); ok {
 		if err := billingentity.InvoiceNumberPrefixValidator(v); err != nil {
 			return &ValidationError{Name: "invoice_number_prefix", err: fmt.Errorf(`ent: validator failed for field "BillingEntity.invoice_number_prefix": %w`, err)}
@@ -498,14 +457,11 @@ func (_u *BillingEntityUpdateOne) sqlSave(ctx context.Context) (_node *BillingEn
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(billingentity.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.LegalName(); ok {
-		_spec.SetField(billingentity.FieldLegalName, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.InvoiceNumberPrefix(); ok {
 		_spec.SetField(billingentity.FieldInvoiceNumberPrefix, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.SellerDetails(); ok {
-		_spec.SetField(billingentity.FieldSellerDetails, field.TypeJSON, value)
+	if value, ok := _u.mutation.BillingDetails(); ok {
+		_spec.SetField(billingentity.FieldBillingDetails, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(billingentity.FieldMetadata, field.TypeJSON, value)

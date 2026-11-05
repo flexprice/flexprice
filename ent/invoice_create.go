@@ -326,9 +326,9 @@ func (_c *InvoiceCreate) SetFxConversion(v *types.FxConversion) *InvoiceCreate {
 	return _c
 }
 
-// SetSeller sets the "seller" field.
-func (_c *InvoiceCreate) SetSeller(v *types.InvoiceSeller) *InvoiceCreate {
-	_c.mutation.SetSeller(v)
+// SetBillingEntity sets the "billing_entity" field.
+func (_c *InvoiceCreate) SetBillingEntity(v *types.InvoiceBillingEntity) *InvoiceCreate {
+	_c.mutation.SetBillingEntity(v)
 	return _c
 }
 
@@ -996,9 +996,9 @@ func (_c *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 		_spec.SetField(invoice.FieldFxConversion, field.TypeJSON, value)
 		_node.FxConversion = value
 	}
-	if value, ok := _c.mutation.Seller(); ok {
-		_spec.SetField(invoice.FieldSeller, field.TypeJSON, value)
-		_node.Seller = value
+	if value, ok := _c.mutation.BillingEntity(); ok {
+		_spec.SetField(invoice.FieldBillingEntity, field.TypeJSON, value)
+		_node.BillingEntity = value
 	}
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)

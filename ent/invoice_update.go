@@ -320,15 +320,15 @@ func (_u *InvoiceUpdate) ClearFxConversion() *InvoiceUpdate {
 	return _u
 }
 
-// SetSeller sets the "seller" field.
-func (_u *InvoiceUpdate) SetSeller(v *types.InvoiceSeller) *InvoiceUpdate {
-	_u.mutation.SetSeller(v)
+// SetBillingEntity sets the "billing_entity" field.
+func (_u *InvoiceUpdate) SetBillingEntity(v *types.InvoiceBillingEntity) *InvoiceUpdate {
+	_u.mutation.SetBillingEntity(v)
 	return _u
 }
 
-// ClearSeller clears the value of the "seller" field.
-func (_u *InvoiceUpdate) ClearSeller() *InvoiceUpdate {
-	_u.mutation.ClearSeller()
+// ClearBillingEntity clears the value of the "billing_entity" field.
+func (_u *InvoiceUpdate) ClearBillingEntity() *InvoiceUpdate {
+	_u.mutation.ClearBillingEntity()
 	return _u
 }
 
@@ -944,11 +944,11 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.FxConversionCleared() {
 		_spec.ClearField(invoice.FieldFxConversion, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.Seller(); ok {
-		_spec.SetField(invoice.FieldSeller, field.TypeJSON, value)
+	if value, ok := _u.mutation.BillingEntity(); ok {
+		_spec.SetField(invoice.FieldBillingEntity, field.TypeJSON, value)
 	}
-	if _u.mutation.SellerCleared() {
-		_spec.ClearField(invoice.FieldSeller, field.TypeJSON)
+	if _u.mutation.BillingEntityCleared() {
+		_spec.ClearField(invoice.FieldBillingEntity, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)
@@ -1471,15 +1471,15 @@ func (_u *InvoiceUpdateOne) ClearFxConversion() *InvoiceUpdateOne {
 	return _u
 }
 
-// SetSeller sets the "seller" field.
-func (_u *InvoiceUpdateOne) SetSeller(v *types.InvoiceSeller) *InvoiceUpdateOne {
-	_u.mutation.SetSeller(v)
+// SetBillingEntity sets the "billing_entity" field.
+func (_u *InvoiceUpdateOne) SetBillingEntity(v *types.InvoiceBillingEntity) *InvoiceUpdateOne {
+	_u.mutation.SetBillingEntity(v)
 	return _u
 }
 
-// ClearSeller clears the value of the "seller" field.
-func (_u *InvoiceUpdateOne) ClearSeller() *InvoiceUpdateOne {
-	_u.mutation.ClearSeller()
+// ClearBillingEntity clears the value of the "billing_entity" field.
+func (_u *InvoiceUpdateOne) ClearBillingEntity() *InvoiceUpdateOne {
+	_u.mutation.ClearBillingEntity()
 	return _u
 }
 
@@ -2125,11 +2125,11 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	if _u.mutation.FxConversionCleared() {
 		_spec.ClearField(invoice.FieldFxConversion, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.Seller(); ok {
-		_spec.SetField(invoice.FieldSeller, field.TypeJSON, value)
+	if value, ok := _u.mutation.BillingEntity(); ok {
+		_spec.SetField(invoice.FieldBillingEntity, field.TypeJSON, value)
 	}
-	if _u.mutation.SellerCleared() {
-		_spec.ClearField(invoice.FieldSeller, field.TypeJSON)
+	if _u.mutation.BillingEntityCleared() {
+		_spec.ClearField(invoice.FieldBillingEntity, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)

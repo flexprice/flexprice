@@ -30,14 +30,12 @@ const (
 	FieldEnvironmentID = "environment_id"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
-	// FieldLegalName holds the string denoting the legal_name field in the database.
-	FieldLegalName = "legal_name"
 	// FieldIsDefault holds the string denoting the is_default field in the database.
 	FieldIsDefault = "is_default"
 	// FieldInvoiceNumberPrefix holds the string denoting the invoice_number_prefix field in the database.
 	FieldInvoiceNumberPrefix = "invoice_number_prefix"
-	// FieldSellerDetails holds the string denoting the seller_details field in the database.
-	FieldSellerDetails = "seller_details"
+	// FieldBillingDetails holds the string denoting the billing_details field in the database.
+	FieldBillingDetails = "billing_details"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// Table holds the table name of the billingentity in the database.
@@ -55,10 +53,9 @@ var Columns = []string{
 	FieldUpdatedBy,
 	FieldEnvironmentID,
 	FieldName,
-	FieldLegalName,
 	FieldIsDefault,
 	FieldInvoiceNumberPrefix,
-	FieldSellerDetails,
+	FieldBillingDetails,
 	FieldMetadata,
 }
 
@@ -87,14 +84,12 @@ var (
 	DefaultEnvironmentID string
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
-	// LegalNameValidator is a validator for the "legal_name" field. It is called by the builders before save.
-	LegalNameValidator func(string) error
 	// DefaultIsDefault holds the default value on creation for the "is_default" field.
 	DefaultIsDefault bool
 	// InvoiceNumberPrefixValidator is a validator for the "invoice_number_prefix" field. It is called by the builders before save.
 	InvoiceNumberPrefixValidator func(string) error
-	// DefaultSellerDetails holds the default value on creation for the "seller_details" field.
-	DefaultSellerDetails types.SellerDetails
+	// DefaultBillingDetails holds the default value on creation for the "billing_details" field.
+	DefaultBillingDetails types.BillingDetails
 )
 
 // OrderOption defines the ordering options for the BillingEntity queries.
@@ -143,11 +138,6 @@ func ByEnvironmentID(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
-}
-
-// ByLegalName orders the results by the legal_name field.
-func ByLegalName(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldLegalName, opts...).ToFunc()
 }
 
 // ByIsDefault orders the results by the is_default field.

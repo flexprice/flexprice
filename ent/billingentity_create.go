@@ -117,12 +117,6 @@ func (_c *BillingEntityCreate) SetName(v string) *BillingEntityCreate {
 	return _c
 }
 
-// SetLegalName sets the "legal_name" field.
-func (_c *BillingEntityCreate) SetLegalName(v string) *BillingEntityCreate {
-	_c.mutation.SetLegalName(v)
-	return _c
-}
-
 // SetIsDefault sets the "is_default" field.
 func (_c *BillingEntityCreate) SetIsDefault(v bool) *BillingEntityCreate {
 	_c.mutation.SetIsDefault(v)
@@ -143,16 +137,16 @@ func (_c *BillingEntityCreate) SetInvoiceNumberPrefix(v string) *BillingEntityCr
 	return _c
 }
 
-// SetSellerDetails sets the "seller_details" field.
-func (_c *BillingEntityCreate) SetSellerDetails(v types.SellerDetails) *BillingEntityCreate {
-	_c.mutation.SetSellerDetails(v)
+// SetBillingDetails sets the "billing_details" field.
+func (_c *BillingEntityCreate) SetBillingDetails(v types.BillingDetails) *BillingEntityCreate {
+	_c.mutation.SetBillingDetails(v)
 	return _c
 }
 
-// SetNillableSellerDetails sets the "seller_details" field if the given value is not nil.
-func (_c *BillingEntityCreate) SetNillableSellerDetails(v *types.SellerDetails) *BillingEntityCreate {
+// SetNillableBillingDetails sets the "billing_details" field if the given value is not nil.
+func (_c *BillingEntityCreate) SetNillableBillingDetails(v *types.BillingDetails) *BillingEntityCreate {
 	if v != nil {
-		_c.SetSellerDetails(*v)
+		_c.SetBillingDetails(*v)
 	}
 	return _c
 }
@@ -224,9 +218,9 @@ func (_c *BillingEntityCreate) defaults() {
 		v := billingentity.DefaultIsDefault
 		_c.mutation.SetIsDefault(v)
 	}
-	if _, ok := _c.mutation.SellerDetails(); !ok {
-		v := billingentity.DefaultSellerDetails
-		_c.mutation.SetSellerDetails(v)
+	if _, ok := _c.mutation.BillingDetails(); !ok {
+		v := billingentity.DefaultBillingDetails
+		_c.mutation.SetBillingDetails(v)
 	}
 }
 
@@ -257,14 +251,6 @@ func (_c *BillingEntityCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "BillingEntity.name": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.LegalName(); !ok {
-		return &ValidationError{Name: "legal_name", err: errors.New(`ent: missing required field "BillingEntity.legal_name"`)}
-	}
-	if v, ok := _c.mutation.LegalName(); ok {
-		if err := billingentity.LegalNameValidator(v); err != nil {
-			return &ValidationError{Name: "legal_name", err: fmt.Errorf(`ent: validator failed for field "BillingEntity.legal_name": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.IsDefault(); !ok {
 		return &ValidationError{Name: "is_default", err: errors.New(`ent: missing required field "BillingEntity.is_default"`)}
 	}
@@ -276,8 +262,8 @@ func (_c *BillingEntityCreate) check() error {
 			return &ValidationError{Name: "invoice_number_prefix", err: fmt.Errorf(`ent: validator failed for field "BillingEntity.invoice_number_prefix": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.SellerDetails(); !ok {
-		return &ValidationError{Name: "seller_details", err: errors.New(`ent: missing required field "BillingEntity.seller_details"`)}
+	if _, ok := _c.mutation.BillingDetails(); !ok {
+		return &ValidationError{Name: "billing_details", err: errors.New(`ent: missing required field "BillingEntity.billing_details"`)}
 	}
 	return nil
 }
@@ -346,10 +332,6 @@ func (_c *BillingEntityCreate) createSpec() (*BillingEntity, *sqlgraph.CreateSpe
 		_spec.SetField(billingentity.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := _c.mutation.LegalName(); ok {
-		_spec.SetField(billingentity.FieldLegalName, field.TypeString, value)
-		_node.LegalName = value
-	}
 	if value, ok := _c.mutation.IsDefault(); ok {
 		_spec.SetField(billingentity.FieldIsDefault, field.TypeBool, value)
 		_node.IsDefault = value
@@ -358,9 +340,9 @@ func (_c *BillingEntityCreate) createSpec() (*BillingEntity, *sqlgraph.CreateSpe
 		_spec.SetField(billingentity.FieldInvoiceNumberPrefix, field.TypeString, value)
 		_node.InvoiceNumberPrefix = value
 	}
-	if value, ok := _c.mutation.SellerDetails(); ok {
-		_spec.SetField(billingentity.FieldSellerDetails, field.TypeJSON, value)
-		_node.SellerDetails = value
+	if value, ok := _c.mutation.BillingDetails(); ok {
+		_spec.SetField(billingentity.FieldBillingDetails, field.TypeJSON, value)
+		_node.BillingDetails = value
 	}
 	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(billingentity.FieldMetadata, field.TypeJSON, value)

@@ -11,8 +11,8 @@ import (
 	"github.com/samber/lo"
 )
 
-// invoiceBillingEntity is the effective billing entity of the invoice's customer, or nil.
-func (s *invoiceService) invoiceBillingEntity(ctx context.Context, inv *invoice.Invoice) (*billingentity.BillingEntity, error) {
+// customerBillingEntity is the effective billing entity of the invoice's customer, or nil.
+func (s *invoiceService) customerBillingEntity(ctx context.Context, inv *invoice.Invoice) (*billingentity.BillingEntity, error) {
 	cust, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
 	if err != nil {
 		return nil, err
@@ -20,18 +20,18 @@ func (s *invoiceService) invoiceBillingEntity(ctx context.Context, inv *invoice.
 	return NewBillingEntityService(s.ServiceParams).EffectiveEntity(ctx, cust)
 }
 
-func (s *invoiceService) GetInvoiceSeller(ctx context.Context, inv *invoice.Invoice) (*types.InvoiceSeller, error) {
-	if inv.Seller != nil {
-		return inv.Seller, nil
+func (s *invoiceService) GetInvoiceBillingEntity(ctx context.Context, inv *invoice.Invoice) (*types.InvoiceBillingEntity, error) {
+	if inv.BillingEntity != nil {
+		return inv.BillingEntity, nil
 	}
 	if inv.InvoiceStatus != types.InvoiceStatusDraft {
 		return nil, nil
 	}
-	entity, err := s.invoiceBillingEntity(ctx, inv)
+	entity, err := s.customerBillingEntity(ctx, inv)
 	if err != nil {
 		return nil, err
 	}
-	return entity.AsInvoiceSeller(), nil
+	return entity.AsInvoiceBillingEntity(), nil
 }
 
 // fillBillingEntityIDs sets each invoice's billing entity from its customer, with one lookup.
@@ -52,7 +52,7 @@ func (s *invoiceService) fillBillingEntityIDs(ctx context.Context, items ...*dto
 
 // numberPrefixFor is the customer's entity prefix, or the environment prefix for a customer without one.
 func (s *invoiceService) numberPrefixFor(ctx context.Context, inv *invoice.Invoice, cfg *types.InvoiceConfig) (string, error) {
-	entity, err := s.invoiceBillingEntity(ctx, inv)
+	entity, err := s.customerBillingEntity(ctx, inv)
 	if err != nil {
 		return "", err
 	}
@@ -62,26 +62,26 @@ func (s *invoiceService) numberPrefixFor(ctx context.Context, inv *invoice.Invoi
 	return entity.InvoiceNumberPrefix, nil
 }
 
-// freezeSeller sets the customer's entity as the invoice's seller once; later calls keep the first one.
-func (s *invoiceService) freezeSeller(ctx context.Context, inv *invoice.Invoice) error {
-	if inv.Seller != nil {
+// freezeBillingEntity sets the customer's entity as the invoice's billing entity once; later calls keep the first one.
+func (s *invoiceService) freezeBillingEntity(ctx context.Context, inv *invoice.Invoice) error {
+	if inv.BillingEntity != nil {
 		return nil
 	}
-	entity, err := s.invoiceBillingEntity(ctx, inv)
+	entity, err := s.customerBillingEntity(ctx, inv)
 	if err != nil {
 		return err
 	}
-	inv.Seller = entity.AsInvoiceSeller()
+	inv.BillingEntity = entity.AsInvoiceBillingEntity()
 	return nil
 }
 
-// sellerAsTenant presents an entity seller in the tenant shape the biller block and hosted page render.
-func sellerAsTenant(t *tenant.Tenant, seller *types.InvoiceSeller) *tenant.Tenant {
+// billingEntityAsTenant presents a billing entity in the tenant shape the biller block and hosted page render.
+func billingEntityAsTenant(t *tenant.Tenant, billingEntity *types.InvoiceBillingEntity) *tenant.Tenant {
 	biller := &tenant.Tenant{}
 	if t != nil {
 		*biller = *t
 	}
-	biller.Name = seller.LegalName
-	biller.BillingDetails = billingentity.TenantBillingDetailsFromSeller(seller.SellerDetails)
+	biller.Name = billingEntity.Name
+	biller.BillingDetails = billingentity.ToTenantBillingDetails(billingEntity.BillingDetails)
 	return biller
 }

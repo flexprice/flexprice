@@ -1458,6 +1458,8 @@ definitions:
     type: object
   BillingEntityResponse:
     properties:
+      billing_details:
+        $ref: '#/definitions/types.BillingDetails'
       created_at:
         type: string
       created_by:
@@ -1470,16 +1472,12 @@ definitions:
         type: string
       is_default:
         type: boolean
-      legal_name:
-        type: string
       metadata:
         additionalProperties:
           type: string
         type: object
       name:
         type: string
-      seller_details:
-        $ref: '#/definitions/types.SellerDetails'
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
@@ -2600,12 +2598,11 @@ definitions:
     type: object
   CreateBillingEntityRequest:
     properties:
+      billing_details:
+        $ref: '#/definitions/types.BillingDetails'
       invoice_number_prefix:
         maxLength: 20
         minLength: 1
-        type: string
-      legal_name:
-        maxLength: 255
         type: string
       metadata:
         additionalProperties:
@@ -2614,11 +2611,8 @@ definitions:
       name:
         maxLength: 255
         type: string
-      seller_details:
-        $ref: '#/definitions/types.SellerDetails'
     required:
     - invoice_number_prefix
-    - legal_name
     - name
     type: object
   CreateBulkEntitlementRequest:
@@ -6122,6 +6116,11 @@ definitions:
         description: amount_remaining is the outstanding amount still owed on this
           invoice (calculated as amount_due minus amount_paid)
         type: string
+      billing_entity:
+        allOf:
+        - $ref: '#/definitions/types.InvoiceBillingEntity'
+        description: BillingEntity is the billing entity frozen at finalization; nil
+          for customers without an entity.
       billing_entity_id:
         description: billing_entity_id is the billing entity of the record's customer;
           null when the environment has no billing entities
@@ -6272,11 +6271,6 @@ definitions:
           refunded_amount is the total sum of credit notes of type "refund".
           These are actual refunds issued to the customer.
         type: string
-      seller:
-        allOf:
-        - $ref: '#/definitions/types.InvoiceSeller'
-        description: Seller is the billing entity seller frozen at finalization; nil
-          for customers without an entity.
       source_type:
         $ref: '#/definitions/types.InvoiceSourceType'
       status:
@@ -10121,12 +10115,10 @@ definitions:
     type: object
   UpdateBillingEntityRequest:
     properties:
+      billing_details:
+        $ref: '#/definitions/types.BillingDetails'
       invoice_number_prefix:
         maxLength: 20
-        minLength: 1
-        type: string
-      legal_name:
-        maxLength: 255
         minLength: 1
         type: string
       metadata:
@@ -10137,8 +10129,6 @@ definitions:
         maxLength: 255
         minLength: 1
         type: string
-      seller_details:
-        $ref: '#/definitions/types.SellerDetails'
     type: object
   UpdateCommitmentRequest:
     properties:
@@ -16168,6 +16158,32 @@ definitions:
     - AmortizationDaily
     - AmortizationPeriodEven
     - AmortizationPeriodEvenProrated
+  types.BillingAddress:
+    properties:
+      address_city:
+        type: string
+      address_country:
+        type: string
+      address_line1:
+        type: string
+      address_line2:
+        type: string
+      address_postal_code:
+        type: string
+      address_state:
+        type: string
+    type: object
+  types.BillingDetails:
+    properties:
+      address:
+        $ref: '#/definitions/types.BillingAddress'
+      email:
+        type: string
+      help_email:
+        type: string
+      phone:
+        type: string
+    type: object
   types.BillingEntityMode:
     enum:
     - "off"
@@ -16333,14 +16349,14 @@ definitions:
     - InstalmentStatusScheduled
     - InstalmentStatusInvoiced
     - InstalmentStatusCancelled
-  types.InvoiceSeller:
+  types.InvoiceBillingEntity:
     properties:
+      billing_details:
+        $ref: '#/definitions/types.BillingDetails'
       billing_entity_id:
         type: string
-      legal_name:
+      name:
         type: string
-      seller_details:
-        $ref: '#/definitions/types.SellerDetails'
     type: object
   types.JournalDirection:
     enum:
@@ -16489,32 +16505,6 @@ definitions:
     - RevenueReportGroupByCustomer
     - RevenueReportGroupByContract
     - RevenueReportGroupByPOB
-  types.SellerAddress:
-    properties:
-      address_city:
-        type: string
-      address_country:
-        type: string
-      address_line1:
-        type: string
-      address_line2:
-        type: string
-      address_postal_code:
-        type: string
-      address_state:
-        type: string
-    type: object
-  types.SellerDetails:
-    properties:
-      address:
-        $ref: '#/definitions/types.SellerAddress'
-      email:
-        type: string
-      help_email:
-        type: string
-      phone:
-        type: string
-    type: object
   types.TenantInternalStatus:
     enum:
     - trialing

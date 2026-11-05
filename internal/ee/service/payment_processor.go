@@ -941,9 +941,9 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 					"error", err,
 					"invoice_id", invoice.ID)
 			}
-			// Best effort like the dates: a paid invoice must still finalize; it then renders the entity's current seller.
-			if err := NewInvoiceService(p.ServiceParams).(*invoiceService).freezeSeller(ctx, invoice); err != nil {
-				p.Logger.Error(ctx, "failed to snapshot invoice seller at finalization",
+			// Best effort like the dates: a paid invoice must still finalize; it then renders the entity's current details.
+			if err := NewInvoiceService(p.ServiceParams).(*invoiceService).freezeBillingEntity(ctx, invoice); err != nil {
+				p.Logger.Error(ctx, "failed to freeze invoice billing entity at finalization",
 					"error", err,
 					"invoice_id", invoice.ID)
 			}

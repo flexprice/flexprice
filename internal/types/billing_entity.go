@@ -25,8 +25,8 @@ func (m BillingEntityMode) Validate() error {
 	})
 }
 
-// SellerAddress is a billing entity's postal address, in the tenant billing details shape.
-type SellerAddress struct {
+// BillingAddress is a billing entity's postal address, in the tenant billing details shape.
+type BillingAddress struct {
 	Line1      string `json:"address_line1,omitempty"`
 	Line2      string `json:"address_line2,omitempty"`
 	City       string `json:"address_city,omitempty"`
@@ -35,19 +35,19 @@ type SellerAddress struct {
 	Country    string `json:"address_country,omitempty"`
 }
 
-// SellerDetails are the contact details a billing entity prints as seller.
-type SellerDetails struct {
-	Email     string        `json:"email,omitempty"`
-	HelpEmail string        `json:"help_email,omitempty"`
-	Phone     string        `json:"phone,omitempty"`
-	Address   SellerAddress `json:"address,omitempty"`
+// BillingDetails are the contact details a billing entity prints as biller.
+type BillingDetails struct {
+	Email     string         `json:"email,omitempty"`
+	HelpEmail string         `json:"help_email,omitempty"`
+	Phone     string         `json:"phone,omitempty"`
+	Address   BillingAddress `json:"address,omitempty"`
 }
 
-// InvoiceSeller freezes the seller of a finalized invoice.
-type InvoiceSeller struct {
-	BillingEntityID string        `json:"billing_entity_id"`
-	LegalName       string        `json:"legal_name"`
-	SellerDetails   SellerDetails `json:"seller_details"`
+// InvoiceBillingEntity is the billing entity frozen on a finalized invoice.
+type InvoiceBillingEntity struct {
+	BillingEntityID string         `json:"billing_entity_id"`
+	Name            string         `json:"name"`
+	BillingDetails  BillingDetails `json:"billing_details"`
 }
 
 // BillingEntityFilter represents the filter options for billing entities

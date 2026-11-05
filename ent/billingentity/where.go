@@ -104,11 +104,6 @@ func Name(v string) predicate.BillingEntity {
 	return predicate.BillingEntity(sql.FieldEQ(FieldName, v))
 }
 
-// LegalName applies equality check predicate on the "legal_name" field. It's identical to LegalNameEQ.
-func LegalName(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldEQ(FieldLegalName, v))
-}
-
 // IsDefault applies equality check predicate on the "is_default" field. It's identical to IsDefaultEQ.
 func IsDefault(v bool) predicate.BillingEntity {
 	return predicate.BillingEntity(sql.FieldEQ(FieldIsDefault, v))
@@ -617,71 +612,6 @@ func NameEqualFold(v string) predicate.BillingEntity {
 // NameContainsFold applies the ContainsFold predicate on the "name" field.
 func NameContainsFold(v string) predicate.BillingEntity {
 	return predicate.BillingEntity(sql.FieldContainsFold(FieldName, v))
-}
-
-// LegalNameEQ applies the EQ predicate on the "legal_name" field.
-func LegalNameEQ(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldEQ(FieldLegalName, v))
-}
-
-// LegalNameNEQ applies the NEQ predicate on the "legal_name" field.
-func LegalNameNEQ(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldNEQ(FieldLegalName, v))
-}
-
-// LegalNameIn applies the In predicate on the "legal_name" field.
-func LegalNameIn(vs ...string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldIn(FieldLegalName, vs...))
-}
-
-// LegalNameNotIn applies the NotIn predicate on the "legal_name" field.
-func LegalNameNotIn(vs ...string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldNotIn(FieldLegalName, vs...))
-}
-
-// LegalNameGT applies the GT predicate on the "legal_name" field.
-func LegalNameGT(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldGT(FieldLegalName, v))
-}
-
-// LegalNameGTE applies the GTE predicate on the "legal_name" field.
-func LegalNameGTE(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldGTE(FieldLegalName, v))
-}
-
-// LegalNameLT applies the LT predicate on the "legal_name" field.
-func LegalNameLT(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldLT(FieldLegalName, v))
-}
-
-// LegalNameLTE applies the LTE predicate on the "legal_name" field.
-func LegalNameLTE(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldLTE(FieldLegalName, v))
-}
-
-// LegalNameContains applies the Contains predicate on the "legal_name" field.
-func LegalNameContains(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldContains(FieldLegalName, v))
-}
-
-// LegalNameHasPrefix applies the HasPrefix predicate on the "legal_name" field.
-func LegalNameHasPrefix(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldHasPrefix(FieldLegalName, v))
-}
-
-// LegalNameHasSuffix applies the HasSuffix predicate on the "legal_name" field.
-func LegalNameHasSuffix(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldHasSuffix(FieldLegalName, v))
-}
-
-// LegalNameEqualFold applies the EqualFold predicate on the "legal_name" field.
-func LegalNameEqualFold(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldEqualFold(FieldLegalName, v))
-}
-
-// LegalNameContainsFold applies the ContainsFold predicate on the "legal_name" field.
-func LegalNameContainsFold(v string) predicate.BillingEntity {
-	return predicate.BillingEntity(sql.FieldContainsFold(FieldLegalName, v))
 }
 
 // IsDefaultEQ applies the EQ predicate on the "is_default" field.

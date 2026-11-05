@@ -19,7 +19,7 @@ type BillingEntityEnabler interface {
 	// PrepareEnable creates the environment's default entity and moves the environment to enabling.
 	PrepareEnable(ctx context.Context) error
 	AssignCustomerBatch(ctx context.Context, limit int) (int, error)
-	// CompleteEnable copies seller details, assigns any remaining customer and moves the environment to enabled.
+	// CompleteEnable copies billing details, assigns any remaining customer and moves the environment to enabled.
 	CompleteEnable(ctx context.Context) error
 }
 
@@ -116,13 +116,13 @@ func (s *billingEntityService) CompleteEnable(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		sellerDetails := billingentity.SellerDetailsFromTenant(t.BillingDetails)
+		billingDetails := billingentity.BillingDetailsFromTenant(t.BillingDetails)
 
 		def, err := s.getOrCreateDefault(txCtx)
 		if err != nil {
 			return err
 		}
-		updated := billingentity.NewBillingEntityBuilder(def).WithSellerDetails(sellerDetails).Build()
+		updated := billingentity.NewBillingEntityBuilder(def).WithBillingDetails(billingDetails).Build()
 		if err := s.BillingEntityRepo.Update(txCtx, updated); err != nil {
 			return err
 		}

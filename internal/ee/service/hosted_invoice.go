@@ -96,12 +96,12 @@ func (s *hostedInvoiceService) GetInvoice(ctx context.Context) (*dto.HostedInvoi
 	if err != nil {
 		return nil, err
 	}
-	seller, err := NewInvoiceService(s.ServiceParams).GetInvoiceSeller(ctx, &inv.Invoice)
+	billingEntity, err := NewInvoiceService(s.ServiceParams).GetInvoiceBillingEntity(ctx, &inv.Invoice)
 	if err != nil {
 		return nil, err
 	}
-	if seller != nil {
-		t = sellerAsTenant(t, seller)
+	if billingEntity != nil {
+		t = billingEntityAsTenant(t, billingEntity)
 	}
 
 	filter := types.NewNoLimitPaymentFilter()

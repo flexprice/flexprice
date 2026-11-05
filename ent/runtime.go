@@ -385,22 +385,18 @@ func init() {
 	billingentityDescName := billingentityFields[1].Descriptor()
 	// billingentity.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	billingentity.NameValidator = billingentityDescName.Validators[0].(func(string) error)
-	// billingentityDescLegalName is the schema descriptor for legal_name field.
-	billingentityDescLegalName := billingentityFields[2].Descriptor()
-	// billingentity.LegalNameValidator is a validator for the "legal_name" field. It is called by the builders before save.
-	billingentity.LegalNameValidator = billingentityDescLegalName.Validators[0].(func(string) error)
 	// billingentityDescIsDefault is the schema descriptor for is_default field.
-	billingentityDescIsDefault := billingentityFields[3].Descriptor()
+	billingentityDescIsDefault := billingentityFields[2].Descriptor()
 	// billingentity.DefaultIsDefault holds the default value on creation for the is_default field.
 	billingentity.DefaultIsDefault = billingentityDescIsDefault.Default.(bool)
 	// billingentityDescInvoiceNumberPrefix is the schema descriptor for invoice_number_prefix field.
-	billingentityDescInvoiceNumberPrefix := billingentityFields[4].Descriptor()
+	billingentityDescInvoiceNumberPrefix := billingentityFields[3].Descriptor()
 	// billingentity.InvoiceNumberPrefixValidator is a validator for the "invoice_number_prefix" field. It is called by the builders before save.
 	billingentity.InvoiceNumberPrefixValidator = billingentityDescInvoiceNumberPrefix.Validators[0].(func(string) error)
-	// billingentityDescSellerDetails is the schema descriptor for seller_details field.
-	billingentityDescSellerDetails := billingentityFields[5].Descriptor()
-	// billingentity.DefaultSellerDetails holds the default value on creation for the seller_details field.
-	billingentity.DefaultSellerDetails = billingentityDescSellerDetails.Default.(types.SellerDetails)
+	// billingentityDescBillingDetails is the schema descriptor for billing_details field.
+	billingentityDescBillingDetails := billingentityFields[4].Descriptor()
+	// billingentity.DefaultBillingDetails holds the default value on creation for the billing_details field.
+	billingentity.DefaultBillingDetails = billingentityDescBillingDetails.Default.(types.BillingDetails)
 	billinginstalmentMixin := schema.BillingInstalment{}.Mixin()
 	billinginstalmentMixinFields0 := billinginstalmentMixin[0].Fields()
 	_ = billinginstalmentMixinFields0

@@ -66,8 +66,8 @@ const (
 	FieldCustomCurrency = "custom_currency"
 	// FieldFxConversion holds the string denoting the fx_conversion field in the database.
 	FieldFxConversion = "fx_conversion"
-	// FieldSeller holds the string denoting the seller field in the database.
-	FieldSeller = "seller"
+	// FieldBillingEntity holds the string denoting the billing_entity field in the database.
+	FieldBillingEntity = "billing_entity"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
 	// FieldDueDate holds the string denoting the due_date field in the database.
@@ -162,7 +162,7 @@ var Columns = []string{
 	FieldTotal,
 	FieldCustomCurrency,
 	FieldFxConversion,
-	FieldSeller,
+	FieldBillingEntity,
 	FieldDescription,
 	FieldDueDate,
 	FieldPaidAt,

@@ -19442,6 +19442,9 @@ const docTemplate = `{
         "BillingEntityResponse": {
             "type": "object",
             "properties": {
+                "billing_details": {
+                    "$ref": "#/definitions/types.BillingDetails"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -19460,9 +19463,6 @@ const docTemplate = `{
                 "is_default": {
                     "type": "boolean"
                 },
-                "legal_name": {
-                    "type": "string"
-                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": {
@@ -19471,9 +19471,6 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
-                },
-                "seller_details": {
-                    "$ref": "#/definitions/types.SellerDetails"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -21101,18 +21098,16 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "invoice_number_prefix",
-                "legal_name",
                 "name"
             ],
             "properties": {
+                "billing_details": {
+                    "$ref": "#/definitions/types.BillingDetails"
+                },
                 "invoice_number_prefix": {
                     "type": "string",
                     "maxLength": 20,
                     "minLength": 1
-                },
-                "legal_name": {
-                    "type": "string",
-                    "maxLength": 255
                 },
                 "metadata": {
                     "type": "object",
@@ -21123,9 +21118,6 @@ const docTemplate = `{
                 "name": {
                     "type": "string",
                     "maxLength": 255
-                },
-                "seller_details": {
-                    "$ref": "#/definitions/types.SellerDetails"
                 }
             }
         },
@@ -25806,6 +25798,14 @@ const docTemplate = `{
                     "description": "amount_remaining is the outstanding amount still owed on this invoice (calculated as amount_due minus amount_paid)",
                     "type": "string"
                 },
+                "billing_entity": {
+                    "description": "BillingEntity is the billing entity frozen at finalization; nil for customers without an entity.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InvoiceBillingEntity"
+                        }
+                    ]
+                },
                 "billing_entity_id": {
                     "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
@@ -25985,14 +25985,6 @@ const docTemplate = `{
                 "refunded_amount": {
                     "description": "refunded_amount is the total sum of credit notes of type \"refund\".\nThese are actual refunds issued to the customer.",
                     "type": "string"
-                },
-                "seller": {
-                    "description": "Seller is the billing entity seller frozen at finalization; nil for customers without an entity.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.InvoiceSeller"
-                        }
-                    ]
                 },
                 "source_type": {
                     "$ref": "#/definitions/types.InvoiceSourceType"
@@ -31389,14 +31381,12 @@ const docTemplate = `{
         "UpdateBillingEntityRequest": {
             "type": "object",
             "properties": {
+                "billing_details": {
+                    "$ref": "#/definitions/types.BillingDetails"
+                },
                 "invoice_number_prefix": {
                     "type": "string",
                     "maxLength": 20,
-                    "minLength": 1
-                },
-                "legal_name": {
-                    "type": "string",
-                    "maxLength": 255,
                     "minLength": 1
                 },
                 "metadata": {
@@ -31409,9 +31399,6 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 255,
                     "minLength": 1
-                },
-                "seller_details": {
-                    "$ref": "#/definitions/types.SellerDetails"
                 }
             }
         },
@@ -39526,6 +39513,46 @@ const docTemplate = `{
                 "AmortizationPeriodEvenProrated"
             ]
         },
+        "types.BillingAddress": {
+            "type": "object",
+            "properties": {
+                "address_city": {
+                    "type": "string"
+                },
+                "address_country": {
+                    "type": "string"
+                },
+                "address_line1": {
+                    "type": "string"
+                },
+                "address_line2": {
+                    "type": "string"
+                },
+                "address_postal_code": {
+                    "type": "string"
+                },
+                "address_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.BillingDetails": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/types.BillingAddress"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "help_email": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
         "types.BillingEntityMode": {
             "type": "string",
             "enum": [
@@ -39744,17 +39771,17 @@ const docTemplate = `{
                 "InstalmentStatusCancelled"
             ]
         },
-        "types.InvoiceSeller": {
+        "types.InvoiceBillingEntity": {
             "type": "object",
             "properties": {
+                "billing_details": {
+                    "$ref": "#/definitions/types.BillingDetails"
+                },
                 "billing_entity_id": {
                     "type": "string"
                 },
-                "legal_name": {
+                "name": {
                     "type": "string"
-                },
-                "seller_details": {
-                    "$ref": "#/definitions/types.SellerDetails"
                 }
             }
         },
@@ -39941,46 +39968,6 @@ const docTemplate = `{
                 "RevenueReportGroupByContract",
                 "RevenueReportGroupByPOB"
             ]
-        },
-        "types.SellerAddress": {
-            "type": "object",
-            "properties": {
-                "address_city": {
-                    "type": "string"
-                },
-                "address_country": {
-                    "type": "string"
-                },
-                "address_line1": {
-                    "type": "string"
-                },
-                "address_line2": {
-                    "type": "string"
-                },
-                "address_postal_code": {
-                    "type": "string"
-                },
-                "address_state": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.SellerDetails": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "$ref": "#/definitions/types.SellerAddress"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "help_email": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                }
-            }
         },
         "types.TenantInternalStatus": {
             "type": "string",

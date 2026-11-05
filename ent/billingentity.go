@@ -35,14 +35,12 @@ type BillingEntity struct {
 	EnvironmentID string `json:"environment_id,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
-	// LegalName holds the value of the "legal_name" field.
-	LegalName string `json:"legal_name,omitempty"`
 	// IsDefault holds the value of the "is_default" field.
 	IsDefault bool `json:"is_default,omitempty"`
 	// InvoiceNumberPrefix holds the value of the "invoice_number_prefix" field.
 	InvoiceNumberPrefix string `json:"invoice_number_prefix,omitempty"`
-	// SellerDetails holds the value of the "seller_details" field.
-	SellerDetails types.SellerDetails `json:"seller_details,omitempty"`
+	// BillingDetails holds the value of the "billing_details" field.
+	BillingDetails types.BillingDetails `json:"billing_details,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata     map[string]string `json:"metadata,omitempty"`
 	selectValues sql.SelectValues
@@ -53,11 +51,11 @@ func (*BillingEntity) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case billingentity.FieldSellerDetails, billingentity.FieldMetadata:
+		case billingentity.FieldBillingDetails, billingentity.FieldMetadata:
 			values[i] = new([]byte)
 		case billingentity.FieldIsDefault:
 			values[i] = new(sql.NullBool)
-		case billingentity.FieldID, billingentity.FieldTenantID, billingentity.FieldStatus, billingentity.FieldCreatedBy, billingentity.FieldUpdatedBy, billingentity.FieldEnvironmentID, billingentity.FieldName, billingentity.FieldLegalName, billingentity.FieldInvoiceNumberPrefix:
+		case billingentity.FieldID, billingentity.FieldTenantID, billingentity.FieldStatus, billingentity.FieldCreatedBy, billingentity.FieldUpdatedBy, billingentity.FieldEnvironmentID, billingentity.FieldName, billingentity.FieldInvoiceNumberPrefix:
 			values[i] = new(sql.NullString)
 		case billingentity.FieldCreatedAt, billingentity.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -130,12 +128,6 @@ func (_m *BillingEntity) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Name = value.String
 			}
-		case billingentity.FieldLegalName:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field legal_name", values[i])
-			} else if value.Valid {
-				_m.LegalName = value.String
-			}
 		case billingentity.FieldIsDefault:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field is_default", values[i])
@@ -148,12 +140,12 @@ func (_m *BillingEntity) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.InvoiceNumberPrefix = value.String
 			}
-		case billingentity.FieldSellerDetails:
+		case billingentity.FieldBillingDetails:
 			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field seller_details", values[i])
+				return fmt.Errorf("unexpected type %T for field billing_details", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.SellerDetails); err != nil {
-					return fmt.Errorf("unmarshal field seller_details: %w", err)
+				if err := json.Unmarshal(*value, &_m.BillingDetails); err != nil {
+					return fmt.Errorf("unmarshal field billing_details: %w", err)
 				}
 			}
 		case billingentity.FieldMetadata:
@@ -224,17 +216,14 @@ func (_m *BillingEntity) String() string {
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
-	builder.WriteString("legal_name=")
-	builder.WriteString(_m.LegalName)
-	builder.WriteString(", ")
 	builder.WriteString("is_default=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsDefault))
 	builder.WriteString(", ")
 	builder.WriteString("invoice_number_prefix=")
 	builder.WriteString(_m.InvoiceNumberPrefix)
 	builder.WriteString(", ")
-	builder.WriteString("seller_details=")
-	builder.WriteString(fmt.Sprintf("%v", _m.SellerDetails))
+	builder.WriteString("billing_details=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BillingDetails))
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))

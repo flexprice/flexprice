@@ -26,18 +26,13 @@ func (b *billingEntityBuilder) WithName(v string) *billingEntityBuilder {
 	return b
 }
 
-func (b *billingEntityBuilder) WithLegalName(v string) *billingEntityBuilder {
-	b.e.LegalName = v
-	return b
-}
-
 func (b *billingEntityBuilder) WithInvoiceNumberPrefix(v string) *billingEntityBuilder {
 	b.e.InvoiceNumberPrefix = v
 	return b
 }
 
-func (b *billingEntityBuilder) WithSellerDetails(v types.SellerDetails) *billingEntityBuilder {
-	b.e.SellerDetails = v
+func (b *billingEntityBuilder) WithBillingDetails(v types.BillingDetails) *billingEntityBuilder {
+	b.e.BillingDetails = v
 	return b
 }
 

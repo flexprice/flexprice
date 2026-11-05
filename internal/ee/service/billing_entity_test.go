@@ -59,7 +59,6 @@ func (s *BillingEntityServiceSuite) addEntity(id, environmentID, prefix string, 
 	e := &billingentity.BillingEntity{
 		ID:                  id,
 		Name:                id,
-		LegalName:           id,
 		IsDefault:           isDefault,
 		InvoiceNumberPrefix: prefix,
 		EnvironmentID:       environmentID,

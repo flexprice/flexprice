@@ -32,15 +32,15 @@ func (s *BillingEntityServiceSuite) addCustomer(id string, billingEntityID *stri
 	}))
 }
 
-func (s *BillingEntityServiceSuite) renameEntity(id, legalName string) {
+func (s *BillingEntityServiceSuite) renameEntity(id, name string) {
 	ctx := s.GetContext()
 	e, err := s.GetStores().BillingEntityRepo.Get(ctx, id)
 	s.Require().NoError(err)
-	e.LegalName = legalName
+	e.Name = name
 	s.Require().NoError(s.GetStores().BillingEntityRepo.Update(ctx, e))
 }
 
-func (s *BillingEntityServiceSuite) TestSellerFor() {
+func (s *BillingEntityServiceSuite) TestGetInvoiceBillingEntity() {
 	env := types.GetEnvironmentID(s.GetContext())
 
 	s.Run("finalized_keeps_snapshot", func() {
@@ -52,14 +52,14 @@ func (s *BillingEntityServiceSuite) TestSellerFor() {
 			ID:            "inv_1",
 			CustomerID:    "c1",
 			InvoiceStatus: types.InvoiceStatusFinalized,
-			Seller:        &types.InvoiceSeller{BillingEntityID: "be_eu", LegalName: "Old EU B.V."},
+			BillingEntity: &types.InvoiceBillingEntity{BillingEntityID: "be_eu", Name: "Old EU B.V."},
 		}
 		s.renameEntity("be_eu", "New EU B.V.")
 
-		got, err := s.invoiceSvc().GetInvoiceSeller(s.GetContext(), inv)
+		got, err := s.invoiceSvc().GetInvoiceBillingEntity(s.GetContext(), inv)
 		s.Require().NoError(err)
 		s.Require().NotNil(got)
-		s.Equal("Old EU B.V.", got.LegalName)
+		s.Equal("Old EU B.V.", got.Name)
 	})
 
 	s.Run("voided_keeps_snapshot", func() {
@@ -71,24 +71,24 @@ func (s *BillingEntityServiceSuite) TestSellerFor() {
 			ID:            "inv_1",
 			CustomerID:    "c1",
 			InvoiceStatus: types.InvoiceStatusVoided,
-			Seller:        &types.InvoiceSeller{BillingEntityID: "be_eu", LegalName: "Old EU B.V."},
+			BillingEntity: &types.InvoiceBillingEntity{BillingEntityID: "be_eu", Name: "Old EU B.V."},
 		}
 		s.renameEntity("be_eu", "New EU B.V.")
 
-		got, err := s.invoiceSvc().GetInvoiceSeller(s.GetContext(), inv)
+		got, err := s.invoiceSvc().GetInvoiceBillingEntity(s.GetContext(), inv)
 		s.Require().NoError(err)
 		s.Require().NotNil(got)
-		s.Equal("Old EU B.V.", got.LegalName)
+		s.Equal("Old EU B.V.", got.Name)
 	})
 
-	s.Run("issued_before_enable_is_tenant_seller", func() {
+	s.Run("issued_before_enable_bills_as_tenant", func() {
 		s.ClearStores()
 		s.setMode(types.BillingEntityModeEnabled)
 		s.addEntity("be_eu", env, "EU", false)
 		s.addCustomer("c1", lo.ToPtr("be_eu"))
 		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusFinalized}
 
-		got, err := s.invoiceSvc().GetInvoiceSeller(s.GetContext(), inv)
+		got, err := s.invoiceSvc().GetInvoiceBillingEntity(s.GetContext(), inv)
 		s.Require().NoError(err)
 		s.Nil(got)
 	})
@@ -101,20 +101,20 @@ func (s *BillingEntityServiceSuite) TestSellerFor() {
 		s.renameEntity("be_eu", "New EU B.V.")
 		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusDraft}
 
-		got, err := s.invoiceSvc().GetInvoiceSeller(s.GetContext(), inv)
+		got, err := s.invoiceSvc().GetInvoiceBillingEntity(s.GetContext(), inv)
 		s.Require().NoError(err)
 		s.Require().NotNil(got)
 		s.Equal("be_eu", got.BillingEntityID)
-		s.Equal("New EU B.V.", got.LegalName)
+		s.Equal("New EU B.V.", got.Name)
 	})
 
-	s.Run("no_entity_is_tenant_seller", func() {
+	s.Run("no_entity_bills_as_tenant", func() {
 		s.ClearStores()
 		s.setMode(types.BillingEntityModeOff)
 		s.addCustomer("c1", nil)
 		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusDraft}
 
-		got, err := s.invoiceSvc().GetInvoiceSeller(s.GetContext(), inv)
+		got, err := s.invoiceSvc().GetInvoiceBillingEntity(s.GetContext(), inv)
 		s.Require().NoError(err)
 		s.Nil(got)
 	})
@@ -146,7 +146,7 @@ func (s *BillingEntityServiceSuite) TestNumberPrefixFor() {
 	})
 }
 
-func (s *BillingEntityServiceSuite) TestFreezeSellerIdempotent() {
+func (s *BillingEntityServiceSuite) TestFreezeBillingEntityIdempotent() {
 	env := types.GetEnvironmentID(s.GetContext())
 	s.ClearStores()
 	s.setMode(types.BillingEntityModeEnabled)
@@ -155,11 +155,11 @@ func (s *BillingEntityServiceSuite) TestFreezeSellerIdempotent() {
 	inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1"}
 	svc := s.invoiceSvc()
 
-	s.Require().NoError(svc.freezeSeller(s.GetContext(), inv))
-	s.Require().NotNil(inv.Seller)
-	s.Equal("be_eu", inv.Seller.LegalName)
+	s.Require().NoError(svc.freezeBillingEntity(s.GetContext(), inv))
+	s.Require().NotNil(inv.BillingEntity)
+	s.Equal("be_eu", inv.BillingEntity.Name)
 
 	s.renameEntity("be_eu", "Renamed")
-	s.Require().NoError(svc.freezeSeller(s.GetContext(), inv))
-	s.Equal("be_eu", inv.Seller.LegalName)
+	s.Require().NoError(svc.freezeBillingEntity(s.GetContext(), inv))
+	s.Equal("be_eu", inv.BillingEntity.Name)
 }

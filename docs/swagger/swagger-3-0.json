@@ -22521,6 +22521,9 @@
       "BillingEntityResponse": {
         "type": "object",
         "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -22540,9 +22543,6 @@
           "is_default": {
             "type": "boolean"
           },
-          "legal_name": {
-            "type": "string"
-          },
           "metadata": {
             "type": "object",
             "additionalProperties": {
@@ -22551,9 +22551,6 @@
           },
           "name": {
             "type": "string"
-          },
-          "seller_details": {
-            "$ref": "#/components/schemas/types.SellerDetails"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -24065,18 +24062,16 @@
       "CreateBillingEntityRequest": {
         "required": [
           "invoice_number_prefix",
-          "legal_name",
           "name"
         ],
         "type": "object",
         "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
           "invoice_number_prefix": {
             "maxLength": 20,
             "minLength": 1,
-            "type": "string"
-          },
-          "legal_name": {
-            "maxLength": 255,
             "type": "string"
           },
           "metadata": {
@@ -24088,9 +24083,6 @@
           "name": {
             "maxLength": 255,
             "type": "string"
-          },
-          "seller_details": {
-            "$ref": "#/components/schemas/types.SellerDetails"
           }
         }
       },
@@ -28576,6 +28568,9 @@
             "type": "string",
             "description": "amount_remaining is the outstanding amount still owed on this invoice (calculated as amount_due minus amount_paid)"
           },
+          "billing_entity": {
+            "$ref": "#/components/schemas/types.InvoiceBillingEntity"
+          },
           "billing_entity_id": {
             "type": "string",
             "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities"
@@ -28723,9 +28718,6 @@
           "refunded_amount": {
             "type": "string",
             "description": "refunded_amount is the total sum of credit notes of type \"refund\".\nThese are actual refunds issued to the customer."
-          },
-          "seller": {
-            "$ref": "#/components/schemas/types.InvoiceSeller"
           },
           "source_type": {
             "$ref": "#/components/schemas/types.InvoiceSourceType"
@@ -33811,13 +33803,11 @@
       "UpdateBillingEntityRequest": {
         "type": "object",
         "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
           "invoice_number_prefix": {
             "maxLength": 20,
-            "minLength": 1,
-            "type": "string"
-          },
-          "legal_name": {
-            "maxLength": 255,
             "minLength": 1,
             "type": "string"
           },
@@ -33831,9 +33821,6 @@
             "maxLength": 255,
             "minLength": 1,
             "type": "string"
-          },
-          "seller_details": {
-            "$ref": "#/components/schemas/types.SellerDetails"
           }
         }
       },
@@ -41984,6 +41971,48 @@
         ],
         "x-speakeasy-name-override": "AmortizationMethod"
       },
+      "types.BillingAddress": {
+        "type": "object",
+        "properties": {
+          "address_city": {
+            "type": "string"
+          },
+          "address_country": {
+            "type": "string"
+          },
+          "address_line1": {
+            "type": "string"
+          },
+          "address_line2": {
+            "type": "string"
+          },
+          "address_postal_code": {
+            "type": "string"
+          },
+          "address_state": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BillingAddress"
+      },
+      "types.BillingDetails": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/types.BillingAddress"
+          },
+          "email": {
+            "type": "string"
+          },
+          "help_email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BillingDetails"
+      },
       "types.BillingEntityMode": {
         "type": "string",
         "enum": [
@@ -42220,20 +42249,20 @@
         ],
         "x-speakeasy-name-override": "InstalmentStatus"
       },
-      "types.InvoiceSeller": {
+      "types.InvoiceBillingEntity": {
         "type": "object",
         "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
           "billing_entity_id": {
             "type": "string"
           },
-          "legal_name": {
+          "name": {
             "type": "string"
-          },
-          "seller_details": {
-            "$ref": "#/components/schemas/types.SellerDetails"
           }
         },
-        "x-speakeasy-name-override": "InvoiceSeller"
+        "x-speakeasy-name-override": "InvoiceBillingEntity"
       },
       "types.JournalDirection": {
         "type": "string",
@@ -42430,48 +42459,6 @@
           "RevenueReportGroupByPOB"
         ],
         "x-speakeasy-name-override": "RevenueReportGroupBy"
-      },
-      "types.SellerAddress": {
-        "type": "object",
-        "properties": {
-          "address_city": {
-            "type": "string"
-          },
-          "address_country": {
-            "type": "string"
-          },
-          "address_line1": {
-            "type": "string"
-          },
-          "address_line2": {
-            "type": "string"
-          },
-          "address_postal_code": {
-            "type": "string"
-          },
-          "address_state": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "SellerAddress"
-      },
-      "types.SellerDetails": {
-        "type": "object",
-        "properties": {
-          "address": {
-            "$ref": "#/components/schemas/types.SellerAddress"
-          },
-          "email": {
-            "type": "string"
-          },
-          "help_email": {
-            "type": "string"
-          },
-          "phone": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "SellerDetails"
       },
       "types.TenantInternalStatus": {
         "type": "string",

@@ -40,10 +40,6 @@ func (BillingEntity) Fields() []ent.Field {
 			SchemaType(varchar("255")).
 			NotEmpty(),
 
-		field.String("legal_name").
-			SchemaType(varchar("255")).
-			NotEmpty(),
-
 		field.Bool("is_default").
 			Default(false).
 			Immutable(),
@@ -52,9 +48,9 @@ func (BillingEntity) Fields() []ent.Field {
 			SchemaType(varchar("20")).
 			NotEmpty(),
 
-		field.JSON("seller_details", types.SellerDetails{}).
+		field.JSON("billing_details", types.BillingDetails{}).
 			SchemaType(jsonb).
-			Default(types.SellerDetails{}),
+			Default(types.BillingDetails{}),
 
 		field.JSON("metadata", map[string]string{}).
 			SchemaType(jsonb).

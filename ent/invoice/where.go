@@ -1700,14 +1700,14 @@ func FxConversionNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldFxConversion))
 }
 
-// SellerIsNil applies the IsNil predicate on the "seller" field.
-func SellerIsNil() predicate.Invoice {
-	return predicate.Invoice(sql.FieldIsNull(FieldSeller))
+// BillingEntityIsNil applies the IsNil predicate on the "billing_entity" field.
+func BillingEntityIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldBillingEntity))
 }
 
-// SellerNotNil applies the NotNil predicate on the "seller" field.
-func SellerNotNil() predicate.Invoice {
-	return predicate.Invoice(sql.FieldNotNull(FieldSeller))
+// BillingEntityNotNil applies the NotNil predicate on the "billing_entity" field.
+func BillingEntityNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldBillingEntity))
 }
 
 // DescriptionEQ applies the EQ predicate on the "description" field.

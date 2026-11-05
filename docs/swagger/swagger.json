@@ -19374,6 +19374,9 @@
         "BillingEntityResponse": {
             "type": "object",
             "properties": {
+                "billing_details": {
+                    "$ref": "#/definitions/types.BillingDetails"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -19392,9 +19395,6 @@
                 "is_default": {
                     "type": "boolean"
                 },
-                "legal_name": {
-                    "type": "string"
-                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": {
@@ -19403,9 +19403,6 @@
                 },
                 "name": {
                     "type": "string"
-                },
-                "seller_details": {
-                    "$ref": "#/definitions/types.SellerDetails"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -20921,18 +20918,16 @@
             "type": "object",
             "required": [
                 "invoice_number_prefix",
-                "legal_name",
                 "name"
             ],
             "properties": {
+                "billing_details": {
+                    "$ref": "#/definitions/types.BillingDetails"
+                },
                 "invoice_number_prefix": {
                     "type": "string",
                     "maxLength": 20,
                     "minLength": 1
-                },
-                "legal_name": {
-                    "type": "string",
-                    "maxLength": 255
                 },
                 "metadata": {
                     "type": "object",
@@ -20943,9 +20938,6 @@
                 "name": {
                     "type": "string",
                     "maxLength": 255
-                },
-                "seller_details": {
-                    "$ref": "#/definitions/types.SellerDetails"
                 }
             }
         },
@@ -25406,6 +25398,10 @@
                     "description": "amount_remaining is the outstanding amount still owed on this invoice (calculated as amount_due minus amount_paid)",
                     "type": "string"
                 },
+                "billing_entity": {
+                    "description": "BillingEntity is the billing entity frozen at finalization; nil for customers without an entity.",
+                    "$ref": "#/definitions/types.InvoiceBillingEntity"
+                },
                 "billing_entity_id": {
                     "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
@@ -25553,10 +25549,6 @@
                 "refunded_amount": {
                     "description": "refunded_amount is the total sum of credit notes of type \"refund\".\nThese are actual refunds issued to the customer.",
                     "type": "string"
-                },
-                "seller": {
-                    "description": "Seller is the billing entity seller frozen at finalization; nil for customers without an entity.",
-                    "$ref": "#/definitions/types.InvoiceSeller"
                 },
                 "source_type": {
                     "$ref": "#/definitions/types.InvoiceSourceType"
@@ -30605,14 +30597,12 @@
         "UpdateBillingEntityRequest": {
             "type": "object",
             "properties": {
+                "billing_details": {
+                    "$ref": "#/definitions/types.BillingDetails"
+                },
                 "invoice_number_prefix": {
                     "type": "string",
                     "maxLength": 20,
-                    "minLength": 1
-                },
-                "legal_name": {
-                    "type": "string",
-                    "maxLength": 255,
                     "minLength": 1
                 },
                 "metadata": {
@@ -30625,9 +30615,6 @@
                     "type": "string",
                     "maxLength": 255,
                     "minLength": 1
-                },
-                "seller_details": {
-                    "$ref": "#/definitions/types.SellerDetails"
                 }
             }
         },
@@ -38498,6 +38485,46 @@
                 "AmortizationPeriodEvenProrated"
             ]
         },
+        "types.BillingAddress": {
+            "type": "object",
+            "properties": {
+                "address_city": {
+                    "type": "string"
+                },
+                "address_country": {
+                    "type": "string"
+                },
+                "address_line1": {
+                    "type": "string"
+                },
+                "address_line2": {
+                    "type": "string"
+                },
+                "address_postal_code": {
+                    "type": "string"
+                },
+                "address_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.BillingDetails": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/types.BillingAddress"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "help_email": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
         "types.BillingEntityMode": {
             "type": "string",
             "enum": [
@@ -38716,17 +38743,17 @@
                 "InstalmentStatusCancelled"
             ]
         },
-        "types.InvoiceSeller": {
+        "types.InvoiceBillingEntity": {
             "type": "object",
             "properties": {
+                "billing_details": {
+                    "$ref": "#/definitions/types.BillingDetails"
+                },
                 "billing_entity_id": {
                     "type": "string"
                 },
-                "legal_name": {
+                "name": {
                     "type": "string"
-                },
-                "seller_details": {
-                    "$ref": "#/definitions/types.SellerDetails"
                 }
             }
         },
@@ -38913,46 +38940,6 @@
                 "RevenueReportGroupByContract",
                 "RevenueReportGroupByPOB"
             ]
-        },
-        "types.SellerAddress": {
-            "type": "object",
-            "properties": {
-                "address_city": {
-                    "type": "string"
-                },
-                "address_country": {
-                    "type": "string"
-                },
-                "address_line1": {
-                    "type": "string"
-                },
-                "address_line2": {
-                    "type": "string"
-                },
-                "address_postal_code": {
-                    "type": "string"
-                },
-                "address_state": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.SellerDetails": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "$ref": "#/definitions/types.SellerAddress"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "help_email": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                }
-            }
         },
         "types.TenantInternalStatus": {
             "type": "string",

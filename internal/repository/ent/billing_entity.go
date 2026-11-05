@@ -50,10 +50,9 @@ func (r *billingEntityRepository) Create(ctx context.Context, e *domain.BillingE
 	created, err := r.client.Writer(ctx).BillingEntity.Create().
 		SetID(e.ID).
 		SetName(e.Name).
-		SetLegalName(e.LegalName).
 		SetIsDefault(e.IsDefault).
 		SetInvoiceNumberPrefix(e.InvoiceNumberPrefix).
-		SetSellerDetails(e.SellerDetails).
+		SetBillingDetails(e.BillingDetails).
 		SetMetadata(e.Metadata).
 		SetTenantID(e.TenantID).
 		SetEnvironmentID(e.EnvironmentID).
@@ -206,9 +205,8 @@ func (r *billingEntityRepository) Update(ctx context.Context, e *domain.BillingE
 			entbillingentity.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetName(e.Name).
-		SetLegalName(e.LegalName).
 		SetInvoiceNumberPrefix(e.InvoiceNumberPrefix).
-		SetSellerDetails(e.SellerDetails).
+		SetBillingDetails(e.BillingDetails).
 		SetMetadata(e.Metadata).
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -265,10 +263,9 @@ func billingEntityFromEnt(e *ent.BillingEntity) *domain.BillingEntity {
 	return &domain.BillingEntity{
 		ID:                  e.ID,
 		Name:                e.Name,
-		LegalName:           e.LegalName,
 		IsDefault:           e.IsDefault,
 		InvoiceNumberPrefix: e.InvoiceNumberPrefix,
-		SellerDetails:       e.SellerDetails,
+		BillingDetails:      e.BillingDetails,
 		Metadata:            e.Metadata,
 		EnvironmentID:       e.EnvironmentID,
 		BaseModel: types.BaseModel{

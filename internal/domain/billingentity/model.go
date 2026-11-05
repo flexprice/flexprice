@@ -12,36 +12,35 @@ var ErrNotEnabled = errors.New("billing entities not enabled")
 
 // BillingEntity is a legal entity of a tenant that bills customers in one environment.
 type BillingEntity struct {
-	ID                  string              `json:"id"`
-	Name                string              `json:"name"`
-	LegalName           string              `json:"legal_name"`
-	IsDefault           bool                `json:"is_default"`
-	InvoiceNumberPrefix string              `json:"invoice_number_prefix"`
-	SellerDetails       types.SellerDetails `json:"seller_details"`
-	Metadata            map[string]string   `json:"metadata,omitempty"`
-	EnvironmentID       string              `json:"environment_id"`
+	ID                  string               `json:"id"`
+	Name                string               `json:"name"`
+	IsDefault           bool                 `json:"is_default"`
+	InvoiceNumberPrefix string               `json:"invoice_number_prefix"`
+	BillingDetails      types.BillingDetails `json:"billing_details"`
+	Metadata            map[string]string    `json:"metadata,omitempty"`
+	EnvironmentID       string               `json:"environment_id"`
 	types.BaseModel
 }
 
-// AsInvoiceSeller freezes the entity as an invoice's seller.
-func (e *BillingEntity) AsInvoiceSeller() *types.InvoiceSeller {
+// AsInvoiceBillingEntity freezes the entity as an invoice's billing entity.
+func (e *BillingEntity) AsInvoiceBillingEntity() *types.InvoiceBillingEntity {
 	if e == nil {
 		return nil
 	}
-	return &types.InvoiceSeller{
+	return &types.InvoiceBillingEntity{
 		BillingEntityID: e.ID,
-		LegalName:       e.LegalName,
-		SellerDetails:   e.SellerDetails,
+		Name:            e.Name,
+		BillingDetails:  e.BillingDetails,
 	}
 }
 
-// SellerDetailsFromTenant copies tenant billing details into the seller details shape.
-func SellerDetailsFromTenant(d tenant.TenantBillingDetails) types.SellerDetails {
-	return types.SellerDetails{
+// BillingDetailsFromTenant copies tenant billing details into the entity billing details shape.
+func BillingDetailsFromTenant(d tenant.TenantBillingDetails) types.BillingDetails {
+	return types.BillingDetails{
 		Email:     d.Email,
 		HelpEmail: d.HelpEmail,
 		Phone:     d.Phone,
-		Address: types.SellerAddress{
+		Address: types.BillingAddress{
 			Line1:      d.Address.Line1,
 			Line2:      d.Address.Line2,
 			City:       d.Address.City,
@@ -52,8 +51,8 @@ func SellerDetailsFromTenant(d tenant.TenantBillingDetails) types.SellerDetails 
 	}
 }
 
-// TenantBillingDetailsFromSeller maps seller details back to the tenant billing details shape.
-func TenantBillingDetailsFromSeller(d types.SellerDetails) tenant.TenantBillingDetails {
+// ToTenantBillingDetails maps entity billing details back to the tenant billing details shape.
+func ToTenantBillingDetails(d types.BillingDetails) tenant.TenantBillingDetails {
 	return tenant.TenantBillingDetails{
 		Email:     d.Email,
 		HelpEmail: d.HelpEmail,

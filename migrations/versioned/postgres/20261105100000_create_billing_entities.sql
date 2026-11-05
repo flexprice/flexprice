@@ -12,10 +12,9 @@ CREATE TABLE IF NOT EXISTS "billing_entities" (
   "updated_by" varchar NULL,
   "environment_id" varchar(50) NULL DEFAULT '',
   "name" varchar(255) NOT NULL,
-  "legal_name" varchar(255) NOT NULL,
   "is_default" boolean NOT NULL DEFAULT false,
   "invoice_number_prefix" varchar(20) NOT NULL,
-  "seller_details" jsonb NOT NULL,
+  "billing_details" jsonb NOT NULL,
   "metadata" jsonb NULL,
   PRIMARY KEY ("id")
 );
