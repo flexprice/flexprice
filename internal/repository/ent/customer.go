@@ -676,36 +676,3 @@ func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, t
 	SetSpanSuccess(span)
 	return count, nil
 }
-
-func (r *customerRepository) BillingEntityIDsByCustomerIDs(ctx context.Context, ids []string) (map[string]*string, error) {
-	result := make(map[string]*string, len(ids))
-	if len(ids) == 0 {
-		return result, nil
-	}
-
-	span := StartRepositorySpan(ctx, "customer", "billing_entity_ids", map[string]interface{}{
-		"count": len(ids),
-	})
-	defer FinishSpan(span)
-
-	rows, err := r.client.Reader(ctx).Customer.Query().
-		Where(
-			customer.IDIn(ids...),
-			customer.TenantID(types.GetTenantID(ctx)),
-			customer.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		Select(customer.FieldID, customer.FieldBillingEntityID).
-		All(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to read customer billing entities").
-			Mark(ierr.ErrDatabase)
-	}
-
-	for _, row := range rows {
-		result[row.ID] = row.BillingEntityID
-	}
-	SetSpanSuccess(span)
-	return result, nil
-}

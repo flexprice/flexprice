@@ -72,6 +72,8 @@ type Invoice struct {
 	FxConversion *types.FxConversion `json:"fx_conversion,omitempty"`
 	// BillingEntity holds the value of the "billing_entity" field.
 	BillingEntity *types.InvoiceBillingEntity `json:"billing_entity,omitempty"`
+	// BillingEntityID holds the value of the "billing_entity_id" field.
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
 	// DueDate holds the value of the "due_date" field.
@@ -166,7 +168,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case invoice.FieldVersion, invoice.FieldBillingSequence:
 			values[i] = new(sql.NullInt64)
-		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldSubscriptionCustomerID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID, invoice.FieldSourceType, invoice.FieldTaxExemptionReasonCode:
+		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldSubscriptionCustomerID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldBillingEntityID, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID, invoice.FieldSourceType, invoice.FieldTaxExemptionReasonCode:
 			values[i] = new(sql.NullString)
 		case invoice.FieldCreatedAt, invoice.FieldUpdatedAt, invoice.FieldDueDate, invoice.FieldPaidAt, invoice.FieldVoidedAt, invoice.FieldFinalizedAt, invoice.FieldIssueDate, invoice.FieldLastComputedAt, invoice.FieldPeriodStart, invoice.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -356,6 +358,13 @@ func (_m *Invoice) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.BillingEntity); err != nil {
 					return fmt.Errorf("unmarshal field billing_entity: %w", err)
 				}
+			}
+		case invoice.FieldBillingEntityID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_entity_id", values[i])
+			} else if value.Valid {
+				_m.BillingEntityID = new(string)
+				*_m.BillingEntityID = value.String
 			}
 		case invoice.FieldDescription:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -638,6 +647,11 @@ func (_m *Invoice) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("billing_entity=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BillingEntity))
+	builder.WriteString(", ")
+	if v := _m.BillingEntityID; v != nil {
+		builder.WriteString("billing_entity_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)

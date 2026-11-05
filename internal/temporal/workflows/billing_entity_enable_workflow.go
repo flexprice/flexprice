@@ -12,11 +12,12 @@ const (
 	WorkflowBillingEntityEnable          = "BillingEntityEnableWorkflow"
 	ActivityPrepareBillingEntityEnable   = "PrepareBillingEntityEnable"
 	ActivityAssignBillingEntityCustomers = "AssignBillingEntityCustomers"
+	ActivityAssignBillingEntityInvoices  = "AssignBillingEntityInvoices"
 	ActivityCompleteBillingEntityEnable  = "CompleteBillingEntityEnable"
 )
 
-// BillingEntityEnableWorkflow creates the environment's default entity, assigns existing customers to it in
-// batches and moves the environment to enabled. Every step is safe to rerun.
+// BillingEntityEnableWorkflow creates the environment's default entity, assigns existing customers and invoices
+// to it in batches and moves the environment to enabled. Every step is safe to rerun.
 func BillingEntityEnableWorkflow(ctx workflow.Context, in models.BillingEntityEnableWorkflowInput) error {
 	if err := in.Validate(); err != nil {
 		return err
@@ -41,6 +42,9 @@ func BillingEntityEnableWorkflow(ctx workflow.Context, in models.BillingEntityEn
 	assignOptions.HeartbeatTimeout = time.Minute * 2
 	assignCtx := workflow.WithActivityOptions(ctx, assignOptions)
 	if err := workflow.ExecuteActivity(assignCtx, ActivityAssignBillingEntityCustomers, in).Get(ctx, nil); err != nil {
+		return err
+	}
+	if err := workflow.ExecuteActivity(assignCtx, ActivityAssignBillingEntityInvoices, in).Get(ctx, nil); err != nil {
 		return err
 	}
 	return workflow.ExecuteActivity(ctx, ActivityCompleteBillingEntityEnable, in).Get(ctx, nil)

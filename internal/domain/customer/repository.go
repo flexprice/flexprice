@@ -19,5 +19,4 @@ type Repository interface {
 	// AssignDefaultBillingEntities sets up to limit (all when limit <= 0) of the environment's customers
 	// without an entity to its default entity, bypassing the activity log.
 	AssignDefaultBillingEntities(ctx context.Context, tenantID, environmentID string, limit int) (int, error)
-	BillingEntityIDsByCustomerIDs(ctx context.Context, ids []string) (map[string]*string, error)
 }

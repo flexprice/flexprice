@@ -53,6 +53,9 @@ type Invoice struct {
 	// BillingEntity is the billing entity frozen at finalization; nil for customers without an entity.
 	BillingEntity *types.InvoiceBillingEntity `json:"billing_entity,omitempty"`
 
+	// BillingEntityID is the entity that bills the invoice; nil while the environment has no billing entities. Never changes once set.
+	BillingEntityID *string `json:"billing_entity_id"`
+
 	// subtotal is the sum of all line items before any taxes, discounts, or additional fees
 	Subtotal decimal.Decimal `json:"subtotal" swaggertype:"string"`
 
@@ -195,7 +198,8 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		AmountPaid:             e.AmountPaid,
 		CustomCurrency:         e.CustomCurrency,
 		FxConversion:           e.FxConversion,
-		BillingEntity:                 e.BillingEntity,
+		BillingEntity:          e.BillingEntity,
+		BillingEntityID:        e.BillingEntityID,
 		Subtotal:               e.Subtotal,
 		Total:                  e.Total,
 		TotalDiscount:          lo.FromPtrOr(e.TotalDiscount, decimal.Zero),

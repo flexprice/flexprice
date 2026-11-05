@@ -37,27 +37,45 @@ func (a *BillingEntityActivities) PrepareBillingEntityEnable(ctx context.Context
 }
 
 func (a *BillingEntityActivities) AssignBillingEntityCustomers(ctx context.Context, in models.BillingEntityEnableWorkflowInput) error {
-	svc := service.NewBillingEntityService(a.params)
 	ctx = scopedCtx(ctx, in)
-
-	total := 0
-	for {
-		assigned, err := svc.AssignCustomerBatch(ctx, assignBatchSize)
-		if err != nil {
-			return err
-		}
-		total += assigned
-		activity.RecordHeartbeat(ctx, total)
-		if assigned == 0 {
-			break
-		}
+	total, err := assignInBatches(ctx, service.NewBillingEntityService(a.params).AssignCustomerBatch)
+	if err != nil {
+		return err
 	}
-
 	a.params.Logger.Info(ctx, "assigned customers to default billing entities",
 		"tenant_id", in.TenantID,
 		"environment_id", in.EnvironmentID,
 		"customers", total)
 	return nil
+}
+
+func (a *BillingEntityActivities) AssignBillingEntityInvoices(ctx context.Context, in models.BillingEntityEnableWorkflowInput) error {
+	ctx = scopedCtx(ctx, in)
+	total, err := assignInBatches(ctx, service.NewBillingEntityService(a.params).AssignInvoiceBatch)
+	if err != nil {
+		return err
+	}
+	a.params.Logger.Info(ctx, "assigned invoices to default billing entities",
+		"tenant_id", in.TenantID,
+		"environment_id", in.EnvironmentID,
+		"invoices", total)
+	return nil
+}
+
+// assignInBatches runs assign until a batch assigns nothing, heartbeating the running total.
+func assignInBatches(ctx context.Context, assign func(ctx context.Context, limit int) (int, error)) (int, error) {
+	total := 0
+	for {
+		assigned, err := assign(ctx, assignBatchSize)
+		if err != nil {
+			return total, err
+		}
+		total += assigned
+		activity.RecordHeartbeat(ctx, total)
+		if assigned == 0 {
+			return total, nil
+		}
+	}
 }
 
 func (a *BillingEntityActivities) CompleteBillingEntityEnable(ctx context.Context, in models.BillingEntityEnableWorkflowInput) error {

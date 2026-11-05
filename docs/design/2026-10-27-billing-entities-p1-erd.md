@@ -132,8 +132,9 @@ release on, the new prefix starts its own series instead of continuing the old p
 | FR-20 | Enabling is rejected unless the deployment's `billing_entities.enabled` switch is on. | UC1 | Switch off → enable returns 400 and the mode stays `off`; switch on → enable proceeds (FR-1). |
 | FR-21 | Delegated and grouped invoices only combine customers of one entity. | UC4 | Set `invoicing_customer_id` to a customer of another entity → 400; grouped invoice across entities → 400. |
 | FR-22 | Lists and searches of customers and invoices accept an optional `billing_entity_id`; absent means all entities. | UC5 | Filter by entity → only that entity's records; no filter → all. |
-| FR-23 | Customers and invoices carry `billing_entity_id` in Get, List and outbound webhook payloads. | UC5 | Each response and webhook shows the stored or derived entity; off environment → null. |
+| FR-23 | Customers and invoices carry `billing_entity_id` in Get, List and outbound webhook payloads. | UC5 | Each response and webhook shows the stored entity; off environment → null. |
 | FR-24 | Get, update and delete by ID are not scoped by entity. | UC5 | Get a record of any entity by ID → returned with its entity. |
+| FR-25 | An invoice stores its `billing_entity_id`: its customer's entity when created from `enabling` on, the default entity for invoices from before enablement. It never changes and needs no customer to read or filter. | UC5 | Enable → every earlier invoice, issued or draft, shows the default; new invoice shows its customer's entity. |
 
 ## 5. Non-functional requirements
 <!-- erd:locked -->
@@ -147,7 +148,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 | NFR-5 | Correctness | Enabling changes no existing invoice number, amount, status, balance or issued PDF. | e2e: snapshot invoices before and after enable. |
 | NFR-6 | Performance | Customer create adds at most one shared lock and two indexed reads; list responses add one batch entity lookup per page (two for payments), never one per row. | Query count in e2e traces. |
 | NFR-7 | Availability | Enabling never blocks billing: finalization, payments and customer creates keep working throughout; creates wait at most for the enable step-1 transaction. | e2e: run billing while enabling an environment with 100k customers. |
-| NFR-8 | Scalability | The enable backfill updates customers in batches of at most 1,000 rows per transaction and can resume after a crash. | Kill the worker mid-backfill; rerun completes with no duplicates or gaps. |
+| NFR-8 | Scalability | The enable backfill updates customers, then invoices, in batches of at most 1,000 rows per transaction and can resume after a crash. | Kill the worker mid-backfill; rerun completes with no duplicates or gaps. |
 
 ## 6. Constraints
 <!-- erd:locked -->
@@ -160,7 +161,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 | There is no database-wide statement or transaction timeout. | Database configuration | "Wait for in-flight creates" cannot be proven; enablement uses a lock instead (FR-3, NFR-4). |
 | Settings are cached in memory. | Existing settings cache | Every decision that affects stored data reads the mode from the database, never the cached setting. |
 | Customers are cached. | Existing customer cache | Enablement clears the cache of each customer it assigns. |
-| Every write to a recorded entity goes into the activity log. | Activity log | The enable backfill is a system update that is not recorded per customer. |
+| Every write to a recorded entity goes into the activity log. | Activity log | The enable backfill is a system update that is not recorded per customer or invoice. |
 | Tenant name and billing details are also the tenant's buyer details in Flexprice's own billing. | Self-billing | They stay editable after enable; only their biller role ends. |
 | External tax engines use the shared gateway account's registrations and address. | Stripe Tax | Billing entities run on native tax only in this phase (FR-8). |
 | The enable job runs on Temporal, which is off by default in local setups. | Local configuration | e2e runs need Temporal enabled. |
@@ -247,6 +248,7 @@ erDiagram
   }
   INVOICE {
     jsonb billing_entity "new"
+    string billing_entity_id "new"
   }
   INVOICE_SEQUENCE {
     string prefix "new, in unique key"
@@ -270,12 +272,13 @@ Changed tables:
 | `settings` | new key `billing_entity_config`, value `{"mode": "off" \| "enabling" \| "enabled"}` | | | FR-1. No row means `off`; only enablement writes it |
 | `customers` | `billing_entity_id` | varchar(50) | yes | NULL only while the environment is off or before the backfill reaches the row; immutable once set. Index (tenant, environment, `billing_entity_id`) built concurrently |
 | `invoices` | `billing_entity` | jsonb | yes | Written at finalization for customers with an entity (FR-17) |
+| `invoices` | `billing_entity_id` | varchar(50) | yes | FR-25. NULL only while the environment is off or before the backfill reaches the row; immutable once set. Index (tenant, environment, `billing_entity_id`) built concurrently |
 | `invoice_sequences` | `prefix` | varchar(20) | see migration | Counter key becomes (tenant, environment, prefix, period) |
 | `tax_associations` | new `entity_type` value `billing_entity` | | | Entity default rates; no schema change |
 
 Migration notes:
-- All additions are nullable or defaulted; `customers.billing_entity_id` and its index need no backfill at
-  deploy. Off environments are never backfilled.
+- All additions are nullable or defaulted; `customers.billing_entity_id`, `invoices.billing_entity_id` and
+  their indexes need no backfill at deploy. Off environments are never backfilled.
 - Migrations run before the new code rolls out and must stay additive, because old pods keep running
   against the migrated schema. `invoice_sequences` therefore changes in two releases:
   1. **This change:** add `prefix` nullable, fill existing rows with their environment's effective
@@ -361,8 +364,8 @@ stateDiagram-v2
   off --> enabling: admin enables (default entity created)
   enabling --> enabled: backfill done, billing details copied
   note right of off: No entities. Entity fields rejected. Today's behaviour.
-  note right of enabling: Entities exist. New customers get an entity. Entity fields still rejected.
-  note right of enabled: Entity fields accepted. Every customer has an entity.
+  note right of enabling: Entities exist. New customers and invoices get an entity. Entity fields still rejected.
+  note right of enabled: Entity fields accepted. Every customer and invoice has an entity.
 ```
 
 **Enable job** (UC1; FR-1 to FR-4, NFR-4)
@@ -386,9 +389,12 @@ sequenceDiagram
   loop until no customer without an entity
     Job->>DB: Assign a batch of the environment's customers to the default entity (not activity-logged)
   end
+  loop until no invoice without an entity
+    Job->>DB: Assign a batch of the environment's invoices to the default entity (not activity-logged)
+  end
   Note over Job,DB: Step 3 (one transaction)
   Job->>DB: Copy tenant billing details into the default entity's billing details
-  Job->>DB: Assign any remaining customers, mode = enabled
+  Job->>DB: Assign any remaining customers and invoices, mode = enabled
   Job->>Cache: Clear environment and customer caches
 ```
 
@@ -417,6 +423,7 @@ sequenceDiagram
 
 Shared locks never block each other; a create waits only while step 1 of an enablement holds the
 exclusive lock. A create either commits before step 1 (and is assigned in step 2) or sees `enabling`.
+Once the environment is `enabled`, creates skip the lock: no enablement can follow.
 
 **Finalize and render** (UC4; FR-16 to FR-18)
 
@@ -443,7 +450,8 @@ flowchart TD
 
 During `enabling`, a customer the backfill has not reached yet belongs to its environment's default
 entity: it can only predate enablement, when the default was the only entity. Every rule above treats it
-that way, so its invoices number, render and tax exactly as after the backfill.
+that way, so its invoices number, render and tax exactly as after the backfill. Invoice create stores the
+customer's entity on the invoice (FR-25), so an invoice created then also belongs to the default.
 
 ### 9.4 Jobs and events
 
@@ -461,12 +469,12 @@ that way, so its invoices number, render and tax exactly as after the backfill.
 | Concern | How the design handles it | NFR |
 |---|---|---|
 | Backward compatibility | Off environments follow today's paths; new request fields optional, response field additive | NFR-1, NFR-2 |
-| Concurrency: enable vs creates | Exclusive lock in enable step 1, shared lock in creates; mode read from the database | NFR-4, NFR-7 |
+| Concurrency: enable vs creates | Exclusive lock in enable step 1, shared lock in creates until `enabled`; mode read from the database | NFR-4, NFR-7 |
 | Concurrency: numbering | Counter increment in the finalize transaction; unique invoice number index; prefix edits never repeat a number because a prefix always shares one counter | NFR-3 |
 | Stale caches | Decisions use stored data, not the cached mode; caches cleared at the end of enable | NFR-4 |
-| Idempotency | One enable run per tenant and environment; backfill only touches customers without an entity; snapshot written only if empty | NFR-5, NFR-8 |
+| Idempotency | One enable run per tenant and environment; backfill only touches customers and invoices without an entity; snapshot written only if empty | NFR-5, NFR-8 |
 | Failure: enable job crashes | Temporal retries the step; steps 1 and 3 are single transactions, step 2 resumes | NFR-8 |
-| Failure: customer missed by backfill | Step 3 assigns any remaining customer in the same transaction that sets `enabled` | NFR-4 |
+| Failure: customer or invoice missed by backfill | Step 3 assigns any remaining customer and invoice in the same transaction that sets `enabled` | NFR-4 |
 | Performance | Concurrent index build; batch entity lookup per page; backfill batches of 1,000 | NFR-6, NFR-8 |
 | Multi-tenancy | Entities are tenant- and environment-scoped; body and filter entities are checked against the request's environment | — |
 | Observability | Enable job logs each step with counts | — |

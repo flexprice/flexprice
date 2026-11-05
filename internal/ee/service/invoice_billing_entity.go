@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -34,22 +33,6 @@ func (s *invoiceService) GetInvoiceBillingEntity(ctx context.Context, inv *invoi
 	return entity.AsInvoiceBillingEntity(), nil
 }
 
-// fillBillingEntityIDs sets each invoice's billing entity from its customer, with one lookup.
-func (s *invoiceService) fillBillingEntityIDs(ctx context.Context, items ...*dto.InvoiceResponse) error {
-	if len(items) == 0 {
-		return nil
-	}
-	ids := lo.Uniq(lo.Compact(lo.Map(items, func(r *dto.InvoiceResponse, _ int) string { return r.CustomerID })))
-	byCustomer, err := s.CustomerRepo.BillingEntityIDsByCustomerIDs(ctx, ids)
-	if err != nil {
-		return err
-	}
-	for _, r := range items {
-		r.BillingEntityID = byCustomer[r.CustomerID]
-	}
-	return nil
-}
-
 // numberPrefixFor is the customer's entity prefix, or the environment prefix for a customer without one.
 func (s *invoiceService) numberPrefixFor(ctx context.Context, inv *invoice.Invoice, cfg *types.InvoiceConfig) (string, error) {
 	entity, err := s.customerBillingEntity(ctx, inv)
@@ -64,14 +47,16 @@ func (s *invoiceService) numberPrefixFor(ctx context.Context, inv *invoice.Invoi
 
 // freezeBillingEntity sets the customer's entity as the invoice's billing entity once; later calls keep the first one.
 func (s *invoiceService) freezeBillingEntity(ctx context.Context, inv *invoice.Invoice) error {
-	if inv.BillingEntity != nil {
-		return nil
+	if inv.BillingEntity == nil {
+		entity, err := s.customerBillingEntity(ctx, inv)
+		if err != nil {
+			return err
+		}
+		inv.BillingEntity = entity.AsInvoiceBillingEntity()
 	}
-	entity, err := s.customerBillingEntity(ctx, inv)
-	if err != nil {
-		return err
+	if inv.BillingEntityID == nil && inv.BillingEntity != nil {
+		inv.BillingEntityID = lo.ToPtr(inv.BillingEntity.BillingEntityID)
 	}
-	inv.BillingEntity = entity.AsInvoiceBillingEntity()
 	return nil
 }
 

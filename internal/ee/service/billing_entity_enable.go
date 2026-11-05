@@ -19,7 +19,8 @@ type BillingEntityEnabler interface {
 	// PrepareEnable creates the environment's default entity and moves the environment to enabling.
 	PrepareEnable(ctx context.Context) error
 	AssignCustomerBatch(ctx context.Context, limit int) (int, error)
-	// CompleteEnable copies billing details, assigns any remaining customer and moves the environment to enabled.
+	AssignInvoiceBatch(ctx context.Context, limit int) (int, error)
+	// CompleteEnable copies billing details, assigns any remaining customer and invoice and moves the environment to enabled.
 	CompleteEnable(ctx context.Context) error
 }
 
@@ -92,6 +93,10 @@ func (s *billingEntityService) AssignCustomerBatch(ctx context.Context, limit in
 	return s.CustomerRepo.AssignDefaultBillingEntities(ctx, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), limit)
 }
 
+func (s *billingEntityService) AssignInvoiceBatch(ctx context.Context, limit int) (int, error) {
+	return s.InvoiceRepo.AssignDefaultBillingEntities(ctx, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), limit)
+}
+
 func (s *billingEntityService) CompleteEnable(ctx context.Context) error {
 	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		tenantID := types.GetTenantID(txCtx)
@@ -131,6 +136,10 @@ func (s *billingEntityService) CompleteEnable(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		remainingInvoices, err := s.InvoiceRepo.AssignDefaultBillingEntities(txCtx, tenantID, environmentID, 0)
+		if err != nil {
+			return err
+		}
 
 		if err := s.setMode(txCtx, types.BillingEntityModeEnabled); err != nil {
 			return err
@@ -138,7 +147,8 @@ func (s *billingEntityService) CompleteEnable(ctx context.Context) error {
 		s.Logger.Info(txCtx, "billing entities enabled",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
-			"customers_assigned_at_completion", remaining)
+			"customers_assigned_at_completion", remaining,
+			"invoices_assigned_at_completion", remainingInvoices)
 		return nil
 	})
 }

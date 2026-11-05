@@ -553,6 +553,7 @@ func buildWorkerConfig(
 			envActivities.CloneEnvironmentPlans,
 			beActivities.PrepareBillingEntityEnable,
 			beActivities.AssignBillingEntityCustomers,
+			beActivities.AssignBillingEntityInvoices,
 			beActivities.CompleteBillingEntityEnable,
 			alertActs.SpendAndEntitlementAlertsActivity,
 			alertActs.WalletAlertsActivity,

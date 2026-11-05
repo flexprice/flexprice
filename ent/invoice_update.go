@@ -332,6 +332,26 @@ func (_u *InvoiceUpdate) ClearBillingEntity() *InvoiceUpdate {
 	return _u
 }
 
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (_u *InvoiceUpdate) SetBillingEntityID(v string) *InvoiceUpdate {
+	_u.mutation.SetBillingEntityID(v)
+	return _u
+}
+
+// SetNillableBillingEntityID sets the "billing_entity_id" field if the given value is not nil.
+func (_u *InvoiceUpdate) SetNillableBillingEntityID(v *string) *InvoiceUpdate {
+	if v != nil {
+		_u.SetBillingEntityID(*v)
+	}
+	return _u
+}
+
+// ClearBillingEntityID clears the value of the "billing_entity_id" field.
+func (_u *InvoiceUpdate) ClearBillingEntityID() *InvoiceUpdate {
+	_u.mutation.ClearBillingEntityID()
+	return _u
+}
+
 // SetDescription sets the "description" field.
 func (_u *InvoiceUpdate) SetDescription(v string) *InvoiceUpdate {
 	_u.mutation.SetDescription(v)
@@ -950,6 +970,12 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.BillingEntityCleared() {
 		_spec.ClearField(invoice.FieldBillingEntity, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.BillingEntityID(); ok {
+		_spec.SetField(invoice.FieldBillingEntityID, field.TypeString, value)
+	}
+	if _u.mutation.BillingEntityIDCleared() {
+		_spec.ClearField(invoice.FieldBillingEntityID, field.TypeString)
+	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)
 	}
@@ -1480,6 +1506,26 @@ func (_u *InvoiceUpdateOne) SetBillingEntity(v *types.InvoiceBillingEntity) *Inv
 // ClearBillingEntity clears the value of the "billing_entity" field.
 func (_u *InvoiceUpdateOne) ClearBillingEntity() *InvoiceUpdateOne {
 	_u.mutation.ClearBillingEntity()
+	return _u
+}
+
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (_u *InvoiceUpdateOne) SetBillingEntityID(v string) *InvoiceUpdateOne {
+	_u.mutation.SetBillingEntityID(v)
+	return _u
+}
+
+// SetNillableBillingEntityID sets the "billing_entity_id" field if the given value is not nil.
+func (_u *InvoiceUpdateOne) SetNillableBillingEntityID(v *string) *InvoiceUpdateOne {
+	if v != nil {
+		_u.SetBillingEntityID(*v)
+	}
+	return _u
+}
+
+// ClearBillingEntityID clears the value of the "billing_entity_id" field.
+func (_u *InvoiceUpdateOne) ClearBillingEntityID() *InvoiceUpdateOne {
+	_u.mutation.ClearBillingEntityID()
 	return _u
 }
 
@@ -2130,6 +2176,12 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	}
 	if _u.mutation.BillingEntityCleared() {
 		_spec.ClearField(invoice.FieldBillingEntity, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BillingEntityID(); ok {
+		_spec.SetField(invoice.FieldBillingEntityID, field.TypeString, value)
+	}
+	if _u.mutation.BillingEntityIDCleared() {
+		_spec.ClearField(invoice.FieldBillingEntityID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)

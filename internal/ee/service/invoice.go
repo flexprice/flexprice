@@ -308,6 +308,13 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 		inv.IdempotencyKey = &idempKey
 		inv.BillingSequence = billingSeq
 		inv.InvoiceStatus = types.InvoiceStatusDraft
+		billingEntity, err := s.customerBillingEntity(txCtx, inv)
+		if err != nil {
+			return err
+		}
+		if billingEntity != nil {
+			inv.BillingEntityID = lo.ToPtr(billingEntity.ID)
+		}
 
 		// Entities bill in the custom currency, invoices in fiat. Amounts live in
 		// custom_currency; the fiat columns are projected from it.
@@ -1006,10 +1013,6 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 
 	response.WithTaxes(appliedTaxes.Items)
 
-	if err := s.fillBillingEntityIDs(ctx, response); err != nil {
-		return nil, err
-	}
-
 	return response, nil
 }
 
@@ -1326,10 +1329,6 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		for _, inv := range items {
 			inv.WithTaxes(taxesByInvoice[inv.ID])
 		}
-	}
-
-	if err := s.fillBillingEntityIDs(ctx, items...); err != nil {
-		return nil, err
 	}
 
 	return &dto.ListInvoicesResponse{

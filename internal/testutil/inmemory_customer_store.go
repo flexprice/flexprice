@@ -258,18 +258,3 @@ func (s *InMemoryCustomerStore) CountByFilter(ctx context.Context, filter *types
 func (s *InMemoryCustomerStore) AssignDefaultBillingEntities(ctx context.Context, tenantID, environmentID string, limit int) (int, error) {
 	return 0, ierr.NewError("not supported by the in-memory customer store").Mark(ierr.ErrNotImplemented)
 }
-
-func (s *InMemoryCustomerStore) BillingEntityIDsByCustomerIDs(ctx context.Context, ids []string) (map[string]*string, error) {
-	result := make(map[string]*string, len(ids))
-	for _, id := range ids {
-		c, err := s.Get(ctx, id)
-		if err != nil {
-			if ierr.IsNotFound(err) {
-				continue
-			}
-			return nil, err
-		}
-		result[id] = c.BillingEntityID
-	}
-	return result, nil
-}

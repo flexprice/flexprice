@@ -185,6 +185,11 @@ func Total(v decimal.Decimal) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldTotal, v))
 }
 
+// BillingEntityID applies equality check predicate on the "billing_entity_id" field. It's identical to BillingEntityIDEQ.
+func BillingEntityID(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldBillingEntityID, v))
+}
+
 // Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
 func Description(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldDescription, v))
@@ -1708,6 +1713,81 @@ func BillingEntityIsNil() predicate.Invoice {
 // BillingEntityNotNil applies the NotNil predicate on the "billing_entity" field.
 func BillingEntityNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldBillingEntity))
+}
+
+// BillingEntityIDEQ applies the EQ predicate on the "billing_entity_id" field.
+func BillingEntityIDEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDNEQ applies the NEQ predicate on the "billing_entity_id" field.
+func BillingEntityIDNEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDIn applies the In predicate on the "billing_entity_id" field.
+func BillingEntityIDIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldBillingEntityID, vs...))
+}
+
+// BillingEntityIDNotIn applies the NotIn predicate on the "billing_entity_id" field.
+func BillingEntityIDNotIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldBillingEntityID, vs...))
+}
+
+// BillingEntityIDGT applies the GT predicate on the "billing_entity_id" field.
+func BillingEntityIDGT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDGTE applies the GTE predicate on the "billing_entity_id" field.
+func BillingEntityIDGTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDLT applies the LT predicate on the "billing_entity_id" field.
+func BillingEntityIDLT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDLTE applies the LTE predicate on the "billing_entity_id" field.
+func BillingEntityIDLTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDContains applies the Contains predicate on the "billing_entity_id" field.
+func BillingEntityIDContains(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContains(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDHasPrefix applies the HasPrefix predicate on the "billing_entity_id" field.
+func BillingEntityIDHasPrefix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasPrefix(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDHasSuffix applies the HasSuffix predicate on the "billing_entity_id" field.
+func BillingEntityIDHasSuffix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasSuffix(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDIsNil applies the IsNil predicate on the "billing_entity_id" field.
+func BillingEntityIDIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldBillingEntityID))
+}
+
+// BillingEntityIDNotNil applies the NotNil predicate on the "billing_entity_id" field.
+func BillingEntityIDNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldBillingEntityID))
+}
+
+// BillingEntityIDEqualFold applies the EqualFold predicate on the "billing_entity_id" field.
+func BillingEntityIDEqualFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEqualFold(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDContainsFold applies the ContainsFold predicate on the "billing_entity_id" field.
+func BillingEntityIDContainsFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContainsFold(FieldBillingEntityID, v))
 }
 
 // DescriptionEQ applies the EQ predicate on the "description" field.

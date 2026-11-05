@@ -114,7 +114,8 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		AmountPaid:                 inv.AmountPaid,
 		CustomCurrency:             inv.CustomCurrency,
 		FxConversion:               clonePtr(inv.FxConversion),
-		BillingEntity:                     inv.BillingEntity,
+		BillingEntity:              inv.BillingEntity,
+		BillingEntityID:            inv.BillingEntityID,
 		Subtotal:                   inv.Subtotal,
 		Total:                      inv.Total,
 		TotalTax:                   inv.TotalTax,
@@ -364,6 +365,11 @@ func (s *InMemoryInvoiceStore) ListAllTenant(ctx context.Context, filter *types.
 
 func (s *InMemoryInvoiceStore) Count(ctx context.Context, filter *types.InvoiceFilter) (int, error) {
 	return s.InMemoryStore.Count(ctx, filter, invoiceFilterFn)
+}
+
+// AssignDefaultBillingEntities needs the raw SQL join; it is covered by e2e only.
+func (s *InMemoryInvoiceStore) AssignDefaultBillingEntities(ctx context.Context, tenantID, environmentID string, limit int) (int, error) {
+	return 0, ierr.NewError("not supported by the in-memory invoice store").Mark(ierr.ErrNotImplemented)
 }
 
 func (s *InMemoryInvoiceStore) GetByIdempotencyKey(ctx context.Context, key string) (*invoice.Invoice, error) {

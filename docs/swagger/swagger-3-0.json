@@ -28573,7 +28573,7 @@
           },
           "billing_entity_id": {
             "type": "string",
-            "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities"
+            "description": "BillingEntityID is the entity that bills the invoice; nil while the environment has no billing entities. Never changes once set."
           },
           "billing_period": {
             "type": "string",

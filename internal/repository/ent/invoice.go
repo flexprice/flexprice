@@ -101,7 +101,8 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetRefundedAmount(inv.RefundedAmount).
 		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 		SetNillableIssueDate(inv.IssueDate).
-		SetCustomCurrency(inv.CustomCurrency)
+		SetCustomCurrency(inv.CustomCurrency).
+		SetNillableBillingEntityID(inv.BillingEntityID)
 
 	// Keep fx_conversion SQL NULL ("never converted"); never write a jsonb null.
 	if inv.FxConversion != nil {
@@ -216,7 +217,8 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetEnvironmentID(inv.EnvironmentID).
 			SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 			SetNillableIssueDate(inv.IssueDate).
-			SetCustomCurrency(inv.CustomCurrency)
+			SetCustomCurrency(inv.CustomCurrency).
+			SetNillableBillingEntityID(inv.BillingEntityID)
 
 		// fx_conversion stays SQL NULL until conversion.
 		if inv.FxConversion != nil {
@@ -640,6 +642,9 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	if inv.BillingEntity != nil {
 		query.SetBillingEntity(inv.BillingEntity)
 	}
+	if inv.BillingEntityID != nil {
+		query.SetBillingEntityID(*inv.BillingEntityID)
+	}
 
 	if inv.TaxExemptionReasonCode != nil {
 		query.SetTaxExemptionReasonCode(*inv.TaxExemptionReasonCode)
@@ -905,6 +910,55 @@ func (r *invoiceRepository) Count(ctx context.Context, filter *types.InvoiceFilt
 		return 0, ierr.WithError(err).WithHint("invoice counting failed").Mark(ierr.ErrDatabase)
 	}
 	return count, nil
+}
+
+func (r *invoiceRepository) AssignDefaultBillingEntities(ctx context.Context, tenantID, environmentID string, limit int) (int, error) {
+	span := StartRepositorySpan(ctx, "invoice", "assign_default_billing_entities", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": environmentID,
+		"limit":          limit,
+	})
+	defer FinishSpan(span)
+
+	var batchLimit any
+	if limit > 0 {
+		batchLimit = limit
+	}
+
+	query := `
+		WITH batch AS (
+			SELECT i.id, be.id AS billing_entity_id
+			FROM invoices i
+			JOIN billing_entities be
+				ON be.tenant_id = i.tenant_id
+				AND be.environment_id = i.environment_id
+				AND be.is_default
+				AND be.status = 'published'
+			WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.billing_entity_id IS NULL
+			LIMIT $3
+		)
+		UPDATE invoices i
+		SET billing_entity_id = batch.billing_entity_id
+		FROM batch
+		WHERE i.id = batch.id AND i.billing_entity_id IS NULL`
+
+	result, err := r.client.Writer(ctx).ExecContext(ctx, query, tenantID, environmentID, batchLimit)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to assign invoices to their default billing entity").
+			Mark(ierr.ErrDatabase)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to read assigned invoices").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return int(count), nil
 }
 
 func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string) (*domainInvoice.Invoice, error) {
@@ -1221,7 +1275,7 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(ctx context.Context, f *typ
 	}
 
 	if f.BillingEntityID != "" {
-		query = query.Where(predicate.Invoice(columnInSelector(invoice.FieldCustomerID, customerIDsOfEntity(ctx, f.BillingEntityID))))
+		query = query.Where(invoice.BillingEntityID(f.BillingEntityID))
 	}
 
 	// Apply entity-specific filters

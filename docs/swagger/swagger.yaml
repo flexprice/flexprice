@@ -6122,8 +6122,8 @@ definitions:
         description: BillingEntity is the billing entity frozen at finalization; nil
           for customers without an entity.
       billing_entity_id:
-        description: billing_entity_id is the billing entity of the record's customer;
-          null when the environment has no billing entities
+        description: BillingEntityID is the entity that bills the invoice; nil while
+          the environment has no billing entities. Never changes once set.
         type: string
       billing_period:
         description: billing_period describes the billing period this invoice covers
