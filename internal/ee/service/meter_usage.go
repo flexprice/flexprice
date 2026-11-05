@@ -49,7 +49,7 @@ type MeterUsageService interface {
 	GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error)
 	GetDetailedAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) (*dto.GetUsageAnalyticsResponse, error)
 
-	// GetUnpricedMeterAnalytics returns a customer's raw usage on params.MeterIDs (required),
+	// GetUnpricedMeterAnalytics returns one customer's raw usage on params.MeterIDs (both required),
 	// whether or not those meters are on a subscription. Usage only; callers apply prices.
 	GetUnpricedMeterAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) (*dto.GetUsageAnalyticsResponse, error)
 
@@ -1660,38 +1660,44 @@ func (s *meterUsageService) GetUnpricedMeterAnalytics(
 			Mark(ierr.ErrValidation)
 	}
 
-	switch {
-	case params.ExternalCustomerID == "":
-	case !params.IncludeChildren:
+	if params.ExternalCustomerID == "" {
+		// Without a customer this would scan every customer's usage.
+		return nil, ierr.NewError("external_customer_id is required").
+			WithHint("Unpriced meter analytics must be scoped to a customer").
+			Mark(ierr.ErrValidation)
+	}
+
+	if !params.IncludeChildren {
 		// Only the timezone is needed; skip loading subscriptions and line items.
 		cust, err := s.CustomerRepo.GetByLookupKey(ctx, params.ExternalCustomerID)
 		if err != nil {
 			return nil, err
 		}
 		params.Timezone = cust.Timezone
-	default:
-		cust, subs, err := s.resolveCustomerAndSubscriptions(ctx, params.ExternalCustomerID)
+		return s.getDetailedAnalyticsWithoutSubscriptionContext(ctx, params)
+	}
+
+	cust, subs, err := s.resolveCustomerAndSubscriptions(ctx, params.ExternalCustomerID)
+	if err != nil {
+		return nil, err
+	}
+	params.Timezone = cust.Timezone
+
+	externalIDs := []string{params.ExternalCustomerID}
+	for _, sub := range subs {
+		// Parent subs loaded for an inherited child belong to another customer;
+		// expanding them would pull in sibling usage.
+		if sub.CustomerID != cust.ID {
+			continue
+		}
+		ids, err := s.resolveExternalCustomerIDs(ctx, sub, true)
 		if err != nil {
 			return nil, err
 		}
-		params.Timezone = cust.Timezone
-
-		externalIDs := []string{params.ExternalCustomerID}
-		for _, sub := range subs {
-			// Parent subs loaded for an inherited child belong to another customer;
-			// expanding them would pull in sibling usage.
-			if sub.CustomerID != cust.ID {
-				continue
-			}
-			ids, err := s.resolveExternalCustomerIDs(ctx, sub, true)
-			if err != nil {
-				return nil, err
-			}
-			externalIDs = append(externalIDs, ids...)
-		}
-		params.ExternalCustomerIDs = lo.Uniq(externalIDs)
-		params.ExternalCustomerID = ""
+		externalIDs = append(externalIDs, ids...)
 	}
+	params.ExternalCustomerIDs = lo.Uniq(externalIDs)
+	params.ExternalCustomerID = ""
 
 	return s.getDetailedAnalyticsWithoutSubscriptionContext(ctx, params)
 }

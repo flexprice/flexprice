@@ -63,4 +63,42 @@ func (s *MeterUsageServiceSuite) TestGetUnpricedMeterAnalytics_IncludesMetersOff
 		s.Require().Error(err)
 		s.True(ierr.IsValidation(err))
 	})
+
+	s.Run("requires a customer", func() {
+		p := newParams(vendor.ID)
+		p.ExternalCustomerID = ""
+		_, err := s.svc.GetUnpricedMeterAnalytics(ctx, p)
+		s.Require().Error(err)
+		s.True(ierr.IsValidation(err))
+	})
+}
+
+// IncludeChildren expands a parent to its inherited children, but a child must not
+// pick up its parent's (or siblings') usage through the parent sub it inherits.
+func (s *MeterUsageServiceSuite) TestGetUnpricedMeterAnalytics_IncludeChildrenScope() {
+	ctx := s.GetContext()
+	f := s.newParentChildScopeFixture("unpriced") // parent 100, child 25
+
+	query := func(externalID string) decimal.Decimal {
+		resp, err := s.svc.GetUnpricedMeterAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+			TenantID:           types.GetTenantID(ctx),
+			EnvironmentID:      types.GetEnvironmentID(ctx),
+			ExternalCustomerID: externalID,
+			MeterIDs:           []string{s.meterAPI.ID},
+			StartTime:          s.periodStart,
+			EndTime:            s.periodEnd,
+			IncludeChildren:    true,
+		})
+		s.Require().NoError(err)
+		return s.totalUsageForMeter(resp, s.meterAPI.ID)
+	}
+
+	s.Run("parent includes its children", func() {
+		got := query(f.parentCust.ExternalID)
+		s.True(got.Equal(decimal.NewFromInt(125)), "got %s", got)
+	})
+	s.Run("child gets only its own usage", func() {
+		got := query(f.childCust.ExternalID)
+		s.True(got.Equal(decimal.NewFromInt(25)), "got %s", got)
+	})
 }
