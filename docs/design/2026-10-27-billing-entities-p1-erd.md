@@ -84,7 +84,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 - Entity create, read and edit; billing details and invoice prefix per entity (UC2).
 - Entity-level default tax rates (UC2, UC3).
 - Customer assigned to one entity at creation, immutable (UC3).
-- Per-prefix invoice numbering for all tenants (UC4, UC6).
+- Per-prefix invoice numbering for all tenants, in two releases ahead of any enablement (§9.1 migration notes) (UC4, UC6).
 - Billing entity snapshot on finalized invoices; entity biller on PDF and hosted invoice page (UC4).
 - Entity filter on lists and entity on responses and outbound webhooks (UC5).
 - Deployment switch that rejects enabling until per-entity integrations ship (UC1).

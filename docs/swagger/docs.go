@@ -21117,7 +21117,8 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string",
-                    "maxLength": 255
+                    "maxLength": 255,
+                    "minLength": 1
                 }
             }
         },

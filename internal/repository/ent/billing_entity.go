@@ -128,10 +128,14 @@ func (r *billingEntityRepository) List(ctx context.Context, filter *types.Billin
 	}
 
 	query := applyBillingEntityFilter(r.scoped(ctx), filter)
+	sortField := entbillingentity.FieldCreatedAt
+	if entbillingentity.ValidColumn(filter.GetSort()) {
+		sortField = filter.GetSort()
+	}
 	if filter.GetOrder() == types.OrderAsc {
-		query = query.Order(ent.Asc(entbillingentity.FieldCreatedAt))
+		query = query.Order(ent.Asc(sortField))
 	} else {
-		query = query.Order(ent.Desc(entbillingentity.FieldCreatedAt))
+		query = query.Order(ent.Desc(sortField))
 	}
 	if !filter.IsUnlimited() {
 		query = query.Limit(filter.GetLimit()).Offset(filter.GetOffset())

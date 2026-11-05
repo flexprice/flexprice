@@ -10,7 +10,7 @@ import (
 
 // CreateBillingEntityRequest creates a non-default billing entity.
 type CreateBillingEntityRequest struct {
-	Name                string               `json:"name" validate:"required,max=255"`
+	Name                string               `json:"name" validate:"required,min=1,max=255"`
 	InvoiceNumberPrefix string               `json:"invoice_number_prefix" validate:"required,min=1,max=20"`
 	BillingDetails      types.BillingDetails `json:"billing_details"`
 	Metadata            map[string]string    `json:"metadata,omitempty"`

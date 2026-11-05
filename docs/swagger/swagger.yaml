@@ -2610,6 +2610,7 @@ definitions:
         type: object
       name:
         maxLength: 255
+        minLength: 1
         type: string
     required:
     - invoice_number_prefix
