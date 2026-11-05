@@ -7,6 +7,7 @@ import (
 	"github.com/cockroachdb/errors"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -31,7 +32,7 @@ func CustomerByEmail(ctx context.Context, customers interfaces.CustomerService, 
 		BillingEntityID: types.GetBillingEntityID(ctx),
 	}
 	list, err := customers.GetCustomers(ctx, filter)
-	if errors.Is(err, ierr.ErrBillingEntitiesNotEnabled) {
+	if errors.Is(err, billingentity.ErrNotEnabled) {
 		filter.BillingEntityID = ""
 		list, err = customers.GetCustomers(ctx, filter)
 	}
