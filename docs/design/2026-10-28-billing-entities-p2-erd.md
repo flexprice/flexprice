@@ -294,7 +294,8 @@ Migration notes:
 
 Every entry point that acts on a record (billing run, auto-charge, payment link, checkout, payment
 methods, syncs, refunds, catalog sync, provider event handlers) sets the record's customer's entity in the
-request context, as Phase 1 already resolves it. Webhook routes set the connection instead.
+request context, as Phase 1 already resolves it; an invoice uses the entity stored on it. Webhook routes set
+the connection instead.
 
 ```mermaid
 flowchart TD
