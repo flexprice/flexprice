@@ -368,9 +368,6 @@ func (s *billingEntityService) Update(ctx context.Context, id string, req dto.Up
 	if req.SellerDetails != nil {
 		builder.WithSellerDetails(*req.SellerDetails)
 	}
-	if req.TaxIdentifiers != nil {
-		builder.WithTaxIdentifiers(*req.TaxIdentifiers)
-	}
 	if req.Metadata != nil {
 		builder.WithMetadata(req.Metadata)
 	}

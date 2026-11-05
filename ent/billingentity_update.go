@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/billingentity"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -123,18 +122,6 @@ func (_u *BillingEntityUpdate) SetNillableSellerDetails(v *types.SellerDetails) 
 	if v != nil {
 		_u.SetSellerDetails(*v)
 	}
-	return _u
-}
-
-// SetTaxIdentifiers sets the "tax_identifiers" field.
-func (_u *BillingEntityUpdate) SetTaxIdentifiers(v []types.TaxIdentifier) *BillingEntityUpdate {
-	_u.mutation.SetTaxIdentifiers(v)
-	return _u
-}
-
-// AppendTaxIdentifiers appends value to the "tax_identifiers" field.
-func (_u *BillingEntityUpdate) AppendTaxIdentifiers(v []types.TaxIdentifier) *BillingEntityUpdate {
-	_u.mutation.AppendTaxIdentifiers(v)
 	return _u
 }
 
@@ -252,14 +239,6 @@ func (_u *BillingEntityUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if value, ok := _u.mutation.SellerDetails(); ok {
 		_spec.SetField(billingentity.FieldSellerDetails, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.TaxIdentifiers(); ok {
-		_spec.SetField(billingentity.FieldTaxIdentifiers, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedTaxIdentifiers(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, billingentity.FieldTaxIdentifiers, value)
-		})
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(billingentity.FieldMetadata, field.TypeJSON, value)
@@ -380,18 +359,6 @@ func (_u *BillingEntityUpdateOne) SetNillableSellerDetails(v *types.SellerDetail
 	if v != nil {
 		_u.SetSellerDetails(*v)
 	}
-	return _u
-}
-
-// SetTaxIdentifiers sets the "tax_identifiers" field.
-func (_u *BillingEntityUpdateOne) SetTaxIdentifiers(v []types.TaxIdentifier) *BillingEntityUpdateOne {
-	_u.mutation.SetTaxIdentifiers(v)
-	return _u
-}
-
-// AppendTaxIdentifiers appends value to the "tax_identifiers" field.
-func (_u *BillingEntityUpdateOne) AppendTaxIdentifiers(v []types.TaxIdentifier) *BillingEntityUpdateOne {
-	_u.mutation.AppendTaxIdentifiers(v)
 	return _u
 }
 
@@ -539,14 +506,6 @@ func (_u *BillingEntityUpdateOne) sqlSave(ctx context.Context) (_node *BillingEn
 	}
 	if value, ok := _u.mutation.SellerDetails(); ok {
 		_spec.SetField(billingentity.FieldSellerDetails, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.TaxIdentifiers(); ok {
-		_spec.SetField(billingentity.FieldTaxIdentifiers, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedTaxIdentifiers(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, billingentity.FieldTaxIdentifiers, value)
-		})
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(billingentity.FieldMetadata, field.TypeJSON, value)

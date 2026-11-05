@@ -22558,12 +22558,6 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           },
-          "tax_identifiers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.TaxIdentifier"
-            }
-          },
           "tenant_id": {
             "type": "string"
           },
@@ -24097,12 +24091,6 @@
           },
           "seller_details": {
             "$ref": "#/components/schemas/types.SellerDetails"
-          },
-          "tax_identifiers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.TaxIdentifier"
-            }
           }
         }
       },
@@ -33846,12 +33834,6 @@
           },
           "seller_details": {
             "$ref": "#/components/schemas/types.SellerDetails"
-          },
-          "tax_identifiers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.TaxIdentifier"
-            }
           }
         }
       },
@@ -42251,12 +42233,6 @@
           },
           "seller_details": {
             "$ref": "#/components/schemas/types.SellerDetails"
-          },
-          "tax_identifiers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.TaxIdentifier"
-            }
           }
         },
         "x-speakeasy-name-override": "InvoiceSeller"
@@ -42498,21 +42474,6 @@
           }
         },
         "x-speakeasy-name-override": "SellerDetails"
-      },
-      "types.TaxIdentifier": {
-        "type": "object",
-        "properties": {
-          "country": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          },
-          "value": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "TaxIdentifier"
       },
       "types.TenantInternalStatus": {
         "type": "string",

@@ -45,10 +45,9 @@ type SellerDetails struct {
 
 // InvoiceSeller freezes the seller of a finalized invoice.
 type InvoiceSeller struct {
-	BillingEntityID string          `json:"billing_entity_id"`
-	LegalName       string          `json:"legal_name"`
-	SellerDetails   SellerDetails   `json:"seller_details"`
-	TaxIdentifiers  []TaxIdentifier `json:"tax_identifiers,omitempty"`
+	BillingEntityID string        `json:"billing_entity_id"`
+	LegalName       string        `json:"legal_name"`
+	SellerDetails   SellerDetails `json:"seller_details"`
 }
 
 // BillingEntityFilter represents the filter options for billing entities

@@ -19478,12 +19478,6 @@ const docTemplate = `{
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
-                "tax_identifiers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.TaxIdentifier"
-                    }
-                },
                 "tenant_id": {
                     "type": "string"
                 },
@@ -21132,12 +21126,6 @@ const docTemplate = `{
                 },
                 "seller_details": {
                     "$ref": "#/definitions/types.SellerDetails"
-                },
-                "tax_identifiers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.TaxIdentifier"
-                    }
                 }
             }
         },
@@ -31424,12 +31412,6 @@ const docTemplate = `{
                 },
                 "seller_details": {
                     "$ref": "#/definitions/types.SellerDetails"
-                },
-                "tax_identifiers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.TaxIdentifier"
-                    }
                 }
             }
         },
@@ -39775,12 +39757,6 @@ const docTemplate = `{
                 },
                 "seller_details": {
                     "$ref": "#/definitions/types.SellerDetails"
-                },
-                "tax_identifiers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.TaxIdentifier"
-                    }
                 }
             }
         },
@@ -40004,20 +39980,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "phone": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.TaxIdentifier": {
-            "type": "object",
-            "properties": {
-                "country": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "value": {
                     "type": "string"
                 }
             }

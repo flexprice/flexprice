@@ -56,10 +56,6 @@ func (BillingEntity) Fields() []ent.Field {
 			SchemaType(jsonb).
 			Default(types.SellerDetails{}),
 
-		field.JSON("tax_identifiers", []types.TaxIdentifier{}).
-			SchemaType(jsonb).
-			Default([]types.TaxIdentifier{}),
-
 		field.JSON("metadata", map[string]string{}).
 			SchemaType(jsonb).
 			Optional(),

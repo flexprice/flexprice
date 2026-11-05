@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS "billing_entities" (
   "is_default" boolean NOT NULL DEFAULT false,
   "invoice_number_prefix" varchar(20) NOT NULL,
   "seller_details" jsonb NOT NULL,
-  "tax_identifiers" jsonb NOT NULL,
   "metadata" jsonb NULL,
   PRIMARY KEY ("id")
 );

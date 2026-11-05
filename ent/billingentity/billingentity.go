@@ -38,8 +38,6 @@ const (
 	FieldInvoiceNumberPrefix = "invoice_number_prefix"
 	// FieldSellerDetails holds the string denoting the seller_details field in the database.
 	FieldSellerDetails = "seller_details"
-	// FieldTaxIdentifiers holds the string denoting the tax_identifiers field in the database.
-	FieldTaxIdentifiers = "tax_identifiers"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// Table holds the table name of the billingentity in the database.
@@ -61,7 +59,6 @@ var Columns = []string{
 	FieldIsDefault,
 	FieldInvoiceNumberPrefix,
 	FieldSellerDetails,
-	FieldTaxIdentifiers,
 	FieldMetadata,
 }
 
@@ -98,8 +95,6 @@ var (
 	InvoiceNumberPrefixValidator func(string) error
 	// DefaultSellerDetails holds the default value on creation for the "seller_details" field.
 	DefaultSellerDetails types.SellerDetails
-	// DefaultTaxIdentifiers holds the default value on creation for the "tax_identifiers" field.
-	DefaultTaxIdentifiers []types.TaxIdentifier
 )
 
 // OrderOption defines the ordering options for the BillingEntity queries.

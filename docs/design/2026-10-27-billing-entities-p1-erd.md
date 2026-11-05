@@ -41,7 +41,7 @@ an already enabled environment changes nothing. The environment uses an external
 deployment switch is off → enabling is rejected.
 
 **UC2 — Tenant admin manages an entity.**
-1. Admin creates an entity with a name, legal name, seller details, tax IDs and a distinct invoice prefix.
+1. Admin creates an entity with a name, legal name, seller details and a distinct invoice prefix.
 2. Admin links the default tax rates the entity's new customers should get.
 3. Admin edits the entity later; drafts and future invoices use the new details, issued invoices do not
    change.
@@ -60,7 +60,7 @@ entity belongs to another environment → rejected.
 **UC4 — Billing run issues an invoice for a customer.**
 1. An invoice is generated for the customer as today.
 2. On finalization it takes the next number in the series of the customer's entity's prefix, and freezes
-   the entity's seller details and tax IDs.
+   the entity's seller details.
 3. The PDF and hosted invoice page show that entity as the seller, then and on every later rebuild.
 
 **UC5 — API client reads billing records by entity.**
@@ -81,7 +81,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 **In**
 - Per-environment, irreversible switch to enable billing entities, with an enabling state (UC1).
 - One default entity per enabled environment, created at enablement (UC1).
-- Entity create, read and edit; seller details, tax IDs and invoice prefix per entity (UC2).
+- Entity create, read and edit; seller details and invoice prefix per entity (UC2).
 - Entity-level default tax rates (UC2, UC3).
 - Customer assigned to one entity at creation, immutable (UC3).
 - Per-prefix invoice numbering for all tenants (UC4, UC6).
@@ -127,9 +127,8 @@ release on, the new prefix starts its own series instead of continuing the old p
 | FR-14 | A new customer gets its entity's auto-apply tax rates; a customer in an off environment gets the tenant-level rates as today. | UC3 | Create a customer of an entity linked to rate R → customer has R. |
 | FR-15 | `billing_entity_id` in a request body or filter is rejected unless the environment is `enabled`, and must name an entity of the request's environment. | UC3, UC5 | Off or enabling environment → 400 `billing_entities_not_enabled`; other environment's entity → 400. |
 | FR-16 | An invoice's number comes from the counter of its prefix and period: the customer's entity's prefix, or the environment prefix for a customer without one. | UC4, UC6 | Two entities with prefixes INV and EU finalize in one period → `INV-…` continues the existing series, `EU-…-00001` starts its own; no two invoices share a number. |
-| FR-17 | Finalizing the invoice of a customer with an entity stores a seller snapshot once: entity ID, legal name, seller details, tax IDs. | UC4 | Finalize → snapshot present; retry finalize → snapshot unchanged. |
+| FR-17 | Finalizing the invoice of a customer with an entity stores a seller snapshot once: entity ID, legal name, seller details. | UC4 | Finalize → snapshot present; retry finalize → snapshot unchanged. |
 | FR-18 | The PDF and hosted invoice page show the snapshot for finalized invoices, the customer's entity for drafts, and the tenant for customers without an entity and for invoices issued before enablement. | UC4 | Edit entity after finalize, force PDF rebuild → old seller shown; invoice issued before enable → tenant shown. |
-| FR-19 | For customers with an entity, biller tax IDs come from the entity. | UC4 | Entity with a GSTIN → GSTIN on the PDF. |
 | FR-20 | Enabling is rejected unless the deployment's `billing_entities.enabled` switch is on. | UC1 | Switch off → enable returns 400 and the mode stays `off`; switch on → enable proceeds (FR-1). |
 | FR-21 | Delegated and grouped invoices only combine customers of one entity. | UC4 | Set `invoicing_customer_id` to a customer of another entity → 400; grouped invoice across entities → 400. |
 | FR-22 | Lists and searches of customers and invoices accept an optional `billing_entity_id`; absent means all entities. | UC5 | Filter by entity → only that entity's records; no filter → all. |
@@ -213,7 +212,7 @@ flowchart LR
 Main flow (UC1 → UC4):
 1. With the deployment switch on, admin enables an environment; the enable job creates its default entity and switches it to `enabling`.
 2. The job assigns the environment's existing customers to the default entity and switches it to `enabled`.
-3. Admin creates a second entity with its own prefix, seller details, tax IDs and tax rates.
+3. Admin creates a second entity with its own prefix, seller details and tax rates.
 4. Client creates a customer under the second entity; the customer gets that entity's tax rates.
 5. The billing run finalizes the customer's invoice: the number comes from the entity prefix's counter and the seller is frozen into the snapshot.
 6. The PDF and hosted page show the entity as seller.
@@ -243,7 +242,6 @@ erDiagram
     bool is_default
     string invoice_number_prefix
     jsonb seller_details
-    jsonb tax_identifiers
   }
   CUSTOMER {
     string billing_entity_id "new"
@@ -266,7 +264,6 @@ New table `billing_entities` (base, environment and metadata columns as every en
 | `is_default` | bool | no | false | One per environment: partial unique index on (tenant, environment) where default and published |
 | `invoice_number_prefix` | varchar(20) | no | | Distinct current prefix per environment (FR-7) |
 | `seller_details` | jsonb | no | `{}` | Email, help email, phone, address; same shape as tenant billing details |
-| `tax_identifiers` | jsonb | no | `[]` | List of `{type, value}` printed as biller tax IDs |
 
 Changed tables:
 
@@ -309,7 +306,7 @@ Errors: `403` not a super admin; `400` the environment uses an external tax engi
 | `GET` | `/v1/billing-entities` | List |
 | `POST` | `/v1/billing-entities` | Create (non-default) |
 | `GET` | `/v1/billing-entities/:id` | Read |
-| `PUT` | `/v1/billing-entities/:id` | Edit name, legal name, prefix, seller details, tax IDs |
+| `PUT` | `/v1/billing-entities/:id` | Edit name, legal name, prefix, seller details |
 
 ```json
 {
@@ -325,7 +322,6 @@ Errors: `403` not a super admin; `400` the environment uses an external tax engi
     "address": {"address_line1": "Main 1", "address_city": "Amsterdam", "address_postal_code": "1011",
                 "address_country": "NL"}
   },
-  "tax_identifiers": [{"type": "eu_vat", "value": "NL000000000B01"}],
   "metadata": {},
   "created_at": "2026-10-27T10:00:00Z",
   "updated_at": "2026-10-27T10:00:00Z"
@@ -425,7 +421,7 @@ sequenceDiagram
 Shared locks never block each other; a create waits only while step 1 of an enablement holds the
 exclusive lock. A create either commits before step 1 (and is assigned in step 2) or sees `enabling`.
 
-**Finalize and render** (UC4; FR-16 to FR-19)
+**Finalize and render** (UC4; FR-16 to FR-18)
 
 ```mermaid
 flowchart TD

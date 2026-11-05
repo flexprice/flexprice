@@ -7395,8 +7395,6 @@ type BillingEntityMutation struct {
 	is_default            *bool
 	invoice_number_prefix *string
 	seller_details        *types.SellerDetails
-	tax_identifiers       *[]types.TaxIdentifier
-	appendtax_identifiers []types.TaxIdentifier
 	metadata              *map[string]string
 	clearedFields         map[string]struct{}
 	done                  bool
@@ -7979,57 +7977,6 @@ func (m *BillingEntityMutation) ResetSellerDetails() {
 	m.seller_details = nil
 }
 
-// SetTaxIdentifiers sets the "tax_identifiers" field.
-func (m *BillingEntityMutation) SetTaxIdentifiers(ti []types.TaxIdentifier) {
-	m.tax_identifiers = &ti
-	m.appendtax_identifiers = nil
-}
-
-// TaxIdentifiers returns the value of the "tax_identifiers" field in the mutation.
-func (m *BillingEntityMutation) TaxIdentifiers() (r []types.TaxIdentifier, exists bool) {
-	v := m.tax_identifiers
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTaxIdentifiers returns the old "tax_identifiers" field's value of the BillingEntity entity.
-// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingEntityMutation) OldTaxIdentifiers(ctx context.Context) (v []types.TaxIdentifier, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTaxIdentifiers is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTaxIdentifiers requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTaxIdentifiers: %w", err)
-	}
-	return oldValue.TaxIdentifiers, nil
-}
-
-// AppendTaxIdentifiers adds ti to the "tax_identifiers" field.
-func (m *BillingEntityMutation) AppendTaxIdentifiers(ti []types.TaxIdentifier) {
-	m.appendtax_identifiers = append(m.appendtax_identifiers, ti...)
-}
-
-// AppendedTaxIdentifiers returns the list of values that were appended to the "tax_identifiers" field in this mutation.
-func (m *BillingEntityMutation) AppendedTaxIdentifiers() ([]types.TaxIdentifier, bool) {
-	if len(m.appendtax_identifiers) == 0 {
-		return nil, false
-	}
-	return m.appendtax_identifiers, true
-}
-
-// ResetTaxIdentifiers resets all changes to the "tax_identifiers" field.
-func (m *BillingEntityMutation) ResetTaxIdentifiers() {
-	m.tax_identifiers = nil
-	m.appendtax_identifiers = nil
-}
-
 // SetMetadata sets the "metadata" field.
 func (m *BillingEntityMutation) SetMetadata(value map[string]string) {
 	m.metadata = &value
@@ -8113,7 +8060,7 @@ func (m *BillingEntityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BillingEntityMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 13)
 	if m.tenant_id != nil {
 		fields = append(fields, billingentity.FieldTenantID)
 	}
@@ -8150,9 +8097,6 @@ func (m *BillingEntityMutation) Fields() []string {
 	if m.seller_details != nil {
 		fields = append(fields, billingentity.FieldSellerDetails)
 	}
-	if m.tax_identifiers != nil {
-		fields = append(fields, billingentity.FieldTaxIdentifiers)
-	}
 	if m.metadata != nil {
 		fields = append(fields, billingentity.FieldMetadata)
 	}
@@ -8188,8 +8132,6 @@ func (m *BillingEntityMutation) Field(name string) (ent.Value, bool) {
 		return m.InvoiceNumberPrefix()
 	case billingentity.FieldSellerDetails:
 		return m.SellerDetails()
-	case billingentity.FieldTaxIdentifiers:
-		return m.TaxIdentifiers()
 	case billingentity.FieldMetadata:
 		return m.Metadata()
 	}
@@ -8225,8 +8167,6 @@ func (m *BillingEntityMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldInvoiceNumberPrefix(ctx)
 	case billingentity.FieldSellerDetails:
 		return m.OldSellerDetails(ctx)
-	case billingentity.FieldTaxIdentifiers:
-		return m.OldTaxIdentifiers(ctx)
 	case billingentity.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -8321,13 +8261,6 @@ func (m *BillingEntityMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSellerDetails(v)
-		return nil
-	case billingentity.FieldTaxIdentifiers:
-		v, ok := value.([]types.TaxIdentifier)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTaxIdentifiers(v)
 		return nil
 	case billingentity.FieldMetadata:
 		v, ok := value.(map[string]string)
@@ -8447,9 +8380,6 @@ func (m *BillingEntityMutation) ResetField(name string) error {
 		return nil
 	case billingentity.FieldSellerDetails:
 		m.ResetSellerDetails()
-		return nil
-	case billingentity.FieldTaxIdentifiers:
-		m.ResetTaxIdentifiers()
 		return nil
 	case billingentity.FieldMetadata:
 		m.ResetMetadata()

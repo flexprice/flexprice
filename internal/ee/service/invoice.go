@@ -3780,7 +3780,6 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 	biller := tenant
 	if seller != nil {
 		biller = sellerAsTenant(tenant, seller)
-		billerTaxIDs = seller.TaxIdentifiers
 	}
 
 	// Convert to InvoiceData

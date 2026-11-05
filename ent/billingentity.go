@@ -43,8 +43,6 @@ type BillingEntity struct {
 	InvoiceNumberPrefix string `json:"invoice_number_prefix,omitempty"`
 	// SellerDetails holds the value of the "seller_details" field.
 	SellerDetails types.SellerDetails `json:"seller_details,omitempty"`
-	// TaxIdentifiers holds the value of the "tax_identifiers" field.
-	TaxIdentifiers []types.TaxIdentifier `json:"tax_identifiers,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata     map[string]string `json:"metadata,omitempty"`
 	selectValues sql.SelectValues
@@ -55,7 +53,7 @@ func (*BillingEntity) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case billingentity.FieldSellerDetails, billingentity.FieldTaxIdentifiers, billingentity.FieldMetadata:
+		case billingentity.FieldSellerDetails, billingentity.FieldMetadata:
 			values[i] = new([]byte)
 		case billingentity.FieldIsDefault:
 			values[i] = new(sql.NullBool)
@@ -158,14 +156,6 @@ func (_m *BillingEntity) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field seller_details: %w", err)
 				}
 			}
-		case billingentity.FieldTaxIdentifiers:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field tax_identifiers", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.TaxIdentifiers); err != nil {
-					return fmt.Errorf("unmarshal field tax_identifiers: %w", err)
-				}
-			}
 		case billingentity.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
@@ -245,9 +235,6 @@ func (_m *BillingEntity) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("seller_details=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SellerDetails))
-	builder.WriteString(", ")
-	builder.WriteString("tax_identifiers=")
-	builder.WriteString(fmt.Sprintf("%v", _m.TaxIdentifiers))
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))

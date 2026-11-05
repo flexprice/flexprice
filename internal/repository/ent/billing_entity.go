@@ -54,7 +54,6 @@ func (r *billingEntityRepository) Create(ctx context.Context, e *domain.BillingE
 		SetIsDefault(e.IsDefault).
 		SetInvoiceNumberPrefix(e.InvoiceNumberPrefix).
 		SetSellerDetails(e.SellerDetails).
-		SetTaxIdentifiers(taxIdentifiersOrEmpty(e.TaxIdentifiers)).
 		SetMetadata(e.Metadata).
 		SetTenantID(e.TenantID).
 		SetEnvironmentID(e.EnvironmentID).
@@ -210,7 +209,6 @@ func (r *billingEntityRepository) Update(ctx context.Context, e *domain.BillingE
 		SetLegalName(e.LegalName).
 		SetInvoiceNumberPrefix(e.InvoiceNumberPrefix).
 		SetSellerDetails(e.SellerDetails).
-		SetTaxIdentifiers(taxIdentifiersOrEmpty(e.TaxIdentifiers)).
 		SetMetadata(e.Metadata).
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -260,13 +258,6 @@ func applyBillingEntityFilter(query *ent.BillingEntityQuery, f *types.BillingEnt
 	return query
 }
 
-func taxIdentifiersOrEmpty(ids []types.TaxIdentifier) []types.TaxIdentifier {
-	if ids == nil {
-		return []types.TaxIdentifier{}
-	}
-	return ids
-}
-
 func billingEntityFromEnt(e *ent.BillingEntity) *domain.BillingEntity {
 	if e == nil {
 		return nil
@@ -278,7 +269,6 @@ func billingEntityFromEnt(e *ent.BillingEntity) *domain.BillingEntity {
 		IsDefault:           e.IsDefault,
 		InvoiceNumberPrefix: e.InvoiceNumberPrefix,
 		SellerDetails:       e.SellerDetails,
-		TaxIdentifiers:      e.TaxIdentifiers,
 		Metadata:            e.Metadata,
 		EnvironmentID:       e.EnvironmentID,
 		BaseModel: types.BaseModel{

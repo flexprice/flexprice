@@ -19410,12 +19410,6 @@
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
-                "tax_identifiers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.TaxIdentifier"
-                    }
-                },
                 "tenant_id": {
                     "type": "string"
                 },
@@ -20952,12 +20946,6 @@
                 },
                 "seller_details": {
                     "$ref": "#/definitions/types.SellerDetails"
-                },
-                "tax_identifiers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.TaxIdentifier"
-                    }
                 }
             }
         },
@@ -30640,12 +30628,6 @@
                 },
                 "seller_details": {
                     "$ref": "#/definitions/types.SellerDetails"
-                },
-                "tax_identifiers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.TaxIdentifier"
-                    }
                 }
             }
         },
@@ -38747,12 +38729,6 @@
                 },
                 "seller_details": {
                     "$ref": "#/definitions/types.SellerDetails"
-                },
-                "tax_identifiers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.TaxIdentifier"
-                    }
                 }
             }
         },
@@ -38976,20 +38952,6 @@
                     "type": "string"
                 },
                 "phone": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.TaxIdentifier": {
-            "type": "object",
-            "properties": {
-                "country": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "value": {
                     "type": "string"
                 }
             }

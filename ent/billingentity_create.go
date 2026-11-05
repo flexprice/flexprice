@@ -157,12 +157,6 @@ func (_c *BillingEntityCreate) SetNillableSellerDetails(v *types.SellerDetails) 
 	return _c
 }
 
-// SetTaxIdentifiers sets the "tax_identifiers" field.
-func (_c *BillingEntityCreate) SetTaxIdentifiers(v []types.TaxIdentifier) *BillingEntityCreate {
-	_c.mutation.SetTaxIdentifiers(v)
-	return _c
-}
-
 // SetMetadata sets the "metadata" field.
 func (_c *BillingEntityCreate) SetMetadata(v map[string]string) *BillingEntityCreate {
 	_c.mutation.SetMetadata(v)
@@ -234,10 +228,6 @@ func (_c *BillingEntityCreate) defaults() {
 		v := billingentity.DefaultSellerDetails
 		_c.mutation.SetSellerDetails(v)
 	}
-	if _, ok := _c.mutation.TaxIdentifiers(); !ok {
-		v := billingentity.DefaultTaxIdentifiers
-		_c.mutation.SetTaxIdentifiers(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -288,9 +278,6 @@ func (_c *BillingEntityCreate) check() error {
 	}
 	if _, ok := _c.mutation.SellerDetails(); !ok {
 		return &ValidationError{Name: "seller_details", err: errors.New(`ent: missing required field "BillingEntity.seller_details"`)}
-	}
-	if _, ok := _c.mutation.TaxIdentifiers(); !ok {
-		return &ValidationError{Name: "tax_identifiers", err: errors.New(`ent: missing required field "BillingEntity.tax_identifiers"`)}
 	}
 	return nil
 }
@@ -374,10 +361,6 @@ func (_c *BillingEntityCreate) createSpec() (*BillingEntity, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.SellerDetails(); ok {
 		_spec.SetField(billingentity.FieldSellerDetails, field.TypeJSON, value)
 		_node.SellerDetails = value
-	}
-	if value, ok := _c.mutation.TaxIdentifiers(); ok {
-		_spec.SetField(billingentity.FieldTaxIdentifiers, field.TypeJSON, value)
-		_node.TaxIdentifiers = value
 	}
 	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(billingentity.FieldMetadata, field.TypeJSON, value)

@@ -1482,10 +1482,6 @@ definitions:
         $ref: '#/definitions/types.SellerDetails'
       status:
         $ref: '#/definitions/types.Status'
-      tax_identifiers:
-        items:
-          $ref: '#/definitions/types.TaxIdentifier'
-        type: array
       tenant_id:
         type: string
       updated_at:
@@ -2620,10 +2616,6 @@ definitions:
         type: string
       seller_details:
         $ref: '#/definitions/types.SellerDetails'
-      tax_identifiers:
-        items:
-          $ref: '#/definitions/types.TaxIdentifier'
-        type: array
     required:
     - invoice_number_prefix
     - legal_name
@@ -10147,10 +10139,6 @@ definitions:
         type: string
       seller_details:
         $ref: '#/definitions/types.SellerDetails'
-      tax_identifiers:
-        items:
-          $ref: '#/definitions/types.TaxIdentifier'
-        type: array
     type: object
   UpdateCommitmentRequest:
     properties:
@@ -16355,10 +16343,6 @@ definitions:
         type: string
       seller_details:
         $ref: '#/definitions/types.SellerDetails'
-      tax_identifiers:
-        items:
-          $ref: '#/definitions/types.TaxIdentifier'
-        type: array
     type: object
   types.JournalDirection:
     enum:
@@ -16531,15 +16515,6 @@ definitions:
       help_email:
         type: string
       phone:
-        type: string
-    type: object
-  types.TaxIdentifier:
-    properties:
-      country:
-        type: string
-      type:
-        type: string
-      value:
         type: string
     type: object
   types.TenantInternalStatus:

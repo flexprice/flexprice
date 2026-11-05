@@ -25,7 +25,6 @@ func copyBillingEntity(e *billingentity.BillingEntity) *billingentity.BillingEnt
 		return nil
 	}
 	cp := *e
-	cp.TaxIdentifiers = append([]types.TaxIdentifier(nil), e.TaxIdentifiers...)
 	cp.Metadata = lo.Assign(map[string]string{}, e.Metadata)
 	return &cp
 }

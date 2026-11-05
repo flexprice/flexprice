@@ -401,10 +401,6 @@ func init() {
 	billingentityDescSellerDetails := billingentityFields[5].Descriptor()
 	// billingentity.DefaultSellerDetails holds the default value on creation for the seller_details field.
 	billingentity.DefaultSellerDetails = billingentityDescSellerDetails.Default.(types.SellerDetails)
-	// billingentityDescTaxIdentifiers is the schema descriptor for tax_identifiers field.
-	billingentityDescTaxIdentifiers := billingentityFields[6].Descriptor()
-	// billingentity.DefaultTaxIdentifiers holds the default value on creation for the tax_identifiers field.
-	billingentity.DefaultTaxIdentifiers = billingentityDescTaxIdentifiers.Default.([]types.TaxIdentifier)
 	billinginstalmentMixin := schema.BillingInstalment{}.Mixin()
 	billinginstalmentMixinFields0 := billinginstalmentMixin[0].Fields()
 	_ = billinginstalmentMixinFields0

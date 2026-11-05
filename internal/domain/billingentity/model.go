@@ -7,15 +7,14 @@ import (
 
 // BillingEntity is a legal entity of a tenant that bills customers in one environment.
 type BillingEntity struct {
-	ID                  string                `json:"id"`
-	Name                string                `json:"name"`
-	LegalName           string                `json:"legal_name"`
-	IsDefault           bool                  `json:"is_default"`
-	InvoiceNumberPrefix string                `json:"invoice_number_prefix"`
-	SellerDetails       types.SellerDetails   `json:"seller_details"`
-	TaxIdentifiers      []types.TaxIdentifier `json:"tax_identifiers"`
-	Metadata            map[string]string     `json:"metadata,omitempty"`
-	EnvironmentID       string                `json:"environment_id"`
+	ID                  string              `json:"id"`
+	Name                string              `json:"name"`
+	LegalName           string              `json:"legal_name"`
+	IsDefault           bool                `json:"is_default"`
+	InvoiceNumberPrefix string              `json:"invoice_number_prefix"`
+	SellerDetails       types.SellerDetails `json:"seller_details"`
+	Metadata            map[string]string   `json:"metadata,omitempty"`
+	EnvironmentID       string              `json:"environment_id"`
 	types.BaseModel
 }
 
@@ -28,7 +27,6 @@ func (e *BillingEntity) AsInvoiceSeller() *types.InvoiceSeller {
 		BillingEntityID: e.ID,
 		LegalName:       e.LegalName,
 		SellerDetails:   e.SellerDetails,
-		TaxIdentifiers:  append([]types.TaxIdentifier(nil), e.TaxIdentifiers...),
 	}
 }
 
