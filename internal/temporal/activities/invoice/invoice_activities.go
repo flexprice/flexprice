@@ -2,9 +2,9 @@ package invoice
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/ee/service"
@@ -144,7 +144,7 @@ func (s *InvoiceActivities) ListPastPeriodDraftsActivity(
 	filter.SubscriptionID = input.SubscriptionID
 	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
 	filter.BillingReason = types.InvoiceBillingReasonSubscriptionCycle
-	filter.PeriodEndLTE = lo.ToPtr(time.Now().UTC())
+	filter.PeriodEndLTE = lo.ToPtr(clock.Now())
 
 	drafts, err := s.serviceParams.InvoiceRepo.List(ctx, filter)
 	if err != nil {
