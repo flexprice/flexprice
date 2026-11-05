@@ -57,6 +57,8 @@ type BillingTerm struct {
 	InvoiceCadence *types.InvoiceCadence `json:"invoice_cadence,omitempty"`
 	// Split holds the value of the "split" field.
 	Split *types.BillingTermSplit `json:"split,omitempty"`
+	// InstalmentInvoicing holds the value of the "instalment_invoicing" field.
+	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
 	// InvoiceLabel holds the value of the "invoice_label" field.
 	InvoiceLabel *string `json:"invoice_label,omitempty"`
 	// Metadata holds the value of the "metadata" field.
@@ -73,7 +75,7 @@ func (*BillingTerm) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case billingterm.FieldPeriodCount:
 			values[i] = new(sql.NullInt64)
-		case billingterm.FieldID, billingterm.FieldTenantID, billingterm.FieldStatus, billingterm.FieldCreatedBy, billingterm.FieldUpdatedBy, billingterm.FieldEnvironmentID, billingterm.FieldOwnerType, billingterm.FieldOwnerID, billingterm.FieldKind, billingterm.FieldValueType, billingterm.FieldBillTrigger, billingterm.FieldInvoiceCadence, billingterm.FieldSplit, billingterm.FieldInvoiceLabel:
+		case billingterm.FieldID, billingterm.FieldTenantID, billingterm.FieldStatus, billingterm.FieldCreatedBy, billingterm.FieldUpdatedBy, billingterm.FieldEnvironmentID, billingterm.FieldOwnerType, billingterm.FieldOwnerID, billingterm.FieldKind, billingterm.FieldValueType, billingterm.FieldBillTrigger, billingterm.FieldInvoiceCadence, billingterm.FieldSplit, billingterm.FieldInstalmentInvoicing, billingterm.FieldInvoiceLabel:
 			values[i] = new(sql.NullString)
 		case billingterm.FieldCreatedAt, billingterm.FieldUpdatedAt, billingterm.FieldBillOn, billingterm.FieldStartDate, billingterm.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -222,6 +224,13 @@ func (_m *BillingTerm) assignValues(columns []string, values []any) error {
 				_m.Split = new(types.BillingTermSplit)
 				*_m.Split = types.BillingTermSplit(value.String)
 			}
+		case billingterm.FieldInstalmentInvoicing:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field instalment_invoicing", values[i])
+			} else if value.Valid {
+				_m.InstalmentInvoicing = new(types.InstalmentDelivery)
+				*_m.InstalmentInvoicing = types.InstalmentDelivery(value.String)
+			}
 		case billingterm.FieldInvoiceLabel:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_label", values[i])
@@ -341,6 +350,11 @@ func (_m *BillingTerm) String() string {
 	builder.WriteString(", ")
 	if v := _m.Split; v != nil {
 		builder.WriteString("split=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.InstalmentInvoicing; v != nil {
+		builder.WriteString("instalment_invoicing=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

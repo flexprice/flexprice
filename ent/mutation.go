@@ -9739,35 +9739,36 @@ func (m *BillingSequenceMutation) ResetEdge(name string) error {
 // BillingTermMutation represents an operation that mutates the BillingTerm nodes in the graph.
 type BillingTermMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *string
-	tenant_id       *string
-	status          *string
-	created_at      *time.Time
-	updated_at      *time.Time
-	created_by      *string
-	updated_by      *string
-	environment_id  *string
-	owner_type      *types.BillingTermOwnerType
-	owner_id        *string
-	kind            *types.BillingTermKind
-	value_type      *types.BillingTermValueType
-	value           *decimal.Decimal
-	bill_trigger    *types.InstalmentBillTrigger
-	bill_on         *time.Time
-	start_date      *time.Time
-	end_date        *time.Time
-	period_count    *int
-	addperiod_count *int
-	invoice_cadence *types.InvoiceCadence
-	split           *types.BillingTermSplit
-	invoice_label   *string
-	metadata        *types.Metadata
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*BillingTerm, error)
-	predicates      []predicate.BillingTerm
+	op                   Op
+	typ                  string
+	id                   *string
+	tenant_id            *string
+	status               *string
+	created_at           *time.Time
+	updated_at           *time.Time
+	created_by           *string
+	updated_by           *string
+	environment_id       *string
+	owner_type           *types.BillingTermOwnerType
+	owner_id             *string
+	kind                 *types.BillingTermKind
+	value_type           *types.BillingTermValueType
+	value                *decimal.Decimal
+	bill_trigger         *types.InstalmentBillTrigger
+	bill_on              *time.Time
+	start_date           *time.Time
+	end_date             *time.Time
+	period_count         *int
+	addperiod_count      *int
+	invoice_cadence      *types.InvoiceCadence
+	split                *types.BillingTermSplit
+	instalment_invoicing *types.InstalmentDelivery
+	invoice_label        *string
+	metadata             *types.Metadata
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*BillingTerm, error)
+	predicates           []predicate.BillingTerm
 }
 
 var _ ent.Mutation = (*BillingTermMutation)(nil)
@@ -10722,6 +10723,55 @@ func (m *BillingTermMutation) ResetSplit() {
 	delete(m.clearedFields, billingterm.FieldSplit)
 }
 
+// SetInstalmentInvoicing sets the "instalment_invoicing" field.
+func (m *BillingTermMutation) SetInstalmentInvoicing(td types.InstalmentDelivery) {
+	m.instalment_invoicing = &td
+}
+
+// InstalmentInvoicing returns the value of the "instalment_invoicing" field in the mutation.
+func (m *BillingTermMutation) InstalmentInvoicing() (r types.InstalmentDelivery, exists bool) {
+	v := m.instalment_invoicing
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInstalmentInvoicing returns the old "instalment_invoicing" field's value of the BillingTerm entity.
+// If the BillingTerm object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingTermMutation) OldInstalmentInvoicing(ctx context.Context) (v *types.InstalmentDelivery, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInstalmentInvoicing is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInstalmentInvoicing requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInstalmentInvoicing: %w", err)
+	}
+	return oldValue.InstalmentInvoicing, nil
+}
+
+// ClearInstalmentInvoicing clears the value of the "instalment_invoicing" field.
+func (m *BillingTermMutation) ClearInstalmentInvoicing() {
+	m.instalment_invoicing = nil
+	m.clearedFields[billingterm.FieldInstalmentInvoicing] = struct{}{}
+}
+
+// InstalmentInvoicingCleared returns if the "instalment_invoicing" field was cleared in this mutation.
+func (m *BillingTermMutation) InstalmentInvoicingCleared() bool {
+	_, ok := m.clearedFields[billingterm.FieldInstalmentInvoicing]
+	return ok
+}
+
+// ResetInstalmentInvoicing resets all changes to the "instalment_invoicing" field.
+func (m *BillingTermMutation) ResetInstalmentInvoicing() {
+	m.instalment_invoicing = nil
+	delete(m.clearedFields, billingterm.FieldInstalmentInvoicing)
+}
+
 // SetInvoiceLabel sets the "invoice_label" field.
 func (m *BillingTermMutation) SetInvoiceLabel(s string) {
 	m.invoice_label = &s
@@ -10854,7 +10904,7 @@ func (m *BillingTermMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BillingTermMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 22)
 	if m.tenant_id != nil {
 		fields = append(fields, billingterm.FieldTenantID)
 	}
@@ -10912,6 +10962,9 @@ func (m *BillingTermMutation) Fields() []string {
 	if m.split != nil {
 		fields = append(fields, billingterm.FieldSplit)
 	}
+	if m.instalment_invoicing != nil {
+		fields = append(fields, billingterm.FieldInstalmentInvoicing)
+	}
 	if m.invoice_label != nil {
 		fields = append(fields, billingterm.FieldInvoiceLabel)
 	}
@@ -10964,6 +11017,8 @@ func (m *BillingTermMutation) Field(name string) (ent.Value, bool) {
 		return m.InvoiceCadence()
 	case billingterm.FieldSplit:
 		return m.Split()
+	case billingterm.FieldInstalmentInvoicing:
+		return m.InstalmentInvoicing()
 	case billingterm.FieldInvoiceLabel:
 		return m.InvoiceLabel()
 	case billingterm.FieldMetadata:
@@ -11015,6 +11070,8 @@ func (m *BillingTermMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldInvoiceCadence(ctx)
 	case billingterm.FieldSplit:
 		return m.OldSplit(ctx)
+	case billingterm.FieldInstalmentInvoicing:
+		return m.OldInstalmentInvoicing(ctx)
 	case billingterm.FieldInvoiceLabel:
 		return m.OldInvoiceLabel(ctx)
 	case billingterm.FieldMetadata:
@@ -11161,6 +11218,13 @@ func (m *BillingTermMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSplit(v)
 		return nil
+	case billingterm.FieldInstalmentInvoicing:
+		v, ok := value.(types.InstalmentDelivery)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInstalmentInvoicing(v)
+		return nil
 	case billingterm.FieldInvoiceLabel:
 		v, ok := value.(string)
 		if !ok {
@@ -11253,6 +11317,9 @@ func (m *BillingTermMutation) ClearedFields() []string {
 	if m.FieldCleared(billingterm.FieldSplit) {
 		fields = append(fields, billingterm.FieldSplit)
 	}
+	if m.FieldCleared(billingterm.FieldInstalmentInvoicing) {
+		fields = append(fields, billingterm.FieldInstalmentInvoicing)
+	}
 	if m.FieldCleared(billingterm.FieldInvoiceLabel) {
 		fields = append(fields, billingterm.FieldInvoiceLabel)
 	}
@@ -11305,6 +11372,9 @@ func (m *BillingTermMutation) ClearField(name string) error {
 		return nil
 	case billingterm.FieldSplit:
 		m.ClearSplit()
+		return nil
+	case billingterm.FieldInstalmentInvoicing:
+		m.ClearInstalmentInvoicing()
 		return nil
 	case billingterm.FieldInvoiceLabel:
 		m.ClearInvoiceLabel()
@@ -11376,6 +11446,9 @@ func (m *BillingTermMutation) ResetField(name string) error {
 		return nil
 	case billingterm.FieldSplit:
 		m.ResetSplit()
+		return nil
+	case billingterm.FieldInstalmentInvoicing:
+		m.ResetInstalmentInvoicing()
 		return nil
 	case billingterm.FieldInvoiceLabel:
 		m.ResetInvoiceLabel()

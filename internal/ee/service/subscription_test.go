@@ -1794,7 +1794,23 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr:       true,
-			expectedError: "end_date cannot be before start_date",
+			expectedError: "end_date must be after start_date",
+			errorType:     "validation",
+		},
+		{
+			name: "start_and_end_date_in_the_same_second",
+			input: dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				StartDate:          lo.ToPtr(s.testData.now.Truncate(time.Second).Add(200 * time.Millisecond)),
+				EndDate:            lo.ToPtr(s.testData.now.Truncate(time.Second).Add(800 * time.Millisecond)),
+				Currency:           "usd",
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+			},
+			wantErr:       true,
+			expectedError: "end_date must be after start_date",
 			errorType:     "validation",
 		},
 		// Collection Method Tests
@@ -2130,6 +2146,19 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitment() {
 	s.Require().NoError(err)
 	s.Require().Len(items, 1)
 	s.Equal(resp.ID, items[0].SubscriptionID)
+
+	s.Require().Len(resp.Commitments, 1)
+	s.Equal(items[0].ID, resp.Commitments[0].ID)
+	s.True(resp.Commitments[0].CommitmentValue.Equal(decimal.RequireFromString("4.608")))
+
+	unexpanded, err := s.service.GetSubscriptionV2(ctx, resp.ID, types.NewExpand(""))
+	s.Require().NoError(err)
+	s.Empty(unexpanded.Commitments, "v2 lists commitments only when expanded")
+
+	expanded, err := s.service.GetSubscriptionV2(ctx, resp.ID, types.NewExpand("commitments"))
+	s.Require().NoError(err)
+	s.Require().Len(expanded.Commitments, 1)
+	s.Equal(items[0].ID, expanded.Commitments[0].ID)
 }
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentOnIncompleteSubscription() {
@@ -11461,4 +11490,33 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_NoneAddonDatedMidPerio
 	s.True(addonCharge(start, time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)).IsZero(), "addon is free in [Jan 15, Feb 1)")
 	s.True(addonCharge(time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC), time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)).Equal(decimal.NewFromInt(31)),
 		"addon is billed in full from Feb 1")
+}
+
+// A subscription starts on a whole second, like every later billing period edge, so dates derived from its start land
+// on its edges; its line items start with it.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_StartsOnAWholeSecond() {
+	ctx := s.GetContext()
+	start := s.testData.now.Truncate(time.Second).Add(750 * time.Millisecond)
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(start),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+	})
+	s.Require().NoError(err)
+
+	whole := start.Truncate(time.Second)
+	s.True(resp.StartDate.Equal(whole), "start %s", resp.StartDate)
+	s.True(resp.BillingAnchor.Equal(whole), "anchor %s", resp.BillingAnchor)
+	s.True(resp.CurrentPeriodEnd.Equal(whole.AddDate(0, 1, 0)), "first period end %s", resp.CurrentPeriodEnd)
+
+	_, items, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, resp.ID)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(items)
+	for _, item := range items {
+		s.False(item.StartDate.After(whole), "line item %s starts %s", item.ID, item.StartDate)
+	}
 }

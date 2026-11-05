@@ -92,6 +92,12 @@ func monthlyWants(start time.Time, amounts []string, cadence types.InvoiceCadenc
 	return out
 }
 
+// aligned is the owner's periods for a collection period starting on a billing period edge, so that counting periods
+// from its start cuts them the same way.
+func aligned(periods []PeriodValue) Periods {
+	return Periods{Billing: periods, Anniversary: periods}
+}
+
 func usd(total string, start, end time.Time) testOwner {
 	return testOwner{
 		currency: "USD",
@@ -181,7 +187,7 @@ func TestExpand(t *testing.T) {
 			),
 			check: func(t *testing.T, terms []*Term, got []*Instalment) {
 				require.Equal(t, DefaultInvoiceLabel, got[0].InvoiceLabel, "Expand leaves the numbering to NumberLabels")
-				NumberLabels(got)
+				NumberLabels(got, 0)
 				require.Equal(t, "Instalment 1 of 11", got[0].InvoiceLabel, "a once term is numbered with the recurring ones")
 				require.Equal(t, "Instalment 3 of 11", got[2].InvoiceLabel)
 				require.Equal(t, "Instalment 11 of 11", got[10].InvoiceLabel)
@@ -204,7 +210,7 @@ func TestExpand(t *testing.T) {
 				monthlyWants(jan2027, repeat("70", 10), types.InvoiceCadenceArrear)...,
 			),
 			check: func(t *testing.T, _ []*Term, got []*Instalment) {
-				NumberLabels(got)
+				NumberLabels(got, 0)
 				require.Equal(t, "Instalment 1 of 11", got[0].InvoiceLabel)
 				require.Equal(t, "Payment 2/11", got[1].InvoiceLabel)
 				require.Equal(t, "Payment 11/11", got[10].InvoiceLabel)
@@ -340,7 +346,7 @@ func TestExpand(t *testing.T) {
 			ctx := context.WithValue(context.Background(), types.CtxEnvironmentID, "env_1")
 			ctx = context.WithValue(ctx, types.CtxTenantID, "tenant_1")
 
-			got, err := Expand(ctx, tt.owner, tt.periods, tt.terms)
+			got, err := Expand(ctx, tt.owner, aligned(tt.periods), tt.terms)
 			require.NoError(t, err)
 
 			gotWants := lo.Map(got, func(i *Instalment, _ int) instalmentWant {
@@ -436,14 +442,14 @@ func TestExpand_Validation(t *testing.T) {
 			name:    "no terms",
 			owner:   year,
 			periods: months,
-			wantMsg: "billing_terms: must hold 1 to 20 terms",
+			wantMsg: "billing_terms: must hold 1 to 100 terms",
 		},
 		{
-			name:    "21 terms",
+			name:    "101 terms",
 			owner:   year,
 			periods: months,
-			terms:   lo.Times(21, func(int) *Term { return onceFixed("1") }),
-			wantMsg: "billing_terms: must hold 1 to 20 terms",
+			terms:   lo.Times(101, func(int) *Term { return onceFixed("1") }),
+			wantMsg: "billing_terms: must hold 1 to 100 terms",
 		},
 		{
 			name:    "unknown kind",
@@ -451,6 +457,15 @@ func TestExpand_Validation(t *testing.T) {
 			periods: months,
 			terms:   []*Term{with(onceRemainder(), func(t *Term) { t.Kind = "weekly" })},
 			wantMsg: "billing_terms[0].kind:",
+		},
+		{
+			name:    "unknown instalment invoicing",
+			owner:   year,
+			periods: months,
+			terms: []*Term{with(onceRemainder(), func(t *Term) {
+				t.InstalmentInvoicing = lo.ToPtr(types.InstalmentDelivery("email"))
+			})},
+			wantMsg: "billing_terms[0].instalment_invoicing:",
 		},
 		{
 			name:    "percentage terms",
@@ -666,7 +681,7 @@ func TestExpand_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Expand(context.Background(), tt.owner, tt.periods, tt.terms)
+			got, err := Expand(context.Background(), tt.owner, aligned(tt.periods), tt.terms)
 
 			require.Error(t, err)
 			require.True(t, ierr.IsValidation(err), "want a validation error, got %v", err)
@@ -685,7 +700,7 @@ func TestExpand_OwnerWithoutSubscription(t *testing.T) {
 	jan2027 := date(2027, time.January, 1)
 	owner := unsubscribedOwner{usd("1200", jan2027, date(2028, time.January, 1))}
 
-	got, err := Expand(context.Background(), owner, monthly(jan2027, 12, "100"), []*Term{onceRemainder()})
+	got, err := Expand(context.Background(), owner, aligned(monthly(jan2027, 12, "100")), []*Term{onceRemainder()})
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
@@ -698,7 +713,7 @@ func TestExpand_UndatedTermsStartAtTheTermStart(t *testing.T) {
 	owner := usd("1200", jan2027, date(2028, time.January, 1))
 	owner.termStart = apr2027
 
-	got, err := Expand(context.Background(), owner, monthly(jan2027, 12, "100"),
+	got, err := Expand(context.Background(), owner, aligned(monthly(jan2027, 12, "100")),
 		[]*Term{onceFixed("300"), recurringRemainder(types.InvoiceCadenceAdvance)})
 
 	require.NoError(t, err)
@@ -721,12 +736,101 @@ func TestExpand_DatedTermsMayStartBeforeTheTermStart(t *testing.T) {
 		with(recurringRemainder(types.InvoiceCadenceAdvance), func(t *Term) { t.StartDate = lo.ToPtr(feb2027) }),
 	}
 
-	got, err := Expand(context.Background(), owner, monthly(jan2027, 12, "100"), terms)
+	got, err := Expand(context.Background(), owner, aligned(monthly(jan2027, 12, "100")), terms)
 
 	require.NoError(t, err)
 	require.Len(t, got, 12)
 	require.True(t, got[0].BillOn.Equal(feb2027))
 	require.True(t, got[1].BillOn.Equal(feb2027))
+}
+
+func TestExpand_TermDeliveryOverridesTheOwners(t *testing.T) {
+	jan2027 := date(2027, time.January, 1)
+	owner := usd("1200", jan2027, date(2028, time.January, 1))
+	upfront := with(onceFixed("300"), func(t *Term) {
+		t.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
+	})
+
+	got, err := Expand(context.Background(), owner, aligned(monthly(jan2027, 12, "100")),
+		[]*Term{upfront, recurringRemainder(types.InvoiceCadenceArrear)})
+
+	require.NoError(t, err)
+	require.Len(t, got, 13)
+	require.Equal(t, types.InstalmentDeliverySeparateInvoice, got[0].Delivery, "the upfront")
+	for _, monthly := range got[1:] {
+		require.Equal(t, types.InstalmentDeliverySubscriptionInvoice, monthly.Delivery)
+	}
+}
+
+// A year from 15 Jan on calendar billing: a separately invoiced recurring term steps on the 15th, one on the
+// subscription invoice on the 1st after a stub. Undated terms start at the period holding the term start.
+func TestExpand_RecurringTermsStepByDelivery(t *testing.T) {
+	jan15, feb1, mar1, mar15 := date(2027, time.January, 15), date(2027, time.February, 1), date(2027, time.March, 1), date(2027, time.March, 15)
+	jan2028, jan15of2028 := date(2028, time.January, 1), date(2028, time.January, 15)
+	billing := append(append([]PeriodValue{{Period: period(jan15, feb1), Amount: dec("55")}},
+		monthly(feb1, 11, "100")...),
+		PeriodValue{Period: period(jan2028, jan15of2028), Amount: dec("45")})
+	periods := Periods{Billing: billing, Anniversary: monthly(jan15, 12, "100")}
+
+	tests := []struct {
+		name      string
+		delivery  types.InstalmentDelivery
+		termStart time.Time // zero for the collection start
+		terms     []*Term
+		wantCount int
+		wantBills []time.Time // the first instalments' bill_on, in billing order
+		wantErr   string
+	}{
+		{
+			name:      "invoiced separately, steps on the 15th",
+			delivery:  types.InstalmentDeliverySeparateInvoice,
+			terms:     []*Term{recurringRemainder(types.InvoiceCadenceAdvance)},
+			wantCount: 12,
+			wantBills: []time.Time{jan15, date(2027, time.February, 15), mar15},
+		},
+		{
+			name:      "on the subscription invoice, a stub then the 1st",
+			delivery:  types.InstalmentDeliverySubscriptionInvoice,
+			terms:     []*Term{recurringRemainder(types.InvoiceCadenceAdvance)},
+			wantCount: 13,
+			wantBills: []time.Time{jan15, feb1, mar1},
+		},
+		{
+			name:      "an edit on 20 Mar: the once term on 1 Mar, the separate recurring term on 15 Mar",
+			delivery:  types.InstalmentDeliverySeparateInvoice,
+			termStart: date(2027, time.March, 20),
+			terms:     []*Term{onceFixed("100"), recurringRemainder(types.InvoiceCadenceAdvance)},
+			wantCount: 11,
+			wantBills: []time.Time{mar1, mar15},
+		},
+		{
+			name:     "a separate term's start_date must be an anniversary edge",
+			delivery: types.InstalmentDeliverySeparateInvoice,
+			terms: []*Term{with(recurringRemainder(types.InvoiceCadenceAdvance), func(t *Term) {
+				t.StartDate = lo.ToPtr(feb1)
+			})},
+			wantErr: "billing_terms[0].start_date: must be the start of an anniversary period",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			owner := usd("1200", jan15, jan15of2028)
+			owner.delivery = tt.delivery
+			owner.termStart = tt.termStart
+
+			got, err := Expand(context.Background(), owner, periods, tt.terms)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Len(t, got, tt.wantCount)
+			for i, want := range tt.wantBills {
+				require.True(t, got[i].BillOn.Equal(want), "instalment %d bills on %s, want %s", i, got[i].BillOn, want)
+			}
+		})
+	}
 }
 
 func TestNumberLabels_CountsEveryTermInBillingOrder(t *testing.T) {
@@ -737,14 +841,48 @@ func TestNumberLabels_CountsEveryTermInBillingOrder(t *testing.T) {
 		with(onceRemainder(), func(t *Term) { t.BillOn = lo.ToPtr(midJune) }),
 	}
 
-	got, err := Expand(context.Background(), usd("1200", jan2027, date(2028, time.January, 1)), monthly(jan2027, 12, "100"), terms)
+	got, err := Expand(context.Background(), usd("1200", jan2027, date(2028, time.January, 1)), aligned(monthly(jan2027, 12, "100")), terms)
 
 	require.NoError(t, err)
 	require.Len(t, got, 13)
 	require.True(t, got[6].BillOn.Equal(midJune))
 
-	NumberLabels(got)
+	NumberLabels(got, 0)
 	require.Equal(t, "Instalment 6 of 13", got[5].InvoiceLabel)
 	require.Equal(t, "Instalment 7 of 13", got[6].InvoiceLabel, "the once instalment takes its place among the recurring ones")
 	require.Equal(t, "Instalment 8 of 13", got[7].InvoiceLabel)
+}
+
+// A label without {n} or {of}, such as a milestone's, takes no number, so the numbered instalments run without a gap.
+func TestNumberLabels_SkipsLabelsWithoutNumbers(t *testing.T) {
+	jan2027 := date(2027, time.January, 1)
+	terms := []*Term{
+		with(onceFixed("60"), func(t *Term) {
+			t.BillTrigger = lo.ToPtr(types.InstalmentBillTriggerManual)
+			t.InvoiceLabel = lo.ToPtr("Go-live milestone")
+		}),
+		recurringRemainder(types.InvoiceCadenceArrear),
+	}
+
+	got, err := Expand(context.Background(), usd("300", jan2027, date(2027, time.April, 1)), aligned(monthly(jan2027, 3, "100")), terms)
+	require.NoError(t, err)
+	require.Len(t, got, 4)
+
+	NumberLabels(got, 0)
+	labels := lo.Map(got, func(i *Instalment, _ int) string { return i.InvoiceLabel })
+	require.ElementsMatch(t, []string{"Go-live milestone", "Instalment 1 of 3", "Instalment 2 of 3", "Instalment 3 of 3"}, labels)
+}
+
+// An edit numbers its new instalments after the numbered ones already invoiced.
+func TestNumberLabels_ContinuesAfterTheInvoiced(t *testing.T) {
+	planned := []*Instalment{
+		{InvoiceLabel: DefaultInvoiceLabel},
+		{InvoiceLabel: "Final settlement"},
+		{InvoiceLabel: "Payment {n}/{of}"},
+	}
+
+	NumberLabels(planned, 2)
+	require.Equal(t, "Instalment 3 of 4", planned[0].InvoiceLabel)
+	require.Equal(t, "Final settlement", planned[1].InvoiceLabel)
+	require.Equal(t, "Payment 4/4", planned[2].InvoiceLabel)
 }

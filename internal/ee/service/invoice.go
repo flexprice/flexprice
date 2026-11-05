@@ -1333,7 +1333,7 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 		return err
 	}
 
-	if err := s.refreshDraftInstalments(ctx, inv, req.InvoiceStateChangeSource); err != nil {
+	if err := s.refreshStaleDraft(ctx, inv, req.InvoiceStateChangeSource); err != nil {
 		return err
 	}
 
@@ -1958,7 +1958,7 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		return ierr.NewError("invoice has not been computed").WithHint("Invoice must be computed before processing").Mark(ierr.ErrValidation)
 	}
 
-	if err := s.refreshDraftInstalments(ctx, inv, dto.InvoiceStateChangeSource{}); err != nil {
+	if err := s.refreshStaleDraft(ctx, inv, dto.InvoiceStateChangeSource{}); err != nil {
 		return err
 	}
 
@@ -4313,7 +4313,7 @@ func (s *invoiceService) reconcileLineItems(
 		PeriodStart         time.Time
 		PeriodEnd           time.Time
 	}
-	// Commitment lines are keyed by commitment and line kind too: stacked commitments and overage
+	// Commitment lines are keyed by commitment and line kind too: stacked commitments, overage and plain usage
 	// share a subscription line item, and true-up or settlement lines have none. Instalment lines are
 	// keyed by their instalment, since two instalments of a commitment can cover the same period.
 	keyOf := func(item *invoice.InvoiceLineItem) (reconcileKey, bool) {
@@ -4322,12 +4322,12 @@ func (s *invoiceService) reconcileLineItems(
 		}
 
 		k := reconcileKey{
-			PeriodStart: *item.PeriodStart,
-			PeriodEnd:   *item.PeriodEnd,
+			PeriodStart:    *item.PeriodStart,
+			PeriodEnd:      *item.PeriodEnd,
+			CommitmentKind: item.Metadata[types.MetadataKeyCommitmentLineKind],
 		}
 		if item.CommitmentID != nil {
 			k.CommitmentID = *item.CommitmentID
-			k.CommitmentKind = item.Metadata[types.MetadataKeyCommitmentLineKind]
 			k.BillingInstalmentID = lo.FromPtr(item.BillingInstalmentID)
 			k.SubLineItemID = lo.FromPtr(item.SubscriptionLineItemID)
 			return k, true
@@ -4342,11 +4342,16 @@ func (s *invoiceService) reconcileLineItems(
 
 	// Items missing PeriodStart/PeriodEnd (legacy pre-migration or hand-crafted) are silently ignored here
 	// same contract as the pre-fan-out reconciler, which ignored items missing SubscriptionLineItemID. They stay in the DB untouched.
+	// A key held twice keeps its last row; the others are archived.
+	var toArchiveIDs []string
 	existingByKey := make(map[reconcileKey]*invoice.InvoiceLineItem, len(existing))
 	for _, item := range existing {
 		k, ok := keyOf(item)
 		if !ok {
 			continue
+		}
+		if held, dup := existingByKey[k]; dup {
+			toArchiveIDs = append(toArchiveIDs, held.ID)
 		}
 		existingByKey[k] = item
 	}
@@ -4384,7 +4389,6 @@ func (s *invoiceService) reconcileLineItems(
 
 	// Archive old items that no longer appear in the new calculation.
 	// An existing invoice line item whose key is not re-emitted by the fresh calculation gets archived.
-	var toArchiveIDs []string
 	for _, item := range existingByKey {
 		toArchiveIDs = append(toArchiveIDs, item.ID)
 	}

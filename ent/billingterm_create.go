@@ -248,6 +248,20 @@ func (_c *BillingTermCreate) SetNillableSplit(v *types.BillingTermSplit) *Billin
 	return _c
 }
 
+// SetInstalmentInvoicing sets the "instalment_invoicing" field.
+func (_c *BillingTermCreate) SetInstalmentInvoicing(v types.InstalmentDelivery) *BillingTermCreate {
+	_c.mutation.SetInstalmentInvoicing(v)
+	return _c
+}
+
+// SetNillableInstalmentInvoicing sets the "instalment_invoicing" field if the given value is not nil.
+func (_c *BillingTermCreate) SetNillableInstalmentInvoicing(v *types.InstalmentDelivery) *BillingTermCreate {
+	if v != nil {
+		_c.SetInstalmentInvoicing(*v)
+	}
+	return _c
+}
+
 // SetInvoiceLabel sets the "invoice_label" field.
 func (_c *BillingTermCreate) SetInvoiceLabel(v string) *BillingTermCreate {
 	_c.mutation.SetInvoiceLabel(v)
@@ -397,6 +411,11 @@ func (_c *BillingTermCreate) check() error {
 			return &ValidationError{Name: "split", err: fmt.Errorf(`ent: validator failed for field "BillingTerm.split": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.InstalmentInvoicing(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "instalment_invoicing", err: fmt.Errorf(`ent: validator failed for field "BillingTerm.instalment_invoicing": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -507,6 +526,10 @@ func (_c *BillingTermCreate) createSpec() (*BillingTerm, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Split(); ok {
 		_spec.SetField(billingterm.FieldSplit, field.TypeString, value)
 		_node.Split = &value
+	}
+	if value, ok := _c.mutation.InstalmentInvoicing(); ok {
+		_spec.SetField(billingterm.FieldInstalmentInvoicing, field.TypeString, value)
+		_node.InstalmentInvoicing = &value
 	}
 	if value, ok := _c.mutation.InvoiceLabel(); ok {
 		_spec.SetField(billingterm.FieldInvoiceLabel, field.TypeString, value)

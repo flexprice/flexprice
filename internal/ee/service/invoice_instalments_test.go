@@ -489,6 +489,31 @@ func (s *CommitmentE2ESuite) TestVoid_LocksTheCommitment() {
 	s.Contains(events, "lock:commitment:"+commitmentID)
 }
 
+// A draft computed before a commitment was written, and not recomputed since, is recomputed when it is finalized.
+func (s *CommitmentE2ESuite) TestFinalize_RecomputesADraftOlderThanACommitment() {
+	ctx := s.GetContext()
+	feb, mar := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0)
+	tokens := s.planWith("finalize_after_commitment", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan)
+	s.record(s.tokens, feb.AddDate(0, 0, 9), "100")
+
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	draft := s.computedDraft(invoices, sub.ID, types.Period{Start: feb, End: mar})
+	s.Require().True(draft.AmountDue.Equal(dec("10")), "only the usage, got %s", draft.AmountDue)
+
+	// create, unlike Create, does not recompute the drafts, as when that recompute fails.
+	req := floorRequest("Floor", tokens.ID, "100", s.jan, s.jan.AddDate(1, 0, 0))
+	req.SubscriptionID = sub.ID
+	_, _, err := s.commitments.(*commitmentService).create(ctx, req, commitmentCreateOptions{})
+	s.Require().NoError(err)
+
+	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
+	finalized, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, finalized.InvoiceStatus)
+	s.True(finalized.AmountDue.Equal(dec("100")), "the floor is billed, got %s", finalized.AmountDue)
+}
+
 func (s *CommitmentE2ESuite) TestVoid_ReschedulesInstalments() {
 	ctx := s.GetContext()
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)

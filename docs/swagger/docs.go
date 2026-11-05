@@ -2257,7 +2257,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; edit the billing terms to bill it later.",
+                "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when its instalment_invoicing, the term's or else the commitment's, is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; edit the billing terms to bill it later.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2328,7 +2328,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Ends a commitment immediately. effective_at defaults to now and cannot be in the future. Under billing terms, its scheduled instalments are cancelled and any amount it earned beyond what is already invoiced is billed as a settlement. The settlement and a fixed cancellation fee, when given, are billed together on one one-off invoice.",
+                "description": "Ends a commitment immediately. effective_at defaults to now and cannot be in the future. Under billing terms, its scheduled instalments are cancelled, and those already due by effective_at are billed together as one settlement; later instalments are not billed and nothing is refunded. The settlement and a fixed cancellation fee, when given, are billed together on one one-off invoice.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12369,7 +12369,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan')",
+                        "description": "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan,commitments')",
                         "name": "expand",
                         "in": "query"
                     }
@@ -15214,7 +15214,7 @@ const docTemplate = `{
         },
         "/webhook-events/billing_instalment.created": {
             "post": {
-                "description": "Fired when a billing instalment is added to a commitment. Doc-only for parsing.",
+                "description": "Fired when a billing instalment is scheduled for an entity (like a commitment). Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -15283,7 +15283,7 @@ const docTemplate = `{
         },
         "/webhook-events/billing_terms.created": {
             "post": {
-                "description": "Fired when billing terms are saved with a new commitment. Doc-only for parsing.",
+                "description": "Fired when billing terms are saved against an entity (like a commitment). Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -15306,7 +15306,7 @@ const docTemplate = `{
         },
         "/webhook-events/billing_terms.updated": {
             "post": {
-                "description": "Fired when an edit replaces a commitment's billing terms. Doc-only for parsing.",
+                "description": "Fired when an entity's (like a commitment's) billing terms are replaced. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -17643,11 +17643,19 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "instalment_invoicing": {
+                    "description": "InstalmentInvoicing delivers its instalments, the owner's delivery by default.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InstalmentDelivery"
+                        }
+                    ]
+                },
                 "invoice_cadence": {
                     "$ref": "#/definitions/types.InvoiceCadence"
                 },
                 "invoice_label": {
-                    "description": "InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number\nall of the owner's instalments together.",
+                    "description": "InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number\nthe owner's instalments whose labels use them.",
                     "type": "string"
                 },
                 "kind": {
@@ -19090,7 +19098,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "bill_on": {
-                    "description": "BillOn is a whole second, the commitment start by default. On an edit it defaults to the start of the billing\nperiod holding now, or to the commitment start once the term has ended.",
+                    "description": "BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now (the\ncommitment start once its term has ended). A manual term omits it and waits at the commitment end.",
                     "type": "string"
                 },
                 "bill_trigger": {
@@ -19099,11 +19107,19 @@ const docTemplate = `{
                 "end_date": {
                     "type": "string"
                 },
+                "instalment_invoicing": {
+                    "description": "InstalmentInvoicing delivers this term's instalments, the commitment's instalment_invoicing by default.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InstalmentDelivery"
+                        }
+                    ]
+                },
                 "invoice_cadence": {
                     "$ref": "#/definitions/types.InvoiceCadence"
                 },
                 "invoice_label": {
-                    "description": "InvoiceLabel names the term's instalments on the invoice, \"Instalment {n} of {of}\" by default. {n} and {of} are\nfilled with each instalment's place among all of the commitment's instalments and their count.",
+                    "description": "InvoiceLabel names the term's instalments, \"Instalment {n} of {of}\" by default. {n} and {of} count only the\ncommitment's instalments whose labels use them.",
                     "type": "string",
                     "maxLength": 255
                 },
@@ -19120,7 +19136,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.BillingTermSplit"
                 },
                 "start_date": {
-                    "description": "StartDate defaults like BillOn; EndDate defaults to the commitment end. Both are whole seconds.",
+                    "description": "StartDate and EndDate are edges of the periods the term steps on: billing periods, or anniversary ones when it is\ninvoiced separately; by default, the period holding the commitment start (now, on an edit) to the commitment end.",
                     "type": "string"
                 },
                 "value": {
@@ -20769,7 +20785,7 @@ const docTemplate = `{
                 "billing_terms": {
                     "description": "BillingTerms apply only to collection_method billing_terms, which requires at least one.",
                     "type": "array",
-                    "maxItems": 20,
+                    "maxItems": 100,
                     "minItems": 1,
                     "items": {
                         "$ref": "#/definitions/BillingTermInput"
@@ -20794,7 +20810,7 @@ const docTemplate = `{
                     "maxLength": 128
                 },
                 "instalment_invoicing": {
-                    "description": "InstalmentInvoicing applies only to collection_method billing_terms.",
+                    "description": "InstalmentInvoicing applies only to collection_method billing_terms; a billing term may set its own.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.InstalmentDelivery"
@@ -20829,7 +20845,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/CommitmentScopeInput"
                 },
                 "start_date": {
-                    "description": "StartDate and EndDate must be whole seconds.",
+                    "description": "StartDate and EndDate within a second after a billing period edge are taken as that edge.",
                     "type": "string"
                 },
                 "subscription_id": {
@@ -27282,7 +27298,7 @@ const docTemplate = `{
             "properties": {
                 "billing_terms": {
                     "type": "array",
-                    "maxItems": 20,
+                    "maxItems": 100,
                     "minItems": 1,
                     "items": {
                         "$ref": "#/definitions/BillingTermInput"
@@ -29569,6 +29585,13 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "commitments": {
+                    "description": "Commitments are the commitments created with the subscription; set on create only.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CommitmentResponse"
+                    }
+                },
                 "coupon_associations": {
                     "description": "CouponAssociations are the coupon associations for this subscription",
                     "type": "array",
@@ -29822,6 +29845,13 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.BillingPeriod"
                         }
                     ]
+                },
+                "commitments": {
+                    "description": "Commitments are included when \"commitments\" is in expand parameter",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CommitmentResponse"
+                    }
                 },
                 "coupon_associations": {
                     "description": "CouponAssociations are included when \"coupon_associations\" is in expand parameter",
@@ -30649,7 +30679,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/CancellationFeeInput"
                 },
                 "effective_at": {
-                    "description": "EffectiveAt defaults to now; a given one must be a whole second.",
+                    "description": "EffectiveAt defaults to now; within a second after a billing period edge it is taken as that edge.",
                     "type": "string"
                 }
             }
@@ -30828,7 +30858,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "bill_on": {
-                    "description": "BillOn must be a whole second.",
+                    "description": "BillOn within a second after a billing period edge is taken as that edge.",
                     "type": "string"
                 }
             }
@@ -30862,6 +30892,10 @@ const docTemplate = `{
         "UpdateCommitmentRequest": {
             "type": "object",
             "properties": {
+                "end_date": {
+                    "description": "EndDate can't be changed yet; terminate the commitment to end it.",
+                    "type": "string"
+                },
                 "invoice_description": {
                     "type": "string",
                     "maxLength": 500
@@ -35117,7 +35151,8 @@ const docTemplate = `{
                 "WALLET_AUTO_TOPUP",
                 "SUBSCRIPTION_PAUSED",
                 "SUBSCRIPTION_RESUME",
-                "BILLING_TERMS"
+                "BILLING_TERMS",
+                "COMMITMENT_TERMINATION"
             ],
             "x-enum-varnames": [
                 "InvoiceBillingReasonSubscriptionCreate",
@@ -35131,7 +35166,8 @@ const docTemplate = `{
                 "InvoiceBillingReasonWalletAutoTopup",
                 "InvoiceBillingReasonSubscriptionPaused",
                 "InvoiceBillingReasonSubscriptionResume",
-                "InvoiceBillingReasonBillingTerms"
+                "InvoiceBillingReasonBillingTerms",
+                "InvoiceBillingReasonCommitmentTermination"
             ]
         },
         "types.InvoiceCadence": {

@@ -78,6 +78,11 @@ func sortCommitmentStack(cs []*stackedCommitment) {
 	})
 }
 
+// covers reports whether a commitment holding line has capacity in window w.
+func (s *commitmentStack) covers(line *usageLine, w int) bool {
+	return lo.SomeBy(s.Commitments, func(sc *stackedCommitment) bool { return sc.PoolOf[w] != noPool && lo.Contains(sc.Lines, line) })
+}
+
 // validate checks allocate's input contract: every line's usage is window-aligned and sums to its
 // period total, and every commitment's pools and lines are consistent with the stack.
 func (s *commitmentStack) validate() error {
@@ -362,69 +367,88 @@ func sumAmounts(rows []dto.CreateInvoiceLineItemRequest) decimal.Decimal {
 	return total
 }
 
-// overageLines prices one line's usage left after the whole stack was filled. Overage belongs
-// to the stack, not to any one commitment, so its rows carry no commitment id.
+// overageLines prices one line's usage left after the stack was filled: overage in windows a commitment covers, plain
+// usage elsewhere. Neither row carries a commitment id.
 func (r lineRenderer) overageLines(
 	stack *commitmentStack,
 	line *usageLine,
 	left []decimal.Decimal,
 ) []dto.CreateInvoiceLineItemRequest {
 	if stack.Type == types.COMMITMENT_TYPE_AMOUNT {
-		total := decimal.Zero
-		for _, value := range left {
-			if value.IsPositive() {
-				total = total.Add(value)
+		overage, plain := decimal.Zero, decimal.Zero
+		for w, value := range left {
+			if !value.IsPositive() {
+				continue
+			}
+
+			if stack.covers(line, w) {
+				overage = overage.Add(value)
+			} else {
+				plain = plain.Add(value)
 			}
 		}
 
-		switch {
-		case total.IsPositive():
-			return []dto.CreateInvoiceLineItemRequest{
-				r.row(nil, line, types.CommitmentLineOverage, line.displayName(), proportionalQuantity(line, total), total),
-			}
-		case line.Cost.IsZero() && line.Quantity.IsPositive():
+		var rows []dto.CreateInvoiceLineItemRequest
+		if overage.IsPositive() {
+			rows = append(rows, r.row(nil, line, types.CommitmentLineOverage, line.displayName(), proportionalQuantity(line, overage), overage))
+		}
+
+		if plain.IsPositive() {
+			rows = append(rows, r.row(nil, line, types.CommitmentLinePlain, line.displayName(), proportionalQuantity(line, plain), plain))
+		}
+
+		if len(rows) == 0 && line.Cost.IsZero() && line.Quantity.IsPositive() {
 			// Free usage takes no capacity, but its quantity still shows on the invoice.
-			return []dto.CreateInvoiceLineItemRequest{
-				r.row(nil, line, types.CommitmentLineOverage, line.displayName(), line.Quantity, decimal.Zero),
-			}
+			rows = append(rows, r.row(nil, line, types.CommitmentLineOverage, line.displayName(), line.Quantity, decimal.Zero))
 		}
 
-		return nil
+		return rows
 	}
 
-	// Remainder in windows a commitment applies to bills at the custom rate; the rest at the line's own margin.
-	listQty, listAmount, overageQty := decimal.Zero, decimal.Zero, decimal.Zero
+	// Covered usage bills at the overage price when the line has one, else at the line's own margin like plain usage.
+	overageQty, coveredQty, plainQty := decimal.Zero, decimal.Zero, decimal.Zero
+	coveredAmount, plainAmount := decimal.Zero, decimal.Zero
 	for w, units := range left {
 		if !units.IsPositive() {
 			continue
 		}
 
-		covered := lo.SomeBy(stack.Commitments, func(sc *stackedCommitment) bool {
-			return sc.PoolOf[w] != noPool && lo.Contains(sc.Lines, line)
-		})
-		if line.OveragePrice != nil && covered {
+		covered := stack.covers(line, w)
+		if covered && line.OveragePrice != nil {
 			overageQty = overageQty.Add(units)
 			continue
 		}
 
-		listQty = listQty.Add(units)
+		amount := decimal.Zero
 		if line.PerWindow {
-			listAmount = listAmount.Add(r.marginalCost(line.Price, line.Usage[w], units))
+			amount = r.marginalCost(line.Price, line.Usage[w], units)
 		}
+
+		if covered {
+			coveredQty, coveredAmount = coveredQty.Add(units), coveredAmount.Add(amount)
+		} else {
+			plainQty, plainAmount = plainQty.Add(units), plainAmount.Add(amount)
+		}
+	}
+
+	// A line priced once for the period prices the remainder at its margin, rounds it once and shares it by quantity.
+	if remainder := coveredQty.Add(plainQty); !line.PerWindow && remainder.IsPositive() {
+		total := types.RoundToCurrencyPrecision(r.marginalCost(line.Price, line.Quantity.Sub(overageQty), remainder), r.currency)
+		coveredAmount = types.RoundToCurrencyPrecision(total.Mul(coveredQty).Div(remainder), r.currency)
+		plainAmount = total.Sub(coveredAmount)
 	}
 
 	var rows []dto.CreateInvoiceLineItemRequest
 	if overageQty.IsPositive() {
-		overageAmount := r.cost(line.OveragePrice, overageQty)
-		rows = append(rows, r.row(nil, line, types.CommitmentLineOverage, line.displayName(), overageQty, overageAmount))
+		rows = append(rows, r.row(nil, line, types.CommitmentLineOverage, line.displayName(), overageQty, r.cost(line.OveragePrice, overageQty)))
 	}
 
-	if listQty.IsPositive() {
-		if !line.PerWindow {
-			listAmount = r.marginalCost(line.Price, line.Quantity.Sub(overageQty), listQty)
-		}
+	if coveredQty.IsPositive() {
+		rows = append(rows, r.row(nil, line, types.CommitmentLineOverage, line.displayName(), coveredQty, coveredAmount))
+	}
 
-		rows = append(rows, r.row(nil, line, types.CommitmentLineOverage, line.displayName(), listQty, listAmount))
+	if plainQty.IsPositive() {
+		rows = append(rows, r.row(nil, line, types.CommitmentLinePlain, line.displayName(), plainQty, plainAmount))
 	}
 
 	return rows
@@ -454,11 +478,13 @@ func (r lineRenderer) newRow(
 		Amount:      types.RoundToCurrencyPrecision(amount, r.currency),
 		PeriodStart: lo.ToPtr(r.periodStart),
 		PeriodEnd:   lo.ToPtr(r.periodEnd),
-		Metadata: types.Metadata{
-			types.MetadataKeyCommitmentLineKind: string(kind),
-		},
 	}
 
+	if kind == types.CommitmentLinePlain {
+		return out
+	}
+
+	out.Metadata = types.Metadata{types.MetadataKeyCommitmentLineKind: string(kind)}
 	if c == nil {
 		return out
 	}
@@ -472,7 +498,7 @@ func (r lineRenderer) newRow(
 	return out
 }
 
-// row builds the invoice line of a usage line; a nil c means overage, which belongs to no commitment.
+// row builds the invoice line of a usage line; a nil c means overage or plain usage, which belong to no commitment.
 func (r lineRenderer) row(
 	c *commitment.Commitment,
 	line *usageLine,
