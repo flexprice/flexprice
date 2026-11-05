@@ -3365,18 +3365,19 @@ func (s *InvoiceServiceSuite) TestCreateDraftInvoiceForSubscription_PeriodStartC
 	}
 }
 
-func (s *InvoiceServiceSuite) seedInvoiceConfigDelay(seconds int) {
+func (s *InvoiceServiceSuite) seedInvoiceFinalizationConfig(autoFinalize bool, delaySeconds int) {
 	svc := NewSettingsService(s.service.(*invoiceService).ServiceParams).(*settingsService)
 	cfg, err := GetSetting[types.InvoiceConfig](svc, s.GetContext(), types.SettingKeyInvoiceConfig)
 	s.Require().NoError(err)
-	cfg.FinalizationDelaySeconds = seconds
+	cfg.AutoFinalize = autoFinalize
+	cfg.FinalizationDelaySeconds = delaySeconds
 	s.Require().NoError(UpdateSetting(svc, s.GetContext(), types.SettingKeyInvoiceConfig, cfg))
 }
 
 func (s *InvoiceServiceSuite) TestIsFinalizationDue_SkipsSubscriptionCreateDrafts() {
 	ctx := s.GetContext()
 	s.invoiceRepo.Clear()
-	s.seedInvoiceConfigDelay(0)
+	s.seedInvoiceFinalizationConfig(true, 0)
 
 	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: s.testData.subscription.CurrentPeriodStart, PeriodEnd: s.testData.subscription.CurrentPeriodEnd, ReferencePoint: types.ReferencePointPeriodStart})
 	s.Require().NoError(err)
@@ -3395,7 +3396,7 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_SkipsSubscriptionCreateDraft
 func (s *InvoiceServiceSuite) TestIsFinalizationDue_CycleDraftAfterPeriodEndIsDue() {
 	ctx := s.GetContext()
 	s.invoiceRepo.Clear()
-	s.seedInvoiceConfigDelay(0)
+	s.seedInvoiceFinalizationConfig(true, 0)
 
 	periodStart := s.testData.now.Add(-40 * 24 * time.Hour)
 	periodEnd := s.testData.now.Add(-10 * 24 * time.Hour)
@@ -3432,7 +3433,7 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_DelayCountsFromCreation() {
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			s.invoiceRepo.Clear()
-			s.seedInvoiceConfigDelay(7200)
+			s.seedInvoiceFinalizationConfig(true, 7200)
 
 			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: types.ReferencePointPeriodEnd})
 			s.Require().NoError(err)
@@ -3443,6 +3444,42 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_DelayCountsFromCreation() {
 			s.Require().NoError(err)
 			inv.CreatedAt = now.Add(-tt.createdAgo)
 			inv.LastComputedAt = &recomputedAt
+			s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
+
+			due, err := s.service.IsFinalizationDue(ctx, draft.ID)
+			s.Require().NoError(err)
+			s.Equal(tt.wantDue, due)
+		})
+	}
+}
+
+func (s *InvoiceServiceSuite) TestIsFinalizationDue_AutoFinalize() {
+	tests := []struct {
+		name         string
+		autoFinalize bool
+		delaySeconds int
+		wantDue      bool
+	}{
+		{name: "auto finalize off", autoFinalize: false, delaySeconds: 0, wantDue: false},
+		{name: "auto finalize on with delay elapsed", autoFinalize: true, delaySeconds: 1800, wantDue: true},
+		{name: "auto finalize on with delay pending", autoFinalize: true, delaySeconds: 7200, wantDue: false},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.invoiceRepo.Clear()
+			s.seedInvoiceFinalizationConfig(tt.autoFinalize, tt.delaySeconds)
+
+			periodStart := s.testData.now.Add(-40 * 24 * time.Hour)
+			periodEnd := s.testData.now.Add(-10 * 24 * time.Hour)
+			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: types.ReferencePointPeriodEnd})
+			s.Require().NoError(err)
+
+			computedAt := time.Now().UTC().Add(-time.Hour)
+			inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+			s.Require().NoError(err)
+			inv.LastComputedAt = &computedAt
 			s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
 
 			due, err := s.service.IsFinalizationDue(ctx, draft.ID)
