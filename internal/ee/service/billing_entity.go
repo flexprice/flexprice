@@ -18,7 +18,7 @@ import (
 type BillingEntityService interface {
 	BillingEntityEnabler
 
-	// WithMode runs fn in a transaction holding the shared enable lock, with the mode read from the database.
+	// WithMode runs fn in a transaction with the mode read from the database; before enabled it holds the shared enable lock.
 	WithMode(ctx context.Context, fn func(txCtx context.Context, mode types.BillingEntityMode) error) error
 	ResolveForCreate(ctx context.Context, mode types.BillingEntityMode, requested *string) (*string, error)
 	// EffectiveEntity is the customer's entity; a customer the enable backfill has not reached belongs to the default.
@@ -106,6 +106,16 @@ func (s *billingEntityService) requireEnabled(ctx context.Context) error {
 }
 
 func (s *billingEntityService) WithMode(ctx context.Context, fn func(txCtx context.Context, mode types.BillingEntityMode) error) error {
+	// Enabled is final, so the lock only guards writes against an enablement still to come.
+	mode, err := s.mode(ctx)
+	if err != nil {
+		return err
+	}
+	if mode == types.BillingEntityModeEnabled {
+		return s.DB.WithTx(ctx, func(txCtx context.Context) error {
+			return fn(txCtx, mode)
+		})
+	}
 	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.DB.LockSharedWithWait(txCtx, postgres.LockRequest{Key: billingEntityEnableLockKey(txCtx)}); err != nil {
 			return err
