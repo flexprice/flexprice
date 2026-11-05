@@ -1006,7 +1006,7 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 
 	response.WithTaxes(appliedTaxes.Items)
 
-	if err := fillInvoiceBillingEntityIDs(ctx, s.ServiceParams, response); err != nil {
+	if err := s.fillBillingEntityIDs(ctx, response); err != nil {
 		return nil, err
 	}
 
@@ -1328,7 +1328,7 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		}
 	}
 
-	if err := fillInvoiceBillingEntityIDs(ctx, s.ServiceParams, items...); err != nil {
+	if err := s.fillBillingEntityIDs(ctx, items...); err != nil {
 		return nil, err
 	}
 

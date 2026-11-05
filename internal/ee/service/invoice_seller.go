@@ -3,10 +3,12 @@ package service
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // invoiceBillingEntity is the effective billing entity of the invoice's customer, or nil.
@@ -30,6 +32,22 @@ func (s *invoiceService) GetInvoiceSeller(ctx context.Context, inv *invoice.Invo
 		return nil, err
 	}
 	return entity.AsInvoiceSeller(), nil
+}
+
+// fillBillingEntityIDs sets each invoice's billing entity from its customer, with one lookup.
+func (s *invoiceService) fillBillingEntityIDs(ctx context.Context, items ...*dto.InvoiceResponse) error {
+	if len(items) == 0 {
+		return nil
+	}
+	ids := lo.Uniq(lo.Compact(lo.Map(items, func(r *dto.InvoiceResponse, _ int) string { return r.CustomerID })))
+	byCustomer, err := s.CustomerRepo.BillingEntityIDsByCustomerIDs(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for _, r := range items {
+		r.BillingEntityID = byCustomer[r.CustomerID]
+	}
+	return nil
 }
 
 // numberPrefixFor is the customer's entity prefix, or the environment prefix for a customer without one.
