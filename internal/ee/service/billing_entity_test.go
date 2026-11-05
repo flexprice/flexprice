@@ -55,6 +55,17 @@ func (s *BillingEntityServiceSuite) setMode(mode types.BillingEntityMode) {
 	s.Require().NoError(s.service.(*billingEntityService).setMode(ctx, mode))
 }
 
+func (s *BillingEntityServiceSuite) addCustomer(id string, billingEntityID *string) {
+	ctx := s.GetContext()
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, &customer.Customer{
+		ID:              id,
+		ExternalID:      id,
+		BillingEntityID: billingEntityID,
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}))
+}
+
 func (s *BillingEntityServiceSuite) addEntity(id, environmentID, prefix string, isDefault bool) *billingentity.BillingEntity {
 	ctx := s.GetContext()
 	e := &billingentity.BillingEntity{
