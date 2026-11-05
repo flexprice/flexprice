@@ -243,7 +243,12 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 				return nil
 			}
 			s.Logger.Info(ctx, "invoice already exists, returning existing invoice")
-			return ierr.NewError("invoice already exists").WithHint("invoice already exists").Mark(ierr.ErrAlreadyExists)
+			return ierr.NewError("invoice already exists").
+				WithHint("invoice already exists").
+				WithReportableDetails(map[string]interface{}{
+					"invoice_id": existing.ID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
 		}
 
 		// 3. For subscription invoices, check period uniqueness (when no caller key) and get billing sequence.
@@ -271,7 +276,12 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 						"subscription_id", *req.SubscriptionID,
 						"period_start", *req.PeriodStart,
 						"period_end", *req.PeriodEnd)
-					return ierr.NewError("invoice already exists").WithHint("invoice already exists for this period").Mark(ierr.ErrAlreadyExists)
+					return ierr.NewError("invoice already exists").
+						WithHint("invoice already exists for this period").
+						WithReportableDetails(map[string]interface{}{
+							"invoice_id": existingForPeriod.ID,
+						}).
+						Mark(ierr.ErrAlreadyExists)
 				}
 			}
 

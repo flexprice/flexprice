@@ -1,12 +1,19 @@
 package service
 
 import (
+	"encoding/json"
+	"net/http"
+	"strings"
 	"time"
 
+	cockroachErrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -190,4 +197,86 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription_ImmediateOnNotYetStart
 	s.True(cancelled.CurrentPeriodEnd.Equal(*cancelled.EndDate),
 		"current_period_end (%s) must close at end_date (%s)",
 		cancelled.CurrentPeriodEnd, *cancelled.EndDate)
+}
+
+// TestCancelSubscription_ExistingFinalizedProrationInvoiceReturnsConflict covers an immediate
+// cancel with generate_invoice whose cancel period already has a finalized proration invoice
+// (e.g. a repeated or concurrent cancel request). The invoice service rejects it with
+// ErrAlreadyExists, and that must reach the API as 409. Re-marking it as ErrDatabase gave the
+// error both a 409 and a 500 mark, and ResolveError picked one at random from its map.
+func (s *SubscriptionServiceSuite) TestCancelSubscription_ExistingFinalizedProrationInvoiceReturnsConflict() {
+	periodStart := s.testData.now.Add(-5 * 24 * time.Hour).UTC()
+	cancelAt := s.testData.now.Add(-1 * time.Hour).UTC()
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_cancel_existing_proration_invoice",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   s.testData.now.Add(25 * 24 * time.Hour),
+		BillingAnchor:      s.testData.now.Add(-30 * 24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		Timezone:           types.DefaultTimezone,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub))
+
+	// Finalized invoice for exactly the period the cancel would bill: current period start → cancel_at.
+	existing := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      sub.CustomerID,
+		SubscriptionID:  lo.ToPtr(sub.ID),
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        sub.Currency,
+		AmountDue:       decimal.NewFromInt(10),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromInt(10),
+		PeriodStart:     lo.ToPtr(periodStart),
+		PeriodEnd:       lo.ToPtr(cancelAt),
+		BillingReason:   string(types.InvoiceBillingReasonProration),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), existing))
+
+	_, err := s.service.CancelSubscription(s.GetContext(), sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:               types.CancellationTypeImmediate,
+		CancelAt:                       lo.ToPtr(cancelAt),
+		ProrationBehavior:              types.ProrationBehaviorCreateProrations,
+		CancelImmediatelyInvoicePolicy: types.CancelImmediatelyInvoicePolicyGenerateInvoice,
+		Reason:                         "test_existing_proration_invoice",
+	})
+	s.Require().Error(err)
+	s.True(ierr.IsAlreadyExists(err), "existing invoice must surface as already exists, got: %v", err)
+	s.False(ierr.IsDatabase(err), "existing invoice must not be marked as a database error")
+
+	// ResolveError ranges over a map, so a second 5xx mark would flip the status between runs.
+	for i := 0; i < 50; i++ {
+		status, code := ierr.ResolveError(err)
+		s.Equal(http.StatusConflict, status)
+		s.Equal(ierr.ErrCodeAlreadyExists, code)
+	}
+
+	// The 409 names the conflicting invoice so the caller can fetch it. Details are read
+	// the way the error middleware builds the response body.
+	var details map[string]any
+	for _, sdp := range cockroachErrors.GetAllSafeDetails(err) {
+		for _, payload := range sdp.SafeDetails {
+			if strings.HasPrefix(payload, "__json__:") {
+				s.Require().NoError(json.Unmarshal([]byte(strings.TrimPrefix(payload, "__json__:")), &details))
+			}
+		}
+	}
+	s.Equal(existing.ID, details["invoice_id"])
+
+	// The transaction rolled back, so the subscription is left untouched.
+	after, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), sub.ID)
+	s.NoError(err)
+	s.Equal(types.SubscriptionStatusActive, after.SubscriptionStatus)
+	s.Nil(after.CancelAt)
 }

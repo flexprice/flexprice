@@ -258,6 +258,7 @@ func (h *SubscriptionHandler) QuerySubscriptionLineItems(c *gin.Context) {
 // @Param request body dto.CancelSubscriptionRequest true "Cancel Subscription Request"
 // @Success 200 {object} dto.CancelSubscriptionResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 409 {object} ierr.ErrorResponse "An invoice already exists for the cancellation period; details.invoice_id identifies it"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/cancel [post]
 func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
