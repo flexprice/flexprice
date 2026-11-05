@@ -9070,7 +9070,7 @@ const docTemplate = `{
                         }
                     },
                     "409": {
-                        "description": "An invoice already exists for the cancellation period; details.invoice_id identifies it",
+                        "description": "An invoice already exists for the cancellation period",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }

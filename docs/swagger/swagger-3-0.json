@@ -10892,7 +10892,7 @@
             }
           },
           "409": {
-            "description": "An invoice already exists for the cancellation period; details.invoice_id identifies it",
+            "description": "An invoice already exists for the cancellation period",
             "content": {
               "application/json": {
                 "schema": {

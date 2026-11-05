@@ -199,11 +199,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription_ImmediateOnNotYetStart
 		cancelled.CurrentPeriodEnd, *cancelled.EndDate)
 }
 
-// TestCancelSubscription_ExistingFinalizedProrationInvoiceReturnsConflict covers an immediate
-// cancel with generate_invoice whose cancel period already has a finalized proration invoice
-// (e.g. a repeated or concurrent cancel request). The invoice service rejects it with
-// ErrAlreadyExists, and that must reach the API as 409. Re-marking it as ErrDatabase gave the
-// error both a 409 and a 500 mark, and ResolveError picked one at random from its map.
+// TestCancelSubscription_ExistingFinalizedProrationInvoiceReturnsConflict asserts a cancel whose period is already invoiced returns 409 with that invoice's ID.
 func (s *SubscriptionServiceSuite) TestCancelSubscription_ExistingFinalizedProrationInvoiceReturnsConflict() {
 	periodStart := s.testData.now.Add(-5 * 24 * time.Hour).UTC()
 	cancelAt := s.testData.now.Add(-1 * time.Hour).UTC()
@@ -262,8 +258,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription_ExistingFinalizedProra
 		s.Equal(ierr.ErrCodeAlreadyExists, code)
 	}
 
-	// The 409 names the conflicting invoice so the caller can fetch it. Details are read
-	// the way the error middleware builds the response body.
+	// Read the way the error middleware builds the response body.
 	var details map[string]any
 	for _, sdp := range cockroachErrors.GetAllSafeDetails(err) {
 		for _, payload := range sdp.SafeDetails {
@@ -274,7 +269,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription_ExistingFinalizedProra
 	}
 	s.Equal(existing.ID, details["invoice_id"])
 
-	// The transaction rolled back, so the subscription is left untouched.
+	// The conflict is raised before the subscription is updated, so it stays uncancelled.
 	after, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), sub.ID)
 	s.NoError(err)
 	s.Equal(types.SubscriptionStatusActive, after.SubscriptionStatus)
