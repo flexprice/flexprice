@@ -302,6 +302,9 @@ func (s *billingEntityService) ScopeToInvoice(ctx context.Context, invoiceID str
 	if err != nil {
 		return ctx, err
 	}
+	if id := lo.FromPtr(inv.BillingEntityID); id != "" {
+		return types.SetBillingEntityID(ctx, id), nil
+	}
 	return s.scopeToCustomer(ctx, inv.CustomerID)
 }
 
