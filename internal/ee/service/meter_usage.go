@@ -49,6 +49,10 @@ type MeterUsageService interface {
 	GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error)
 	GetDetailedAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) (*dto.GetUsageAnalyticsResponse, error)
 
+	// GetUnpricedMeterAnalytics returns a customer's raw usage on params.MeterIDs (required),
+	// whether or not those meters are on a subscription. Usage only; callers apply prices.
+	GetUnpricedMeterAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) (*dto.GetUsageAnalyticsResponse, error)
+
 	// GetDetailedUsageAnalytics adapts GetDetailedAnalytics to the dto-based
 	// request shape used by callers that need to be signal-agnostic (e.g. the
 	// usage-analytics CSV exporter). It resolves tenant/environment from ctx.
@@ -1647,15 +1651,61 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 ) (*dto.GetUsageAnalyticsResponse, error) {
 	// No subscription context means there is no price to bill against, so
 	// report zero instead of fanning the query out over every meter in the
-	// environment. Disables this whole path for now — including the admin-style
-	// query with no external_customer_id — leaving the code below unreachable
-	// until the surface is reworked.
+	// environment.
 	return &dto.GetUsageAnalyticsResponse{
 		TotalCost: decimal.Zero,
 		Items:     []dto.UsageAnalyticItem{},
 	}, nil
+}
 
-	// Fetch meter configs
+func (s *meterUsageService) GetUnpricedMeterAnalytics(
+	ctx context.Context,
+	params *events.MeterUsageDetailedAnalyticsParams,
+) (*dto.GetUsageAnalyticsResponse, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+	if len(params.MeterIDs) == 0 {
+		return nil, ierr.NewError("meter_ids are required").
+			WithHint("Unpriced meter analytics must be scoped to an explicit meter set").
+			Mark(ierr.ErrValidation)
+	}
+
+	if params.ExternalCustomerID != "" {
+		cust, subs, err := s.resolveCustomerAndSubscriptions(ctx, params.ExternalCustomerID)
+		if err != nil {
+			return nil, err
+		}
+		params.Timezone = cust.Timezone
+
+		if params.IncludeChildren {
+			externalIDs := []string{params.ExternalCustomerID}
+			for _, sub := range subs {
+				// Parent subs loaded for an inherited child belong to another customer;
+				// expanding them would pull in sibling usage.
+				if sub.CustomerID != cust.ID {
+					continue
+				}
+				ids, err := s.resolveExternalCustomerIDs(ctx, sub, true)
+				if err != nil {
+					return nil, err
+				}
+				externalIDs = append(externalIDs, ids...)
+			}
+			params.ExternalCustomerIDs = lo.Uniq(externalIDs)
+			params.ExternalCustomerID = ""
+		}
+	}
+
+	return s.getUnpricedMeterAnalytics(ctx, params)
+}
+
+// getUnpricedMeterAnalytics queries meter_usage directly for params.MeterIDs, with no
+// subscription bounding and no pricing.
+func (s *meterUsageService) getUnpricedMeterAnalytics(
+	ctx context.Context,
+	params *events.MeterUsageDetailedAnalyticsParams,
+) (*dto.GetUsageAnalyticsResponse, error) {
 	meters, err := s.fetchMeters(ctx, params)
 	if err != nil {
 		return nil, err
