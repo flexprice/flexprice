@@ -6280,11 +6280,11 @@ definitions:
           refunded_amount is the total sum of credit notes of type "refund".
           These are actual refunds issued to the customer.
         type: string
-      seller_snapshot:
+      seller:
         allOf:
-        - $ref: '#/definitions/types.SellerSnapshot'
-        description: SellerSnapshot is the billing entity seller frozen at finalization;
-          nil for customers without an entity.
+        - $ref: '#/definitions/types.InvoiceSeller'
+        description: Seller is the billing entity seller frozen at finalization; nil
+          for customers without an entity.
       source_type:
         $ref: '#/definitions/types.InvoiceSourceType'
       status:
@@ -16347,6 +16347,19 @@ definitions:
     - InstalmentStatusScheduled
     - InstalmentStatusInvoiced
     - InstalmentStatusCancelled
+  types.InvoiceSeller:
+    properties:
+      billing_entity_id:
+        type: string
+      legal_name:
+        type: string
+      seller_details:
+        $ref: '#/definitions/types.SellerDetails'
+      tax_identifiers:
+        items:
+          $ref: '#/definitions/types.TaxIdentifier'
+        type: array
+    type: object
   types.JournalDirection:
     enum:
     - debit
@@ -16519,19 +16532,6 @@ definitions:
         type: string
       phone:
         type: string
-    type: object
-  types.SellerSnapshot:
-    properties:
-      billing_entity_id:
-        type: string
-      legal_name:
-        type: string
-      seller_details:
-        $ref: '#/definitions/types.SellerDetails'
-      tax_identifiers:
-        items:
-          $ref: '#/definitions/types.TaxIdentifier'
-        type: array
     type: object
   types.TaxIdentifier:
     properties:

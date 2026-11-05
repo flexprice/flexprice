@@ -320,15 +320,15 @@ func (_u *InvoiceUpdate) ClearFxConversion() *InvoiceUpdate {
 	return _u
 }
 
-// SetSellerSnapshot sets the "seller_snapshot" field.
-func (_u *InvoiceUpdate) SetSellerSnapshot(v *types.SellerSnapshot) *InvoiceUpdate {
-	_u.mutation.SetSellerSnapshot(v)
+// SetSeller sets the "seller" field.
+func (_u *InvoiceUpdate) SetSeller(v *types.InvoiceSeller) *InvoiceUpdate {
+	_u.mutation.SetSeller(v)
 	return _u
 }
 
-// ClearSellerSnapshot clears the value of the "seller_snapshot" field.
-func (_u *InvoiceUpdate) ClearSellerSnapshot() *InvoiceUpdate {
-	_u.mutation.ClearSellerSnapshot()
+// ClearSeller clears the value of the "seller" field.
+func (_u *InvoiceUpdate) ClearSeller() *InvoiceUpdate {
+	_u.mutation.ClearSeller()
 	return _u
 }
 
@@ -944,11 +944,11 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.FxConversionCleared() {
 		_spec.ClearField(invoice.FieldFxConversion, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.SellerSnapshot(); ok {
-		_spec.SetField(invoice.FieldSellerSnapshot, field.TypeJSON, value)
+	if value, ok := _u.mutation.Seller(); ok {
+		_spec.SetField(invoice.FieldSeller, field.TypeJSON, value)
 	}
-	if _u.mutation.SellerSnapshotCleared() {
-		_spec.ClearField(invoice.FieldSellerSnapshot, field.TypeJSON)
+	if _u.mutation.SellerCleared() {
+		_spec.ClearField(invoice.FieldSeller, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)
@@ -1471,15 +1471,15 @@ func (_u *InvoiceUpdateOne) ClearFxConversion() *InvoiceUpdateOne {
 	return _u
 }
 
-// SetSellerSnapshot sets the "seller_snapshot" field.
-func (_u *InvoiceUpdateOne) SetSellerSnapshot(v *types.SellerSnapshot) *InvoiceUpdateOne {
-	_u.mutation.SetSellerSnapshot(v)
+// SetSeller sets the "seller" field.
+func (_u *InvoiceUpdateOne) SetSeller(v *types.InvoiceSeller) *InvoiceUpdateOne {
+	_u.mutation.SetSeller(v)
 	return _u
 }
 
-// ClearSellerSnapshot clears the value of the "seller_snapshot" field.
-func (_u *InvoiceUpdateOne) ClearSellerSnapshot() *InvoiceUpdateOne {
-	_u.mutation.ClearSellerSnapshot()
+// ClearSeller clears the value of the "seller" field.
+func (_u *InvoiceUpdateOne) ClearSeller() *InvoiceUpdateOne {
+	_u.mutation.ClearSeller()
 	return _u
 }
 
@@ -2125,11 +2125,11 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	if _u.mutation.FxConversionCleared() {
 		_spec.ClearField(invoice.FieldFxConversion, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.SellerSnapshot(); ok {
-		_spec.SetField(invoice.FieldSellerSnapshot, field.TypeJSON, value)
+	if value, ok := _u.mutation.Seller(); ok {
+		_spec.SetField(invoice.FieldSeller, field.TypeJSON, value)
 	}
-	if _u.mutation.SellerSnapshotCleared() {
-		_spec.ClearField(invoice.FieldSellerSnapshot, field.TypeJSON)
+	if _u.mutation.SellerCleared() {
+		_spec.ClearField(invoice.FieldSeller, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)

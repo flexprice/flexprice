@@ -70,8 +70,8 @@ type Invoice struct {
 	CustomCurrency *types.CustomCurrency `json:"custom_currency,omitempty"`
 	// FxConversion holds the value of the "fx_conversion" field.
 	FxConversion *types.FxConversion `json:"fx_conversion,omitempty"`
-	// SellerSnapshot holds the value of the "seller_snapshot" field.
-	SellerSnapshot *types.SellerSnapshot `json:"seller_snapshot,omitempty"`
+	// Seller holds the value of the "seller" field.
+	Seller *types.InvoiceSeller `json:"seller,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
 	// DueDate holds the value of the "due_date" field.
@@ -158,7 +158,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoice.FieldTotalTax, invoice.FieldTotalDiscount, invoice.FieldTotalPrepaidCreditsApplied:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
-		case invoice.FieldCustomCurrency, invoice.FieldFxConversion, invoice.FieldSellerSnapshot, invoice.FieldMetadata:
+		case invoice.FieldCustomCurrency, invoice.FieldFxConversion, invoice.FieldSeller, invoice.FieldMetadata:
 			values[i] = new([]byte)
 		case invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldAmountRemaining, invoice.FieldSubtotal, invoice.FieldAdjustmentAmount, invoice.FieldRefundedAmount, invoice.FieldTotal:
 			values[i] = new(decimal.Decimal)
@@ -349,12 +349,12 @@ func (_m *Invoice) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field fx_conversion: %w", err)
 				}
 			}
-		case invoice.FieldSellerSnapshot:
+		case invoice.FieldSeller:
 			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field seller_snapshot", values[i])
+				return fmt.Errorf("unexpected type %T for field seller", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.SellerSnapshot); err != nil {
-					return fmt.Errorf("unmarshal field seller_snapshot: %w", err)
+				if err := json.Unmarshal(*value, &_m.Seller); err != nil {
+					return fmt.Errorf("unmarshal field seller: %w", err)
 				}
 			}
 		case invoice.FieldDescription:
@@ -636,8 +636,8 @@ func (_m *Invoice) String() string {
 	builder.WriteString("fx_conversion=")
 	builder.WriteString(fmt.Sprintf("%v", _m.FxConversion))
 	builder.WriteString(", ")
-	builder.WriteString("seller_snapshot=")
-	builder.WriteString(fmt.Sprintf("%v", _m.SellerSnapshot))
+	builder.WriteString("seller=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Seller))
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)

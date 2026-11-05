@@ -637,8 +637,8 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	}
 
 	// Frozen at finalize like fx_conversion; never cleared by an update.
-	if inv.SellerSnapshot != nil {
-		query.SetSellerSnapshot(inv.SellerSnapshot)
+	if inv.Seller != nil {
+		query.SetSeller(inv.Seller)
 	}
 
 	if inv.TaxExemptionReasonCode != nil {

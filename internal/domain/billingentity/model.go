@@ -1,7 +1,6 @@
 package billingentity
 
 import (
-	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -20,12 +19,12 @@ type BillingEntity struct {
 	types.BaseModel
 }
 
-// SellerSnapshot freezes the entity as an invoice's seller.
-func (e *BillingEntity) SellerSnapshot() *types.SellerSnapshot {
+// AsInvoiceSeller freezes the entity as an invoice's seller.
+func (e *BillingEntity) AsInvoiceSeller() *types.InvoiceSeller {
 	if e == nil {
 		return nil
 	}
-	return &types.SellerSnapshot{
+	return &types.InvoiceSeller{
 		BillingEntityID: e.ID,
 		LegalName:       e.LegalName,
 		SellerDetails:   e.SellerDetails,
@@ -65,42 +64,4 @@ func TenantBillingDetailsFromSeller(d types.SellerDetails) tenant.TenantBillingD
 			Country:    d.Address.Country,
 		},
 	}
-}
-
-// FromEnt converts an Ent BillingEntity to a domain BillingEntity
-func FromEnt(e *ent.BillingEntity) *BillingEntity {
-	if e == nil {
-		return nil
-	}
-	return &BillingEntity{
-		ID:                  e.ID,
-		Name:                e.Name,
-		LegalName:           e.LegalName,
-		IsDefault:           e.IsDefault,
-		InvoiceNumberPrefix: e.InvoiceNumberPrefix,
-		SellerDetails:       e.SellerDetails,
-		TaxIdentifiers:      e.TaxIdentifiers,
-		Metadata:            e.Metadata,
-		EnvironmentID:       e.EnvironmentID,
-		BaseModel: types.BaseModel{
-			TenantID:  e.TenantID,
-			Status:    types.Status(e.Status),
-			CreatedAt: e.CreatedAt,
-			UpdatedAt: e.UpdatedAt,
-			CreatedBy: e.CreatedBy,
-			UpdatedBy: e.UpdatedBy,
-		},
-	}
-}
-
-// FromEntList converts a list of Ent BillingEntities to domain BillingEntities
-func FromEntList(list []*ent.BillingEntity) []*BillingEntity {
-	if list == nil {
-		return nil
-	}
-	entities := make([]*BillingEntity, len(list))
-	for i, item := range list {
-		entities[i] = FromEnt(item)
-	}
-	return entities
 }

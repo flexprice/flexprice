@@ -81,6 +81,9 @@ type InvoiceService interface {
 	AttemptPayment(ctx context.Context, id string) error
 	GetInvoicePDF(ctx context.Context, req dto.InvoicePDFRequest) ([]byte, error)
 	GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePDFRequest) (string, error)
+	// GetInvoiceSeller is the seller frozen at finalization, else the customer's entity now; nil means the tenant sells.
+	// An issued invoice without a frozen seller predates billing entities, so the tenant stays its seller.
+	GetInvoiceSeller(ctx context.Context, inv *invoice.Invoice) (*types.InvoiceSeller, error)
 	RecalculateInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
@@ -1552,7 +1555,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 			lockedInv.InvoiceNumber = &invoiceNumber
 		}
 
-		if err := s.applySellerSnapshot(txCtx, lockedInv); err != nil {
+		if err := s.freezeSeller(txCtx, lockedInv); err != nil {
 			return err
 		}
 
@@ -3770,7 +3773,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			"customer_id", inv.CustomerID)
 	}
 
-	seller, err := s.sellerFor(ctx, &inv.Invoice)
+	seller, err := s.GetInvoiceSeller(ctx, &inv.Invoice)
 	if err != nil {
 		return nil, err
 	}

@@ -70,7 +70,7 @@ func (r *billingEntityRepository) Create(ctx context.Context, e *domain.BillingE
 	}
 
 	SetSpanSuccess(span)
-	*e = *domain.FromEnt(created)
+	*e = *billingEntityFromEnt(created)
 	return nil
 }
 
@@ -95,7 +95,7 @@ func (r *billingEntityRepository) Get(ctx context.Context, id string) (*domain.B
 	}
 
 	SetSpanSuccess(span)
-	return domain.FromEnt(row), nil
+	return billingEntityFromEnt(row), nil
 }
 
 func (r *billingEntityRepository) GetDefault(ctx context.Context) (*domain.BillingEntity, error) {
@@ -116,7 +116,7 @@ func (r *billingEntityRepository) GetDefault(ctx context.Context) (*domain.Billi
 	}
 
 	SetSpanSuccess(span)
-	return domain.FromEnt(row), nil
+	return billingEntityFromEnt(row), nil
 }
 
 func (r *billingEntityRepository) List(ctx context.Context, filter *types.BillingEntityFilter) ([]*domain.BillingEntity, error) {
@@ -148,7 +148,7 @@ func (r *billingEntityRepository) List(ctx context.Context, filter *types.Billin
 	}
 
 	SetSpanSuccess(span)
-	return domain.FromEntList(rows), nil
+	return billingEntitiesFromEnt(rows), nil
 }
 
 func (r *billingEntityRepository) Count(ctx context.Context, filter *types.BillingEntityFilter) (int, error) {
@@ -192,7 +192,7 @@ func (r *billingEntityRepository) ListByIDs(ctx context.Context, ids []string) (
 	}
 
 	SetSpanSuccess(span)
-	return domain.FromEntList(rows), nil
+	return billingEntitiesFromEnt(rows), nil
 }
 
 func (r *billingEntityRepository) Update(ctx context.Context, e *domain.BillingEntity) error {
@@ -226,7 +226,7 @@ func (r *billingEntityRepository) Update(ctx context.Context, e *domain.BillingE
 	}
 
 	SetSpanSuccess(span)
-	*e = *domain.FromEnt(updated)
+	*e = *billingEntityFromEnt(updated)
 	return nil
 }
 
@@ -265,4 +265,40 @@ func taxIdentifiersOrEmpty(ids []types.TaxIdentifier) []types.TaxIdentifier {
 		return []types.TaxIdentifier{}
 	}
 	return ids
+}
+
+func billingEntityFromEnt(e *ent.BillingEntity) *domain.BillingEntity {
+	if e == nil {
+		return nil
+	}
+	return &domain.BillingEntity{
+		ID:                  e.ID,
+		Name:                e.Name,
+		LegalName:           e.LegalName,
+		IsDefault:           e.IsDefault,
+		InvoiceNumberPrefix: e.InvoiceNumberPrefix,
+		SellerDetails:       e.SellerDetails,
+		TaxIdentifiers:      e.TaxIdentifiers,
+		Metadata:            e.Metadata,
+		EnvironmentID:       e.EnvironmentID,
+		BaseModel: types.BaseModel{
+			TenantID:  e.TenantID,
+			Status:    types.Status(e.Status),
+			CreatedAt: e.CreatedAt,
+			UpdatedAt: e.UpdatedAt,
+			CreatedBy: e.CreatedBy,
+			UpdatedBy: e.UpdatedBy,
+		},
+	}
+}
+
+func billingEntitiesFromEnt(rows []*ent.BillingEntity) []*domain.BillingEntity {
+	if rows == nil {
+		return nil
+	}
+	entities := make([]*domain.BillingEntity, len(rows))
+	for i, row := range rows {
+		entities[i] = billingEntityFromEnt(row)
+	}
+	return entities
 }

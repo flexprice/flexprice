@@ -49,14 +49,14 @@ func (s *BillingEntityServiceSuite) TestSellerFor() {
 		s.addEntity("be_eu", env, "EU", false)
 		s.addCustomer("c1", lo.ToPtr("be_eu"))
 		inv := &invoice.Invoice{
-			ID:             "inv_1",
-			CustomerID:     "c1",
-			InvoiceStatus:  types.InvoiceStatusFinalized,
-			SellerSnapshot: &types.SellerSnapshot{BillingEntityID: "be_eu", LegalName: "Old EU B.V."},
+			ID:            "inv_1",
+			CustomerID:    "c1",
+			InvoiceStatus: types.InvoiceStatusFinalized,
+			Seller:        &types.InvoiceSeller{BillingEntityID: "be_eu", LegalName: "Old EU B.V."},
 		}
 		s.renameEntity("be_eu", "New EU B.V.")
 
-		got, err := s.invoiceSvc().sellerFor(s.GetContext(), inv)
+		got, err := s.invoiceSvc().GetInvoiceSeller(s.GetContext(), inv)
 		s.Require().NoError(err)
 		s.Require().NotNil(got)
 		s.Equal("Old EU B.V.", got.LegalName)
@@ -68,14 +68,14 @@ func (s *BillingEntityServiceSuite) TestSellerFor() {
 		s.addEntity("be_eu", env, "EU", false)
 		s.addCustomer("c1", lo.ToPtr("be_eu"))
 		inv := &invoice.Invoice{
-			ID:             "inv_1",
-			CustomerID:     "c1",
-			InvoiceStatus:  types.InvoiceStatusVoided,
-			SellerSnapshot: &types.SellerSnapshot{BillingEntityID: "be_eu", LegalName: "Old EU B.V."},
+			ID:            "inv_1",
+			CustomerID:    "c1",
+			InvoiceStatus: types.InvoiceStatusVoided,
+			Seller:        &types.InvoiceSeller{BillingEntityID: "be_eu", LegalName: "Old EU B.V."},
 		}
 		s.renameEntity("be_eu", "New EU B.V.")
 
-		got, err := s.invoiceSvc().sellerFor(s.GetContext(), inv)
+		got, err := s.invoiceSvc().GetInvoiceSeller(s.GetContext(), inv)
 		s.Require().NoError(err)
 		s.Require().NotNil(got)
 		s.Equal("Old EU B.V.", got.LegalName)
@@ -88,7 +88,7 @@ func (s *BillingEntityServiceSuite) TestSellerFor() {
 		s.addCustomer("c1", lo.ToPtr("be_eu"))
 		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusFinalized}
 
-		got, err := s.invoiceSvc().sellerFor(s.GetContext(), inv)
+		got, err := s.invoiceSvc().GetInvoiceSeller(s.GetContext(), inv)
 		s.Require().NoError(err)
 		s.Nil(got)
 	})
@@ -101,7 +101,7 @@ func (s *BillingEntityServiceSuite) TestSellerFor() {
 		s.renameEntity("be_eu", "New EU B.V.")
 		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusDraft}
 
-		got, err := s.invoiceSvc().sellerFor(s.GetContext(), inv)
+		got, err := s.invoiceSvc().GetInvoiceSeller(s.GetContext(), inv)
 		s.Require().NoError(err)
 		s.Require().NotNil(got)
 		s.Equal("be_eu", got.BillingEntityID)
@@ -114,7 +114,7 @@ func (s *BillingEntityServiceSuite) TestSellerFor() {
 		s.addCustomer("c1", nil)
 		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusDraft}
 
-		got, err := s.invoiceSvc().sellerFor(s.GetContext(), inv)
+		got, err := s.invoiceSvc().GetInvoiceSeller(s.GetContext(), inv)
 		s.Require().NoError(err)
 		s.Nil(got)
 	})
@@ -146,7 +146,7 @@ func (s *BillingEntityServiceSuite) TestNumberPrefixFor() {
 	})
 }
 
-func (s *BillingEntityServiceSuite) TestApplySellerSnapshotIdempotent() {
+func (s *BillingEntityServiceSuite) TestFreezeSellerIdempotent() {
 	env := types.GetEnvironmentID(s.GetContext())
 	s.ClearStores()
 	s.setMode(types.BillingEntityModeEnabled)
@@ -155,11 +155,11 @@ func (s *BillingEntityServiceSuite) TestApplySellerSnapshotIdempotent() {
 	inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1"}
 	svc := s.invoiceSvc()
 
-	s.Require().NoError(svc.applySellerSnapshot(s.GetContext(), inv))
-	s.Require().NotNil(inv.SellerSnapshot)
-	s.Equal("be_eu", inv.SellerSnapshot.LegalName)
+	s.Require().NoError(svc.freezeSeller(s.GetContext(), inv))
+	s.Require().NotNil(inv.Seller)
+	s.Equal("be_eu", inv.Seller.LegalName)
 
 	s.renameEntity("be_eu", "Renamed")
-	s.Require().NoError(svc.applySellerSnapshot(s.GetContext(), inv))
-	s.Equal("be_eu", inv.SellerSnapshot.LegalName)
+	s.Require().NoError(svc.freezeSeller(s.GetContext(), inv))
+	s.Equal("be_eu", inv.Seller.LegalName)
 }

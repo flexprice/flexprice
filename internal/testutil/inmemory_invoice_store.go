@@ -114,7 +114,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		AmountPaid:                 inv.AmountPaid,
 		CustomCurrency:             inv.CustomCurrency,
 		FxConversion:               clonePtr(inv.FxConversion),
-		SellerSnapshot:             inv.SellerSnapshot,
+		Seller:                     inv.Seller,
 		Subtotal:                   inv.Subtotal,
 		Total:                      inv.Total,
 		TotalTax:                   inv.TotalTax,
@@ -303,9 +303,9 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 			updated.FxConversion = existing.FxConversion
 		}
 	}
-	if updated.SellerSnapshot == nil {
+	if updated.Seller == nil {
 		if existing, err := s.InMemoryStore.Get(ctx, inv.ID); err == nil {
-			updated.SellerSnapshot = existing.SellerSnapshot
+			updated.Seller = existing.Seller
 		}
 	}
 	return s.InMemoryStore.Update(ctx, inv.ID, updated)

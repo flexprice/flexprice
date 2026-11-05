@@ -47639,7 +47639,7 @@ type InvoiceMutation struct {
 	total                         *decimal.Decimal
 	custom_currency               **types.CustomCurrency
 	fx_conversion                 **types.FxConversion
-	seller_snapshot               **types.SellerSnapshot
+	seller                        **types.InvoiceSeller
 	description                   *string
 	due_date                      *time.Time
 	paid_at                       *time.Time
@@ -48849,53 +48849,53 @@ func (m *InvoiceMutation) ResetFxConversion() {
 	delete(m.clearedFields, invoice.FieldFxConversion)
 }
 
-// SetSellerSnapshot sets the "seller_snapshot" field.
-func (m *InvoiceMutation) SetSellerSnapshot(ts *types.SellerSnapshot) {
-	m.seller_snapshot = &ts
+// SetSeller sets the "seller" field.
+func (m *InvoiceMutation) SetSeller(ts *types.InvoiceSeller) {
+	m.seller = &ts
 }
 
-// SellerSnapshot returns the value of the "seller_snapshot" field in the mutation.
-func (m *InvoiceMutation) SellerSnapshot() (r *types.SellerSnapshot, exists bool) {
-	v := m.seller_snapshot
+// Seller returns the value of the "seller" field in the mutation.
+func (m *InvoiceMutation) Seller() (r *types.InvoiceSeller, exists bool) {
+	v := m.seller
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldSellerSnapshot returns the old "seller_snapshot" field's value of the Invoice entity.
+// OldSeller returns the old "seller" field's value of the Invoice entity.
 // If the Invoice object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceMutation) OldSellerSnapshot(ctx context.Context) (v *types.SellerSnapshot, err error) {
+func (m *InvoiceMutation) OldSeller(ctx context.Context) (v *types.InvoiceSeller, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldSellerSnapshot is only allowed on UpdateOne operations")
+		return v, errors.New("OldSeller is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldSellerSnapshot requires an ID field in the mutation")
+		return v, errors.New("OldSeller requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldSellerSnapshot: %w", err)
+		return v, fmt.Errorf("querying old value for OldSeller: %w", err)
 	}
-	return oldValue.SellerSnapshot, nil
+	return oldValue.Seller, nil
 }
 
-// ClearSellerSnapshot clears the value of the "seller_snapshot" field.
-func (m *InvoiceMutation) ClearSellerSnapshot() {
-	m.seller_snapshot = nil
-	m.clearedFields[invoice.FieldSellerSnapshot] = struct{}{}
+// ClearSeller clears the value of the "seller" field.
+func (m *InvoiceMutation) ClearSeller() {
+	m.seller = nil
+	m.clearedFields[invoice.FieldSeller] = struct{}{}
 }
 
-// SellerSnapshotCleared returns if the "seller_snapshot" field was cleared in this mutation.
-func (m *InvoiceMutation) SellerSnapshotCleared() bool {
-	_, ok := m.clearedFields[invoice.FieldSellerSnapshot]
+// SellerCleared returns if the "seller" field was cleared in this mutation.
+func (m *InvoiceMutation) SellerCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldSeller]
 	return ok
 }
 
-// ResetSellerSnapshot resets all changes to the "seller_snapshot" field.
-func (m *InvoiceMutation) ResetSellerSnapshot() {
-	m.seller_snapshot = nil
-	delete(m.clearedFields, invoice.FieldSellerSnapshot)
+// ResetSeller resets all changes to the "seller" field.
+func (m *InvoiceMutation) ResetSeller() {
+	m.seller = nil
+	delete(m.clearedFields, invoice.FieldSeller)
 }
 
 // SetDescription sets the "description" field.
@@ -50209,8 +50209,8 @@ func (m *InvoiceMutation) Fields() []string {
 	if m.fx_conversion != nil {
 		fields = append(fields, invoice.FieldFxConversion)
 	}
-	if m.seller_snapshot != nil {
-		fields = append(fields, invoice.FieldSellerSnapshot)
+	if m.seller != nil {
+		fields = append(fields, invoice.FieldSeller)
 	}
 	if m.description != nil {
 		fields = append(fields, invoice.FieldDescription)
@@ -50336,8 +50336,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.CustomCurrency()
 	case invoice.FieldFxConversion:
 		return m.FxConversion()
-	case invoice.FieldSellerSnapshot:
-		return m.SellerSnapshot()
+	case invoice.FieldSeller:
+		return m.Seller()
 	case invoice.FieldDescription:
 		return m.Description()
 	case invoice.FieldDueDate:
@@ -50441,8 +50441,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldCustomCurrency(ctx)
 	case invoice.FieldFxConversion:
 		return m.OldFxConversion(ctx)
-	case invoice.FieldSellerSnapshot:
-		return m.OldSellerSnapshot(ctx)
+	case invoice.FieldSeller:
+		return m.OldSeller(ctx)
 	case invoice.FieldDescription:
 		return m.OldDescription(ctx)
 	case invoice.FieldDueDate:
@@ -50671,12 +50671,12 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetFxConversion(v)
 		return nil
-	case invoice.FieldSellerSnapshot:
-		v, ok := value.(*types.SellerSnapshot)
+	case invoice.FieldSeller:
+		v, ok := value.(*types.InvoiceSeller)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetSellerSnapshot(v)
+		m.SetSeller(v)
 		return nil
 	case invoice.FieldDescription:
 		v, ok := value.(string)
@@ -50928,8 +50928,8 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldFxConversion) {
 		fields = append(fields, invoice.FieldFxConversion)
 	}
-	if m.FieldCleared(invoice.FieldSellerSnapshot) {
-		fields = append(fields, invoice.FieldSellerSnapshot)
+	if m.FieldCleared(invoice.FieldSeller) {
+		fields = append(fields, invoice.FieldSeller)
 	}
 	if m.FieldCleared(invoice.FieldDescription) {
 		fields = append(fields, invoice.FieldDescription)
@@ -51044,8 +51044,8 @@ func (m *InvoiceMutation) ClearField(name string) error {
 	case invoice.FieldFxConversion:
 		m.ClearFxConversion()
 		return nil
-	case invoice.FieldSellerSnapshot:
-		m.ClearSellerSnapshot()
+	case invoice.FieldSeller:
+		m.ClearSeller()
 		return nil
 	case invoice.FieldDescription:
 		m.ClearDescription()
@@ -51190,8 +51190,8 @@ func (m *InvoiceMutation) ResetField(name string) error {
 	case invoice.FieldFxConversion:
 		m.ResetFxConversion()
 		return nil
-	case invoice.FieldSellerSnapshot:
-		m.ResetSellerSnapshot()
+	case invoice.FieldSeller:
+		m.ResetSeller()
 		return nil
 	case invoice.FieldDescription:
 		m.ResetDescription()

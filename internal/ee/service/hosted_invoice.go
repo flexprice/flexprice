@@ -96,7 +96,7 @@ func (s *hostedInvoiceService) GetInvoice(ctx context.Context) (*dto.HostedInvoi
 	if err != nil {
 		return nil, err
 	}
-	seller, err := NewInvoiceService(s.ServiceParams).(*invoiceService).sellerFor(ctx, &inv.Invoice)
+	seller, err := NewInvoiceService(s.ServiceParams).GetInvoiceSeller(ctx, &inv.Invoice)
 	if err != nil {
 		return nil, err
 	}

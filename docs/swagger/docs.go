@@ -25998,11 +25998,11 @@ const docTemplate = `{
                     "description": "refunded_amount is the total sum of credit notes of type \"refund\".\nThese are actual refunds issued to the customer.",
                     "type": "string"
                 },
-                "seller_snapshot": {
-                    "description": "SellerSnapshot is the billing entity seller frozen at finalization; nil for customers without an entity.",
+                "seller": {
+                    "description": "Seller is the billing entity seller frozen at finalization; nil for customers without an entity.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/types.SellerSnapshot"
+                            "$ref": "#/definitions/types.InvoiceSeller"
                         }
                     ]
                 },
@@ -39764,6 +39764,26 @@ const docTemplate = `{
                 "InstalmentStatusCancelled"
             ]
         },
+        "types.InvoiceSeller": {
+            "type": "object",
+            "properties": {
+                "billing_entity_id": {
+                    "type": "string"
+                },
+                "legal_name": {
+                    "type": "string"
+                },
+                "seller_details": {
+                    "$ref": "#/definitions/types.SellerDetails"
+                },
+                "tax_identifiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TaxIdentifier"
+                    }
+                }
+            }
+        },
         "types.JournalDirection": {
             "type": "string",
             "enum": [
@@ -39985,26 +40005,6 @@ const docTemplate = `{
                 },
                 "phone": {
                     "type": "string"
-                }
-            }
-        },
-        "types.SellerSnapshot": {
-            "type": "object",
-            "properties": {
-                "billing_entity_id": {
-                    "type": "string"
-                },
-                "legal_name": {
-                    "type": "string"
-                },
-                "seller_details": {
-                    "$ref": "#/definitions/types.SellerDetails"
-                },
-                "tax_identifiers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.TaxIdentifier"
-                    }
                 }
             }
         },

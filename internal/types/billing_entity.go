@@ -43,8 +43,8 @@ type SellerDetails struct {
 	Address   SellerAddress `json:"address,omitempty"`
 }
 
-// SellerSnapshot freezes the seller of a finalized invoice.
-type SellerSnapshot struct {
+// InvoiceSeller freezes the seller of a finalized invoice.
+type InvoiceSeller struct {
 	BillingEntityID string          `json:"billing_entity_id"`
 	LegalName       string          `json:"legal_name"`
 	SellerDetails   SellerDetails   `json:"seller_details"`

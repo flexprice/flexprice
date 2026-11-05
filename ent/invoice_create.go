@@ -326,9 +326,9 @@ func (_c *InvoiceCreate) SetFxConversion(v *types.FxConversion) *InvoiceCreate {
 	return _c
 }
 
-// SetSellerSnapshot sets the "seller_snapshot" field.
-func (_c *InvoiceCreate) SetSellerSnapshot(v *types.SellerSnapshot) *InvoiceCreate {
-	_c.mutation.SetSellerSnapshot(v)
+// SetSeller sets the "seller" field.
+func (_c *InvoiceCreate) SetSeller(v *types.InvoiceSeller) *InvoiceCreate {
+	_c.mutation.SetSeller(v)
 	return _c
 }
 
@@ -996,9 +996,9 @@ func (_c *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 		_spec.SetField(invoice.FieldFxConversion, field.TypeJSON, value)
 		_node.FxConversion = value
 	}
-	if value, ok := _c.mutation.SellerSnapshot(); ok {
-		_spec.SetField(invoice.FieldSellerSnapshot, field.TypeJSON, value)
-		_node.SellerSnapshot = value
+	if value, ok := _c.mutation.Seller(); ok {
+		_spec.SetField(invoice.FieldSeller, field.TypeJSON, value)
+		_node.Seller = value
 	}
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)

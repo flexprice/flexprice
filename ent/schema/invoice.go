@@ -156,7 +156,7 @@ func (Invoice) Fields() []ent.Field {
 				"postgres": "jsonb",
 			}).
 			Optional(),
-		field.JSON("seller_snapshot", &types.SellerSnapshot{}).
+		field.JSON("seller", &types.InvoiceSeller{}).
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}).

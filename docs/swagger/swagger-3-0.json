@@ -28736,8 +28736,8 @@
             "type": "string",
             "description": "refunded_amount is the total sum of credit notes of type \"refund\".\nThese are actual refunds issued to the customer."
           },
-          "seller_snapshot": {
-            "$ref": "#/components/schemas/types.SellerSnapshot"
+          "seller": {
+            "$ref": "#/components/schemas/types.InvoiceSeller"
           },
           "source_type": {
             "$ref": "#/components/schemas/types.InvoiceSourceType"
@@ -42240,6 +42240,27 @@
         ],
         "x-speakeasy-name-override": "InstalmentStatus"
       },
+      "types.InvoiceSeller": {
+        "type": "object",
+        "properties": {
+          "billing_entity_id": {
+            "type": "string"
+          },
+          "legal_name": {
+            "type": "string"
+          },
+          "seller_details": {
+            "$ref": "#/components/schemas/types.SellerDetails"
+          },
+          "tax_identifiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.TaxIdentifier"
+            }
+          }
+        },
+        "x-speakeasy-name-override": "InvoiceSeller"
+      },
       "types.JournalDirection": {
         "type": "string",
         "enum": [
@@ -42477,27 +42498,6 @@
           }
         },
         "x-speakeasy-name-override": "SellerDetails"
-      },
-      "types.SellerSnapshot": {
-        "type": "object",
-        "properties": {
-          "billing_entity_id": {
-            "type": "string"
-          },
-          "legal_name": {
-            "type": "string"
-          },
-          "seller_details": {
-            "$ref": "#/components/schemas/types.SellerDetails"
-          },
-          "tax_identifiers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.TaxIdentifier"
-            }
-          }
-        },
-        "x-speakeasy-name-override": "SellerSnapshot"
       },
       "types.TaxIdentifier": {
         "type": "object",

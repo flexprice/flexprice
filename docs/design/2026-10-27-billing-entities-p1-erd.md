@@ -249,7 +249,7 @@ erDiagram
     string billing_entity_id "new"
   }
   INVOICE {
-    jsonb seller_snapshot "new"
+    jsonb seller "new"
   }
   INVOICE_SEQUENCE {
     string prefix "new, in unique key"
@@ -274,7 +274,7 @@ Changed tables:
 |---|---|---|---|---|
 | `settings` | new key `billing_entity_config`, value `{"mode": "off" \| "enabling" \| "enabled"}` | | | FR-1. No row means `off`; only enablement writes it |
 | `customers` | `billing_entity_id` | varchar(50) | yes | NULL only while the environment is off or before the backfill reaches the row; immutable once set. Index (tenant, environment, `billing_entity_id`) built concurrently |
-| `invoices` | `seller_snapshot` | jsonb | yes | Written at finalization for customers with an entity (FR-17) |
+| `invoices` | `seller` | jsonb | yes | Written at finalization for customers with an entity (FR-17) |
 | `invoice_sequences` | `prefix` | varchar(20) | see migration | Counter key becomes (tenant, environment, prefix, period) |
 | `tax_associations` | new `entity_type` value `billing_entity` | | | Entity default rates; no schema change |
 
