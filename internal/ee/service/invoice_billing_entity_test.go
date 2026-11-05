@@ -1,7 +1,6 @@
 package service
 
 import (
-	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -21,17 +20,6 @@ func (s *BillingEntityServiceSuite) invoiceSvc() *invoiceService {
 	}).(*invoiceService)
 }
 
-func (s *BillingEntityServiceSuite) addCustomer(id string, billingEntityID *string) {
-	ctx := s.GetContext()
-	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, &customer.Customer{
-		ID:              id,
-		ExternalID:      id,
-		BillingEntityID: billingEntityID,
-		EnvironmentID:   types.GetEnvironmentID(ctx),
-		BaseModel:       types.GetDefaultBaseModel(ctx),
-	}))
-}
-
 func (s *BillingEntityServiceSuite) renameEntity(id, name string) {
 	ctx := s.GetContext()
 	e, err := s.GetStores().BillingEntityRepo.Get(ctx, id)
@@ -47,7 +35,6 @@ func (s *BillingEntityServiceSuite) TestGetInvoiceBillingEntity() {
 		s.ClearStores()
 		s.setMode(types.BillingEntityModeEnabled)
 		s.addEntity("be_eu", env, "EU", false)
-		s.addCustomer("c1", lo.ToPtr("be_eu"))
 		inv := &invoice.Invoice{
 			ID:            "inv_1",
 			CustomerID:    "c1",
@@ -66,7 +53,6 @@ func (s *BillingEntityServiceSuite) TestGetInvoiceBillingEntity() {
 		s.ClearStores()
 		s.setMode(types.BillingEntityModeEnabled)
 		s.addEntity("be_eu", env, "EU", false)
-		s.addCustomer("c1", lo.ToPtr("be_eu"))
 		inv := &invoice.Invoice{
 			ID:            "inv_1",
 			CustomerID:    "c1",
@@ -85,8 +71,7 @@ func (s *BillingEntityServiceSuite) TestGetInvoiceBillingEntity() {
 		s.ClearStores()
 		s.setMode(types.BillingEntityModeEnabled)
 		s.addEntity("be_eu", env, "EU", false)
-		s.addCustomer("c1", lo.ToPtr("be_eu"))
-		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusFinalized}
+		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusFinalized, BillingEntityID: lo.ToPtr("be_eu")}
 
 		got, err := s.invoiceSvc().GetInvoiceBillingEntity(s.GetContext(), inv)
 		s.Require().NoError(err)
@@ -97,9 +82,8 @@ func (s *BillingEntityServiceSuite) TestGetInvoiceBillingEntity() {
 		s.ClearStores()
 		s.setMode(types.BillingEntityModeEnabled)
 		s.addEntity("be_eu", env, "EU", false)
-		s.addCustomer("c1", lo.ToPtr("be_eu"))
 		s.renameEntity("be_eu", "New EU B.V.")
-		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusDraft}
+		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusDraft, BillingEntityID: lo.ToPtr("be_eu")}
 
 		got, err := s.invoiceSvc().GetInvoiceBillingEntity(s.GetContext(), inv)
 		s.Require().NoError(err)
@@ -111,7 +95,6 @@ func (s *BillingEntityServiceSuite) TestGetInvoiceBillingEntity() {
 	s.Run("no_entity_bills_as_tenant", func() {
 		s.ClearStores()
 		s.setMode(types.BillingEntityModeOff)
-		s.addCustomer("c1", nil)
 		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusDraft}
 
 		got, err := s.invoiceSvc().GetInvoiceBillingEntity(s.GetContext(), inv)
@@ -128,9 +111,8 @@ func (s *BillingEntityServiceSuite) TestNumberPrefixFor() {
 		s.ClearStores()
 		s.setMode(types.BillingEntityModeEnabled)
 		s.addEntity("be_eu", env, "EU", false)
-		s.addCustomer("c1", lo.ToPtr("be_eu"))
 
-		got, err := s.invoiceSvc().numberPrefixFor(s.GetContext(), &invoice.Invoice{CustomerID: "c1"}, cfg)
+		got, err := s.invoiceSvc().numberPrefixFor(s.GetContext(), &invoice.Invoice{CustomerID: "c1", BillingEntityID: lo.ToPtr("be_eu")}, cfg)
 		s.Require().NoError(err)
 		s.Equal("EU", got)
 	})
@@ -138,7 +120,6 @@ func (s *BillingEntityServiceSuite) TestNumberPrefixFor() {
 	s.Run("environment_prefix_without_entity", func() {
 		s.ClearStores()
 		s.setMode(types.BillingEntityModeOff)
-		s.addCustomer("c1", nil)
 
 		got, err := s.invoiceSvc().numberPrefixFor(s.GetContext(), &invoice.Invoice{CustomerID: "c1"}, cfg)
 		s.Require().NoError(err)
@@ -151,8 +132,7 @@ func (s *BillingEntityServiceSuite) TestFreezeBillingEntityIdempotent() {
 	s.ClearStores()
 	s.setMode(types.BillingEntityModeEnabled)
 	s.addEntity("be_eu", env, "EU", false)
-	s.addCustomer("c1", lo.ToPtr("be_eu"))
-	inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1"}
+	inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", BillingEntityID: lo.ToPtr("be_eu")}
 	svc := s.invoiceSvc()
 
 	s.Require().NoError(svc.freezeBillingEntity(s.GetContext(), inv))

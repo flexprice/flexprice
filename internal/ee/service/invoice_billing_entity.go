@@ -7,16 +7,14 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
-// customerBillingEntity is the effective billing entity of the invoice's customer, or nil.
-func (s *invoiceService) customerBillingEntity(ctx context.Context, inv *invoice.Invoice) (*billingentity.BillingEntity, error) {
-	cust, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
-	if err != nil {
-		return nil, err
+// storedBillingEntity is the billing entity stored on the invoice, or nil when the tenant bills it.
+func (s *invoiceService) storedBillingEntity(ctx context.Context, inv *invoice.Invoice) (*billingentity.BillingEntity, error) {
+	if inv.BillingEntityID == nil {
+		return nil, nil
 	}
-	return NewBillingEntityService(s.ServiceParams).EffectiveEntity(ctx, cust)
+	return s.BillingEntityRepo.Get(ctx, *inv.BillingEntityID)
 }
 
 func (s *invoiceService) GetInvoiceBillingEntity(ctx context.Context, inv *invoice.Invoice) (*types.InvoiceBillingEntity, error) {
@@ -26,16 +24,16 @@ func (s *invoiceService) GetInvoiceBillingEntity(ctx context.Context, inv *invoi
 	if inv.InvoiceStatus != types.InvoiceStatusDraft {
 		return nil, nil
 	}
-	entity, err := s.customerBillingEntity(ctx, inv)
+	entity, err := s.storedBillingEntity(ctx, inv)
 	if err != nil {
 		return nil, err
 	}
 	return entity.AsInvoiceBillingEntity(), nil
 }
 
-// numberPrefixFor is the customer's entity prefix, or the environment prefix for a customer without one.
+// numberPrefixFor is the invoice's entity prefix, or the environment prefix for an invoice without one.
 func (s *invoiceService) numberPrefixFor(ctx context.Context, inv *invoice.Invoice, cfg *types.InvoiceConfig) (string, error) {
-	entity, err := s.customerBillingEntity(ctx, inv)
+	entity, err := s.storedBillingEntity(ctx, inv)
 	if err != nil {
 		return "", err
 	}
@@ -45,18 +43,16 @@ func (s *invoiceService) numberPrefixFor(ctx context.Context, inv *invoice.Invoi
 	return entity.InvoiceNumberPrefix, nil
 }
 
-// freezeBillingEntity sets the customer's entity as the invoice's billing entity once; later calls keep the first one.
+// freezeBillingEntity snapshots the invoice's entity once; later calls keep the first snapshot.
 func (s *invoiceService) freezeBillingEntity(ctx context.Context, inv *invoice.Invoice) error {
-	if inv.BillingEntity == nil {
-		entity, err := s.customerBillingEntity(ctx, inv)
-		if err != nil {
-			return err
-		}
-		inv.BillingEntity = entity.AsInvoiceBillingEntity()
+	if inv.BillingEntity != nil {
+		return nil
 	}
-	if inv.BillingEntityID == nil && inv.BillingEntity != nil {
-		inv.BillingEntityID = lo.ToPtr(inv.BillingEntity.BillingEntityID)
+	entity, err := s.storedBillingEntity(ctx, inv)
+	if err != nil {
+		return err
 	}
+	inv.BillingEntity = entity.AsInvoiceBillingEntity()
 	return nil
 }
 

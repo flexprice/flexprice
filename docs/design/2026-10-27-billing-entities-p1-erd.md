@@ -126,9 +126,9 @@ release on, the new prefix starts its own series instead of continuing the old p
 | FR-13 | A customer's entity never changes. | UC3 | Update a customer with another `billing_entity_id` → rejected. |
 | FR-14 | A new customer gets its entity's auto-apply tax rates; a customer in an off environment gets the tenant-level rates as today. | UC3 | Create a customer of an entity linked to rate R → customer has R. |
 | FR-15 | `billing_entity_id` in a request body or filter is rejected unless the environment is `enabled`, and must name an entity of the request's environment. | UC3, UC5 | Off or enabling environment → 400 "not enabled"; other environment's entity → 400. |
-| FR-16 | An invoice's number comes from the counter of its prefix and period: the customer's entity's prefix, or the environment prefix for a customer without one. | UC4, UC6 | Two entities with prefixes INV and EU finalize in one period → `INV-…` continues the existing series, `EU-…-00001` starts its own; no two invoices share a number. |
-| FR-17 | Finalizing the invoice of a customer with an entity stores a billing entity snapshot once: entity ID, name, billing details. | UC4 | Finalize → snapshot present; retry finalize → snapshot unchanged. |
-| FR-18 | The PDF and hosted invoice page show the snapshot for finalized invoices, the customer's entity for drafts, and the tenant for customers without an entity and for invoices issued before enablement. | UC4 | Edit entity after finalize, force PDF rebuild → old biller shown; invoice issued before enable → tenant shown. |
+| FR-16 | An invoice's number comes from the counter of its prefix and period: the invoice's entity's prefix, or the environment prefix for an invoice without one. | UC4, UC6 | Two entities with prefixes INV and EU finalize in one period → `INV-…` continues the existing series, `EU-…-00001` starts its own; no two invoices share a number. |
+| FR-17 | Finalizing an invoice with an entity stores a billing entity snapshot once: entity ID, name, billing details. | UC4 | Finalize → snapshot present; retry finalize → snapshot unchanged. |
+| FR-18 | The PDF and hosted invoice page show the snapshot for finalized invoices, the invoice's entity for drafts, and the tenant for invoices without an entity and for invoices issued before enablement. | UC4 | Edit entity after finalize, force PDF rebuild → old biller shown; invoice issued before enable → tenant shown. |
 | FR-20 | Enabling is rejected unless the deployment's `billing_entities.enabled` switch is on. | UC1 | Switch off → enable returns 400 and the mode stays `off`; switch on → enable proceeds (FR-1). |
 | FR-21 | Delegated and grouped invoices only combine customers of one entity. | UC4 | Set `invoicing_customer_id` to a customer of another entity → 400; grouped invoice across entities → 400. |
 | FR-22 | Lists and searches of customers and invoices accept an optional `billing_entity_id`; absent means all entities. | UC5 | Filter by entity → only that entity's records; no filter → all. |
@@ -429,12 +429,12 @@ Once the environment is `enabled`, creates skip the lock: no enablement can foll
 
 ```mermaid
 flowchart TD
-  F[Finalize invoice] --> C{Customer has an entity?}
+  F[Finalize invoice] --> C{Invoice has an entity?}
   C -- no --> P0[Prefix = environment prefix]
   C -- yes --> P1[Prefix = entity's prefix]
   P0 --> N[Next value of counter for prefix + period]
   P1 --> N
-  N --> S{Customer has an entity?}
+  N --> S{Invoice has an entity?}
   S -- yes --> SN[Store billing entity snapshot if empty]
   S -- no --> D[Done]
   SN --> D
@@ -443,7 +443,7 @@ flowchart TD
   Q -- yes --> B1[Biller from snapshot]
   Q -- no --> I{Draft?}
   I -- no --> B3[Biller from the tenant, as today]
-  I -- yes --> E{Customer has an entity?}
+  I -- yes --> E{Invoice has an entity?}
   E -- yes --> B2[Biller from the entity now]
   E -- no --> B3
 ```
@@ -451,7 +451,9 @@ flowchart TD
 During `enabling`, a customer the backfill has not reached yet belongs to its environment's default
 entity: it can only predate enablement, when the default was the only entity. Every rule above treats it
 that way, so its invoices number, render and tax exactly as after the backfill. Invoice create stores the
-customer's entity on the invoice (FR-25), so an invoice created then also belongs to the default.
+customer's entity on the invoice (FR-25), and numbering and rendering read only the invoice's entity. A
+draft from before enablement that finalizes before the backfill reaches it bills as the tenant, like other
+invoices issued before enablement; its number is the same, since the default entity keeps the environment prefix.
 
 ### 9.4 Jobs and events
 

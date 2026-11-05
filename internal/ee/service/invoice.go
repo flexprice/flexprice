@@ -308,7 +308,11 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 		inv.IdempotencyKey = &idempKey
 		inv.BillingSequence = billingSeq
 		inv.InvoiceStatus = types.InvoiceStatusDraft
-		billingEntity, err := s.customerBillingEntity(txCtx, inv)
+		cust, err := s.CustomerRepo.Get(txCtx, inv.CustomerID)
+		if err != nil {
+			return err
+		}
+		billingEntity, err := NewBillingEntityService(s.ServiceParams).EffectiveEntity(txCtx, cust)
 		if err != nil {
 			return err
 		}
