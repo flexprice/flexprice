@@ -33201,8 +33201,7 @@ const docTemplate = `{
                 "database_error",
                 "service_unavailable",
                 "too_many_requests",
-                "not_implemented",
-                "billing_entities_not_enabled"
+                "not_implemented"
             ],
             "x-enum-varnames": [
                 "ErrCodeHTTPClient",
@@ -33217,8 +33216,7 @@ const docTemplate = `{
                 "ErrCodeDatabase",
                 "ErrCodeServiceUnavailable",
                 "ErrCodeTooManyRequests",
-                "ErrCodeNotImplemented",
-                "ErrCodeBillingEntitiesNotEnabled"
+                "ErrCodeNotImplemented"
             ]
         },
         "Addon": {

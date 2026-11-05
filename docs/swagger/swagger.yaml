@@ -11417,7 +11417,6 @@ definitions:
     - service_unavailable
     - too_many_requests
     - not_implemented
-    - billing_entities_not_enabled
     type: string
     x-enum-varnames:
     - ErrCodeHTTPClient
@@ -11433,7 +11432,6 @@ definitions:
     - ErrCodeServiceUnavailable
     - ErrCodeTooManyRequests
     - ErrCodeNotImplemented
-    - ErrCodeBillingEntitiesNotEnabled
   Addon:
     properties:
       created_at:

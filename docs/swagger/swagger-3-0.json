@@ -35543,8 +35543,7 @@
           "database_error",
           "service_unavailable",
           "too_many_requests",
-          "not_implemented",
-          "billing_entities_not_enabled"
+          "not_implemented"
         ],
         "x-enum-varnames": [
           "ErrCodeHTTPClient",
@@ -35559,8 +35558,7 @@
           "ErrCodeDatabase",
           "ErrCodeServiceUnavailable",
           "ErrCodeTooManyRequests",
-          "ErrCodeNotImplemented",
-          "ErrCodeBillingEntitiesNotEnabled"
+          "ErrCodeNotImplemented"
         ],
         "x-speakeasy-name-override": "ErrorCode"
       },
