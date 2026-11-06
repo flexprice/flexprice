@@ -78,16 +78,6 @@ func (s *settingsService) requireSAMLEnabled(key types.SettingKey) error {
 	return nil
 }
 
-// rejectSystemOwnedSetting refuses API writes to a setting only Flexprice changes.
-func rejectSystemOwnedSetting(key types.SettingKey) error {
-	if key != types.SettingKeyBillingEntityConfig {
-		return nil
-	}
-	return ierr.NewError("billing_entity_config cannot be changed through the settings API").
-		WithHint("The billing entities mode changes only by enabling billing entities").
-		Mark(ierr.ErrValidation)
-}
-
 // requireSuperAdminToReadSAMLConfig keeps the identity provider configuration
 // away from callers who may not administer it.
 //
@@ -115,6 +105,17 @@ func requireSuperAdminToReadSAMLConfig(ctx context.Context, key types.SettingKey
 	return nil
 }
 
+// rejectAPIReadOnlySetting refuses any settings API write or delete of a key only Flexprice changes.
+// To protect some fields of a key the API may still write, use apiImmutableSettingFields.
+func rejectAPIReadOnlySetting(key types.SettingKey) error {
+	if key != types.SettingKeyBillingEntityConfig {
+		return nil
+	}
+	return ierr.NewError("billing_entity_config cannot be changed through the settings API").
+		WithHint("The billing entities mode changes only by enabling billing entities").
+		Mark(ierr.ErrValidation)
+}
+
 // apiImmutableSettingFields lists the fields of a setting that the settings API
 // may never write, whatever the caller's role.
 //
@@ -125,7 +126,8 @@ func requireSuperAdminToReadSAMLConfig(ctx context.Context, key types.SettingKey
 // else.
 //
 // Fields listed here are carried over from the stored value on update and are
-// changed out of band, directly in the database.
+// changed out of band, directly in the database. The rest of the key stays
+// writable; to refuse the whole key, use rejectAPIReadOnlySetting.
 func apiImmutableSettingFields(key types.SettingKey) []string {
 	if key == types.SettingKeySAMLConfig {
 		// "active" is Flexprice's approval that this tenant may serve SSO at
@@ -414,7 +416,7 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	if err := s.requireSAMLEnabled(key); err != nil {
 		return nil, err
 	}
-	if err := rejectSystemOwnedSetting(key); err != nil {
+	if err := rejectAPIReadOnlySetting(key); err != nil {
 		return nil, err
 	}
 
@@ -484,7 +486,7 @@ func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.Sett
 	if err := s.requireSAMLEnabled(key); err != nil {
 		return err
 	}
-	if err := rejectSystemOwnedSetting(key); err != nil {
+	if err := rejectAPIReadOnlySetting(key); err != nil {
 		return err
 	}
 
