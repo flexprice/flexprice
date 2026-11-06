@@ -20,9 +20,12 @@ type BillingEntityScope interface {
 	ScopeToCustomer(ctx context.Context, customerID string) (context.Context, error)
 	ScopeToInvoice(ctx context.Context, invoiceID string) (context.Context, error)
 	ScopeToSubscription(ctx context.Context, subscriptionID string) (context.Context, error)
+	// ScopeToDefault puts the environment's default entity in ctx; off environments get ctx unchanged.
 	ScopeToDefault(ctx context.Context) (context.Context, error)
 	// ScopeToPayment pins the connection that took the payment, else its customer's entity; a removed connection is a validation error.
 	ScopeToPayment(ctx context.Context, p *payment.Payment) (context.Context, error)
+	// ScopeToConnection pins the published connection and its owner entity in ctx; a removed or another provider's connection is not found.
+	ScopeToConnection(ctx context.Context, connectionID string, provider types.SecretProvider) (context.Context, error)
 	// InScope reports whether the customer belongs to the entity in ctx; true when off or ctx has no entity.
 	InScope(ctx context.Context, customerID string) (bool, error)
 	// RequireProviderConnected returns a validation error when the entity in ctx has no connection for the provider.
