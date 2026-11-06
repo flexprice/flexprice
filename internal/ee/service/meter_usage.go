@@ -49,6 +49,9 @@ type MeterUsageService interface {
 	GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error)
 	GetDetailedAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) (*dto.GetUsageAnalyticsResponse, error)
 
+	// GetUsageAnalyticsV2 returns one sorted page of usage cost grouped by the request's keys, priced like the invoice.
+	GetUsageAnalyticsV2(ctx context.Context, req *dto.GetUsageAnalyticsV2Request) (*dto.GetUsageAnalyticsV2Response, error)
+
 	// GetDetailedUsageAnalytics adapts GetDetailedAnalytics to the dto-based
 	// request shape used by callers that need to be signal-agnostic (e.g. the
 	// usage-analytics CSV exporter). It resolves tenant/environment from ctx.
@@ -2232,7 +2235,8 @@ func (s *meterUsageService) resolveCustomerAndSubscriptions(ctx context.Context,
 	}
 
 	subService := NewSubscriptionService(s.ServiceParams)
-	filter := types.NewSubscriptionFilter()
+	// Every subscription: a default page would silently drop usage from the 51st onwards.
+	filter := types.NewNoLimitSubscriptionFilter()
 	filter.CustomerID = cust.ID
 	filter.WithLineItems = true
 	filter.SubscriptionStatus = []types.SubscriptionStatus{
@@ -2455,12 +2459,7 @@ func loadAnalyticsCoupons(ctx context.Context, sp ServiceParams, data *Analytics
 		return nil, nil
 	}
 
-	filter := func(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
-		return c.Type == types.CouponTypePercentage &&
-			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
-			c.IsValid()
-	}
-	sel, err := selectSubscriptionCoupons(ctx, sp, data.Subscriptions, start, end, filter)
+	sel, err := selectSubscriptionCoupons(ctx, sp, data.Subscriptions, start, end, isAnalyticsCoupon)
 	if err != nil {
 		sp.Logger.Info(ctx, "failed to load coupons for analytics discounts, skipping", "error", err)
 		return nil, nil
@@ -2470,6 +2469,13 @@ func loadAnalyticsCoupons(ctx context.Context, sp ServiceParams, data *Analytics
 		return nil, nil
 	}
 	return lineItemCoupons, subscriptionCoupons
+}
+
+// isAnalyticsCoupon selects the coupons analytics applies: valid percentage coupons that recur.
+func isAnalyticsCoupon(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
+	return c.Type == types.CouponTypePercentage &&
+		(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
+		c.IsValid()
 }
 
 // calculateCosts calculates costs for all analytics items in the data.

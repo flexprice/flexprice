@@ -453,6 +453,44 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// @Summary Query usage analytics
+// @ID queryUsageAnalytics
+// @Description Use when building spend dashboards: usage cost grouped by up to three keys (event properties, source, meter, feature or line item), sorted and paginated, with optional columns, filters, search, time points and per-row metrics.
+// @Description Line costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage. SUM, SUM_WITH_MULTIPLIER and COUNT meters are split by each row's quantity; bucketed MAX meters by bucket peaks, each billing bucket's peak going to the row of the event that set it (filters drop rows after peaks are chosen). Plain MAX and other aggregations are left out of rows and totals. A partial range carries the full period's rate; lines with no usage carry the range's share of the period's time.
+// @Description totals.cost equals rows_cost + unattributed_cost. Unused commitment is unattributed unless a row key is the meter, feature or line item.
+// @Description Each request reads the latest data, so rows can shift between pages while events arrive; data_through in the response says how current the data is.
+// @Tags Events
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param request body dto.GetUsageAnalyticsV2Request true "Request body"
+// @Success 200 {object} dto.GetUsageAnalyticsV2Response
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /events/analytics/query [post]
+func (h *EventsHandler) QueryUsageAnalytics(c *gin.Context) {
+	var req dto.GetUsageAnalyticsV2Request
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	req.ApplyDefaults(clock.Now())
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
+
+	response, err := h.meterUsageService.GetUsageAnalyticsV2(c.Request.Context(), &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, response)
+}
+
 // eventLookupDefaultLookback bounds the event lookup's events-table read when no window is given.
 const eventLookupDefaultLookback = 14 * 24 * time.Hour
 

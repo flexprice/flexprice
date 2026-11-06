@@ -1,0 +1,352 @@
+package service
+
+import (
+	"time"
+
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+)
+
+// analyticsFixture is a customer on one monthly subscription with a SUM meter ($0.01/call) and a MAX meter
+// ($1 per GB of peak), with February events from two apps. Analytics query covers only the SUM meter.
+type analyticsFixture struct {
+	sub          *subscription.Subscription
+	feb1, mar1   time.Time
+	calls, store *meter.Meter
+}
+
+func (s *BillingServiceSuite) setupAnalyticsFixture() *analyticsFixture {
+	s.BaseServiceTestSuite.ClearStores()
+	ctx := s.GetContext()
+	f := &analyticsFixture{
+		feb1: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+		mar1: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+	}
+	jan1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	cust := &customer.Customer{ID: "cust_qa", ExternalID: "ext_qa", Name: "QA", Timezone: "UTC", BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+
+	f.calls = &meter.Meter{ID: "meter_calls", Name: "Calls", EventName: "call",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum}, BaseModel: types.GetDefaultBaseModel(ctx)}
+	f.store = &meter.Meter{ID: "meter_storage", Name: "Storage", EventName: "storage",
+		Aggregation: meter.Aggregation{Type: types.AggregationMax}, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, f.calls))
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, f.store))
+
+	f.sub = &subscription.Subscription{
+		ID: "sub_qa", CustomerID: cust.ID, StartDate: jan1, BillingAnchor: jan1,
+		CurrentPeriodStart: f.feb1, CurrentPeriodEnd: f.mar1, Currency: "usd",
+		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1, BillingCycle: types.BillingCycleAnniversary,
+		SubscriptionStatus: types.SubscriptionStatusActive, SubscriptionType: types.SubscriptionTypeStandalone,
+		Timezone: "UTC", BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	var lines []*subscription.SubscriptionLineItem
+	for _, spec := range []struct {
+		m      *meter.Meter
+		amount string
+	}{{f.calls, "0.01"}, {f.store, "1"}} {
+		pr := &price.Price{
+			ID: "price_" + spec.m.ID, Amount: decimal.RequireFromString(spec.amount), Currency: "usd",
+			Type: types.PRICE_TYPE_USAGE, BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+			BillingModel: types.BILLING_MODEL_FLAT_FEE, BillingCadence: types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence: types.InvoiceCadenceArrear, MeterID: spec.m.ID, BaseModel: types.GetDefaultBaseModel(ctx),
+		}
+		s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, pr))
+		lines = append(lines, &subscription.SubscriptionLineItem{
+			ID: "li_" + spec.m.ID, SubscriptionID: f.sub.ID, CustomerID: cust.ID, PriceID: pr.ID,
+			PriceType: types.PRICE_TYPE_USAGE, MeterID: spec.m.ID, DisplayName: spec.m.Name, Quantity: decimal.Zero,
+			Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+			InvoiceCadence: types.InvoiceCadenceArrear, StartDate: jan1, BaseModel: types.GetDefaultBaseModel(ctx),
+		})
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, f.sub, lines))
+	f.sub.LineItems = lines
+
+	// payout: 300 calls (build 100, run 200), storage peak 8. support: 100 calls (run), storage peak 2.
+	var usage []*events.MeterUsage
+	add := func(m *meter.Meter, app, kind string, day int, qty int64) {
+		ts := time.Date(2026, 2, day, 12, 0, 0, 0, time.UTC)
+		usage = append(usage, &events.MeterUsage{
+			Event: events.Event{ID: s.GetUUID(), TenantID: f.sub.TenantID, EnvironmentID: f.sub.EnvironmentID, EventName: m.EventName,
+				ExternalCustomerID: cust.ExternalID, CustomerID: cust.ID, Timestamp: ts, IngestedAt: ts,
+				Properties: map[string]interface{}{"app": app, "type": kind}},
+			MeterID: m.ID, QtyTotal: decimal.NewFromInt(qty),
+		})
+	}
+	add(f.calls, "payout", "build", 3, 100)
+	add(f.calls, "payout", "run", 10, 200)
+	add(f.calls, "support", "run", 10, 100)
+	add(f.store, "payout", "run", 5, 8)
+	add(f.store, "payout", "run", 6, 3)
+	add(f.store, "support", "run", 5, 2)
+	s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, usage))
+	return f
+}
+
+func (s *BillingServiceSuite) queryAnalytics(f *analyticsFixture, mutate func(r *dto.GetUsageAnalyticsV2Request)) *dto.GetUsageAnalyticsV2Response {
+	req := &dto.GetUsageAnalyticsV2Request{
+		ExternalCustomerID: "ext_qa", StartTime: f.feb1, EndTime: f.mar1, GroupBy: []string{"properties.app"},
+	}
+	if mutate != nil {
+		mutate(req)
+	}
+	req.ApplyDefaults(f.mar1)
+	s.Require().NoError(req.Validate())
+
+	billing := s.service.(*billingService)
+	usageSvc := &meterUsageService{ServiceParams: billing.ServiceParams, repo: billing.MeterUsageRepo, logger: billing.Logger}
+	resp, err := usageSvc.GetUsageAnalyticsV2(s.GetContext(), req)
+	s.Require().NoError(err)
+	return resp
+}
+
+func (s *BillingServiceSuite) requireMoney(want string, got decimal.Decimal, what string) {
+	s.Truef(decimal.RequireFromString(want).Equal(got), "%s: want %s got %s", what, want, got)
+}
+
+func (s *BillingServiceSuite) TestGetUsageAnalyticsV2_RanksAndReconcilesToInvoice() {
+	f := s.setupAnalyticsFixture()
+	ctx := s.GetContext()
+
+	invoice, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, f.sub, f.sub.LineItems, f.feb1, f.mar1, true, nil)
+	s.Require().NoError(err)
+	// calls: 400 x $0.01 = $4; storage: peak 8 x $1 = $8.
+	s.requireMoney("12", invoice.TotalAmount, "invoice")
+
+	resp := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) { r.Expand = []string{"price", "plan"} })
+	s.Equal(int64(2), resp.TotalCount)
+	s.requireMoney("4", resp.Totals.Cost, "totals match the invoice's SUM lines; the MAX storage line is left out")
+	s.requireMoney("4", resp.Totals.RowsCost, "all cost is on rows")
+	s.Require().Len(resp.Items, 2)
+
+	payout, support := resp.Items[0], resp.Items[1]
+	s.Equal("payout", payout.Group["app"])
+	s.requireMoney("3", payout.Cost, "payout: 300 calls")
+	s.requireMoney("1", support.Cost, "support: 100 calls")
+	s.Nil(payout.Usage, "the request is not narrowed to one meter, so usage is not shown")
+	s.Equal([]string{"price_meter_calls"}, payout.PriceIDs)
+	s.Equal([]string{"sub_qa"}, payout.SubscriptionIDs)
+	s.Len(resp.Prices, 1)
+	s.Empty(resp.Unattributed.Charges)
+
+	s.Run("page size 1 keeps the total count", func() {
+		page := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) { r.Limit = 1; r.Offset = 1 })
+		s.Equal(int64(2), page.TotalCount)
+		s.Require().Len(page.Items, 1)
+		s.Equal("support", page.Items[0].Group["app"])
+	})
+
+	s.Run("a filtered row costs the same", func() {
+		filtered := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) {
+			r.Filters = []dto.AnalyticsV2Filter{{Key: "properties.app", Op: dto.AnalyticsV2FilterOpNotIn, Values: []string{"payout"}}}
+		})
+		s.Require().Len(filtered.Items, 1)
+		s.requireMoney("1", filtered.Items[0].Cost, "support unchanged by filtering out payout")
+		s.requireMoney("1", filtered.Totals.Cost, "filtered totals are the rows")
+	})
+
+	s.Run("build/run columns add up to each row", func() {
+		cols := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) {
+			r.MeterIDs = []string{"meter_calls"}
+			r.Columns = "properties.type"
+			r.Sort = &dto.AnalyticsV2Sort{By: dto.AnalyticsV2SortByColumn, Column: "run"}
+		})
+		s.Equal([]string{"build", "run"}, cols.ColumnValues)
+		payout := cols.Items[0]
+		s.requireMoney("1", payout.Columns["build"].Cost, "payout build")
+		s.requireMoney("2", payout.Columns["run"].Cost, "payout run")
+		s.requireMoney("3", payout.Cost, "payout calls")
+		s.Require().NotNil(payout.Usage, "one meter: usage is shown")
+		s.requireMoney("300", *payout.Usage, "payout calls")
+	})
+
+	s.Run("daily points add up to each row", func() {
+		daily := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) {
+			r.WindowSize = types.WindowSizeDay
+			r.Metrics = []string{"distinct:properties.type"}
+		})
+		for _, it := range daily.Items {
+			sum := decimal.Zero
+			for _, p := range it.Points {
+				sum = sum.Add(p.Cost)
+			}
+			s.requireMoney(it.Cost.String(), sum, "points of "+it.Group["app"]+" add up exactly")
+		}
+		s.Equal(uint64(2), *daily.Items[0].Metrics["distinct:properties.type"].Count)
+		s.Equal([]string{"build", "run"}, daily.Items[0].Metrics["distinct:properties.type"].Values)
+		total := decimal.Zero
+		for _, p := range daily.Totals.Points {
+			total = total.Add(p.Cost)
+		}
+		s.requireMoney("4", total, "all-rows points add up exactly")
+	})
+}
+
+func (s *BillingServiceSuite) TestGetUsageAnalyticsV2_UnsupportedMetersAndGuards() {
+	f := s.setupAnalyticsFixture()
+	ctx := s.GetContext()
+
+	// A count-unique meter (like the MAX storage meter) is billed but left out of analytics entirely.
+	users := &meter.Meter{ID: "meter_users", Name: "Users", EventName: "user",
+		Aggregation: meter.Aggregation{Type: types.AggregationCountUnique, Field: "user"}, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, users))
+	pr := &price.Price{
+		ID: "price_meter_users", Amount: decimal.NewFromInt(5), Currency: "usd",
+		Type: types.PRICE_TYPE_USAGE, BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, BillingCadence: types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence: types.InvoiceCadenceArrear, MeterID: users.ID, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, pr))
+	li := &subscription.SubscriptionLineItem{
+		ID: "li_meter_users", SubscriptionID: f.sub.ID, CustomerID: f.sub.CustomerID, PriceID: pr.ID,
+		PriceType: types.PRICE_TYPE_USAGE, MeterID: users.ID, DisplayName: "Users", Quantity: decimal.Zero,
+		Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+		InvoiceCadence: types.InvoiceCadenceArrear, StartDate: f.sub.StartDate, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+	f.sub.LineItems = append(f.sub.LineItems, li)
+	for i, u := range []string{"u1", "u2", "u1"} {
+		ts := time.Date(2026, 2, 7+i, 0, 0, 0, 0, time.UTC)
+		s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+			Event: events.Event{ID: s.GetUUID(), TenantID: f.sub.TenantID, EnvironmentID: f.sub.EnvironmentID, EventName: users.EventName,
+				ExternalCustomerID: "ext_qa", CustomerID: f.sub.CustomerID, Timestamp: ts, IngestedAt: ts,
+				Properties: map[string]interface{}{"app": "payout", "user": u}},
+			MeterID: users.ID, QtyTotal: decimal.NewFromInt(1), UniqueHash: u,
+		}}))
+	}
+
+	invoice, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, f.sub, f.sub.LineItems, f.feb1, f.mar1, true, nil)
+	s.Require().NoError(err)
+	s.True(invoice.TotalAmount.GreaterThan(decimal.NewFromInt(12)), "the invoice bills the users meter")
+	resp := s.queryAnalytics(f, nil)
+	s.requireMoney("4", resp.Totals.Cost, "only the SUM calls line is covered")
+	s.requireMoney("4", resp.Totals.RowsCost, "rows carry only the SUM meter")
+	s.Empty(resp.Unattributed.Charges)
+	for _, it := range resp.Items {
+		s.Equal([]string{"price_meter_calls"}, it.PriceIDs, "no row carries an unsupported meter")
+	}
+
+	s.Run("parent or child subscription is rejected", func() {
+		f.sub.SubscriptionType = types.SubscriptionTypeParent
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, f.sub))
+		req := &dto.GetUsageAnalyticsV2Request{ExternalCustomerID: "ext_qa", StartTime: f.feb1, EndTime: f.mar1, GroupBy: []string{"properties.app"}}
+		req.ApplyDefaults(f.mar1)
+		billing := s.service.(*billingService)
+		usageSvc := &meterUsageService{ServiceParams: billing.ServiceParams, repo: billing.MeterUsageRepo, logger: billing.Logger}
+		_, err := usageSvc.GetUsageAnalyticsV2(ctx, req)
+		s.Require().Error(err)
+		s.True(ierr.IsValidation(err))
+	})
+
+	s.Run("customer without subscriptions gets an empty page", func() {
+		cust := &customer.Customer{ID: "cust_none", ExternalID: "ext_none", Name: "None", BaseModel: types.GetDefaultBaseModel(ctx)}
+		s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+		req := &dto.GetUsageAnalyticsV2Request{ExternalCustomerID: "ext_none", StartTime: f.feb1, EndTime: f.mar1, GroupBy: []string{"properties.app"}}
+		req.ApplyDefaults(f.mar1)
+		billing := s.service.(*billingService)
+		usageSvc := &meterUsageService{ServiceParams: billing.ServiceParams, repo: billing.MeterUsageRepo, logger: billing.Logger}
+		resp, err := usageSvc.GetUsageAnalyticsV2(ctx, req)
+		s.Require().NoError(err)
+		s.Empty(resp.Items)
+		s.True(resp.Totals.Cost.IsZero())
+	})
+}
+
+// A $60 commitment on the calls line: the true-up is cost on line-keyed rows, unattributed on property rows,
+// and a partial range carries the range's share of the line's usage, so slices add up to the invoice.
+func (s *BillingServiceSuite) TestGetUsageAnalyticsV2_TrueUpByUsageShare() {
+	f := s.setupAnalyticsFixture()
+	ctx := s.GetContext()
+	calls := f.sub.LineItems[0]
+	calls.CommitmentAmount = lo.ToPtr(decimal.NewFromInt(60))
+	calls.CommitmentType = types.COMMITMENT_TYPE_AMOUNT
+	calls.CommitmentOverageFactor = lo.ToPtr(decimal.NewFromInt(1))
+	calls.CommitmentTrueUpEnabled = true
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, calls))
+
+	invoice, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, f.sub, f.sub.LineItems, f.feb1, f.mar1, true, nil)
+	s.Require().NoError(err)
+	// calls: $4 used of a $60 commitment -> $56 true-up; storage (MAX, not covered): $8.
+	s.requireMoney("68", invoice.TotalAmount, "invoice")
+
+	byApp := s.queryAnalytics(f, nil)
+	s.requireMoney("60", byApp.Totals.Cost, "totals match the invoice's calls line")
+	s.requireMoney("4", byApp.Totals.RowsCost, "rows carry usage only")
+	s.requireMoney("56", byApp.Totals.UnattributedCost, "the true-up is unattributed on app rows")
+	s.Require().Len(byApp.Unattributed.Charges, 1)
+	s.Equal(dto.AnalyticsV2ReasonUnusedCommitment, byApp.Unattributed.Charges[0].Reason)
+	s.Equal(calls.ID, byApp.Unattributed.Charges[0].SubLineItemID)
+
+	byMeter := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) { r.GroupBy = []string{"meter_id"} })
+	s.requireMoney("60", byMeter.Totals.Cost, "totals match the invoice's calls line")
+	s.requireMoney("0", byMeter.Totals.UnattributedCost, "the true-up stays on the meter row")
+	s.requireMoney("60", byMeter.Items[0].Cost, "calls row = $4 used + $56 true-up")
+
+	// Feb 1-5 holds payout's 100 build calls: 25% of February's 400 calls, so 25% of the true-up.
+	week := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) { r.EndTime = time.Date(2026, 2, 5, 0, 0, 0, 0, time.UTC) })
+	charges := lo.SliceToMap(week.Unattributed.Charges, func(c dto.AnalyticsV2UnattributedCharge) (string, dto.AnalyticsV2UnattributedCharge) {
+		return c.SubLineItemID, c
+	})
+	s.requireMoney("14", charges[calls.ID].Cost, "25% of the $56 true-up")
+	s.Equal(dto.AnalyticsV2ReasonUnusedCommitment, charges[calls.ID].Reason)
+	s.Len(charges, 1, "the MAX storage line is not covered, so it is not unattributed either")
+
+	// Slices on either grouping add up to the invoice.
+	split := time.Date(2026, 2, 8, 0, 0, 0, 0, time.UTC)
+	for _, groupBy := range [][]string{{"properties.app"}, {"meter_id"}} {
+		first := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) { r.GroupBy = groupBy; r.EndTime = split })
+		second := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) { r.GroupBy = groupBy; r.StartTime = split })
+		s.requireMoney("60", first.Totals.Cost.Add(second.Totals.Cost), "slices add up for group_by "+groupBy[0])
+	}
+}
+
+// Storage as bucketed MAX (daily buckets): each day's peak goes to the app whose event set it, and the
+// peaks add up to what billing charged, so rows and slices reconcile to the invoice.
+func (s *BillingServiceSuite) TestGetUsageAnalyticsV2_BucketedMaxByPeakOwner() {
+	f := s.setupAnalyticsFixture()
+	ctx := s.GetContext()
+	storagePrice, err := s.GetStores().PriceRepo.Get(ctx, "price_meter_storage")
+	s.Require().NoError(err)
+	storagePrice.BucketSize = types.WindowSizeDay
+	s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, storagePrice, false))
+
+	invoice, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, f.sub, f.sub.LineItems, f.feb1, f.mar1, true, nil)
+	s.Require().NoError(err)
+	// calls $4; storage daily peaks: Feb 5 = 8 (payout beats support's 2), Feb 6 = 3 (payout) -> 11 GB-days = $11.
+	s.requireMoney("15", invoice.TotalAmount, "invoice")
+
+	resp := s.queryAnalytics(f, nil)
+	s.requireMoney("15", resp.Totals.Cost, "totals match the invoice")
+	s.requireMoney("15", resp.Totals.RowsCost, "every bucket peak is on a row")
+	s.Require().Len(resp.Items, 2)
+	s.Equal("payout", resp.Items[0].Group["app"])
+	s.requireMoney("14", resp.Items[0].Cost, "payout: $3 calls + both daily peaks $11")
+	s.requireMoney("1", resp.Items[1].Cost, "support: $1 calls; its storage never set a daily peak")
+
+	storageOnly := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) { r.MeterIDs = []string{"meter_storage"} })
+	s.Require().NotNil(storageOnly.Items[0].Usage)
+	s.requireMoney("11", *storageOnly.Items[0].Usage, "usage is the sum of the daily peaks payout set")
+
+	// Feb 1-6 holds only the Feb 5 bucket: its peak of 8, from the same rate.
+	firstDays := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) {
+		r.MeterIDs = []string{"meter_storage"}
+		r.EndTime = time.Date(2026, 2, 6, 0, 0, 0, 0, time.UTC)
+	})
+	s.requireMoney("8", firstDays.Totals.Cost, "the Feb 5 peak")
+
+	// Filtering out payout drops its peaks; support does not inherit them.
+	noPayout := s.queryAnalytics(f, func(r *dto.GetUsageAnalyticsV2Request) {
+		r.MeterIDs = []string{"meter_storage"}
+		r.Filters = []dto.AnalyticsV2Filter{{Key: "properties.app", Op: dto.AnalyticsV2FilterOpNotIn, Values: []string{"payout"}}}
+	})
+	s.requireMoney("0", noPayout.Totals.Cost, "support never held a daily peak")
+}

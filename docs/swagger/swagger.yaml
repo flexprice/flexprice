@@ -1397,6 +1397,247 @@ definitions:
           type: array
         type: array
     type: object
+  AnalyticsV2Column:
+    properties:
+      cost:
+        type: string
+      usage:
+        type: string
+    type: object
+  AnalyticsV2Cost:
+    properties:
+      commitment_utilized:
+        type: string
+      overage:
+        type: string
+      true_up:
+        type: string
+      usage:
+        type: string
+    type: object
+  AnalyticsV2Filter:
+    properties:
+      key:
+        example: properties.app
+        type: string
+      op:
+        allOf:
+        - $ref: '#/definitions/AnalyticsV2FilterOp'
+        example: not_in
+      values:
+        items:
+          type: string
+        maxItems: 1000
+        minItems: 1
+        type: array
+    required:
+    - key
+    - op
+    - values
+    type: object
+  AnalyticsV2FilterOp:
+    enum:
+    - in
+    - not_in
+    type: string
+    x-enum-varnames:
+    - AnalyticsV2FilterOpIn
+    - AnalyticsV2FilterOpNotIn
+  AnalyticsV2Item:
+    properties:
+      addon_ids:
+        items:
+          type: string
+        type: array
+      breakdown:
+        $ref: '#/definitions/AnalyticsV2Cost'
+      columns:
+        additionalProperties:
+          $ref: '#/definitions/AnalyticsV2Column'
+        type: object
+      cost:
+        type: string
+      discount:
+        type: string
+      event_count:
+        type: integer
+      free_usage:
+        type: string
+      group:
+        additionalProperties:
+          type: string
+        type: object
+      metrics:
+        additionalProperties:
+          $ref: '#/definitions/AnalyticsV2MetricValue'
+        description: Metrics is keyed by the requested metric string, e.g. "distinct:properties.owner".
+        type: object
+      plan_ids:
+        items:
+          type: string
+        type: array
+      points:
+        items:
+          $ref: '#/definitions/AnalyticsV2Point'
+        type: array
+      price_ids:
+        description: A row can span several lines (a price change, two subscriptions),
+          so these are lists.
+        items:
+          type: string
+        type: array
+      price_unit_cost:
+        description: PriceUnitCost is Cost in the response's price_unit, converted
+          before rounding.
+        type: string
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
+      subscription_ids:
+        items:
+          type: string
+        type: array
+      subtotal:
+        type: string
+      unit:
+        type: string
+      unit_plural:
+        type: string
+      usage:
+        description: Usage and FreeUsage are set only when the row holds a single
+          meter.
+        type: string
+    type: object
+  AnalyticsV2MetricValue:
+    properties:
+      count:
+        type: integer
+      values:
+        items:
+          type: string
+        type: array
+    type: object
+  AnalyticsV2Point:
+    properties:
+      breakdown:
+        $ref: '#/definitions/AnalyticsV2Cost'
+      columns:
+        additionalProperties:
+          $ref: '#/definitions/AnalyticsV2Column'
+        type: object
+      cost:
+        type: string
+      discount:
+        type: string
+      event_count:
+        type: integer
+      subtotal:
+        type: string
+      usage:
+        description: Usage is set only when the row holds a single meter.
+        type: string
+      window_start:
+        type: string
+    type: object
+  AnalyticsV2Sort:
+    properties:
+      by:
+        allOf:
+        - $ref: '#/definitions/AnalyticsV2SortBy'
+        example: total
+      column:
+        description: Column is the column value to sort by when By is "column", e.g.
+          "run" or "2026-08".
+        type: string
+      order:
+        allOf:
+        - $ref: '#/definitions/types.SortDirection'
+        example: desc
+    type: object
+  AnalyticsV2SortBy:
+    enum:
+    - total
+    - column
+    - name
+    - usage
+    - event_count
+    type: string
+    x-enum-varnames:
+    - AnalyticsV2SortByTotal
+    - AnalyticsV2SortByColumn
+    - AnalyticsV2SortByName
+    - AnalyticsV2SortByUsage
+    - AnalyticsV2SortByEventCount
+  AnalyticsV2Totals:
+    properties:
+      breakdown:
+        $ref: '#/definitions/AnalyticsV2Cost'
+      columns:
+        additionalProperties:
+          $ref: '#/definitions/AnalyticsV2Column'
+        type: object
+      cost:
+        type: string
+      discount:
+        type: string
+      free_usage:
+        type: string
+      points:
+        items:
+          $ref: '#/definitions/AnalyticsV2Point'
+        type: array
+      price_unit_cost:
+        type: string
+      rows_cost:
+        type: string
+      subtotal:
+        type: string
+      unattributed_cost:
+        type: string
+      usage:
+        type: string
+    type: object
+  AnalyticsV2Unattributed:
+    properties:
+      breakdown:
+        $ref: '#/definitions/AnalyticsV2Cost'
+      charges:
+        description: Charges lists each billed charge no row carries, e.g. one per
+          unused commitment.
+        items:
+          $ref: '#/definitions/AnalyticsV2UnattributedCharge'
+        type: array
+      cost:
+        type: string
+    type: object
+  AnalyticsV2UnattributedCharge:
+    properties:
+      addon_id:
+        type: string
+      breakdown:
+        $ref: '#/definitions/AnalyticsV2Cost'
+      cost:
+        type: string
+      meter_id:
+        type: string
+      plan_id:
+        type: string
+      price_id:
+        type: string
+      reason:
+        $ref: '#/definitions/AnalyticsV2UnattributedReason'
+      sub_line_item_id:
+        type: string
+      subscription_id:
+        type: string
+    type: object
+  AnalyticsV2UnattributedReason:
+    enum:
+    - unused_commitment
+    - no_usage
+    type: string
+    x-enum-varnames:
+    - AnalyticsV2ReasonUnusedCommitment
+    - AnalyticsV2ReasonNoUsage
   AttributedToCustomerResult:
     properties:
       error:
@@ -5360,6 +5601,137 @@ definitions:
         type: string
       total_discount:
         type: string
+    type: object
+  GetUsageAnalyticsV2Request:
+    properties:
+      columns:
+        description: Columns spreads one key's values into columns on every row; also
+          accepts "month".
+        example: properties.type
+        type: string
+      deduplicate:
+        type: boolean
+      end_time:
+        example: "2026-09-01T00:00:00Z"
+        type: string
+      expand:
+        description: Expand adds price, plan, addon and subscription objects; meter
+          and feature need a meter_id, feature_id or sub_line_item_id row key.
+        items:
+          type: string
+        type: array
+      external_customer_id:
+        example: cust_123
+        type: string
+      feature_ids:
+        items:
+          type: string
+        type: array
+      filters:
+        description: Filters include (in) or exclude (not_in) values of any key; entries
+          are ANDed.
+        items:
+          $ref: '#/definitions/AnalyticsV2Filter'
+        maxItems: 20
+        type: array
+      group_by:
+        description: 'GroupBy lists 1-3 row keys: "source", "meter_id", "feature_id",
+          "sub_line_item_id" or "properties.<name>".'
+        example:
+        - properties.app
+        items:
+          type: string
+        maxItems: 3
+        minItems: 1
+        type: array
+      limit:
+        example: 25
+        type: integer
+      meter_ids:
+        items:
+          type: string
+        type: array
+      metrics:
+        example:
+        - distinct:properties.owner
+        items:
+          type: string
+        type: array
+      offset:
+        example: 0
+        type: integer
+      search:
+        description: Search is a case-insensitive contains match on the row key values.
+        type: string
+      sort:
+        $ref: '#/definitions/AnalyticsV2Sort'
+      start_time:
+        example: "2026-08-01T00:00:00Z"
+        type: string
+      window_size:
+        allOf:
+        - $ref: '#/definitions/types.WindowSize'
+        example: DAY
+    required:
+    - external_customer_id
+    - group_by
+    type: object
+  GetUsageAnalyticsV2Response:
+    properties:
+      addons:
+        additionalProperties:
+          $ref: '#/definitions/AddonResponse'
+        type: object
+      column_values:
+        description: ColumnValues lists every column across the full result, so every
+          page has the same header.
+        items:
+          type: string
+        type: array
+      currency:
+        type: string
+      data_through:
+        description: |-
+          DataThrough is when the event scans were cut off: events received later are not split across rows.
+          It is a watermark, not a billing snapshot: invoice pricing reads usage as of the request, so events
+          received during the request can be billed but not yet split.
+        type: string
+      features:
+        additionalProperties:
+          $ref: '#/definitions/FeatureResponse'
+        type: object
+      items:
+        items:
+          $ref: '#/definitions/AnalyticsV2Item'
+        type: array
+      meters:
+        additionalProperties:
+          $ref: '#/definitions/MeterResponse'
+        description: Object maps are filled only for the values requested in expand.
+        type: object
+      plans:
+        additionalProperties:
+          $ref: '#/definitions/PlanResponse'
+        type: object
+      price_unit:
+        description: |-
+          PriceUnit is the custom price unit (e.g. credits) when every billed line is priced in it; rows and
+          totals then also carry price_unit_cost.
+        type: string
+      prices:
+        additionalProperties:
+          $ref: '#/definitions/PriceResponse'
+        type: object
+      subscriptions:
+        additionalProperties:
+          $ref: '#/definitions/SubscriptionResponse'
+        type: object
+      total_count:
+        type: integer
+      totals:
+        $ref: '#/definitions/AnalyticsV2Totals'
+      unattributed:
+        $ref: '#/definitions/AnalyticsV2Unattributed'
     type: object
   GetUsageByMeterRequest:
     properties:
@@ -20874,6 +21246,44 @@ paths:
       summary: Get usage analytics
       tags:
       - Events
+  /events/analytics/query:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Use when building spend dashboards: usage cost grouped by up to three keys (event properties, source, meter, feature or line item), sorted and paginated, with optional columns, filters, search, time points and per-row metrics.
+        Line costs come from the invoice calculation for every billing period in the range (entitlements, commitments, overage, percentage coupons) and are split across rows by usage. SUM, SUM_WITH_MULTIPLIER and COUNT meters are split by each row's quantity; bucketed MAX meters by bucket peaks, each billing bucket's peak going to the row of the event that set it (filters drop rows after peaks are chosen). Plain MAX and other aggregations are left out of rows and totals. A partial range carries the full period's rate; lines with no usage carry the range's share of the period's time.
+        totals.cost equals rows_cost + unattributed_cost. Unused commitment is unattributed unless a row key is the meter, feature or line item.
+        Each request reads the latest data, so rows can shift between pages while events arrive; data_through in the response says how current the data is.
+      operationId: queryUsageAnalytics
+      parameters:
+      - description: Request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/GetUsageAnalyticsV2Request'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/GetUsageAnalyticsV2Response'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query usage analytics
+      tags:
+      - Events
+      x-scope: read
   /events/bulk:
     post:
       consumes:

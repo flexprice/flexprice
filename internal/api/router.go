@@ -244,6 +244,7 @@ func NewRouter(
 			events.POST("/usage", observe(types.EntityEvent), handlers.Events.GetUsage)
 			events.POST("/usage/meter", observe(types.EntityEvent), handlers.Events.GetUsageByMeter)
 			events.POST("/analytics", observe(types.EntityEvent), handlers.Events.GetUsageAnalytics)
+			events.POST("/analytics/query", observe(types.EntityEvent), handlers.Events.QueryUsageAnalytics)
 			events.GET("/monitoring", observe(types.EntityEvent), handlers.Events.GetMonitoringData)
 			events.POST("/raw/bulk", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite, allowSuspended), handlers.Events.BulkIngestRawEvent)
 			events.POST("/raw/reprocess/all", write(types.EntityEvent, types.ActionWrite), handlers.Events.ReprocessRawEvents)
