@@ -250,14 +250,30 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		return nil
 	}
 
+	if scopeConflict(types.GetTenantID(ctx), batch.TenantID) ||
+		scopeConflict(types.GetEnvironmentID(ctx), batch.EnvironmentID) {
+		s.Logger.Info(ctx, "dropping bulk meter usage batch: message scope mismatch",
+			"message_uuid", msg.UUID,
+		)
+		return nil
+	}
+
 	tenantID := batch.TenantID
+	if tenantID == "" {
+		tenantID = types.GetTenantID(ctx)
+	}
 	environmentID := batch.EnvironmentID
-	if tenantID != "" {
-		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	if environmentID == "" {
+		environmentID = types.GetEnvironmentID(ctx)
 	}
-	if environmentID != "" {
-		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	if tenantID == "" || environmentID == "" {
+		s.Logger.Info(ctx, "dropping bulk meter usage batch: scope missing",
+			"message_uuid", msg.UUID,
+		)
+		return nil
 	}
+	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 
 	// Per-event Redis dedup mirrors the single-event path: acquire an event-ID
 	// keyed lock (TTL = 24h) before doing any work for that event, skip events
@@ -282,6 +298,13 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 	eventsToInsert := make([]*events.Event, 0, len(batch.Events))
 	for _, evt := range batch.Events {
 		if evt == nil {
+			continue
+		}
+		if scopeConflict(evt.TenantID, tenantID) || scopeConflict(evt.EnvironmentID, environmentID) {
+			s.Logger.Info(ctx, "dropping bulk event: scope mismatch",
+				"event_id", evt.ID,
+				"message_uuid", msg.UUID,
+			)
 			continue
 		}
 		if evt.TenantID == "" {
@@ -406,6 +429,14 @@ func (s *meterUsageTrackingService) processMessage(ctx context.Context, msg *mes
 			"message_uuid", msg.UUID,
 		)
 		return nil // non-retriable
+	}
+
+	if scopeConflict(event.TenantID, tenantID) || scopeConflict(event.EnvironmentID, environmentID) {
+		s.Logger.Info(ctx, "dropping event: scope mismatch",
+			"event_id", event.ID,
+			"message_uuid", msg.UUID,
+		)
+		return nil
 	}
 
 	if tenantID == "" && event.TenantID != "" {
