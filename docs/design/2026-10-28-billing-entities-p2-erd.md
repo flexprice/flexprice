@@ -163,7 +163,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 | Payment provider choice | Capability map; requested → single capable → "ambiguous"; auto-charge walks gateways alphabetically for a usable saved method | Extend: candidates are the customer's allowed connections |
 | External ID mappings | One external ID per record per provider; "already synced" checks; upsert by record and provider | Extend: keyed by connection |
 | Catalog and record sync workflows | Retried jobs per plan, price, add-on, customer, invoice, subscription; activities re-read the record | Reuse payloads; catalog activities loop over the provider's connections |
-| Webhook endpoints | One public URL per provider per environment; per-provider signature checks against the connection's secrets | Extend: per-connection URL beside the existing one |
+| Webhook endpoints | One public URL per provider per environment; per-provider signature checks against the connection's secrets | Extend: optional `?connection=` on the existing URL |
 | OAuth connect (QuickBooks, Zoho Books) | Session-based connect that creates a pending connection | Extend: session carries the entity |
 | Gateway refunds | Refund through the payment's provider (Razorpay, Chargebee today) | Extend: through the payment's connection |
 | Customer create from provider events | Stripe, HubSpot, Paddle and Zoho events create customers through the normal create path, which already accepts an entity | Reuse: pass the connection's entity |
@@ -271,12 +271,12 @@ Migration notes:
 
 **Payments** — Get, List and outbound webhooks carry `connection_id` (FR-9).
 
-**Webhooks** — new route per connection, beside the existing one (FR-12, FR-13):
+**Webhooks** — one route per provider; an optional query parameter names the connection (FR-12, FR-13):
 
 | Route | Serves |
 |---|---|
-| `POST /v1/webhooks/{provider}/{tenant_id}/{environment_id}/{connection_id}` | That connection, including removed ones |
-| `POST /v1/webhooks/{provider}/{tenant_id}/{environment_id}` (existing) | The default entity's connection; the only connection for off environments |
+| `POST /v1/webhooks/{provider}/{tenant_id}/{environment_id}?connection={connection_id}` | That connection, including removed ones |
+| `POST /v1/webhooks/{provider}/{tenant_id}/{environment_id}` (existing, no query) | The default entity's connection; the only connection for off environments |
 
 | Error | Status | When |
 |---|---|---|
@@ -333,7 +333,7 @@ sequenceDiagram
   participant P as Provider account
   participant API as Webhook endpoint
   participant DB as Database
-  P->>API: Event on /webhooks/stripe/t/e/conn_Y
+  P->>API: Event on /webhooks/stripe/t/e?connection=conn_Y
   API->>DB: Load conn_Y (published or removed) for this tenant, environment and provider
   API->>API: Verify signature with conn_Y's secret
   API->>API: Pin conn_Y and its entity in context
@@ -360,7 +360,7 @@ sequenceDiagram
 | Sync parity R1: record-anchored | Every sync of a customer, invoice, subscription or payment (dispatcher, workflow activities, inline updates, `POST /integrations/sync`, payment links, checkout, auto-charge) uses the connection of the record's entity. Payloads unchanged; activities re-read the record and set its entity before the lookup. The integration event dispatcher skips a record whose entity has no connection for the provider. Catalog items created inside a record sync (Stripe products and prices, Zoho and Chargebee items, Paddle products) follow R1: mappings are keyed by that connection |
 | Sync parity R2: payment-anchored | Refunds, payment-status polls and the Moyasar settlement cron use the payment's connection, else its customer's entity (FR-18) |
 | Sync parity R3: environment-level push | Runs once per connection of the provider and writes mappings per connection: QuickBooks price push, Chargebee plan and price push, and the marketplace usage report and snapshot crons (already per connection; each is pinned to its connection) |
-| Sync parity R4: inbound | Per-connection route; the event is applied as the sending connection's entity, including customers created from events (FR-14) |
+| Sync parity R4: inbound | Per-connection URL; the event is applied as the sending connection's entity, including customers created from events (FR-14) |
 | "Already synced" checks | Count mappings for the entity's connection |
 | Auto-charge and mark-paid dispatch | Candidates limited to the customer's allowed connections |
 | Outbound webhooks | Payment payloads gain `connection_id` |
@@ -387,7 +387,7 @@ sequenceDiagram
 | Caching | The published-connections list carries each connection's owner and is cleared on every connection write | NFR-5 |
 | Idempotency | Mapping upserts and "already synced" checks keyed by connection; webhook handlers keep today's idempotency | — |
 | Failure: entity without a connection | Behaves as "not connected": invoice pending, sync skipped, 400 on requests; logged with record and entity IDs | NFR-3 |
-| Failure: late event for a removed connection | Still verified and applied through the per-connection route | — |
+| Failure: late event for a removed connection | Still verified and applied through the per-connection URL | — |
 | Deploy safety | Additive schema; mapping index swap tolerated by old pods; non-blocking follow-up | NFR-6 |
 | Observability | Lookup misses for enabled environments and ignored cross-entity webhook events are logged with tenant, entity, connection and record IDs | — |
 | Multi-tenancy | The owner lives on the tenant- and environment-scoped connection; webhook connection must belong to the URL's tenant and environment | NFR-4 |
@@ -401,6 +401,7 @@ sequenceDiagram
 | Providers without two sandbox accounts ship untested per entity | High / Medium | Fail-closed lookup turns a miss into a skipped sync or rejected request, never a wrong account |
 | Tenant connects one provider account for two entities | Low / High | Documented as unsupported; account checks out of scope |
 | Tenant keeps a non-default entity's events on the old URL | Medium / Medium: events applied as the default entity are ignored for other entities' records | Integrations tab shows each connection's URL; release notes |
+| A provider or proxy drops the `?connection=` query | Low / Medium: events are applied as the default entity | The Integrations tab shows the full URL; an unknown connection in the query is a 404 |
 | Duplicate mapping rows written by old pods during the rollout | Low / Low | Follow-up fill collapses them |
 | Moving an entity to a new account leaves customers and cards behind | Medium / Medium | Documented manual re-sync (UC6) |
 
