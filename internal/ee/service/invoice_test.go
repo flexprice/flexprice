@@ -3365,18 +3365,19 @@ func (s *InvoiceServiceSuite) TestCreateDraftInvoiceForSubscription_PeriodStartC
 	}
 }
 
-func (s *InvoiceServiceSuite) seedInvoiceConfigDelay(seconds int) {
+func (s *InvoiceServiceSuite) seedInvoiceFinalizationConfig(autoFinalize bool, delaySeconds int) {
 	svc := NewSettingsService(s.service.(*invoiceService).ServiceParams).(*settingsService)
 	cfg, err := GetSetting[types.InvoiceConfig](svc, s.GetContext(), types.SettingKeyInvoiceConfig)
 	s.Require().NoError(err)
-	cfg.FinalizationDelaySeconds = seconds
+	cfg.AutoFinalize = autoFinalize
+	cfg.FinalizationDelaySeconds = delaySeconds
 	s.Require().NoError(UpdateSetting(svc, s.GetContext(), types.SettingKeyInvoiceConfig, cfg))
 }
 
 func (s *InvoiceServiceSuite) TestIsFinalizationDue_SkipsSubscriptionCreateDrafts() {
 	ctx := s.GetContext()
 	s.invoiceRepo.Clear()
-	s.seedInvoiceConfigDelay(0)
+	s.seedInvoiceFinalizationConfig(true, 0)
 
 	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: s.testData.subscription.CurrentPeriodStart, PeriodEnd: s.testData.subscription.CurrentPeriodEnd, ReferencePoint: types.ReferencePointPeriodStart})
 	s.Require().NoError(err)
@@ -3395,7 +3396,7 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_SkipsSubscriptionCreateDraft
 func (s *InvoiceServiceSuite) TestIsFinalizationDue_CycleDraftAfterPeriodEndIsDue() {
 	ctx := s.GetContext()
 	s.invoiceRepo.Clear()
-	s.seedInvoiceConfigDelay(0)
+	s.seedInvoiceFinalizationConfig(true, 0)
 
 	periodStart := s.testData.now.Add(-40 * 24 * time.Hour)
 	periodEnd := s.testData.now.Add(-10 * 24 * time.Hour)
@@ -3414,35 +3415,80 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_CycleDraftAfterPeriodEndIsDu
 	s.True(due, "a computed cycle draft whose period has ended should finalize")
 }
 
-func (s *InvoiceServiceSuite) TestIsFinalizationDue_DelayCountsFromCreation() {
+func (s *InvoiceServiceSuite) TestIsFinalizationDue_DelayAnchor() {
 	ctx := s.GetContext()
-	periodStart := s.testData.now.Add(-40 * 24 * time.Hour)
-	periodEnd := s.testData.now.Add(-10 * 24 * time.Hour)
+	const delay = 2 * time.Hour
 
 	tests := []struct {
-		name         string
-		createdAgo   time.Duration
-		recomputeAgo time.Duration
-		wantDue      bool
+		name           string
+		referencePoint types.InvoiceReferencePoint
+		periodEndAgo   time.Duration
+		createdAgo     time.Duration
+		computedAgo    time.Duration
+		wantDue        bool
 	}{
-		{name: "created past the delay, recomputed just now", createdAgo: 3 * time.Hour, recomputeAgo: time.Minute, wantDue: true},
-		{name: "created inside the delay", createdAgo: time.Hour, recomputeAgo: time.Minute, wantDue: false},
+		// created_at + delay has passed, period_end + delay has not.
+		{name: "cycle created mid-period, inside period end delay", referencePoint: types.ReferencePointPeriodEnd, periodEndAgo: time.Hour, createdAgo: 10 * 24 * time.Hour, computedAgo: 30 * time.Minute, wantDue: false},
+		{name: "cycle created mid-period, past period end delay", referencePoint: types.ReferencePointPeriodEnd, periodEndAgo: 3 * time.Hour, createdAgo: 10 * 24 * time.Hour, computedAgo: 150 * time.Minute, wantDue: true},
+		{name: "cycle created after period end, inside created delay", referencePoint: types.ReferencePointPeriodEnd, periodEndAgo: 3 * time.Hour, createdAgo: time.Hour, computedAgo: 30 * time.Minute, wantDue: false},
+		{name: "cycle recomputed just now, past period end delay", referencePoint: types.ReferencePointPeriodEnd, periodEndAgo: 3 * time.Hour, createdAgo: 10 * 24 * time.Hour, computedAgo: time.Minute, wantDue: true},
+		{name: "proration computed just now", referencePoint: types.ReferencePointCancel, periodEndAgo: 3 * time.Hour, createdAgo: 10 * 24 * time.Hour, computedAgo: time.Minute, wantDue: false},
+		{name: "proration computed past the delay", referencePoint: types.ReferencePointCancel, periodEndAgo: 3 * time.Hour, createdAgo: 10 * 24 * time.Hour, computedAgo: 3 * time.Hour, wantDue: true},
 	}
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			s.invoiceRepo.Clear()
-			s.seedInvoiceConfigDelay(7200)
-
-			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: types.ReferencePointPeriodEnd})
-			s.Require().NoError(err)
+			s.seedInvoiceFinalizationConfig(true, int(delay.Seconds()))
 
 			now := time.Now().UTC()
-			recomputedAt := now.Add(-tt.recomputeAgo)
+			periodEnd := now.Add(-tt.periodEndAgo)
+			periodStart := periodEnd.Add(-30 * 24 * time.Hour)
+			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: tt.referencePoint})
+			s.Require().NoError(err)
+
+			computedAt := now.Add(-tt.computedAgo)
 			inv, err := s.invoiceRepo.Get(ctx, draft.ID)
 			s.Require().NoError(err)
 			inv.CreatedAt = now.Add(-tt.createdAgo)
-			inv.LastComputedAt = &recomputedAt
+			inv.LastComputedAt = &computedAt
+			s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
+
+			due, err := s.service.IsFinalizationDue(ctx, draft.ID)
+			s.Require().NoError(err)
+			s.Equal(tt.wantDue, due)
+		})
+	}
+}
+
+func (s *InvoiceServiceSuite) TestIsFinalizationDue_AutoFinalize() {
+	tests := []struct {
+		name         string
+		autoFinalize bool
+		delaySeconds int
+		wantDue      bool
+	}{
+		{name: "auto finalize off", autoFinalize: false, delaySeconds: 0, wantDue: false},
+		{name: "auto finalize on with delay elapsed", autoFinalize: true, delaySeconds: 1800, wantDue: true},
+		{name: "auto finalize on with delay pending", autoFinalize: true, delaySeconds: 7200, wantDue: false},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.invoiceRepo.Clear()
+			s.seedInvoiceFinalizationConfig(tt.autoFinalize, tt.delaySeconds)
+
+			periodStart := s.testData.now.Add(-40 * 24 * time.Hour)
+			periodEnd := s.testData.now.Add(-10 * 24 * time.Hour)
+			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: types.ReferencePointPeriodEnd})
+			s.Require().NoError(err)
+
+			computedAt := time.Now().UTC().Add(-time.Hour)
+			inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+			s.Require().NoError(err)
+			inv.CreatedAt = computedAt
+			inv.LastComputedAt = &computedAt
 			s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
 
 			due, err := s.service.IsFinalizationDue(ctx, draft.ID)
