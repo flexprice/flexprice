@@ -203,9 +203,16 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 			totalCost = priceService.CalculateCost(ctx, csPrice, item.TotalUsage)
 		}
 
+		// The meter's own name: vendor meters often share one event name and
+		// differ only by filter, so the event name cannot tell them apart.
+		meterName := item.EventName
+		if m != nil && m.Name != "" {
+			meterName = m.Name
+		}
+
 		costItem := dto.CostAnalyticItem{
 			MeterID:       item.MeterID,
-			MeterName:     item.EventName,
+			MeterName:     meterName,
 			Source:        item.Source,
 			Properties:    item.Properties,
 			TotalCost:     totalCost,
