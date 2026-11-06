@@ -91,14 +91,17 @@ func NewWebhookHandler(
 	}
 }
 
-// webhookContext sets the URL's tenant and environment, then pins the URL's connection and its entity,
+// webhookConnectionQuery names the query parameter that pins a webhook to one connection.
+const webhookConnectionQuery = "connection"
+
+// webhookContext sets the URL's tenant and environment, then pins the connection named by ?connection= and its entity,
 // or the default entity when the URL names no connection.
 func (h *WebhookHandler) webhookContext(c *gin.Context, provider types.SecretProvider) (context.Context, error) {
 	ctx := types.SetTenantID(c.Request.Context(), c.Param("tenant_id"))
 	ctx = types.SetEnvironmentID(ctx, c.Param("environment_id"))
 
 	var err error
-	if connectionID := c.Param("connection_id"); connectionID != "" {
+	if connectionID := c.Query(webhookConnectionQuery); connectionID != "" {
 		ctx, err = h.billingEntityService.ScopeToConnection(ctx, connectionID, provider)
 	} else {
 		ctx, err = h.billingEntityService.ScopeToDefault(ctx)
@@ -120,11 +123,11 @@ func (h *WebhookHandler) webhookContext(c *gin.Context, provider types.SecretPro
 // rejectWebhookContext answers 404 for an unknown or mismatched connection in the URL and 500 otherwise.
 func (h *WebhookHandler) rejectWebhookContext(c *gin.Context, err error) {
 	ctx := c.Request.Context()
-	if ierr.IsNotFound(err) && c.Param("connection_id") != "" {
+	if ierr.IsNotFound(err) && c.Query(webhookConnectionQuery) != "" {
 		h.logger.Info(ctx, "webhook connection not found",
 			"tenant_id", c.Param("tenant_id"),
 			"environment_id", c.Param("environment_id"),
-			"connection_id", c.Param("connection_id"))
+			"connection_id", c.Query(webhookConnectionQuery))
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Webhook connection not found"})
 		return
 	}
@@ -132,7 +135,7 @@ func (h *WebhookHandler) rejectWebhookContext(c *gin.Context, err error) {
 		"error", err,
 		"tenant_id", c.Param("tenant_id"),
 		"environment_id", c.Param("environment_id"),
-		"connection_id", c.Param("connection_id"))
+		"connection_id", c.Query(webhookConnectionQuery))
 	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to process webhook"})
 }
 
