@@ -187,6 +187,7 @@ const (
 	WebhookEventInvoiceUpdateVoided    WebhookEventName = "invoice.update.voided"
 	WebhookEventInvoiceUpdate          WebhookEventName = "invoice.update"
 	WebhookEventInvoicePaymentOverdue  WebhookEventName = "invoice.payment.overdue"
+	WebhookEventInvoicePaymentFailed   WebhookEventName = "invoice.payment.failed"
 )
 
 // invoice sync event names

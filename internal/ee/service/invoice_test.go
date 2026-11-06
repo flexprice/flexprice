@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -21,6 +22,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/razorpay"
+	"github.com/flexprice/flexprice/internal/interfaces"
 
 	"github.com/flexprice/flexprice/internal/metrics/metricstest"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -3705,6 +3708,148 @@ func (s *InvoiceServiceSuite) TestHasMarketplaceMapping() {
 			mapped, err := subscriptionService.HasMarketplaceMapping(ctx, subscriptionID)
 			s.Require().NoError(err)
 			s.Equal(tt.want, mapped)
+		})
+	}
+}
+
+type autoChargeTestRazorpayClient struct {
+	razorpay.RazorpayClient
+	createOrderErr error
+}
+
+func (c *autoChargeTestRazorpayClient) CreateOrder(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
+	if c.createOrderErr != nil {
+		return nil, c.createOrderErr
+	}
+	return map[string]interface{}{"id": "order_rzp_1"}, nil
+}
+
+func (c *autoChargeTestRazorpayClient) CreateRecurringPayment(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
+	return map[string]interface{}{"id": "pay_rzp_1"}, nil
+}
+
+type autoChargeTestCustomerService struct {
+	razorpay.RazorpayCustomerService
+	tokens []*interfaces.ProviderPaymentMethod
+}
+
+func (c *autoChargeTestCustomerService) ListCustomerTokens(_ context.Context, _ string) (string, []*interfaces.ProviderPaymentMethod, error) {
+	return "cust_rzp_1", c.tokens, nil
+}
+
+func (s *InvoiceServiceSuite) TestAutoChargeRazorpayInvoice() {
+	usableCard := &interfaces.ProviderPaymentMethod{
+		GatewayMethodID: "token_card_1",
+		Method:          types.PaymentMethodTypeCard,
+		Active:          true,
+		Recurring:       &interfaces.ProviderRecurringPaymentDetails{Status: types.RecurringPaymentStatusActive},
+	}
+
+	tests := []struct {
+		name             string
+		collectionMethod types.CollectionMethod
+		noSubscription   bool
+		tokens           []*interfaces.ProviderPaymentMethod
+		createOrderErr   error
+		priorStatus      types.PaymentStatus
+		wantCharged      bool
+		wantPaymentState types.PaymentStatus
+		wantReason       types.InvoicePaymentFailureReason
+	}{
+		{name: "charged", collectionMethod: types.CollectionMethodChargeAutomatically, tokens: []*interfaces.ProviderPaymentMethod{usableCard}, wantCharged: true, wantPaymentState: types.PaymentStatusProcessing},
+		{name: "no usable token", collectionMethod: types.CollectionMethodChargeAutomatically, wantReason: types.InvoicePaymentFailureReasonPaymentMethodUnavailable},
+		{name: "submission error", collectionMethod: types.CollectionMethodChargeAutomatically, tokens: []*interfaces.ProviderPaymentMethod{usableCard}, createOrderErr: errors.New("gateway down"), wantPaymentState: types.PaymentStatusFailed, wantReason: types.InvoicePaymentFailureReasonProviderError},
+		{name: "previous attempt failed", collectionMethod: types.CollectionMethodChargeAutomatically, tokens: []*interfaces.ProviderPaymentMethod{usableCard}, priorStatus: types.PaymentStatusFailed, wantCharged: true, wantPaymentState: types.PaymentStatusFailed},
+		{name: "send_invoice subscription", collectionMethod: types.CollectionMethodSendInvoice, tokens: []*interfaces.ProviderPaymentMethod{usableCard}},
+		{name: "no subscription", noSubscription: true, tokens: []*interfaces.ProviderPaymentMethod{usableCard}},
+	}
+
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			invoiceID := fmt.Sprintf("inv_autocharge_%d", i)
+
+			inv := &invoice.Invoice{
+				ID:              invoiceID,
+				CustomerID:      s.testData.customer.ID,
+				InvoiceType:     types.InvoiceTypeSubscription,
+				InvoiceStatus:   types.InvoiceStatusFinalized,
+				PaymentStatus:   types.PaymentStatusPending,
+				Currency:        "inr",
+				AmountDue:       decimal.NewFromInt(100),
+				AmountRemaining: decimal.NewFromInt(100),
+				EnvironmentID:   types.GetEnvironmentID(ctx),
+				BaseModel:       types.GetDefaultBaseModel(ctx),
+			}
+			if !tt.noSubscription {
+				sub := &subscription.Subscription{
+					ID:                 "sub_" + invoiceID,
+					PlanID:             s.testData.plan.ID,
+					CustomerID:         s.testData.customer.ID,
+					Currency:           "inr",
+					CollectionMethod:   string(tt.collectionMethod),
+					SubscriptionStatus: types.SubscriptionStatusActive,
+					BaseModel:          types.GetDefaultBaseModel(ctx),
+				}
+				s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
+				inv.SubscriptionID = &sub.ID
+			}
+			s.NoError(s.invoiceRepo.Create(ctx, inv))
+
+			if tt.priorStatus != "" {
+				s.NoError(s.GetStores().PaymentRepo.Create(ctx, &payment.Payment{
+					ID:                "pay_prior_" + invoiceID,
+					IdempotencyKey:    "autocharge:" + invoiceID,
+					DestinationType:   types.PaymentDestinationTypeInvoice,
+					DestinationID:     invoiceID,
+					PaymentMethodType: types.PaymentMethodTypeCard,
+					Amount:            inv.AmountRemaining,
+					Currency:          inv.Currency,
+					PaymentStatus:     tt.priorStatus,
+					EnvironmentID:     inv.EnvironmentID,
+					BaseModel:         types.GetDefaultBaseModel(ctx),
+				}))
+			}
+
+			razorpaySvc := razorpay.NewPaymentService(
+				&autoChargeTestRazorpayClient{createOrderErr: tt.createOrderErr},
+				&autoChargeTestCustomerService{tokens: tt.tokens},
+				nil, nil, s.GetLogger(),
+			)
+
+			charged, err := s.service.(*invoiceService).autoChargeRazorpayInvoice(ctx, inv, razorpaySvc)
+			s.Require().NoError(err)
+			s.Equal(tt.wantCharged, charged)
+
+			payments, err := s.GetStores().PaymentRepo.List(ctx, &types.PaymentFilter{
+				DestinationID: &invoiceID,
+				QueryFilter:   types.NewNoLimitQueryFilter(),
+			})
+			s.Require().NoError(err)
+			if tt.wantPaymentState == "" {
+				s.Empty(payments)
+			} else {
+				s.Require().Len(payments, 1)
+				s.Equal(tt.wantPaymentState, payments[0].PaymentStatus)
+			}
+
+			events := lo.Filter(s.GetPublishedWebhooks(), func(e *types.WebhookEvent, _ int) bool {
+				return e.EntityID == invoiceID && e.EventName == types.WebhookEventInvoicePaymentFailed
+			})
+			if tt.wantReason == "" {
+				s.Empty(events)
+				return
+			}
+			s.Require().Len(events, 1)
+			var internal webhookDto.InternalInvoicePaymentFailedEvent
+			s.Require().NoError(json.Unmarshal(events[0].Payload, &internal))
+			s.Equal(tt.wantReason, internal.Reason)
+			s.Equal(types.SecretProviderRazorpay, internal.Provider)
+			s.True(internal.IsAutoChargeAttempt)
+			if tt.wantReason == types.InvoicePaymentFailureReasonProviderError {
+				s.Equal(payments[0].ID, internal.PaymentID)
+				s.Equal("gateway down", internal.Error)
+			}
 		})
 	}
 }

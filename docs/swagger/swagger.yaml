@@ -15096,6 +15096,7 @@ definitions:
     - invoice.update.voided
     - invoice.update
     - invoice.payment.overdue
+    - invoice.payment.failed
     - invoice.sync.success
     - invoice.sync.failed
     - wallet.credit_balance.dropped
@@ -15170,6 +15171,7 @@ definitions:
     - WebhookEventInvoiceUpdateVoided
     - WebhookEventInvoiceUpdate
     - WebhookEventInvoicePaymentOverdue
+    - WebhookEventInvoicePaymentFailed
     - WebhookEventInvoiceSyncSuccess
     - WebhookEventInvoiceSyncFailed
     - WebhookEventWalletCreditBalanceDropped
@@ -16199,6 +16201,16 @@ definitions:
     - InstalmentStatusScheduled
     - InstalmentStatusInvoiced
     - InstalmentStatusCancelled
+  types.InvoicePaymentFailureReason:
+    enum:
+    - payment_method_unavailable
+    - provider_error
+    - declined
+    type: string
+    x-enum-varnames:
+    - InvoicePaymentFailureReasonPaymentMethodUnavailable
+    - InvoicePaymentFailureReasonProviderError
+    - InvoicePaymentFailureReasonDeclined
   types.JournalDirection:
     enum:
     - debit
@@ -16817,6 +16829,23 @@ definitions:
         type: string
       subscription_line_item_id:
         type: string
+    type: object
+  webhookDto.InvoicePaymentFailedWebhookPayload:
+    properties:
+      error:
+        type: string
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      invoice:
+        $ref: '#/definitions/webhookDto.Invoice'
+      is_auto_charge_attempt:
+        type: boolean
+      payment_id:
+        type: string
+      provider:
+        $ref: '#/definitions/types.SecretProvider'
+      reason:
+        $ref: '#/definitions/types.InvoicePaymentFailureReason'
     type: object
   webhookDto.InvoiceSyncWebhookPayload:
     properties:
@@ -27959,6 +27988,23 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.create.drafted
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.payment.failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a payment of an invoice does not succeed. `reason` is
+        `payment_method_unavailable`, `provider_error` or `declined`; `is_auto_charge_attempt`
+        is true when Flexprice charged the saved payment method. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoicePaymentFailedWebhookPayload'
+      summary: invoice.payment.failed
       tags:
       - Webhook Events
   /webhook-events/invoice.payment.overdue:

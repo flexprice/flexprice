@@ -113,6 +113,10 @@
             "description": "Fired when a new invoice is created in draft state"
         },
         {
+            "name": "invoice.payment.failed",
+            "description": "Fired when a payment of an invoice does not succeed"
+        },
+        {
             "name": "invoice.payment.overdue",
             "description": "Fired when payment of an invoice is overdue"
         },
