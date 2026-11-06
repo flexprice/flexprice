@@ -18,5 +18,5 @@ type Repository interface {
 	GetByLookupKey(ctx context.Context, lookupKey string) (*Customer, error)
 	// AssignDefaultBillingEntities sets up to limit (all when limit <= 0) of the environment's customers
 	// without an entity to its default entity, bypassing the activity log.
-	AssignDefaultBillingEntities(ctx context.Context, tenantID, environmentID string, limit int) (int, error)
+	AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error)
 }

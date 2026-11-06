@@ -90,11 +90,11 @@ func (s *billingEntityService) PrepareEnable(ctx context.Context) error {
 }
 
 func (s *billingEntityService) AssignCustomerBatch(ctx context.Context, limit int) (int, error) {
-	return s.CustomerRepo.AssignDefaultBillingEntities(ctx, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), limit)
+	return s.CustomerRepo.AssignDefaultBillingEntities(ctx, limit)
 }
 
 func (s *billingEntityService) AssignInvoiceBatch(ctx context.Context, limit int) (int, error) {
-	return s.InvoiceRepo.AssignDefaultBillingEntities(ctx, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), limit)
+	return s.InvoiceRepo.AssignDefaultBillingEntities(ctx, limit)
 }
 
 func (s *billingEntityService) CompleteEnable(ctx context.Context) error {
@@ -132,11 +132,11 @@ func (s *billingEntityService) CompleteEnable(ctx context.Context) error {
 			return err
 		}
 
-		remaining, err := s.CustomerRepo.AssignDefaultBillingEntities(txCtx, tenantID, environmentID, 0)
+		remaining, err := s.CustomerRepo.AssignDefaultBillingEntities(txCtx, 0)
 		if err != nil {
 			return err
 		}
-		remainingInvoices, err := s.InvoiceRepo.AssignDefaultBillingEntities(txCtx, tenantID, environmentID, 0)
+		remainingInvoices, err := s.InvoiceRepo.AssignDefaultBillingEntities(txCtx, 0)
 		if err != nil {
 			return err
 		}

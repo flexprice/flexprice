@@ -23,7 +23,7 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.InvoiceFilter) (int, error)
 	// AssignDefaultBillingEntities sets up to limit (all when limit <= 0) of the environment's invoices
 	// without an entity to its default entity, bypassing the activity log.
-	AssignDefaultBillingEntities(ctx context.Context, tenantID, environmentID string, limit int) (int, error)
+	AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error)
 
 	// Edge-specific operations
 	// TODO: AddLineItems and RemoveLineItems are candidates for future removal

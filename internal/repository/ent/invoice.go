@@ -912,7 +912,9 @@ func (r *invoiceRepository) Count(ctx context.Context, filter *types.InvoiceFilt
 	return count, nil
 }
 
-func (r *invoiceRepository) AssignDefaultBillingEntities(ctx context.Context, tenantID, environmentID string, limit int) (int, error) {
+func (r *invoiceRepository) AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 	span := StartRepositorySpan(ctx, "invoice", "assign_default_billing_entities", map[string]interface{}{
 		"tenant_id":      tenantID,
 		"environment_id": environmentID,

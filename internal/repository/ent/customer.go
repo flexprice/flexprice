@@ -613,7 +613,9 @@ func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCu
 	r.redisCache.Delete(ctx, cacheKey)
 }
 
-func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, tenantID, environmentID string, limit int) (int, error) {
+func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 	span := StartRepositorySpan(ctx, "customer", "assign_default_billing_entities", map[string]interface{}{
 		"tenant_id":      tenantID,
 		"environment_id": environmentID,
@@ -653,7 +655,6 @@ func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, t
 	}
 	defer rows.Close()
 
-	envCtx := types.SetEnvironmentID(types.SetTenantID(ctx, tenantID), environmentID)
 	count := 0
 	for rows.Next() {
 		var id string
@@ -663,7 +664,7 @@ func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, t
 				WithHint("Failed to read assigned customers").
 				Mark(ierr.ErrDatabase)
 		}
-		r.DeleteCache(envCtx, &domainCustomer.Customer{ID: id})
+		r.DeleteCache(ctx, &domainCustomer.Customer{ID: id})
 		count++
 	}
 	if err := rows.Err(); err != nil {
