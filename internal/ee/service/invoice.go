@@ -678,6 +678,7 @@ func subscriptionReferencePoint(reason types.InvoiceBillingReason) types.Invoice
 // Expensive computation (e.g. PrepareSubscriptionInvoiceRequest which queries ClickHouse) is performed
 // OUTSIDE the row-level lock to avoid lock timeouts. Only DB writes happen under the lock.
 func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error) {
+	ctx = withLineItemMemo(ctx)
 	// 1. Read invoice WITHOUT lock to determine type and gather details for computation.
 	//    This avoids holding the row lock during expensive ClickHouse queries.
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
@@ -956,9 +957,12 @@ func (s *invoiceService) saveCompletedCycleUsageCheckpoints(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	if !usesCheckpoints(sub) {
+		return nil
+	}
 	subscriptionForInvoicePeriod := *sub
 	subscriptionForInvoicePeriod.CurrentPeriodStart = *inv.PeriodStart
-	items, err := s.SubscriptionLineItemRepo.ListBySubscription(ctx, &subscriptionForInvoicePeriod)
+	items, err := listActiveLineItems(ctx, s.SubscriptionLineItemRepo, sub.ID, *inv.PeriodStart)
 	if err != nil {
 		return err
 	}

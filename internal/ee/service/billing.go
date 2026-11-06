@@ -186,9 +186,13 @@ func (s *billingService) CalculateFixedCharges(
 			continue
 		}
 
-		price, err := priceService.GetPrice(ctx, item.PriceID)
-		if err != nil {
-			return nil, err
+		price := item.Price
+		if price == nil {
+			resp, err := priceService.GetPrice(ctx, item.PriceID)
+			if err != nil {
+				return nil, err
+			}
+			price = resp.Price
 		}
 
 		var amount decimal.Decimal
@@ -196,7 +200,7 @@ func (s *billingService) CalculateFixedCharges(
 
 		// ONETIME charge: full amount, no proration; service period = line item start (billing date).
 		if price.BillingPeriod == types.BILLING_PERIOD_ONETIME {
-			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
+			amount = priceService.CalculateCost(ctx, price, item.Quantity)
 			linePeriodStart = item.StartDate
 			// For one-time charges the service period collapses to a single point (the billing date).
 			// If EndDate is not explicitly set, use StartDate so PeriodStart == PeriodEnd.
@@ -249,7 +253,7 @@ func (s *billingService) CalculateFixedCharges(
 
 			var skip bool
 			amount, skip, err = prorateFixedCharge(sub, item, anchor,
-				priceService.CalculateCost(ctx, price.Price, item.Quantity), serviceablePeriod, subPeriodStart)
+				priceService.CalculateCost(ctx, price, item.Quantity), serviceablePeriod, subPeriodStart)
 			if err != nil {
 				return nil, err
 			}
@@ -290,7 +294,7 @@ func (s *billingService) CalculateFixedCharges(
 
 				serviceablePeriod := types.Period{Start: effectiveStart, End: effectiveEnd}
 				wAmount, skip, err := prorateFixedCharge(sub, item, sub.BillingAnchor,
-					priceService.CalculateCost(ctx, price.Price, item.Quantity), serviceablePeriod, w.Start)
+					priceService.CalculateCost(ctx, price, item.Quantity), serviceablePeriod, w.Start)
 				if err != nil {
 					return nil, err
 				}
@@ -1651,11 +1655,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	// Line items loaded via GetWithLineItems are filtered by sub.CurrentPeriodStart; for historical
 	// periods (recalculation, past invoices) reload using the invoice billing period start.
-	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
-	lineItemFilter.SubscriptionIDs = []string{sub.ID}
-	lineItemFilter.ActiveFilter = true
-	lineItemFilter.CurrentPeriodStart = &periodStart
-	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
+	lineItems, err := listActiveLineItems(ctx, s.SubscriptionLineItemRepo, sub.ID, periodStart)
 	if err != nil {
 		return nil, err
 	}
