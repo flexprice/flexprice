@@ -49,7 +49,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	if err != nil {
 		return nil, err
 	}
-	ctx, err = NewBillingEntityService(p.ServiceParams).ScopeToPayment(ctx, paymentObj, false)
+	ctx, err = NewBillingEntityService(p.ServiceParams).ScopeToPayment(ctx, paymentObj)
 	if err != nil {
 		return paymentObj, err
 	}

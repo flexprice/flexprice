@@ -61,7 +61,7 @@ Variation: the entity has no connection for a provider → that provider's sync 
 
 Variation: the event arrives on the provider's existing environment URL → it is served by the default
 entity's connection. The event concerns another entity's record → ignored. The connection was removed →
-the late event is still verified and applied.
+the event is rejected, as for any unknown connection.
 
 **UC6 — Tenant admin moves or removes an entity's connection.**
 1. Admin moves an entity to another account of the same provider, or removes a connection, even while the
@@ -116,7 +116,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 | FR-9 | A payment taken through a gateway records the connection that took it. | UC2 | Payment response and record show `connection_id` of the entity's connection. |
 | FR-10 | Customer, invoice, subscription and payment syncs go to the entity's connection for each syncing provider and are skipped when it has none. | UC3 | Y on QuickBooks realm B → Y's invoice appears in realm B, not realm A; Y without Zoho → no Zoho sync started. |
 | FR-11 | Catalog sync pushes plans, prices and add-ons to every connection of the provider and records the external IDs per connection. | UC3 | Price P synced with Stripe 1 and Stripe 2 → two mappings with different external IDs; re-sync does not duplicate. |
-| FR-12 | Every connection has its own webhook URL that names the connection. An event on it is verified with that connection's secrets, including for removed connections, and only changes records of that connection's entity. | UC4 | Event on Y's URL for Y's payment → invoice paid; event on Y's URL referencing X's invoice → ignored and logged; event for a removed connection → applied. |
+| FR-12 | Every connection has its own webhook URL that names the connection. An event on it is verified with that connection's secrets and only changes records of that connection's entity; a removed connection's events are rejected. | UC4 | Event on Y's URL for Y's payment → invoice paid; event on Y's URL referencing X's invoice → ignored and logged; event for a removed connection → 404. |
 | FR-13 | The existing per-environment webhook URL of each provider stays and is served by the default entity's connection. | UC4 | Event on the old Stripe URL → applied as the default entity. |
 | FR-14 | A customer created from a provider event belongs to the entity of the connection that sent it. | UC4 | Stripe 2 (Y) customer-created event → Flexprice customer with Y. |
 | FR-17 | A connection can be removed whatever the state of its entity's invoices and subscriptions; the removed connection keeps its owner. | UC6 | Remove Y's Stripe with open invoices → 200; Y's next charge → no gateway, invoice stays pending. |
@@ -275,7 +275,7 @@ Migration notes:
 
 | Route | Serves |
 |---|---|
-| `POST /v1/webhooks/{provider}/{tenant_id}/{environment_id}?connection={connection_id}` | That connection, including removed ones |
+| `POST /v1/webhooks/{provider}/{tenant_id}/{environment_id}?connection={connection_id}` | That connection, while published |
 | `POST /v1/webhooks/{provider}/{tenant_id}/{environment_id}` (existing, no query) | The default entity's connection; the only connection for off environments |
 
 | Error | Status | When |
@@ -300,7 +300,7 @@ the connection instead.
 ```mermaid
 flowchart TD
   L[Lookup connection for provider P] --> W{Connection pinned in context?}
-  W -- yes --> C1[That connection, if it is P; removed ones allowed]
+  W -- yes --> C1[That connection, if it is P and published]
   W -- no --> M{Environment mode}
   M -- off --> C2[The environment's connection for P, as today]
   M -- enabling / enabled --> E{Entity in context?}
@@ -334,7 +334,7 @@ sequenceDiagram
   participant API as Webhook endpoint
   participant DB as Database
   P->>API: Event on /webhooks/stripe/t/e?connection=conn_Y
-  API->>DB: Load conn_Y (published or removed) for this tenant, environment and provider
+  API->>DB: Load published conn_Y for this tenant, environment and provider
   API->>API: Verify signature with conn_Y's secret
   API->>API: Pin conn_Y and its entity in context
   API->>DB: Find the record the event refers to
@@ -350,7 +350,8 @@ sequenceDiagram
 - Create in an `enabling` or `enabled` environment writes the owner on the connection under Phase 1's
   shared enable lock, so it cannot race the enable job.
 - Move (FR-5) updates the connection's owner under the same lock.
-- Remove (FR-17) archives the connection; it keeps its owner, so late webhooks still resolve its entity.
+- Remove (FR-17) archives the connection. As on develop, nothing uses it afterwards: lookups, webhooks, refunds,
+  payment processing and status polls skip it. It keeps its owner as history.
 
 ### 9.4 Jobs and events
 
@@ -358,7 +359,7 @@ sequenceDiagram
 |---|---|
 | Enable job | Step 1 assigns every existing non-storage connection to its environment's default entity (FR-3) |
 | Sync parity R1: record-anchored | Every sync of a customer, invoice, subscription or payment (dispatcher, workflow activities, inline updates, `POST /integrations/sync`, payment links, checkout, auto-charge) uses the connection of the record's entity. Payloads unchanged; activities re-read the record and set its entity before the lookup. The integration event dispatcher skips a record whose entity has no connection for the provider. Catalog items created inside a record sync (Stripe products and prices, Zoho and Chargebee items, Paddle products) follow R1: mappings are keyed by that connection |
-| Sync parity R2: payment-anchored | Refunds, payment-status polls and the Moyasar settlement cron use the payment's connection, else its customer's entity (FR-18) |
+| Sync parity R2: payment-anchored | Refunds, payment processing, payment-status polls and the Moyasar settlement cron use the payment's connection, else its customer's entity; a removed connection fails them (FR-18) |
 | Sync parity R3: environment-level push | Runs once per connection of the provider and writes mappings per connection: QuickBooks price push, Chargebee plan and price push, and the marketplace usage report and snapshot crons (already per connection; each is pinned to its connection) |
 | Sync parity R4: inbound | Per-connection URL; the event is applied as the sending connection's entity, including customers created from events (FR-14) |
 | "Already synced" checks | Count mappings for the entity's connection |
@@ -387,7 +388,7 @@ sequenceDiagram
 | Caching | The published-connections list carries each connection's owner and is cleared on every connection write | NFR-5 |
 | Idempotency | Mapping upserts and "already synced" checks keyed by connection; webhook handlers keep today's idempotency | — |
 | Failure: entity without a connection | Behaves as "not connected": invoice pending, sync skipped, 400 on requests; logged with record and entity IDs | NFR-3 |
-| Failure: late event for a removed connection | Still verified and applied through the per-connection URL | — |
+| Failure: work on a removed connection | Never used, as on develop: its webhook URL answers 404; refunds fail to wallet credit; processing and polls of its payments fail with "the connection that took this payment was removed" | — |
 | Deploy safety | Additive schema; mapping index swap tolerated by old pods; non-blocking follow-up | NFR-6 |
 | Observability | Lookup misses for enabled environments and ignored cross-entity webhook events are logged with tenant, entity, connection and record IDs | — |
 | Multi-tenancy | The owner lives on the tenant- and environment-scoped connection; webhook connection must belong to the URL's tenant and environment | NFR-4 |

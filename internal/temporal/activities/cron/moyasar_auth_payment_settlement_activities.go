@@ -268,5 +268,5 @@ func (a *MoyasarAuthPaymentSettlementActivities) scopeToPayment(ctx context.Cont
 	if err != nil {
 		return ctx, err
 	}
-	return a.entityScope.ScopeToPayment(ctx, p, false)
+	return a.entityScope.ScopeToPayment(ctx, p)
 }

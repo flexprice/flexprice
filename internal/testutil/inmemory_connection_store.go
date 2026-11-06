@@ -42,19 +42,6 @@ func (s *InMemoryConnectionStore) Get(ctx context.Context, id string) (*connecti
 	return copyConnection(item), nil
 }
 
-func (s *InMemoryConnectionStore) GetUnscoped(ctx context.Context, id string) (*connection.Connection, error) {
-	item, err := s.store.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if !CheckTenantFilter(ctx, item.TenantID) || !CheckEnvironmentFilter(ctx, item.EnvironmentID) {
-		return nil, ierr.NewError("connection not found").
-			WithHintf("Connection with ID %s was not found", id).
-			Mark(ierr.ErrNotFound)
-	}
-	return copyConnection(item), nil
-}
-
 func (s *InMemoryConnectionStore) GetByProvider(ctx context.Context, provider types.SecretProvider) (*connection.Connection, error) {
 	notFound := ierr.NewError("connection not found").
 		WithHintf("Connection with provider %s was not found in this environment", provider).
@@ -65,7 +52,7 @@ func (s *InMemoryConnectionStore) GetByProvider(ctx context.Context, provider ty
 		Mark(ierr.ErrNotFound)
 
 	if pinnedID := types.GetConnectionID(ctx); pinnedID != "" {
-		c, err := s.GetUnscoped(ctx, pinnedID)
+		c, err := s.Get(ctx, pinnedID)
 		if err != nil {
 			return nil, err
 		}
