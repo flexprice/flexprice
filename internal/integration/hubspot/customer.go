@@ -94,7 +94,7 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 		}
 
 		existingCustomers, err := customerService.GetCustomers(ctx, filter)
-		existingCustomer := dto.FirstCustomerInBillingEntity(existingCustomers, types.GetBillingEntityID(ctx))
+		existingCustomer := dto.FindCustomerInBillingEntity(existingCustomers, types.GetBillingEntityID(ctx))
 		if err == nil && existingCustomer != nil {
 			s.logger.Info(ctx, "customer with same email already exists, creating mapping",
 				"customer_id", existingCustomer.ID,
