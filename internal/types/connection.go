@@ -387,6 +387,7 @@ var zohoEndpointSuffixes = []string{
 	".zoho.com.cn",
 	".zoho.sa",
 	".zoho.uk",
+	".zoho.ae",
 	".zohocloud.ca",
 	".zohoapis.com",
 	".zohoapis.eu",

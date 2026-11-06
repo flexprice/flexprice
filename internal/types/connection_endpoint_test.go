@@ -17,6 +17,8 @@ func TestValidateZohoEndpoint(t *testing.T) {
 		{"bare zoho domain", "https://zoho.com", false},
 		{"zoho ca api domain", "https://www.zohoapis.ca", false},
 		{"zoho ae api domain", "https://www.zohoapis.ae", false},
+		{"zoho ae accounts", "https://accounts.zoho.ae", false},
+		{"lookalike ae accounts rejected", "https://evilzoho.ae", true},
 		{"zoho ca api domain no www", "https://zohoapis.ca", false},
 		{"lookalike ca rejected", "https://evilzohoapis.ca", true},
 		{"lookalike ae rejected", "https://evilzohoapis.ae", true},
