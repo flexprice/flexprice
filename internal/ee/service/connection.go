@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // awsMarketplaceRoleVerificationDuration is how long the STS session used to verify a role ARN at
@@ -555,40 +556,18 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		return nil, err
 	}
 
-	// Check for existing published connection with same provider, tenant, and environment
-	existingFilter := &types.ConnectionFilter{
-		ProviderType: req.ProviderType,
-	}
-
-	existingConnections, err := s.ConnectionRepo.List(ctx, existingFilter)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to check for existing connections", "error", err)
+	if err := dto.ValidateConnectionID(req.ID); err != nil {
 		return nil, err
-	}
-
-	// Check if there's already a published connection for this provider, tenant, and environment
-	for _, existingConn := range existingConnections {
-		if existingConn.ProviderType == req.ProviderType &&
-			existingConn.ProviderType != types.SecretProviderS3 &&
-			existingConn.ProviderType != types.SecretProviderGCS &&
-			existingConn.Status == types.StatusPublished {
-			return nil, ierr.NewError("connection already exists").
-				WithHintf("A published connection for provider '%s' already exists in this environment", req.ProviderType).
-				WithReportableDetails(map[string]interface{}{
-					"provider_type":          req.ProviderType,
-					"tenant_id":              tenantID,
-					"environment_id":         environmentID,
-					"existing_connection_id": existingConn.ID,
-				}).
-				Mark(ierr.ErrAlreadyExists)
-		}
 	}
 
 	// Convert DTO to domain model
 	conn := req.ToConnection()
 
 	// Set required fields
-	conn.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION)
+	conn.ID = req.ID
+	if conn.ID == "" {
+		conn.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION)
+	}
 	conn.TenantID = tenantID
 	conn.EnvironmentID = environmentID
 	conn.Status = types.StatusPublished
@@ -773,8 +752,22 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		return nil, err
 	}
 
-	// Create the connection
-	if err := s.ConnectionRepo.Create(ctx, conn); err != nil {
+	beService := NewBillingEntityService(s.ServiceParams)
+	if err := beService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
+		owner, err := resolveConnectionOwner(txCtx, beService, mode, conn.ProviderType, req.BillingEntityID, req.ID)
+		if err != nil {
+			return err
+		}
+		existing, err := s.ConnectionRepo.List(txCtx, &types.ConnectionFilter{ProviderType: conn.ProviderType})
+		if err != nil {
+			return err
+		}
+		if dup := duplicateConnection(existing, conn.ProviderType, owner); dup != nil {
+			return errConnectionExists(txCtx, dup, owner, connectionExistsHint)
+		}
+		conn.BillingEntityID = owner
+		return s.ConnectionRepo.Create(txCtx, conn)
+	}); err != nil {
 		s.Logger.Error(ctx, "failed to create connection", "error", err)
 		return nil, err
 	}
@@ -784,7 +777,11 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	// For QuickBooks connections with auth_code, exchange it immediately for tokens
 	// OAuth 2.0 auth codes expire quickly (typically 10 minutes), so we must exchange them ASAP
 	if conn.ProviderType == types.SecretProviderQuickBooks && s.IntegrationFactory != nil {
-		qbIntegration, err := s.IntegrationFactory.GetQuickBooksIntegration(ctx)
+		exchangeCtx := ctx
+		if conn.BillingEntityID != nil {
+			exchangeCtx = types.SetBillingEntityID(ctx, *conn.BillingEntityID)
+		}
+		qbIntegration, err := s.IntegrationFactory.GetQuickBooksIntegration(exchangeCtx)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to get QuickBooks integration after connection creation",
 				"connection_id", conn.ID,
@@ -792,7 +789,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 			// Don't fail connection creation, but log the error
 		} else {
 			// Try to ensure valid access token (will exchange auth_code if present)
-			if err := qbIntegration.Client.EnsureValidAccessToken(ctx); err != nil {
+			if err := qbIntegration.Client.EnsureValidAccessToken(exchangeCtx); err != nil {
 				s.Logger.Error(ctx, "failed to exchange QuickBooks auth code for tokens",
 					"connection_id", conn.ID,
 					"error", err)
@@ -809,7 +806,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 }
 
 func (s *connectionService) validateStorageReachable(ctx context.Context, conn *connection.Connection) error {
-	if conn.ProviderType != types.SecretProviderS3 && conn.ProviderType != types.SecretProviderGCS {
+	if !connection.IsStorageProvider(conn.ProviderType) {
 		return nil
 	}
 	if s.IntegrationFactory == nil {
@@ -868,6 +865,10 @@ func (s *connectionService) GetConnection(ctx context.Context, id string) (*dto.
 
 func (s *connectionService) GetConnections(ctx context.Context, filter *types.ConnectionFilter) (*dto.ListConnectionsResponse, error) {
 	s.Logger.Debug(ctx, "getting connections", "filter", filter)
+
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
+		return nil, err
+	}
 
 	connections, err := s.ConnectionRepo.List(ctx, filter)
 	if err != nil {
@@ -1110,8 +1111,7 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		return nil, err
 	}
 
-	// Update the connection
-	if err := s.ConnectionRepo.Update(ctx, conn); err != nil {
+	if err := s.persistUpdate(ctx, conn, req.BillingEntityID); err != nil {
 		s.Logger.Error(ctx, "failed to update connection", "error", err, "connection_id", id)
 		return nil, err
 	}
@@ -1159,7 +1159,6 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 	conn.UpdatedAt = clock.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
-	// Delete the connection
 	if err := s.ConnectionRepo.Delete(ctx, conn); err != nil {
 		s.Logger.Error(ctx, "failed to delete connection", "error", err, "connection_id", id)
 		return err
@@ -1167,4 +1166,109 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 
 	s.Logger.Info(ctx, "connection deleted successfully", "connection_id", conn.ID)
 	return nil
+}
+
+// duplicateConnection returns the published connection of the provider that already belongs to the owner (nil when entities are off); storage is exempt.
+func duplicateConnection(existing []*connection.Connection, provider types.SecretProvider, owner *string) *connection.Connection {
+	if connection.IsStorageProvider(provider) {
+		return nil
+	}
+	dup, _ := lo.Find(existing, func(c *connection.Connection) bool {
+		return c.Status == types.StatusPublished &&
+			c.ProviderType == provider &&
+			lo.FromPtr(c.BillingEntityID) == lo.FromPtr(owner)
+	})
+	return dup
+}
+
+const (
+	connectionExistsHint      = "A published connection for provider '%s' already exists"
+	oauthConnectionExistsHint = "A published connection for provider %s already exists"
+)
+
+func errConnectionExists(ctx context.Context, existing *connection.Connection, owner *string, hintFormat string) error {
+	hint := fmt.Sprintf(hintFormat, existing.ProviderType) + " in this environment"
+	details := map[string]any{
+		"provider_type":          existing.ProviderType,
+		"tenant_id":              types.GetTenantID(ctx),
+		"environment_id":         types.GetEnvironmentID(ctx),
+		"existing_connection_id": existing.ID,
+	}
+	if owner != nil {
+		hint = fmt.Sprintf(hintFormat, existing.ProviderType) + " for this billing entity"
+		details["billing_entity_id"] = *owner
+	}
+	return ierr.NewError("connection already exists").
+		WithHint(hint).
+		WithReportableDetails(details).
+		Mark(ierr.ErrAlreadyExists)
+}
+
+// resolveConnectionOwner returns the billing entity that owns a new connection; storage providers have none.
+// A connection created without a client id belongs to the default entity.
+func resolveConnectionOwner(ctx context.Context, beService BillingEntityService, mode types.BillingEntityMode, provider types.SecretProvider, requested *string, connectionID string) (*string, error) {
+	if connection.IsStorageProvider(provider) {
+		if lo.FromPtr(requested) != "" {
+			return nil, errStorageHasNoEntity(provider)
+		}
+		return nil, nil
+	}
+	owner, err := beService.ResolveBillingEntityID(ctx, mode, requested)
+	if err != nil || connectionID != "" || lo.FromPtr(requested) == "" {
+		return owner, err
+	}
+	def, err := beService.ResolveBillingEntityID(ctx, mode, nil)
+	if err != nil {
+		return nil, err
+	}
+	if *owner != *def {
+		return nil, ierr.NewError("id is required for a non-default billing entity").
+			WithHint("Send the connection id (conn_ followed by a ULID) used in its webhook URL; a connection without one belongs to the default billing entity").
+			WithReportableDetails(map[string]any{"billing_entity_id": *owner}).
+			Mark(ierr.ErrValidation)
+	}
+	return owner, nil
+}
+
+func errStorageHasNoEntity(provider types.SecretProvider) error {
+	return ierr.NewError("storage connections have no billing entity").
+		WithHintf("%s connections are shared by all billing entities and cannot belong to one", provider).
+		Mark(ierr.ErrValidation)
+}
+
+// persistUpdate saves the connection and, when a billing entity is given, moves it there.
+func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.Connection, requested *string) error {
+	if lo.FromPtr(requested) == "" {
+		return s.ConnectionRepo.Update(ctx, conn)
+	}
+
+	beService := NewBillingEntityService(s.ServiceParams)
+	return beService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
+		if mode != types.BillingEntityModeEnabled {
+			return errBillingEntitiesNotEnabled()
+		}
+		if connection.IsStorageProvider(conn.ProviderType) {
+			return errStorageHasNoEntity(conn.ProviderType)
+		}
+		target, err := beService.ResolveBillingEntityID(txCtx, mode, requested)
+		if err != nil {
+			return err
+		}
+
+		if err := s.ConnectionRepo.Update(txCtx, conn); err != nil {
+			return err
+		}
+		if lo.FromPtr(conn.BillingEntityID) == *target {
+			return nil
+		}
+		existing, err := s.ConnectionRepo.List(txCtx, &types.ConnectionFilter{ProviderType: conn.ProviderType})
+		if err != nil {
+			return err
+		}
+		if dup := duplicateConnection(existing, conn.ProviderType, target); dup != nil {
+			return errConnectionExists(txCtx, dup, target, connectionExistsHint)
+		}
+		conn.BillingEntityID = target
+		return s.ConnectionRepo.UpdateBillingEntity(txCtx, conn)
+	})
 }

@@ -24,6 +24,7 @@ const defaultBaseURL = "https://integrators.prod.api.tabsplatform.com"
 
 // TabsClient defines the interface for Tabs API operations.
 type TabsClient interface {
+	GetConnection(ctx context.Context) (*connection.Connection, error)
 	CreateCustomer(ctx context.Context, req CreateCustomerRequest) (*CreateCustomerResponse, error)
 	CreateProduct(ctx context.Context, req CreateProductRequest) (*CreateProductResponse, error)
 	CreateContract(ctx context.Context, req CreateContractRequest) (*CreateContractResponse, error)
@@ -62,6 +63,11 @@ func NewClient(
 func (c *Client) HasTabsConnection(ctx context.Context) bool {
 	conn, err := c.connectionRepo.GetByProvider(ctx, types.SecretProviderTabs)
 	return err == nil && conn != nil && conn.Status == types.StatusPublished
+}
+
+// GetConnection returns the Tabs connection for the current context.
+func (c *Client) GetConnection(ctx context.Context) (*connection.Connection, error) {
+	return c.connectionRepo.GetByProvider(ctx, types.SecretProviderTabs)
 }
 
 // apiKey resolves the current environment's Tabs connection and returns its decrypted API key.

@@ -37,6 +37,10 @@ const (
 	CtxHostedInvoiceTokenID ContextKey = "ctx_hosted_invoice_token_id"
 	CtxHostedInvoiceID      ContextKey = "ctx_hosted_invoice_id"
 
+	// Integration scope keys: the billing entity whose connections apply, or one pinned connection
+	CtxBillingEntityID ContextKey = "ctx_billing_entity_id"
+	CtxConnectionID    ContextKey = "ctx_connection_id"
+
 	// Tenant internal state
 	CtxTenantInternalStatus ContextKey = "ctx_tenant_internal_status"
 
@@ -100,6 +104,32 @@ func GetRoles(ctx context.Context) []string {
 func GetCustomerID(ctx context.Context) string {
 	if customerID, ok := ctx.Value(CtxCustomerID).(string); ok {
 		return customerID
+	}
+	return ""
+}
+
+// SetBillingEntityID sets the billing entity whose connections apply in the context
+func SetBillingEntityID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, CtxBillingEntityID, id)
+}
+
+// GetBillingEntityID returns the billing entity ID from the context
+func GetBillingEntityID(ctx context.Context) string {
+	if id, ok := ctx.Value(CtxBillingEntityID).(string); ok {
+		return id
+	}
+	return ""
+}
+
+// SetConnectionID pins one connection in the context for provider lookups
+func SetConnectionID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, CtxConnectionID, id)
+}
+
+// GetConnectionID returns the pinned connection ID from the context
+func GetConnectionID(ctx context.Context) string {
+	if id, ok := ctx.Value(CtxConnectionID).(string); ok {
+		return id
 	}
 	return ""
 }

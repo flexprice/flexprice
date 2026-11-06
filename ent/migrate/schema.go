@@ -573,6 +573,7 @@ var (
 		{Name: "encrypted_secret_data", Type: field.TypeJSON, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 		{Name: "sync_config", Type: field.TypeJSON, Nullable: true},
+		{Name: "billing_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// ConnectionsTable holds the schema information for the "connections" table.
 	ConnectionsTable = &schema.Table{
@@ -584,6 +585,14 @@ var (
 				Name:    "connection_tenant_id_environment_id_provider_type",
 				Unique:  false,
 				Columns: []*schema.Column{ConnectionsColumns[1], ConnectionsColumns[7], ConnectionsColumns[9]},
+			},
+			{
+				Name:    "idx_connections_owner_provider",
+				Unique:  true,
+				Columns: []*schema.Column{ConnectionsColumns[1], ConnectionsColumns[7], ConnectionsColumns[13], ConnectionsColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text AND billing_entity_id IS NOT NULL)",
+				},
 			},
 		},
 	}
@@ -1329,6 +1338,7 @@ var (
 		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "provider_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "provider_entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "connection_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 	}
 	// EntityIntegrationMappingsTable holds the schema information for the "entity_integration_mappings" table.
@@ -1338,9 +1348,9 @@ var (
 		PrimaryKey: []*schema.Column{EntityIntegrationMappingsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "idx_entity_integration_mapping_unique",
+				Name:    "idx_entity_integration_mapping_connection_unique",
 				Unique:  true,
-				Columns: []*schema.Column{EntityIntegrationMappingsColumns[1], EntityIntegrationMappingsColumns[7], EntityIntegrationMappingsColumns[9], EntityIntegrationMappingsColumns[8], EntityIntegrationMappingsColumns[10]},
+				Columns: []*schema.Column{EntityIntegrationMappingsColumns[1], EntityIntegrationMappingsColumns[7], EntityIntegrationMappingsColumns[9], EntityIntegrationMappingsColumns[8], EntityIntegrationMappingsColumns[10], EntityIntegrationMappingsColumns[12]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((status)::text = 'published'::text)",
 				},
@@ -2076,6 +2086,7 @@ var (
 		{Name: "voided_at", Type: field.TypeTime, Nullable: true},
 		{Name: "recorded_at", Type: field.TypeTime, Nullable: true},
 		{Name: "error_message", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "connection_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// PaymentsTable holds the schema information for the "payments" table.
 	PaymentsTable = &schema.Table{

@@ -66,7 +66,8 @@ func (f *fakeInvoiceRepo) Get(_ context.Context, id string) (*invoice.Invoice, e
 
 func newInvoiceSyncServiceForTest(t *testing.T, mappingRepo *fakeInvoiceMappingRepo, invoiceRepo *fakeInvoiceRepo) *InvoiceSyncService {
 	t.Helper()
-	return NewInvoiceSyncService(nil, invoiceRepo, mappingRepo, mustTestLogger(t))
+	client, _ := newTestHubSpotClient(t)
+	return NewInvoiceSyncService(client, invoiceRepo, mappingRepo, mustTestLogger(t))
 }
 
 func TestGetHubSpotContactID_EmptyCustomerIDDoesNotReturnLastLinked(t *testing.T) {

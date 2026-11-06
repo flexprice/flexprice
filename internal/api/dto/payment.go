@@ -100,7 +100,10 @@ type RecordAttemptRequest struct {
 
 // PaymentResponse represents a payment response
 type PaymentResponse struct {
-	ID                     string                       `json:"id"`
+	ID string `json:"id"`
+	// connection_id is the connection that took this payment; null when no gateway connection was used
+	ConnectionID *string `json:"connection_id"`
+
 	IdempotencyKey         string                       `json:"idempotency_key"`
 	DestinationType        types.PaymentDestinationType `json:"destination_type"`
 	DestinationID          string                       `json:"destination_id"`
@@ -148,6 +151,7 @@ func (p *PaymentResponse) ToPayment() *payment.Payment {
 		GatewayPaymentID:  p.GatewayPaymentID,
 		GatewayTrackingID: p.GatewayTrackingID,
 		GatewayMetadata:   p.GatewayMetadata,
+		ConnectionID:      p.ConnectionID,
 		Metadata:          p.Metadata,
 		SucceededAt:       p.SucceededAt,
 		FailedAt:          p.FailedAt,
@@ -204,6 +208,7 @@ func NewPaymentResponse(p *payment.Payment) *PaymentResponse {
 		GatewayPaymentID:  p.GatewayPaymentID,
 		GatewayTrackingID: p.GatewayTrackingID,
 		GatewayMetadata:   p.GatewayMetadata,
+		ConnectionID:      p.ConnectionID,
 		Metadata:          p.Metadata,
 		SucceededAt:       p.SucceededAt,
 		FailedAt:          p.FailedAt,

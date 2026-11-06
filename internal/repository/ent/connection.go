@@ -2,10 +2,13 @@ package ent
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainConnection "github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/dsl"
@@ -13,7 +16,11 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/lib/pq"
+	"github.com/samber/lo"
 )
+
+const connectionPrimaryKey = "connections_pkey"
 
 type connectionRepository struct {
 	client     postgres.IClient
@@ -63,6 +70,7 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 		SetEncryptedSecretData(encryptedSecretDataMap).
 		SetMetadata(c.Metadata).
 		SetSyncConfig(c.SyncConfig).
+		SetNillableBillingEntityID(c.BillingEntityID).
 		SetStatus(string(c.Status)).
 		SetCreatedAt(c.CreatedAt).
 		SetUpdatedAt(c.UpdatedAt).
@@ -75,9 +83,20 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 		SetSpanError(span, err)
 
 		if ent.IsConstraintError(err) {
+			hint := "Failed to create connection"
+			var pqErr *pq.Error
+			if errors.As(err, &pqErr) {
+				switch pqErr.Constraint {
+				case connectionPrimaryKey:
+					hint = "A connection with this id already exists"
+				case schema.ConnectionOwnerProviderUnique:
+					hint = fmt.Sprintf("A published connection for provider '%s' already exists for this billing entity", c.ProviderType)
+				}
+			}
 			return ierr.WithError(err).
-				WithHint("Failed to create connection").
+				WithHint(hint).
 				WithReportableDetails(map[string]any{
+					"connection_id": c.ID,
 					"name":          c.Name,
 					"provider_type": c.ProviderType,
 				}).
@@ -157,23 +176,45 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 	r.log.Debug(ctx, "getting connection by provider",
 		"provider_type", provider)
 
+	notFound := ierr.NewError("connection not found").
+		WithHintf("Connection with provider %s was not found in this environment", provider).
+		Mark(ierr.ErrNotFound)
+
+	if pinnedID := types.GetConnectionID(ctx); pinnedID != "" {
+		c, err := r.Get(ctx, pinnedID)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, err
+		}
+		// The pin holds only while ctx stays on the pinned connection's entity.
+		entityID, owner := types.GetBillingEntityID(ctx), lo.FromPtr(c.BillingEntityID)
+		if c.ProviderType == provider && (entityID == "" || owner == entityID) {
+			SetSpanSuccess(span)
+			return c, nil
+		}
+	}
+
 	connections, err := r.ListAllPublished(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, err
 	}
 
-	for _, c := range connections {
-		if c.ProviderType == provider {
-			SetSpanSuccess(span)
-			return c, nil
-		}
+	isProvider := func(c *domainConnection.Connection) bool { return c.ProviderType == provider }
+	if c, ok := lo.Find(domainConnection.InScope(ctx, connections), isProvider); ok {
+		SetSpanSuccess(span)
+		return c, nil
 	}
 
-	SetSpanError(span, ierr.ErrNotFound)
-	return nil, ierr.NewError("connection not found").
-		WithHintf("Connection with provider %s was not found in this environment", provider).
-		Mark(ierr.ErrNotFound)
+	if lo.ContainsBy(connections, isProvider) {
+		r.log.Info(ctx, "no connection for billing entity",
+			"tenant_id", types.GetTenantID(ctx),
+			"billing_entity_id", types.GetBillingEntityID(ctx),
+			"provider_type", provider)
+	}
+
+	SetSpanError(span, notFound)
+	return nil, notFound
 }
 
 // ListPublishedByProvider returns every published connection for a provider across all tenants and
@@ -229,6 +270,14 @@ func (r *connectionRepository) ListAllPublished(ctx context.Context) ([]*domainC
 
 	r.redisCache.Set(ctx, cacheKey, connections, cache.ExpiryDefaultRedis)
 	return connections, nil
+}
+
+func (r *connectionRepository) ListPublishedInScope(ctx context.Context) ([]*domainConnection.Connection, error) {
+	connections, err := r.ListAllPublished(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return domainConnection.InScope(ctx, connections), nil
 }
 
 func (r *connectionRepository) List(ctx context.Context, filter *types.ConnectionFilter) ([]*domainConnection.Connection, error) {
@@ -566,11 +615,58 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 	*c = *domainConnection.FromEnt(connection)
 
 	// Invalidate cache to ensure fresh data on next read
-	r.DeleteCache(ctx, c)
+	afterCommit(ctx, func() { r.DeleteCache(ctx, c) })
 	// Update cache with new data
-	r.SetCache(ctx, c)
+	cached := *c
+	afterCommit(ctx, func() { r.SetCache(ctx, &cached) })
 	r.deleteAllPublishedCache(ctx)
 
+	return nil
+}
+
+func (r *connectionRepository) UpdateBillingEntity(ctx context.Context, c *domainConnection.Connection) error {
+	span := StartRepositorySpan(ctx, "connection", "update_billing_entity", map[string]interface{}{
+		"connection_id": c.ID,
+	})
+	defer FinishSpan(span)
+
+	updated, err := r.client.Writer(ctx).Connection.UpdateOneID(c.ID).
+		Where(
+			connection.TenantID(c.TenantID),
+			connection.EnvironmentID(c.EnvironmentID),
+		).
+		SetNillableBillingEntityID(c.BillingEntityID).
+		SetUpdatedAt(c.UpdatedAt).
+		SetUpdatedBy(c.UpdatedBy).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHintf("Connection with ID %s was not found", c.ID).
+				WithReportableDetails(map[string]any{"connection_id": c.ID}).
+				Mark(ierr.ErrNotFound)
+		}
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Constraint == schema.ConnectionOwnerProviderUnique {
+			return ierr.WithError(err).
+				WithHintf("A published connection for provider '%s' already exists for this billing entity", c.ProviderType).
+				WithReportableDetails(map[string]any{
+					"connection_id":     c.ID,
+					"billing_entity_id": lo.FromPtr(c.BillingEntityID),
+					"provider_type":     c.ProviderType,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to update connection billing entity").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	*c = *domainConnection.FromEnt(updated)
+	afterCommit(ctx, func() { r.DeleteCache(ctx, c) })
+	r.deleteAllPublishedCache(ctx)
 	return nil
 }
 
@@ -616,7 +712,7 @@ func (r *connectionRepository) Delete(ctx context.Context, c *domainConnection.C
 	}
 
 	SetSpanSuccess(span)
-	r.DeleteCache(ctx, c)
+	afterCommit(ctx, func() { r.DeleteCache(ctx, c) })
 	r.deleteAllPublishedCache(ctx)
 	return nil
 }
@@ -698,6 +794,10 @@ func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 		query = query.Where(connection.IDIn(f.ConnectionIDs...))
 	}
 
+	if f.BillingEntityID != "" {
+		query = query.Where(connection.BillingEntityID(f.BillingEntityID))
+	}
+
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[ConnectionQuery, predicate.Connection](
 			query,
@@ -768,6 +868,7 @@ func (r *connectionRepository) DeleteCache(ctx context.Context, connection *doma
 // in ctx. Called on any create/update/delete so a newly connected, updated, or disconnected
 // integration is reflected immediately instead of waiting out the cache TTL.
 func (r *connectionRepository) deleteAllPublishedCache(ctx context.Context) {
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixPublishedConnections)
-	r.redisCache.Delete(ctx, cacheKey)
+	afterCommit(ctx, func() {
+		r.redisCache.Delete(ctx, cache.GenerateKey(ctx, cache.PrefixPublishedConnections))
+	})
 }

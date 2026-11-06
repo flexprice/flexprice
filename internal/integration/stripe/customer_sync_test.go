@@ -13,6 +13,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -103,6 +104,19 @@ func (l *syncTestLocker) AcquireLock(_ context.Context, _ string, _ time.Duratio
 	return syncTestLock{acquired: acquired, releaseCalls: &l.releaseCalls}, nil
 }
 
+// stubConnectionRepo resolves every provider to one published test connection.
+type stubConnectionRepo struct {
+	connection.Repository
+}
+
+func (stubConnectionRepo) GetByProvider(_ context.Context, provider types.SecretProvider) (*connection.Connection, error) {
+	return &connection.Connection{ID: "conn_test", ProviderType: provider}, nil
+}
+
+func testClient() *Client {
+	return NewClient(stubConnectionRepo{}, nil, logger.NewNoopLogger())
+}
+
 func testContext() context.Context {
 	ctx := types.SetTenantID(context.Background(), "tenant_test")
 	return types.SetEnvironmentID(ctx, "env_test")
@@ -186,7 +200,7 @@ func TestEnsureCustomerSyncedToStripe(t *testing.T) {
 			mappingRepo := &syncTestMappingRepo{mappings: tt.mappings}
 			locker := &syncTestLocker{acquiredOnCall: tt.lockAcquiredOnCall}
 
-			svc := NewCustomerService(nil, nil, mappingRepo, locker, logger.NewNoopLogger())
+			svc := NewCustomerService(testClient(), nil, mappingRepo, locker, logger.NewNoopLogger())
 
 			resp, err := svc.EnsureCustomerSyncedToStripe(testContext(), customerID, customerSvc)
 
@@ -249,7 +263,7 @@ func TestGetStripeCustomerID(t *testing.T) {
 				updateErr: tt.updateErr,
 			}
 			locker := &syncTestLocker{acquiredOnCall: 1}
-			svc := NewCustomerService(nil, nil, &syncTestMappingRepo{mappings: tt.mappings}, locker, logger.NewNoopLogger())
+			svc := NewCustomerService(testClient(), nil, &syncTestMappingRepo{mappings: tt.mappings}, locker, logger.NewNoopLogger())
 
 			stripeID, err := svc.GetStripeCustomerID(testContext(), customerID, customerSvc)
 
@@ -306,7 +320,7 @@ func TestUpdateCustomerInStripe_UnlinkedCustomerIsSkipped(t *testing.T) {
 			Name: "Acme",
 		},
 	}
-	svc := NewCustomerService(nil, nil, &syncTestMappingRepo{}, &syncTestLocker{}, logger.NewNoopLogger())
+	svc := NewCustomerService(testClient(), nil, &syncTestMappingRepo{}, &syncTestLocker{}, logger.NewNoopLogger())
 
 	err := svc.UpdateCustomerInStripe(testContext(), customerSvc.customer, customerSvc)
 

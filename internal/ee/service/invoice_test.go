@@ -1462,6 +1462,7 @@ func (s *InvoiceServiceSuite) TestUpdatePaymentStatusWithPayments() {
 					ConnectionRepo:         s.GetStores().ConnectionRepo,
 					EntitlementRepo:        s.GetStores().EntitlementRepo,
 					EnvironmentRepo:        s.GetStores().EnvironmentRepo,
+					SettingsRepo:           s.GetStores().SettingsRepo,
 					FeatureRepo:            s.GetStores().FeatureRepo,
 					TenantRepo:             s.GetStores().TenantRepo,
 					UserRepo:               s.GetStores().UserRepo,

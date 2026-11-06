@@ -61,6 +61,7 @@ type oauthService struct {
 	connectionService  ConnectionService
 	integrationFactory *integration.Factory
 	logger             *logger.Logger
+	params             ServiceParams
 }
 
 func oauthProviderToSecretProvider(provider types.OAuthProvider) (types.SecretProvider, error) {
@@ -131,6 +132,7 @@ func NewOAuthService(
 	connectionService ConnectionService,
 	integrationFactory *integration.Factory,
 	logger *logger.Logger,
+	params ServiceParams,
 ) OAuthService {
 	return &oauthService{
 		connectionRepo:     connectionRepo,
@@ -138,6 +140,7 @@ func NewOAuthService(
 		connectionService:  connectionService,
 		integrationFactory: integrationFactory,
 		logger:             logger,
+		params:             params,
 	}
 }
 
@@ -182,6 +185,61 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 		encryptedCredentials[key] = encrypted
 	}
 
+	providerType, err := oauthProviderToSecretProvider(session.Provider)
+	if err != nil {
+		return err
+	}
+
+	beService := NewBillingEntityService(s.params)
+	var incompleteConnection *connection.Connection
+	if err := beService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
+		owner, err := resolveConnectionOwner(txCtx, beService, mode, providerType, session.BillingEntityID, session.ConnectionID)
+		if err != nil {
+			return err
+		}
+		existing, err := s.connectionRepo.List(txCtx, &types.ConnectionFilter{ProviderType: providerType})
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to check for existing connections").
+				Mark(ierr.ErrDatabase)
+		}
+		if dup := duplicateConnection(existing, providerType, owner); dup != nil {
+			return errConnectionExists(txCtx, dup, owner, oauthConnectionExistsHint)
+		}
+
+		session.BillingEntityID = owner
+		encryptedSessionJSON, err := s.encryptSessionBlob(session, encryptedCredentials)
+		if err != nil {
+			return err
+		}
+		incompleteConnection = s.newIncompleteConnection(session, providerType, encryptedSessionJSON, encryptedCredentials)
+		incompleteConnection.BillingEntityID = owner
+
+		if err := s.connectionRepo.Create(txCtx, incompleteConnection); err != nil {
+			if ierr.IsAlreadyExists(err) {
+				return err
+			}
+			return ierr.WithError(err).
+				WithHint("Failed to store OAuth session in database").
+				Mark(ierr.ErrDatabase)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	s.logger.Info(ctx, "stored OAuth session as incomplete connection",
+		"session_id", session.SessionID,
+		"connection_id", incompleteConnection.ID,
+		"provider", session.Provider,
+		"tenant_id", session.TenantID,
+		"expires_at", session.ExpiresAt)
+
+	return nil
+}
+
+// encryptSessionBlob serializes and encrypts the session data stored in the incomplete connection.
+func (s *oauthService) encryptSessionBlob(session *types.OAuthSession, encryptedCredentials map[string]string) (string, error) {
 	// Build OAuth session data to store in encrypted_secret_data
 	oauthSessionData := map[string]interface{}{
 		"session_id":     session.SessionID,
@@ -190,10 +248,12 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 		"oauth_provider": string(session.Provider),
 		"credentials":    encryptedCredentials,
 	}
-
 	// Add non-sensitive metadata
 	for key, value := range session.Metadata {
 		oauthSessionData[key] = value
+	}
+	if session.BillingEntityID != nil {
+		oauthSessionData["billing_entity_id"] = *session.BillingEntityID
 	}
 
 	// Add sync config if provided
@@ -205,51 +265,27 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 	// This goes into encrypted_secret_data field
 	sessionJSON, err := json.Marshal(oauthSessionData)
 	if err != nil {
-		return ierr.WithError(err).
+		return "", ierr.WithError(err).
 			WithHint("Failed to serialize OAuth session data").
 			Mark(ierr.ErrInternal)
 	}
 
 	encryptedSessionJSON, err := s.encryptionService.Encrypt(string(sessionJSON))
 	if err != nil {
-		return ierr.WithError(err).
+		return "", ierr.WithError(err).
 			WithHint("Failed to encrypt OAuth session data").
 			Mark(ierr.ErrInternal)
 	}
+	return encryptedSessionJSON, nil
+}
 
-	providerType, err := oauthProviderToSecretProvider(session.Provider)
-	if err != nil {
-		return err
+func (s *oauthService) newIncompleteConnection(session *types.OAuthSession, providerType types.SecretProvider, encryptedSessionJSON string, encryptedCredentials map[string]string) *connection.Connection {
+	id := session.ConnectionID
+	if id == "" {
+		id = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION)
 	}
-
-	// Check if a published provider connection already exists for this tenant/environment
-	// GetByProvider automatically filters by ctx.tenant, ctx.env, provider, and status=published
-	existingConn, err := s.connectionRepo.GetByProvider(ctx, providerType)
-	if err != nil && !ierr.IsNotFound(err) {
-		// Real database error (not just "not found")
-		return ierr.WithError(err).
-			WithHint("Failed to check for existing connections").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// If connection exists, reject unless it's a pending OAuth session (has OAuthSessionData)
-	if existingConn != nil {
-		// Connection already exists
-		return ierr.NewError("connection already exists").
-			WithHintf("A published connection for provider %s already exists in this environment", providerType).
-			WithReportableDetails(map[string]interface{}{
-				"provider_type":          providerType,
-				"tenant_id":              session.TenantID,
-				"environment_id":         session.EnvironmentID,
-				"existing_connection_id": existingConn.ID,
-			}).
-			Mark(ierr.ErrAlreadyExists)
-	}
-
-	// Create incomplete connection
-	// Generate proper connection ID (NOT session_id)
-	incompleteConnection := &connection.Connection{
-		ID:           types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION),
+	return &connection.Connection{
+		ID:           id,
 		Name:         session.Name,
 		ProviderType: providerType, // Provider type for incomplete connection
 		// Store encrypted OAuth session data in OAuthSessionData field (temporary)
@@ -282,22 +318,6 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 			UpdatedBy: session.TenantID,
 		},
 	}
-
-	// Store in database
-	if err := s.connectionRepo.Create(ctx, incompleteConnection); err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to store OAuth session in database").
-			Mark(ierr.ErrDatabase)
-	}
-
-	s.logger.Info(ctx, "stored OAuth session as incomplete connection",
-		"session_id", session.SessionID,
-		"connection_id", incompleteConnection.ID,
-		"provider", session.Provider,
-		"tenant_id", session.TenantID,
-		"expires_at", session.ExpiresAt)
-
-	return nil
 }
 
 // GetOAuthSession retrieves and decrypts an OAuth session from connection's encrypted_secret_data
@@ -417,7 +437,7 @@ func (s *oauthService) GetOAuthSession(ctx context.Context, sessionID string) (*
 	sessionMetadata := make(map[string]string)
 	for key, value := range oauthSessionData {
 		// Skip internal keys
-		if key == "session_id" || key == "csrf_state" || key == "expires_at" || key == "credentials" || key == "sync_config" || key == "oauth_provider" {
+		if key == "session_id" || key == "csrf_state" || key == "expires_at" || key == "credentials" || key == "sync_config" || key == "oauth_provider" || key == "billing_entity_id" {
 			continue
 		}
 		if strValue, ok := value.(string); ok {
@@ -488,6 +508,11 @@ func (s *oauthService) GetOAuthSession(ctx context.Context, sessionID string) (*
 		}
 	}
 
+	var billingEntityID *string
+	if id, ok := oauthSessionData["billing_entity_id"].(string); ok && id != "" {
+		billingEntityID = &id
+	}
+
 	// Build session object
 	session := &types.OAuthSession{
 		SessionID:     sessionID,
@@ -500,6 +525,8 @@ func (s *oauthService) GetOAuthSession(ctx context.Context, sessionID string) (*
 		SyncConfig:    syncConfig,
 		CSRFState:     csrfState,
 		ExpiresAt:     expiresAt,
+
+		BillingEntityID: billingEntityID,
 	}
 
 	s.logger.Debug(ctx, "retrieved OAuth session from connection",
@@ -658,6 +685,10 @@ func (s *oauthService) ExchangeCodeForConnection(
 	session *types.OAuthSession,
 	code, providerAccountID string,
 ) (string, error) {
+	if session.BillingEntityID != nil {
+		ctx = types.SetBillingEntityID(ctx, *session.BillingEntityID)
+	}
+
 	switch session.Provider {
 	case types.OAuthProviderQuickBooks:
 		// Find the incomplete connection by session_id

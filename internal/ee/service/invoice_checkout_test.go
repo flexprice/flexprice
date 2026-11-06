@@ -25,11 +25,13 @@ func (s *InvoiceServiceSuite) checkoutParamsRazorpay() *dto.CheckoutParams {
 func (s *InvoiceServiceSuite) stubCheckoutProvider() *fakeCheckoutProvider {
 	provider := &fakeCheckoutProvider{}
 	s.service.(*invoiceService).IntegrationFactory.SetCheckoutProvider(provider)
+	seedCheckoutConnections(&s.BaseServiceTestSuite)
 	return provider
 }
 
 func (s *InvoiceServiceSuite) checkoutServiceWith(provider interfaces.CheckoutProvider) *checkoutSessionService {
 	s.service.(*invoiceService).IntegrationFactory.SetCheckoutProvider(provider)
+	seedCheckoutConnections(&s.BaseServiceTestSuite)
 	return NewCheckoutSessionService(s.service.(*invoiceService).ServiceParams).(*checkoutSessionService)
 }
 

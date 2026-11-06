@@ -15,6 +15,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
@@ -50,6 +51,7 @@ type WebhookHandler struct {
 	refundService                   interfaces.RefundService
 	db                              postgres.IClient
 	webhookService                  *flexwebhook.WebhookService
+	billingEntityService            service.BillingEntityService
 }
 
 // NewWebhookHandler creates a new webhook handler
@@ -68,6 +70,7 @@ func NewWebhookHandler(
 	refundService interfaces.RefundService,
 	db postgres.IClient,
 	webhookService *flexwebhook.WebhookService,
+	billingEntityService service.BillingEntityService,
 ) *WebhookHandler {
 	return &WebhookHandler{
 		config:                          cfg,
@@ -84,7 +87,56 @@ func NewWebhookHandler(
 		refundService:                   refundService,
 		db:                              db,
 		webhookService:                  webhookService,
+		billingEntityService:            billingEntityService,
 	}
+}
+
+// webhookConnectionQuery names the query parameter that pins a webhook to one connection.
+const webhookConnectionQuery = "connection"
+
+// webhookContext sets the URL's tenant and environment, then pins the connection named by ?connection= and its entity,
+// or the default entity when the URL names no connection.
+func (h *WebhookHandler) webhookContext(c *gin.Context, provider types.SecretProvider) (context.Context, error) {
+	ctx := types.SetTenantID(c.Request.Context(), c.Param("tenant_id"))
+	ctx = types.SetEnvironmentID(ctx, c.Param("environment_id"))
+
+	var err error
+	if connectionID := c.Query(webhookConnectionQuery); connectionID != "" {
+		ctx, err = h.billingEntityService.ScopeToConnection(ctx, connectionID, provider)
+	} else {
+		ctx, err = h.billingEntityService.ScopeToDefault(ctx)
+		// The old URL never read the tenant, so an unknown one is handled as before, with no entity.
+		if ierr.IsNotFound(err) {
+			h.logger.Info(ctx, "webhook tenant not found, handling without a billing entity",
+				"tenant_id", c.Param("tenant_id"),
+				"environment_id", c.Param("environment_id"))
+			err = nil
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	c.Request = c.Request.WithContext(ctx)
+	return ctx, nil
+}
+
+// rejectWebhookContext answers 404 for an unknown or mismatched connection in the URL and 500 otherwise.
+func (h *WebhookHandler) rejectWebhookContext(c *gin.Context, err error) {
+	ctx := c.Request.Context()
+	if ierr.IsNotFound(err) && c.Query(webhookConnectionQuery) != "" {
+		h.logger.Info(ctx, "webhook connection not found",
+			"tenant_id", c.Param("tenant_id"),
+			"environment_id", c.Param("environment_id"),
+			"connection_id", c.Query(webhookConnectionQuery))
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Webhook connection not found"})
+		return
+	}
+	h.logger.Error(ctx, "failed to resolve webhook context",
+		"error", err,
+		"tenant_id", c.Param("tenant_id"),
+		"environment_id", c.Param("environment_id"),
+		"connection_id", c.Query(webhookConnectionQuery))
+	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to process webhook"})
 }
 
 // GetDashboardURL handles the GET /webhooks/dashboard endpoint
@@ -188,10 +240,11 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 		return
 	}
 
-	// Set context with tenant and environment IDs
-	ctx := types.SetTenantID(c.Request.Context(), tenantID)
-	ctx = types.SetEnvironmentID(ctx, environmentID)
-	c.Request = c.Request.WithContext(ctx)
+	ctx, err := h.webhookContext(c, types.SecretProviderStripe)
+	if err != nil {
+		h.rejectWebhookContext(c, err)
+		return
+	}
 
 	// Get Stripe integration
 	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
@@ -283,6 +336,9 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	// Always return 200 OK to HubSpot to prevent retries
 	// We log errors internally but don't expose them to HubSpot
 	defer func() {
+		if c.IsAborted() {
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Webhook received",
 		})
@@ -325,10 +381,11 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
 
-	// Set context with tenant and environment IDs
-	ctx := types.SetTenantID(c.Request.Context(), tenantID)
-	ctx = types.SetEnvironmentID(ctx, environmentID)
-	c.Request = c.Request.WithContext(ctx)
+	ctx, err := h.webhookContext(c, types.SecretProviderHubSpot)
+	if err != nil {
+		h.rejectWebhookContext(c, err)
+		return
+	}
 
 	// Get HubSpot integration
 	hubspotIntegration, err := h.integrationFactory.GetHubSpotIntegration(ctx)
@@ -442,6 +499,9 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	// Always return 200 OK to Razorpay to prevent retries
 	// We log errors internally but don't expose them to Razorpay
 	defer func() {
+		if c.IsAborted() {
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Webhook received",
 		})
@@ -481,10 +541,11 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	// As per Razorpay docs: "The value for this header is unique per event"
 	eventID := c.GetHeader("x-razorpay-event-id")
 
-	// Set context with tenant and environment IDs
-	ctx := types.SetTenantID(c.Request.Context(), tenantID)
-	ctx = types.SetEnvironmentID(ctx, environmentID)
-	c.Request = c.Request.WithContext(ctx)
+	ctx, err := h.webhookContext(c, types.SecretProviderRazorpay)
+	if err != nil {
+		h.rejectWebhookContext(c, err)
+		return
+	}
 
 	// Get Razorpay integration
 	razorpayIntegration, err := h.integrationFactory.GetRazorpayIntegration(ctx)
@@ -573,10 +634,11 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 		return
 	}
 
-	// Set context with tenant and environment IDs
-	ctx := types.SetTenantID(c.Request.Context(), tenantID)
-	ctx = types.SetEnvironmentID(ctx, environmentID)
-	c.Request = c.Request.WithContext(ctx)
+	ctx, err := h.webhookContext(c, types.SecretProviderChargebee)
+	if err != nil {
+		h.rejectWebhookContext(c, err)
+		return
+	}
 
 	// Get Chargebee integration
 	chargebeeIntegration, err := h.integrationFactory.GetChargebeeIntegration(ctx)
@@ -750,10 +812,11 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 		"environment_id", environmentID,
 		"body_length", len(body))
 
-	// Set context with tenant and environment IDs
-	ctx := types.SetTenantID(c.Request.Context(), tenantID)
-	ctx = types.SetEnvironmentID(ctx, environmentID)
-	c.Request = c.Request.WithContext(ctx)
+	ctx, err := h.webhookContext(c, types.SecretProviderQuickBooks)
+	if err != nil {
+		h.rejectWebhookContext(c, err)
+		return
+	}
 
 	// Get QuickBooks integration
 	qbIntegration, err := h.integrationFactory.GetQuickBooksIntegration(ctx)
@@ -839,10 +902,11 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 	// Get X-API-KEY from headers for authentication
 	providedAPIKey := c.GetHeader("X-API-KEY")
 
-	// Set context with tenant and environment IDs
-	ctx := types.SetTenantID(c.Request.Context(), tenantID)
-	ctx = types.SetEnvironmentID(ctx, environmentID)
-	c.Request = c.Request.WithContext(ctx)
+	ctx, err := h.webhookContext(c, types.SecretProviderNomod)
+	if err != nil {
+		h.rejectWebhookContext(c, err)
+		return
+	}
 
 	// Get Nomod integration
 	nomodIntegration, err := h.integrationFactory.GetNomodIntegration(ctx)
@@ -993,10 +1057,11 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 		return
 	}
 
-	// Set context with tenant and environment IDs
-	ctx := types.SetTenantID(c.Request.Context(), tenantID)
-	ctx = types.SetEnvironmentID(ctx, environmentID)
-	c.Request = c.Request.WithContext(ctx)
+	ctx, err := h.webhookContext(c, types.SecretProviderMoyasar)
+	if err != nil {
+		h.rejectWebhookContext(c, err)
+		return
+	}
 
 	// Parse webhook payload first to get the secret_token
 	var event moyasarwebhook.MoyasarWebhookEvent
@@ -1140,9 +1205,11 @@ func (h *WebhookHandler) HandleZohoBooksWebhook(c *gin.Context) {
 		return
 	}
 
-	ctx := types.SetTenantID(c.Request.Context(), tenantID)
-	ctx = types.SetEnvironmentID(ctx, environmentID)
-	c.Request = c.Request.WithContext(ctx)
+	ctx, err := h.webhookContext(c, types.SecretProviderZohoBooks)
+	if err != nil {
+		h.rejectWebhookContext(c, err)
+		return
+	}
 
 	zohoIntegration, err := h.integrationFactory.GetZohoBooksIntegration(ctx)
 	if err != nil || zohoIntegration == nil {
@@ -1238,10 +1305,12 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 		return
 	}
 
-	// Set context with tenant and environment IDs
-	ctx := types.SetTenantID(c.Request.Context(), tenantID)
-	ctx = types.SetEnvironmentID(ctx, environmentID)
-	c.Request = c.Request.WithContext(ctx)
+	ctx, err := h.webhookContext(c, types.SecretProviderPaddle)
+	if err != nil {
+		h.rejectWebhookContext(c, err)
+		handled = true
+		return
+	}
 
 	paddleIntegration, err := h.integrationFactory.GetPaddleIntegration(ctx)
 	if err != nil {
@@ -1325,9 +1394,11 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		return
 	}
 
-	ctx := types.SetTenantID(c.Request.Context(), tenantID)
-	ctx = types.SetEnvironmentID(ctx, environmentID)
-	c.Request = c.Request.WithContext(ctx)
+	ctx, err := h.webhookContext(c, types.SecretProviderWhop)
+	if err != nil {
+		h.rejectWebhookContext(c, err)
+		return
+	}
 
 	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
 	if err != nil {
