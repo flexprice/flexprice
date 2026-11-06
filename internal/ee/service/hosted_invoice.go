@@ -208,7 +208,7 @@ func (s *hostedInvoiceService) payGateway(ctx context.Context, inv *dto.InvoiceR
 		return "", false, nil
 	}
 
-	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return "", false, err
 	}

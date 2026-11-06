@@ -1117,7 +1117,7 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 		return nil, ierr.NewError("request and invoice are required").
 			Mark(ierr.ErrValidation)
 	}
-	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, req.Invoice.CustomerID)
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, req.Invoice.ID)
 	if err != nil {
 		return nil, err
 	}
