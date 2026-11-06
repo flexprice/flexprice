@@ -15,6 +15,14 @@ func TestValidateZohoEndpoint(t *testing.T) {
 		{"zoho in api domain", "https://www.zohoapis.in", false},
 		{"zoho com au", "https://accounts.zoho.com.au", false},
 		{"bare zoho domain", "https://zoho.com", false},
+		{"zoho ca api domain", "https://www.zohoapis.ca", false},
+		{"zoho ae api domain", "https://www.zohoapis.ae", false},
+		{"zoho ae accounts", "https://accounts.zoho.ae", false},
+		{"lookalike ae accounts rejected", "https://evilzoho.ae", true},
+		{"zoho ca api domain no www", "https://zohoapis.ca", false},
+		{"lookalike ca rejected", "https://evilzohoapis.ca", true},
+		{"lookalike ae rejected", "https://evilzohoapis.ae", true},
+		{"ca suffix on attacker host rejected", "https://x.zohoapis.ca.evil.com", true},
 
 		// A host chosen at connection creation would otherwise receive this
 		// connection's client_id and client_secret on every token refresh.

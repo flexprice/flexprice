@@ -333,6 +333,42 @@ func TestCreateConnection_NilIntegrationFactory_StorageConnectionStillCreated(t 
 	require.Equal(t, resp.ID, stored.ID)
 }
 
+func TestCreateConnection_QuickBooksMetadataValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		md      types.QuickBooksConnectionMetadata
+		wantErr bool
+	}{
+		{"valid", types.QuickBooksConnectionMetadata{ClientID: "c", ClientSecret: "s", RealmID: "9130350000000000", Environment: "sandbox"}, false},
+		{"bad realm", types.QuickBooksConnectionMetadata{ClientID: "c", ClientSecret: "s", RealmID: "../x", Environment: "sandbox"}, true},
+		{"bad environment", types.QuickBooksConnectionMetadata{ClientID: "c", ClientSecret: "s", RealmID: "123", Environment: "staging"}, true},
+		{"missing client id", types.QuickBooksConnectionMetadata{ClientSecret: "s", RealmID: "123", Environment: "sandbox"}, true},
+		{"missing client secret", types.QuickBooksConnectionMetadata{ClientID: "c", RealmID: "123", Environment: "sandbox"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, connRepo := newConnectionServiceForTest(t)
+			ctx := testutil.SetupContext()
+			md := tt.md
+			resp, err := svc.CreateConnection(ctx, dto.CreateConnectionRequest{
+				Name:                "QuickBooks",
+				ProviderType:        types.SecretProviderQuickBooks,
+				EncryptedSecretData: types.ConnectionMetadata{QuickBooks: &md},
+			})
+			if tt.wantErr {
+				require.Error(t, err)
+				require.True(t, ierr.IsValidation(err))
+				require.Nil(t, resp)
+				return
+			}
+			require.NoError(t, err)
+			stored, err := connRepo.Get(ctx, resp.ID)
+			require.NoError(t, err)
+			require.Equal(t, resp.ID, stored.ID)
+		})
+	}
+}
+
 // TestCreateConnection_NonStorageProvider_NoValidationAttempted proves the new
 // post-create validation block only triggers for S3/GCS providers: a Stripe connection
 // created with a nil IntegrationFactory must succeed exactly as before, confirming the
