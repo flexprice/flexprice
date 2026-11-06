@@ -2409,15 +2409,12 @@ func (s *meterUsageService) ListUsageLineItems(ctx context.Context, sub *subscri
 	if sub.SubscriptionType == types.SubscriptionTypeInherited && lo.FromPtr(sub.ParentSubscriptionID) != "" {
 		ownerID = lo.FromPtr(sub.ParentSubscriptionID)
 	}
+	if !lifetime {
+		return listActiveLineItems(ctx, s.SubscriptionLineItemRepo, ownerID, from)
+	}
 	filter := types.NewNoLimitSubscriptionLineItemFilter()
 	filter.SubscriptionIDs = []string{ownerID}
-	if lifetime {
-		filter.ActiveFilter = false
-		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-	} else {
-		filter.ActiveFilter = true
-		filter.CurrentPeriodStart = &from
-	}
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	return s.SubscriptionLineItemRepo.List(ctx, filter)
 }
 
