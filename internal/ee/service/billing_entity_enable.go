@@ -79,7 +79,7 @@ func (s *billingEntityService) PrepareEnable(ctx context.Context) error {
 		if err := s.rejectExternalTaxEngine(txCtx); err != nil {
 			return err
 		}
-		def, err := s.getOrCreateDefault(txCtx)
+		def, err := s.createDefault(txCtx)
 		if err != nil {
 			return err
 		}
@@ -149,7 +149,7 @@ func (s *billingEntityService) CompleteEnable(ctx context.Context) error {
 		}
 		billingDetails := billingentity.BillingDetailsFromTenant(t.BillingDetails)
 
-		def, err := s.getOrCreateDefault(txCtx)
+		def, err := s.BillingEntityRepo.GetDefault(txCtx)
 		if err != nil {
 			return err
 		}
