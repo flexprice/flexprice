@@ -108,7 +108,8 @@ type PaymentProviderConfig struct {
 // paymentDefaultSettleTimeout covers gateways slower than the global default:
 // Razorpay test-mode mandate debits capture up to a few minutes after submission.
 var paymentDefaultSettleTimeout = map[string]time.Duration{
-	"razorpay": 10 * time.Minute,
+	"razorpay":  10 * time.Minute,
+	"chargebee": 5 * time.Minute,
 }
 
 // paymentFixedCustomer is the same in every region; its cards or mandates are saved by hand.
@@ -214,7 +215,7 @@ func LoadConfig() (*Config, error) {
 		APIKey:              os.Getenv("E2EPROBE_API_KEY"),
 		Enabled:             getBool("E2EPROBE_ENABLED", true),
 		DryRun:              getBool("E2EPROBE_DRY_RUN", false),
-		EventIngestRate:     getInt(&warnings, "E2EPROBE_EVENT_INGEST_RATE", 1),
+		EventIngestRate:     getInt(&warnings, "E2EPROBE_EVENT_INGEST_RATE", 5),
 		EventIngestSeed:     getInt64(&warnings, "E2EPROBE_EVENT_INGEST_SEED", 42),
 		ListenerPort:        getInt(&warnings, "E2EPROBE_LISTENER_PORT", 8765),
 		TenantID:            os.Getenv("E2EPROBE_TENANT_ID"),

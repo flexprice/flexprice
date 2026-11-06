@@ -306,6 +306,7 @@ func (s *checkoutSessionService) Cancel(ctx context.Context, id string) (*dto.Ch
 			Mark(ierr.ErrValidation)
 	}
 
+	ctx = types.WithForceWriter(ctx)
 	session, err := s.CheckoutSessionRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
