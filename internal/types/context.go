@@ -270,6 +270,15 @@ func RegisterPostCommit(ctx context.Context, fn func()) bool {
 	return true
 }
 
+// AfterCommit runs fn once the surrounding transaction commits, or now when
+// there is none. fn receives ctx without the finished transaction.
+func AfterCommit(ctx context.Context, fn func(ctx context.Context)) {
+	detached := WithoutDBTransaction(ctx)
+	if !RegisterPostCommit(ctx, func() { fn(detached) }) {
+		fn(detached)
+	}
+}
+
 // RunPostCommitHooks closes registration and runs what was queued.
 func RunPostCommitHooks(ctx context.Context) {
 	for _, fn := range closePostCommitHooks(ctx) {
