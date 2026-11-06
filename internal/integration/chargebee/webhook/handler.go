@@ -10,7 +10,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	"github.com/flexprice/flexprice/internal/integration/payments"
-	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -205,9 +204,6 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *ChargebeeWebho
 	if session.CheckoutStatus != types.CheckoutStatusPending {
 		return nil
 	}
-	if inScope, err := h.paymentInScope(ctx, flexpricePaymentID, services); err != nil || !inScope {
-		return nil
-	}
 
 	reason := fmt.Errorf("chargebee payment failed for transaction %s", content.Transaction.ID)
 	if err := services.CheckoutSessionService.CleanupCheckoutSession(ctx, session.ID, reason); err != nil {
@@ -239,13 +235,6 @@ func (h *Handler) handleCheckoutSessionForPayment(
 	}
 	if session == nil {
 		return false, nil
-	}
-	inScope, err := h.paymentInScope(ctx, flexpricePaymentID, services)
-	if err != nil {
-		return false, err
-	}
-	if !inScope {
-		return true, nil
 	}
 
 	switch session.CheckoutStatus {
@@ -333,13 +322,6 @@ func (h *Handler) settleLinkedPayment(
 	if _, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID); err != nil {
 		return false, nil
 	}
-	inScope, err := h.paymentInScope(ctx, flexpricePaymentID, services)
-	if err != nil {
-		return false, err
-	}
-	if !inScope {
-		return true, nil
-	}
 
 	// Settlement books the payment's own amount and does not check it against
 	// transaction.Amount: the hosted page charges exactly what the link was created
@@ -361,17 +343,6 @@ func (h *Handler) settleLinkedPayment(
 		"flexprice_payment_id", flexpricePaymentID,
 		"chargebee_transaction_id", chargebeeTransactionID)
 	return true, nil
-}
-
-// paymentInScope logs a lookup failure; callers handle it as they handle a failed session lookup.
-func (h *Handler) paymentInScope(ctx context.Context, paymentID string, services *ServiceDependencies) (bool, error) {
-	ok, err := webhookscope.Payment(ctx, services.BillingEntityScope, services.PaymentService, services.InvoiceService, h.logger, paymentID)
-	if err != nil {
-		h.logger.Error(ctx, "failed to read the billing entity of the webhook payment",
-			"error", err,
-			"flexprice_payment_id", paymentID)
-	}
-	return ok, err
 }
 
 // findCheckoutSessionForPayment returns the session that owns this payment, in any

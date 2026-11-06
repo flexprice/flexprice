@@ -337,25 +337,6 @@ func (s *billingEntityService) ScopeToPayment(ctx context.Context, p *payment.Pa
 	return ctx, nil
 }
 
-func (s *billingEntityService) InScope(ctx context.Context, customerID string) (bool, error) {
-	want := types.GetBillingEntityID(ctx)
-	if want == "" {
-		return true, nil
-	}
-	if off, err := s.entitiesOff(ctx); err != nil || off {
-		return off, err
-	}
-	cust, err := s.CustomerRepo.Get(ctx, customerID)
-	if err != nil {
-		return false, err
-	}
-	entity, err := s.EffectiveEntity(ctx, cust)
-	if err != nil {
-		return false, err
-	}
-	return entity != nil && entity.ID == want, nil
-}
-
 func (s *billingEntityService) RequireProviderConnected(ctx context.Context, provider types.SecretProvider) error {
 	return requireProviderConnected(ctx, s.ServiceParams, provider)
 }

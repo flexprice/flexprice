@@ -251,3 +251,9 @@ func ValidatePersons(persons []*ContactPerson) error {
 	}
 	return nil
 }
+
+// InBillingEntity reports whether the entity bills the customer; an empty entity matches every customer.
+// A customer the enable backfill has not reached belongs to the default, the only entity until enable completes.
+func (c *Customer) InBillingEntity(entityID string) bool {
+	return entityID == "" || c.BillingEntityID == nil || *c.BillingEntityID == entityID
+}

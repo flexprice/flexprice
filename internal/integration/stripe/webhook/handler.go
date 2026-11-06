@@ -18,7 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
-	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -139,7 +138,7 @@ func (h *Handler) handleCustomerCreated(ctx context.Context, event *stripeapi.Ev
 	)
 
 	// Create customer in our system from Stripe data
-	err = h.customerSvc.CreateCustomerFromStripe(ctx, &stripeCustomer, environmentID, services.CustomerService, services.BillingEntityScope)
+	err = h.customerSvc.CreateCustomerFromStripe(ctx, &stripeCustomer, environmentID, services.CustomerService)
 	if err != nil {
 		h.logger.Error(ctx, "failed to create customer from Stripe webhook, skipping event",
 			"error", err,
@@ -200,11 +199,6 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 		h.logger.Info(ctx, "found FlexPrice payment ID in metadata, checking payment status",
 			"payment_intent_id", paymentIntent.ID,
 			"flexprice_payment_id", flexpricePaymentID)
-
-		inScope, err := h.paymentInScope(ctx, flexpricePaymentID, event.ID, services)
-		if err != nil || !inScope {
-			return err
-		}
 
 		// Off-session charges never raise checkout.session.completed, so this is the only
 		// webhook that completes their session, or refunds them if it already ended.
@@ -286,10 +280,6 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 	h.logger.Info(ctx, "processing FlexPrice payment failure",
 		"payment_intent_id", paymentIntentID,
 		"flexprice_payment_id", flexpricePaymentID)
-
-	if inScope, err := h.paymentInScope(ctx, flexpricePaymentID, event.ID, services); err != nil || !inScope {
-		return nil
-	}
 
 	// Get payment record by flexprice_payment_id
 	payment, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
@@ -400,18 +390,6 @@ func (h *Handler) handleSetupIntentSucceeded(ctx context.Context, event *stripea
 		return nil
 	}
 
-	inScope, err := webhookscope.Customer(ctx, services.BillingEntityScope, h.logger, customerID)
-	if err != nil {
-		h.logger.Error(ctx, "failed to read the billing entity of the setup intent's customer, skipping event",
-			"error", err,
-			"customer_id", customerID,
-			"event_id", event.ID)
-		return nil
-	}
-	if !inScope {
-		return nil
-	}
-
 	// Set the payment method as default
 	paymentMethodID := setupIntent.PaymentMethod.ID
 	h.logger.Info(ctx, "attempting to set payment method as default",
@@ -440,18 +418,6 @@ func (h *Handler) handleSetupIntentSucceeded(ctx context.Context, event *stripea
 }
 
 // Helper methods
-
-// paymentInScope logs a lookup failure; callers decide whether it is retried.
-func (h *Handler) paymentInScope(ctx context.Context, paymentID, eventID string, services *ServiceDependencies) (bool, error) {
-	ok, err := webhookscope.Payment(ctx, services.BillingEntityScope, services.PaymentService, services.InvoiceService, h.logger, paymentID)
-	if err != nil {
-		h.logger.Error(ctx, "failed to read the billing entity of the webhook payment",
-			"error", err,
-			"flexprice_payment_id", paymentID,
-			"event_id", eventID)
-	}
-	return ok, err
-}
 
 // getConnection retrieves the Stripe connection for the given environment
 func (h *Handler) getConnection(ctx context.Context) (*connection.Connection, error) {
@@ -986,11 +952,6 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	if flexpricePaymentID == "" {
 		h.logger.Info(ctx, "no flexprice_payment_id found in checkout session metadata", "event_id", event.ID)
 		return nil
-	}
-
-	inScope, err := h.paymentInScope(ctx, flexpricePaymentID, event.ID, services)
-	if err != nil || !inScope {
-		return err
 	}
 
 	piID := ""

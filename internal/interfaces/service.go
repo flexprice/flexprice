@@ -26,8 +26,6 @@ type BillingEntityScope interface {
 	ScopeToPayment(ctx context.Context, p *payment.Payment) (context.Context, error)
 	// ScopeToConnection pins the published connection and its owner entity in ctx; a removed or another provider's connection is not found.
 	ScopeToConnection(ctx context.Context, connectionID string, provider types.SecretProvider) (context.Context, error)
-	// InScope reports whether the customer belongs to the entity in ctx; true when off or ctx has no entity.
-	InScope(ctx context.Context, customerID string) (bool, error)
 	// RequireProviderConnected returns a validation error when the entity in ctx has no connection for the provider.
 	RequireProviderConnected(ctx context.Context, provider types.SecretProvider) error
 }
@@ -352,7 +350,6 @@ type ServiceDependencies struct {
 	CreditAdjustmentService         CreditAdjustmentService
 	CheckoutSessionService          CheckoutSessionService
 	RefundService                   RefundService
-	BillingEntityScope              BillingEntityScope
 	DB                              postgres.IClient
 }
 

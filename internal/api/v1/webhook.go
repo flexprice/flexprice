@@ -308,7 +308,6 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
 		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
-		BillingEntityScope:              h.billingEntityService,
 	}
 
 	// Handle the webhook event using new integration
@@ -482,7 +481,6 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
 		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
-		BillingEntityScope:              h.billingEntityService,
 	}
 
 	// Handle the webhook events
@@ -589,7 +587,6 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 		CheckoutSessionService:          h.checkoutSessionService,
 		RefundService:                   h.refundService,
 		DB:                              h.db,
-		BillingEntityScope:              h.billingEntityService,
 	}
 
 	// Handle the webhook event
@@ -753,7 +750,6 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 		CheckoutSessionService:          h.checkoutSessionService,
 		RefundService:                   h.refundService,
 		DB:                              h.db,
-		BillingEntityScope:              h.billingEntityService,
 	}
 
 	// Handle the event
@@ -1005,7 +1001,6 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 		InvoiceService:         h.invoiceService,
 		PlanService:            h.planService,
 		CheckoutSessionService: h.checkoutSessionService,
-		BillingEntityScope:     h.billingEntityService,
 	}
 
 	// Handle the event
@@ -1172,7 +1167,6 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
 		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
-		BillingEntityScope:              h.billingEntityService,
 	}
 
 	// Handle the webhook event
@@ -1360,7 +1354,6 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
 		DB:                              h.db,
-		BillingEntityScope:              h.billingEntityService,
 	}
 
 	err = paddleIntegration.WebhookHandler.HandleWebhookEvent(ctx, payload.EventType, body, environmentID, serviceDeps)
@@ -1497,7 +1490,6 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
 		DB:                              h.db,
-		BillingEntityScope:              h.billingEntityService,
 	}
 
 	if err := whopIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, serviceDeps); err != nil {
