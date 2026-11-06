@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 )
 
 // awsMarketplaceRoleVerificationDuration is how long the STS session used to verify a role ARN at
@@ -943,22 +944,28 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		return nil, err
 	}
 
-	if err := req.SyncConfig.ValidateForProvider(conn.ProviderType); err != nil {
-		return nil, err
-	}
-
-	// Update simple fields if provided
-	if req.Name != "" {
+	changed := false
+	if req.Name != "" && req.Name != conn.Name {
 		conn.Name = req.Name
+		changed = true
 	}
 
-	// Update metadata if provided
 	if req.Metadata != nil {
 		conn.Metadata = req.Metadata
+		changed = true
 	}
 
 	if req.SyncConfig != nil {
-		conn.SyncConfig = req.SyncConfig
+		merged := &types.SyncConfig{}
+		syncChanged, err := utils.MergeJSON(conn.SyncConfig, req.SyncConfig, merged)
+		if err != nil {
+			return nil, err
+		}
+		if err := merged.ValidateForProvider(conn.ProviderType); err != nil {
+			return nil, err
+		}
+		conn.SyncConfig = merged
+		changed = changed || syncChanged
 	}
 
 	// Re-apply to block cross-tenant redirect.
@@ -966,140 +973,22 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		return nil, err
 	}
 
-	// Update encrypted_secret_data if provided (e.g., webhook_verifier_token)
-	// Only process if there's actual provider-specific data (not just an empty wrapper struct)
-	if req.EncryptedSecretData != nil && req.EncryptedSecretData.QuickBooks != nil {
-		// Encrypt and merge the new secret data with existing data
-		encryptedMetadata, err := s.encryptMetadata(*req.EncryptedSecretData, conn.ProviderType)
-		if err != nil {
-			s.Logger.Error(ctx, "failed to encrypt connection metadata during update", "error", err, "connection_id", id)
-			return nil, err
-		}
-
-		// Merge with existing encrypted_secret_data for QuickBooks
-		// This ensures we don't overwrite existing tokens (access_token, refresh_token, etc.)
-		if conn.ProviderType == types.SecretProviderQuickBooks {
-			existingData := conn.EncryptedSecretData
-			if existingData.QuickBooks == nil {
-				existingData.QuickBooks = &types.QuickBooksConnectionMetadata{}
-			}
-			if encryptedMetadata.QuickBooks != nil && encryptedMetadata.QuickBooks.WebhookVerifierToken != "" {
-				// Only update webhook_verifier_token, don't overwrite access_token, refresh_token, etc.
-				existingData.QuickBooks.WebhookVerifierToken = encryptedMetadata.QuickBooks.WebhookVerifierToken
-			}
-			conn.EncryptedSecretData = existingData
-		}
-	}
-
-	// Accept flat encrypted_secret_data (create-style keys) for providers that support
-	// partial secret updates below.
 	if req.EncryptedSecretData == nil && len(req.FlatEncryptedSecretData) > 0 {
 		structured := dto.ConvertFlatMetadataToStructured(req.FlatEncryptedSecretData, conn.ProviderType)
 		req.EncryptedSecretData = &structured
 	}
 
-	// Zoho Books: merge webhook_secret only (plaintext from API → encrypted at rest)
-	if req.EncryptedSecretData != nil && req.EncryptedSecretData.ZohoBooks != nil && req.EncryptedSecretData.ZohoBooks.WebhookSecret != "" {
-		if conn.ProviderType != types.SecretProviderZohoBooks {
-			return nil, ierr.NewError("webhook_secret update is only valid for zoho_books connections").
-				Mark(ierr.ErrValidation)
+	if req.EncryptedSecretData != nil {
+		secretsChanged, err := s.mergeSecrets(conn, *req.EncryptedSecretData)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to merge connection secrets during update", "error", err, "connection_id", id)
+			return nil, err
 		}
-		if conn.EncryptedSecretData.ZohoBooks == nil {
-			return nil, ierr.NewError("Zoho Books connection metadata is missing").
-				Mark(ierr.ErrValidation)
-		}
-		encWS, encErr := s.encryptionService.Encrypt(req.EncryptedSecretData.ZohoBooks.WebhookSecret)
-		if encErr != nil {
-			s.Logger.Error(ctx, "failed to encrypt Zoho webhook secret", "error", encErr, "connection_id", id)
-			return nil, encErr
-		}
-		conn.EncryptedSecretData.ZohoBooks.WebhookSecret = encWS
+		changed = changed || secretsChanged
 	}
 
-	// Whop: merge webhook_secret only (plaintext from API → encrypted at rest)
-	if req.EncryptedSecretData != nil && req.EncryptedSecretData.Whop != nil && req.EncryptedSecretData.Whop.WebhookSecret != "" {
-		if conn.ProviderType != types.SecretProviderWhop {
-			return nil, ierr.NewError("webhook_secret update is only valid for whop connections").
-				Mark(ierr.ErrValidation)
-		}
-		if conn.EncryptedSecretData.Whop == nil {
-			return nil, ierr.NewError("Whop connection metadata is missing").
-				Mark(ierr.ErrValidation)
-		}
-		encWS, encErr := s.encryptionService.Encrypt(req.EncryptedSecretData.Whop.WebhookSecret)
-		if encErr != nil {
-			s.Logger.Error(ctx, "failed to encrypt Whop webhook secret", "error", encErr, "connection_id", id)
-			return nil, encErr
-		}
-		conn.EncryptedSecretData.Whop.WebhookSecret = encWS
-	}
-
-	// Stripe: merge only the keys provided.
-	if req.EncryptedSecretData != nil && req.EncryptedSecretData.Stripe != nil {
-		if conn.ProviderType != types.SecretProviderStripe {
-			return nil, ierr.NewError("stripe secret update is only valid for stripe connections").
-				Mark(ierr.ErrValidation)
-		}
-		if conn.EncryptedSecretData.Stripe == nil {
-			conn.EncryptedSecretData.Stripe = &types.StripeConnectionMetadata{}
-		}
-		stored := conn.EncryptedSecretData.Stripe
-		incoming := req.EncryptedSecretData.Stripe
-		for _, field := range []struct {
-			value  string
-			target *string
-		}{
-			{incoming.SecretKey, &stored.SecretKey},
-			{incoming.PublishableKey, &stored.PublishableKey},
-			{incoming.WebhookSecret, &stored.WebhookSecret},
-		} {
-			if field.value == "" {
-				continue
-			}
-			encrypted, encErr := s.encryptionService.Encrypt(field.value)
-			if encErr != nil {
-				s.Logger.Error(ctx, "failed to encrypt Stripe secret", "error", encErr, "connection_id", id)
-				return nil, encErr
-			}
-			*field.target = encrypted
-		}
-		if incoming.AccountID != "" {
-			stored.AccountID = incoming.AccountID
-		}
-	}
-
-	// Chargebee: merge webhook_username and webhook_password so legacy
-	// connections predating the mandatory-creds-at-create check can migrate
-	// without delete-and-recreate. Both fields must be provided together — a
-	// mismatched pair would leave the connection in a broken state that the
-	// webhook handler rejects with 401.
-	if req.EncryptedSecretData != nil && req.EncryptedSecretData.Chargebee != nil &&
-		(req.EncryptedSecretData.Chargebee.WebhookUsername != "" || req.EncryptedSecretData.Chargebee.WebhookPassword != "") {
-		if conn.ProviderType != types.SecretProviderChargebee {
-			return nil, ierr.NewError("chargebee webhook credential update is only valid for chargebee connections").
-				Mark(ierr.ErrValidation)
-		}
-		if req.EncryptedSecretData.Chargebee.WebhookUsername == "" || req.EncryptedSecretData.Chargebee.WebhookPassword == "" {
-			return nil, ierr.NewError("webhook_username and webhook_password must be provided together").
-				WithHint("Update both webhook_username and webhook_password in the same request").
-				Mark(ierr.ErrValidation)
-		}
-		if conn.EncryptedSecretData.Chargebee == nil {
-			return nil, ierr.NewError("Chargebee connection metadata is missing").
-				Mark(ierr.ErrValidation)
-		}
-		encUser, encErr := s.encryptionService.Encrypt(req.EncryptedSecretData.Chargebee.WebhookUsername)
-		if encErr != nil {
-			s.Logger.Error(ctx, "failed to encrypt Chargebee webhook username", "error", encErr, "connection_id", id)
-			return nil, encErr
-		}
-		encPass, encErr := s.encryptionService.Encrypt(req.EncryptedSecretData.Chargebee.WebhookPassword)
-		if encErr != nil {
-			s.Logger.Error(ctx, "failed to encrypt Chargebee webhook password", "error", encErr, "connection_id", id)
-			return nil, encErr
-		}
-		conn.EncryptedSecretData.Chargebee.WebhookUsername = encUser
-		conn.EncryptedSecretData.Chargebee.WebhookPassword = encPass
+	if !changed {
+		return dto.ToConnectionResponse(conn), nil
 	}
 
 	conn.UpdatedAt = clock.Now()
@@ -1118,6 +1007,44 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 
 	s.Logger.Info(ctx, "connection updated successfully", "connection_id", conn.ID)
 	return dto.ToConnectionResponse(conn), nil
+}
+
+// mergeSecrets encrypts the provided secret fields and overlays them on the connection's stored secrets.
+func (s *connectionService) mergeSecrets(conn *connection.Connection, update types.ConnectionMetadata) (bool, error) {
+	if cb := update.Chargebee; cb != nil && (cb.WebhookUsername == "") != (cb.WebhookPassword == "") {
+		return false, ierr.NewError("webhook_username and webhook_password must be provided together").
+			WithHint("Update both webhook_username and webhook_password in the same request").
+			Mark(ierr.ErrValidation)
+	}
+
+	key := string(conn.ProviderType)
+	if conn.ProviderType == types.SecretProviderGCS {
+		key = "generic"
+	}
+	fields, err := utils.ToJSONMap(update)
+	if err != nil {
+		return false, err
+	}
+	for k := range fields {
+		if k != key && k != "settings" {
+			return false, ierr.NewErrorf("%s secrets cannot be set on a %s connection", k, conn.ProviderType).
+				WithHintf("Send encrypted_secret_data.%s for a %s connection", key, conn.ProviderType).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if _, ok := fields[key]; ok {
+		if update, err = s.encryptMetadata(update, conn.ProviderType); err != nil {
+			return false, err
+		}
+	}
+
+	var merged types.ConnectionMetadata
+	changed, err := utils.MergeJSON(conn.EncryptedSecretData, update, &merged)
+	if err != nil {
+		return false, err
+	}
+	conn.EncryptedSecretData = merged
+	return changed, nil
 }
 
 func (s *connectionService) DeleteConnection(ctx context.Context, id string) error {

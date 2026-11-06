@@ -662,3 +662,107 @@ func TestUpdateConnection_StripeSecrets_RejectedForOtherProviders(t *testing.T) 
 	})
 	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
 }
+
+func TestUpdateConnection_SecretsAndSyncConfigMerge(t *testing.T) {
+	svc, connRepo := newConnectionServiceForTest(t)
+	ctx := testutil.SetupContext()
+	encSvc, err := security.NewEncryptionService(&config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}, logger.NewNoopLogger())
+	require.NoError(t, err)
+	decrypt := func(v string) string {
+		out, err := encSvc.Decrypt(v)
+		require.NoError(t, err)
+		return out
+	}
+
+	s3Conn, err := svc.CreateConnection(ctx, dto.CreateConnectionRequest{
+		Name:         "Customer S3",
+		ProviderType: types.SecretProviderS3,
+		SyncConfig:   &types.SyncConfig{Storage: &types.StorageExportConfig{Bucket: "bucket", Region: "ap-south-1"}},
+		EncryptedSecretData: types.ConnectionMetadata{
+			S3: &types.S3ConnectionMetadata{AWSAccessKeyID: "AKIAOLD", AWSSecretAccessKey: "old-secret"},
+		},
+	})
+	require.NoError(t, err)
+
+	stripeConn, err := svc.CreateConnection(ctx, dto.CreateConnectionRequest{
+		Name:         "Stripe",
+		ProviderType: types.SecretProviderStripe,
+		SyncConfig: &types.SyncConfig{
+			Customer: &types.EntitySyncConfig{Inbound: true, Outbound: true},
+			Invoice:  &types.EntitySyncConfig{Outbound: true},
+		},
+		EncryptedSecretData: types.ConnectionMetadata{
+			Stripe: &types.StripeConnectionMetadata{PublishableKey: "pk_old", SecretKey: "sk_old", WebhookSecret: "wh_old"},
+		},
+	})
+	require.NoError(t, err)
+
+	t.Run("s3 keys are rotated and the bucket is kept", func(t *testing.T) {
+		_, err := svc.UpdateConnection(ctx, s3Conn.ID, dto.UpdateConnectionRequest{
+			EncryptedSecretData: &types.ConnectionMetadata{
+				S3: &types.S3ConnectionMetadata{AWSAccessKeyID: "AKIANEW", AWSSecretAccessKey: "new-secret"},
+			},
+		})
+		require.NoError(t, err)
+
+		stored, err := connRepo.Get(ctx, s3Conn.ID)
+		require.NoError(t, err)
+		require.Equal(t, "AKIANEW", decrypt(stored.EncryptedSecretData.S3.AWSAccessKeyID))
+		require.Equal(t, "new-secret", decrypt(stored.EncryptedSecretData.S3.AWSSecretAccessKey))
+		require.Equal(t, "bucket", stored.SyncConfig.Storage.Bucket)
+	})
+
+	t.Run("partial secret update keeps the other fields", func(t *testing.T) {
+		_, err := svc.UpdateConnection(ctx, stripeConn.ID, dto.UpdateConnectionRequest{
+			EncryptedSecretData: &types.ConnectionMetadata{
+				Stripe: &types.StripeConnectionMetadata{WebhookSecret: "wh_new"},
+			},
+		})
+		require.NoError(t, err)
+
+		stored, err := connRepo.Get(ctx, stripeConn.ID)
+		require.NoError(t, err)
+		require.Equal(t, "wh_new", decrypt(stored.EncryptedSecretData.Stripe.WebhookSecret))
+		require.Equal(t, "sk_old", decrypt(stored.EncryptedSecretData.Stripe.SecretKey))
+		require.Equal(t, "pk_old", decrypt(stored.EncryptedSecretData.Stripe.PublishableKey))
+	})
+
+	t.Run("secrets for another provider are rejected", func(t *testing.T) {
+		_, err := svc.UpdateConnection(ctx, stripeConn.ID, dto.UpdateConnectionRequest{
+			EncryptedSecretData: &types.ConnectionMetadata{
+				S3: &types.S3ConnectionMetadata{AWSAccessKeyID: "AKIA", AWSSecretAccessKey: "secret"},
+			},
+		})
+		require.Error(t, err)
+		require.True(t, ierr.IsValidation(err))
+	})
+
+	t.Run("sync config is merged, not replaced", func(t *testing.T) {
+		_, err := svc.UpdateConnection(ctx, stripeConn.ID, dto.UpdateConnectionRequest{
+			SyncConfig: &types.SyncConfig{Customer: &types.EntitySyncConfig{Inbound: false, Outbound: true}},
+		})
+		require.NoError(t, err)
+
+		stored, err := connRepo.Get(ctx, stripeConn.ID)
+		require.NoError(t, err)
+		require.Equal(t, &types.EntitySyncConfig{Inbound: false, Outbound: true}, stored.SyncConfig.Customer)
+		require.Equal(t, &types.EntitySyncConfig{Outbound: true}, stored.SyncConfig.Invoice)
+	})
+
+	t.Run("no-op update does not bump updated_at", func(t *testing.T) {
+		before, err := connRepo.Get(ctx, stripeConn.ID)
+		require.NoError(t, err)
+
+		_, err = svc.UpdateConnection(ctx, stripeConn.ID, dto.UpdateConnectionRequest{
+			Name:       before.Name,
+			SyncConfig: &types.SyncConfig{Customer: &types.EntitySyncConfig{Inbound: false, Outbound: true}},
+		})
+		require.NoError(t, err)
+
+		after, err := connRepo.Get(ctx, stripeConn.ID)
+		require.NoError(t, err)
+		require.Equal(t, before.UpdatedAt, after.UpdatedAt)
+	})
+}
