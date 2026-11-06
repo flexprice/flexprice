@@ -463,7 +463,7 @@ func init() {
 	// billinginstalment.InstalmentStatusValidator is a validator for the "instalment_status" field. It is called by the builders before save.
 	billinginstalment.InstalmentStatusValidator = billinginstalmentDescInstalmentStatus.Validators[0].(func(string) error)
 	// billinginstalmentDescMetadata is the schema descriptor for metadata field.
-	billinginstalmentDescMetadata := billinginstalmentFields[18].Descriptor()
+	billinginstalmentDescMetadata := billinginstalmentFields[19].Descriptor()
 	// billinginstalment.DefaultMetadata holds the default value on creation for the metadata field.
 	billinginstalment.DefaultMetadata = billinginstalmentDescMetadata.Default.(types.Metadata)
 	billingsequenceFields := schema.BillingSequence{}.Fields()
