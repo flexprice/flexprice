@@ -8412,6 +8412,7 @@ type BillingInstalmentMutation struct {
 	delivery             *types.InstalmentDelivery
 	instalment_status    *types.InstalmentStatus
 	invoice_id           *string
+	invoiced_at          *time.Time
 	metadata             *types.Metadata
 	clearedFields        map[string]struct{}
 	done                 bool
@@ -9478,6 +9479,55 @@ func (m *BillingInstalmentMutation) ResetInvoiceID() {
 	delete(m.clearedFields, billinginstalment.FieldInvoiceID)
 }
 
+// SetInvoicedAt sets the "invoiced_at" field.
+func (m *BillingInstalmentMutation) SetInvoicedAt(t time.Time) {
+	m.invoiced_at = &t
+}
+
+// InvoicedAt returns the value of the "invoiced_at" field in the mutation.
+func (m *BillingInstalmentMutation) InvoicedAt() (r time.Time, exists bool) {
+	v := m.invoiced_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoicedAt returns the old "invoiced_at" field's value of the BillingInstalment entity.
+// If the BillingInstalment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingInstalmentMutation) OldInvoicedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoicedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoicedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoicedAt: %w", err)
+	}
+	return oldValue.InvoicedAt, nil
+}
+
+// ClearInvoicedAt clears the value of the "invoiced_at" field.
+func (m *BillingInstalmentMutation) ClearInvoicedAt() {
+	m.invoiced_at = nil
+	m.clearedFields[billinginstalment.FieldInvoicedAt] = struct{}{}
+}
+
+// InvoicedAtCleared returns if the "invoiced_at" field was cleared in this mutation.
+func (m *BillingInstalmentMutation) InvoicedAtCleared() bool {
+	_, ok := m.clearedFields[billinginstalment.FieldInvoicedAt]
+	return ok
+}
+
+// ResetInvoicedAt resets all changes to the "invoiced_at" field.
+func (m *BillingInstalmentMutation) ResetInvoicedAt() {
+	m.invoiced_at = nil
+	delete(m.clearedFields, billinginstalment.FieldInvoicedAt)
+}
+
 // SetMetadata sets the "metadata" field.
 func (m *BillingInstalmentMutation) SetMetadata(t types.Metadata) {
 	m.metadata = &t
@@ -9561,7 +9611,7 @@ func (m *BillingInstalmentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BillingInstalmentMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, billinginstalment.FieldTenantID)
 	}
@@ -9634,6 +9684,9 @@ func (m *BillingInstalmentMutation) Fields() []string {
 	if m.invoice_id != nil {
 		fields = append(fields, billinginstalment.FieldInvoiceID)
 	}
+	if m.invoiced_at != nil {
+		fields = append(fields, billinginstalment.FieldInvoicedAt)
+	}
 	if m.metadata != nil {
 		fields = append(fields, billinginstalment.FieldMetadata)
 	}
@@ -9693,6 +9746,8 @@ func (m *BillingInstalmentMutation) Field(name string) (ent.Value, bool) {
 		return m.InstalmentStatus()
 	case billinginstalment.FieldInvoiceID:
 		return m.InvoiceID()
+	case billinginstalment.FieldInvoicedAt:
+		return m.InvoicedAt()
 	case billinginstalment.FieldMetadata:
 		return m.Metadata()
 	}
@@ -9752,6 +9807,8 @@ func (m *BillingInstalmentMutation) OldField(ctx context.Context, name string) (
 		return m.OldInstalmentStatus(ctx)
 	case billinginstalment.FieldInvoiceID:
 		return m.OldInvoiceID(ctx)
+	case billinginstalment.FieldInvoicedAt:
+		return m.OldInvoicedAt(ctx)
 	case billinginstalment.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -9931,6 +9988,13 @@ func (m *BillingInstalmentMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetInvoiceID(v)
 		return nil
+	case billinginstalment.FieldInvoicedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoicedAt(v)
+		return nil
 	case billinginstalment.FieldMetadata:
 		v, ok := value.(types.Metadata)
 		if !ok {
@@ -9989,6 +10053,9 @@ func (m *BillingInstalmentMutation) ClearedFields() []string {
 	if m.FieldCleared(billinginstalment.FieldInvoiceID) {
 		fields = append(fields, billinginstalment.FieldInvoiceID)
 	}
+	if m.FieldCleared(billinginstalment.FieldInvoicedAt) {
+		fields = append(fields, billinginstalment.FieldInvoicedAt)
+	}
 	if m.FieldCleared(billinginstalment.FieldMetadata) {
 		fields = append(fields, billinginstalment.FieldMetadata)
 	}
@@ -10026,6 +10093,9 @@ func (m *BillingInstalmentMutation) ClearField(name string) error {
 		return nil
 	case billinginstalment.FieldInvoiceID:
 		m.ClearInvoiceID()
+		return nil
+	case billinginstalment.FieldInvoicedAt:
+		m.ClearInvoicedAt()
 		return nil
 	case billinginstalment.FieldMetadata:
 		m.ClearMetadata()
@@ -10109,6 +10179,9 @@ func (m *BillingInstalmentMutation) ResetField(name string) error {
 		return nil
 	case billinginstalment.FieldInvoiceID:
 		m.ResetInvoiceID()
+		return nil
+	case billinginstalment.FieldInvoicedAt:
+		m.ResetInvoicedAt()
 		return nil
 	case billinginstalment.FieldMetadata:
 		m.ResetMetadata()

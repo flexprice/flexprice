@@ -107,7 +107,13 @@ then returns the commitment's lines, which are appended to the usage charges.
 Analytics and previews use `newProjectedCommitmentLoader`, which prices a window inside the open period as if through
 the period's end but reads usage only up to the window's end: `attachCommitmentBreakdown`
 ([subscription.go:6712](../../internal/ee/service/subscription.go#L6712)) and `calculateLineItemCommitments`
-([meter_usage.go:2869](../../internal/ee/service/meter_usage.go#L2869)).
+([meter_usage.go:2947](../../internal/ee/service/meter_usage.go#L2947)).
+
+Usage analytics prices a range one billing period at a time, as each period's invoice bills it. For each period it
+builds the projected loader, reads usage only for the lines the loader handles (`HandledLineIDs`), and sums
+`BillingLines` per line into utilized, overage and true-up, so billing-terms commitments cost $0 and take no true-up.
+A covered line's periods without a commitment bill at its own price. With `expand: ["instalments"]`, the response lists
+the instalments of the commitments it applied that were invoiced in the range (`ListInvoiced`, by `invoiced_at`).
 
 ### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:58](../../internal/ee/service/billing_commitments.go#L58))
 
@@ -286,7 +292,8 @@ Instalments wait while the subscription is trialing or paused. `TriggerInstalmen
 
 ### 9.4 Claiming, refreshing and voiding — `invoice_instalments.go`
 
-- **Claim on finalize.** `claimInstalments` moves `scheduled` → `invoiced` in the finalize transaction
+- **Claim on finalize.** `claimInstalments` moves `scheduled` → `invoiced`, setting `invoiced_at` to the invoice's
+  `finalized_at`, in the finalize transaction
   (`performFinalizeInvoiceActions` [invoice.go:1562](../../internal/ee/service/invoice.go#L1562), and payment-driven
   finalization [payment_processor.go:958](../../internal/ee/service/payment_processor.go#L958)). Computing a draft never claims.
 - **Refresh.** `refreshStaleDraft` recomputes a subscription draft before it is finalized when it carries a
@@ -296,8 +303,8 @@ Instalments wait while the subscription is trialing or paused. `TriggerInstalmen
 - **Charging.** `requireFreshDraft` refuses to charge a stale draft, both when the payment is created
   ([payment.go:257](../../internal/ee/service/payment.go#L257)) and in `ProcessPayment`. In `ProcessPayment` it runs under the
   invoice lock together with the move to processing ([payment_processor.go:88](../../internal/ee/service/payment_processor.go#L88)).
-- **Void.** `rescheduleInstalments` puts a voided invoice's instalments back to `scheduled`, under their commitments'
-  locks ([invoice.go:1888](../../internal/ee/service/invoice.go#L1888)).
+- **Void.** `rescheduleInstalments` puts a voided invoice's instalments back to `scheduled` and clears `invoiced_at`,
+  under their commitments' locks ([invoice.go:1888](../../internal/ee/service/invoice.go#L1888)).
 
 ### 9.5 Events
 

@@ -21040,6 +21040,11 @@
           "invoice_label": {
             "type": "string"
           },
+          "invoiced_at": {
+            "type": "string",
+            "description": "InvoicedAt is when the invoice billing the instalment was finalized.",
+            "format": "date-time"
+          },
           "kind": {
             "$ref": "#/components/schemas/types.InstalmentKind"
           },
@@ -27599,7 +27604,7 @@
           },
           "expand": {
             "type": "array",
-            "description": "allowed values: \"price\", \"meter\", \"feature\", \"subscription_line_item\",\"plan\",\"addon\"",
+            "description": "allowed values: \"price\", \"meter\", \"feature\", \"subscription_line_item\",\"plan\",\"addon\",\"source\",\"instalments\"",
             "items": {
               "type": "string"
             }
@@ -27662,6 +27667,13 @@
               "$ref": "#/components/schemas/CustomAnalyticItem"
             }
           },
+          "instalments": {
+            "type": "array",
+            "description": "Instalments lists, when expand includes \"instalments\", the instalments of the v2 commitments this request applies\nthat were invoiced inside the range. They bill the value of billing-terms commitments, whose covered usage adds\nnothing to TotalCost. Property and source filters apply no commitments, so they list none.",
+            "items": {
+              "$ref": "#/components/schemas/UsageAnalyticInstalment"
+            }
+          },
           "items": {
             "type": "array",
             "items": {
@@ -27674,6 +27686,10 @@
           "total_cost": {
             "type": "string",
             "description": "TotalCost is the final cost after discount (Subtotal - TotalDiscount)"
+          },
+          "total_cost_with_instalments": {
+            "type": "string",
+            "description": "TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes \"instalments\"."
           },
           "total_discount": {
             "type": "string"
@@ -34687,6 +34703,45 @@
             "$ref": "#/components/schemas/types.Metadata"
           },
           "name": {
+            "type": "string"
+          }
+        }
+      },
+      "UsageAnalyticInstalment": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "commitment_id": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoice_id": {
+            "type": "string"
+          },
+          "invoice_label": {
+            "type": "string"
+          },
+          "invoiced_at": {
+            "type": "string",
+            "description": "when the invoice billing it was finalized",
+            "format": "date-time"
+          },
+          "service_period_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "service_period_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subscription_id": {
             "type": "string"
           }
         }

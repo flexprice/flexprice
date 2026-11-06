@@ -331,6 +331,7 @@ var (
 		{Name: "delivery", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(30)"}},
 		{Name: "instalment_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "invoice_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "invoiced_at", Type: field.TypeTime, Nullable: true},
 		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// BillingInstalmentsTable holds the schema information for the "billing_instalments" table.
@@ -358,6 +359,11 @@ var (
 				Name:    "billinginstalment_tenant_id_environment_id_invoice_id",
 				Unique:  false,
 				Columns: []*schema.Column{BillingInstalmentsColumns[1], BillingInstalmentsColumns[7], BillingInstalmentsColumns[24]},
+			},
+			{
+				Name:    "idx_billing_instalments_tenant_env_owner_invoiced_at",
+				Unique:  false,
+				Columns: []*schema.Column{BillingInstalmentsColumns[1], BillingInstalmentsColumns[7], BillingInstalmentsColumns[9], BillingInstalmentsColumns[25]},
 			},
 		},
 	}

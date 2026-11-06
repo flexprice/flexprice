@@ -63,7 +63,7 @@ func (s *CommitmentE2ESuite) markInvoiced(req *dto.CreateInvoiceRequest) {
 		return *line.BillingInstalmentID
 	})
 
-	invoiced, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE), ids)
+	invoiced, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE), time.Now(), ids)
 	s.Require().NoError(err)
 	s.Require().Len(invoiced, len(ids))
 }

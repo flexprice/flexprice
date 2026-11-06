@@ -41,6 +41,7 @@ const (
 	ExpandIntegrations              ExpandableField = "integrations"
 	ExpandPriceSyncStatus           ExpandableField = "price_sync_status"
 	ExpandCommitments               ExpandableField = "commitments"
+	ExpandInstalments               ExpandableField = "instalments"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions

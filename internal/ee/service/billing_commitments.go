@@ -45,7 +45,8 @@ type loadedScope struct {
 	bucket       types.WindowSize
 	overagePrice *price.Price
 	amountOf     amountFn
-	accrualStart time.Time // where the commitment period's capacity starts accruing
+	accrualStart time.Time      // where the commitment period's capacity starts accruing
+	location     *time.Location // the commitment's timezone, loaded once for its active windows
 }
 
 // stackKey groups commitments that can share lines: same type and measurement, and bucket size for windows.
@@ -240,6 +241,7 @@ func (l *commitmentLoader) load(
 		overagePrice: overagePrice,
 		amountOf:     amountOf,
 		accrualStart: period.Start,
+		location:     c.Location(),
 	}
 	l.commitments = append(l.commitments, &stackedCommitment{
 		Commitment:     c,
@@ -333,8 +335,8 @@ func (l *commitmentLoader) Stacks(ctx context.Context) ([]*commitmentStack, []*a
 	return stacks, allocs, nil
 }
 
-// usageLines returns the commitment lines at usage value, with true-ups, before any billing terms cover them. Usage
-// analytics reads these; invoices bill BillingLines.
+// usageLines returns the commitment lines at usage value, with true-ups, before any billing terms cover them. Invoices
+// and usage analytics read BillingLines instead.
 func (l *commitmentLoader) usageLines(ctx context.Context) ([]dto.CreateInvoiceLineItemRequest, error) {
 	stacks, allocs, err := l.Stacks(ctx)
 	if err != nil {
@@ -596,14 +598,21 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 
 // activeBuckets counts the buckets of the usage grid starting within span that the commitment's capacity applies to.
 func (l *commitmentLoader) activeBuckets(c *commitment.Commitment, span types.Period, bucket types.WindowSize) int64 {
-	starts := generateBucketStarts(span.Start.UTC(), span.End.UTC(), bucket, &l.sub.BillingAnchor)
-	return int64(lo.CountBy(starts, func(t time.Time) bool { return !t.Before(span.Start) && l.appliesAt(c, t) }))
+	anchor := &l.sub.BillingAnchor
+	var count int64
+	for start := truncateToBucketStart(span.Start.UTC(), bucket, anchor); start.Before(span.End); start = nextBucketStart(start, bucket, anchor) {
+		if !start.Before(span.Start) && l.appliesAt(c, start) {
+			count++
+		}
+	}
+
+	return count
 }
 
 // appliesAt reports whether the commitment's capacity applies at t: within its term, which ends with the subscription
 // when it is open-ended, and inside its active windows.
 func (l *commitmentLoader) appliesAt(c *commitment.Commitment, t time.Time) bool {
-	return !t.Before(c.StartDate) && !endReached(termEnd(l.sub, c), t) && c.ActiveWindows.Contains(t, c.Location())
+	return !t.Before(c.StartDate) && !endReached(termEnd(l.sub, c), t) && c.ActiveWindows.Contains(t, l.scopeByCommitment[c.ID].location)
 }
 
 // windowOf returns the index of the window holding max(t, line start), or of the first window for an earlier one.

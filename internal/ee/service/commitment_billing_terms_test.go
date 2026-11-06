@@ -367,7 +367,7 @@ func (s *CommitmentServiceSuite) claimFirstInstalment(invoiceID string) *billing
 	rows := s.storedInstalments()
 	s.Require().NotEmpty(rows)
 
-	claimed, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), invoiceID, []string{rows[0].ID})
+	claimed, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), invoiceID, time.Now(), []string{rows[0].ID})
 	s.Require().NoError(err)
 	s.Require().Len(claimed, 1)
 	return claimed[0]
@@ -427,7 +427,7 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_NumbersNewInstalmentsAf
 
 	rows := s.storedInstalments()
 	slices.SortFunc(rows, byBillOn)
-	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", []string{rows[0].ID, rows[1].ID})
+	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", time.Now(), []string{rows[0].ID, rows[1].ID})
 	s.Require().NoError(err)
 
 	between := rows[0].BillOn.AddDate(0, 0, 14)
@@ -455,7 +455,7 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_NumbersOnlyAfterNumbere
 	rows := s.storedInstalments()
 	milestone, ok := lo.Find(rows, func(i *billingterm.Instalment) bool { return i.InvoiceLabel == "Go-live milestone" })
 	s.Require().True(ok)
-	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", []string{milestone.ID})
+	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", time.Now(), []string{milestone.ID})
 	s.Require().NoError(err)
 
 	edit := dto.ReplaceBillingTermsRequest{BillingTerms: upfrontPlusRemainder()[1:]}
@@ -484,7 +484,7 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_SizesThePlanAfterTheCan
 
 	rows := s.storedInstalments()
 	racing := s.racingCommitmentService(func(ctx context.Context) {
-		_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_race", []string{rows[0].ID})
+		_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_race", time.Now(), []string{rows[0].ID})
 		s.Require().NoError(err)
 	})
 
@@ -501,7 +501,7 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsAFullyInvoicedCo
 	s.Require().NoError(err)
 
 	ids := lo.Map(s.storedInstalments(), func(i *billingterm.Instalment, _ int) string { return i.ID })
-	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", ids)
+	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", time.Now(), ids)
 	s.Require().NoError(err)
 
 	_, err = s.svc.PreviewBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
@@ -1080,7 +1080,7 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 			s.Require().NoError(err)
 
 			billed := instalmentIDs(s.storedInstalments()[:tt.invoiced])
-			_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_billed", billed)
+			_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_billed", time.Now(), billed)
 			s.Require().NoError(err)
 
 			publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
@@ -1675,7 +1675,7 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_SettlesTheOpenDra
 	s.Require().True(arrear.Amount.Equal(dec("97.5")) && arrear.BillOn.Equal(feb), "%s on %s", arrear.Amount, arrear.BillOn)
 
 	// The upfront was billed when January opened.
-	_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_opening", []string{upfront.ID})
+	_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_opening", time.Now(), []string{upfront.ID})
 	s.Require().NoError(err)
 	s.record(s.tokens, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), "1500")
 

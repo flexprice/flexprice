@@ -36,6 +36,8 @@ type Instalment struct {
 	Delivery         types.InstalmentDelivery `json:"delivery"`
 	InstalmentStatus types.InstalmentStatus   `json:"instalment_status"`
 	InvoiceID        *string                  `json:"invoice_id,omitempty"`
+	// InvoicedAt is when the invoice billing the instalment was finalized.
+	InvoicedAt *time.Time `json:"invoiced_at,omitempty"`
 
 	Metadata types.Metadata `json:"metadata,omitempty" activity:"drop"`
 
@@ -69,6 +71,7 @@ func InstalmentFromEnt(e *ent.BillingInstalment) *Instalment {
 		Delivery:           e.Delivery,
 		InstalmentStatus:   e.InstalmentStatus,
 		InvoiceID:          e.InvoiceID,
+		InvoicedAt:         e.InvoicedAt,
 		Metadata:           e.Metadata,
 		EnvironmentID:      e.EnvironmentID,
 		BaseModel: types.BaseModel{
