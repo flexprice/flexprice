@@ -2037,7 +2037,7 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 		return err
 	}
 
-	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
@@ -2171,7 +2171,7 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 		return err
 	}
 
-	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
@@ -2261,7 +2261,7 @@ func (s *invoiceService) SyncInvoiceToChargebeeIfEnabled(ctx context.Context, in
 		return err
 	}
 
-	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
@@ -2324,7 +2324,7 @@ func (s *invoiceService) SyncInvoiceToQuickBooksIfEnabled(ctx context.Context, i
 		return err
 	}
 
-	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
@@ -2391,7 +2391,7 @@ func (s *invoiceService) SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, in
 		return err
 	}
 
-	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
@@ -2437,7 +2437,7 @@ func (s *invoiceService) SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, in
 // saved payment method (token), the invoice is also charged automatically; otherwise
 // the invoice is synced as a Moyasar invoice link so the customer can pay manually.
 func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error {
-	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
@@ -3499,7 +3499,7 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 	}
 
 	// An entity without a gateway connection finds none below, so only wallets pay.
-	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
@@ -5868,7 +5868,7 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 	if inv.SubscriptionID == nil {
 		return nil // No subscription to sync for non-subscription invoices
 	}
-	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}

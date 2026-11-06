@@ -76,7 +76,7 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 			Mark(ierr.ErrValidation)
 	}
 
-	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}

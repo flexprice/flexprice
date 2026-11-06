@@ -737,7 +737,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 		"amount", amount,
 	)
 
-	ctx, err := NewBillingEntityService(*s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	ctx, err := NewBillingEntityService(*s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to resolve billing entity for card charge",
 			"error", err,
