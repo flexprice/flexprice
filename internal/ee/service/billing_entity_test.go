@@ -121,6 +121,41 @@ func (s *BillingEntityServiceSuite) TestResolveBillingEntityID() {
 	}
 }
 
+func (s *BillingEntityServiceSuite) TestResolveConnectionOwner() {
+	env := types.GetEnvironmentID(s.GetContext())
+
+	tests := []struct {
+		name         string
+		requested    *string
+		connectionID string
+		wantID       *string
+		wantErr      error
+	}{
+		{name: "no_id_no_entity", wantID: lo.ToPtr("be_default")},
+		{name: "no_id_default_entity", requested: lo.ToPtr("be_default"), wantID: lo.ToPtr("be_default")},
+		{name: "no_id_other_entity", requested: lo.ToPtr("be_eu"), wantErr: ierr.ErrValidation},
+		{name: "id_other_entity", requested: lo.ToPtr("be_eu"), connectionID: "conn_01J0000000000000000000000A", wantID: lo.ToPtr("be_eu")},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			s.ClearStores()
+			s.setMode(types.BillingEntityModeEnabled)
+			s.addEntity("be_default", env, "INV", true)
+			s.addEntity("be_eu", env, "EU", false)
+
+			got, err := resolveConnectionOwner(s.GetContext(), s.service, types.BillingEntityModeEnabled, types.SecretProviderStripe, tc.requested, tc.connectionID)
+			if tc.wantErr != nil {
+				s.Require().Error(err)
+				s.True(errors.Is(err, tc.wantErr), "got %v", err)
+				return
+			}
+			s.Require().NoError(err)
+			s.Equal(tc.wantID, got)
+		})
+	}
+}
+
 func (s *BillingEntityServiceSuite) TestEffectiveEntity() {
 	env := types.GetEnvironmentID(s.GetContext())
 
