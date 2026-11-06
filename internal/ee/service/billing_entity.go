@@ -20,8 +20,8 @@ type BillingEntityService interface {
 
 	// WithMode runs fn in a transaction with the mode read from the database; before enabled it holds the shared enable lock.
 	WithMode(ctx context.Context, fn func(txCtx context.Context, mode types.BillingEntityMode) error) error
-	// CustomerBillingEntityID is the entity a new customer gets: the one asked for when enabled, else the default; nil when off.
-	CustomerBillingEntityID(ctx context.Context, mode types.BillingEntityMode, billingEntityID *string) (*string, error)
+	// ResolveBillingEntityID is the entity a new customer gets: the one asked for when enabled, else the default; nil when off.
+	ResolveBillingEntityID(ctx context.Context, mode types.BillingEntityMode, billingEntityID *string) (*string, error)
 	// EffectiveEntity is the customer's entity; a customer the enable backfill has not reached belongs to the default.
 	EffectiveEntity(ctx context.Context, cust *customer.Customer) (*billingentity.BillingEntity, error)
 	ValidateFilter(ctx context.Context, billingEntityID string) error
@@ -176,7 +176,7 @@ func (s *billingEntityService) createDefault(ctx context.Context) (*billingentit
 	return entity, nil
 }
 
-func (s *billingEntityService) CustomerBillingEntityID(ctx context.Context, mode types.BillingEntityMode, billingEntityID *string) (*string, error) {
+func (s *billingEntityService) ResolveBillingEntityID(ctx context.Context, mode types.BillingEntityMode, billingEntityID *string) (*string, error) {
 	requestedID := lo.FromPtr(billingEntityID)
 	if requestedID != "" && mode != types.BillingEntityModeEnabled {
 		return nil, errBillingEntitiesNotEnabled()

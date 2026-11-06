@@ -68,7 +68,7 @@ func (s *BillingEntityServiceSuite) addEntity(id, environmentID, prefix string, 
 	return e
 }
 
-func (s *BillingEntityServiceSuite) TestCustomerBillingEntityID() {
+func (s *BillingEntityServiceSuite) TestResolveBillingEntityID() {
 	env := types.GetEnvironmentID(s.GetContext())
 
 	tests := []struct {
@@ -97,7 +97,7 @@ func (s *BillingEntityServiceSuite) TestCustomerBillingEntityID() {
 				s.addEntity("be_other", "env_other", "OT", false)
 			}
 
-			got, err := s.service.CustomerBillingEntityID(s.GetContext(), tc.mode, tc.requested)
+			got, err := s.service.ResolveBillingEntityID(s.GetContext(), tc.mode, tc.requested)
 			if tc.wantErr != nil {
 				s.Require().Error(err)
 				s.True(errors.Is(err, tc.wantErr), "got %v", err)

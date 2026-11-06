@@ -52,7 +52,7 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 
 	billingEntityService := NewBillingEntityService(s.ServiceParams)
 	if err := billingEntityService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
-		billingEntityID, err := billingEntityService.CustomerBillingEntityID(txCtx, mode, req.BillingEntityID)
+		billingEntityID, err := billingEntityService.ResolveBillingEntityID(txCtx, mode, req.BillingEntityID)
 		if err != nil {
 			return err
 		}
