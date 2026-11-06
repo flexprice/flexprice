@@ -560,12 +560,14 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 			p.ConnectionID = nil
 		}
 		p.PaymentGateway = req.PaymentGateway
-		gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p, false)
-		if err != nil {
-			return nil, err
-		}
-		if err := s.setGatewayConnection(gatewayCtx, p); err != nil {
-			return nil, err
+		if p.ConnectionID == nil {
+			gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p)
+			if err != nil {
+				return nil, err
+			}
+			if err := s.setGatewayConnection(gatewayCtx, p); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if req.GatewayPaymentID != nil {
@@ -944,7 +946,7 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	gatewayTrackingID := lo.FromPtr(p.GatewayTrackingID)
 	gateway := types.PaymentGatewayType(*p.PaymentGateway)
 
-	gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p, false)
+	gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p)
 	if err != nil {
 		return p, err
 	}

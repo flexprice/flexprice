@@ -95,10 +95,6 @@ func (r *fakeConnectionRepo) UpdateBillingEntity(ctx context.Context, c *connect
 	return r.Update(ctx, c)
 }
 
-func (r *fakeConnectionRepo) GetUnscoped(ctx context.Context, id string) (*connection.Connection, error) {
-	return r.Get(ctx, id)
-}
-
 func (r *fakeConnectionRepo) Count(_ context.Context, _ *types.ConnectionFilter) (int, error) {
 	return len(r.byProvider), nil
 }

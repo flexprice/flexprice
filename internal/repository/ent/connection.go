@@ -164,38 +164,6 @@ func (r *connectionRepository) Get(ctx context.Context, id string) (*domainConne
 	return domainConn, nil
 }
 
-func (r *connectionRepository) GetUnscoped(ctx context.Context, id string) (*domainConnection.Connection, error) {
-	span := StartRepositorySpan(ctx, "connection", "get_unscoped", map[string]interface{}{
-		"connection_id": id,
-	})
-	defer FinishSpan(span)
-
-	c, err := r.client.Reader(ctx).Connection.Query().
-		Where(
-			connection.ID(id),
-			connection.TenantID(types.GetTenantID(ctx)),
-			connection.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		Only(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return nil, ierr.WithError(err).
-				WithHintf("Connection with ID %s was not found", id).
-				WithReportableDetails(map[string]any{
-					"connection_id": id,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get connection").
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return domainConnection.FromEnt(c), nil
-}
-
 // GetByProvider is used for providers that does not support multiple connections per environment.
 // this method returns the first result only and should NOT be used if the provider supports multiple connections per environment.
 func (r *connectionRepository) GetByProvider(ctx context.Context, provider types.SecretProvider) (*domainConnection.Connection, error) {
@@ -213,7 +181,7 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 		Mark(ierr.ErrNotFound)
 
 	if pinnedID := types.GetConnectionID(ctx); pinnedID != "" {
-		c, err := r.GetUnscoped(ctx, pinnedID)
+		c, err := r.Get(ctx, pinnedID)
 		if err != nil {
 			SetSpanError(span, err)
 			return nil, err

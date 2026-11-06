@@ -396,7 +396,7 @@ func (s *refundService) dispatchToGateway(ctx context.Context, row *refund.Refun
 		return err
 	}
 
-	gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p, true)
+	gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p)
 	if err != nil {
 		if !ierr.IsValidation(err) {
 			return err

@@ -30,9 +30,9 @@ type BillingEntityService interface {
 	ScopeToSubscription(ctx context.Context, subscriptionID string) (context.Context, error)
 	// ScopeToDefault puts the environment's default entity in ctx; off environments get ctx unchanged.
 	ScopeToDefault(ctx context.Context) (context.Context, error)
-	// ScopeToPayment pins the connection that took the payment, else its customer's entity; publishedOnly rejects a removed connection.
-	ScopeToPayment(ctx context.Context, p *payment.Payment, publishedOnly bool) (context.Context, error)
-	// ScopeToConnection pins the connection, in any status, and its owner entity in ctx; another provider's connection is not found.
+	// ScopeToPayment pins the connection that took the payment, else its customer's entity; a removed connection is a validation error.
+	ScopeToPayment(ctx context.Context, p *payment.Payment) (context.Context, error)
+	// ScopeToConnection pins the published connection and its owner entity in ctx; a removed or another provider's connection is not found.
 	ScopeToConnection(ctx context.Context, connectionID string, provider types.SecretProvider) (context.Context, error)
 	// InScope reports whether the customer belongs to the entity in ctx; true when off or ctx has no entity.
 	InScope(ctx context.Context, customerID string) (bool, error)
@@ -300,7 +300,7 @@ func (s *billingEntityService) ScopeToDefault(ctx context.Context) (context.Cont
 }
 
 func (s *billingEntityService) ScopeToConnection(ctx context.Context, connectionID string, provider types.SecretProvider) (context.Context, error) {
-	conn, err := s.ConnectionRepo.GetUnscoped(ctx, connectionID)
+	conn, err := s.ConnectionRepo.Get(ctx, connectionID)
 	if err != nil {
 		return ctx, err
 	}
@@ -317,7 +317,7 @@ func (s *billingEntityService) ScopeToConnection(ctx context.Context, connection
 	return ctx, nil
 }
 
-func (s *billingEntityService) ScopeToPayment(ctx context.Context, p *payment.Payment, publishedOnly bool) (context.Context, error) {
+func (s *billingEntityService) ScopeToPayment(ctx context.Context, p *payment.Payment) (context.Context, error) {
 	connectionID := lo.FromPtr(p.ConnectionID)
 	if connectionID == "" {
 		if off, err := s.entitiesOff(ctx); err != nil || off {
@@ -330,13 +330,9 @@ func (s *billingEntityService) ScopeToPayment(ctx context.Context, p *payment.Pa
 		return s.ScopeToCustomer(ctx, customerID)
 	}
 
-	get := s.ConnectionRepo.GetUnscoped
-	if publishedOnly {
-		get = s.ConnectionRepo.Get
-	}
-	conn, err := get(ctx, connectionID)
+	conn, err := s.ConnectionRepo.Get(ctx, connectionID)
 	if err != nil {
-		if publishedOnly && ierr.IsNotFound(err) {
+		if ierr.IsNotFound(err) {
 			return ctx, ierr.NewError("payment connection was removed").
 				WithHintf("The connection %s that took this payment was removed", connectionID).
 				WithReportableDetails(map[string]any{"payment_id": p.ID, "connection_id": connectionID}).
