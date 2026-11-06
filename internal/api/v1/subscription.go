@@ -710,6 +710,7 @@ func (h *SubscriptionHandler) GetUpcomingCreditGrantApplications(c *gin.Context)
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
+// @Param addon_statuses query []string false "Addon statuses to include (active, cancelled, pending). Defaults to active." collectionFormat(multi)
 // @Success 200 {object} dto.ListAddonAssociationsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
@@ -724,7 +725,18 @@ func (h *SubscriptionHandler) GetActiveAddonAssociations(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetActiveAddonAssociations(c.Request.Context(), id)
+	// Omitted statuses retain the active-only default.
+	var addonStatuses []types.AddonStatus
+	for _, raw := range c.QueryArray("addon_statuses") {
+		status := types.AddonStatus(raw)
+		if err := status.Validate(); err != nil {
+			c.Error(err)
+			return
+		}
+		addonStatuses = append(addonStatuses, status)
+	}
+
+	resp, err := h.service.GetActiveAddonAssociations(c.Request.Context(), id, addonStatuses...)
 	if err != nil {
 		h.log.Error(c.Request.Context(), "Failed to get active addon associations", "error", err)
 		c.Error(err)
