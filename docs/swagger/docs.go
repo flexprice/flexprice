@@ -17955,6 +17955,10 @@ const docTemplate = `{
                 "invoice_label": {
                     "type": "string"
                 },
+                "invoiced_at": {
+                    "description": "InvoicedAt is when the invoice billing the instalment was finalized.",
+                    "type": "string"
+                },
                 "kind": {
                     "$ref": "#/definitions/types.InstalmentKind"
                 },
@@ -24816,7 +24820,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "expand": {
-                    "description": "allowed values: \"price\", \"meter\", \"feature\", \"subscription_line_item\",\"plan\",\"addon\"",
+                    "description": "allowed values: \"price\", \"meter\", \"feature\", \"subscription_line_item\",\"plan\",\"addon\",\"source\",\"instalments\"",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -24879,6 +24883,13 @@ const docTemplate = `{
                         "$ref": "#/definitions/CustomAnalyticItem"
                     }
                 },
+                "instalments": {
+                    "description": "Instalments lists, when expand includes \"instalments\", the instalments of the v2 commitments this request applies\nthat were invoiced inside the range. They bill the value of billing-terms commitments, whose covered usage adds\nnothing to TotalCost. Property and source filters apply no commitments, so they list none.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/UsageAnalyticInstalment"
+                    }
+                },
                 "items": {
                     "type": "array",
                     "items": {
@@ -24890,6 +24901,10 @@ const docTemplate = `{
                 },
                 "total_cost": {
                     "description": "TotalCost is the final cost after discount (Subtotal - TotalDiscount)",
+                    "type": "string"
+                },
+                "total_cost_with_instalments": {
+                    "description": "TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes \"instalments\".",
                     "type": "string"
                 },
                 "total_discount": {
@@ -32304,6 +32319,42 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.Metadata"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "UsageAnalyticInstalment": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "commitment_id": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_label": {
+                    "type": "string"
+                },
+                "invoiced_at": {
+                    "description": "when the invoice billing it was finalized",
+                    "type": "string"
+                },
+                "service_period_end": {
+                    "type": "string"
+                },
+                "service_period_start": {
+                    "type": "string"
+                },
+                "subscription_id": {
                     "type": "string"
                 }
             }

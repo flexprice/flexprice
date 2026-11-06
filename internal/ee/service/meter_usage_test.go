@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -6571,7 +6573,7 @@ func (s *MeterUsageServiceSuite) TestAnalytics_ThousandLineAllocationsUseBatched
 			params := fullServiceParams(&s.BaseServiceTestSuite)
 			params.MeterUsageRepo = repo
 			svc := NewMeterUsageService(params).(*meterUsageService)
-			totals, commitments, err := svc.calculateLineItemTotals(ctx, usage, &events.MeterUsageDetailedAnalyticsParams{
+			totals, commitments, _, err := svc.calculateLineItemTotals(ctx, usage, &events.MeterUsageDetailedAnalyticsParams{
 				StartTime: s.periodStart,
 				EndTime:   s.periodEnd,
 				Sources:   []string{"selected"},
@@ -6586,4 +6588,426 @@ func (s *MeterUsageServiceSuite) TestAnalytics_ThousandLineAllocationsUseBatched
 			}
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// v2 commitments in analytics
+// ---------------------------------------------------------------------------
+
+// januaryNoon returns midday on the given day of January 2026, inside the suite's billing period.
+func januaryNoon(day int) time.Time {
+	return time.Date(2026, 1, day, 12, 0, 0, 0, time.UTC)
+}
+
+// customerAnalytics returns the customer's analytics for [start, end), with the request adjusted by each of adjust.
+func (s *MeterUsageServiceSuite) customerAnalytics(
+	start, end time.Time,
+	adjust ...func(*events.MeterUsageDetailedAnalyticsParams),
+) *dto.GetUsageAnalyticsResponse {
+	ctx := s.GetContext()
+	params := &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          start,
+		EndTime:            end,
+	}
+	for _, apply := range adjust {
+		apply(params)
+	}
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, params)
+	s.Require().NoError(err)
+	return resp
+}
+
+// periodInvoice returns the invoice the subscription's billing period [start, end) bills.
+func (s *MeterUsageServiceSuite) periodInvoice(start, end time.Time) *dto.CreateInvoiceRequest {
+	ctx := s.GetContext()
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.sub.ID)
+	s.Require().NoError(err)
+	inv, err := NewBillingService(fullServiceParams(&s.BaseServiceTestSuite)).PrepareSubscriptionInvoiceRequest(ctx,
+		&dto.PrepareSubscriptionInvoiceRequestParams{
+			Subscription:   sub,
+			PeriodStart:    start,
+			PeriodEnd:      end,
+			ReferencePoint: types.ReferencePointPeriodEnd,
+			AsOf:           end,
+		})
+	s.Require().NoError(err)
+	return inv
+}
+
+// invoicedTotal sums an invoice's lines, and the amount of each commitment line kind.
+func invoicedTotal(inv *dto.CreateInvoiceRequest) (decimal.Decimal, map[types.CommitmentLineKind]decimal.Decimal) {
+	total, byKind := decimal.Zero, map[types.CommitmentLineKind]decimal.Decimal{}
+	for _, line := range inv.LineItems {
+		kind := types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind])
+		byKind[kind] = byKind[kind].Add(line.Amount)
+		total = total.Add(line.Amount)
+	}
+
+	return total, byKind
+}
+
+// dailyMeter stores a meter whose usage buckets per day, aggregated by agg.
+func (s *MeterUsageServiceSuite) dailyMeter(id string, agg types.AggregationType) *meter.Meter {
+	ctx := s.GetContext()
+	m := &meter.Meter{
+		ID:          id,
+		Name:        id,
+		EventName:   "api_call",
+		Aggregation: meter.Aggregation{Type: agg, BucketSize: types.WindowSizeDay},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	return m
+}
+
+// openLineItem stores a usage line that runs with the subscription, past the suite's first billing period.
+func (s *MeterUsageServiceSuite) openLineItem(id, meterID, priceID string) *subscription.SubscriptionLineItem {
+	ctx := s.GetContext()
+	li := &subscription.SubscriptionLineItem{
+		ID:             id,
+		SubscriptionID: s.sub.ID,
+		CustomerID:     s.customer.ID,
+		PriceID:        priceID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        meterID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      s.periodStart,
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+	return li
+}
+
+// reserveTenADay commits 10 units a day at $1 on a daily SUM meter priced at $2, and records 14 units on 5 Jan (4 over)
+// and 4 on 6 Jan (6 unused). January bills $14 utilized, $8 overage and $296 unused: $318.
+func (s *MeterUsageServiceSuite) reserveTenADay() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	daily := s.dailyMeter("meter_reserved_units", types.AggregationSum)
+	p := s.createPriceForMeter(ctx, "price_reserved_units", daily.ID, dec("2"))
+	s.createLineItemForMeter(ctx, "li_reserved_units", daily.ID, p.ID)
+	committed := s.createPriceForMeter(ctx, "price_reserved_committed", daily.ID, dec("1"))
+	c := s.newCommitment("cmt_reserved_units", types.CommitmentScopePrice, p.ID, "10")
+	c.Type, c.Measurement = types.COMMITMENT_TYPE_QUANTITY, types.CommitmentMeasurementWindow
+	c.CommittedPriceID = lo.ToPtr(committed.ID)
+	s.storeCommitment(c)
+
+	s.insertMeterUsageWithProps(ctx, daily.ID, s.customer.ExternalID, "api", januaryNoon(5), 10, nil)
+	s.insertMeterUsageWithProps(ctx, daily.ID, s.customer.ExternalID, "batch", januaryNoon(5), 4, nil)
+	s.insertMeterUsageWithProps(ctx, daily.ID, s.customer.ExternalID, "api", januaryNoon(6), 4, nil)
+}
+
+// A window commitment bills in analytics what its invoice bills: $14 utilized, $8 over the capacity on 5 Jan, and the
+// $296 the other days left unused.
+func (s *MeterUsageServiceSuite) TestCommitments_WindowCommitmentBillsWhatTheInvoiceBills() {
+	s.reserveTenADay()
+	invoiced, byKind := invoicedTotal(s.periodInvoice(s.periodStart, s.periodEnd))
+	s.True(invoiced.Equal(dec("318")), "invoice %s", invoiced)
+
+	resp := s.customerAnalytics(s.periodStart, s.periodEnd, func(p *events.MeterUsageDetailedAnalyticsParams) {
+		p.WindowSize = types.WindowSizeDay
+	})
+	s.Require().Len(resp.Items, 1)
+	item := resp.Items[0]
+	s.True(item.TotalCost.Equal(invoiced), "item %s, invoice %s", item.TotalCost, invoiced)
+	s.Require().NotNil(item.CommitmentInfo)
+	s.True(item.CommitmentInfo.IsWindowed)
+	s.True(item.CommitmentInfo.ComputedCommitmentUtilizedAmount.Equal(byKind[types.CommitmentLineUtilized]), "utilized %s", item.CommitmentInfo.ComputedCommitmentUtilizedAmount)
+	s.True(item.CommitmentInfo.ComputedOverageAmount.Equal(byKind[types.CommitmentLineOverage]), "overage %s", item.CommitmentInfo.ComputedOverageAmount)
+	s.True(item.CommitmentInfo.ComputedTrueUpAmount.Equal(byKind[types.CommitmentLineTrueUp]), "true-up %s", item.CommitmentInfo.ComputedTrueUpAmount)
+
+	pointsCost := decimal.Zero
+	for _, p := range item.Points {
+		pointsCost = pointsCost.Add(p.Cost)
+	}
+	s.True(pointsCost.Equal(invoiced), "points add up to %s", pointsCost)
+}
+
+// A range across two billing periods prices each period's commitment as its invoice does: January's floor bills a $50
+// true-up, February's usage runs $50 past it, and the range shows both invoices' $350.
+func (s *MeterUsageServiceSuite) TestCommitments_RangeAcrossBillingPeriodsPricesEachPeriod() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	m := s.createMeterWithAggregation(ctx, "meter_two_months", "api_call", types.AggregationSum)
+	p := s.createPriceForMeter(ctx, "price_two_months", m.ID, dec("1"))
+	s.openLineItem("li_two_months", m.ID, p.ID)
+	s.storeCommitment(s.newCommitment("cmt_two_months", types.CommitmentScopePrice, p.ID, "150"))
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10), 100, nil)
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10).AddDate(0, 1, 0), 200, nil)
+
+	february := s.periodEnd.AddDate(0, 1, 0)
+	januaryInvoice, _ := invoicedTotal(s.periodInvoice(s.periodStart, s.periodEnd))
+	februaryInvoice, _ := invoicedTotal(s.periodInvoice(s.periodEnd, february))
+	s.True(januaryInvoice.Equal(dec("150")), "January invoice %s", januaryInvoice)
+	s.True(februaryInvoice.Equal(dec("200")), "February invoice %s", februaryInvoice)
+
+	resp := s.customerAnalytics(s.periodStart, february)
+	s.Require().Len(resp.Items, 1)
+	info := resp.Items[0].CommitmentInfo
+	s.Require().NotNil(info)
+	s.True(resp.TotalCost.Equal(dec("350")), "total %s", resp.TotalCost)
+	s.True(info.ComputedCommitmentUtilizedAmount.Equal(dec("250")), "utilized %s", info.ComputedCommitmentUtilizedAmount)
+	s.True(info.ComputedTrueUpAmount.Equal(dec("50")), "true-up %s", info.ComputedTrueUpAmount)
+	s.True(info.ComputedOverageAmount.Equal(dec("50")), "overage %s", info.ComputedOverageAmount)
+}
+
+// prepayFloor commits $150 a period through billing terms on a $1 meter, and records 200 units on 5 Jan: the
+// commitment covers $150 of it at no charge and the invoice bills the $50 above it.
+func (s *MeterUsageServiceSuite) prepayFloor() *meter.Meter {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	m := s.createMeterWithAggregation(ctx, "meter_prepaid", "api_call", types.AggregationSum)
+	p := s.createPriceForMeter(ctx, "price_prepaid", m.ID, dec("1"))
+	s.createLineItemForMeter(ctx, "li_prepaid", m.ID, p.ID)
+	c := s.newCommitment("cmt_prepaid", types.CommitmentScopePrice, p.ID, "150")
+	c.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
+	s.storeCommitment(c)
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(5), 200, nil)
+	return m
+}
+
+// Usage a billing-terms commitment covers costs nothing and the commitment takes no true-up, as on the invoice: its
+// instalments bill its value.
+func (s *MeterUsageServiceSuite) TestCommitments_BillingTermsCommitmentBillsWhatTheInvoiceBills() {
+	s.prepayFloor()
+	invoiced, byKind := invoicedTotal(s.periodInvoice(s.periodStart, s.periodEnd))
+	s.True(invoiced.Equal(dec("50")), "invoice %s", invoiced)
+	s.True(byKind[types.CommitmentLineTrueUp].IsZero(), "the invoice bills no true-up")
+
+	resp := s.customerAnalytics(s.periodStart, s.periodEnd)
+	s.Require().Len(resp.Items, 1)
+	item := resp.Items[0]
+	s.True(item.TotalUsage.Equal(dec("200")), "usage %s", item.TotalUsage)
+	s.True(item.TotalCost.Equal(invoiced), "analytics %s, invoice %s", item.TotalCost, invoiced)
+	s.Require().NotNil(item.CommitmentInfo)
+	s.True(item.CommitmentInfo.ComputedCommitmentUtilizedAmount.IsZero(), "covered usage %s", item.CommitmentInfo.ComputedCommitmentUtilizedAmount)
+	s.True(item.CommitmentInfo.ComputedOverageAmount.Equal(dec("50")), "overage %s", item.CommitmentInfo.ComputedOverageAmount)
+	s.True(item.CommitmentInfo.ComputedTrueUpAmount.IsZero(), "true-up %s", item.CommitmentInfo.ComputedTrueUpAmount)
+	s.False(item.CommitmentInfo.TrueUpEnabled, "billing terms take no true-up")
+	s.Nil(resp.TotalCostWithInstalments, "instalments are listed only when expanded")
+}
+
+// billInstalment stores a $1,800 instalment of cmt_prepaid on an invoice finalized at invoicedAt.
+func (s *MeterUsageServiceSuite) billInstalment(invoicedAt time.Time) {
+	ctx := s.GetContext()
+	_, err := s.GetStores().BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{{
+		ID:                 "binst_prepaid",
+		OwnerType:          types.BillingTermOwnerCommitment,
+		OwnerID:            "cmt_prepaid",
+		CustomerID:         s.customer.ID,
+		SubscriptionID:     lo.ToPtr(s.sub.ID),
+		Currency:           "usd",
+		Kind:               types.InstalmentKindInstalment,
+		BillOn:             invoicedAt,
+		Amount:             dec("1800"),
+		InvoiceLabel:       "Prepaid - Instalment 1 of 1",
+		ServicePeriodStart: s.periodStart,
+		ServicePeriodEnd:   s.periodStart.AddDate(1, 0, 0),
+		InstalmentStatus:   types.InstalmentStatusInvoiced,
+		InvoiceID:          lo.ToPtr("inv_prepaid"),
+		InvoicedAt:         lo.ToPtr(invoicedAt),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}})
+	s.Require().NoError(err)
+}
+
+// withInstalments expands the instalments, then adjusts the request with each of with.
+func withInstalments(with ...func(*events.MeterUsageDetailedAnalyticsParams)) func(*events.MeterUsageDetailedAnalyticsParams) {
+	return func(p *events.MeterUsageDetailedAnalyticsParams) {
+		p.Expand = append(p.Expand, string(types.ExpandInstalments))
+		for _, adjust := range with {
+			adjust(p)
+		}
+	}
+}
+
+// The instalments of the commitments a request applies show in the range they were invoiced in, and the total with
+// instalments adds them. A range or filter that does not apply the commitment lists none, and neither does a request
+// that does not expand instalments.
+func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInstalments() {
+	ctx := s.GetContext()
+	m := s.prepayFloor()
+	other := s.createMeterWithAggregation(ctx, "meter_unprepaid", "api_call", types.AggregationSum)
+	otherPrice := s.createPriceForMeter(ctx, "price_unprepaid", other.ID, dec("1"))
+	s.createLineItemForMeter(ctx, "li_unprepaid", other.ID, otherPrice.ID)
+	s.insertMeterUsageWithProps(ctx, other.ID, s.customer.ExternalID, "api", januaryNoon(6), 10, nil)
+	s.billInstalment(januaryNoon(1))
+
+	january := s.customerAnalytics(s.periodStart, s.periodEnd, withInstalments())
+	s.Require().Len(january.Instalments, 1)
+	instalment := january.Instalments[0]
+	s.Equal("binst_prepaid", instalment.ID)
+	s.Equal("cmt_prepaid", instalment.CommitmentID)
+	s.Equal("inv_prepaid", instalment.InvoiceID)
+	s.True(instalment.InvoicedAt.Equal(januaryNoon(1)), "invoiced at %s", instalment.InvoicedAt)
+	// $50 over the prepaid floor, whose covered usage costs nothing, and $10 on the other meter.
+	s.True(january.TotalCost.Equal(dec("60")), "usage cost %s", january.TotalCost)
+	s.Require().NotNil(january.TotalCostWithInstalments)
+	s.True(january.TotalCostWithInstalments.Equal(dec("1860")), "with instalments %s", january.TotalCostWithInstalments)
+
+	s.Run("not expanded", func() {
+		resp := s.customerAnalytics(s.periodStart, s.periodEnd)
+		s.Empty(resp.Instalments)
+		s.Nil(resp.TotalCostWithInstalments)
+		s.True(resp.TotalCost.Equal(january.TotalCost), "cost %s", resp.TotalCost)
+	})
+
+	tests := []struct {
+		name string
+		with func(*events.MeterUsageDetailedAnalyticsParams)
+	}{
+		{name: "a range after the invoice", with: func(p *events.MeterUsageDetailedAnalyticsParams) { p.StartTime = januaryNoon(2) }},
+		{name: "another meter", with: func(p *events.MeterUsageDetailedAnalyticsParams) { p.MeterIDs = []string{other.ID} }},
+		{name: "a source filter", with: func(p *events.MeterUsageDetailedAnalyticsParams) { p.Sources = []string{"api"} }},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			resp := s.customerAnalytics(s.periodStart, s.periodEnd, withInstalments(tt.with))
+			s.Empty(resp.Instalments)
+			s.Require().NotNil(resp.TotalCostWithInstalments)
+			s.True(resp.TotalCostWithInstalments.Equal(resp.TotalCost), "with instalments %s, cost %s", resp.TotalCostWithInstalments, resp.TotalCost)
+		})
+	}
+
+	s.Run("the commitment's meter", func() {
+		resp := s.customerAnalytics(s.periodStart, s.periodEnd, withInstalments(func(p *events.MeterUsageDetailedAnalyticsParams) {
+			p.MeterIDs = []string{m.ID}
+		}))
+		s.Len(resp.Instalments, 1)
+	})
+}
+
+// A range whose first period no commitment covers bills that period at the line's own price: January's 100 units cost
+// $100, and February's 200 fill its $150 floor and run $50 over.
+func (s *MeterUsageServiceSuite) TestCommitments_PeriodsWithoutACommitmentBillAtTheLinePrice() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	m := s.createMeterWithAggregation(ctx, "meter_late_floor", "api_call", types.AggregationSum)
+	p := s.createPriceForMeter(ctx, "price_late_floor", m.ID, dec("1"))
+	s.openLineItem("li_late_floor", m.ID, p.ID)
+	c := s.newCommitment("cmt_late_floor", types.CommitmentScopePrice, p.ID, "150")
+	c.StartDate = s.periodEnd
+	s.storeCommitment(c)
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10), 100, nil)
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10).AddDate(0, 1, 0), 200, nil)
+
+	resp := s.customerAnalytics(s.periodStart, s.periodEnd.AddDate(0, 1, 0))
+	s.Require().Len(resp.Items, 1)
+	info := resp.Items[0].CommitmentInfo
+	s.Require().NotNil(info)
+	s.True(resp.TotalCost.Equal(dec("300")), "total %s", resp.TotalCost)
+	s.True(info.ComputedCommitmentUtilizedAmount.Equal(dec("150")), "utilized %s", info.ComputedCommitmentUtilizedAmount)
+	s.True(info.ComputedOverageAmount.Equal(dec("150")), "January's plain $100 and February's $50 over, got %s", info.ComputedOverageAmount)
+	s.True(info.ComputedTrueUpAmount.IsZero(), "true-up %s", info.ComputedTrueUpAmount)
+}
+
+// A range starting before the subscription keeps its first period's commitment: nothing bills before the start.
+func (s *MeterUsageServiceSuite) TestCommitments_RangeBeforeTheSubscriptionBillsFromItsStart() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	m := s.createMeterWithAggregation(ctx, "meter_early_range", "api_call", types.AggregationSum)
+	p := s.createPriceForMeter(ctx, "price_early_range", m.ID, dec("1"))
+	s.createLineItemForMeter(ctx, "li_early_range", m.ID, p.ID)
+	s.storeCommitment(s.newCommitment("cmt_early_range", types.CommitmentScopePrice, p.ID, "150"))
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10), 100, nil)
+
+	resp := s.customerAnalytics(s.periodStart.AddDate(0, 0, -15), s.periodEnd)
+	s.Require().Len(resp.Items, 1)
+	s.True(resp.TotalCost.Equal(dec("150")), "total %s", resp.TotalCost)
+	s.True(resp.Items[0].CommitmentInfo.ComputedTrueUpAmount.Equal(dec("50")), "true-up %s", resp.Items[0].CommitmentInfo.ComputedTrueUpAmount)
+}
+
+// Billing periods that start after now have billed nothing: a range running a year past today prices the binding $150
+// floor once for each month up to the current one. January's 100 units leave a $50 true-up; later months are idle.
+func (s *MeterUsageServiceSuite) TestCommitments_FuturePeriodsBillNothing() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	m := s.createMeterWithAggregation(ctx, "meter_future_floor", "api_call", types.AggregationSum)
+	p := s.createPriceForMeter(ctx, "price_future_floor", m.ID, dec("1"))
+	s.openLineItem("li_future_floor", m.ID, p.ID)
+	c := s.newCommitment("cmt_future_floor", types.CommitmentScopePrice, p.ID, "150")
+	c.EndDate = nil
+	s.storeCommitment(c)
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10), 100, nil)
+
+	now := clock.Now()
+	thisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	elapsedMonths := (now.Year()-s.periodStart.Year())*12 + int(now.Month()-s.periodStart.Month()) + 1
+	resp := s.customerAnalytics(s.periodStart, thisMonth.AddDate(1, 0, 0))
+	want := dec("150").Mul(decimal.NewFromInt(int64(elapsedMonths)))
+	s.True(resp.TotalCost.Equal(want), "%d months bill %s, want %s", elapsedMonths, resp.TotalCost, want)
+}
+
+// Groups share a line's commitment charges by their usage over the range, so a group costs the same whatever window the
+// response uses. The trainer peaks at 10 GPUs on 5 Jan; inference runs 4 GPUs every day of that week.
+func (s *MeterUsageServiceSuite) TestCommitments_GroupCostsDoNotDependOnTheWindow() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	gpus := s.dailyMeter("meter_gpus", types.AggregationMax)
+	p := s.createPriceForMeter(ctx, "price_gpus", gpus.ID, dec("2"))
+	s.createLineItemForMeter(ctx, "li_gpus", gpus.ID, p.ID)
+	committed := s.createPriceForMeter(ctx, "price_gpus_committed", gpus.ID, dec("1"))
+	c := s.newCommitment("cmt_gpus", types.CommitmentScopePrice, p.ID, "4")
+	c.Type, c.Measurement = types.COMMITMENT_TYPE_QUANTITY, types.CommitmentMeasurementWindow
+	c.CommittedPriceID = lo.ToPtr(committed.ID)
+	s.storeCommitment(c)
+	s.insertMeterUsageWithProps(ctx, gpus.ID, s.customer.ExternalID, "trainer", januaryNoon(5), 10, nil)
+	for day := 5; day <= 11; day++ {
+		s.insertMeterUsageWithProps(ctx, gpus.ID, s.customer.ExternalID, "inference", januaryNoon(day).Add(time.Hour), 4, nil)
+	}
+
+	invoiced, _ := invoicedTotal(s.periodInvoice(s.periodStart, s.periodEnd))
+	var byDay map[string]decimal.Decimal
+	for _, window := range []types.WindowSize{types.WindowSizeDay, "", types.WindowSizeWeek, types.WindowSizeMonth} {
+		resp := s.customerAnalytics(s.periodStart, s.periodEnd, func(params *events.MeterUsageDetailedAnalyticsParams) {
+			params.GroupBy, params.WindowSize = []string{"source"}, window
+		})
+		s.True(resp.TotalCost.Equal(invoiced), "window %q costs %s, invoice %s", window, resp.TotalCost, invoiced)
+		costs := lo.SliceToMap(resp.Items, func(item dto.UsageAnalyticItem) (string, decimal.Decimal) { return item.Source, item.TotalCost })
+		if byDay == nil {
+			byDay = costs
+			continue
+		}
+
+		for source, cost := range costs {
+			s.True(cost.Equal(byDay[source]), "window %q: %s costs %s, by day %s", window, source, cost, byDay[source])
+		}
+	}
+}
+
+// An expanded request carries the total with instalments even when nothing in it can bill one: a feature with no
+// meters, or a customer without subscriptions.
+func (s *MeterUsageServiceSuite) TestCommitments_ExpandedRequestsCarryTheTotalWithInstalments() {
+	ctx := s.GetContext()
+	s.prepayFloor()
+	s.billInstalment(januaryNoon(1))
+
+	unknownFeature := s.customerAnalytics(s.periodStart, s.periodEnd, withInstalments(func(p *events.MeterUsageDetailedAnalyticsParams) {
+		p.FeatureIDs = []string{"feat_unknown"}
+	}))
+	s.Require().NotNil(unknownFeature.TotalCostWithInstalments)
+	s.True(unknownFeature.TotalCostWithInstalments.IsZero(), "with instalments %s", unknownFeature.TotalCostWithInstalments)
+
+	idle := &customer.Customer{ID: "cust_idle", ExternalID: "ext_cust_idle", Name: "Idle", BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, idle))
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: idle.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		Expand:             []string{string(types.ExpandInstalments)},
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.TotalCostWithInstalments)
+	s.True(resp.TotalCostWithInstalments.Equal(resp.TotalCost), "with instalments %s, cost %s", resp.TotalCostWithInstalments, resp.TotalCost)
 }

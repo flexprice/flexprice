@@ -335,8 +335,8 @@ func (l *commitmentLoader) Stacks(ctx context.Context) ([]*commitmentStack, []*a
 	return stacks, allocs, nil
 }
 
-// usageLines returns the commitment lines at usage value, with true-ups, before any billing terms cover them. Usage
-// analytics reads these; invoices bill BillingLines.
+// usageLines returns the commitment lines at usage value, with true-ups, before any billing terms cover them. Invoices
+// and usage analytics read BillingLines instead.
 func (l *commitmentLoader) usageLines(ctx context.Context) ([]dto.CreateInvoiceLineItemRequest, error) {
 	stacks, allocs, err := l.Stacks(ctx)
 	if err != nil {
