@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIsPrefixedULID(t *testing.T) {
+func TestIsPrefixedUUID(t *testing.T) {
 	id := ulid.Make().String()
 
 	tests := []struct {
@@ -26,7 +26,7 @@ func TestIsPrefixedULID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, IsPrefixedULID(tt.id, UUID_PREFIX_CONNECTION))
+			require.Equal(t, tt.want, IsPrefixedUUID(tt.id, UUID_PREFIX_CONNECTION))
 		})
 	}
 }
