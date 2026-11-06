@@ -434,16 +434,20 @@ func (s *temporalService) ExecuteWorkflow(ctx context.Context, workflowType type
 	options := models.StartWorkflowOptions{
 		ID:        workflowID,
 		TaskQueue: workflowType.TaskQueueName(),
-		// Only fixed IDs (exclusiveWorkflowIDKeys) can collide; fail loudly instead of attaching to the open run.
-		WorkflowExecutionErrorWhenAlreadyStarted: true,
 	}
 
 	// Execute workflow using existing StartWorkflow method
+	return s.startUnique(ctx, options, workflowType, input)
+}
+
+// startUnique maps an already-started rejection to ErrAlreadyExists.
+func (s *temporalService) startUnique(ctx context.Context, options models.StartWorkflowOptions, workflowType types.TemporalWorkflowType, input interface{}) (models.WorkflowRun, error) {
+	options.WorkflowExecutionErrorWhenAlreadyStarted = true
 	run, err := s.StartWorkflow(ctx, options, workflowType, input)
 	if _, ok := stderrors.AsType[*serviceerror.WorkflowExecutionAlreadyStarted](err); ok {
 		return nil, errors.WithError(err).
 			WithHint("A workflow is already running for this entity. Try again once it finishes.").
-			WithReportableDetails(map[string]interface{}{"workflow_id": workflowID}).
+			WithReportableDetails(map[string]interface{}{"workflow_id": options.ID}).
 			Mark(errors.ErrAlreadyExists)
 	}
 	return run, err
@@ -470,8 +474,7 @@ func (s *temporalService) ExecuteWorkflowWithDelay(ctx context.Context, workflow
 		StartDelay: time.Duration(delaySeconds) * time.Second,
 	}
 
-	// Execute workflow using existing StartWorkflow method
-	return s.StartWorkflow(ctx, options, workflowType, input)
+	return s.startUnique(ctx, options, workflowType, input)
 }
 
 // exclusiveWorkflowIDKeys lists workflow types that allow one open run per entity. Their ID is fixed
@@ -479,6 +482,9 @@ func (s *temporalService) ExecuteWorkflowWithDelay(ctx context.Context, workflow
 var exclusiveWorkflowIDKeys = map[types.TemporalWorkflowType]string{
 	types.TemporalPriceSyncV2Workflow:    "price_sync_plan",
 	types.TemporalAddonPriceSyncWorkflow: "price_sync_addon",
+
+	types.TemporalProcessSubscriptionBillingWorkflow: "process_subscription_billing",
+	types.TemporalProcessInvoiceWorkflow:             "process_invoice",
 }
 
 func (s *temporalService) generateWorkflowID(workflowType types.TemporalWorkflowType, params interface{}) string {
