@@ -29,7 +29,7 @@ type CreateConnectionRequest struct {
 
 // ValidateConnectionID rejects a client-generated connection id that is not conn_ followed by a ULID.
 func ValidateConnectionID(id string) error {
-	if id == "" || types.IsPrefixedULID(id, types.UUID_PREFIX_CONNECTION) {
+	if id == "" || types.IsPrefixedUUID(id, types.UUID_PREFIX_CONNECTION) {
 		return nil
 	}
 	return ierr.NewError("invalid connection id").
