@@ -1710,7 +1710,12 @@ func (s *invoiceService) IsInvoiceFinalizationDue(ctx context.Context, inv *invo
 		return true, nil
 	}
 
-	dueAt := inv.LastComputedAt.Add(time.Duration(invoiceConfig.FinalizationDelaySeconds) * time.Second)
+	// Cycle drafts are recomputed daily, so their delay counts from period close instead of the last compute.
+	anchor := *inv.LastComputedAt
+	if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCycle) && inv.PeriodEnd != nil {
+		anchor = lo.Latest(inv.CreatedAt, *inv.PeriodEnd)
+	}
+	dueAt := anchor.Add(time.Duration(invoiceConfig.FinalizationDelaySeconds) * time.Second)
 	return clock.Now().After(dueAt), nil
 }
 

@@ -126,6 +126,8 @@ type RevenueAnalyticsService interface {
 type DraftAndComputeOptions struct {
 	// SkipIfAlreadyInvoiced skips finalized current periods.
 	SkipIfAlreadyInvoiced bool
+	// RecomputePastPeriodDrafts also recomputes the subscription's cycle drafts whose period has ended.
+	RecomputePastPeriodDrafts bool
 }
 
 type SubscriptionService interface {
