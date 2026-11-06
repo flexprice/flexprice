@@ -108,7 +108,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 | FR-1 | Connection create and OAuth connect accept an optional `billing_entity_id`; absent means the default entity. It follows Phase 1's entity input rule: rejected unless the environment is `enabled`, and must name an entity of the request's environment. Both also accept an optional client-generated `id` (`conn_` followed by a ULID) so the webhook URL is known before the connection exists; absent means one is generated and the connection belongs to the default entity, so a non-default entity requires `id`. | UC1 | Enabled environment: connect with entity X → connection shows X; without → shows the default's ID. Off environment with an entity → 400 `billing_entities_not_enabled`. Create with `id` → connection has that id; the same `id` again → 409; `conn_123` → 400. Entity X (not default) without `id` → 400. |
 | FR-2 | In an `enabling` or `enabled` environment, each connection belongs to exactly one entity and each entity has at most one published connection per provider. An off environment keeps at most one published connection per provider. Storage providers keep today's rule and belong to no entity. | UC1 | Second Stripe connection for X → 409; Stripe for X and for Y → both saved; second Stripe on an off environment → 409 as today. |
 | FR-3 | Enabling makes the default entity the owner of every existing non-storage connection; a connection created while enabling belongs to the default entity. | UC1 | After enable, every connection except S3/GCS shows the default entity's ID. |
-| FR-4 | Connection list accepts an optional `billing_entity_id` filter; connection Get and List carry `billing_entity_id` (null for off environments and storage) and, for providers that receive webhooks, `webhook_secret_set`. | UC1 | Filter by X → X's connections only; off environment → field null. Razorpay without a webhook secret → `webhook_secret_set: false`; S3 → field absent. |
+| FR-4 | Connection list accepts an optional `billing_entity_id` filter; connection Get and List carry `billing_entity_id` (null for off environments and storage). | UC1 | Filter by X → X's connections only; off environment → field null. |
 | FR-5 | A connection's owner can be changed to another entity that has no connection for the provider; customers and saved payment methods are not copied. | UC6 | Move Stripe 2 from X to Y (Y without Stripe) → saved; Y already has Stripe → 409. |
 | FR-6 | Every provider call for a record uses the connection owned by the record's customer's entity; with none, the call behaves as if the provider were not connected. A call never uses another entity's connection. | UC2, UC3 | X on Stripe 1, Y on Stripe 2: charge Y's invoice → Stripe 2 only. Y without Razorpay: Razorpay payment link for Y → 400 provider not connected. |
 | FR-7 | For an entity with a connection for the provider, auto-charge, checkout, payment links, saved payment methods, hosted invoice payment and wallet top-up links work as for the default entity; Phase 1's guard applies only when the entity has no connection for that provider. | UC2 | Non-default customer with saved Stripe card and `charge_automatically` → charged through the entity's Stripe; hosted page shows `pay.enabled: true`. |
@@ -255,7 +255,7 @@ Migration notes:
 | `POST /v1/connections` | Optional `billing_entity_id` and `id` (FR-1); duplicate check per entity (FR-2) |
 | `PUT /v1/connections/:id` | Optional `billing_entity_id` to move the connection to another entity (FR-5) |
 | `GET /v1/connections`, `POST /v1/connections/search` | Optional `billing_entity_id` filter (FR-4) |
-| Get, List responses | `billing_entity_id`, `webhook_secret_set` (FR-4) |
+| Get, List responses | `billing_entity_id` (FR-4) |
 | `DELETE /v1/connections/:id` | Archives the connection, which keeps its owner (FR-17) |
 | OAuth connect start (QuickBooks, Zoho Books) | Optional `billing_entity_id` and `id`, kept in the OAuth session and applied on completion (FR-1) |
 
@@ -265,7 +265,6 @@ Migration notes:
   "name": "Stripe India",
   "provider_type": "stripe",
   "billing_entity_id": "be_01J...",
-  "webhook_secret_set": true,
   "status": "published"
 }
 ```
@@ -371,8 +370,7 @@ sequenceDiagram
 - **Integrations tab:** with entity X selected, lists X's connections; *Connect* (API key or OAuth)
   generates the connection id, shows its webhook URL beside the key and webhook-secret fields, and creates
   the connection for X in one submit. Webhook fields keep the off-environment rules (required for Stripe,
-  Paddle and Whop). A connection with `webhook_secret_set: false` shows "Webhook not set up". Off
-  environments see today's page.
+  Paddle and Whop). Off environments see today's page.
 - **Exports:** unchanged; S3 and GCS stay environment-wide.
 - **Connection settings:** owner entity, changeable to an entity without a connection for that provider.
 
