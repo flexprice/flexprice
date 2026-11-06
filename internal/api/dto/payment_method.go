@@ -1,7 +1,7 @@
 package dto
 
 import (
-	"strings"
+	"net/url"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/errors"
@@ -223,7 +223,7 @@ func (r *CreateSetupIntentRequest) Validate() error {
 	if r.SuccessURL != "" {
 		if !isValidURL(r.SuccessURL) {
 			return errors.NewError("invalid success_url format").
-				WithHint("Success URL must be a valid HTTP/HTTPS URL").
+				WithHint("Success URL must be an https URL (http only for localhost)").
 				WithReportableDetails(map[string]interface{}{
 					"success_url": r.SuccessURL,
 				}).
@@ -234,7 +234,7 @@ func (r *CreateSetupIntentRequest) Validate() error {
 	if r.CancelURL != "" {
 		if !isValidURL(r.CancelURL) {
 			return errors.NewError("invalid cancel_url format").
-				WithHint("Cancel URL must be a valid HTTP/HTTPS URL").
+				WithHint("Cancel URL must be an https URL (http only for localhost)").
 				WithReportableDetails(map[string]interface{}{
 					"cancel_url": r.CancelURL,
 				}).
@@ -318,23 +318,26 @@ func (r *ListPaymentMethodsRequest) Validate() error {
 	return nil
 }
 
-// isValidURL checks if a string is a valid HTTP/HTTPS URL
+// isValidURL accepts empty or absolute https URLs (http only for loopback).
 func isValidURL(urlStr string) bool {
 	if urlStr == "" {
-		return true // Empty URLs are allowed (optional)
+		return true
 	}
-
-	// Must start with http:// or https://
-	if !strings.HasPrefix(urlStr, "http://") && !strings.HasPrefix(urlStr, "https://") {
+	if len(urlStr) > 2048 {
 		return false
 	}
-
-	// Basic length check
-	if len(urlStr) > 2048 {
-		return false // URLs longer than 2048 chars are generally not supported
+	u, err := url.Parse(urlStr)
+	if err != nil || u.Hostname() == "" || u.User != nil {
+		return false
 	}
-
-	return true
+	switch u.Scheme {
+	case "https":
+		return true
+	case "http":
+		h := u.Hostname()
+		return h == "localhost" || h == "127.0.0.1"
+	}
+	return false
 }
 
 type SetupActionType string
