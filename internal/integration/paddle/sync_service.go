@@ -22,7 +22,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
@@ -945,7 +944,12 @@ func (s *PaddleSyncService) ProcessCustomerCreatedWebhook(ctx context.Context, p
 
 	// Deduplication by email: if customer exists by email, create mapping and skip creation
 	if paddleCustomer.Email != "" {
-		existingCustomer, err := webhookscope.CustomerByEmail(ctx, customerService, paddleCustomer.Email)
+		emailFilter := &types.CustomerFilter{
+			Email:       paddleCustomer.Email,
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+		existingCustomers, err := customerService.GetCustomers(ctx, emailFilter)
+		existingCustomer := apidto.FirstCustomerInBillingEntity(existingCustomers, types.GetBillingEntityID(ctx))
 		if err == nil && existingCustomer != nil {
 			_, err = s.mappingService.CreateEntityIntegrationMapping(ctx, apidto.CreateEntityIntegrationMappingRequest{
 				EntityID:         existingCustomer.ID,

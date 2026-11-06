@@ -11,7 +11,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -89,7 +88,13 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 
 	// Check if customer exists by email
 	if hubspotContact.Properties.Email != "" {
-		existingCustomer, err := webhookscope.CustomerByEmail(ctx, customerService, hubspotContact.Properties.Email)
+		filter := &types.CustomerFilter{
+			Email:       hubspotContact.Properties.Email,
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+
+		existingCustomers, err := customerService.GetCustomers(ctx, filter)
+		existingCustomer := dto.FirstCustomerInBillingEntity(existingCustomers, types.GetBillingEntityID(ctx))
 		if err == nil && existingCustomer != nil {
 			s.logger.Info(ctx, "customer with same email already exists, creating mapping",
 				"customer_id", existingCustomer.ID,

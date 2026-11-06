@@ -8,7 +8,6 @@ import (
 	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
-	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 )
@@ -144,17 +143,6 @@ func (h *Handler) handleSubscriptionActivated(ctx context.Context, payload []byt
 		h.logger.Error(ctx, "failed to parse subscription.activated payload",
 			"error", err, "event_type", EventSubscriptionActivated)
 		return nil
-	}
-	if subID := h.syncSvc.ExtractFlexSubIDFromCustomData(event.Data.CustomData); subID != "" {
-		inScope, err := webhookscope.Subscription(ctx, services.BillingEntityScope, services.SubscriptionService, h.logger, subID)
-		if err != nil {
-			h.logger.Error(ctx, "failed to process subscription.activated webhook",
-				"error", err, "paddle_sub_id", event.Data.ID)
-			return nil
-		}
-		if !inScope {
-			return nil
-		}
 	}
 	err := h.syncSvc.ProcessSubscriptionActivatedWebhook(ctx, &event.Data, services.SubscriptionService)
 	if err != nil {
