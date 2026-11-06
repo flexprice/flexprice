@@ -60,7 +60,7 @@ func FixLineItemPriceEndDates() error {
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	ctx = context.WithValue(ctx, types.CtxUserID, userID)
 
-	out, err := os.Create(outputFile) // #nosec G304 -- operator-supplied report path
+	out, err := os.Create(outputFile) // #nosec G703,G304 -- operator-supplied report path
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
