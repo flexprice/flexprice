@@ -36,7 +36,7 @@ func initOAuth(t *testing.T, svc *stubOAuthService) *httptest.ResponseRecorder {
 	h := NewOAuthHandler(svc, "https://app.test/cb", logger.NewNoopLogger())
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	body := `{"provider":"zoho_books","name":"z","credentials":{"client_id":"a","client_secret":"b"},"metadata":{"accounts_server":"https://x.test"}}`
+	body := `{"provider":"zoho_books","name":"z","credentials":{"client_id":"a","client_secret":"b"},"metadata":{"accounts_server":"https://accounts.zoho.com"}}`
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/oauth/init", bytes.NewBufferString(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 	h.InitiateOAuth(c)
