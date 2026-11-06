@@ -20,7 +20,8 @@ type BillingEntityService interface {
 
 	// WithMode runs fn in a transaction with the mode read from the database; before enabled it holds the shared enable lock.
 	WithMode(ctx context.Context, fn func(txCtx context.Context, mode types.BillingEntityMode) error) error
-	ResolveForCreate(ctx context.Context, mode types.BillingEntityMode, requested *string) (*string, error)
+	// CustomerBillingEntityID is the entity a new customer gets: the one asked for when enabled, else the default; nil when off.
+	CustomerBillingEntityID(ctx context.Context, mode types.BillingEntityMode, billingEntityID *string) (*string, error)
 	// EffectiveEntity is the customer's entity; a customer the enable backfill has not reached belongs to the default.
 	EffectiveEntity(ctx context.Context, cust *customer.Customer) (*billingentity.BillingEntity, error)
 	ValidateFilter(ctx context.Context, billingEntityID string) error
@@ -50,13 +51,9 @@ func errBillingEntitiesNotEnabled() error {
 		Mark(ierr.ErrValidation)
 }
 
+// mode reads the context environment's mode from the database; an environment without the setting is off.
 func (s *billingEntityService) mode(ctx context.Context) (types.BillingEntityMode, error) {
-	return s.modeOf(ctx, types.GetEnvironmentID(ctx))
-}
-
-// modeOf reads an environment's mode from the database; an environment without the setting is off.
-func (s *billingEntityService) modeOf(ctx context.Context, environmentID string) (types.BillingEntityMode, error) {
-	stored, err := s.SettingsRepo.GetByKeyUncached(ctx, environmentID, types.SettingKeyBillingEntityConfig)
+	stored, err := s.SettingsRepo.GetByKeyUncached(ctx, types.GetEnvironmentID(ctx), types.SettingKeyBillingEntityConfig)
 	if ierr.IsNotFound(err) {
 		return types.BillingEntityModeOff, nil
 	}
@@ -128,41 +125,6 @@ func (s *billingEntityService) WithMode(ctx context.Context, fn func(txCtx conte
 	})
 }
 
-func (s *billingEntityService) getOrCreateDefault(ctx context.Context) (*billingentity.BillingEntity, error) {
-	existing, err := s.BillingEntityRepo.GetDefault(ctx)
-	if err == nil {
-		return existing, nil
-	}
-	if !ierr.IsNotFound(err) {
-		return nil, err
-	}
-
-	var result *billingentity.BillingEntity
-	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		key := "billing_entity_default:" + types.GetTenantID(txCtx) + ":" + types.GetEnvironmentID(txCtx)
-		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: key}); err != nil {
-			return err
-		}
-
-		existing, err := s.BillingEntityRepo.GetDefault(txCtx)
-		if err == nil {
-			result = existing
-			return nil
-		}
-		if !ierr.IsNotFound(err) {
-			return err
-		}
-
-		created, err := s.createDefault(txCtx)
-		if err != nil {
-			return err
-		}
-		result = created
-		return nil
-	})
-	return result, err
-}
-
 // createDefault makes the environment's default entity from the tenant and copies the tenant-level tax links to it.
 func (s *billingEntityService) createDefault(ctx context.Context) (*billingentity.BillingEntity, error) {
 	tenantID := types.GetTenantID(ctx)
@@ -214,32 +176,23 @@ func (s *billingEntityService) createDefault(ctx context.Context) (*billingentit
 	return entity, nil
 }
 
-func (s *billingEntityService) ResolveForCreate(ctx context.Context, mode types.BillingEntityMode, requested *string) (*string, error) {
-	if lo.FromPtr(requested) == "" {
-		requested = nil
+func (s *billingEntityService) CustomerBillingEntityID(ctx context.Context, mode types.BillingEntityMode, billingEntityID *string) (*string, error) {
+	requestedID := lo.FromPtr(billingEntityID)
+	if requestedID != "" && mode != types.BillingEntityModeEnabled {
+		return nil, errBillingEntitiesNotEnabled()
 	}
-
-	switch mode {
-	case types.BillingEntityModeOff:
-		if requested != nil {
-			return nil, errBillingEntitiesNotEnabled()
-		}
+	if mode == types.BillingEntityModeOff {
 		return nil, nil
-	case types.BillingEntityModeEnabling:
-		if requested != nil {
-			return nil, errBillingEntitiesNotEnabled()
+	}
+	if requestedID != "" {
+		entity, err := s.entityInEnvironment(ctx, requestedID)
+		if err != nil {
+			return nil, err
 		}
-	case types.BillingEntityModeEnabled:
-		if requested != nil {
-			entity, err := s.entityInEnvironment(ctx, *requested)
-			if err != nil {
-				return nil, err
-			}
-			return lo.ToPtr(entity.ID), nil
-		}
+		return lo.ToPtr(entity.ID), nil
 	}
 
-	def, err := s.getOrCreateDefault(ctx)
+	def, err := s.BillingEntityRepo.GetDefault(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -398,23 +351,26 @@ func requireSameBillingEntity(ctx context.Context, params ServiceParams, custome
 	if mode == types.BillingEntityModeOff {
 		return nil
 	}
-	entityIDs := make([]string, 0, 2)
-	for _, id := range []string{customerID, otherCustomerID} {
+	entityIDOf := func(id string) (string, error) {
 		cust, err := params.CustomerRepo.Get(ctx, id)
 		if err != nil {
-			return err
+			return "", err
 		}
 		entity, err := beService.EffectiveEntity(ctx, cust)
-		if err != nil {
-			return err
+		if err != nil || entity == nil {
+			return "", err
 		}
-		entityID := ""
-		if entity != nil {
-			entityID = entity.ID
-		}
-		entityIDs = append(entityIDs, entityID)
+		return entity.ID, nil
 	}
-	if entityIDs[0] != entityIDs[1] {
+	entityID, err := entityIDOf(customerID)
+	if err != nil {
+		return err
+	}
+	otherEntityID, err := entityIDOf(otherCustomerID)
+	if err != nil {
+		return err
+	}
+	if entityID != otherEntityID {
 		return ierr.NewError("customers belong to different billing entities").
 			WithHint("Customers of different billing entities cannot be invoiced together").
 			WithReportableDetails(map[string]any{"customer_id": customerID, "other_customer_id": otherCustomerID}).

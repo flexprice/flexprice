@@ -89,7 +89,7 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, req dto.Crea
 
 func (s *environmentService) CheckCloneAllowed(ctx context.Context, environmentIDs ...string) error {
 	for _, id := range environmentIDs {
-		mode, err := (&billingEntityService{ServiceParams: s.ServiceParams}).modeOf(ctx, id)
+		mode, err := (&billingEntityService{ServiceParams: s.ServiceParams}).mode(types.SetEnvironmentID(ctx, id))
 		if err != nil {
 			return err
 		}
