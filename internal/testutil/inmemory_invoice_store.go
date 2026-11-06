@@ -114,6 +114,8 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		AmountPaid:                 inv.AmountPaid,
 		CustomCurrency:             inv.CustomCurrency,
 		FxConversion:               clonePtr(inv.FxConversion),
+		BillingEntity:              inv.BillingEntity,
+		BillingEntityID:            inv.BillingEntityID,
 		Subtotal:                   inv.Subtotal,
 		Total:                      inv.Total,
 		TotalTax:                   inv.TotalTax,
@@ -302,6 +304,11 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 			updated.FxConversion = existing.FxConversion
 		}
 	}
+	if updated.BillingEntity == nil {
+		if existing, err := s.InMemoryStore.Get(ctx, inv.ID); err == nil {
+			updated.BillingEntity = existing.BillingEntity
+		}
+	}
 	return s.InMemoryStore.Update(ctx, inv.ID, updated)
 }
 
@@ -358,6 +365,11 @@ func (s *InMemoryInvoiceStore) ListAllTenant(ctx context.Context, filter *types.
 
 func (s *InMemoryInvoiceStore) Count(ctx context.Context, filter *types.InvoiceFilter) (int, error) {
 	return s.InMemoryStore.Count(ctx, filter, invoiceFilterFn)
+}
+
+// AssignDefaultBillingEntities needs the raw SQL join; it is covered by e2e only.
+func (s *InMemoryInvoiceStore) AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error) {
+	return 0, ierr.NewError("not supported by the in-memory invoice store").Mark(ierr.ErrNotImplemented)
 }
 
 func (s *InMemoryInvoiceStore) GetByIdempotencyKey(ctx context.Context, key string) (*invoice.Invoice, error) {
@@ -446,7 +458,7 @@ func (s *InMemoryInvoiceStore) GetForPeriod(ctx context.Context, subscriptionID 
 	return nil, ierr.NewError("invoice not found").WithHint("invoice not found for period").Mark(ierr.ErrNotFound)
 }
 
-func (s *InMemoryInvoiceStore) GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig) (string, error) {
+func (s *InMemoryInvoiceStore) GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig, prefix string) (string, error) {
 	filter := types.NewNoLimitInvoiceFilter()
 	invoices, err := s.List(ctx, filter)
 	if err != nil {

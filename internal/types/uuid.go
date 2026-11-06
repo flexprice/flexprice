@@ -140,6 +140,7 @@ const (
 
 	UUID_PREFIX_BILLING_TERM       = "bterm"
 	UUID_PREFIX_BILLING_INSTALMENT = "binst"
+	UUID_PREFIX_BILLING_ENTITY     = "be"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"

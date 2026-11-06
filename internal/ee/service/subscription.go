@@ -2411,9 +2411,9 @@ func (s *subscriptionService) CancelSubscription(
 
 	if err != nil {
 		logger.Error(ctx, "failed to process cancellation", "error", err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to process subscription cancellation").
-			Mark(ierr.ErrDatabase)
+		// Returned unwrapped: re-marking as ErrDatabase stacks a 500 mark on top of the
+		// inner mark (e.g. ErrAlreadyExists → 409) and the resolved status becomes random.
+		return nil, err
 	}
 	NotifySubscriptionChanged(ctx, s.ServiceParams, subscription.ID)
 
@@ -7841,6 +7841,10 @@ func (s *subscriptionService) TriggerSubscriptionWorkflow(ctx context.Context, s
 		types.TemporalProcessSubscriptionBillingWorkflow,
 		workflowInput,
 	)
+	// Conflict error already carries workflow_id.
+	if ierr.IsAlreadyExists(err) {
+		return nil, err
+	}
 	if err != nil {
 		s.Logger.Error(ctx, "failed to trigger subscription billing workflow",
 			"error", err,
@@ -7888,14 +7892,16 @@ func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflowWithOpti
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 		"user_id", userID,
-		"skip_if_already_invoiced", opts.SkipIfAlreadyInvoiced)
+		"skip_if_already_invoiced", opts.SkipIfAlreadyInvoiced,
+		"recompute_past_period_drafts", opts.RecomputePastPeriodDrafts)
 
 	workflowInput := invoiceTemporalModels.DraftAndComputeSubscriptionInvoiceWorkflowInput{
-		SubscriptionID:        subscriptionID,
-		TenantID:              tenantID,
-		EnvironmentID:         environmentID,
-		UserID:                userID,
-		SkipIfAlreadyInvoiced: opts.SkipIfAlreadyInvoiced,
+		SubscriptionID:            subscriptionID,
+		TenantID:                  tenantID,
+		EnvironmentID:             environmentID,
+		UserID:                    userID,
+		SkipIfAlreadyInvoiced:     opts.SkipIfAlreadyInvoiced,
+		RecomputePastPeriodDrafts: opts.RecomputePastPeriodDrafts,
 	}
 	if err := workflowInput.Validate(); err != nil {
 		return nil, ierr.WithError(err).WithHint("Invalid workflow input").Mark(ierr.ErrValidation)
@@ -8216,6 +8222,8 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 		// Inherited.
 		if sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
 			sub.SubscriptionType = types.SubscriptionTypeInherited
+		} else if err := requireSameBillingEntity(ctx, s.ServiceParams, sub.CustomerID, parentSub.CustomerID); err != nil {
+			return nil, nil, err
 		}
 	}
 
@@ -8229,6 +8237,9 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 				WithHint("The invoicing customer must be active").
 				WithReportableDetails(map[string]interface{}{"external_id": lo.FromPtr(inh.InvoicingCustomerExternalID), "status": invoicingCustomer.Status}).
 				Mark(ierr.ErrValidation)
+		}
+		if err := requireSameBillingEntity(ctx, s.ServiceParams, sub.CustomerID, invoicingCustomer.ID); err != nil {
+			return nil, nil, err
 		}
 		sub.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
 	}

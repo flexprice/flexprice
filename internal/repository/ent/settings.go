@@ -253,6 +253,26 @@ func (r *settingsRepository) GetByKey(ctx context.Context, key types.SettingKey)
 	return setting, nil
 }
 
+func (r *settingsRepository) GetByKeyUncached(ctx context.Context, environmentID string, key types.SettingKey) (*domainSettings.Setting, error) {
+	s, err := r.client.Reader(ctx).Settings.Query().
+		Where(
+			settings.Key(string(key)),
+			settings.TenantID(types.GetTenantID(ctx)),
+			settings.EnvironmentID(environmentID),
+			settings.Status(string(types.StatusPublished)),
+		).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, notFoundSettingErr(key)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get setting by key").
+			Mark(ierr.ErrDatabase)
+	}
+	return domainSettings.FromEnt(s), nil
+}
+
 // GetTenantLevelSettingByKey retrieves a tenant-level setting by key (without environment_id)
 // This is for settings that apply tenant-wide across all environments
 func (r *settingsRepository) GetTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {

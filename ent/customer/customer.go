@@ -58,6 +58,8 @@ const (
 	FieldTaxTreatment = "tax_treatment"
 	// FieldContactPersons holds the string denoting the contact_persons field in the database.
 	FieldContactPersons = "contact_persons"
+	// FieldBillingEntityID holds the string denoting the billing_entity_id field in the database.
+	FieldBillingEntityID = "billing_entity_id"
 	// Table holds the table name of the customer in the database.
 	Table = "customers"
 )
@@ -87,6 +89,7 @@ var Columns = []string{
 	FieldTimezone,
 	FieldTaxTreatment,
 	FieldContactPersons,
+	FieldBillingEntityID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -230,4 +233,9 @@ func ByTimezone(opts ...sql.OrderTermOption) OrderOption {
 // ByTaxTreatment orders the results by the tax_treatment field.
 func ByTaxTreatment(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTaxTreatment, opts...).ToFunc()
+}
+
+// ByBillingEntityID orders the results by the billing_entity_id field.
+func ByBillingEntityID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingEntityID, opts...).ToFunc()
 }
