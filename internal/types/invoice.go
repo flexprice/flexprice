@@ -448,7 +448,7 @@ type InvoiceConfig struct {
 	PaymentTerms                           *PaymentTerms       `json:"payment_terms,omitempty"`                            // Tenant default payment terms; takes precedence over due_date_days when set
 	AutoCompletePurchasedCreditTransaction bool                `json:"auto_complete_purchased_credit_transaction,omitempty"`
 	FinalizationDelaySeconds               int                 `json:"finalization_delay_seconds,omitempty" validate:"omitempty,min=0"` // Seconds to wait after invoice creation before finalization. 0 = immediate.
-	AutoFinalize                           bool                `json:"auto_finalize"`                                                   // Let scheduled billing finalize computed drafts. On by default, when off drafts stay draft until finalized manually.
+	AutoFinalize                           bool                `json:"auto_finalize"`                                                   // When false, drafts are not finalized at period end and wait for a manual finalize. Defaults to true.
 	IncludeZeroValueLineItems              bool                `json:"include_zero_value_line_items"`                                   // Keep usage line items with zero quantity and zero amount on the invoice. Skipped by default.
 }
 
