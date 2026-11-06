@@ -237,12 +237,13 @@ Migration notes:
 - Migrations run before the new code and stay safe for old pods (NFR-6).
 - **This release:** add `connections.billing_entity_id` and its unique key; add `payments.connection_id`; add
   `entity_integration_mappings.connection_id`, fill it on existing rows from the environment's connection
-  for the row's provider (one per provider today, so the fill is exact), then drop the old unique index
-  and create the new one. The code relies on the index only to report "already exists", so the swap is
-  safe in one release. Rows that old pods write during the rollout have no connection and are not covered
-  by the new unique key for those few minutes.
-- **Follow-up (non-blocking):** fill rows written during the rollout the same way, collapse any duplicate
-  among them, and make `entity_integration_mappings.connection_id` required. Nothing waits on it.
+  for the row's provider (one per provider today, so the fill is exact), and create the new unique index
+  alongside the old one. The old index keeps guarding rows with no connection and keeps rollback free of
+  an index rebuild.
+- **Follow-up:** fill rows written during the rollout the same way, collapse any duplicate among them,
+  make `entity_integration_mappings.connection_id` required, and drop the old unique index. Until the drop,
+  two connections of one provider cannot map the same entity, so it must ship before any environment adds
+  a second connection of a provider.
 - No owner fill for tenants enabled before this release (test tenants only). Tenants that enable
   afterwards get it from the enable job (§9.4).
 
