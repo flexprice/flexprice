@@ -949,7 +949,7 @@ func (s *PaddleSyncService) ProcessCustomerCreatedWebhook(ctx context.Context, p
 			QueryFilter: types.NewDefaultQueryFilter(),
 		}
 		existingCustomers, err := customerService.GetCustomers(ctx, emailFilter)
-		existingCustomer := apidto.FirstCustomerInBillingEntity(existingCustomers, types.GetBillingEntityID(ctx))
+		existingCustomer := apidto.FindCustomerInBillingEntity(existingCustomers, types.GetBillingEntityID(ctx))
 		if err == nil && existingCustomer != nil {
 			_, err = s.mappingService.CreateEntityIntegrationMapping(ctx, apidto.CreateEntityIntegrationMappingRequest{
 				EntityID:         existingCustomer.ID,

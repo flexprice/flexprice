@@ -290,7 +290,7 @@ func (h *Handler) handleContact(ctx context.Context, conn *domainconn.Connection
 	if err != nil {
 		return err
 	}
-	if dto.FirstCustomerInBillingEntity(custList, types.GetBillingEntityID(ctx)) != nil {
+	if dto.FindCustomerInBillingEntity(custList, types.GetBillingEntityID(ctx)) != nil {
 		h.logger.Debug(ctx, "zoho webhook: FlexPrice customer with same email exists, skipping create",
 			"email", email,
 			"zoho_contact_id", c.ContactID)

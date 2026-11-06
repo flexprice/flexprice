@@ -164,8 +164,8 @@ func EmptyCustomerResponse() *CustomerResponse {
 // @Description Response object for listing customers with pagination
 type ListCustomersResponse = types.ListResponse[*CustomerResponse] // @name ListCustomersResponse
 
-// FirstCustomerInBillingEntity returns the first listed customer the entity bills, or nil; an empty entity matches any customer.
-func FirstCustomerInBillingEntity(list *ListCustomersResponse, entityID string) *CustomerResponse {
+// FindCustomerInBillingEntity returns the first listed customer the entity bills, or nil; an empty entity matches any customer.
+func FindCustomerInBillingEntity(list *ListCustomersResponse, entityID string) *CustomerResponse {
 	if list == nil {
 		return nil
 	}
