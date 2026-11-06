@@ -637,11 +637,11 @@ func NewRouter(
 
 		billingEntities := v1Private.Group("/billing-entities")
 		{
-			billingEntities.GET("", observe(types.EntityBillingEntity), handlers.BillingEntity.ListBillingEntities)
+			billingEntities.GET("", read(types.EntityBillingEntity, types.ActionRead), handlers.BillingEntity.ListBillingEntities)
 			billingEntities.POST("/enable", write(types.EntityBillingEntity, types.ActionWrite, superAdminOnly), handlers.BillingEntity.EnableBillingEntities)
-			billingEntities.GET("/status", observe(types.EntityBillingEntity), handlers.BillingEntity.GetBillingEntitiesStatus)
+			billingEntities.GET("/status", read(types.EntityBillingEntity, types.ActionRead), handlers.BillingEntity.GetBillingEntitiesStatus)
 			billingEntities.POST("", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.CreateBillingEntity)
-			billingEntities.GET("/:id", observe(types.EntityBillingEntity), handlers.BillingEntity.GetBillingEntity)
+			billingEntities.GET("/:id", read(types.EntityBillingEntity, types.ActionRead), handlers.BillingEntity.GetBillingEntity)
 			billingEntities.PUT("/:id", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.UpdateBillingEntity)
 		}
 
