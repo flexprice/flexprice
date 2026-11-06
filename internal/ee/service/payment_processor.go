@@ -941,6 +941,12 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 					"error", err,
 					"invoice_id", invoice.ID)
 			}
+			// Best effort like the dates: a paid invoice must still finalize; without a snapshot it renders the tenant.
+			if err := NewInvoiceService(p.ServiceParams).(*invoiceService).freezeBillingEntity(ctx, invoice); err != nil {
+				p.Logger.Error(ctx, "failed to freeze invoice billing entity at finalization",
+					"error", err,
+					"invoice_id", invoice.ID)
+			}
 		}
 	} else if invoice.AmountRemaining.LessThan(invoice.AmountDue) {
 		invoice.PaymentStatus = types.PaymentStatusPending // Partial payment still keeps it pending

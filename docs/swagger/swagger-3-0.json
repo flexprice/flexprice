@@ -1829,6 +1829,465 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/billing-entities": {
+      "get": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "List billing entities",
+        "description": "List the billing entities of this environment.",
+        "operationId": "listBillingEntities",
+        "parameters": [
+          {
+            "name": "billing_entity_ids",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "is_default",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "published",
+                "deleted",
+                "archived"
+              ],
+              "x-enum-varnames": [
+                "StatusPublished",
+                "StatusDeleted",
+                "StatusArchived"
+              ]
+            },
+            "x-enum-varnames": [
+              "StatusPublished",
+              "StatusDeleted",
+              "StatusArchived"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBillingEntitiesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Billing entities not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Create a billing entity",
+        "description": "Create a legal entity that bills customers in this environment. Requires billing entities to be enabled.",
+        "operationId": "createBillingEntity",
+        "requestBody": {
+          "description": "Billing entity to create",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBillingEntityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or billing entities not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Invoice prefix already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "billing_entity"
+      }
+    },
+    "/billing-entities/enable": {
+      "post": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Enable billing entities",
+        "description": "Start enabling billing entities in the environment. The environment gets a default entity and its existing customers are assigned to it. Irreversible.",
+        "operationId": "enableBillingEntities",
+        "responses": {
+          "200": {
+            "description": "Already enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityModeResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Enabling started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityModeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The environment uses an external tax engine",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a super admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/billing-entities/status": {
+      "get": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Get billing entities status",
+        "description": "Whether billing entities are off, enabling or enabled in the environment.",
+        "operationId": "getBillingEntitiesStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityModeResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/billing-entities/{id}": {
+      "get": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Get a billing entity",
+        "description": "Load a single billing entity by ID.",
+        "operationId": "getBillingEntity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Billing entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Billing entities not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Update a billing entity",
+        "description": "Edit a billing entity. Drafts and future invoices use the new details; finalized invoices keep theirs.",
+        "operationId": "updateBillingEntity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Billing entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Fields to change",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBillingEntityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or billing entities not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Invoice prefix already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "billing_entity"
+      }
+    },
     "/checkout/sessions": {
       "post": {
         "tags": [
@@ -22051,6 +22510,63 @@
           }
         }
       },
+      "BillingEntityModeResponse": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/types.BillingEntityMode"
+          }
+        }
+      },
+      "BillingEntityResponse": {
+        "type": "object",
+        "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoice_number_prefix": {
+            "type": "string"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
       "BillingPeriodConfig": {
         "type": "object",
         "properties": {
@@ -23543,6 +24059,34 @@
           }
         }
       },
+      "CreateBillingEntityRequest": {
+        "required": [
+          "invoice_number_prefix",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
+          "invoice_number_prefix": {
+            "maxLength": 20,
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      },
       "CreateBulkEntitlementRequest": {
         "required": [
           "items"
@@ -24007,6 +24551,10 @@
             "maxLength": 10,
             "type": "string",
             "description": "billing_currency is the fiat currency invoices are issued in; empty means the charge currency is used as-is"
+          },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "billing_entity_id is the billing entity that bills this customer; defaults to the environment's\ndefault entity. Accepted only once billing entities are enabled, and never changes afterwards."
           },
           "contact": {
             "maxLength": 20,
@@ -25892,6 +26440,10 @@
           "billing_currency": {
             "type": "string",
             "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is."
+          },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "BillingEntityID is the entity that bills the customer; nil while the environment has no billing entities. Never changes once set."
           },
           "contact": {
             "type": "string",
@@ -28017,6 +28569,13 @@
             "type": "string",
             "description": "amount_remaining is the outstanding amount still owed on this invoice (calculated as amount_due minus amount_paid)"
           },
+          "billing_entity": {
+            "$ref": "#/components/schemas/types.InvoiceBillingEntity"
+          },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "BillingEntityID is the entity that bills the invoice; nil while the environment has no billing entities. Never changes once set."
+          },
           "billing_period": {
             "type": "string",
             "description": "billing_period describes the billing period this invoice covers (e.g., \"January 2024\", \"Q1 2024\")"
@@ -28493,6 +29052,20 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AlertLogResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListBillingEntitiesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BillingEntityResponse"
             }
           },
           "pagination": {
@@ -33228,6 +33801,30 @@
           }
         }
       },
+      "UpdateBillingEntityRequest": {
+        "type": "object",
+        "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
+          "invoice_number_prefix": {
+            "maxLength": 20,
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      },
       "UpdateCommitmentRequest": {
         "type": "object",
         "properties": {
@@ -33352,6 +33949,10 @@
             "maxLength": 10,
             "type": "string",
             "description": "billing_currency updates the invoicing currency; send \"\" to clear it back to the charge currency"
+          },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "billing_entity_id cannot be changed; sending it is rejected"
           },
           "contact": {
             "maxLength": 20,
@@ -35101,6 +35702,10 @@
             "type": "string",
             "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is."
           },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "BillingEntityID is the entity that bills the customer; nil while the environment has no billing entities. Never changes once set."
+          },
           "contact": {
             "type": "string",
             "description": "Contact is an optional contact number for the customer (e.g. phone)"
@@ -36505,6 +37110,10 @@
       "types.CustomerFilter": {
         "type": "object",
         "properties": {
+          "billing_entity_id": {
+            "type": "string",
+            "description": "billing_entity_id filters by the customer's billing entity"
+          },
           "customer_ids": {
             "type": "array",
             "items": {
@@ -37537,6 +38146,10 @@
           "amount_remaining_gt": {
             "type": "number",
             "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts"
+          },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "billing_entity_id filters by the customer's billing entity"
           },
           "billing_reason": {
             "$ref": "#/components/schemas/types.InvoiceBillingReason"
@@ -39427,14 +40040,16 @@
           "subscription",
           "invoice",
           "tenant",
-          "credit_note"
+          "credit_note",
+          "billing_entity"
         ],
         "x-enum-varnames": [
           "TaxRateEntityTypeCustomer",
           "TaxRateEntityTypeSubscription",
           "TaxRateEntityTypeInvoice",
           "TaxRateEntityTypeTenant",
-          "TaxRateEntityTypeCreditNote"
+          "TaxRateEntityTypeCreditNote",
+          "TaxRateEntityTypeBillingEntity"
         ],
         "x-speakeasy-name-override": "TaxRateEntityType"
       },
@@ -41357,6 +41972,62 @@
         ],
         "x-speakeasy-name-override": "AmortizationMethod"
       },
+      "types.BillingAddress": {
+        "type": "object",
+        "properties": {
+          "address_city": {
+            "type": "string"
+          },
+          "address_country": {
+            "type": "string"
+          },
+          "address_line1": {
+            "type": "string"
+          },
+          "address_line2": {
+            "type": "string"
+          },
+          "address_postal_code": {
+            "type": "string"
+          },
+          "address_state": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BillingAddress"
+      },
+      "types.BillingDetails": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/types.BillingAddress"
+          },
+          "email": {
+            "type": "string"
+          },
+          "help_email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BillingDetails"
+      },
+      "types.BillingEntityMode": {
+        "type": "string",
+        "enum": [
+          "off",
+          "enabling",
+          "enabled"
+        ],
+        "x-enum-varnames": [
+          "BillingEntityModeOff",
+          "BillingEntityModeEnabling",
+          "BillingEntityModeEnabled"
+        ],
+        "x-speakeasy-name-override": "BillingEntityMode"
+      },
       "types.BillingTermKind": {
         "type": "string",
         "enum": [
@@ -41578,6 +42249,21 @@
           "InstalmentStatusCancelled"
         ],
         "x-speakeasy-name-override": "InstalmentStatus"
+      },
+      "types.InvoiceBillingEntity": {
+        "type": "object",
+        "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
+          "billing_entity_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "InvoiceBillingEntity"
       },
       "types.JournalDirection": {
         "type": "string",
@@ -42142,6 +42828,9 @@
           "address_state": {
             "type": "string"
           },
+          "billing_entity_id": {
+            "type": "string"
+          },
           "email": {
             "type": "string"
           },
@@ -42281,6 +42970,9 @@
             "type": "string"
           },
           "amount_remaining": {
+            "type": "string"
+          },
+          "billing_entity_id": {
             "type": "string"
           },
           "billing_period": {

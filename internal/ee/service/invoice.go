@@ -81,6 +81,9 @@ type InvoiceService interface {
 	AttemptPayment(ctx context.Context, id string) error
 	GetInvoicePDF(ctx context.Context, req dto.InvoicePDFRequest) ([]byte, error)
 	GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePDFRequest) (string, error)
+	// GetInvoiceBillingEntity is the billing entity frozen at finalization, else the customer's entity now; nil means the tenant bills.
+	// An issued invoice without a frozen billing entity predates billing entities, so the tenant stays its biller.
+	GetInvoiceBillingEntity(ctx context.Context, inv *invoice.Invoice) (*types.InvoiceBillingEntity, error)
 	RecalculateInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
@@ -305,6 +308,17 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 		inv.IdempotencyKey = &idempKey
 		inv.BillingSequence = billingSeq
 		inv.InvoiceStatus = types.InvoiceStatusDraft
+		cust, err := s.CustomerRepo.Get(txCtx, inv.CustomerID)
+		if err != nil {
+			return err
+		}
+		billingEntity, err := NewBillingEntityService(s.ServiceParams).EffectiveEntity(txCtx, cust)
+		if err != nil {
+			return err
+		}
+		if billingEntity != nil {
+			inv.BillingEntityID = lo.ToPtr(billingEntity.ID)
+		}
 
 		// Entities bill in the custom currency, invoices in fiat. Amounts live in
 		// custom_currency; the fiat columns are projected from it.
@@ -1240,6 +1254,10 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		filter.CustomerID = customer.ID
 	}
 
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
+		return nil, err
+	}
+
 	invoices, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -1529,11 +1547,19 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 			if err != nil {
 				return ierr.WithError(err).WithHint("Failed to get invoice configuration").Mark(ierr.ErrValidation)
 			}
-			invoiceNumber, err := s.InvoiceRepo.GetNextInvoiceNumber(txCtx, &invoiceConfig)
+			prefix, err := s.numberPrefixFor(txCtx, lockedInv, &invoiceConfig)
+			if err != nil {
+				return err
+			}
+			invoiceNumber, err := s.InvoiceRepo.GetNextInvoiceNumber(txCtx, &invoiceConfig, prefix)
 			if err != nil {
 				return err
 			}
 			lockedInv.InvoiceNumber = &invoiceNumber
+		}
+
+		if err := s.freezeBillingEntity(txCtx, lockedInv); err != nil {
+			return err
 		}
 
 		// Trial-start invoices are always $0 but must NOT be auto-succeeded here.
@@ -3750,6 +3776,15 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			"customer_id", inv.CustomerID)
 	}
 
+	billingEntity, err := s.GetInvoiceBillingEntity(ctx, &inv.Invoice)
+	if err != nil {
+		return nil, err
+	}
+	biller := tenant
+	if billingEntity != nil {
+		biller = billingEntityAsTenant(tenant, billingEntity)
+	}
+
 	// Convert to InvoiceData
 	data := &pdf.InvoiceData{
 		ID:                         inv.ID,
@@ -3765,7 +3800,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		BillingReason:              inv.BillingReason,
 		Notes:                      "",  // resolved from invoice metadata
 		VAT:                        0.0, // resolved from invoice metadata
-		Biller:                     s.getBillerInfo(tenant, billerTaxIDs),
+		Biller:                     s.getBillerInfo(biller, billerTaxIDs),
 		PeriodStart:                pdf.CustomTime{Time: lo.FromPtr(inv.PeriodStart)},
 		PeriodEnd:                  pdf.CustomTime{Time: lo.FromPtr(inv.PeriodEnd)},
 		Recipient:                  s.getRecipientInfo(customer, customerTaxIDs),

@@ -42,6 +42,7 @@ const (
 	SettingKeyTaxConfig                   SettingKey = "tax_config"
 	SettingKeyCommitmentsV2               SettingKey = "commitments_v2"
 	SettingKeyRevenueRecognitionConfig    SettingKey = "revenue_recognition_config"
+	SettingKeyBillingEntityConfig         SettingKey = "billing_entity_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -70,6 +71,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyTaxConfig,
 		SettingKeyCommitmentsV2,
 		SettingKeyRevenueRecognitionConfig,
+		SettingKeyBillingEntityConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -972,6 +974,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: map[string]interface{}{"enabled": false},
 			Description:  "Enable revenue recognition",
 		},
+		SettingKeyBillingEntityConfig: {
+			Key:          SettingKeyBillingEntityConfig,
+			DefaultValue: map[string]interface{}{"mode": string(BillingEntityModeOff)},
+			Description:  "Billing entities mode of the environment; set only by enabling billing entities",
+		},
 	}, nil
 }
 
@@ -1158,6 +1165,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return cfg.Validate()
 
+	case SettingKeyBillingEntityConfig:
+		cfg, err := utils.ToStruct[BillingEntityConfig](value)
+		if err != nil {
+			return err
+		}
+		return cfg.Validate()
+
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -1314,4 +1328,13 @@ type RevenueRecognitionConfig struct {
 
 func (c RevenueRecognitionConfig) Validate() error {
 	return nil
+}
+
+// BillingEntityConfig holds the environment's billing entities mode.
+type BillingEntityConfig struct {
+	Mode BillingEntityMode `json:"mode"`
+}
+
+func (c BillingEntityConfig) Validate() error {
+	return c.Mode.Normalize().Validate()
 }

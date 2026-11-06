@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/ent/alertsettings"
 	"github.com/flexprice/flexprice/ent/analyticsview"
 	"github.com/flexprice/flexprice/ent/auth"
+	"github.com/flexprice/flexprice/ent/billingentity"
 	"github.com/flexprice/flexprice/ent/billinginstalment"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/billingterm"
@@ -150,6 +151,7 @@ func checkColumn(t, c string) error {
 			alertsettings.Table:                    alertsettings.ValidColumn,
 			analyticsview.Table:                    analyticsview.ValidColumn,
 			auth.Table:                             auth.ValidColumn,
+			billingentity.Table:                    billingentity.ValidColumn,
 			billinginstalment.Table:                billinginstalment.ValidColumn,
 			billingsequence.Table:                  billingsequence.ValidColumn,
 			billingterm.Table:                      billingterm.ValidColumn,

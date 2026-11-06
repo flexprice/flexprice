@@ -8220,6 +8220,8 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 		// Inherited.
 		if sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
 			sub.SubscriptionType = types.SubscriptionTypeInherited
+		} else if err := requireSameBillingEntity(ctx, s.ServiceParams, sub.CustomerID, parentSub.CustomerID); err != nil {
+			return nil, nil, err
 		}
 	}
 
@@ -8233,6 +8235,9 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 				WithHint("The invoicing customer must be active").
 				WithReportableDetails(map[string]interface{}{"external_id": lo.FromPtr(inh.InvoicingCustomerExternalID), "status": invoicingCustomer.Status}).
 				Mark(ierr.ErrValidation)
+		}
+		if err := requireSameBillingEntity(ctx, s.ServiceParams, sub.CustomerID, invoicingCustomer.ID); err != nil {
+			return nil, nil, err
 		}
 		sub.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
 	}

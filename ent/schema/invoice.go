@@ -156,6 +156,17 @@ func (Invoice) Fields() []ent.Field {
 				"postgres": "jsonb",
 			}).
 			Optional(),
+		field.JSON("billing_entity", &types.InvoiceBillingEntity{}).
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Optional(),
+		field.String("billing_entity_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
 		field.String("description").
 			Optional(),
 		field.Time("due_date").
@@ -296,6 +307,8 @@ func (Invoice) Indexes() []ent.Index {
 		index.Fields("finalized_at").
 			StorageKey("idx_invoices_finalized_at_published").
 			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text))")),
+		index.Fields("tenant_id", "environment_id", "billing_entity_id").
+			StorageKey("idx_invoices_tenant_env_billing_entity"),
 		index.Fields("subscription_id", "period_start", "period_end").
 			StorageKey("idx_subscription_period_unique").
 			Annotations(entsql.IndexWhere("(((invoice_status)::text <> 'VOIDED'::text) AND (subscription_id IS NOT NULL))")),

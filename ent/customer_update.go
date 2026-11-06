@@ -343,6 +343,26 @@ func (_u *CustomerUpdate) ClearContactPersons() *CustomerUpdate {
 	return _u
 }
 
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (_u *CustomerUpdate) SetBillingEntityID(v string) *CustomerUpdate {
+	_u.mutation.SetBillingEntityID(v)
+	return _u
+}
+
+// SetNillableBillingEntityID sets the "billing_entity_id" field if the given value is not nil.
+func (_u *CustomerUpdate) SetNillableBillingEntityID(v *string) *CustomerUpdate {
+	if v != nil {
+		_u.SetBillingEntityID(*v)
+	}
+	return _u
+}
+
+// ClearBillingEntityID clears the value of the "billing_entity_id" field.
+func (_u *CustomerUpdate) ClearBillingEntityID() *CustomerUpdate {
+	_u.mutation.ClearBillingEntityID()
+	return _u
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (_u *CustomerUpdate) Mutation() *CustomerMutation {
 	return _u.mutation
@@ -519,6 +539,12 @@ func (_u *CustomerUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ContactPersonsCleared() {
 		_spec.ClearField(customer.FieldContactPersons, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BillingEntityID(); ok {
+		_spec.SetField(customer.FieldBillingEntityID, field.TypeString, value)
+	}
+	if _u.mutation.BillingEntityIDCleared() {
+		_spec.ClearField(customer.FieldBillingEntityID, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -852,6 +878,26 @@ func (_u *CustomerUpdateOne) ClearContactPersons() *CustomerUpdateOne {
 	return _u
 }
 
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (_u *CustomerUpdateOne) SetBillingEntityID(v string) *CustomerUpdateOne {
+	_u.mutation.SetBillingEntityID(v)
+	return _u
+}
+
+// SetNillableBillingEntityID sets the "billing_entity_id" field if the given value is not nil.
+func (_u *CustomerUpdateOne) SetNillableBillingEntityID(v *string) *CustomerUpdateOne {
+	if v != nil {
+		_u.SetBillingEntityID(*v)
+	}
+	return _u
+}
+
+// ClearBillingEntityID clears the value of the "billing_entity_id" field.
+func (_u *CustomerUpdateOne) ClearBillingEntityID() *CustomerUpdateOne {
+	_u.mutation.ClearBillingEntityID()
+	return _u
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (_u *CustomerUpdateOne) Mutation() *CustomerMutation {
 	return _u.mutation
@@ -1058,6 +1104,12 @@ func (_u *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err 
 	}
 	if _u.mutation.ContactPersonsCleared() {
 		_spec.ClearField(customer.FieldContactPersons, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BillingEntityID(); ok {
+		_spec.SetField(customer.FieldBillingEntityID, field.TypeString, value)
+	}
+	if _u.mutation.BillingEntityIDCleared() {
+		_spec.ClearField(customer.FieldBillingEntityID, field.TypeString)
 	}
 	_node = &Customer{config: _u.config}
 	_spec.Assign = _node.assignValues

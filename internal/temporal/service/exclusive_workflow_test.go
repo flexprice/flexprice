@@ -39,6 +39,7 @@ func TestExecuteWorkflowExclusiveID(t *testing.T) {
 	}{
 		{"plan price sync", types.TemporalPriceSyncV2Workflow, "plan_1", "wf_price_sync_plan_plan_1", true},
 		{"addon price sync", types.TemporalAddonPriceSyncWorkflow, "addon_1", "wf_price_sync_addon_addon_1", true},
+		{"billing entity enable", types.TemporalBillingEntityEnableWorkflow, models.BillingEntityEnableWorkflowInput{}, "wf_billing_entity_enable_tenant_1-env_1", true},
 		{
 			"subscription billing", types.TemporalProcessSubscriptionBillingWorkflow,
 			subscriptionModels.ProcessSubscriptionBillingWorkflowInput{SubscriptionID: "sub_1", TenantID: "tenant_1", EnvironmentID: "env_1", PeriodStart: time.Now(), PeriodEnd: time.Now().Add(time.Hour)},

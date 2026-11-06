@@ -50,7 +50,14 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 		}
 	}
 
-	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	billingEntityService := NewBillingEntityService(s.ServiceParams)
+	if err := billingEntityService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
+		billingEntityID, err := billingEntityService.ResolveBillingEntityID(txCtx, mode, req.BillingEntityID)
+		if err != nil {
+			return err
+		}
+		cust.BillingEntityID = billingEntityID
+
 		if err := s.CustomerRepo.Create(txCtx, cust); err != nil {
 			// No need to wrap the error as the repository already returns properly formatted errors
 			return err
@@ -71,11 +78,15 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 			}
 		}
 
-		// If no tax rate overrides are provided, link the tenant tax rate to the customer
+		// If no tax rate overrides are provided, link the entity's (or, without one, the tenant's) default rates
 		if req.TaxRateOverrides == nil {
 			filter := types.NewNoLimitTaxAssociationFilter()
 			filter.EntityType = types.TaxRateEntityTypeTenant
 			filter.EntityID = types.GetTenantID(txCtx)
+			if cust.BillingEntityID != nil {
+				filter.EntityType = types.TaxRateEntityTypeBillingEntity
+				filter.EntityID = *cust.BillingEntityID
+			}
 			filter.AutoApply = lo.ToPtr(true)
 			tenantTaxAssociations, err := taxService.ListTaxAssociations(txCtx, filter)
 			if err != nil {
@@ -139,6 +150,9 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 
 	// Validate expand fields
 	if err := filter.GetExpand().Validate(types.CustomerExpandConfig); err != nil {
+		return nil, err
+	}
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
 		return nil, err
 	}
 
