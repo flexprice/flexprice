@@ -2671,3 +2671,88 @@ func TestRawChargesByLine_SplitsChargesAcrossLinesSharingAPrice(t *testing.T) {
 	require.Len(t, got["li_old"], 1)
 	require.Len(t, got["li_new"], 1)
 }
+
+func TestActiveBuckets_CountsTheBucketsTheTermAndWindowsHold(t *testing.T) {
+	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	day := types.Period{Start: jan, End: jan.AddDate(0, 0, 1)}
+	tests := []struct {
+		name       string
+		commitment commitment.Commitment
+		subEnd     *time.Time
+		span       types.Period
+		bucket     types.WindowSize
+		want       int64
+	}{
+		{
+			name:       "minutes from a start inside the span",
+			commitment: commitment.Commitment{StartDate: jan.Add(90 * time.Second)},
+			span:       types.Period{Start: jan, End: jan.Add(time.Hour)},
+			bucket:     types.WindowSizeMinute,
+			want:       58,
+		},
+		{
+			name:       "hours up to a termination",
+			commitment: commitment.Commitment{StartDate: jan, EndDate: lo.ToPtr(jan.AddDate(0, 1, 0)), TerminatedAt: lo.ToPtr(jan.Add(10 * time.Hour))},
+			span:       day,
+			bucket:     types.WindowSizeHour,
+			want:       10,
+		},
+		{
+			name:       "open-ended until the subscription ends",
+			commitment: commitment.Commitment{StartDate: jan},
+			subEnd:     lo.ToPtr(jan.Add(6 * time.Hour)),
+			span:       day,
+			bucket:     types.WindowSize15Min,
+			want:       24,
+		},
+		{
+			name: "hours inside active windows in the commitment's timezone",
+			commitment: commitment.Commitment{StartDate: jan, Timezone: "Asia/Kolkata", ActiveWindows: types.ActiveWindows{
+				{Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 17}},
+			}},
+			span:   day,
+			bucket: types.WindowSizeHour,
+			want:   8,
+		},
+		{
+			name:       "days before the commitment starts",
+			commitment: commitment.Commitment{StartDate: jan.AddDate(0, 0, 10)},
+			span:       types.Period{Start: jan, End: jan.AddDate(0, 0, 10)},
+			bucket:     types.WindowSizeDay,
+			want:       0,
+		},
+		{
+			name:       "days from a start inside the span",
+			commitment: commitment.Commitment{StartDate: jan.AddDate(0, 0, 10)},
+			span:       types.Period{Start: jan, End: jan.AddDate(0, 1, 0)},
+			bucket:     types.WindowSizeDay,
+			want:       21,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &commitmentLoader{
+				sub:               &subscription.Subscription{BillingAnchor: jan, EndDate: tt.subEnd},
+				scopeByCommitment: map[string]*loadedScope{tt.commitment.ID: {location: tt.commitment.Location()}},
+			}
+			require.Equal(t, tt.want, l.activeBuckets(&tt.commitment, tt.span, tt.bucket))
+		})
+	}
+}
+
+// BenchmarkActiveBuckets_ElevenMonthsOfMinutes counts the minute buckets an annual commitment period accrued before its
+// last billing period, for a commitment outside UTC.
+func BenchmarkActiveBuckets_ElevenMonthsOfMinutes(b *testing.B) {
+	start := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	c := &commitment.Commitment{StartDate: start, Timezone: "Asia/Kolkata"}
+	l := &commitmentLoader{
+		sub:               &subscription.Subscription{BillingAnchor: start},
+		scopeByCommitment: map[string]*loadedScope{c.ID: {location: c.Location()}},
+	}
+	elapsed := types.Period{Start: start, End: start.AddDate(0, 11, 0)}
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		l.activeBuckets(c, elapsed, types.WindowSizeMinute)
+	}
+}
