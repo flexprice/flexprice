@@ -14434,6 +14434,16 @@
               }
             }
           },
+          "409": {
+            "description": "An invoice already exists for the cancellation period",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Server error",
             "content": {
