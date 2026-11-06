@@ -11,7 +11,7 @@ import (
 )
 
 // selfBillingEventCountQuery counts across every tenant on purpose: Flexprice bills each tenant on its ingest volume.
-// Hours are pinned to UTC. The timestamp bound lets partitions prune; later arrivals go uncounted.
+// Hours are pinned to UTC. Events ingested over 30 days late go uncounted.
 const selfBillingEventCountQuery = `
 SELECT
 	tenant_id,
@@ -20,11 +20,12 @@ SELECT
 	uniqExact(id) AS cnt
 FROM events
 WHERE ingested_at >= ? AND ingested_at < ?
+	AND timestamp >= ingested_at - INTERVAL 30 DAY
 	AND timestamp >= ?
 GROUP BY tenant_id, environment_id, hour
 SETTINGS ` + maxMemoryUsageSetting
 
-// selfBillingLateEventHorizon bounds event age, so old partitions prune.
+// Implied by the per-row bound; enables partition pruning.
 const selfBillingLateEventHorizon = 30 * 24 * time.Hour
 
 type selfBillingRepository struct {
