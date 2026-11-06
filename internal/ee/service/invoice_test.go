@@ -3415,6 +3415,73 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_CycleDraftAfterPeriodEndIsDu
 	s.True(due, "a computed cycle draft whose period has ended should finalize")
 }
 
+func (s *InvoiceServiceSuite) TestIsFinalizationDue_AutoFinalizeDefaultsOnWhenKeyMissing() {
+	ctx := s.GetContext()
+	s.invoiceRepo.Clear()
+	s.seedInvoiceFinalizationConfig(true, 1800)
+
+	// Tenants saved invoice_config before auto_finalize existed, so their stored value has no such key.
+	svc := NewSettingsService(s.service.(*invoiceService).ServiceParams).(*settingsService)
+	stored, err := svc.fetchSetting(ctx, types.SettingKeyInvoiceConfig)
+	s.Require().NoError(err)
+	delete(stored.Value, "auto_finalize")
+	s.Require().NoError(svc.SettingsRepo.Update(ctx, stored))
+
+	cfg, err := GetSetting[types.InvoiceConfig](svc, ctx, types.SettingKeyInvoiceConfig)
+	s.Require().NoError(err)
+	s.True(cfg.AutoFinalize)
+
+	now := time.Now().UTC()
+	periodEnd := now.Add(-3 * time.Hour)
+	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodEnd.Add(-30 * 24 * time.Hour), PeriodEnd: periodEnd, ReferencePoint: types.ReferencePointPeriodEnd})
+	s.Require().NoError(err)
+
+	computedAt := now.Add(-time.Hour)
+	inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	inv.CreatedAt = now.Add(-10 * 24 * time.Hour)
+	inv.LastComputedAt = &computedAt
+	s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
+
+	due, err := s.service.IsFinalizationDue(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.True(due)
+}
+
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_ManualFinalizeIgnoresAutoFinalize() {
+	ctx := s.GetContext()
+	s.invoiceRepo.Clear()
+	s.seedInvoiceFinalizationConfig(false, 1800)
+
+	computedAt := time.Now().UTC().Add(-time.Hour)
+	draftInvoice := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(50),
+		Total:           decimal.NewFromFloat(50),
+		Subtotal:        decimal.NewFromFloat(50),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(50),
+		LastComputedAt:  &computedAt,
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draftInvoice))
+
+	due, err := s.service.IsFinalizationDue(ctx, draftInvoice.ID)
+	s.Require().NoError(err)
+	s.False(due)
+
+	s.Require().NoError(s.service.FinalizeInvoice(ctx, draftInvoice.ID, dto.FinalizeInvoiceRequest{}))
+
+	finalized, err := s.invoiceRepo.Get(ctx, draftInvoice.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, finalized.InvoiceStatus)
+}
+
 func (s *InvoiceServiceSuite) TestIsFinalizationDue_DelayAnchor() {
 	ctx := s.GetContext()
 	const delay = 2 * time.Hour
