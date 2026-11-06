@@ -105,7 +105,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 
 | ID | Requirement | UC | Acceptance criteria |
 |---|---|---|---|
-| FR-1 | Connection create and OAuth connect accept an optional `billing_entity_id`; absent means the default entity. It follows Phase 1's entity input rule: rejected unless the environment is `enabled`, and must name an entity of the request's environment. Both also accept an optional client-generated `id` (`conn_` followed by a ULID) so the webhook URL is known before the connection exists; absent means one is generated. | UC1 | Enabled environment: connect with entity X → connection shows X; without → shows the default's ID. Off environment with an entity → 400 `billing_entities_not_enabled`. Create with `id` → connection has that id; the same `id` again → 409; `conn_123` → 400. |
+| FR-1 | Connection create and OAuth connect accept an optional `billing_entity_id`; absent means the default entity. It follows Phase 1's entity input rule: rejected unless the environment is `enabled`, and must name an entity of the request's environment. Both also accept an optional client-generated `id` (`conn_` followed by a ULID) so the webhook URL is known before the connection exists; absent means one is generated and the connection belongs to the default entity, so a non-default entity requires `id`. | UC1 | Enabled environment: connect with entity X → connection shows X; without → shows the default's ID. Off environment with an entity → 400 `billing_entities_not_enabled`. Create with `id` → connection has that id; the same `id` again → 409; `conn_123` → 400. Entity X (not default) without `id` → 400. |
 | FR-2 | In an `enabling` or `enabled` environment, each connection belongs to exactly one entity and each entity has at most one published connection per provider. An off environment keeps at most one published connection per provider. Storage providers keep today's rule and belong to no entity. | UC1 | Second Stripe connection for X → 409; Stripe for X and for Y → both saved; second Stripe on an off environment → 409 as today. |
 | FR-3 | Enabling makes the default entity the owner of every existing non-storage connection; a connection created while enabling belongs to the default entity. | UC1 | After enable, every connection except S3/GCS shows the default entity's ID. |
 | FR-4 | Connection list accepts an optional `billing_entity_id` filter; connection Get and List carry `billing_entity_id` (null for off environments and storage) and, for providers that receive webhooks, `webhook_secret_set`. | UC1 | Filter by X → X's connections only; off environment → field null. Razorpay without a webhook secret → `webhook_secret_set: false`; S3 → field absent. |
@@ -285,6 +285,7 @@ Migration notes:
 | Connection already exists for this entity | 409 | FR-2, FR-5 |
 | Invalid connection id | 400 | `id` is not `conn_` followed by a ULID (FR-1) |
 | Connection id already exists | 409 | `id` is already taken (FR-1) |
+| Connection id required | 400 | `billing_entity_id` names a non-default entity and `id` is absent (FR-1) |
 | Provider not connected | 400 | Payment link, checkout or payment method for an entity without that provider (FR-6) |
 | Unknown or mismatched connection | 404 | Webhook URL names a connection of another provider, tenant or environment |
 

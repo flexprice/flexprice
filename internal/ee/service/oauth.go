@@ -193,7 +193,7 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 	beService := NewBillingEntityService(s.params)
 	var incompleteConnection *connection.Connection
 	if err := beService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
-		owner, err := resolveConnectionOwner(txCtx, beService, mode, providerType, session.BillingEntityID)
+		owner, err := resolveConnectionOwner(txCtx, beService, mode, providerType, session.BillingEntityID, session.ConnectionID)
 		if err != nil {
 			return err
 		}
