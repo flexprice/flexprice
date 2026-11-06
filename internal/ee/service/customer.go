@@ -57,7 +57,7 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 		if requested == nil && mode == types.BillingEntityModeEnabled && types.GetBillingEntityID(txCtx) != "" {
 			requested = lo.ToPtr(types.GetBillingEntityID(txCtx))
 		}
-		billingEntityID, err := billingEntityService.ResolveForCreate(txCtx, mode, requested)
+		billingEntityID, err := billingEntityService.ResolveBillingEntityID(txCtx, mode, requested)
 		if err != nil {
 			return err
 		}

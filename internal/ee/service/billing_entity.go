@@ -21,7 +21,8 @@ type BillingEntityService interface {
 
 	// WithMode runs fn in a transaction with the mode read from the database; before enabled it holds the shared enable lock.
 	WithMode(ctx context.Context, fn func(txCtx context.Context, mode types.BillingEntityMode) error) error
-	ResolveForCreate(ctx context.Context, mode types.BillingEntityMode, requested *string) (*string, error)
+	// ResolveBillingEntityID is the entity a new customer or connection gets: the one asked for when enabled, else the default; nil when off.
+	ResolveBillingEntityID(ctx context.Context, mode types.BillingEntityMode, billingEntityID *string) (*string, error)
 	// EffectiveEntity is the customer's entity; a customer the enable backfill has not reached belongs to the default.
 	EffectiveEntity(ctx context.Context, cust *customer.Customer) (*billingentity.BillingEntity, error)
 	ScopeToCustomer(ctx context.Context, customerID string) (context.Context, error)
@@ -137,41 +138,6 @@ func (s *billingEntityService) WithMode(ctx context.Context, fn func(txCtx conte
 	})
 }
 
-func (s *billingEntityService) getOrCreateDefault(ctx context.Context) (*billingentity.BillingEntity, error) {
-	existing, err := s.BillingEntityRepo.GetDefault(ctx)
-	if err == nil {
-		return existing, nil
-	}
-	if !ierr.IsNotFound(err) {
-		return nil, err
-	}
-
-	var result *billingentity.BillingEntity
-	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		key := "billing_entity_default:" + types.GetTenantID(txCtx) + ":" + types.GetEnvironmentID(txCtx)
-		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: key}); err != nil {
-			return err
-		}
-
-		existing, err := s.BillingEntityRepo.GetDefault(txCtx)
-		if err == nil {
-			result = existing
-			return nil
-		}
-		if !ierr.IsNotFound(err) {
-			return err
-		}
-
-		created, err := s.createDefault(txCtx)
-		if err != nil {
-			return err
-		}
-		result = created
-		return nil
-	})
-	return result, err
-}
-
 // createDefault makes the environment's default entity from the tenant and copies the tenant-level tax links to it.
 func (s *billingEntityService) createDefault(ctx context.Context) (*billingentity.BillingEntity, error) {
 	tenantID := types.GetTenantID(ctx)
@@ -239,7 +205,7 @@ func (s *billingEntityService) ResolveBillingEntityID(ctx context.Context, mode 
 		return lo.ToPtr(entity.ID), nil
 	}
 
-	def, err := s.getOrCreateDefault(ctx)
+	def, err := s.BillingEntityRepo.GetDefault(ctx)
 	if err != nil {
 		return nil, err
 	}

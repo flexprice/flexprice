@@ -1291,7 +1291,7 @@ func resolveConnectionOwner(ctx context.Context, beService BillingEntityService,
 		}
 		return nil, nil
 	}
-	return beService.ResolveForCreate(ctx, mode, requested)
+	return beService.ResolveBillingEntityID(ctx, mode, requested)
 }
 
 func errStorageHasNoEntity(provider types.SecretProvider) error {
@@ -1314,7 +1314,7 @@ func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.
 		if connection.IsStorageProvider(conn.ProviderType) {
 			return errStorageHasNoEntity(conn.ProviderType)
 		}
-		target, err := beService.ResolveForCreate(txCtx, mode, requested)
+		target, err := beService.ResolveBillingEntityID(txCtx, mode, requested)
 		if err != nil {
 			return err
 		}
