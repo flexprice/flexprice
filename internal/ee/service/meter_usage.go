@@ -2938,7 +2938,7 @@ func (s *meterUsageService) fetchLineItemCharges(
 	return chargesByLine, nil
 }
 
-// maxCommitmentPeriods bounds the billing periods one analytics query prices v2 commitments over.
+// maxCommitmentPeriods bounds the billing periods of a range a v2 commitment overlaps, each priced on its own.
 const maxCommitmentPeriods = 366
 
 // calculateLineItemCommitments returns what v2 commitments bill each queried line they cover in
@@ -2952,7 +2952,26 @@ func (s *meterUsageService) calculateLineItemCommitments(
 	billingAnchor *time.Time,
 	end time.Time,
 ) (map[string]*types.CommitmentInfo, []string, error) {
-	periods, err := billingPeriodsIn(usage.Subscription, types.Period{Start: params.StartTime, End: end}, clock.Now())
+	// Only a range some v2 commitment overlaps is priced period by period, so a long range without one stays valid.
+	svc := newCommitmentService(s.ServiceParams)
+	enabled, err := svc.IsEnabled(ctx)
+	if err != nil || !enabled {
+		return nil, nil, err
+	}
+
+	// The open period's loader prices through the period end, so the lookup reaches it too.
+	sub := usage.Subscription
+	lookupEnd := end
+	if end.After(sub.CurrentPeriodStart) && end.Before(sub.CurrentPeriodEnd) {
+		lookupEnd = sub.CurrentPeriodEnd
+	}
+
+	overlapping, err := svc.ListOverlapping(ctx, sub.ID, params.StartTime, lookupEnd)
+	if err != nil || len(overlapping) == 0 {
+		return nil, nil, err
+	}
+
+	periods, err := billingPeriodsIn(sub, types.Period{Start: params.StartTime, End: end}, clock.Now())
 	if err != nil {
 		return nil, nil, err
 	}

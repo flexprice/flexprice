@@ -6947,6 +6947,35 @@ func (s *MeterUsageServiceSuite) TestCommitments_FuturePeriodsBillNothing() {
 	s.True(resp.TotalCost.Equal(want), "%d months bill %s, want %s", elapsedMonths, resp.TotalCost, want)
 }
 
+// The period limit applies only to a range a commitment overlaps: two years of a daily subscription's history bill at the
+// line price, and fail once a commitment overlaps them.
+func (s *MeterUsageServiceSuite) TestCommitments_PeriodLimitAppliesOnlyWithACommitment() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	start := s.periodStart.AddDate(-2, 0, 0)
+	s.sub.StartDate, s.sub.BillingAnchor, s.sub.BillingPeriod = start, start, types.BILLING_PERIOD_DAILY
+	s.sub.CurrentPeriodStart, s.sub.CurrentPeriodEnd = s.periodEnd.AddDate(0, 0, -1), s.periodEnd
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, s.sub))
+
+	m := s.createMeterWithAggregation(ctx, "meter_daily_billing", "api_call", types.AggregationSum)
+	p := s.createPriceForMeter(ctx, "price_daily_billing", m.ID, dec("1"))
+	s.createLineItemForMeter(ctx, "li_daily_billing", m.ID, p.ID)
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10), 100, nil)
+
+	resp := s.customerAnalytics(start, s.periodEnd)
+	s.True(resp.TotalCost.Equal(dec("100")), "total %s", resp.TotalCost)
+
+	s.storeCommitment(s.newCommitment("cmt_daily_billing", types.CommitmentScopePrice, p.ID, "150"))
+	_, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          start,
+		EndTime:            s.periodEnd,
+	})
+	s.True(ierr.IsValidation(err), "error %v", err)
+}
+
 // Groups share a line's commitment charges by their usage over the range, so a group costs the same whatever window the
 // response uses. The trainer peaks at 10 GPUs on 5 Jan; inference runs 4 GPUs every day of that week.
 func (s *MeterUsageServiceSuite) TestCommitments_GroupCostsDoNotDependOnTheWindow() {
