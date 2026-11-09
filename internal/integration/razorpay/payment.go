@@ -827,29 +827,28 @@ func selectAutoChargeToken(
 	return nil, false
 }
 
-// SelectSavedToken returns the customer's Razorpay ID and a recurring token able to pay amount; ok is false when there is none.
+// SelectSavedToken returns the customer's Razorpay ID and a recurring token able to pay amount; token is nil when there is none.
 func (s *PaymentService) SelectSavedToken(
 	ctx context.Context,
 	customerID string,
 	amount decimal.Decimal,
 	preferred types.PaymentMethodType,
-) (razorpayCustomerID string, token *interfaces.ProviderPaymentMethod, ok bool) {
+) (razorpayCustomerID string, token *interfaces.ProviderPaymentMethod, err error) {
 	razorpayCustomerID, tokens, err := s.customerSvc.ListCustomerTokens(ctx, customerID)
 	if err != nil {
-		s.logger.Info(ctx, "list Razorpay tokens failed, no saved token to charge",
-			"customer_id", customerID, "error", err)
-		return "", nil, false
+		return "", nil, err
 	}
 
-	token, ok = selectAutoChargeToken(tokens, preferred, amount)
+	token, ok := selectAutoChargeToken(tokens, preferred, amount)
 	if !ok {
 		s.logger.Info(ctx, "no usable Razorpay token",
 			"customer_id", customerID,
 			"amount", amount.String(),
 			"preferred_method", preferred,
 			"tokens_inspected", len(tokens))
+		return razorpayCustomerID, nil, nil
 	}
-	return razorpayCustomerID, token, ok
+	return razorpayCustomerID, token, nil
 }
 
 // ChargeSavedToken selects a confirmed token for an already-mapped Razorpay
@@ -862,8 +861,13 @@ func (s *PaymentService) ChargeSavedToken(
 		return nil, false, nil
 	}
 
-	razorpayCustomerID, token, ok := s.SelectSavedToken(ctx, req.Customer.ID, req.Amount, req.PreferredMethod)
-	if !ok {
+	razorpayCustomerID, token, err := s.SelectSavedToken(ctx, req.Customer.ID, req.Amount, req.PreferredMethod)
+	if err != nil {
+		s.logger.Info(ctx, "list Razorpay tokens failed, no saved token to charge",
+			"customer_id", req.Customer.ID, "error", err)
+		return nil, false, nil
+	}
+	if token == nil {
 		return nil, false, nil
 	}
 
@@ -1026,7 +1030,7 @@ func (s *PaymentService) submitRecurringPayment(ctx context.Context, req AutoCha
 		return nil, err
 	}
 
-	razorpayPaymentID, _ := payment["id"].(string)
+	razorpayPaymentID, _ := payment["razorpay_payment_id"].(string)
 	s.logger.Info(ctx, "recurring payment submitted to Razorpay",
 		"invoice_id", req.InvoiceID,
 		"order_id", orderID,

@@ -2270,8 +2270,13 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		IsAutoChargeAttempt: true,
 	}
 
-	razorpayCustomerID, token, ok := razorpaySvc.SelectSavedToken(ctx, inv.CustomerID, inv.AmountRemaining, "")
-	if !ok {
+	razorpayCustomerID, token, err := razorpaySvc.SelectSavedToken(ctx, inv.CustomerID, inv.AmountRemaining, "")
+	if err != nil {
+		s.Logger.Info(ctx, "list Razorpay tokens failed, sending the invoice instead",
+			"invoice_id", inv.ID, "customer_id", inv.CustomerID, "error", err)
+		return false, nil
+	}
+	if token == nil {
 		failedEvent.Reason = types.InvoicePaymentFailureReasonPaymentMethodUnavailable
 		s.PublishInvoicePaymentFailed(ctx, failedEvent)
 		return false, nil
@@ -2315,7 +2320,7 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeRazorpay),
 		Amount:            freshInv.AmountRemaining,
 		Currency:          freshInv.Currency,
-		Metadata:          types.Metadata{types.MetadataKeyPaymentSource: types.PaymentSourceInvoiceAutoCharge},
+		PaymentSource:     types.PaymentSourceInvoiceAutoCharge,
 	})
 	if err != nil {
 		return false, err
@@ -2336,6 +2341,7 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		Email:              cust.Email,
 	})
 	if err != nil {
+		// TODO: a timeout can still capture at Razorpay after this; refund a capture that lands on this FAILED payment.
 		failed := string(types.PaymentStatusFailed)
 		errMsg := err.Error()
 		if _, updateErr := paymentSvc.UpdatePayment(ctx, pymnt.ID, dto.UpdatePaymentRequest{
@@ -2358,10 +2364,9 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 
 	processing := string(types.PaymentStatusProcessing)
 	if _, err := paymentSvc.UpdatePayment(ctx, pymnt.ID, dto.UpdatePaymentRequest{
-		PaymentStatus:     &processing,
-		GatewayPaymentID:  lo.EmptyableToPtr(result.RazorpayPaymentID),
-		GatewayTrackingID: lo.EmptyableToPtr(result.RazorpayOrderID),
-		Amount:            &freshInv.AmountRemaining,
+		PaymentStatus:    &processing,
+		GatewayPaymentID: lo.EmptyableToPtr(result.RazorpayPaymentID),
+		Amount:           &freshInv.AmountRemaining,
 	}); err != nil {
 		// The charge is submitted; the Razorpay webhook reconciles via flexprice_payment_id.
 		s.Logger.Error(ctx, "failed to mark auto-charge payment as processing",

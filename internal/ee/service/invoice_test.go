@@ -3877,7 +3877,7 @@ func (c *autoChargeTestRazorpayClient) CreateOrder(_ context.Context, _ map[stri
 }
 
 func (c *autoChargeTestRazorpayClient) CreateRecurringPayment(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
-	return map[string]interface{}{"id": "pay_rzp_1"}, nil
+	return map[string]interface{}{"razorpay_payment_id": "pay_rzp_1"}, nil
 }
 
 type autoChargeTestCustomerService struct {
@@ -3983,6 +3983,9 @@ func (s *InvoiceServiceSuite) TestAutoChargeRazorpayInvoice() {
 			} else {
 				s.Require().Len(payments, 1)
 				s.Equal(tt.wantPaymentState, payments[0].PaymentStatus)
+				if tt.wantPaymentState == types.PaymentStatusProcessing {
+					s.Equal("pay_rzp_1", lo.FromPtr(payments[0].GatewayPaymentID))
+				}
 			}
 
 			events := lo.Filter(s.GetPublishedWebhooks(), func(e *types.WebhookEvent, _ int) bool {
