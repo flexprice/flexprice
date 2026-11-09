@@ -29,8 +29,8 @@ type InvoicePaymentFailedWebhookPayload struct {
 	Invoice             *Invoice                          `json:"invoice"`
 	Provider            types.SecretProvider              `json:"provider"`
 	Reason              types.InvoicePaymentFailureReason `json:"reason"`
-	PaymentID           *string                           `json:"payment_id"`
-	Error               *string                           `json:"error"`
+	PaymentID           *string                           `json:"payment_id,omitempty"`
+	Error               *string                           `json:"error,omitempty"`
 	IsAutoChargeAttempt bool                              `json:"is_auto_charge_attempt"`
 }
 
