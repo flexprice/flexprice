@@ -37,9 +37,8 @@ const (
 	CtxHostedInvoiceTokenID ContextKey = "ctx_hosted_invoice_token_id"
 	CtxHostedInvoiceID      ContextKey = "ctx_hosted_invoice_id"
 
-	// Integration scope keys: the billing entity whose connections apply, or one pinned connection
+	// Integration scope key: the billing entity whose connections apply
 	CtxBillingEntityID ContextKey = "ctx_billing_entity_id"
-	CtxConnectionID    ContextKey = "ctx_connection_id"
 
 	// Tenant internal state
 	CtxTenantInternalStatus ContextKey = "ctx_tenant_internal_status"
@@ -116,19 +115,6 @@ func SetBillingEntityID(ctx context.Context, id string) context.Context {
 // GetBillingEntityID returns the billing entity ID from the context
 func GetBillingEntityID(ctx context.Context) string {
 	if id, ok := ctx.Value(CtxBillingEntityID).(string); ok {
-		return id
-	}
-	return ""
-}
-
-// SetConnectionID pins one connection in the context for provider lookups
-func SetConnectionID(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, CtxConnectionID, id)
-}
-
-// GetConnectionID returns the pinned connection ID from the context
-func GetConnectionID(ctx context.Context) string {
-	if id, ok := ctx.Value(CtxConnectionID).(string); ok {
 		return id
 	}
 	return ""

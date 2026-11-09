@@ -10,8 +10,8 @@ import (
 	"github.com/samber/lo"
 )
 
-// ForEachConnection runs fn once per published connection of the provider, with that connection
-// and its owner entity pinned in ctx. Every connection runs; failures come back joined.
+// ForEachConnection runs fn once per published connection of the provider, with that connection's
+// owner entity in ctx. Every connection runs; failures come back joined.
 // It returns a not-found error when the provider has no connection.
 func ForEachConnection(ctx context.Context, repo connection.Repository, provider types.SecretProvider, fn func(context.Context, *connection.Connection) error) error {
 	all, err := repo.ListAllPublished(ctx)
@@ -27,11 +27,7 @@ func ForEachConnection(ctx context.Context, repo connection.Repository, provider
 
 	var errs []error
 	for _, c := range conns {
-		connCtx := types.SetConnectionID(ctx, c.ID)
-		if owner := lo.FromPtr(c.BillingEntityID); owner != "" {
-			connCtx = types.SetBillingEntityID(connCtx, owner)
-		}
-		if err := fn(connCtx, c); err != nil {
+		if err := fn(connection.WithOwner(ctx, c), c); err != nil {
 			errs = append(errs, ierr.WithError(err).
 				WithReportableDetails(map[string]any{"connection_id": c.ID}).
 				Error())

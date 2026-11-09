@@ -24,6 +24,11 @@ import (
 // rejects any durationSeconds below 900 with a ValidationError, so 15m is the floor, not a choice.
 const awsMarketplaceRoleVerificationDuration = 15 * time.Minute
 
+const (
+	connectionExistsHint      = "A published connection for provider '%s' already exists"
+	oauthConnectionExistsHint = "A published connection for provider %s already exists"
+)
+
 // ConnectionService defines the interface for connection operations
 type ConnectionService interface {
 	CreateConnection(ctx context.Context, req dto.CreateConnectionRequest) (*dto.ConnectionResponse, error)
@@ -1234,11 +1239,6 @@ func duplicateConnection(existing []*connection.Connection, provider types.Secre
 	})
 	return dup
 }
-
-const (
-	connectionExistsHint      = "A published connection for provider '%s' already exists"
-	oauthConnectionExistsHint = "A published connection for provider %s already exists"
-)
 
 func errConnectionExists(ctx context.Context, existing *connection.Connection, owner *string, hintFormat string) error {
 	hint := fmt.Sprintf(hintFormat, existing.ProviderType) + " in this environment"

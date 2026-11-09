@@ -391,28 +391,40 @@ func (s *refundService) dispatchToGateway(ctx context.Context, row *refund.Refun
 		return s.Fail(ctx, row.ID, "gateway does not support refunds")
 	}
 
-	p, err := s.paymentFor(ctx, row)
+	if row.PaymentID == nil {
+		return ierr.NewError("gateway refund has no payment to refund against").
+			WithHint("A gateway refund must be linked to a payment.").
+			WithReportableDetails(map[string]any{"refund_id": row.ID}).
+			Mark(ierr.ErrValidation)
+	}
+	p, err := s.PaymentRepo.Get(ctx, *row.PaymentID)
 	if err != nil {
 		return err
 	}
+	if lo.FromPtr(p.GatewayPaymentID) == "" {
+		return ierr.NewError("payment has no gateway payment id").
+			WithHint("The payment this refund draws from was never recorded against a gateway.").
+			WithReportableDetails(map[string]any{"refund_id": row.ID, "payment_id": p.ID}).
+			Mark(ierr.ErrValidation)
+	}
 
 	gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p)
+	failReason := "the connection that took this payment was removed"
+	if err == nil {
+		err = requireProviderConnected(gatewayCtx, s.ServiceParams, types.SecretProvider(gateway))
+		failReason = "the payment's gateway is not connected for the customer's billing entity"
+	}
 	if err != nil {
 		if !ierr.IsValidation(err) {
 			return err
 		}
-		if failErr := s.Fail(ctx, row.ID, "the connection that took this payment was removed"); failErr != nil {
+		if failErr := s.Fail(ctx, row.ID, failReason); failErr != nil {
 			return failErr
 		}
 		return err
 	}
 
 	provider, err := s.IntegrationFactory.GetRefundProvider(gatewayCtx, gateway)
-	if err != nil {
-		return err
-	}
-
-	gatewayPaymentID, err := gatewayPaymentIDOf(row, p)
 	if err != nil {
 		return err
 	}
@@ -425,7 +437,7 @@ func (s *refundService) dispatchToGateway(ctx context.Context, row *refund.Refun
 	}
 
 	resp, err := provider.RefundPayment(gatewayCtx, interfaces.RefundProviderRequest{
-		GatewayPaymentID: gatewayPaymentID,
+		GatewayPaymentID: *p.GatewayPaymentID,
 		Amount:           row.Amount,
 		Currency:         row.Currency,
 		IdempotencyKey:   lo.FromPtrOr(row.GatewayIdempotencyToken, row.IdempotencyKey),
@@ -451,30 +463,6 @@ func (s *refundService) dispatchToGateway(ctx context.Context, row *refund.Refun
 	default:
 		return s.recordGatewayAcceptance(ctx, row.ID, resp)
 	}
-}
-
-// paymentFor loads the payment the refund draws from.
-func (s *refundService) paymentFor(ctx context.Context, row *refund.Refund) (*payment.Payment, error) {
-	if row.PaymentID == nil {
-		return nil, ierr.NewError("gateway refund has no payment to refund against").
-			WithHint("A gateway refund must be linked to a payment.").
-			WithReportableDetails(map[string]any{"refund_id": row.ID}).
-			Mark(ierr.ErrValidation)
-	}
-	return s.PaymentRepo.Get(ctx, *row.PaymentID)
-}
-
-// gatewayPaymentIDOf reads the provider's payment identifier off the payment the
-// refund draws from, rather than copying it onto the refund row at plan time.
-func gatewayPaymentIDOf(row *refund.Refund, p *payment.Payment) (string, error) {
-	if p.GatewayPaymentID == nil || *p.GatewayPaymentID == "" {
-		return "", ierr.NewError("payment has no gateway payment id").
-			WithHint("The payment this refund draws from was never recorded against a gateway.").
-			WithReportableDetails(map[string]any{"refund_id": row.ID, "payment_id": p.ID}).
-			Mark(ierr.ErrValidation)
-	}
-
-	return *p.GatewayPaymentID, nil
 }
 
 func (s *refundService) claimForGateway(ctx context.Context, refundID string) (bool, error) {

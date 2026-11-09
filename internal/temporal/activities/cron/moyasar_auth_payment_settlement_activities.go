@@ -262,7 +262,7 @@ func (a *MoyasarAuthPaymentSettlementActivities) VoidOrRefundSucceededAuthPaymen
 	return result, nil
 }
 
-// scopeToPayment pins the payment's connection, even a removed one, else its customer's entity.
+// scopeToPayment puts the entity of the payment's connection, else of its customer, in ctx.
 func (a *MoyasarAuthPaymentSettlementActivities) scopeToPayment(ctx context.Context, paymentID string) (context.Context, error) {
 	p, err := a.paymentRepo.Get(ctx, paymentID)
 	if err != nil {

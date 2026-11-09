@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -244,14 +245,22 @@ func (s *billingEntityService) EffectiveEntity(ctx context.Context, cust *custom
 }
 
 func (s *billingEntityService) ScopeToCustomer(ctx context.Context, customerID string) (context.Context, error) {
-	if off, err := s.entitiesOff(ctx); err != nil || off {
+	if mode, err := s.mode(ctx); err != nil || mode == types.BillingEntityModeOff {
 		return ctx, err
 	}
-	return s.scopeToCustomer(ctx, customerID)
+	cust, err := s.CustomerRepo.Get(ctx, customerID)
+	if err != nil {
+		return ctx, err
+	}
+	entity, err := s.EffectiveEntity(ctx, cust)
+	if err != nil || entity == nil {
+		return ctx, err
+	}
+	return types.SetBillingEntityID(ctx, entity.ID), nil
 }
 
 func (s *billingEntityService) ScopeToInvoice(ctx context.Context, invoiceID string) (context.Context, error) {
-	if off, err := s.entitiesOff(ctx); err != nil || off {
+	if mode, err := s.mode(ctx); err != nil || mode == types.BillingEntityModeOff {
 		return ctx, err
 	}
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
@@ -261,22 +270,22 @@ func (s *billingEntityService) ScopeToInvoice(ctx context.Context, invoiceID str
 	if id := lo.FromPtr(inv.BillingEntityID); id != "" {
 		return types.SetBillingEntityID(ctx, id), nil
 	}
-	return s.scopeToCustomer(ctx, inv.CustomerID)
+	return s.ScopeToCustomer(ctx, inv.CustomerID)
 }
 
 func (s *billingEntityService) ScopeToSubscription(ctx context.Context, subscriptionID string) (context.Context, error) {
-	if off, err := s.entitiesOff(ctx); err != nil || off {
+	if mode, err := s.mode(ctx); err != nil || mode == types.BillingEntityModeOff {
 		return ctx, err
 	}
 	sub, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
 		return ctx, err
 	}
-	return s.scopeToCustomer(ctx, sub.CustomerID)
+	return s.ScopeToCustomer(ctx, sub.CustomerID)
 }
 
 func (s *billingEntityService) ScopeToDefault(ctx context.Context) (context.Context, error) {
-	if off, err := s.entitiesOff(ctx); err != nil || off {
+	if mode, err := s.mode(ctx); err != nil || mode == types.BillingEntityModeOff {
 		return ctx, err
 	}
 	def, err := s.BillingEntityRepo.GetDefault(ctx)
@@ -300,17 +309,13 @@ func (s *billingEntityService) ScopeToConnection(ctx context.Context, connection
 			WithReportableDetails(map[string]any{"connection_id": connectionID}).
 			Mark(ierr.ErrNotFound)
 	}
-	ctx = types.SetConnectionID(ctx, conn.ID)
-	if owner := lo.FromPtr(conn.BillingEntityID); owner != "" {
-		ctx = types.SetBillingEntityID(ctx, owner)
-	}
-	return ctx, nil
+	return connection.WithOwner(ctx, conn), nil
 }
 
 func (s *billingEntityService) ScopeToPayment(ctx context.Context, p *payment.Payment) (context.Context, error) {
 	connectionID := lo.FromPtr(p.ConnectionID)
 	if connectionID == "" {
-		if off, err := s.entitiesOff(ctx); err != nil || off {
+		if mode, err := s.mode(ctx); err != nil || mode == types.BillingEntityModeOff {
 			return ctx, err
 		}
 		customerID, err := s.PaymentRepo.GetLinkedCustomerID(ctx, p.ID)
@@ -330,39 +335,11 @@ func (s *billingEntityService) ScopeToPayment(ctx context.Context, p *payment.Pa
 		}
 		return ctx, err
 	}
-	ctx = types.SetConnectionID(ctx, conn.ID)
-	if owner := lo.FromPtr(conn.BillingEntityID); owner != "" {
-		ctx = types.SetBillingEntityID(ctx, owner)
-	}
-	return ctx, nil
+	return connection.WithOwner(ctx, conn), nil
 }
 
 func (s *billingEntityService) RequireProviderConnected(ctx context.Context, provider types.SecretProvider) error {
 	return requireProviderConnected(ctx, s.ServiceParams, provider)
-}
-
-// entitiesOff reports whether the environment has billing entities off, so no record needs a lookup.
-func (s *billingEntityService) entitiesOff(ctx context.Context) (bool, error) {
-	mode, err := s.mode(ctx)
-	if err != nil {
-		return false, err
-	}
-	return mode == types.BillingEntityModeOff, nil
-}
-
-func (s *billingEntityService) scopeToCustomer(ctx context.Context, customerID string) (context.Context, error) {
-	cust, err := s.CustomerRepo.Get(ctx, customerID)
-	if err != nil {
-		return ctx, err
-	}
-	entity, err := s.EffectiveEntity(ctx, cust)
-	if err != nil {
-		return ctx, err
-	}
-	if entity == nil {
-		return ctx, nil
-	}
-	return types.SetBillingEntityID(ctx, entity.ID), nil
 }
 
 func (s *billingEntityService) ValidateFilter(ctx context.Context, billingEntityID string) error {
@@ -500,8 +477,8 @@ func requireSameBillingEntity(ctx context.Context, params ServiceParams, custome
 	if customerID == otherCustomerID {
 		return nil
 	}
-	beService := &billingEntityService{ServiceParams: params}
-	mode, err := beService.mode(ctx)
+	beService := NewBillingEntityService(params)
+	mode, err := beService.Status(ctx)
 	if err != nil {
 		return err
 	}

@@ -892,11 +892,7 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 		return nil, err
 	}
 
-	ctx, err := s.scopeCheckout(ctx, req.CustomerID, session.PaymentProvider)
-	if err == nil {
-		err = s.fulfillCheckoutSession(ctx, session, req.DraftInvoice)
-	}
-	if err != nil {
+	terminate := func(ctx context.Context, err error) error {
 		if _, cleanupErr := s.terminateCheckoutSession(ctx, session, err); cleanupErr != nil {
 			s.Logger.Error(ctx, "checkout cleanup failed after pay-first fulfillment error",
 				"session_id", session.ID,
@@ -904,7 +900,14 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 				"original_err", err,
 			)
 		}
-		return nil, err
+		return err
+	}
+	ctx, err := s.scopeCheckout(ctx, req.CustomerID, session.PaymentProvider)
+	if err != nil {
+		return nil, terminate(ctx, err)
+	}
+	if err := s.fulfillCheckoutSession(ctx, session, req.DraftInvoice); err != nil {
+		return nil, terminate(ctx, err)
 	}
 
 	sessionResp := s.toPollableResponse(ctx, session, false)

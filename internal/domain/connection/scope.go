@@ -32,3 +32,11 @@ func InScope(ctx context.Context, conns []*Connection) []*Connection {
 		return entityID != "" && lo.FromPtr(c.BillingEntityID) == entityID
 	})
 }
+
+// WithOwner puts the connection's owner entity in ctx, so lookups resolve to this connection.
+func WithOwner(ctx context.Context, c *Connection) context.Context {
+	if owner := lo.FromPtr(c.BillingEntityID); owner != "" {
+		return types.SetBillingEntityID(ctx, owner)
+	}
+	return ctx
+}

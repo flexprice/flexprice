@@ -51,16 +51,6 @@ func (s *InMemoryConnectionStore) GetByProvider(ctx context.Context, provider ty
 		}).
 		Mark(ierr.ErrNotFound)
 
-	if pinnedID := types.GetConnectionID(ctx); pinnedID != "" {
-		c, err := s.Get(ctx, pinnedID)
-		if err != nil {
-			return nil, err
-		}
-		if c.ProviderType == provider {
-			return c, nil
-		}
-	}
-
 	connections, err := s.ListPublishedInScope(ctx)
 	if err != nil {
 		return nil, err

@@ -213,19 +213,17 @@ func (s *entityIntegrationMappingService) setProviderConnection(ctx context.Cont
 	if mapping.ConnectionID != nil || provider.Validate() != nil {
 		return nil
 	}
-	if types.GetBillingEntityID(ctx) == "" && types.GetConnectionID(ctx) == "" {
-		mode, err := (&billingEntityService{ServiceParams: s.ServiceParams}).mode(ctx)
+	if types.GetBillingEntityID(ctx) == "" {
+		mode, err := NewBillingEntityService(s.ServiceParams).Status(ctx)
 		if err != nil {
 			return err
 		}
 		if mode != types.BillingEntityModeOff {
-			_, connections, err := s.linkConnections(ctx, mapping.EntityType, mapping.EntityID, provider)
-			if err != nil {
+			_, conn, err := s.linkConnection(ctx, mapping.EntityType, mapping.EntityID, provider)
+			if err != nil || conn == nil {
 				return err
 			}
-			if len(connections) > 0 {
-				mapping.ConnectionID = lo.ToPtr(connections[0].ID)
-			}
+			mapping.ConnectionID = lo.ToPtr(conn.ID)
 			return nil
 		}
 	}
@@ -240,9 +238,9 @@ func (s *entityIntegrationMappingService) setProviderConnection(ctx context.Cont
 	return nil
 }
 
-// linkConnections scopes ctx to the linked customer, invoice or subscription and returns its connections
-// for the provider. Other entity types link only when the environment has at most one such connection.
-func (s *entityIntegrationMappingService) linkConnections(ctx context.Context, entityType types.IntegrationEntityType, entityID string, provider types.SecretProvider) (context.Context, []*connection.Connection, error) {
+// linkConnection scopes ctx to the linked customer, invoice or subscription and returns its connection
+// for the provider, nil when there is none. Other entity types link only when the environment has at most one such connection.
+func (s *entityIntegrationMappingService) linkConnection(ctx context.Context, entityType types.IntegrationEntityType, entityID string, provider types.SecretProvider) (context.Context, *connection.Connection, error) {
 	scope := NewBillingEntityService(s.ServiceParams)
 
 	var err error
@@ -271,17 +269,20 @@ func (s *entityIntegrationMappingService) linkConnections(ctx context.Context, e
 				}).
 				Mark(ierr.ErrValidation)
 		}
-		return ctx, connections, nil
+		if len(connections) == 0 {
+			return ctx, nil, nil
+		}
+		return ctx, connections[0], nil
 	}
 	if err != nil {
 		return ctx, nil, err
 	}
 
-	inScope, err := s.ConnectionRepo.ListPublishedInScope(ctx)
-	if err != nil {
-		return ctx, nil, err
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, provider)
+	if ierr.IsNotFound(err) {
+		return ctx, nil, nil
 	}
-	return ctx, lo.Filter(inScope, func(c *connection.Connection, _ int) bool { return c.ProviderType == provider }), nil
+	return ctx, conn, err
 }
 
 func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Context, req dto.LinkIntegrationMappingRequest) (*dto.LinkIntegrationMappingResponse, error) {
@@ -289,11 +290,11 @@ func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Con
 		return nil, err
 	}
 
-	ctx, connections, err := s.linkConnections(ctx, req.EntityType, req.EntityID, types.SecretProvider(req.ProviderType))
+	ctx, conn, err := s.linkConnection(ctx, req.EntityType, req.EntityID, types.SecretProvider(req.ProviderType))
 	if err != nil {
 		return nil, err
 	}
-	if len(connections) == 0 {
+	if conn == nil {
 		return nil, ierr.NewError(fmt.Sprintf("no active connection found for provider %s", req.ProviderType)).
 			WithHint("Create a connection for this provider before linking entities").
 			Mark(ierr.ErrValidation)
@@ -302,7 +303,7 @@ func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Con
 	if err := s.applyEntitySideEffects(ctx, req); err != nil {
 		return nil, err
 	}
-	mapping, err := s.upsertEntityMapping(ctx, req, connections[0].ID)
+	mapping, err := s.upsertEntityMapping(ctx, req, conn.ID)
 	if err != nil {
 		return nil, err
 	}

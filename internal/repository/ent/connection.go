@@ -180,20 +180,6 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 		WithHintf("Connection with provider %s was not found in this environment", provider).
 		Mark(ierr.ErrNotFound)
 
-	if pinnedID := types.GetConnectionID(ctx); pinnedID != "" {
-		c, err := r.Get(ctx, pinnedID)
-		if err != nil {
-			SetSpanError(span, err)
-			return nil, err
-		}
-		// The pin holds only while ctx stays on the pinned connection's entity.
-		entityID, owner := types.GetBillingEntityID(ctx), lo.FromPtr(c.BillingEntityID)
-		if c.ProviderType == provider && (entityID == "" || owner == entityID) {
-			SetSpanSuccess(span)
-			return c, nil
-		}
-	}
-
 	connections, err := r.ListAllPublished(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -616,9 +602,6 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 
 	// Invalidate cache to ensure fresh data on next read
 	afterCommit(ctx, func() { r.DeleteCache(ctx, c) })
-	// Update cache with new data
-	cached := *c
-	afterCommit(ctx, func() { r.SetCache(ctx, &cached) })
 	r.deleteAllPublishedCache(ctx)
 
 	return nil

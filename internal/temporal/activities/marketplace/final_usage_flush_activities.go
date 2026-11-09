@@ -152,7 +152,7 @@ func (a *FlushActivities) MarketplaceSubscriptionFinalUsageFlushActivity(
 			connectionResolutionFailed = true
 			continue
 		}
-		prepared, err := a.mktplaceReporter.prepareMarketplaceConnection(types.SetConnectionID(ctx, conn.ID), conn)
+		prepared, err := a.mktplaceReporter.prepareMarketplaceConnection(connection.WithOwner(ctx, conn), conn)
 		if err != nil {
 			// already logged inside prepareMarketplaceConnection at the stage that failed
 			connectionResolutionFailed = true

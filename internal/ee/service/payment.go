@@ -217,9 +217,11 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		return nil, err
 	}
 
-	if err := s.setGatewayConnection(ctx, p); err != nil {
+	connectionID, err := s.gatewayConnectionID(ctx, p)
+	if err != nil {
 		return nil, err
 	}
+	p.ConnectionID = connectionID
 
 	if err := s.PaymentRepo.Create(ctx, p); err != nil {
 		// Concurrent request already inserted with this key — return theirs.
@@ -565,7 +567,8 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 			if err != nil {
 				return nil, err
 			}
-			if err := s.setGatewayConnection(gatewayCtx, p); err != nil {
+			p.ConnectionID, err = s.gatewayConnectionID(gatewayCtx, p)
+			if err != nil {
 				return nil, err
 			}
 		}
@@ -1093,20 +1096,19 @@ func (s *paymentService) fetchMoyasarPaymentStatus(ctx context.Context, gatewayP
 	return integrations.MoyasarPaymentStatus(resp.Status).ToFlexpricePaymentStatus()
 }
 
-// setGatewayConnection records the connection of the payment's gateway; a gateway without one leaves it nil.
-func (s *paymentService) setGatewayConnection(ctx context.Context, p *payment.Payment) error {
+// gatewayConnectionID is the payment's connection, else its gateway's connection in scope; nil when there is none.
+func (s *paymentService) gatewayConnectionID(ctx context.Context, p *payment.Payment) (*string, error) {
 	if p.ConnectionID != nil || lo.FromPtr(p.PaymentGateway) == "" {
-		return nil
+		return p.ConnectionID, nil
 	}
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProvider(*p.PaymentGateway))
-	if err != nil {
-		if ierr.IsNotFound(err) {
-			return nil
-		}
-		return err
+	if ierr.IsNotFound(err) {
+		return nil, nil
 	}
-	p.ConnectionID = lo.ToPtr(conn.ID)
-	return nil
+	if err != nil {
+		return nil, err
+	}
+	return lo.ToPtr(conn.ID), nil
 }
 
 // CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
@@ -1150,9 +1152,11 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 		return nil, err
 	}
 
-	if err := s.setGatewayConnection(ctx, p); err != nil {
+	connectionID, err := s.gatewayConnectionID(ctx, p)
+	if err != nil {
 		return nil, err
 	}
+	p.ConnectionID = connectionID
 
 	if err := s.PaymentRepo.Create(ctx, p); err != nil {
 		return nil, err

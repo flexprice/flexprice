@@ -157,7 +157,7 @@ func (r *MarketplaceReporter) reportRecordToMarketplaces(
 			continue
 		}
 
-		ctx := types.SetConnectionID(ctx, marketplaceConn.conn.ID)
+		ctx := connection.WithOwner(ctx, marketplaceConn.conn)
 		var entry types.UsageRecordSyncEntry
 		var ok bool
 		switch marketplaceConn.conn.ProviderType {

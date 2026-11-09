@@ -180,7 +180,7 @@ flowchart LR
   Provider -->|existing URL| WH
   API --> Conn["Connections + owner entity (changed)"]
   Conn --- Entities[Billing entities]
-  Billing[Billing run, syncs, refunds] --> Ctx["Entity or connection in request context (new)"]
+  Billing[Billing run, syncs, refunds] --> Ctx["Entity in request context (new)"]
   WH --> Ctx
   Ctx --> Lookup["Connection lookup (changed)"]
   Lookup --> Conn
@@ -295,14 +295,13 @@ Migration notes:
 
 Every entry point that acts on a record (billing run, auto-charge, payment link, checkout, payment
 methods, syncs, refunds, catalog sync, provider event handlers) sets the record's customer's entity in the
-request context, as Phase 1 already resolves it; an invoice uses the entity stored on it. Webhook routes set
-the connection instead.
+request context, as Phase 1 already resolves it; an invoice uses the entity stored on it. Webhook routes and
+payments set the entity that owns the connection. An entity has at most one published connection per provider,
+so the entity alone picks the connection.
 
 ```mermaid
 flowchart TD
-  L[Lookup connection for provider P] --> W{Connection pinned in context?}
-  W -- yes --> C1[That connection, if it is P and published]
-  W -- no --> M{Environment mode}
+  L[Lookup connection for provider P] --> M{Environment mode}
   M -- off --> C2[The environment's connection for P, as today]
   M -- enabling / enabled --> E{Entity in context?}
   E -- no --> NF[Not found]
@@ -337,7 +336,7 @@ sequenceDiagram
   P->>API: Event on /webhooks/stripe/t/e?connection=conn_Y
   API->>DB: Load published conn_Y for this tenant, environment and provider
   API->>API: Verify signature with conn_Y's secret
-  API->>API: Pin conn_Y and its entity in context
+  API->>API: Set conn_Y's owner entity in context
   API->>DB: Apply (mark paid, record payment with conn_Y, create customer under the entity)
 ```
 
@@ -355,8 +354,8 @@ sequenceDiagram
 |---|---|
 | Enable job | Step 1 assigns every existing non-storage connection to its environment's default entity (FR-3) |
 | Sync parity R1: record-anchored | Every sync of a customer, invoice, subscription or payment (dispatcher, workflow activities, inline updates, `POST /integrations/sync`, payment links, checkout, auto-charge) uses the connection of the record's entity. Payloads unchanged; activities re-read the record and set its entity before the lookup. The integration event dispatcher skips a record whose entity has no connection for the provider. Catalog items created inside a record sync (Stripe products and prices, Zoho and Chargebee items, Paddle products) follow R1: mappings are keyed by that connection |
-| Sync parity R2: payment-anchored | Refunds, payment processing, payment-status polls and the Moyasar settlement cron use the payment's connection, else its customer's entity; a removed connection fails them (FR-18) |
-| Sync parity R3: environment-level push | Runs once per connection of the provider and writes mappings per connection: QuickBooks price push, Chargebee plan and price push, and the marketplace usage report and snapshot crons (already per connection; each is pinned to its connection) |
+| Sync parity R2: payment-anchored | Refunds, payment processing, payment-status polls and the Moyasar settlement cron use the entity that owns the payment's connection, else its customer's entity; a removed connection fails them (FR-18) |
+| Sync parity R3: environment-level push | Runs once per connection of the provider and writes mappings per connection: QuickBooks price push, Chargebee plan and price push, and the marketplace usage report and snapshot crons (already per connection; each runs with its connection's owner entity in context) |
 | Sync parity R4: inbound | Per-connection URL; the event is applied as the sending connection's entity, including customers created from events (FR-14) |
 | "Already synced" checks | Count mappings for the entity's connection |
 | Auto-charge and mark-paid dispatch | Candidates limited to the customer's allowed connections |

@@ -59,7 +59,6 @@ func TestForEachConnection(t *testing.T) {
 
 			calls := map[string]string{}
 			err := ForEachConnection(ctx, repo, types.SecretProviderQuickBooks, func(ctx context.Context, c *connection.Connection) error {
-				require.Equal(t, c.ID, types.GetConnectionID(ctx))
 				calls[c.ID] = types.GetBillingEntityID(ctx)
 				if c.ID == tt.failing {
 					return errors.New("sync failed")
