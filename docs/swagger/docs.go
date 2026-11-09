@@ -24884,7 +24884,7 @@ const docTemplate = `{
                     }
                 },
                 "instalments": {
-                    "description": "Instalments lists, when expand includes \"instalments\", the instalments of the v2 commitments this request applies\nthat were invoiced inside the range. They bill the value of billing-terms commitments, whose covered usage adds\nnothing to TotalCost. Property and source filters apply no commitments, so they list none.",
+                    "description": "Instalments lists, with expand \"instalments\", the instalments of the v2 commitments the request applied that were\ninvoiced in the range. Property and source filters apply no commitments, so they list none.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/UsageAnalyticInstalment"

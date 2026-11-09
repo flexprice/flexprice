@@ -5419,9 +5419,8 @@ definitions:
         type: array
       instalments:
         description: |-
-          Instalments lists, when expand includes "instalments", the instalments of the v2 commitments this request applies
-          that were invoiced inside the range. They bill the value of billing-terms commitments, whose covered usage adds
-          nothing to TotalCost. Property and source filters apply no commitments, so they list none.
+          Instalments lists, with expand "instalments", the instalments of the v2 commitments the request applied that were
+          invoiced in the range. Property and source filters apply no commitments, so they list none.
         items:
           $ref: '#/definitions/UsageAnalyticInstalment'
         type: array

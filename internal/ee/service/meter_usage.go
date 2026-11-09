@@ -321,9 +321,8 @@ type AnalyticsData struct {
 
 	// LineTotals holds the selected cost per line item, before allocation to groups and points.
 	LineTotals map[string]decimal.Decimal
-	// LineCommitments is the utilized, overage and true-up split of the line totals v2 commitments priced, per
-	// billing period.
-	LineCommitments map[string][]periodCommitment
+	// LineBilledPeriods is what each billing period bills the lines v2 commitments cover: utilized, overage and true-up.
+	LineBilledPeriods map[string][]billedPeriod
 }
 
 // ---------------------------------------------------------------------------
@@ -1288,7 +1287,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	// Call GetSubscriptionMeterUsage per subscription
 	var allUsages []*SubscriptionMeterUsage
 	lineTotals := map[string]decimal.Decimal{}
-	lineCommitments := map[string][]periodCommitment{}
+	lineBilledPeriods := map[string][]billedPeriod{}
 	var commitmentIDs []string
 	for _, sub := range subscriptions {
 		// Skip parent subs that resolveCustomerAndSubscriptions appended for a
@@ -1346,19 +1345,19 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			continue
 		}
 
-		totals, commitments, applied, err := s.calculateLineItemTotals(ctx, usage, params, billingAnchor, subEndTime)
+		totals, billed, applied, err := s.calculateLineItemTotals(ctx, usage, params, billingAnchor, subEndTime)
 		if err != nil {
 			return nil, err
 		}
 
 		maps.Copy(lineTotals, totals)
-		maps.Copy(lineCommitments, commitments)
+		maps.Copy(lineBilledPeriods, billed)
 		commitmentIDs = append(commitmentIDs, applied...)
 		allUsages = append(allUsages, usage)
 	}
 
 	// Merge into AnalyticsData
-	data := s.mergeSubscriptionUsagesToAnalyticsData(cust, subscriptions, allUsages, params, lineTotals, lineCommitments)
+	data := s.mergeSubscriptionUsagesToAnalyticsData(cust, subscriptions, allUsages, params, lineTotals, lineBilledPeriods)
 
 	// Calculate costs inline
 	err = s.calculateCosts(ctx, data)
@@ -1439,11 +1438,11 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 	usages []*SubscriptionMeterUsage,
 	params *events.MeterUsageDetailedAnalyticsParams,
 	lineTotals map[string]decimal.Decimal,
-	lineCommitments map[string][]periodCommitment,
+	lineBilledPeriods map[string][]billedPeriod,
 ) *AnalyticsData {
 	data := &AnalyticsData{
 		LineTotals:            lineTotals,
-		LineCommitments:       lineCommitments,
+		LineBilledPeriods:     lineBilledPeriods,
 		Customer:              cust,
 		Subscriptions:         subscriptions,
 		SubscriptionLineItems: make(map[string]*subscription.SubscriptionLineItem),
@@ -1497,7 +1496,7 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 		// committed minimum (and true-up, if windowed) is applied even with no usage.
 		for _, lu := range su.LineItemUsages {
 			if lu.Usage.IsZero() && lu.EventCount == 0 && len(lu.Points) == 0 && lu.BucketedResult == nil {
-				if lu.LineItem == nil || (!lu.LineItem.HasAnyCommitment() && lineCommitments[lu.LineItem.ID] == nil) {
+				if lu.LineItem == nil || (!lu.LineItem.HasAnyCommitment() && lineBilledPeriods[lu.LineItem.ID] == nil) {
 					continue
 				}
 			}
@@ -2627,8 +2626,8 @@ func allocateLineItemCosts(data *AnalyticsData) []*events.DetailedUsageAnalytic 
 	}
 
 	for lineID, groups := range groupsByLine {
-		if periods := data.LineCommitments[lineID]; len(periods) > 0 {
-			allocatePeriodCharges(data, groups, periods)
+		if billed := data.LineBilledPeriods[lineID]; len(billed) > 0 {
+			allocateBilledPeriods(data, groups, billed)
 			continue
 		}
 
@@ -2652,15 +2651,14 @@ func allocateLineItemCosts(data *AnalyticsData) []*events.DetailedUsageAnalytic 
 	return allocated
 }
 
-// allocatePeriodCharges shares each billing period's commitment charges among the line's groups that used it in that
-// period, or among all groups by range usage when none did. Each group's share goes to its points in the period by
-// usage; with none there, a windowed request puts it on the point whose window holds the period's start.
-func allocatePeriodCharges(data *AnalyticsData, groups []*events.DetailedUsageAnalytic, periods []periodCommitment) {
+// allocateBilledPeriods shares what each billing period billed a line among its groups, and each group's share among its
+// points in that period, by usage.
+func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAnalytic, periods []billedPeriod) {
 	var flags types.CommitmentInfo
-	for _, pc := range periods {
-		flags.Type = lo.CoalesceOrEmpty(flags.Type, pc.info.Type)
-		flags.IsWindowed = flags.IsWindowed || pc.info.IsWindowed
-		flags.TrueUpEnabled = flags.TrueUpEnabled || pc.info.TrueUpEnabled
+	for _, bp := range periods {
+		flags.Type = lo.CoalesceOrEmpty(flags.Type, bp.billed.Type)
+		flags.IsWindowed = flags.IsWindowed || bp.billed.IsWindowed
+		flags.TrueUpEnabled = flags.TrueUpEnabled || bp.billed.TrueUpEnabled
 	}
 
 	anchor := data.Params.BillingAnchor
@@ -2668,41 +2666,44 @@ func allocatePeriodCharges(data *AnalyticsData, groups []*events.DetailedUsageAn
 		anchor = &sub.BillingAnchor
 	}
 
-	rangeStart := periods[0].period.Start
+	// Bucket points belong to v1 commitment time buckets, which no v2 commitment covers, so only points are reset.
 	rangeUsage := make([]decimal.Decimal, len(groups))
 	for gi, group := range groups {
 		info := flags
-		group.CommitmentInfo = &info
-		group.TotalCost = decimal.Zero
-		rangeUsage[gi] = group.TotalUsage
-		for _, points := range [][]events.UsageAnalyticPoint{group.Points, group.BucketPoints} {
-			for j := range points {
-				points[j].Cost = decimal.Zero
-				points[j].ComputedCommitmentUtilizedAmount = decimal.Zero
-				points[j].ComputedOverageAmount = decimal.Zero
-				points[j].ComputedTrueUpAmount = decimal.Zero
-			}
+		group.CommitmentInfo, group.TotalCost, rangeUsage[gi] = &info, decimal.Zero, group.TotalUsage
+		for j := range group.Points {
+			point := &group.Points[j]
+			point.Cost, point.ComputedCommitmentUtilizedAmount = decimal.Zero, decimal.Zero
+			point.ComputedOverageAmount, point.ComputedTrueUpAmount = decimal.Zero, decimal.Zero
 		}
 	}
 
-	// Additive usage is weighed by what each group used in the period. Other aggregations' points don't add up across
-	// windows, so a group that used the line in the period is weighed by its range usage.
+	// Points of other aggregations don't add up across windows, so a group using the line in a period weighs its
+	// range usage.
 	additive := lo.Contains(
 		[]types.AggregationType{types.AggregationSum, types.AggregationCount, types.AggregationSumWithMultiplier},
 		groups[0].AggregationType,
 	)
-	for _, pc := range periods {
+	for i, bp := range periods {
+		// A point counts toward the period its window starts in; the first period also takes those starting before it.
+		bounds := bp.period
+		if i == 0 {
+			bounds.Start = time.Time{}
+		}
+
+		var window time.Time
+		if data.Params.WindowSize != "" {
+			window = truncateToBucketStart(bp.period.Start.UTC(), data.Params.WindowSize, anchor)
+		}
+
+		pointsIn := make([][]int, len(groups))
 		weights := make([]decimal.Decimal, len(groups))
 		for gi, group := range groups {
-			for _, point := range group.Points {
-				at := maxTime(point.Timestamp, rangeStart)
-				if at.Before(pc.period.Start) || !at.Before(pc.period.End) {
-					continue
-				}
-
+			pointsIn[gi] = periodPoints(group.Points, bounds, window)
+			for _, j := range pointsIn[gi] {
 				if additive {
-					weights[gi] = weights[gi].Add(point.Usage)
-				} else if point.Usage.IsPositive() {
+					weights[gi] = weights[gi].Add(group.Points[j].Usage)
+				} else if group.Points[j].Usage.IsPositive() {
 					weights[gi] = group.TotalUsage
 				}
 			}
@@ -2711,29 +2712,33 @@ func allocatePeriodCharges(data *AnalyticsData, groups []*events.DetailedUsageAn
 			weights = rangeUsage
 		}
 
-		utilized := allocateCostByWeight(pc.info.ComputedCommitmentUtilizedAmount, weights)
-		overage := allocateCostByWeight(pc.info.ComputedOverageAmount, weights)
-		trueUp := allocateCostByWeight(pc.info.ComputedTrueUpAmount, weights)
-		var fill time.Time
-		if data.Params.WindowSize != "" {
-			fill = truncateToBucketStart(pc.period.Start.UTC(), data.Params.WindowSize, anchor)
-		}
-
-		for gi, group := range groups {
-			share := types.CommitmentInfo{
-				ComputedCommitmentUtilizedAmount: utilized[gi],
-				ComputedOverageAmount:            overage[gi],
-				ComputedTrueUpAmount:             trueUp[gi],
-			}
+		for gi, share := range splitBilled(bp.billed, weights) {
+			group := groups[gi]
 			info := group.CommitmentInfo
 			info.ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount.Add(share.ComputedCommitmentUtilizedAmount)
 			info.ComputedOverageAmount = info.ComputedOverageAmount.Add(share.ComputedOverageAmount)
 			info.ComputedTrueUpAmount = info.ComputedTrueUpAmount.Add(share.ComputedTrueUpAmount)
 			// Utilized plus true-up: what the commitment itself bills; overage is billed outside it.
 			info.Amount = info.ComputedCommitmentUtilizedAmount.Add(info.ComputedTrueUpAmount)
-			group.TotalCost = group.TotalCost.Add(utilized[gi]).Add(overage[gi]).Add(trueUp[gi])
-			group.Points = placePeriodCharge(group.Points, pc.period, rangeStart, share, fill)
-			group.BucketPoints = placePeriodCharge(group.BucketPoints, pc.period, rangeStart, share, time.Time{})
+			total := share.ComputedCommitmentUtilizedAmount.Add(share.ComputedOverageAmount).Add(share.ComputedTrueUpAmount)
+			group.TotalCost = group.TotalCost.Add(total)
+
+			at := pointsIn[gi]
+			if len(at) == 0 && !window.IsZero() && !total.IsZero() {
+				group.Points = append(group.Points, events.UsageAnalyticPoint{Timestamp: window, WindowStart: window})
+				at = []int{len(group.Points) - 1}
+			}
+
+			usage := lo.Map(at, func(j int, _ int) decimal.Decimal { return group.Points[j].Usage })
+			for k, part := range splitBilled(&share, usage) {
+				point := &group.Points[at[k]]
+				point.ComputedCommitmentUtilizedAmount = point.ComputedCommitmentUtilizedAmount.Add(part.ComputedCommitmentUtilizedAmount)
+				point.ComputedOverageAmount = point.ComputedOverageAmount.Add(part.ComputedOverageAmount)
+				point.ComputedTrueUpAmount = point.ComputedTrueUpAmount.Add(part.ComputedTrueUpAmount)
+				point.Cost = point.Cost.Add(part.ComputedCommitmentUtilizedAmount).
+					Add(part.ComputedOverageAmount).
+					Add(part.ComputedTrueUpAmount)
+			}
 		}
 	}
 
@@ -2742,53 +2747,40 @@ func allocatePeriodCharges(data *AnalyticsData, groups []*events.DetailedUsageAn
 	}
 }
 
-// placePeriodCharge spreads a period's charge over the points whose windows start in it, by usage; a point starting
-// before rangeStart counts from it. With none, the charge goes to the point starting at fill, added when missing; a
-// zero fill leaves it unplaced.
-func placePeriodCharge(
-	points []events.UsageAnalyticPoint,
-	period types.Period,
-	rangeStart time.Time,
-	charge types.CommitmentInfo,
-	fill time.Time,
-) []events.UsageAnalyticPoint {
-	if charge.ComputedCommitmentUtilizedAmount.IsZero() && charge.ComputedOverageAmount.IsZero() && charge.ComputedTrueUpAmount.IsZero() {
-		return points
-	}
-
+// periodPoints returns the indexes of the points whose windows start in bounds or, with none, of the point whose window
+// starts at window, which holds the period's start.
+func periodPoints(points []events.UsageAnalyticPoint, bounds types.Period, window time.Time) []int {
 	var in []int
 	for j, point := range points {
-		if at := maxTime(point.Timestamp, rangeStart); !at.Before(period.Start) && at.Before(period.End) {
+		if !point.Timestamp.Before(bounds.Start) && point.Timestamp.Before(bounds.End) {
 			in = append(in, j)
 		}
 	}
 
 	if len(in) == 0 {
-		if fill.IsZero() {
-			return points
+		if j := slices.IndexFunc(points, func(point events.UsageAnalyticPoint) bool { return point.Timestamp.Equal(window) }); j >= 0 {
+			in = append(in, j)
 		}
-
-		j := slices.IndexFunc(points, func(point events.UsageAnalyticPoint) bool { return point.Timestamp.Equal(fill) })
-		if j < 0 {
-			points = append(points, events.UsageAnalyticPoint{Timestamp: fill, WindowStart: fill})
-			j = len(points) - 1
-		}
-		in = []int{j}
 	}
 
-	usage := lo.Map(in, func(j int, _ int) decimal.Decimal { return points[j].Usage })
-	utilized := allocateCostByWeight(charge.ComputedCommitmentUtilizedAmount, usage)
-	overage := allocateCostByWeight(charge.ComputedOverageAmount, usage)
-	trueUp := allocateCostByWeight(charge.ComputedTrueUpAmount, usage)
-	for k, j := range in {
-		point := &points[j]
-		point.ComputedCommitmentUtilizedAmount = point.ComputedCommitmentUtilizedAmount.Add(utilized[k])
-		point.ComputedOverageAmount = point.ComputedOverageAmount.Add(overage[k])
-		point.ComputedTrueUpAmount = point.ComputedTrueUpAmount.Add(trueUp[k])
-		point.Cost = point.Cost.Add(utilized[k]).Add(overage[k]).Add(trueUp[k])
+	return in
+}
+
+// splitBilled shares billed utilized, overage and true-up amounts by weight.
+func splitBilled(billed *types.CommitmentInfo, weights []decimal.Decimal) []types.CommitmentInfo {
+	utilized := allocateCostByWeight(billed.ComputedCommitmentUtilizedAmount, weights)
+	overage := allocateCostByWeight(billed.ComputedOverageAmount, weights)
+	trueUp := allocateCostByWeight(billed.ComputedTrueUpAmount, weights)
+	shares := make([]types.CommitmentInfo, len(weights))
+	for i := range shares {
+		shares[i] = types.CommitmentInfo{
+			ComputedCommitmentUtilizedAmount: utilized[i],
+			ComputedOverageAmount:            overage[i],
+			ComputedTrueUpAmount:             trueUp[i],
+		}
 	}
 
-	return points
+	return shares
 }
 
 // allocateCostByWeight uses positive weights, or equal shares when none are positive.
@@ -2836,32 +2828,32 @@ func (s *meterUsageService) calculateLineItemTotals(
 	params *events.MeterUsageDetailedAnalyticsParams,
 	billingAnchor *time.Time,
 	end time.Time,
-) (map[string]decimal.Decimal, map[string][]periodCommitment, []string, error) {
+) (map[string]decimal.Decimal, map[string][]billedPeriod, []string, error) {
 	hasUsageFilters := len(params.PropertyFilters) > 0 || len(params.Sources) > 0
 	selectedCharges, err := s.collectLineItemCharges(ctx, usage, params, billingAnchor, end)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	var commitmentsByLine map[string][]periodCommitment
+	var billedByLine map[string][]billedPeriod
 	var commitmentIDs []string
 	if !hasUsageFilters {
-		commitmentsByLine, commitmentIDs, err = s.calculateLineItemCommitments(ctx, usage, selectedCharges, params, billingAnchor, end)
+		billedByLine, commitmentIDs, err = s.calculateLineItemCommitments(ctx, usage, selectedCharges, params, billingAnchor, end)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 	}
 
 	costByLine := make(map[string]decimal.Decimal, len(selectedCharges))
-	for lineID, periods := range commitmentsByLine {
-		for _, pc := range periods {
-			costByLine[lineID] = costByLine[lineID].Add(pc.info.ComputedCommitmentUtilizedAmount).
-				Add(pc.info.ComputedOverageAmount).
-				Add(pc.info.ComputedTrueUpAmount)
+	for lineID, periods := range billedByLine {
+		for _, bp := range periods {
+			costByLine[lineID] = costByLine[lineID].Add(bp.billed.ComputedCommitmentUtilizedAmount).
+				Add(bp.billed.ComputedOverageAmount).
+				Add(bp.billed.ComputedTrueUpAmount)
 		}
 	}
 	if !hasUsageFilters && !hasExtraGroupBy(params.GroupBy) {
-		return costByLine, commitmentsByLine, commitmentIDs, nil
+		return costByLine, billedByLine, commitmentIDs, nil
 	}
 
 	fullCharges := selectedCharges
@@ -2882,7 +2874,7 @@ func (s *meterUsageService) calculateLineItemTotals(
 	priceService := NewPriceService(s.ServiceParams)
 	for _, item := range usage.Subscription.LineItems {
 		selectedCharge := selectedCharges[item.ID]
-		if selectedCharge == nil || commitmentsByLine[item.ID] != nil || (preserveLegacyCommitments && item.HasAnyCommitment()) {
+		if selectedCharge == nil || billedByLine[item.ID] != nil || (preserveLegacyCommitments && item.HasAnyCommitment()) {
 			continue
 		}
 
@@ -2902,7 +2894,7 @@ func (s *meterUsageService) calculateLineItemTotals(
 		costByLine[item.ID] = lineCost
 	}
 
-	return costByLine, commitmentsByLine, commitmentIDs, nil
+	return costByLine, billedByLine, commitmentIDs, nil
 }
 
 // collectLineItemCharges reuses selected usage, querying only totals that cannot be recovered from its groups.
@@ -3053,15 +3045,14 @@ func (s *meterUsageService) fetchLineItemCharges(
 // maxCommitmentPeriods bounds the billing periods of a range a v2 commitment overlaps, each priced on its own.
 const maxCommitmentPeriods = 366
 
-// periodCommitment is what one billing period bills a line v2 commitments cover in the range.
-type periodCommitment struct {
+// billedPeriod is what one billing period bills a line v2 commitments cover in the range.
+type billedPeriod struct {
 	period types.Period
-	info   *types.CommitmentInfo
+	billed *types.CommitmentInfo
 }
 
-// calculateLineItemCommitments returns what v2 commitments bill each queried line they cover in
-// [params.StartTime, end), billing period by billing period as each period's invoice bills it, and the IDs of the
-// commitments applied. A covered line's usage in a period no commitment covers it bills at the line's own price.
+// calculateLineItemCommitments returns what each billing period of [params.StartTime, end) bills the queried lines v2
+// commitments cover, at the line's own price where none does, and the IDs of the commitments applied.
 func (s *meterUsageService) calculateLineItemCommitments(
 	ctx context.Context,
 	usage *SubscriptionMeterUsage,
@@ -3069,7 +3060,7 @@ func (s *meterUsageService) calculateLineItemCommitments(
 	params *events.MeterUsageDetailedAnalyticsParams,
 	billingAnchor *time.Time,
 	end time.Time,
-) (map[string][]periodCommitment, []string, error) {
+) (map[string][]billedPeriod, []string, error) {
 	// Only a range some v2 commitment overlaps is priced period by period, so a long range without one stays valid.
 	svc := newCommitmentService(s.ServiceParams)
 	enabled, err := svc.IsEnabled(ctx)
@@ -3143,10 +3134,10 @@ func (s *meterUsageService) calculateLineItemCommitments(
 		}
 	}
 
-	byLine := map[string][]periodCommitment{}
+	byLine := map[string][]billedPeriod{}
 	for i, period := range periods {
 		for lineID, breakdown := range breakdownsByPeriod[i] {
-			byLine[lineID] = append(byLine[lineID], periodCommitment{period: period, info: breakdown})
+			byLine[lineID] = append(byLine[lineID], billedPeriod{period: period, billed: breakdown})
 		}
 	}
 
@@ -3213,9 +3204,8 @@ func billingPeriodsIn(sub *subscription.Subscription, span types.Period, now tim
 	return periods, nil
 }
 
-// periodCommitments prices one billing period's part of the range through the billing commitment loader. It returns
-// what the commitments bill each queried line they cover, as the period's invoice bills it, and the IDs of the
-// commitments covering a queried line. Shared true-up is allocated by utilized value across a commitment's full scope.
+// periodCommitments prices one billing period's part of the range through the billing commitment loader: what its
+// commitments bill each queried line they cover, and the IDs of the commitments covering a queried line.
 func (s *meterUsageService) periodCommitments(
 	ctx context.Context,
 	usage *SubscriptionMeterUsage,
@@ -3238,21 +3228,28 @@ func (s *meterUsageService) periodCommitments(
 
 	isQueried := func(item *subscription.SubscriptionLineItem) bool { return selectedCharges[item.ID] != nil }
 	var commitmentIDs []string
+	inScope := map[string]bool{}
 	for _, sc := range loader.commitments {
-		if lo.SomeBy(loader.scopeByCommitment[sc.ID].lineItems, isQueried) {
-			commitmentIDs = append(commitmentIDs, sc.ID)
+		scope := loader.scopeByCommitment[sc.ID].lineItems
+		if !lo.SomeBy(scope, isQueried) {
+			continue
+		}
+
+		commitmentIDs = append(commitmentIDs, sc.ID)
+		for _, item := range scope {
+			inScope[item.ID] = true
 		}
 	}
 	if len(commitmentIDs) == 0 {
 		return nil, nil, nil
 	}
 
-	// A commitment fills from every line it covers, including lines a meter filter left out of the query. A period
+	// A commitment covering a queried line fills from every line it covers, even those a meter filter left out. A period
 	// holding the whole range reuses the queried usage, except a running meter's, which bills its total.
 	wholeRange := period.Start.Equal(params.StartTime) && period.End.Equal(end)
 	var linesToRead []*subscription.SubscriptionLineItem
 	for _, item := range usage.Subscription.LineItems {
-		if !loader.HandledLineIDs()[item.ID] || !item.GetPeriodStart(period.Start).Before(item.GetPeriodEnd(period.End)) {
+		if !inScope[item.ID] || !item.GetPeriodStart(period.Start).Before(item.GetPeriodEnd(period.End)) {
 			continue
 		}
 
@@ -3330,6 +3327,7 @@ func (s *meterUsageService) periodCommitments(
 		lineBreakdown.ComputedCommitmentUtilizedAmount = lineBreakdown.ComputedCommitmentUtilizedAmount.Add(line.Amount)
 	}
 
+	// A shared true-up is split across the commitment's whole scope by utilized value.
 	for _, line := range trueUps {
 		commitmentID := lo.FromPtr(line.CommitmentID)
 		scope := loader.scopeByCommitment[commitmentID].lineItems

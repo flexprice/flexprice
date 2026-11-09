@@ -600,10 +600,12 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 func (l *commitmentLoader) activeBuckets(c *commitment.Commitment, span types.Period, bucket types.WindowSize) int64 {
 	anchor := &l.sub.BillingAnchor
 	var count int64
-	for start := truncateToBucketStart(span.Start.UTC(), bucket, anchor); start.Before(span.End); start = nextBucketStart(start, bucket, anchor) {
+	for start := truncateToBucketStart(span.Start.UTC(), bucket, anchor); start.Before(span.End); {
 		if !start.Before(span.Start) && l.appliesAt(c, start) {
 			count++
 		}
+
+		start = nextBucketStart(start, bucket, anchor)
 	}
 
 	return count
@@ -612,7 +614,8 @@ func (l *commitmentLoader) activeBuckets(c *commitment.Commitment, span types.Pe
 // appliesAt reports whether the commitment's capacity applies at t: within its term, which ends with the subscription
 // when it is open-ended, and inside its active windows.
 func (l *commitmentLoader) appliesAt(c *commitment.Commitment, t time.Time) bool {
-	return !t.Before(c.StartDate) && !endReached(termEnd(l.sub, c), t) && c.ActiveWindows.Contains(t, l.scopeByCommitment[c.ID].location)
+	location := l.scopeByCommitment[c.ID].location
+	return !t.Before(c.StartDate) && !endReached(termEnd(l.sub, c), t) && c.ActiveWindows.Contains(t, location)
 }
 
 // windowOf returns the index of the window holding max(t, line start), or of the first window for an earlier one.

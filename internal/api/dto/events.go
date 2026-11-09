@@ -391,9 +391,8 @@ type GetUsageAnalyticsResponse struct {
 	Currency        string               `json:"currency"`
 	Items           []UsageAnalyticItem  `json:"items"`
 	CustomAnalytics []CustomAnalyticItem `json:"custom_analytics,omitempty"`
-	// Instalments lists, when expand includes "instalments", the instalments of the v2 commitments this request applies
-	// that were invoiced inside the range. They bill the value of billing-terms commitments, whose covered usage adds
-	// nothing to TotalCost. Property and source filters apply no commitments, so they list none.
+	// Instalments lists, with expand "instalments", the instalments of the v2 commitments the request applied that were
+	// invoiced in the range. Property and source filters apply no commitments, so they list none.
 	Instalments []UsageAnalyticInstalment `json:"instalments,omitempty"`
 	// TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes "instalments".
 	TotalCostWithInstalments *decimal.Decimal `json:"total_cost_with_instalments,omitempty" swaggertype:"string"`
