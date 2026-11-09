@@ -2666,6 +2666,12 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 		anchor = &sub.BillingAnchor
 	}
 
+	// Bucketed prices keep their points at the bucket when it is coarser than the request window.
+	grain := data.Params.WindowSize
+	if grain != "" {
+		grain = grain.Max(price.ResolveBucketSize(data.Prices[groups[0].PriceID], data.Meters[groups[0].MeterID]))
+	}
+
 	// Bucket points belong to v1 commitment time buckets, which no v2 commitment covers, so only points are reset.
 	rangeUsage := make([]decimal.Decimal, len(groups))
 	for gi, group := range groups {
@@ -2692,8 +2698,8 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 		}
 
 		var window time.Time
-		if data.Params.WindowSize != "" {
-			window = truncateToBucketStart(bp.period.Start.UTC(), data.Params.WindowSize, anchor)
+		if grain != "" {
+			window = truncateToBucketStart(bp.period.Start.UTC(), grain, anchor)
 		}
 
 		pointsIn := make([][]int, len(groups))
@@ -2712,7 +2718,7 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 			weights = rangeUsage
 		}
 
-		for gi, share := range splitBilled(bp.billed, weights) {
+		for gi, share := range splitBilled(bp.billed, weights, groups[0].AggregationType) {
 			group := groups[gi]
 			info := group.CommitmentInfo
 			info.ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount.Add(share.ComputedCommitmentUtilizedAmount)
@@ -2730,7 +2736,7 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 			}
 
 			usage := lo.Map(at, func(j int, _ int) decimal.Decimal { return group.Points[j].Usage })
-			for k, part := range splitBilled(&share, usage) {
+			for k, part := range splitBilled(&share, usage, group.AggregationType) {
 				point := &group.Points[at[k]]
 				point.ComputedCommitmentUtilizedAmount = point.ComputedCommitmentUtilizedAmount.Add(part.ComputedCommitmentUtilizedAmount)
 				point.ComputedOverageAmount = point.ComputedOverageAmount.Add(part.ComputedOverageAmount)
@@ -2766,10 +2772,11 @@ func periodPoints(points []events.UsageAnalyticPoint, bounds types.Period, windo
 	return in
 }
 
-// splitBilled shares billed utilized, overage and true-up amounts by weight.
-func splitBilled(billed *types.CommitmentInfo, weights []decimal.Decimal) []types.CommitmentInfo {
-	utilized := allocateCostByWeight(billed.ComputedCommitmentUtilizedAmount, weights)
-	overage := allocateCostByWeight(billed.ComputedOverageAmount, weights)
+// splitBilled shares billed amounts by weight. Utilized and overage follow usage, keeping signed SUM corrections; a
+// true-up is no usage, so it follows positive weights only.
+func splitBilled(billed *types.CommitmentInfo, weights []decimal.Decimal, aggregation types.AggregationType) []types.CommitmentInfo {
+	utilized := allocateUsageCost(billed.ComputedCommitmentUtilizedAmount, weights, aggregation)
+	overage := allocateUsageCost(billed.ComputedOverageAmount, weights, aggregation)
 	trueUp := allocateCostByWeight(billed.ComputedTrueUpAmount, weights)
 	shares := make([]types.CommitmentInfo, len(weights))
 	for i := range shares {
@@ -3228,28 +3235,22 @@ func (s *meterUsageService) periodCommitments(
 
 	isQueried := func(item *subscription.SubscriptionLineItem) bool { return selectedCharges[item.ID] != nil }
 	var commitmentIDs []string
-	inScope := map[string]bool{}
 	for _, sc := range loader.commitments {
-		scope := loader.scopeByCommitment[sc.ID].lineItems
-		if !lo.SomeBy(scope, isQueried) {
-			continue
-		}
-
-		commitmentIDs = append(commitmentIDs, sc.ID)
-		for _, item := range scope {
-			inScope[item.ID] = true
+		if lo.SomeBy(loader.scopeByCommitment[sc.ID].lineItems, isQueried) {
+			commitmentIDs = append(commitmentIDs, sc.ID)
 		}
 	}
 	if len(commitmentIDs) == 0 {
 		return nil, nil, nil
 	}
 
-	// A commitment covering a queried line fills from every line it covers, even those a meter filter left out. A period
-	// holding the whole range reuses the queried usage, except a running meter's, which bills its total.
+	// The lines read include those a meter filter left out. A period holding the whole range reuses the queried usage,
+	// except a running meter's, which bills its total.
+	affecting := loader.LinesAffecting(isQueried)
 	wholeRange := period.Start.Equal(params.StartTime) && period.End.Equal(end)
 	var linesToRead []*subscription.SubscriptionLineItem
 	for _, item := range usage.Subscription.LineItems {
-		if !inScope[item.ID] || !item.GetPeriodStart(period.Start).Before(item.GetPeriodEnd(period.End)) {
+		if !affecting[item.ID] || !item.GetPeriodStart(period.Start).Before(item.GetPeriodEnd(period.End)) {
 			continue
 		}
 

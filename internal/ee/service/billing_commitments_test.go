@@ -2741,6 +2741,42 @@ func TestActiveBuckets_CountsTheBucketsTheTermAndWindowsHold(t *testing.T) {
 	}
 }
 
+// The lines a commitment's bill depends on reach through every commitment sharing a line with it: x shares c with y,
+// which also draws on d, while z touches none of them.
+func TestCommitmentLoader_LinesAffecting(t *testing.T) {
+	a, c := &subscription.SubscriptionLineItem{ID: "a"}, &subscription.SubscriptionLineItem{ID: "c"}
+	d, e := &subscription.SubscriptionLineItem{ID: "d"}, &subscription.SubscriptionLineItem{ID: "e"}
+	l := &commitmentLoader{
+		commitments: []*stackedCommitment{
+			{Commitment: &commitment.Commitment{ID: "y"}},
+			{Commitment: &commitment.Commitment{ID: "x"}},
+			{Commitment: &commitment.Commitment{ID: "z"}},
+		},
+		scopeByCommitment: map[string]*loadedScope{
+			"x": {lineItems: []*subscription.SubscriptionLineItem{a, c}},
+			"y": {lineItems: []*subscription.SubscriptionLineItem{c, d}},
+			"z": {lineItems: []*subscription.SubscriptionLineItem{e}},
+		},
+	}
+
+	tests := []struct {
+		name    string
+		covered string
+		want    map[string]bool
+	}{
+		{name: "through a shared line", covered: "a", want: map[string]bool{"a": true, "c": true, "d": true}},
+		{name: "from the other side", covered: "d", want: map[string]bool{"a": true, "c": true, "d": true}},
+		{name: "a separate scope", covered: "e", want: map[string]bool{"e": true}},
+		{name: "no covering commitment", covered: "b", want: map[string]bool{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := l.LinesAffecting(func(item *subscription.SubscriptionLineItem) bool { return item.ID == tt.covered })
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 // BenchmarkActiveBuckets_ElevenMonthsOfMinutes counts the minute buckets an annual commitment period accrued before its
 // last billing period, for a commitment outside UTC.
 func BenchmarkActiveBuckets_ElevenMonthsOfMinutes(b *testing.B) {

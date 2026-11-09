@@ -289,6 +289,34 @@ func (l *commitmentLoader) HandledLineIDs() map[string]bool {
 	return l.handledLineIDs
 }
 
+// LinesAffecting returns the lines whose usage can change what the commitments bill the lines matching covered: the
+// scopes of the commitments covering one, widened by every commitment sharing a line with those, which draws on it too.
+func (l *commitmentLoader) LinesAffecting(covered func(*subscription.SubscriptionLineItem) bool) map[string]bool {
+	affecting := map[string]bool{}
+	reached := map[string]bool{}
+	for grew := true; grew; {
+		grew = false
+		for _, sc := range l.commitments {
+			if reached[sc.ID] {
+				continue
+			}
+
+			scope := l.scopeByCommitment[sc.ID].lineItems
+			touches := lo.SomeBy(scope, func(item *subscription.SubscriptionLineItem) bool { return covered(item) || affecting[item.ID] })
+			if !touches {
+				continue
+			}
+
+			reached[sc.ID], grew = true, true
+			for _, item := range scope {
+				affecting[item.ID] = true
+			}
+		}
+	}
+
+	return affecting
+}
+
 // Stacks builds one stack per type, measurement and bucket size from the loaded commitments and allocates each.
 func (l *commitmentLoader) Stacks(ctx context.Context) ([]*commitmentStack, []*allocation, error) {
 	var keys []stackKey

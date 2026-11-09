@@ -6459,6 +6459,75 @@ func (s *MeterUsageServiceSuite) TestAnalytics_PeriodsInsideAWindowFollowItsUsag
 	}
 }
 
+// A correction point gives back its share of the usage amounts but takes none of the true-up, which is no usage: with
+// +10 and -5 units, $5 utilized splits $10 and -$5, and the $10 true-up stays on the +10 point.
+func (s *MeterUsageServiceSuite) TestAnalytics_CorrectionsShareUsageAmountsButNoTrueUp() {
+	january := s.periodStart
+	data := &AnalyticsData{
+		Analytics: []*events.DetailedUsageAnalytic{{
+			SubLineItemID:   "line",
+			AggregationType: types.AggregationSum,
+			TotalUsage:      dec("5"),
+			Points: []events.UsageAnalyticPoint{
+				{Timestamp: january.AddDate(0, 0, 4), Usage: dec("10")},
+				{Timestamp: january.AddDate(0, 0, 5), Usage: dec("-5")},
+			},
+		}},
+		LineTotals: map[string]decimal.Decimal{"line": dec("15")},
+		LineBilledPeriods: map[string][]billedPeriod{"line": {{
+			period: types.Period{Start: january, End: s.periodEnd},
+			billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("5"), ComputedTrueUpAmount: dec("10")},
+		}}},
+		Params: &events.UsageAnalyticsParams{WindowSize: types.WindowSizeDay},
+	}
+
+	points := allocateLineItemCosts(data)[0].Points
+	s.Require().Len(points, 2)
+	s.True(points[0].ComputedCommitmentUtilizedAmount.Equal(dec("10")), "utilized %s", points[0].ComputedCommitmentUtilizedAmount)
+	s.True(points[0].ComputedTrueUpAmount.Equal(dec("10")), "true-up %s", points[0].ComputedTrueUpAmount)
+	s.True(points[0].Cost.Equal(dec("20")), "cost %s", points[0].Cost)
+	s.True(points[1].ComputedCommitmentUtilizedAmount.Equal(dec("-5")), "utilized %s", points[1].ComputedCommitmentUtilizedAmount)
+	s.True(points[1].ComputedTrueUpAmount.IsZero(), "true-up %s", points[1].ComputedTrueUpAmount)
+	s.True(points[1].Cost.Equal(dec("-5")), "cost %s", points[1].Cost)
+}
+
+// Points stay at the grain they were computed at: a monthly-bucketed price keeps monthly points under a daily request,
+// so a weekly period without usage of its own goes on its month's point instead of a new daily one.
+func (s *MeterUsageServiceSuite) TestAnalytics_FillPointsUseTheBucketGrain() {
+	january := s.periodStart
+	week := 7 * 24 * time.Hour
+	monthly := &meter.Meter{
+		ID:          "meter_monthly",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeMonth},
+	}
+	data := &AnalyticsData{
+		Analytics: []*events.DetailedUsageAnalytic{{
+			SubLineItemID:   "line",
+			MeterID:         monthly.ID,
+			AggregationType: types.AggregationSum,
+			TotalUsage:      dec("10"),
+			Points:          []events.UsageAnalyticPoint{{Timestamp: january, Usage: dec("10")}},
+		}},
+		Meters:     map[string]*meter.Meter{monthly.ID: monthly},
+		LineTotals: map[string]decimal.Decimal{"line": dec("120")},
+		LineBilledPeriods: map[string][]billedPeriod{"line": {
+			{
+				period: types.Period{Start: january, End: january.Add(week)},
+				billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("40")},
+			},
+			{
+				period: types.Period{Start: january.Add(week), End: january.Add(2 * week)},
+				billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("80")},
+			},
+		}},
+		Params: &events.UsageAnalyticsParams{WindowSize: types.WindowSizeDay, BillingAnchor: &january},
+	}
+
+	points := allocateLineItemCosts(data)[0].Points
+	s.Require().Len(points, 1)
+	s.True(points[0].Cost.Equal(dec("120")), "the month's point costs %s", points[0].Cost)
+}
+
 func (s *MeterUsageServiceSuite) TestAnalytics_NetZeroBucketedUsagePreservesCharges() {
 	ctx := s.GetContext()
 	m := &meter.Meter{
@@ -6879,38 +6948,92 @@ func (s *MeterUsageServiceSuite) TestCommitments_EachPeriodKeepsItsChargesOnItsP
 	}
 }
 
-// A running meter bills its total each period, as its invoices do: February has no new usage, and its invoice bills the
-// 200 units January left, $50 above the floor.
+// A running meter bills its total each period, as its invoices do: a period without new events bills what January left,
+// usage from before the range counts, and a period after the commitment ends bills the total at the line's price.
 func (s *MeterUsageServiceSuite) TestCommitments_RunningMeterBillsItsTotalEachPeriod() {
-	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
-	m := s.runningSumMeter(ctx, "meter_running_floor", types.ResetUsageNever)
-	p := s.createPriceForMeter(ctx, "price_running_floor", m.ID, dec("1"))
-	s.openLineItem("li_running_floor", m.ID, p.ID)
-	s.storeCommitment(s.newCommitment("cmt_running_floor", types.CommitmentScopePrice, p.ID, "150"))
-	s.insertMeterUsage(ctx, m.ID, s.customer.ExternalID, januaryNoon(10), 200)
-
 	february, march := s.periodEnd, s.periodEnd.AddDate(0, 1, 0)
-	januaryInvoice, _ := invoicedTotal(s.periodInvoice(s.periodStart, february))
-	februaryInvoice, _ := invoicedTotal(s.periodInvoice(february, march))
-	s.True(februaryInvoice.Equal(dec("200")), "February invoice %s", februaryInvoice)
+	december := time.Date(2025, time.December, 20, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name          string
+		commitmentEnd time.Time
+		usage         map[time.Time]float64
+		periods       []time.Time // each runs to the next, the last to rangeEnd
+		rangeEnd      time.Time
+		invoices      []string
+	}{
+		{
+			name:          "a_period_without_new_events",
+			commitmentEnd: s.periodStart.AddDate(0, 6, 0),
+			usage:         map[time.Time]float64{januaryNoon(10): 200},
+			periods:       []time.Time{s.periodStart, february},
+			rangeEnd:      march,
+			invoices:      []string{"200", "200"},
+		},
+		{
+			name:          "usage_before_the_range",
+			commitmentEnd: s.periodStart.AddDate(0, 6, 0),
+			usage:         map[time.Time]float64{december: 100, januaryNoon(10): 80},
+			periods:       []time.Time{s.periodStart},
+			rangeEnd:      february,
+			invoices:      []string{"180"},
+		},
+		{
+			name:          "after_the_commitment_ends",
+			commitmentEnd: february,
+			usage:         map[time.Time]float64{januaryNoon(10): 200},
+			periods:       []time.Time{s.periodStart, february},
+			rangeEnd:      march,
+			invoices:      []string{"200", "200"},
+		},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+			m := s.runningSumMeter(ctx, "meter_running_floor", types.ResetUsageNever)
+			p := s.createPriceForMeter(ctx, "price_running_floor", m.ID, dec("1"))
+			s.openLineItem("li_running_floor", m.ID, p.ID)
+			c := s.newCommitment("cmt_running_floor", types.CommitmentScopePrice, p.ID, "150")
+			c.EndDate = lo.ToPtr(tt.commitmentEnd)
+			s.storeCommitment(c)
+			for at, quantity := range tt.usage {
+				s.insertMeterUsage(ctx, m.ID, s.customer.ExternalID, at, quantity)
+			}
 
-	resp := s.customerAnalytics(s.periodStart, march, func(params *events.MeterUsageDetailedAnalyticsParams) {
-		params.WindowSize = types.WindowSizeMonth
-	})
-	s.Require().Len(resp.Items, 1)
-	invoiced := januaryInvoice.Add(februaryInvoice)
-	s.True(resp.TotalCost.Equal(invoiced), "total %s, invoices %s", resp.TotalCost, invoiced)
-	points := resp.Items[0].Points
-	s.Require().Len(points, 2)
-	s.True(points[1].Timestamp.Equal(february), "second point starts %s", points[1].Timestamp)
-	s.True(points[1].Cost.Equal(februaryInvoice), "February point costs %s", points[1].Cost)
+			resp := s.customerAnalytics(s.periodStart, tt.rangeEnd, func(params *events.MeterUsageDetailedAnalyticsParams) {
+				params.WindowSize = types.WindowSizeMonth
+			})
+			s.Require().Len(resp.Items, 1)
+			points := resp.Items[0].Points
+			s.Require().Len(points, len(tt.periods))
+			total := decimal.Zero
+			for i, start := range tt.periods {
+				end := tt.rangeEnd
+				if i+1 < len(tt.periods) {
+					end = tt.periods[i+1]
+				}
+
+				invoiced, _ := invoicedTotal(s.periodInvoice(start, end))
+				s.True(invoiced.Equal(dec(tt.invoices[i])), "invoice from %s bills %s, want %s", start, invoiced, tt.invoices[i])
+				s.True(points[i].Timestamp.Equal(start), "point %d starts %s", i, points[i].Timestamp)
+				s.True(points[i].Cost.Equal(invoiced), "point from %s costs %s, invoice %s", start, points[i].Cost, invoiced)
+				total = total.Add(invoiced)
+			}
+			s.True(resp.TotalCost.Equal(total), "total %s, invoices %s", resp.TotalCost, total)
+		})
+	}
 }
 
-// recordingUsageStore records each multi-meter usage read.
+// recordingUsageStore records each usage read, single- or multi-meter.
 type recordingUsageStore struct {
 	events.MeterUsageRepository
 	reads []events.MeterUsageQueryParams
+}
+
+func (r *recordingUsageStore) GetUsage(ctx context.Context, params *events.MeterUsageQueryParams) (*events.MeterUsageAggregationResult, error) {
+	r.reads = append(r.reads, *params)
+	return r.MeterUsageRepository.GetUsage(ctx, params)
 }
 
 func (r *recordingUsageStore) GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error) {
@@ -6933,12 +7056,16 @@ func (s *MeterUsageServiceSuite) TestCommitments_LinesAreReadOnlyWhileTheyRun() 
 	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10).AddDate(0, 1, 0), 100, nil)
 
 	recorded := &recordingUsageStore{MeterUsageRepository: s.GetStores().MeterUsageRepo}
-	s.svc.(*meterUsageService).repo = recorded
+	svc := s.svc.(*meterUsageService)
+	svc.repo, svc.MeterUsageRepo = recorded, recorded
 	resp := s.customerAnalytics(s.periodStart, s.periodEnd.AddDate(0, 1, 0))
 	s.True(resp.TotalCost.Equal(dec("150")), "total %s", resp.TotalCost)
 	s.NotEmpty(recorded.reads)
 	for _, read := range recorded.reads {
 		s.True(read.StartTime.Before(read.EndTime), "read [%s, %s)", read.StartTime, read.EndTime)
+		if read.MeterID == m.ID || slices.Contains(read.MeterIDs, m.ID) {
+			s.False(read.StartTime.Before(li.StartDate), "read [%s, %s) before the line starts", read.StartTime, read.EndTime)
+		}
 	}
 }
 
@@ -6961,13 +7088,15 @@ func (s *MeterUsageServiceSuite) TestCommitments_ReadsOnlyTheLinesOfCommitmentsI
 	}
 
 	recorded := &recordingUsageStore{MeterUsageRepository: s.GetStores().MeterUsageRepo}
-	s.svc.(*meterUsageService).repo = recorded
+	svc := s.svc.(*meterUsageService)
+	svc.repo, svc.MeterUsageRepo = recorded, recorded
 	resp := s.customerAnalytics(s.periodStart, s.periodEnd.AddDate(0, 1, 0), func(params *events.MeterUsageDetailedAnalyticsParams) {
 		params.MeterIDs = []string{queried.ID}
 	})
 	s.True(resp.TotalCost.Equal(dec("300")), "total %s", resp.TotalCost)
 	for _, read := range recorded.reads {
 		s.NotContains(read.MeterIDs, other.ID, "read [%s, %s)", read.StartTime, read.EndTime)
+		s.NotEqual(other.ID, read.MeterID, "read [%s, %s)", read.StartTime, read.EndTime)
 	}
 }
 
