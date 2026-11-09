@@ -1272,13 +1272,17 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 	}
 
 	paymentService := NewPaymentService(p.ServiceParams)
-	if _, err := paymentService.UpdatePayment(ctx, paymentObj.ID, *updateReq); err != nil {
+	updated, err := paymentService.UpdatePayment(ctx, paymentObj.ID, *updateReq)
+	if err != nil {
 		p.Logger.Error(ctx, "failed to update payment status to succeeded",
 			"error", err,
 			"payment_id", paymentObj.ID,
 		)
 		return err
 	}
+	// The caller saves paymentObj again; keep the gateway and connection the charge recorded.
+	paymentObj.PaymentGateway = updated.PaymentGateway
+	paymentObj.ConnectionID = updated.ConnectionID
 
 	p.Logger.Info(ctx, "successfully processed card payment",
 		"payment_id", paymentObj.ID,

@@ -358,6 +358,12 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 		externalID = lookupKey
 		existing, err := customerService.GetCustomerByLookupKey(ctx, lookupKey)
 		if err == nil && existing != nil {
+			if !existing.Customer.InBillingEntity(types.GetBillingEntityID(ctx)) {
+				s.logger.Info(ctx, "lookup key matches a customer of another billing entity, skipping link",
+					"flexprice_customer_id", existing.Customer.ID,
+					"stripe_customer_id", stripeCustomer.ID)
+				return nil
+			}
 			conn, err := s.client.GetConnection(ctx)
 			if err != nil {
 				return err
