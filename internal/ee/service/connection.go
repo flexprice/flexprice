@@ -24,10 +24,7 @@ import (
 // rejects any durationSeconds below 900 with a ValidationError, so 15m is the floor, not a choice.
 const awsMarketplaceRoleVerificationDuration = 15 * time.Minute
 
-const (
-	connectionExistsHint      = "A published connection for provider '%s' already exists"
-	oauthConnectionExistsHint = "A published connection for provider %s already exists"
-)
+const connectionExistsHint = "A published connection for provider '%s' already exists"
 
 // ConnectionService defines the interface for connection operations
 type ConnectionService interface {
@@ -761,16 +758,12 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 
 	beService := NewBillingEntityService(s.ServiceParams)
 	if err := beService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
-		owner, err := resolveConnectionOwner(txCtx, beService, mode, conn.ProviderType, req.BillingEntityID, req.ID)
+		owner, err := beService.ResolveConnectionOwner(txCtx, mode, conn.ProviderType, req.BillingEntityID, req.ID != "")
 		if err != nil {
 			return err
 		}
-		existing, err := s.ConnectionRepo.List(txCtx, &types.ConnectionFilter{ProviderType: conn.ProviderType})
-		if err != nil {
+		if err := requireNoDuplicateConnection(txCtx, s.ConnectionRepo, conn.ProviderType, owner); err != nil {
 			return err
-		}
-		if dup := duplicateConnection(existing, conn.ProviderType, owner); dup != nil {
-			return errConnectionExists(txCtx, dup, owner, connectionExistsHint)
 		}
 		conn.BillingEntityID = owner
 		return s.ConnectionRepo.Create(txCtx, conn)
@@ -1227,21 +1220,8 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 	return nil
 }
 
-// duplicateConnection returns the published connection of the provider that already belongs to the owner (nil when entities are off); storage is exempt.
-func duplicateConnection(existing []*connection.Connection, provider types.SecretProvider, owner *string) *connection.Connection {
-	if connection.IsStorageProvider(provider) {
-		return nil
-	}
-	dup, _ := lo.Find(existing, func(c *connection.Connection) bool {
-		return c.Status == types.StatusPublished &&
-			c.ProviderType == provider &&
-			lo.FromPtr(c.BillingEntityID) == lo.FromPtr(owner)
-	})
-	return dup
-}
-
-func errConnectionExists(ctx context.Context, existing *connection.Connection, owner *string, hintFormat string) error {
-	hint := fmt.Sprintf(hintFormat, existing.ProviderType) + " in this environment"
+func errConnectionExists(ctx context.Context, existing *connection.Connection, owner *string) error {
+	hint := fmt.Sprintf(connectionExistsHint, existing.ProviderType) + " in this environment"
 	details := map[string]any{
 		"provider_type":          existing.ProviderType,
 		"tenant_id":              types.GetTenantID(ctx),
@@ -1249,39 +1229,13 @@ func errConnectionExists(ctx context.Context, existing *connection.Connection, o
 		"existing_connection_id": existing.ID,
 	}
 	if owner != nil {
-		hint = fmt.Sprintf(hintFormat, existing.ProviderType) + " for this billing entity"
+		hint = fmt.Sprintf(connectionExistsHint, existing.ProviderType) + " for this billing entity"
 		details["billing_entity_id"] = *owner
 	}
 	return ierr.NewError("connection already exists").
 		WithHint(hint).
 		WithReportableDetails(details).
 		Mark(ierr.ErrAlreadyExists)
-}
-
-// resolveConnectionOwner returns the billing entity that owns a new connection; storage providers have none.
-// A connection created without a client id belongs to the default entity.
-func resolveConnectionOwner(ctx context.Context, beService BillingEntityService, mode types.BillingEntityMode, provider types.SecretProvider, requested *string, connectionID string) (*string, error) {
-	if connection.IsStorageProvider(provider) {
-		if lo.FromPtr(requested) != "" {
-			return nil, errStorageHasNoEntity(provider)
-		}
-		return nil, nil
-	}
-	owner, err := beService.ResolveBillingEntityID(ctx, mode, requested)
-	if err != nil || connectionID != "" || lo.FromPtr(requested) == "" {
-		return owner, err
-	}
-	def, err := beService.ResolveBillingEntityID(ctx, mode, nil)
-	if err != nil {
-		return nil, err
-	}
-	if *owner != *def {
-		return nil, ierr.NewError("id is required for a non-default billing entity").
-			WithHint("Send the connection id (conn_ followed by a ULID) used in its webhook URL; a connection without one belongs to the default billing entity").
-			WithReportableDetails(map[string]any{"billing_entity_id": *owner}).
-			Mark(ierr.ErrValidation)
-	}
-	return owner, nil
 }
 
 func errStorageHasNoEntity(provider types.SecretProvider) error {
@@ -1291,8 +1245,8 @@ func errStorageHasNoEntity(provider types.SecretProvider) error {
 }
 
 // persistUpdate saves the connection and, when a billing entity is given, moves it there.
-func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.Connection, requested *string) error {
-	if lo.FromPtr(requested) == "" {
+func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.Connection, billingEntityID *string) error {
+	if lo.FromPtr(billingEntityID) == "" {
 		return s.ConnectionRepo.Update(ctx, conn)
 	}
 
@@ -1304,7 +1258,7 @@ func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.
 		if connection.IsStorageProvider(conn.ProviderType) {
 			return errStorageHasNoEntity(conn.ProviderType)
 		}
-		target, err := beService.ResolveBillingEntityID(txCtx, mode, requested)
+		target, err := beService.ResolveBillingEntityID(txCtx, mode, billingEntityID)
 		if err != nil {
 			return err
 		}
@@ -1315,12 +1269,8 @@ func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.
 		if lo.FromPtr(conn.BillingEntityID) == *target {
 			return nil
 		}
-		existing, err := s.ConnectionRepo.List(txCtx, &types.ConnectionFilter{ProviderType: conn.ProviderType})
-		if err != nil {
+		if err := requireNoDuplicateConnection(txCtx, s.ConnectionRepo, conn.ProviderType, target); err != nil {
 			return err
-		}
-		if dup := duplicateConnection(existing, conn.ProviderType, target); dup != nil {
-			return errConnectionExists(txCtx, dup, target, connectionExistsHint)
 		}
 		conn.BillingEntityID = target
 		return s.ConnectionRepo.UpdateBillingEntity(txCtx, conn)

@@ -26,6 +26,8 @@ type BillingEntityService interface {
 	WithMode(ctx context.Context, fn func(txCtx context.Context, mode types.BillingEntityMode) error) error
 	// ResolveBillingEntityID is the entity a new customer or connection gets: the one asked for when enabled, else the default; nil when off.
 	ResolveBillingEntityID(ctx context.Context, mode types.BillingEntityMode, billingEntityID *string) (*string, error)
+	// ResolveConnectionOwner returns the billing entity a new connection belongs to.
+	ResolveConnectionOwner(ctx context.Context, mode types.BillingEntityMode, provider types.SecretProvider, billingEntityID *string, hasClientConnectionID bool) (*string, error)
 	// EffectiveEntity is the customer's entity; a customer the enable backfill has not reached belongs to the default.
 	EffectiveEntity(ctx context.Context, cust *customer.Customer) (*billingentity.BillingEntity, error)
 	ValidateFilter(ctx context.Context, billingEntityID string) error
@@ -216,6 +218,30 @@ func (s *billingEntityService) entityInEnvironment(ctx context.Context, id strin
 		return nil, err
 	}
 	return entity, nil
+}
+
+func (s *billingEntityService) ResolveConnectionOwner(ctx context.Context, mode types.BillingEntityMode, provider types.SecretProvider, billingEntityID *string, hasClientConnectionID bool) (*string, error) {
+	if connection.IsStorageProvider(provider) {
+		if lo.FromPtr(billingEntityID) != "" {
+			return nil, errStorageHasNoEntity(provider)
+		}
+		return nil, nil
+	}
+	owner, err := s.ResolveBillingEntityID(ctx, mode, billingEntityID)
+	if err != nil || hasClientConnectionID || lo.FromPtr(billingEntityID) == "" {
+		return owner, err
+	}
+	def, err := s.ResolveBillingEntityID(ctx, mode, nil)
+	if err != nil {
+		return nil, err
+	}
+	if *owner != *def {
+		return nil, ierr.NewError("id is required for a non-default billing entity").
+			WithHint("Send the connection id (conn_ followed by a ULID) used in its webhook URL; a connection without one belongs to the default billing entity").
+			WithReportableDetails(map[string]any{"billing_entity_id": *owner}).
+			Mark(ierr.ErrValidation)
+	}
+	return owner, nil
 }
 
 func (s *billingEntityService) EffectiveEntity(ctx context.Context, cust *customer.Customer) (*billingentity.BillingEntity, error) {

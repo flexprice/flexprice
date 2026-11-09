@@ -12,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -750,31 +749,4 @@ func TestUpdateConnection_S3KeyRotation(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, before.UpdatedAt, after.UpdatedAt)
 	})
-}
-
-func TestDuplicateConnection(t *testing.T) {
-	entityA := lo.ToPtr("be_a")
-	entityB := lo.ToPtr("be_b")
-	conn := func(provider types.SecretProvider, owner *string, status types.Status) *connection.Connection {
-		return &connection.Connection{ProviderType: provider, BillingEntityID: owner, BaseModel: types.BaseModel{Status: status}}
-	}
-
-	tests := []struct {
-		name     string
-		existing []*connection.Connection
-		provider types.SecretProvider
-		owner    *string
-		want     bool
-	}{
-		{"off_same_provider", []*connection.Connection{conn(types.SecretProviderStripe, nil, types.StatusPublished)}, types.SecretProviderStripe, nil, true},
-		{"same_entity", []*connection.Connection{conn(types.SecretProviderStripe, entityA, types.StatusPublished)}, types.SecretProviderStripe, entityA, true},
-		{"other_entity", []*connection.Connection{conn(types.SecretProviderStripe, entityA, types.StatusPublished)}, types.SecretProviderStripe, entityB, false},
-		{"storage", []*connection.Connection{conn(types.SecretProviderS3, nil, types.StatusPublished)}, types.SecretProviderS3, nil, false},
-		{"archived_ignored", []*connection.Connection{conn(types.SecretProviderStripe, entityA, types.StatusArchived)}, types.SecretProviderStripe, entityA, false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.want, duplicateConnection(tc.existing, tc.provider, tc.owner) != nil)
-		})
-	}
 }

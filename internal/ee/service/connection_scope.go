@@ -36,6 +36,25 @@ func ForEachConnection(ctx context.Context, repo connection.Repository, provider
 	return errors.Join(errs...)
 }
 
+// requireNoDuplicateConnection rejects a second published connection of the provider for the owner (nil when entities are off); storage is exempt.
+func requireNoDuplicateConnection(ctx context.Context, repo connection.Repository, provider types.SecretProvider, owner *string) error {
+	if connection.IsStorageProvider(provider) {
+		return nil
+	}
+	existing, err := repo.List(ctx, &types.ConnectionFilter{
+		QueryFilter:     types.NewNoLimitPublishedQueryFilter(),
+		ProviderType:    provider,
+		BillingEntityID: lo.FromPtr(owner),
+	})
+	if err != nil {
+		return err
+	}
+	if len(existing) > 0 {
+		return errConnectionExists(ctx, existing[0], owner)
+	}
+	return nil
+}
+
 // hasPublishedConnection reports whether the environment has any published connection of the provider.
 func hasPublishedConnection(ctx context.Context, repo connection.Repository, provider types.SecretProvider) (bool, error) {
 	all, err := repo.ListAllPublished(ctx)

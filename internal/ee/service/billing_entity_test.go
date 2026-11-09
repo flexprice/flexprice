@@ -144,7 +144,7 @@ func (s *BillingEntityServiceSuite) TestResolveConnectionOwner() {
 			s.addEntity("be_default", env, "INV", true)
 			s.addEntity("be_eu", env, "EU", false)
 
-			got, err := resolveConnectionOwner(s.GetContext(), s.service, types.BillingEntityModeEnabled, types.SecretProviderStripe, tc.requested, tc.connectionID)
+			got, err := s.service.ResolveConnectionOwner(s.GetContext(), types.BillingEntityModeEnabled, types.SecretProviderStripe, tc.requested, tc.connectionID != "")
 			if tc.wantErr != nil {
 				s.Require().Error(err)
 				s.True(errors.Is(err, tc.wantErr), "got %v", err)

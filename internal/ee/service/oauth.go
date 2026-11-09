@@ -193,18 +193,12 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 	beService := NewBillingEntityService(s.params)
 	var incompleteConnection *connection.Connection
 	if err := beService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
-		owner, err := resolveConnectionOwner(txCtx, beService, mode, providerType, session.BillingEntityID, session.ConnectionID)
+		owner, err := beService.ResolveConnectionOwner(txCtx, mode, providerType, session.BillingEntityID, session.ConnectionID != "")
 		if err != nil {
 			return err
 		}
-		existing, err := s.connectionRepo.List(txCtx, &types.ConnectionFilter{ProviderType: providerType})
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to check for existing connections").
-				Mark(ierr.ErrDatabase)
-		}
-		if dup := duplicateConnection(existing, providerType, owner); dup != nil {
-			return errConnectionExists(txCtx, dup, owner, oauthConnectionExistsHint)
+		if err := requireNoDuplicateConnection(txCtx, s.connectionRepo, providerType, owner); err != nil {
+			return err
 		}
 
 		session.BillingEntityID = owner
