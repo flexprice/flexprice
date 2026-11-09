@@ -125,7 +125,7 @@ func (s *subscriptionService) archiveDraftCheckoutSubscription(ctx context.Conte
 			Mark(ierr.ErrAlreadyExists)
 	}
 
-	children, err := s.childSubscriptions(ctx, subscriptionID)
+	children, err := s.childSubscriptions(ctx, subscriptionID, types.SubscriptionStatusDraft, types.SubscriptionStatusActive, types.SubscriptionStatusTrialing)
 	if err != nil {
 		return err
 	}

@@ -96,6 +96,13 @@ func (s *hostedInvoiceService) GetInvoice(ctx context.Context) (*dto.HostedInvoi
 	if err != nil {
 		return nil, err
 	}
+	billingEntity, err := NewInvoiceService(s.ServiceParams).GetInvoiceBillingEntity(ctx, &inv.Invoice)
+	if err != nil {
+		return nil, err
+	}
+	if billingEntity != nil {
+		t = billingEntityAsTenant(t, billingEntity)
+	}
 
 	filter := types.NewNoLimitPaymentFilter()
 	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))

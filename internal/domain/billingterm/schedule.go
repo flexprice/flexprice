@@ -16,7 +16,7 @@ import (
 
 const (
 	// MaxTerms is the most billing terms an owner can have.
-	MaxTerms = 20
+	MaxTerms = 100
 
 	// MaxInstalments is the most instalments an owner's terms can expand to, and the most its plan can hold with the
 	// invoiced ones.
@@ -46,11 +46,13 @@ type resolvedTerm struct {
 
 	// total is the term's share of the owner's total, which its instalments split.
 	total decimal.Decimal
+
+	delivery types.InstalmentDelivery
 }
 
 // Expand validates the terms against the owner and its period values and returns their instalments in billing order.
 // Their labels keep {n} and {of} until NumberLabels numbers them among the owner's other instalments.
-func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Term) ([]*Instalment, error) {
+func Expand(ctx context.Context, owner Owner, periods Periods, terms []*Term) ([]*Instalment, error) {
 	collection := owner.CollectionPeriod()
 	total := owner.CollectionTotal()
 	currency := owner.BillingCurrency()
@@ -63,8 +65,7 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 		return nil, ierr.Validationf("billing_terms.owner: the collection total must be greater than 0 and rounded to %s", currency)
 	}
 
-	delivery := owner.InstalmentDelivery()
-	if delivery != types.InstalmentDeliverySubscriptionInvoice && delivery != types.InstalmentDeliverySeparateInvoice {
+	if !isDelivery(owner.InstalmentDelivery()) {
 		return nil, ierr.Validationf("billing_terms.owner: the instalment delivery must be subscription_invoice or separate_invoice")
 	}
 
@@ -74,7 +75,7 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 
 	resolved := make([]*resolvedTerm, 0, len(terms))
 	for i, t := range terms {
-		r, err := resolveTerm(i, t, collection, owner.TermStart(), currency, periods)
+		r, err := resolveTerm(i, t, owner, periods)
 		if err != nil {
 			return nil, err
 		}
@@ -110,26 +111,25 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 	return instalments, nil
 }
 
-// NumberLabels fills {n} and {of} in the labels of plan, all of an owner's instalments in the order they are billed:
-// each label's place in plan and the plan's length. Labels already numbered keep their numbers. Within MaxInstalments,
-// a numbered label is never longer than its template.
-func NumberLabels(plan []*Instalment) {
-	of := strconv.Itoa(len(plan))
-	for n, i := range plan {
-		i.InvoiceLabel = strings.NewReplacer("{n}", strconv.Itoa(n+1), "{of}", of).Replace(i.InvoiceLabel)
+// NumberLabels fills {n} and {of} in planned, new instalments in billing order, counting on from numberedBefore; labels
+// without them take no number. Within MaxInstalments a label never outgrows its template.
+func NumberLabels(planned []*Instalment, numberedBefore int) {
+	numbered := lo.Filter(planned, func(i *Instalment, _ int) bool { return IsNumbered(i.InvoiceLabel) })
+	of := strconv.Itoa(numberedBefore + len(numbered))
+	for n, i := range numbered {
+		i.InvoiceLabel = strings.NewReplacer("{n}", strconv.Itoa(numberedBefore+n+1), "{of}", of).Replace(i.InvoiceLabel)
 	}
 }
 
-// resolveTerm validates one term against the collection period and applies the defaults of its kind; a term without
-// dates starts at termStart.
-func resolveTerm(
-	index int,
-	t *Term,
-	collection types.Period,
-	termStart time.Time,
-	currency string,
-	periods []PeriodValue,
-) (*resolvedTerm, error) {
+// IsNumbered reports whether a label template takes a number: it uses {n} or {of}.
+func IsNumbered(template string) bool {
+	return strings.Contains(template, "{n}") || strings.Contains(template, "{of}")
+}
+
+// resolveTerm validates one term against the owner and applies the defaults of its kind; a term without dates starts
+// at the period holding the owner's term start.
+func resolveTerm(index int, t *Term, owner Owner, periods Periods) (*resolvedTerm, error) {
+	currency := owner.BillingCurrency()
 	switch t.ValueType {
 	case types.BillingTermValueFixed:
 		if t.Value == nil || !t.Value.IsPositive() {
@@ -149,29 +149,58 @@ func resolveTerm(
 		return nil, ierr.Validationf(termErrorFormat, index, "value_type", "must be fixed or remainder")
 	}
 
+	delivery := lo.FromPtrOr(t.InstalmentInvoicing, owner.InstalmentDelivery())
+	if !isDelivery(delivery) {
+		return nil, ierr.Validationf(termErrorFormat, index, "instalment_invoicing", "must be subscription_invoice or separate_invoice")
+	}
+
 	switch t.Kind {
 	case types.BillingTermKindOnce:
-		return resolveOnce(index, t, collection, termStart)
+		return resolveOnce(index, t, owner, periods.Billing, delivery)
 	case types.BillingTermKindRecurring:
-		return resolveRecurring(index, t, collection, termStart, periods)
+		steps, unit := periods.stepsFor(delivery)
+		return resolveRecurring(index, t, owner, steps, unit, delivery)
 	default:
 		return nil, ierr.Validationf(termErrorFormat, index, "kind", "must be once or recurring")
 	}
 }
 
-// resolveOnce checks a once term's dates; bill_on defaults to termStart. The collection period is the service period of
-// its instalment.
-func resolveOnce(index int, t *Term, collection types.Period, termStart time.Time) (*resolvedTerm, error) {
+// isDelivery reports whether d is a delivery instalments support.
+func isDelivery(d types.InstalmentDelivery) bool {
+	return d == types.InstalmentDeliverySubscriptionInvoice || d == types.InstalmentDeliverySeparateInvoice
+}
+
+// periodHolding returns the period that holds t.
+func periodHolding(periods []PeriodValue, t time.Time) (PeriodValue, bool) {
+	return lo.Find(periods, func(p PeriodValue) bool { return !p.Start.After(t) && p.End.After(t) })
+}
+
+// resolveOnce checks a once term's dates; bill_on defaults to the start of the billing period holding the term start.
+// The collection period is the service period of its instalment.
+func resolveOnce(
+	index int,
+	t *Term,
+	owner Owner,
+	billing []PeriodValue,
+	delivery types.InstalmentDelivery,
+) (*resolvedTerm, error) {
 	if field := t.recurringOnlyField(); field != "" {
 		return nil, ierr.Validationf(termErrorFormat, index, field, "is not used by once terms")
 	}
 
+	collection := owner.CollectionPeriod()
+	start := owner.TermStart()
+	if holding, ok := periodHolding(billing, start); ok {
+		start = holding.Start
+	}
+
 	r := &resolvedTerm{
-		index: index,
-		term:  t,
+		index:    index,
+		term:     t,
+		delivery: delivery,
 
 		billTrigger:   lo.FromPtrOr(t.BillTrigger, types.InstalmentBillTriggerDate),
-		billOn:        lo.FromPtrOr(t.BillOn, termStart),
+		billOn:        lo.FromPtrOr(t.BillOn, start),
 		servicePeriod: collection,
 	}
 
@@ -194,14 +223,15 @@ func resolveOnce(index int, t *Term, collection types.Period, termStart time.Tim
 	return r, nil
 }
 
-// resolveRecurring checks a recurring term and cuts its steps; start_date defaults to termStart and end_date to the end
-// of the collection period.
+// resolveRecurring checks a recurring term and cuts its steps from periods, named unit in errors; start_date defaults to
+// the start of the period holding the term start and end_date to the end of the collection period.
 func resolveRecurring(
 	index int,
 	t *Term,
-	collection types.Period,
-	termStart time.Time,
+	owner Owner,
 	periods []PeriodValue,
+	unit string,
+	delivery types.InstalmentDelivery,
 ) (*resolvedTerm, error) {
 	if field := t.onceOnlyField(); field != "" {
 		return nil, ierr.Validationf(termErrorFormat, index, field, "is not used by recurring terms")
@@ -226,17 +256,22 @@ func resolveRecurring(
 		return nil, ierr.Validationf(termErrorFormat, index, "split", "must be even or proportional")
 	}
 
+	start := owner.TermStart()
+	if holding, ok := periodHolding(periods, start); ok {
+		start = holding.Start
+	}
+
 	span := types.Period{
-		Start: lo.FromPtrOr(t.StartDate, termStart),
-		End:   lo.FromPtrOr(t.EndDate, collection.End),
+		Start: lo.FromPtrOr(t.StartDate, start),
+		End:   lo.FromPtrOr(t.EndDate, owner.CollectionPeriod().End),
 	}
 
 	if !lo.ContainsBy(periods, func(p PeriodValue) bool { return p.Start.Equal(span.Start) }) {
-		return nil, ierr.Validationf(termErrorFormat, index, "start_date", "must be the start of a billing period")
+		return nil, ierr.Validationf(termErrorFormat, index, "start_date", "must be the start of "+unit)
 	}
 
 	if !lo.ContainsBy(periods, func(p PeriodValue) bool { return p.End.Equal(span.End) }) {
-		return nil, ierr.Validationf(termErrorFormat, index, "end_date", "must be the end of a billing period")
+		return nil, ierr.Validationf(termErrorFormat, index, "end_date", "must be the end of "+unit)
 	}
 
 	if !span.Start.Before(span.End) {
@@ -245,12 +280,13 @@ func resolveRecurring(
 
 	steps := cutSteps(periods, span, periodCount)
 	if split == types.BillingTermSplitProportional && !sumValues(steps).IsPositive() {
-		return nil, ierr.Validationf(termErrorFormat, index, "split", "proportional needs billing periods with a value")
+		return nil, ierr.Validationf(termErrorFormat, index, "split", "proportional needs periods with a value")
 	}
 
 	return &resolvedTerm{
-		index: index,
-		term:  t,
+		index:    index,
+		term:     t,
+		delivery: delivery,
 
 		cadence: cadence,
 		split:   split,
@@ -332,6 +368,7 @@ func (r *resolvedTerm) instalments(ctx context.Context, owner Owner) ([]*Instalm
 	var builders []*instalmentBuilder
 	if r.term.Kind == types.BillingTermKindOnce {
 		builders = append(builders, NewOwnerInstalment(ctx, owner).
+			WithDelivery(r.delivery).
 			WithBillTrigger(r.billTrigger).
 			WithBillOn(r.billOn).
 			WithServicePeriod(r.servicePeriod))
@@ -342,11 +379,14 @@ func (r *resolvedTerm) instalments(ctx context.Context, owner Owner) ([]*Instalm
 				billOn = step.Start
 			}
 
-			builders = append(builders, NewOwnerInstalment(ctx, owner).WithBillOn(billOn).WithServicePeriod(step.Period))
+			builders = append(builders, NewOwnerInstalment(ctx, owner).
+				WithDelivery(r.delivery).
+				WithBillOn(billOn).
+				WithServicePeriod(step.Period))
 		}
 	}
 
-	label := lo.CoalesceOrEmpty(lo.FromPtr(r.term.InvoiceLabel), DefaultInvoiceLabel)
+	label := r.term.LabelTemplate()
 	amounts := r.instalmentAmounts(owner.BillingCurrency())
 	out := make([]*Instalment, 0, len(builders))
 	for n, b := range builders {

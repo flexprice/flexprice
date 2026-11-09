@@ -160,6 +160,9 @@ func (_u *BillingTermUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if _u.mutation.SplitCleared() {
 		_spec.ClearField(billingterm.FieldSplit, field.TypeString)
 	}
+	if _u.mutation.InstalmentInvoicingCleared() {
+		_spec.ClearField(billingterm.FieldInstalmentInvoicing, field.TypeString)
+	}
 	if _u.mutation.InvoiceLabelCleared() {
 		_spec.ClearField(billingterm.FieldInvoiceLabel, field.TypeString)
 	}
@@ -347,6 +350,9 @@ func (_u *BillingTermUpdateOne) sqlSave(ctx context.Context) (_node *BillingTerm
 	}
 	if _u.mutation.SplitCleared() {
 		_spec.ClearField(billingterm.FieldSplit, field.TypeString)
+	}
+	if _u.mutation.InstalmentInvoicingCleared() {
+		_spec.ClearField(billingterm.FieldInstalmentInvoicing, field.TypeString)
 	}
 	if _u.mutation.InvoiceLabelCleared() {
 		_spec.ClearField(billingterm.FieldInvoiceLabel, field.TypeString)

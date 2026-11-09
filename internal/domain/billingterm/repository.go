@@ -14,6 +14,9 @@ type TermRepository interface {
 	// List returns the owner's published terms ordered by id.
 	List(ctx context.Context, ownerType types.BillingTermOwnerType, ownerID string) ([]*Term, error)
 
+	// ListByIDs returns the terms with these ids in any status, so an invoiced instalment still finds an archived term.
+	ListByIDs(ctx context.Context, ids []string) ([]*Term, error)
+
 	// Archive archives the owner's published terms and returns them.
 	Archive(ctx context.Context, ownerType types.BillingTermOwnerType, ownerID string) ([]*Term, error)
 

@@ -314,6 +314,10 @@ const (
 
 	// InvoiceBillingReasonBillingTerms is an invoice that carries only billing-term instalments (separate delivery).
 	InvoiceBillingReasonBillingTerms InvoiceBillingReason = "BILLING_TERMS"
+
+	// InvoiceBillingReasonCommitmentTermination bills what terminating a commitment owes: its cancellation fee, its
+	// billing-terms settlement, or both.
+	InvoiceBillingReasonCommitmentTermination InvoiceBillingReason = "COMMITMENT_TERMINATION"
 )
 
 func (r InvoiceBillingReason) String() string {
@@ -334,6 +338,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonSubscriptionPaused,
 		InvoiceBillingReasonSubscriptionResume,
 		InvoiceBillingReasonBillingTerms,
+		InvoiceBillingReasonCommitmentTermination,
 	}
 
 	if r != "" && !lo.Contains(allowed, r) {
@@ -433,7 +438,7 @@ const (
 //
 // Note: Sequences reset monthly and are tenant-environment-scoped for isolation.
 type InvoiceConfig struct {
-	InvoiceNumberPrefix                    string              `json:"prefix,omitempty" validate:"required,min=1"`
+	InvoiceNumberPrefix                    string              `json:"prefix,omitempty" validate:"required,min=1,max=20"`
 	InvoiceNumberFormat                    InvoiceNumberFormat `json:"format,omitempty" validate:"required"`
 	InvoiceNumberStartSequence             int                 `json:"start_sequence,omitempty" validate:"required,min=0"`
 	InvoiceNumberTimezone                  string              `json:"timezone,omitempty" validate:"required,min=1"`
@@ -443,6 +448,7 @@ type InvoiceConfig struct {
 	PaymentTerms                           *PaymentTerms       `json:"payment_terms,omitempty"`                            // Tenant default payment terms; takes precedence over due_date_days when set
 	AutoCompletePurchasedCreditTransaction bool                `json:"auto_complete_purchased_credit_transaction,omitempty"`
 	FinalizationDelaySeconds               int                 `json:"finalization_delay_seconds,omitempty" validate:"omitempty,min=0"` // Seconds to wait after invoice creation before finalization. 0 = immediate.
+	AutoFinalize                           bool                `json:"auto_finalize"`                                                   // When false, drafts are not finalized at period end and wait for a manual finalize. Defaults to true.
 	IncludeZeroValueLineItems              bool                `json:"include_zero_value_line_items"`                                   // Keep usage line items with zero quantity and zero amount on the invoice. Skipped by default.
 }
 
@@ -504,6 +510,9 @@ type InvoiceFilter struct {
 	// customer_id filters invoices for a specific customer using FlexPrice's internal customer ID
 	// This is the ID returned by FlexPrice when creating or retrieving customers
 	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
+
+	// billing_entity_id filters by the customer's billing entity
+	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
 
 	// external_customer_id filters invoices for a customer using your system's customer identifier
 	// This is the ID you provided when creating the customer in FlexPrice

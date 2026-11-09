@@ -394,3 +394,29 @@ func TestCreateExternalPaymentRecord(t *testing.T) {
 		})
 	}
 }
+
+// Booking back a Stripe payment (invoice_payment.paid / payment_intent.* for synced invoices).
+func TestCreateExternalPaymentRecord_SmallestUnit(t *testing.T) {
+	cases := []struct {
+		name     string
+		amount   int64
+		currency stripe.Currency
+		want     string
+	}{
+		{"USD control", 1234, "usd", "12.34"},
+		{"JPY zero-decimal", 12000, "jpy", "12000"},
+		{"KRW zero-decimal", 50000, "krw", "50000"},
+		{"KWD three-decimal", 12345, "kwd", "12.345"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &PaymentService{logger: logger.NewNoopLogger()}
+			paymentSvc := &externalTestPaymentService{}
+			pi := &stripe.PaymentIntent{ID: "pi_1", Amount: tc.amount, Currency: tc.currency, LatestCharge: &stripe.Charge{ID: "ch_1"}}
+
+			require.NoError(t, s.CreateExternalPaymentRecord(context.Background(), pi, "inv_1", types.PaymentStatusSucceeded, "evt_1", paymentSvc))
+
+			require.True(t, decimal.RequireFromString(tc.want).Equal(paymentSvc.createReq.Amount), "got %s", paymentSvc.createReq.Amount)
+		})
+	}
+}

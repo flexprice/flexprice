@@ -482,6 +482,11 @@ func withCommittedPrices(cost lineCost) lineCost {
 	}
 }
 
+// unitCost prices every unit at 1.
+func unitCost(_ *price.Price, qty decimal.Decimal) decimal.Decimal {
+	return qty
+}
+
 func renderStack(t *testing.T, stack *commitmentStack, cost lineCost) []dto.CreateInvoiceLineItemRequest {
 	t.Helper()
 	alloc, err := allocate(stack)
@@ -511,7 +516,6 @@ func requireLines(t *testing.T, want []wantLine, got []dto.CreateInvoiceLineItem
 }
 
 func TestCommitmentInvoiceLines(t *testing.T) {
-	unitCost := func(_ *price.Price, qty decimal.Decimal) decimal.Decimal { return qty }
 	// slabCost charges 1 per unit up to 120 and 2 per unit above, so the overage units cost by where they sit.
 	slabCost := func(_ *price.Price, qty decimal.Decimal) decimal.Decimal {
 		first := decimal.Min(qty, intDec(120))
@@ -868,7 +872,7 @@ func TestCommitmentInvoiceLinesFields(t *testing.T) {
 		Commitments: []*stackedCommitment{committed("c1", true, "150", []int{0}, []*usageLine{line}, "100")},
 	}
 
-	got := renderStack(t, stack, func(_ *price.Price, qty decimal.Decimal) decimal.Decimal { return qty })
+	got := renderStack(t, stack, unitCost)
 	requireLines(t, []wantLine{
 		{types.CommitmentLineUtilized, "Label c1", "100", "100"},
 		{types.CommitmentLineTrueUp, "Label c1 (unused)", "0", "50"},
@@ -929,7 +933,7 @@ func TestCommitmentInvoiceLinesNegativeDriftNeverGoesBelowZero(t *testing.T) {
 		Commitments: []*stackedCommitment{committed("c1", true, "100", []int{0}, lines, "100")},
 	}
 
-	got := renderStack(t, stack, func(_ *price.Price, qty decimal.Decimal) decimal.Decimal { return qty })
+	got := renderStack(t, stack, unitCost)
 	requireLines(t, []wantLine{
 		{types.CommitmentLineUtilized, "Label c1", "1", "0"},
 		{types.CommitmentLineUtilized, "Label c1", "1", "0"},
@@ -981,14 +985,14 @@ func partialHalves(t *testing.T, binding bool, used ...string) [][]dto.CreateInv
 		StartDate:   apr,
 		EndDate:     lo.ToPtr(may),
 	}
-	periods, err := commitmentPeriods(c, monthlySub(apr), amountOf, "", apr, may)
+	periods, err := commitmentPeriods(c, monthlySub(apr), amountOf, "", types.Period{Start: apr, End: may})
 	require.NoError(t, err)
 	require.Len(t, periods, 1)
 
 	edges := []time.Time{apr, split, may}
 	out := make([][]dto.CreateInvoiceLineItemRequest, len(used))
 	for i, u := range used {
-		part := clipCommitmentPeriod(c, periods[0], edges[i], edges[i+1], amountOf, "", apr)
+		part := clipCommitmentPeriod(c, periods[0], types.Period{Start: edges[i], End: edges[i+1]}, amountOf, "", apr)
 		line := invoiceLine("a", u, "0", u)
 		sc := committed("c1", binding, "0", []int{0}, []*usageLine{line}, part.Capacity.String())
 		sc.CommittedPrice, sc.Period = committedPrice, part
@@ -998,7 +1002,7 @@ func partialHalves(t *testing.T, binding bool, used ...string) [][]dto.CreateInv
 			Windows:     engineWindows(1),
 			Lines:       []*usageLine{line},
 			Commitments: []*stackedCommitment{sc},
-		}, func(_ *price.Price, qty decimal.Decimal) decimal.Decimal { return qty })
+		}, unitCost)
 	}
 
 	return out
@@ -1071,7 +1075,7 @@ func TestCommitmentInvoiceLinesCappedWithinConservesTheFloorAcrossLines(t *testi
 		Windows:     engineWindows(1),
 		Lines:       []*usageLine{a, b, c},
 		Commitments: []*stackedCommitment{sc},
-	}, func(_ *price.Price, qty decimal.Decimal) decimal.Decimal { return qty })
+	}, unitCost)
 
 	// 30 within capped at 10 scales each row to 3.33; the cent left over lands on the first, largest row.
 	requireLines(t, []wantLine{
@@ -1161,7 +1165,7 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 		want         []wantLine
 	}{
 		{
-			name:         "usage before the commitment starts bills at the line's price, beyond capacity at the overage price",
+			name:         "usage before the commitment starts bills as plain usage, beyond capacity at the overage price",
 			usage:        []string{"20", "50"},
 			poolOf:       []int{-1, 0},
 			capacities:   []string{"30"},
@@ -1170,11 +1174,11 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 			want: []wantLine{
 				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
 				{types.CommitmentLineOverage, "Usage a", "20", "60"},
-				{types.CommitmentLineOverage, "Usage a", "20", "20"},
+				{types.CommitmentLinePlain, "Usage a", "20", "20"},
 			},
 		},
 		{
-			name:         "usage after a mid-period end bills at the line's price, beyond capacity at the overage price",
+			name:         "usage after a mid-period end bills as plain usage, beyond capacity at the overage price",
 			usage:        []string{"50", "20"},
 			poolOf:       []int{0, -1},
 			capacities:   []string{"30"},
@@ -1183,11 +1187,11 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 			want: []wantLine{
 				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
 				{types.CommitmentLineOverage, "Usage a", "20", "60"},
-				{types.CommitmentLineOverage, "Usage a", "20", "20"},
+				{types.CommitmentLinePlain, "Usage a", "20", "20"},
 			},
 		},
 		{
-			name:         "with capacity to spare only the out-of-force usage is left, at the line's price",
+			name:         "with capacity to spare only the out-of-force usage is left, as plain usage",
 			usage:        []string{"20", "30"},
 			poolOf:       []int{-1, 0},
 			capacities:   []string{"30"},
@@ -1195,7 +1199,7 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 			overagePrice: overagePrice,
 			want: []wantLine{
 				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
-				{types.CommitmentLineOverage, "Usage a", "20", "20"},
+				{types.CommitmentLinePlain, "Usage a", "20", "20"},
 			},
 		},
 		{
@@ -1210,18 +1214,19 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 			want: []wantLine{
 				{types.CommitmentLineUtilized, "Label c1", "15", "15"},
 				{types.CommitmentLineOverage, "Usage a", "5", "15"},
-				{types.CommitmentLineOverage, "Usage a", "130", "140"},
+				{types.CommitmentLinePlain, "Usage a", "130", "140"},
 			},
 		},
 		{
-			name:        "without an overage price every leftover unit bills at the line's price in one row",
+			name:        "without an overage price overage bills at the line's price, apart from the plain usage",
 			usage:       []string{"20", "50"},
 			poolOf:      []int{-1, 0},
 			capacities:  []string{"30"},
 			measurement: types.CommitmentMeasurementBillingPeriod,
 			want: []wantLine{
 				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
-				{types.CommitmentLineOverage, "Usage a", "40", "40"},
+				{types.CommitmentLineOverage, "Usage a", "20", "20"},
+				{types.CommitmentLinePlain, "Usage a", "20", "20"},
 			},
 		},
 	}
@@ -1246,4 +1251,50 @@ func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) 
 			requireLines(t, tt.want, lines)
 		})
 	}
+}
+
+// On an amount stack, money left in windows the commitment covers is overage; usage in windows it does not cover bills
+// as plain usage.
+func TestCommitmentInvoiceLinesAmountStackBillsUncoveredUsageAsPlainUsage(t *testing.T) {
+	line := invoiceLine("a", "70", "70", "20", "50")
+	lines := renderStack(t, &commitmentStack{
+		Type:        types.COMMITMENT_TYPE_AMOUNT,
+		Measurement: types.CommitmentMeasurementBillingPeriod,
+		Windows:     engineWindows(2),
+		Lines:       []*usageLine{line},
+		Commitments: []*stackedCommitment{committed("c1", false, "30", []int{-1, 0}, []*usageLine{line}, "30")},
+	}, unitCost)
+
+	requireLines(t, []wantLine{
+		{types.CommitmentLineUtilized, "Label c1", "30", "30"},
+		{types.CommitmentLineOverage, "Usage a", "20", "20"},
+		{types.CommitmentLinePlain, "Usage a", "20", "20"},
+	}, lines)
+	require.Nil(t, lines[2].Metadata, "plain usage carries no commitment metadata")
+	require.Nil(t, lines[2].CommitmentID)
+}
+
+// A line priced once for the period rounds its remainder once; overage and plain usage split that rounded amount.
+func TestCommitmentInvoiceLinesSplitsTheRoundedRemainder(t *testing.T) {
+	cost := func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
+		if p.ID == "committed_price_c1" {
+			return qty
+		}
+
+		return qty.Mul(dec("0.005"))
+	}
+	line := invoiceLine("a", "32", "0", "1", "31")
+	lines := renderStack(t, &commitmentStack{
+		Type:        types.COMMITMENT_TYPE_QUANTITY,
+		Measurement: types.CommitmentMeasurementBillingPeriod,
+		Windows:     engineWindows(2),
+		Lines:       []*usageLine{line},
+		Commitments: []*stackedCommitment{committed("c1", false, "0", []int{-1, 0}, []*usageLine{line}, "30")},
+	}, cost)
+
+	requireLines(t, []wantLine{
+		{types.CommitmentLineUtilized, "Label c1", "30", "30"},
+		{types.CommitmentLineOverage, "Usage a", "1", "0.01"},
+		{types.CommitmentLinePlain, "Usage a", "1", "0"},
+	}, lines)
 }

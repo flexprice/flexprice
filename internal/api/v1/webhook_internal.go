@@ -505,7 +505,7 @@ func WebhookEventCommitmentTerminated() {}
 
 // WebhookEventBillingTermsCreated godoc
 // @Summary billing_terms.created
-// @Description Fired when billing terms are saved with a new commitment. Doc-only for parsing.
+// @Description Fired when billing terms are saved against an entity (like a commitment). Doc-only for parsing.
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
@@ -515,7 +515,7 @@ func WebhookEventBillingTermsCreated() {}
 
 // WebhookEventBillingTermsUpdated godoc
 // @Summary billing_terms.updated
-// @Description Fired when an edit replaces a commitment's billing terms. Doc-only for parsing.
+// @Description Fired when an entity's (like a commitment's) billing terms are replaced. Doc-only for parsing.
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
@@ -525,7 +525,7 @@ func WebhookEventBillingTermsUpdated() {}
 
 // WebhookEventBillingInstalmentCreated godoc
 // @Summary billing_instalment.created
-// @Description Fired when a billing instalment is added to a commitment. Doc-only for parsing.
+// @Description Fired when a billing instalment is scheduled for an entity (like a commitment). Doc-only for parsing.
 // @Tags Webhook Events
 // @Accept json
 // @Produce json

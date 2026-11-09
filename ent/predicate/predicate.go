@@ -27,6 +27,9 @@ type AnalyticsView func(*sql.Selector)
 // Auth is the predicate function for auth builders.
 type Auth func(*sql.Selector)
 
+// BillingEntity is the predicate function for billingentity builders.
+type BillingEntity func(*sql.Selector)
+
 // BillingInstalment is the predicate function for billinginstalment builders.
 type BillingInstalment func(*sql.Selector)
 

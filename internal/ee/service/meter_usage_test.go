@@ -895,7 +895,7 @@ func (s *MeterUsageServiceSuite) TestCountMeter_NoSubscriptionAnalytics() {
 }
 
 // TestNoSubscriptionAnalytics_ReturnsZero pins the short-circuit in
-// getDetailedAnalyticsWithoutSubscriptionContext: with no subscription context
+// GetDetailedAnalytics: with no subscription context
 // the response is zero, whether or not the request names a customer.
 func (s *MeterUsageServiceSuite) TestNoSubscriptionAnalytics_ReturnsZero() {
 	ctx := s.GetContext()

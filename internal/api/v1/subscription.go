@@ -133,7 +133,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
-// @Param expand query string false "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan')"
+// @Param expand query string false "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan,commitments')"
 // @Success 200 {object} dto.SubscriptionResponseV2
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
@@ -290,6 +290,7 @@ func (h *SubscriptionHandler) GetSubscriptionLineItemHistory(c *gin.Context) {
 // @Param request body dto.CancelSubscriptionRequest true "Cancel Subscription Request"
 // @Success 200 {object} dto.CancelSubscriptionResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 409 {object} ierr.ErrorResponse "An invoice already exists for the cancellation period"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/cancel [post]
 func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {

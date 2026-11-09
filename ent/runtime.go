@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/ent/alertsettings"
 	"github.com/flexprice/flexprice/ent/analyticsview"
 	"github.com/flexprice/flexprice/ent/auth"
+	"github.com/flexprice/flexprice/ent/billingentity"
 	"github.com/flexprice/flexprice/ent/billinginstalment"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/billingterm"
@@ -351,6 +352,51 @@ func init() {
 	auth.DefaultUpdatedAt = authDescUpdatedAt.Default.(func() time.Time)
 	// auth.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	auth.UpdateDefaultUpdatedAt = authDescUpdatedAt.UpdateDefault.(func() time.Time)
+	billingentityMixin := schema.BillingEntity{}.Mixin()
+	billingentityMixinFields0 := billingentityMixin[0].Fields()
+	_ = billingentityMixinFields0
+	billingentityMixinFields1 := billingentityMixin[1].Fields()
+	_ = billingentityMixinFields1
+	billingentityFields := schema.BillingEntity{}.Fields()
+	_ = billingentityFields
+	// billingentityDescTenantID is the schema descriptor for tenant_id field.
+	billingentityDescTenantID := billingentityMixinFields0[0].Descriptor()
+	// billingentity.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	billingentity.TenantIDValidator = billingentityDescTenantID.Validators[0].(func(string) error)
+	// billingentityDescStatus is the schema descriptor for status field.
+	billingentityDescStatus := billingentityMixinFields0[1].Descriptor()
+	// billingentity.DefaultStatus holds the default value on creation for the status field.
+	billingentity.DefaultStatus = billingentityDescStatus.Default.(string)
+	// billingentityDescCreatedAt is the schema descriptor for created_at field.
+	billingentityDescCreatedAt := billingentityMixinFields0[2].Descriptor()
+	// billingentity.DefaultCreatedAt holds the default value on creation for the created_at field.
+	billingentity.DefaultCreatedAt = billingentityDescCreatedAt.Default.(func() time.Time)
+	// billingentityDescUpdatedAt is the schema descriptor for updated_at field.
+	billingentityDescUpdatedAt := billingentityMixinFields0[3].Descriptor()
+	// billingentity.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	billingentity.DefaultUpdatedAt = billingentityDescUpdatedAt.Default.(func() time.Time)
+	// billingentity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	billingentity.UpdateDefaultUpdatedAt = billingentityDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// billingentityDescEnvironmentID is the schema descriptor for environment_id field.
+	billingentityDescEnvironmentID := billingentityMixinFields1[0].Descriptor()
+	// billingentity.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	billingentity.DefaultEnvironmentID = billingentityDescEnvironmentID.Default.(string)
+	// billingentityDescName is the schema descriptor for name field.
+	billingentityDescName := billingentityFields[1].Descriptor()
+	// billingentity.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	billingentity.NameValidator = billingentityDescName.Validators[0].(func(string) error)
+	// billingentityDescIsDefault is the schema descriptor for is_default field.
+	billingentityDescIsDefault := billingentityFields[2].Descriptor()
+	// billingentity.DefaultIsDefault holds the default value on creation for the is_default field.
+	billingentity.DefaultIsDefault = billingentityDescIsDefault.Default.(bool)
+	// billingentityDescInvoiceNumberPrefix is the schema descriptor for invoice_number_prefix field.
+	billingentityDescInvoiceNumberPrefix := billingentityFields[3].Descriptor()
+	// billingentity.InvoiceNumberPrefixValidator is a validator for the "invoice_number_prefix" field. It is called by the builders before save.
+	billingentity.InvoiceNumberPrefixValidator = billingentityDescInvoiceNumberPrefix.Validators[0].(func(string) error)
+	// billingentityDescBillingDetails is the schema descriptor for billing_details field.
+	billingentityDescBillingDetails := billingentityFields[4].Descriptor()
+	// billingentity.DefaultBillingDetails holds the default value on creation for the billing_details field.
+	billingentity.DefaultBillingDetails = billingentityDescBillingDetails.Default.(types.BillingDetails)
 	billinginstalmentMixin := schema.BillingInstalment{}.Mixin()
 	billinginstalmentMixinFields0 := billinginstalmentMixin[0].Fields()
 	_ = billinginstalmentMixinFields0
@@ -490,7 +536,7 @@ func init() {
 	// billingterm.ValueTypeValidator is a validator for the "value_type" field. It is called by the builders before save.
 	billingterm.ValueTypeValidator = billingtermDescValueType.Validators[0].(func(string) error)
 	// billingtermDescMetadata is the schema descriptor for metadata field.
-	billingtermDescMetadata := billingtermFields[14].Descriptor()
+	billingtermDescMetadata := billingtermFields[15].Descriptor()
 	// billingterm.DefaultMetadata holds the default value on creation for the metadata field.
 	billingterm.DefaultMetadata = billingtermDescMetadata.Default.(types.Metadata)
 	checkoutsessionMixin := schema.CheckoutSession{}.Mixin()
@@ -1735,15 +1781,15 @@ func init() {
 	// invoice.DefaultTotal holds the default value on creation for the total field.
 	invoice.DefaultTotal = invoiceDescTotal.Default.(decimal.Decimal)
 	// invoiceDescVersion is the schema descriptor for version field.
-	invoiceDescVersion := invoiceFields[32].Descriptor()
+	invoiceDescVersion := invoiceFields[34].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
 	// invoiceDescTotalPrepaidCreditsApplied is the schema descriptor for total_prepaid_credits_applied field.
-	invoiceDescTotalPrepaidCreditsApplied := invoiceFields[35].Descriptor()
+	invoiceDescTotalPrepaidCreditsApplied := invoiceFields[37].Descriptor()
 	// invoice.DefaultTotalPrepaidCreditsApplied holds the default value on creation for the total_prepaid_credits_applied field.
 	invoice.DefaultTotalPrepaidCreditsApplied = invoiceDescTotalPrepaidCreditsApplied.Default.(decimal.Decimal)
 	// invoiceDescIsManuallyEdited is the schema descriptor for is_manually_edited field.
-	invoiceDescIsManuallyEdited := invoiceFields[39].Descriptor()
+	invoiceDescIsManuallyEdited := invoiceFields[41].Descriptor()
 	// invoice.DefaultIsManuallyEdited holds the default value on creation for the is_manually_edited field.
 	invoice.DefaultIsManuallyEdited = invoiceDescIsManuallyEdited.Default.(bool)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()
@@ -1818,15 +1864,15 @@ func init() {
 	// invoicesequence.YearMonthValidator is a validator for the "year_month" field. It is called by the builders before save.
 	invoicesequence.YearMonthValidator = invoicesequenceDescYearMonth.Validators[0].(func(string) error)
 	// invoicesequenceDescLastValue is the schema descriptor for last_value field.
-	invoicesequenceDescLastValue := invoicesequenceFields[3].Descriptor()
+	invoicesequenceDescLastValue := invoicesequenceFields[4].Descriptor()
 	// invoicesequence.DefaultLastValue holds the default value on creation for the last_value field.
 	invoicesequence.DefaultLastValue = invoicesequenceDescLastValue.Default.(int64)
 	// invoicesequenceDescCreatedAt is the schema descriptor for created_at field.
-	invoicesequenceDescCreatedAt := invoicesequenceFields[4].Descriptor()
+	invoicesequenceDescCreatedAt := invoicesequenceFields[5].Descriptor()
 	// invoicesequence.DefaultCreatedAt holds the default value on creation for the created_at field.
 	invoicesequence.DefaultCreatedAt = invoicesequenceDescCreatedAt.Default.(func() time.Time)
 	// invoicesequenceDescUpdatedAt is the schema descriptor for updated_at field.
-	invoicesequenceDescUpdatedAt := invoicesequenceFields[5].Descriptor()
+	invoicesequenceDescUpdatedAt := invoicesequenceFields[6].Descriptor()
 	// invoicesequence.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	invoicesequence.DefaultUpdatedAt = invoicesequenceDescUpdatedAt.Default.(func() time.Time)
 	// invoicesequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

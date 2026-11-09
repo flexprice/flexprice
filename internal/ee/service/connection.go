@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -947,18 +949,29 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		return nil, err
 	}
 
-	// Update simple fields if provided
-	if req.Name != "" {
+	changed := false
+	if req.Name != "" && req.Name != conn.Name {
 		conn.Name = req.Name
+		changed = true
 	}
 
-	// Update metadata if provided
 	if req.Metadata != nil {
 		conn.Metadata = req.Metadata
+		changed = true
 	}
 
 	if req.SyncConfig != nil {
+		syncChanged, err := jsonChanged(conn.SyncConfig, req.SyncConfig)
+		if err != nil {
+			return nil, err
+		}
 		conn.SyncConfig = req.SyncConfig
+		changed = changed || syncChanged
+	}
+
+	secretsBefore, err := json.Marshal(conn.EncryptedSecretData)
+	if err != nil {
+		return nil, err
 	}
 
 	// Re-apply to block cross-tenant redirect.
@@ -1102,6 +1115,34 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		conn.EncryptedSecretData.Chargebee.WebhookPassword = encPass
 	}
 
+	// S3: the key pair rotates as one unit; an omitted session token is cleared.
+	if req.EncryptedSecretData != nil && req.EncryptedSecretData.S3 != nil {
+		if conn.ProviderType != types.SecretProviderS3 {
+			return nil, ierr.NewError("s3 secret update is only valid for s3 connections").
+				Mark(ierr.ErrValidation)
+		}
+		incoming := req.EncryptedSecretData.S3
+		if incoming.AWSAccessKeyID == "" || incoming.AWSSecretAccessKey == "" {
+			return nil, ierr.NewError("aws_access_key_id and aws_secret_access_key must be provided together").
+				WithHint("Send both AWS keys to rotate S3 credentials").
+				Mark(ierr.ErrValidation)
+		}
+		encrypted, encErr := s.encryptMetadata(types.ConnectionMetadata{S3: incoming}, types.SecretProviderS3)
+		if encErr != nil {
+			s.Logger.Error(ctx, "failed to encrypt S3 credentials", "error", encErr, "connection_id", id)
+			return nil, encErr
+		}
+		conn.EncryptedSecretData.S3 = encrypted.S3
+	}
+
+	secretsChanged, err := jsonChanged(json.RawMessage(secretsBefore), conn.EncryptedSecretData)
+	if err != nil {
+		return nil, err
+	}
+	if !changed && !secretsChanged {
+		return dto.ToConnectionResponse(conn), nil
+	}
+
 	conn.UpdatedAt = clock.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
@@ -1118,6 +1159,19 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 
 	s.Logger.Info(ctx, "connection updated successfully", "connection_id", conn.ID)
 	return dto.ToConnectionResponse(conn), nil
+}
+
+// jsonChanged reports whether a and b serialise to different JSON.
+func jsonChanged(a, b any) (bool, error) {
+	before, err := json.Marshal(a)
+	if err != nil {
+		return false, err
+	}
+	after, err := json.Marshal(b)
+	if err != nil {
+		return false, err
+	}
+	return !bytes.Equal(before, after), nil
 }
 
 func (s *connectionService) DeleteConnection(ctx context.Context, id string) error {

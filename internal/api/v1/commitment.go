@@ -198,7 +198,7 @@ func (h *CommitmentHandler) UpdateCommitment(c *gin.Context) {
 
 // @Summary Terminate commitment
 // @ID terminateCommitment
-// @Description Ends a commitment immediately. effective_at defaults to now and cannot be in the future. Under billing terms, its scheduled instalments are cancelled and any amount it earned beyond what is already invoiced is billed as a settlement. The settlement and a fixed cancellation fee, when given, are billed together on one one-off invoice.
+// @Description Ends a commitment immediately. effective_at defaults to now and cannot be in the future. Under billing terms, its scheduled instalments are cancelled, and those already due by effective_at are billed together as one settlement; later instalments are not billed and nothing is refunded. The settlement and a fixed cancellation fee, when given, are billed together on one one-off invoice.
 // @Tags Commitments
 // @Accept json
 // @Produce json
@@ -403,7 +403,7 @@ func (h *CommitmentHandler) ListInstalments(c *gin.Context) {
 
 // @Summary Trigger instalment
 // @ID triggerCommitmentInstalment
-// @Description Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; edit the billing terms to bill it later.
+// @Description Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when its instalment_invoicing, the term's or else the commitment's, is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; edit the billing terms to bill it later.
 // @Tags Commitments
 // @Accept json
 // @Produce json
