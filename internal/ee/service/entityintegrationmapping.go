@@ -207,25 +207,10 @@ func (s *entityIntegrationMappingService) DeleteEntityIntegrationMapping(ctx con
 }
 
 // setProviderConnection fills a missing connection with the provider's connection in scope; none leaves it nil.
-// A ctx without an entity in an environment with entities resolves it from the mapped record.
 func (s *entityIntegrationMappingService) setProviderConnection(ctx context.Context, mapping *entityintegrationmapping.EntityIntegrationMapping) error {
 	provider := types.SecretProvider(mapping.ProviderType)
 	if mapping.ConnectionID != nil || provider.Validate() != nil {
 		return nil
-	}
-	if types.GetBillingEntityID(ctx) == "" {
-		mode, err := NewBillingEntityService(s.ServiceParams).Status(ctx)
-		if err != nil {
-			return err
-		}
-		if mode != types.BillingEntityModeOff {
-			_, conn, err := s.linkConnection(ctx, mapping.EntityType, mapping.EntityID, provider)
-			if err != nil || conn == nil {
-				return err
-			}
-			mapping.ConnectionID = lo.ToPtr(conn.ID)
-			return nil
-		}
 	}
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, provider)
 	if ierr.IsNotFound(err) {
@@ -238,8 +223,7 @@ func (s *entityIntegrationMappingService) setProviderConnection(ctx context.Cont
 	return nil
 }
 
-// linkConnection scopes ctx to the linked customer, invoice or subscription and returns its connection
-// for the provider, nil when there is none. Other entity types link only when the environment has at most one such connection.
+// linkConnection scopes ctx to the linked record and returns its connection for the provider, nil when there is none.
 func (s *entityIntegrationMappingService) linkConnection(ctx context.Context, entityType types.IntegrationEntityType, entityID string, provider types.SecretProvider) (context.Context, *connection.Connection, error) {
 	scope := NewBillingEntityService(s.ServiceParams)
 
@@ -303,7 +287,8 @@ func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Con
 	if err := s.applyEntitySideEffects(ctx, req); err != nil {
 		return nil, err
 	}
-	mapping, err := s.upsertEntityMapping(ctx, req, conn.ID)
+	req.ConnectionID = lo.ToPtr(conn.ID)
+	mapping, err := s.upsertEntityMapping(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +357,7 @@ func (s *entityIntegrationMappingService) DelinkIntegrationMapping(ctx context.C
 	}, nil
 }
 
-func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Context, req dto.LinkIntegrationMappingRequest, connectionID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Context, req dto.LinkIntegrationMappingRequest) (*entityintegrationmapping.EntityIntegrationMapping, error) {
 	// Published rows only. An archived row left behind by an earlier unlink must not be updated in
 	// place: reviving it would overwrite the record of when it was archived, which is the only trace
 	// of that unlink. Re-linking therefore falls through to the create below and gets a fresh row.
@@ -383,7 +368,7 @@ func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Contex
 		ProviderTypes: []string{
 			req.ProviderType,
 		},
-		ConnectionID: connectionID,
+		ConnectionID: lo.FromPtr(req.ConnectionID),
 	}
 	existing, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
@@ -401,7 +386,7 @@ func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Contex
 		mapping := existing[0]
 		mapping.ProviderEntityID = req.ProviderEntityID
 		mapping.Metadata = metadata
-		mapping.ConnectionID = lo.ToPtr(connectionID)
+		mapping.ConnectionID = req.ConnectionID
 		mapping.UpdatedAt = clock.Now()
 		mapping.UpdatedBy = types.GetUserID(ctx)
 		if err := s.EntityIntegrationMappingRepo.Update(ctx, mapping); err != nil {
@@ -418,7 +403,7 @@ func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Contex
 		ProviderEntityID: req.ProviderEntityID,
 		Metadata:         metadata,
 		EnvironmentID:    types.GetEnvironmentID(ctx),
-		ConnectionID:     lo.ToPtr(connectionID),
+		ConnectionID:     req.ConnectionID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
 	if err := entityintegrationmapping.Validate(mapping); err != nil {

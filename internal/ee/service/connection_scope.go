@@ -10,9 +10,7 @@ import (
 	"github.com/samber/lo"
 )
 
-// ForEachConnection runs fn once per published connection of the provider, with that connection's
-// owner entity in ctx. Every connection runs; failures come back joined.
-// It returns a not-found error when the provider has no connection.
+// ForEachConnection runs fn for each published connection of the provider with its owner entity in ctx and joins the failures.
 func ForEachConnection(ctx context.Context, repo connection.Repository, provider types.SecretProvider, fn func(context.Context, *connection.Connection) error) error {
 	all, err := repo.ListAllPublished(ctx)
 	if err != nil {
@@ -36,7 +34,7 @@ func ForEachConnection(ctx context.Context, repo connection.Repository, provider
 	return errors.Join(errs...)
 }
 
-// requireNoDuplicateConnection rejects a second published connection of the provider for the owner (nil when entities are off); storage is exempt.
+// requireNoDuplicateConnection rejects a second published connection of the provider for the owner; storage is exempt.
 func requireNoDuplicateConnection(ctx context.Context, repo connection.Repository, provider types.SecretProvider, owner *string) error {
 	if connection.IsStorageProvider(provider) {
 		return nil

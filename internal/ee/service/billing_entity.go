@@ -24,7 +24,7 @@ type BillingEntityService interface {
 
 	// WithMode runs fn in a transaction with the mode read from the database; before enabled it holds the shared enable lock.
 	WithMode(ctx context.Context, fn func(txCtx context.Context, mode types.BillingEntityMode) error) error
-	// ResolveBillingEntityID is the entity a new customer or connection gets: the one asked for when enabled, else the default; nil when off.
+	// ResolveBillingEntityID is the entity a new customer or connection gets; nil when off.
 	ResolveBillingEntityID(ctx context.Context, mode types.BillingEntityMode, billingEntityID *string) (*string, error)
 	// ResolveConnectionOwner returns the billing entity a new connection belongs to.
 	ResolveConnectionOwner(ctx context.Context, mode types.BillingEntityMode, provider types.SecretProvider, billingEntityID *string, hasClientConnectionID bool) (*string, error)

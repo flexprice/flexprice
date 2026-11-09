@@ -89,8 +89,7 @@ func (a *FlushActivities) subscriptionMarketplaceMappings(ctx context.Context, s
 	})
 }
 
-// mappingConnection returns the published connection the mapping was made with, or the provider's
-// connection for a mapping without one.
+// mappingConnection returns the mapping's connection, else the provider's connection.
 func (a *FlushActivities) mappingConnection(ctx context.Context, m *entityintegrationmapping.EntityIntegrationMapping) (*connection.Connection, error) {
 	if connectionID := lo.FromPtr(m.ConnectionID); connectionID != "" {
 		return a.connectionRepo.Get(ctx, connectionID)

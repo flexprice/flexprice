@@ -16,7 +16,6 @@ type CreateEntityIntegrationMappingRequest struct {
 	ProviderEntityID string                      `json:"provider_entity_id" validate:"required,max=255"`
 	Metadata         map[string]interface{}      `json:"metadata,omitempty"`
 
-	// ConnectionID is set by internal callers; the service resolves it when unset
 	ConnectionID *string `json:"-"`
 }
 

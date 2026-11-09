@@ -406,8 +406,7 @@ func (r *MarketplaceReporter) reportAWSRecord(ctx context.Context, rec *usagerec
 	}, true
 }
 
-// loadAWSMappings loads the connection's subscription, customer and plan mappings and indexes
-// them for lookup while reporting.
+// loadAWSMappings indexes the connection's subscription, customer and plan mappings.
 func (r *MarketplaceReporter) loadAWSMappings(ctx context.Context, connectionID string) (*awsConnectionMappings, error) {
 	providerType := string(types.SecretProviderAWSMarketplace)
 
@@ -563,8 +562,7 @@ func (r *MarketplaceReporter) reportGCPRecord(ctx context.Context, rec *usagerec
 	}, true
 }
 
-// loadGCPMappings loads the connection's subscription and plan mappings and indexes them for
-// lookup while reporting.
+// loadGCPMappings indexes the connection's subscription and plan mappings.
 func (r *MarketplaceReporter) loadGCPMappings(ctx context.Context, connectionID string) (*gcpConnectionMappings, error) {
 	providerType := string(types.SecretProviderGCPMarketplace)
 
@@ -728,8 +726,7 @@ func (r *MarketplaceReporter) reportAzureRecord(ctx context.Context, rec *usager
 	}, true
 }
 
-// loadAzureMappings loads the connection's subscription and plan mappings and indexes them for
-// lookup while reporting.
+// loadAzureMappings indexes the connection's subscription and plan mappings.
 func (r *MarketplaceReporter) loadAzureMappings(ctx context.Context, connectionID string) (*azureConnectionMappings, error) {
 	providerType := string(types.SecretProviderAzureMarketplace)
 
