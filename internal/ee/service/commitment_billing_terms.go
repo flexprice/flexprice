@@ -437,7 +437,9 @@ func (s *commitmentService) settle(
 
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
 
-	due := lo.Filter(cancelled, func(inst *billingterm.Instalment, _ int) bool { return !inst.BillOn.After(effectiveAt) })
+	due := lo.Filter(cancelled, func(inst *billingterm.Instalment, _ int) bool {
+		return dueByTermination(inst, effectiveAt)
+	})
 	if len(due) == 0 {
 		return nil, nil
 	}
@@ -461,6 +463,18 @@ func (s *commitmentService) settle(
 
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, created)
 	return created[0], nil
+}
+
+// dueByTermination reports whether a termination at effectiveAt still bills the instalment: it fell due by then.
+func dueByTermination(inst *billingterm.Instalment, effectiveAt time.Time) bool {
+	return !inst.BillOn.After(effectiveAt)
+}
+
+// terminatedBeforeDue reports whether the instalment's commitment was terminated before the instalment fell due, so
+// it is never billed.
+func terminatedBeforeDue(c *commitment.Commitment, inst *billingterm.Instalment) bool {
+	return c.CommitmentStatus == types.CommitmentStatusTerminated && c.TerminatedAt != nil &&
+		!dueByTermination(inst, *c.TerminatedAt)
 }
 
 // settleEnded bills the instalments still scheduled on a billing-terms commitment that ended before its subscription
@@ -565,8 +579,8 @@ func (s *commitmentService) billEnvironmentInstalments(ctx context.Context) erro
 
 // billInstalment issues the instalment's one-off invoice under its commitment's lock; finalizing it claims the
 // instalment. It returns nil when the instalment was claimed or cancelled since it was listed, when its subscription
-// or commitment no longer exists, or when it is not a settlement and its subscription is not active (draft,
-// incomplete, trialing, paused), so it waits for a later run.
+// or commitment no longer exists, when its commitment was terminated before it fell due, or when it is not a
+// settlement and its subscription is not active (draft, incomplete, trialing, paused), so it waits for a later run.
 func (s *commitmentService) billInstalment(ctx context.Context, listed *billingterm.Instalment) (*dto.InvoiceResponse, error) {
 	var inv *dto.InvoiceResponse
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
@@ -613,6 +627,17 @@ func (s *commitmentService) billInstalment(ctx context.Context, listed *billingt
 		}
 		if err != nil {
 			return err
+		}
+
+		if terminatedBeforeDue(c, instalment) {
+			s.Logger.Info(ctx, "commitment.instalment_skipped",
+				"operation", "commitment.instalment_skipped",
+				"reason", "commitment terminated before the instalment fell due",
+				"instalment_id", instalment.ID,
+				"commitment_id", c.ID,
+				"terminated_at", lo.FromPtr(c.TerminatedAt),
+			)
+			return nil
 		}
 
 		billingPeriod := string(sub.BillingPeriod)

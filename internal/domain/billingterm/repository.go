@@ -48,6 +48,10 @@ type InstalmentRepository interface {
 
 	// Reschedule moves the invoice's invoiced instalments back to scheduled and clears invoice_id and invoiced_at.
 	Reschedule(ctx context.Context, invoiceID string) ([]*Instalment, error)
+
+	// CancelInvoiced cancels the given instalments invoiced on the invoice, clears invoice_id and invoiced_at, and
+	// returns only the rows it changed.
+	CancelInvoiced(ctx context.Context, invoiceID string, ids []string) ([]*Instalment, error)
 }
 
 // InstalmentFilter selects instalments for List; empty fields do not constrain.

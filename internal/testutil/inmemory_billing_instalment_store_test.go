@@ -142,6 +142,34 @@ func TestInMemoryBillingInstalmentStore_ClaimRescheduleCancel(t *testing.T) {
 		require.Empty(t, again)
 	})
 
+	t.Run("cancel invoiced moves only the given rows invoiced on that invoice", func(t *testing.T) {
+		f := newInstalmentFixture(t)
+		given := f.instalment("binst_a", "cmt_1", types.InstalmentStatusInvoiced, f.start)
+		given.InvoiceID, given.InvoicedAt = lo.ToPtr("inv_1"), lo.ToPtr(f.start)
+		kept := f.instalment("binst_b", "cmt_1", types.InstalmentStatusInvoiced, f.start.AddDate(0, 1, 0))
+		kept.InvoiceID, kept.InvoicedAt = lo.ToPtr("inv_1"), lo.ToPtr(f.start)
+		onSecond := f.instalment("binst_c", "cmt_1", types.InstalmentStatusInvoiced, f.start.AddDate(0, 2, 0))
+		onSecond.InvoiceID, onSecond.InvoicedAt = lo.ToPtr("inv_2"), lo.ToPtr(f.start)
+		scheduled := f.instalment("binst_d", "cmt_1", types.InstalmentStatusScheduled, f.start.AddDate(0, 3, 0))
+		f.seed(t, given, kept, onSecond, scheduled)
+
+		cancelled, err := f.store.CancelInvoiced(f.ctx, "inv_1", []string{given.ID, onSecond.ID, scheduled.ID})
+		require.NoError(t, err)
+		require.Equal(t, []string{given.ID}, instalmentIDs(cancelled))
+		require.Equal(t, types.InstalmentStatusCancelled, cancelled[0].InstalmentStatus)
+		require.Nil(t, cancelled[0].InvoiceID)
+		require.Nil(t, cancelled[0].InvoicedAt)
+		require.Equal(t, types.InstalmentStatusCancelled, f.get(t, given.ID).InstalmentStatus)
+
+		require.Equal(t, "inv_1", lo.FromPtr(f.get(t, kept.ID).InvoiceID))
+		require.Equal(t, "inv_2", lo.FromPtr(f.get(t, onSecond.ID).InvoiceID))
+		require.Equal(t, types.InstalmentStatusScheduled, f.get(t, scheduled.ID).InstalmentStatus)
+
+		none, err := f.store.CancelInvoiced(f.ctx, "inv_1", nil)
+		require.NoError(t, err)
+		require.Empty(t, none)
+	})
+
 	t.Run("cancel by owner and status keeps the invoice", func(t *testing.T) {
 		f := newInstalmentFixture(t)
 		scheduled := f.instalment("binst_a", "cmt_1", types.InstalmentStatusScheduled, f.start)

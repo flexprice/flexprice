@@ -1445,6 +1445,25 @@ func (s *CommitmentE2ESuite) TestBillDueInstalments_SkipsMissingSubscriptionOrCo
 	}
 }
 
+// An instalment back on schedule though its commitment was terminated before it fell due, as a void used to leave one,
+// is skipped by the run and stays scheduled rather than being billed again.
+func (s *CommitmentE2ESuite) TestBillDueInstalments_SkipsInstalmentsTerminatedBeforeDue() {
+	ctx := s.GetContext()
+	feb15 := s.jan.AddDate(0, 1, 14)
+	sub, instalments, marchInvoice := s.billedThroughMarch("skip_terminated", types.InstalmentDeliverySeparateInvoice)
+	march := instalments[2]
+	_, err := s.commitments.Terminate(ctx, march.OwnerID, dto.TerminateCommitmentRequest{EffectiveAt: &feb15})
+	s.Require().NoError(err)
+
+	_, err = s.GetStores().BillingInstalmentRepo.Reschedule(ctx, marchInvoice)
+	s.Require().NoError(err)
+
+	live := len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms))
+	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
+	s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), live, "nothing is billed again")
+	s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(march.ID).InstalmentStatus)
+}
+
 // settlementOf returns the commitment's only settlement instalment.
 func (s *CommitmentE2ESuite) settlementOf(commitmentID string) *billingterm.Instalment {
 	listed, err := s.commitments.ListInstalments(s.GetContext(), commitmentID, nil)
@@ -1784,6 +1803,28 @@ func (s *CommitmentE2ESuite) TestPlanInstalments_AnEditStartsAtTheAnniversaryPer
 	s.Require().NoError(err)
 	s.Require().Len(planned, 10)
 	s.True(planned[0].BillOn.Equal(time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)), "starts on %s", planned[0].BillOn)
+}
+
+// A terminated commitment still owes the instalments due by its termination, one falling due at that instant included.
+func TestTerminatedBeforeDue(t *testing.T) {
+	mar := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name         string
+		status       types.CommitmentStatus
+		terminatedAt *time.Time
+		want         bool
+	}{
+		{name: "active", status: types.CommitmentStatusActive},
+		{name: "terminated after it fell due", status: types.CommitmentStatusTerminated, terminatedAt: lo.ToPtr(mar.AddDate(0, 0, 14))},
+		{name: "terminated as it fell due", status: types.CommitmentStatusTerminated, terminatedAt: &mar},
+		{name: "terminated before it fell due", status: types.CommitmentStatusTerminated, terminatedAt: lo.ToPtr(mar.AddDate(0, 0, -14)), want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &commitment.Commitment{CommitmentStatus: tt.status, TerminatedAt: tt.terminatedAt}
+			require.Equal(t, tt.want, terminatedBeforeDue(c, &billingterm.Instalment{BillOn: mar}))
+		})
+	}
 }
 
 // Anniversary periods count from the commitment start in billing-period lengths and add up to its value: a month-end

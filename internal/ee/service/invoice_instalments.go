@@ -161,7 +161,7 @@ func (s *invoiceService) missingInstalments(
 		return nil, nil
 	}
 
-	due, err := dueInstalments(ctx, s.ServiceParams, subscriptionIDs, billAt)
+	due, _, err := dueInstalments(ctx, s.ServiceParams, subscriptionIDs, billAt)
 	if err != nil {
 		return nil, err
 	}
@@ -305,8 +305,9 @@ func (s *invoiceService) billedInstalmentIDs(ctx context.Context, invoiceID stri
 	}), nil
 }
 
-// rescheduleInstalments puts a voided invoice's instalments back on schedule in the void transaction, under their
-// commitments' locks so an edit sizing its plan by the invoiced instalments never runs halfway through it.
+// rescheduleInstalments puts a voided invoice's instalments back on schedule, or cancels those whose commitment was
+// terminated before they fell due. It runs in the void transaction, under the commitments' locks, so an edit sizing
+// its plan by the invoiced instalments never runs halfway through it.
 func (s *invoiceService) rescheduleInstalments(ctx context.Context, invoiceID string) error {
 	ids, err := s.billedInstalmentIDs(ctx, invoiceID)
 	if err != nil || len(ids) == 0 {
@@ -327,11 +328,34 @@ func (s *invoiceService) rescheduleInstalments(ctx context.Context, invoiceID st
 		}
 	}
 
+	// Read under the locks, so a termination that committed while the void waited is seen.
+	filter := commitment.NewNoLimitFilter()
+	filter.IDs = owners
+	filter.Statuses = []types.CommitmentStatus{types.CommitmentStatusTerminated}
+	terminated, err := s.CommitmentRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	terminatedByID := lo.KeyBy(terminated, func(c *commitment.Commitment) string { return c.ID })
+	var notDue []string
+	for _, inst := range billed {
+		if c, ok := terminatedByID[inst.OwnerID]; ok && terminatedBeforeDue(c, inst) {
+			notDue = append(notDue, inst.ID)
+		}
+	}
+
+	cancelled, err := s.BillingInstalmentRepo.CancelInvoiced(ctx, invoiceID, notDue)
+	if err != nil {
+		return err
+	}
+
 	rescheduled, err := s.BillingInstalmentRepo.Reschedule(ctx, invoiceID)
 	if err != nil {
 		return err
 	}
 
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentUpdated, rescheduled)
 	return nil
 }

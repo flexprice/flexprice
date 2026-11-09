@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -654,4 +656,151 @@ func (s *CommitmentE2ESuite) TestPaymentFinalize_StaleDraftKeepsPayment() {
 		s.Nil(inst.InvoiceID)
 	}
 	s.Empty(s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
+}
+
+// billedThroughMarch commits 100 a month from 1 Jan to 1 Jul as a monthly remainder in advance, delivered as given,
+// and bills January to March. It returns the subscription, the six instalments in billing order and March's invoice.
+func (s *CommitmentE2ESuite) billedThroughMarch(
+	name string,
+	delivery types.InstalmentDelivery,
+) (*dto.SubscriptionResponse, []*billingterm.Instalment, string) {
+	ctx := s.GetContext()
+	feb, mar := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0)
+	tokens := s.planWith(name, types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan)
+	req := termsRequest("Platform", tokens.ID, "100", s.jan, s.jan.AddDate(0, 6, 0), dto.BillingTermInput{
+		Kind:           types.BillingTermKindRecurring,
+		ValueType:      types.BillingTermValueRemainder,
+		InvoiceCadence: lo.ToPtr(types.InvoiceCadenceAdvance),
+	})
+	req.InstalmentInvoicing = lo.ToPtr(delivery)
+	instalments := s.commit(sub.ID, req).Instalments
+	slices.SortFunc(instalments, byBillOn)
+	s.Require().Len(instalments, 6)
+
+	march := instalments[2]
+	s.Require().True(march.BillOn.Equal(mar) && march.ServicePeriodEnd.Equal(mar.AddDate(0, 1, 0)), "March bills on %s", march.BillOn)
+
+	if delivery == types.InstalmentDeliverySeparateInvoice {
+		for _, inst := range instalments[:3] {
+			_, err := s.commitments.(*commitmentService).billInstalment(ctx, inst)
+			s.Require().NoError(err)
+		}
+	} else {
+		invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+		for _, period := range []types.Period{{Start: s.jan, End: feb}, {Start: feb, End: mar}} {
+			draft := s.computedDraft(invoices, sub.ID, period)
+			s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
+		}
+	}
+
+	billed := s.instalmentStatus(march.ID)
+	s.Require().Equal(types.InstalmentStatusInvoiced, billed.InstalmentStatus)
+	s.requireBilledBy(lo.FromPtr(billed.InvoiceID), []string{march.ID})
+	return sub, instalments, lo.FromPtr(billed.InvoiceID)
+}
+
+// requireVoided checks what voiding left of March's instalment: back on schedule while it is owed, otherwise cancelled.
+func (s *CommitmentE2ESuite) requireVoided(march *billingterm.Instalment, owed bool) {
+	voided := s.instalmentStatus(march.ID)
+	s.Nil(voided.InvoiceID)
+	s.Nil(voided.InvoicedAt)
+	if owed {
+		s.Equal(types.InstalmentStatusScheduled, voided.InstalmentStatus)
+		s.Equal([]string{march.ID}, s.instalmentEvents(types.WebhookEventBillingInstalmentUpdated))
+		s.Empty(s.instalmentEvents(types.WebhookEventBillingInstalmentCancelled))
+		return
+	}
+
+	s.Equal(types.InstalmentStatusCancelled, voided.InstalmentStatus)
+	s.Equal([]string{march.ID}, s.instalmentEvents(types.WebhookEventBillingInstalmentCancelled))
+	s.Empty(s.instalmentEvents(types.WebhookEventBillingInstalmentUpdated))
+}
+
+// The staging case: voiding March's separate invoice reschedules its instalment for the next run only while the
+// commitment still owes it; terminated back to 15 Feb, it cancels the instalment and the run bills nothing.
+func (s *CommitmentE2ESuite) TestVoid_SeparateInvoiceAfterTermination() {
+	feb15, mar15 := s.jan.AddDate(0, 1, 14), s.jan.AddDate(0, 2, 14)
+	tests := []struct {
+		name        string
+		terminateAt *time.Time
+		owed        bool
+	}{
+		{name: "active", owed: true},
+		{name: "terminated after it fell due", terminateAt: &mar15, owed: true},
+		{name: "terminated before it fell due", terminateAt: &feb15},
+	}
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			sub, instalments, voided := s.billedThroughMarch(fmt.Sprintf("void_separate_%d", i), types.InstalmentDeliverySeparateInvoice)
+			march := instalments[2]
+			if tt.terminateAt != nil {
+				resp, err := s.commitments.Terminate(ctx, march.OwnerID, dto.TerminateCommitmentRequest{EffectiveAt: tt.terminateAt})
+				s.Require().NoError(err)
+				s.Nil(resp.TerminationInvoiceID, "nothing scheduled was due by the termination")
+			}
+
+			s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+			_, err := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite)).VoidInvoice(ctx, voided, dto.InvoiceVoidRequest{})
+			s.Require().NoError(err)
+			s.requireVoided(march, tt.owed)
+
+			live := len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms))
+			s.Require().NoError(s.commitments.BillDueInstalments(ctx))
+			rebilled := s.instalmentStatus(march.ID)
+			if !tt.owed {
+				s.Equal(types.InstalmentStatusCancelled, rebilled.InstalmentStatus)
+				s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), live, "nothing is billed again")
+				return
+			}
+
+			s.NotEqual(voided, lo.FromPtr(rebilled.InvoiceID))
+			s.requireBilledBy(lo.FromPtr(rebilled.InvoiceID), []string{march.ID})
+		})
+	}
+}
+
+// The staging case on the subscription invoice, where February's invoice, issued on 1 Mar, bills March's instalment:
+// voiding it reschedules the instalment onto the period's next invoice only while the commitment still owes it.
+func (s *CommitmentE2ESuite) TestVoid_SubscriptionInvoiceAfterTermination() {
+	feb, mar := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0)
+	feb15, mar15 := s.jan.AddDate(0, 1, 14), s.jan.AddDate(0, 2, 14)
+	tests := []struct {
+		name        string
+		terminateAt *time.Time
+		owed        bool
+	}{
+		{name: "active", owed: true},
+		{name: "terminated after it fell due", terminateAt: &mar15, owed: true},
+		{name: "terminated before it fell due", terminateAt: &feb15},
+	}
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+			sub, instalments, february := s.billedThroughMarch(fmt.Sprintf("void_subscription_%d", i), types.InstalmentDeliverySubscriptionInvoice)
+			march := instalments[2]
+			if tt.terminateAt != nil {
+				resp, err := s.commitments.Terminate(ctx, march.OwnerID, dto.TerminateCommitmentRequest{EffectiveAt: tt.terminateAt})
+				s.Require().NoError(err)
+				s.Nil(resp.TerminationInvoiceID, "nothing scheduled was due by the termination")
+			}
+
+			s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+			_, err := invoices.VoidInvoice(ctx, february, dto.InvoiceVoidRequest{})
+			s.Require().NoError(err)
+			s.requireVoided(march, tt.owed)
+
+			next := s.computedDraft(invoices, sub.ID, types.Period{Start: feb, End: mar})
+			if !tt.owed {
+				s.Empty(s.storedInstalmentLines(next.ID), "nothing is billed again")
+				return
+			}
+
+			s.Equal([]string{march.ID}, instalmentIDs(s.billedInstalments(next.ID)))
+		})
+	}
 }

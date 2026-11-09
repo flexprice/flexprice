@@ -296,7 +296,7 @@ none. A termination's settlement always goes on a separate invoice.
 | `separate_invoice` | The `BillingInstalmentsDue` Temporal schedule (`internal/temporal/service/schedules.go`) runs `BillDueInstalments`. For each environment with v2 on, `billInstalment` issues a one-off invoice per due instalment under the commitment lock. |
 
 Instalments wait while the subscription is trialing or paused. `TriggerInstalment` sets a manual milestone's `bill_on`
-(it may only move earlier).
+(it may only move earlier). Both paths skip an instalment whose commitment was terminated before it fell due.
 
 ### 9.4 Claiming, refreshing and voiding — `invoice_instalments.go`
 
@@ -311,8 +311,10 @@ Instalments wait while the subscription is trialing or paused. `TriggerInstalmen
 - **Charging.** `requireFreshDraft` refuses to charge a stale draft, both when the payment is created
   ([payment.go:257](../../internal/ee/service/payment.go#L257)) and in `ProcessPayment`. In `ProcessPayment` it runs under the
   invoice lock together with the move to processing ([payment_processor.go:88](../../internal/ee/service/payment_processor.go#L88)).
-- **Void.** `rescheduleInstalments` puts a voided invoice's instalments back to `scheduled` and clears `invoiced_at`,
-  under their commitments' locks ([invoice.go:1888](../../internal/ee/service/invoice.go#L1888)).
+- **Void.** `rescheduleInstalments` puts a voided invoice's instalments back to `scheduled` and clears `invoice_id` and
+  `invoiced_at`, under their commitments' locks ([invoice.go:1934](../../internal/ee/service/invoice.go#L1934)). An
+  instalment whose commitment was terminated before it fell due is cancelled instead (`terminatedBeforeDue`, the rule
+  `settle` applies), so it is never billed again.
 
 ### 9.5 Events
 

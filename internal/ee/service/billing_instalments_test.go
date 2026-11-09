@@ -365,6 +365,24 @@ func (s *CommitmentE2ESuite) TestInstalments_DisabledSettingAddsNothing() {
 	s.Empty(instalmentLines(s.invoiceFor(sub.ID, s.jan, feb)))
 }
 
+// An instalment back on schedule though its commitment was terminated before it fell due, as a void used to leave one,
+// is left off the subscription invoices rather than billed again.
+func (s *CommitmentE2ESuite) TestInstalments_SkipThoseTerminatedBeforeDue() {
+	ctx := s.GetContext()
+	feb, mar, feb15 := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0), s.jan.AddDate(0, 1, 14)
+	sub, instalments, february := s.billedThroughMarch("skip_terminated", types.InstalmentDeliverySubscriptionInvoice)
+	march := instalments[2]
+	_, err := s.commitments.Terminate(ctx, march.OwnerID, dto.TerminateCommitmentRequest{EffectiveAt: &feb15})
+	s.Require().NoError(err)
+
+	_, err = s.GetStores().BillingInstalmentRepo.Reschedule(ctx, february)
+	s.Require().NoError(err)
+	s.Require().Equal(types.InstalmentStatusScheduled, s.instalmentStatus(march.ID).InstalmentStatus)
+
+	s.Empty(instalmentLines(s.invoiceFor(sub.ID, feb, mar)))
+	s.Empty(instalmentLines(s.invoiceFor(sub.ID, mar, mar.AddDate(0, 1, 0))))
+}
+
 // A term can deliver differently from its commitment: the upfront bills on its own invoice on its date while the
 // monthly instalments go on the subscription invoices.
 func (s *CommitmentE2ESuite) TestDelivery_PerTerm() {
