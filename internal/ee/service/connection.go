@@ -1138,7 +1138,7 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 	if err != nil {
 		return nil, err
 	}
-	if !changed && !secretsChanged {
+	if !changed && !secretsChanged && lo.FromPtr(req.BillingEntityID) == "" {
 		return dto.ToConnectionResponse(conn), nil
 	}
 
