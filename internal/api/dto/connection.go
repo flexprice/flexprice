@@ -402,8 +402,6 @@ type UpdateConnectionRequest struct {
 	// FlatEncryptedSecretData is set when the client sends a flat encrypted_secret_data object (create-style keys at top level).
 	// It is merged using the connection's provider_type in the service layer. Not serialized.
 	FlatEncryptedSecretData map[string]interface{} `json:"-"`
-	// BillingEntityID moves the connection to this billing entity; only accepted when billing entities are enabled.
-	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 }
 
 func updateRequestMetadataStructPopulated(cm types.ConnectionMetadata) bool {
@@ -420,7 +418,6 @@ func (req *UpdateConnectionRequest) UnmarshalJSON(data []byte) error {
 		Metadata            map[string]interface{} `json:"metadata,omitempty"`
 		SyncConfig          *types.SyncConfig      `json:"sync_config,omitempty"`
 		EncryptedSecretData json.RawMessage        `json:"encrypted_secret_data,omitempty"`
-		BillingEntityID     *string                `json:"billing_entity_id,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &temp); err != nil {
@@ -430,7 +427,6 @@ func (req *UpdateConnectionRequest) UnmarshalJSON(data []byte) error {
 	req.Name = temp.Name
 	req.Metadata = temp.Metadata
 	req.SyncConfig = temp.SyncConfig
-	req.BillingEntityID = temp.BillingEntityID
 	req.EncryptedSecretData = nil
 	req.FlatEncryptedSecretData = nil
 

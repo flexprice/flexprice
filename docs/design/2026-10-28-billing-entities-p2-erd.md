@@ -64,8 +64,8 @@ entity's connection. The connection was removed →
 the event is rejected, as for any unknown connection.
 
 **UC6 — Tenant admin moves or removes an entity's connection.**
-1. Admin moves an entity to another account of the same provider, or removes a connection, even while the
-   entity has open invoices or active subscriptions.
+1. Admin moves an entity to another account of the same provider (removes its connection and creates one for
+   the new account), or removes a connection, even while the entity has open invoices or active subscriptions.
 2. New charges and syncs use the entity's current connection; with none, its records behave as in UC2's
    variation.
 3. A refund of an earlier payment goes through the connection that took it.
@@ -109,7 +109,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 | FR-2 | In an `enabling` or `enabled` environment, each connection belongs to exactly one entity and each entity has at most one published connection per provider. An off environment keeps at most one published connection per provider. Storage providers keep today's rule and belong to no entity. | UC1 | Second Stripe connection for X → 409; Stripe for X and for Y → both saved; second Stripe on an off environment → 409 as today. |
 | FR-3 | Enabling makes the default entity the owner of every existing non-storage connection; a connection created while enabling belongs to the default entity. | UC1 | After enable, every connection except S3/GCS shows the default entity's ID. |
 | FR-4 | Connection list accepts an optional `billing_entity_id` filter; connection Get and List carry `billing_entity_id` (null for off environments and storage). | UC1 | Filter by X → X's connections only; off environment → field null. |
-| FR-5 | A connection's owner can be changed to another entity that has no connection for the provider; customers and saved payment methods are not copied. | UC6 | Move Stripe 2 from X to Y (Y without Stripe) → saved; Y already has Stripe → 409. |
+| FR-5 | A connection's owner never changes after create; an entity moves to another account by removing its connection and creating one. Customers and saved payment methods are not copied. | UC6 | Update with `billing_entity_id` → owner unchanged; remove X's Stripe, create Stripe for X → new connection owned by X. |
 | FR-6 | Every provider call for a record uses the connection owned by the record's customer's entity; with none, the call behaves as if the provider were not connected. A call never uses another entity's connection. | UC2, UC3 | X on Stripe 1, Y on Stripe 2: charge Y's invoice → Stripe 2 only. Y without Razorpay: Razorpay payment link for Y → 400 provider not connected. |
 | FR-7 | For an entity with a connection for the provider, auto-charge, checkout, payment links, saved payment methods, hosted invoice payment and wallet top-up links work as for the default entity; Phase 1's guard applies only when the entity has no connection for that provider. | UC2 | Non-default customer with saved Stripe card and `charge_automatically` → charged through the entity's Stripe; hosted page shows `pay.enabled: true`. |
 | FR-8 | Gateway choice: an explicitly requested provider; else today's rule over the customer's allowed connections. | UC2 | Entity on Razorpay and Stripe, customer with a Stripe card only → auto-charge through Stripe. A payment link created through the API still names its provider. |
@@ -155,7 +155,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 
 | Piece | What it gives us | Reuse as-is / extend / replace |
 |---|---|---|
-| Connections and their API | Create, read, list, update, remove (archive) per environment; encrypted secrets; one published connection per provider, except storage | Extend: entity on create, update, list filter and response; duplicate check per entity |
+| Connections and their API | Create, read, list, update, remove (archive) per environment; encrypted secrets; one published connection per provider, except storage | Extend: entity on create, list filter and response; duplicate check per entity |
 | Connection lookup by provider | The single path almost every provider client, service and webhook uses to load "the" connection, from a cached per-environment list | Extend: resolves by the entity or connection carried in the request context |
 | Published-connections cache | Per-environment cached list, cleared on every connection write | Reuse: the list carries each connection's owner |
 | Phase 1 entity resolution | Customer's entity, default-entity fallback while enabling, mode short-circuit for off environments | Reuse to set the entity for each provider call |
@@ -254,7 +254,6 @@ Migration notes:
 | Endpoint | Change |
 |---|---|
 | `POST /v1/connections` | Optional `billing_entity_id` and `id` (FR-1); duplicate check per entity (FR-2) |
-| `PUT /v1/connections/:id` | Optional `billing_entity_id` to move the connection to another entity (FR-5) |
 | `GET /v1/connections`, `POST /v1/connections/search` | Optional `billing_entity_id` filter (FR-4) |
 | Get, List responses | `billing_entity_id` (FR-4) |
 | `DELETE /v1/connections/:id` | Archives the connection, which keeps its owner (FR-17) |
@@ -281,8 +280,8 @@ Migration notes:
 
 | Error | Status | When |
 |---|---|---|
-| `billing_entities_not_enabled` | 400 | Entity on connection create, update or filter while not enabled |
-| Connection already exists for this entity | 409 | FR-2, FR-5 |
+| `billing_entities_not_enabled` | 400 | Entity on connection create or filter while not enabled |
+| Connection already exists for this entity | 409 | FR-2 |
 | Invalid connection id | 400 | `id` is not `conn_` followed by a ULID (FR-1) |
 | Connection id already exists | 409 | `id` is already taken (FR-1) |
 | Connection id required | 400 | `billing_entity_id` names a non-default entity and `id` is absent (FR-1) |
@@ -344,7 +343,6 @@ sequenceDiagram
 
 - Create in an `enabling` or `enabled` environment writes the owner on the connection under Phase 1's
   shared enable lock, so it cannot race the enable job.
-- Move (FR-5) updates the connection's owner under the same lock.
 - Remove (FR-17) archives the connection. As on develop, nothing uses it afterwards: lookups, webhooks, refunds,
   payment processing and status polls skip it. It keeps its owner as history.
 

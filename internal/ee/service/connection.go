@@ -15,7 +15,6 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // awsMarketplaceRoleVerificationDuration is how long the STS session used to verify a role ARN at
@@ -1138,7 +1137,7 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 	if err != nil {
 		return nil, err
 	}
-	if !changed && !secretsChanged && lo.FromPtr(req.BillingEntityID) == "" {
+	if !changed && !secretsChanged {
 		return dto.ToConnectionResponse(conn), nil
 	}
 
@@ -1150,7 +1149,7 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		return nil, err
 	}
 
-	if err := s.persistUpdate(ctx, conn, req.BillingEntityID); err != nil {
+	if err := s.ConnectionRepo.Update(ctx, conn); err != nil {
 		s.Logger.Error(ctx, "failed to update connection", "error", err, "connection_id", id)
 		return nil, err
 	}
@@ -1242,37 +1241,4 @@ func errStorageHasNoEntity(provider types.SecretProvider) error {
 	return ierr.NewError("storage connections have no billing entity").
 		WithHintf("%s connections are shared by all billing entities and cannot belong to one", provider).
 		Mark(ierr.ErrValidation)
-}
-
-// persistUpdate saves the connection and, when a billing entity is given, moves it there.
-func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.Connection, billingEntityID *string) error {
-	if lo.FromPtr(billingEntityID) == "" {
-		return s.ConnectionRepo.Update(ctx, conn)
-	}
-
-	beService := NewBillingEntityService(s.ServiceParams)
-	return beService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
-		if mode != types.BillingEntityModeEnabled {
-			return errBillingEntitiesNotEnabled()
-		}
-		if connection.IsStorageProvider(conn.ProviderType) {
-			return errStorageHasNoEntity(conn.ProviderType)
-		}
-		target, err := beService.ResolveBillingEntityID(txCtx, mode, billingEntityID)
-		if err != nil {
-			return err
-		}
-
-		if err := s.ConnectionRepo.Update(txCtx, conn); err != nil {
-			return err
-		}
-		if lo.FromPtr(conn.BillingEntityID) == *target {
-			return nil
-		}
-		if err := requireNoDuplicateConnection(txCtx, s.ConnectionRepo, conn.ProviderType, target); err != nil {
-			return err
-		}
-		conn.BillingEntityID = target
-		return s.ConnectionRepo.UpdateBillingEntity(txCtx, conn)
-	})
 }
