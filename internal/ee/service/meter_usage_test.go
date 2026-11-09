@@ -6731,24 +6731,13 @@ func januaryNoon(day int) time.Time {
 	return time.Date(2026, 1, day, 12, 0, 0, 0, time.UTC)
 }
 
-// customerAnalytics returns the customer's analytics for [start, end), with the request adjusted by each of adjust.
-func (s *MeterUsageServiceSuite) customerAnalytics(
-	start, end time.Time,
-	adjust ...func(*events.MeterUsageDetailedAnalyticsParams),
-) *dto.GetUsageAnalyticsResponse {
+// customerAnalytics returns the customer's analytics for the request, addressed to the suite's customer.
+func (s *MeterUsageServiceSuite) customerAnalytics(params events.MeterUsageDetailedAnalyticsParams) *dto.GetUsageAnalyticsResponse {
 	ctx := s.GetContext()
-	params := &events.MeterUsageDetailedAnalyticsParams{
-		TenantID:           types.GetTenantID(ctx),
-		EnvironmentID:      types.GetEnvironmentID(ctx),
-		ExternalCustomerID: s.customer.ExternalID,
-		StartTime:          start,
-		EndTime:            end,
-	}
-	for _, apply := range adjust {
-		apply(params)
-	}
-
-	resp, err := s.svc.GetDetailedAnalytics(ctx, params)
+	params.TenantID = types.GetTenantID(ctx)
+	params.EnvironmentID = types.GetEnvironmentID(ctx)
+	params.ExternalCustomerID = s.customer.ExternalID
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &params)
 	s.Require().NoError(err)
 	return resp
 }
@@ -6845,8 +6834,10 @@ func (s *MeterUsageServiceSuite) TestCommitments_WindowCommitmentBillsWhatTheInv
 	invoiced, byKind := invoicedTotal(s.periodInvoice(s.periodStart, s.periodEnd))
 	s.True(invoiced.Equal(dec("318")), "invoice %s", invoiced)
 
-	resp := s.customerAnalytics(s.periodStart, s.periodEnd, func(p *events.MeterUsageDetailedAnalyticsParams) {
-		p.WindowSize = types.WindowSizeDay
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+		StartTime:  s.periodStart,
+		EndTime:    s.periodEnd,
+		WindowSize: types.WindowSizeDay,
 	})
 	s.Require().Len(resp.Items, 1)
 	item := resp.Items[0]
@@ -6892,7 +6883,7 @@ func (s *MeterUsageServiceSuite) TestCommitments_RangeAcrossBillingPeriodsPrices
 	s.True(januaryInvoice.Equal(dec("150")), "January invoice %s", januaryInvoice)
 	s.True(februaryInvoice.Equal(dec("200")), "February invoice %s", februaryInvoice)
 
-	resp := s.customerAnalytics(s.periodStart, february)
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{StartTime: s.periodStart, EndTime: february})
 	s.Require().Len(resp.Items, 1)
 	info := resp.Items[0].CommitmentInfo
 	s.Require().NotNil(info)
@@ -6935,8 +6926,10 @@ func (s *MeterUsageServiceSuite) TestCommitments_EachPeriodKeepsItsChargesOnItsP
 	}
 	want := []decimal.Decimal{januaryInvoice, februaryInvoice, marchInvoice}
 	for _, tt := range tests {
-		resp := s.customerAnalytics(s.periodStart, april, func(params *events.MeterUsageDetailedAnalyticsParams) {
-			params.WindowSize = tt.window
+		resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+			StartTime:  s.periodStart,
+			EndTime:    april,
+			WindowSize: tt.window,
 		})
 		s.Require().Len(resp.Items, 1)
 		points := resp.Items[0].Points
@@ -7001,8 +6994,10 @@ func (s *MeterUsageServiceSuite) TestCommitments_RunningMeterBillsItsTotalEachPe
 				s.insertMeterUsage(ctx, m.ID, s.customer.ExternalID, at, quantity)
 			}
 
-			resp := s.customerAnalytics(s.periodStart, tt.rangeEnd, func(params *events.MeterUsageDetailedAnalyticsParams) {
-				params.WindowSize = types.WindowSizeMonth
+			resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+				StartTime:  s.periodStart,
+				EndTime:    tt.rangeEnd,
+				WindowSize: types.WindowSizeMonth,
 			})
 			s.Require().Len(resp.Items, 1)
 			points := resp.Items[0].Points
@@ -7058,7 +7053,7 @@ func (s *MeterUsageServiceSuite) TestCommitments_LinesAreReadOnlyWhileTheyRun() 
 	recorded := &recordingUsageStore{MeterUsageRepository: s.GetStores().MeterUsageRepo}
 	svc := s.svc.(*meterUsageService)
 	svc.repo, svc.MeterUsageRepo = recorded, recorded
-	resp := s.customerAnalytics(s.periodStart, s.periodEnd.AddDate(0, 1, 0))
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{StartTime: s.periodStart, EndTime: s.periodEnd.AddDate(0, 1, 0)})
 	s.True(resp.TotalCost.Equal(dec("150")), "total %s", resp.TotalCost)
 	s.NotEmpty(recorded.reads)
 	for _, read := range recorded.reads {
@@ -7090,8 +7085,10 @@ func (s *MeterUsageServiceSuite) TestCommitments_ReadsOnlyTheLinesOfCommitmentsI
 	recorded := &recordingUsageStore{MeterUsageRepository: s.GetStores().MeterUsageRepo}
 	svc := s.svc.(*meterUsageService)
 	svc.repo, svc.MeterUsageRepo = recorded, recorded
-	resp := s.customerAnalytics(s.periodStart, s.periodEnd.AddDate(0, 1, 0), func(params *events.MeterUsageDetailedAnalyticsParams) {
-		params.MeterIDs = []string{queried.ID}
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+		StartTime: s.periodStart,
+		EndTime:   s.periodEnd.AddDate(0, 1, 0),
+		MeterIDs:  []string{queried.ID},
 	})
 	s.True(resp.TotalCost.Equal(dec("300")), "total %s", resp.TotalCost)
 	for _, read := range recorded.reads {
@@ -7123,7 +7120,7 @@ func (s *MeterUsageServiceSuite) TestCommitments_BillingTermsCommitmentBillsWhat
 	s.True(invoiced.Equal(dec("50")), "invoice %s", invoiced)
 	s.True(byKind[types.CommitmentLineTrueUp].IsZero(), "the invoice bills no true-up")
 
-	resp := s.customerAnalytics(s.periodStart, s.periodEnd)
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{StartTime: s.periodStart, EndTime: s.periodEnd})
 	s.Require().Len(resp.Items, 1)
 	item := resp.Items[0]
 	s.True(item.TotalUsage.Equal(dec("200")), "usage %s", item.TotalUsage)
@@ -7161,16 +7158,6 @@ func (s *MeterUsageServiceSuite) billInstalment(invoicedAt time.Time) {
 	s.Require().NoError(err)
 }
 
-// withInstalments expands the instalments, then adjusts the request with each of with.
-func withInstalments(with ...func(*events.MeterUsageDetailedAnalyticsParams)) func(*events.MeterUsageDetailedAnalyticsParams) {
-	return func(p *events.MeterUsageDetailedAnalyticsParams) {
-		p.Expand = append(p.Expand, string(types.ExpandInstalments))
-		for _, adjust := range with {
-			adjust(p)
-		}
-	}
-}
-
 // The instalments of the commitments a request applies show in the range they were invoiced in, and the total with
 // instalments adds them. A range or filter that does not apply the commitment lists none, and neither does a request
 // that does not expand instalments.
@@ -7182,13 +7169,38 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInsta
 	s.createLineItemForMeter(ctx, "li_unprepaid", other.ID, otherPrice.ID)
 	s.insertMeterUsageWithProps(ctx, other.ID, s.customer.ExternalID, "api", januaryNoon(6), 10, nil)
 	s.billInstalment(januaryNoon(1))
+	// An instalment invoiced before invoiced_at existed has none, so it is left out rather than listed at a zero time.
+	_, err := s.GetStores().BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{{
+		ID:                 "binst_untimed",
+		OwnerType:          types.BillingTermOwnerCommitment,
+		OwnerID:            "cmt_prepaid",
+		CustomerID:         s.customer.ID,
+		SubscriptionID:     lo.ToPtr(s.sub.ID),
+		Currency:           "usd",
+		Kind:               types.InstalmentKindInstalment,
+		BillOn:             januaryNoon(1),
+		Amount:             dec("500"),
+		InvoiceLabel:       "Prepaid - Instalment without invoiced_at",
+		ServicePeriodStart: s.periodStart,
+		ServicePeriodEnd:   s.periodEnd,
+		InstalmentStatus:   types.InstalmentStatusInvoiced,
+		InvoiceID:          lo.ToPtr("inv_untimed"),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}})
+	s.Require().NoError(err)
 
-	january := s.customerAnalytics(s.periodStart, s.periodEnd, withInstalments())
+	january := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+		StartTime: s.periodStart,
+		EndTime:   s.periodEnd,
+		Expand:    []string{string(types.ExpandInstalments)},
+	})
 	s.Require().Len(january.Instalments, 1)
 	instalment := january.Instalments[0]
 	s.Equal("binst_prepaid", instalment.ID)
 	s.Equal("cmt_prepaid", instalment.CommitmentID)
 	s.Equal("inv_prepaid", instalment.InvoiceID)
+	s.Require().NotNil(instalment.InvoicedAt)
 	s.True(instalment.InvoicedAt.Equal(januaryNoon(1)), "invoiced at %s", instalment.InvoicedAt)
 	// $50 over the prepaid floor, whose covered usage costs nothing, and $10 on the other meter.
 	s.True(january.TotalCost.Equal(dec("60")), "usage cost %s", january.TotalCost)
@@ -7196,24 +7208,38 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInsta
 	s.True(january.TotalCostWithInstalments.Equal(dec("1860")), "with instalments %s", january.TotalCostWithInstalments)
 
 	s.Run("not expanded", func() {
-		resp := s.customerAnalytics(s.periodStart, s.periodEnd)
+		resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{StartTime: s.periodStart, EndTime: s.periodEnd})
 		s.Empty(resp.Instalments)
 		s.Nil(resp.TotalCostWithInstalments)
 		s.True(resp.TotalCost.Equal(january.TotalCost), "cost %s", resp.TotalCost)
 	})
 
 	tests := []struct {
-		name string
-		with func(*events.MeterUsageDetailedAnalyticsParams)
+		name   string
+		params events.MeterUsageDetailedAnalyticsParams
 	}{
-		{name: "a range after the invoice", with: func(p *events.MeterUsageDetailedAnalyticsParams) { p.StartTime = januaryNoon(2) }},
-		{name: "another meter", with: func(p *events.MeterUsageDetailedAnalyticsParams) { p.MeterIDs = []string{other.ID} }},
-		{name: "a source filter", with: func(p *events.MeterUsageDetailedAnalyticsParams) { p.Sources = []string{"api"} }},
+		{name: "a range after the invoice", params: events.MeterUsageDetailedAnalyticsParams{
+			StartTime: januaryNoon(2),
+			EndTime:   s.periodEnd,
+			Expand:    []string{string(types.ExpandInstalments)},
+		}},
+		{name: "another meter", params: events.MeterUsageDetailedAnalyticsParams{
+			StartTime: s.periodStart,
+			EndTime:   s.periodEnd,
+			MeterIDs:  []string{other.ID},
+			Expand:    []string{string(types.ExpandInstalments)},
+		}},
+		{name: "a source filter", params: events.MeterUsageDetailedAnalyticsParams{
+			StartTime: s.periodStart,
+			EndTime:   s.periodEnd,
+			Sources:   []string{"api"},
+			Expand:    []string{string(types.ExpandInstalments)},
+		}},
 	}
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			resp := s.customerAnalytics(s.periodStart, s.periodEnd, withInstalments(tt.with))
+			resp := s.customerAnalytics(tt.params)
 			s.Empty(resp.Instalments)
 			s.Require().NotNil(resp.TotalCostWithInstalments)
 			s.True(resp.TotalCostWithInstalments.Equal(resp.TotalCost), "with instalments %s, cost %s", resp.TotalCostWithInstalments, resp.TotalCost)
@@ -7221,9 +7247,12 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInsta
 	}
 
 	s.Run("the commitment's meter", func() {
-		resp := s.customerAnalytics(s.periodStart, s.periodEnd, withInstalments(func(p *events.MeterUsageDetailedAnalyticsParams) {
-			p.MeterIDs = []string{m.ID}
-		}))
+		resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+			StartTime: s.periodStart,
+			EndTime:   s.periodEnd,
+			MeterIDs:  []string{m.ID},
+			Expand:    []string{string(types.ExpandInstalments)},
+		})
 		s.Len(resp.Instalments, 1)
 	})
 }
@@ -7242,7 +7271,7 @@ func (s *MeterUsageServiceSuite) TestCommitments_PeriodsWithoutACommitmentBillAt
 	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10), 100, nil)
 	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10).AddDate(0, 1, 0), 200, nil)
 
-	resp := s.customerAnalytics(s.periodStart, s.periodEnd.AddDate(0, 1, 0))
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{StartTime: s.periodStart, EndTime: s.periodEnd.AddDate(0, 1, 0)})
 	s.Require().Len(resp.Items, 1)
 	info := resp.Items[0].CommitmentInfo
 	s.Require().NotNil(info)
@@ -7262,7 +7291,7 @@ func (s *MeterUsageServiceSuite) TestCommitments_RangeBeforeTheSubscriptionBills
 	s.storeCommitment(s.newCommitment("cmt_early_range", types.CommitmentScopePrice, p.ID, "150"))
 	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10), 100, nil)
 
-	resp := s.customerAnalytics(s.periodStart.AddDate(0, 0, -15), s.periodEnd)
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{StartTime: s.periodStart.AddDate(0, 0, -15), EndTime: s.periodEnd})
 	s.Require().Len(resp.Items, 1)
 	s.True(resp.TotalCost.Equal(dec("150")), "total %s", resp.TotalCost)
 	s.True(resp.Items[0].CommitmentInfo.ComputedTrueUpAmount.Equal(dec("50")), "true-up %s", resp.Items[0].CommitmentInfo.ComputedTrueUpAmount)
@@ -7284,7 +7313,7 @@ func (s *MeterUsageServiceSuite) TestCommitments_FuturePeriodsBillNothing() {
 	now := clock.Now()
 	thisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	elapsedMonths := (now.Year()-s.periodStart.Year())*12 + int(now.Month()-s.periodStart.Month()) + 1
-	resp := s.customerAnalytics(s.periodStart, thisMonth.AddDate(1, 0, 0))
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{StartTime: s.periodStart, EndTime: thisMonth.AddDate(1, 0, 0)})
 	want := dec("150").Mul(decimal.NewFromInt(int64(elapsedMonths)))
 	s.True(resp.TotalCost.Equal(want), "%d months bill %s, want %s", elapsedMonths, resp.TotalCost, want)
 }
@@ -7304,7 +7333,7 @@ func (s *MeterUsageServiceSuite) TestCommitments_PeriodLimitAppliesOnlyWithAComm
 	s.createLineItemForMeter(ctx, "li_daily_billing", m.ID, p.ID)
 	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", januaryNoon(10), 100, nil)
 
-	resp := s.customerAnalytics(start, s.periodEnd)
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{StartTime: start, EndTime: s.periodEnd})
 	s.True(resp.TotalCost.Equal(dec("100")), "total %s", resp.TotalCost)
 
 	s.storeCommitment(s.newCommitment("cmt_daily_billing", types.CommitmentScopePrice, p.ID, "150"))
@@ -7339,8 +7368,11 @@ func (s *MeterUsageServiceSuite) TestCommitments_GroupCostsDoNotDependOnTheWindo
 	invoiced, _ := invoicedTotal(s.periodInvoice(s.periodStart, s.periodEnd))
 	var byDay map[string]decimal.Decimal
 	for _, window := range []types.WindowSize{types.WindowSizeDay, "", types.WindowSizeWeek, types.WindowSizeMonth} {
-		resp := s.customerAnalytics(s.periodStart, s.periodEnd, func(params *events.MeterUsageDetailedAnalyticsParams) {
-			params.GroupBy, params.WindowSize = []string{"source"}, window
+		resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+			StartTime:  s.periodStart,
+			EndTime:    s.periodEnd,
+			GroupBy:    []string{"source"},
+			WindowSize: window,
 		})
 		s.True(resp.TotalCost.Equal(invoiced), "window %q costs %s, invoice %s", window, resp.TotalCost, invoiced)
 		costs := lo.SliceToMap(resp.Items, func(item dto.UsageAnalyticItem) (string, decimal.Decimal) { return item.Source, item.TotalCost })
@@ -7362,9 +7394,12 @@ func (s *MeterUsageServiceSuite) TestCommitments_ExpandedRequestsCarryTheTotalWi
 	s.prepayFloor()
 	s.billInstalment(januaryNoon(1))
 
-	unknownFeature := s.customerAnalytics(s.periodStart, s.periodEnd, withInstalments(func(p *events.MeterUsageDetailedAnalyticsParams) {
-		p.FeatureIDs = []string{"feat_unknown"}
-	}))
+	unknownFeature := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+		StartTime:  s.periodStart,
+		EndTime:    s.periodEnd,
+		FeatureIDs: []string{"feat_unknown"},
+		Expand:     []string{string(types.ExpandInstalments)},
+	})
 	s.Require().NotNil(unknownFeature.TotalCostWithInstalments)
 	s.True(unknownFeature.TotalCostWithInstalments.IsZero(), "with instalments %s", unknownFeature.TotalCostWithInstalments)
 

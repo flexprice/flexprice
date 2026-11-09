@@ -403,11 +403,11 @@ type UsageAnalyticInstalment struct {
 	ID                 string          `json:"id"`
 	CommitmentID       string          `json:"commitment_id"`
 	SubscriptionID     string          `json:"subscription_id,omitempty"`
-	InvoiceID          string          `json:"invoice_id"`
+	InvoiceID          string          `json:"invoice_id,omitempty"`
 	InvoiceLabel       string          `json:"invoice_label"`
 	Amount             decimal.Decimal `json:"amount" swaggertype:"string"`
 	Currency           string          `json:"currency"`
-	InvoicedAt         time.Time       `json:"invoiced_at"` // when the invoice billing it was finalized
+	InvoicedAt         *time.Time      `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
 	ServicePeriodStart time.Time       `json:"service_period_start"`
 	ServicePeriodEnd   time.Time       `json:"service_period_end"`
 }

@@ -289,9 +289,24 @@ func (l *commitmentLoader) HandledLineIDs() map[string]bool {
 	return l.handledLineIDs
 }
 
-// LinesAffecting returns the lines whose usage can change what the commitments bill the lines matching covered: the
-// scopes of the commitments covering one, widened by every commitment sharing a line with those, which draws on it too.
-func (l *commitmentLoader) LinesAffecting(covered func(*subscription.SubscriptionLineItem) bool) map[string]bool {
+// CommitmentsCovering returns the IDs of the commitments whose scope holds one of the given lines.
+func (l *commitmentLoader) CommitmentsCovering(lineIDs map[string]bool) []string {
+	var ids []string
+	for _, sc := range l.commitments {
+		for _, item := range l.scopeByCommitment[sc.ID].lineItems {
+			if lineIDs[item.ID] {
+				ids = append(ids, sc.ID)
+				break
+			}
+		}
+	}
+
+	return ids
+}
+
+// LinesAffecting returns the lines whose usage can change what the commitments bill the given lines: the scopes of the
+// commitments covering one, widened by every commitment sharing a line with those, which draws on it too.
+func (l *commitmentLoader) LinesAffecting(lineIDs map[string]bool) map[string]bool {
 	affecting := map[string]bool{}
 	reached := map[string]bool{}
 	for grew := true; grew; {
@@ -302,7 +317,13 @@ func (l *commitmentLoader) LinesAffecting(covered func(*subscription.Subscriptio
 			}
 
 			scope := l.scopeByCommitment[sc.ID].lineItems
-			touches := lo.SomeBy(scope, func(item *subscription.SubscriptionLineItem) bool { return covered(item) || affecting[item.ID] })
+			touches := false
+			for _, item := range scope {
+				if lineIDs[item.ID] || affecting[item.ID] {
+					touches = true
+					break
+				}
+			}
 			if !touches {
 				continue
 			}

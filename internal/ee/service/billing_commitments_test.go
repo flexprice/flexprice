@@ -2741,9 +2741,9 @@ func TestActiveBuckets_CountsTheBucketsTheTermAndWindowsHold(t *testing.T) {
 	}
 }
 
-// The lines a commitment's bill depends on reach through every commitment sharing a line with it: x shares c with y,
-// which also draws on d, while z touches none of them.
-func TestCommitmentLoader_LinesAffecting(t *testing.T) {
+// A line's commitments are those whose scope holds it, and the lines their bills depend on reach through every
+// commitment sharing a line with them: x shares c with y, which also draws on d, while z touches none of them.
+func TestCommitmentLoader_CommitmentsCoveringAndLinesAffecting(t *testing.T) {
 	a, c := &subscription.SubscriptionLineItem{ID: "a"}, &subscription.SubscriptionLineItem{ID: "c"}
 	d, e := &subscription.SubscriptionLineItem{ID: "d"}, &subscription.SubscriptionLineItem{ID: "e"}
 	l := &commitmentLoader{
@@ -2760,19 +2760,21 @@ func TestCommitmentLoader_LinesAffecting(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		covered string
-		want    map[string]bool
+		name      string
+		line      string
+		covering  []string
+		affecting map[string]bool
 	}{
-		{name: "through a shared line", covered: "a", want: map[string]bool{"a": true, "c": true, "d": true}},
-		{name: "from the other side", covered: "d", want: map[string]bool{"a": true, "c": true, "d": true}},
-		{name: "a separate scope", covered: "e", want: map[string]bool{"e": true}},
-		{name: "no covering commitment", covered: "b", want: map[string]bool{}},
+		{name: "through a shared line", line: "a", covering: []string{"x"}, affecting: map[string]bool{"a": true, "c": true, "d": true}},
+		{name: "from the other side", line: "d", covering: []string{"y"}, affecting: map[string]bool{"a": true, "c": true, "d": true}},
+		{name: "a separate scope", line: "e", covering: []string{"z"}, affecting: map[string]bool{"e": true}},
+		{name: "no covering commitment", line: "b", affecting: map[string]bool{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := l.LinesAffecting(func(item *subscription.SubscriptionLineItem) bool { return item.ID == tt.covered })
-			require.Equal(t, tt.want, got)
+			lineIDs := map[string]bool{tt.line: true}
+			require.Equal(t, tt.covering, l.CommitmentsCovering(lineIDs))
+			require.Equal(t, tt.affecting, l.LinesAffecting(lineIDs))
 		})
 	}
 }

@@ -1421,7 +1421,7 @@ func setInstalments(response *dto.GetUsageAnalyticsResponse, instalments []*bill
 			InvoiceLabel:       inst.InvoiceLabel,
 			Amount:             inst.Amount,
 			Currency:           inst.Currency,
-			InvoicedAt:         lo.FromPtr(inst.InvoicedAt),
+			InvoicedAt:         inst.InvoicedAt,
 			ServicePeriodStart: inst.ServicePeriodStart,
 			ServicePeriodEnd:   inst.ServicePeriodEnd,
 		})
@@ -2735,7 +2735,11 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 				at = []int{len(group.Points) - 1}
 			}
 
-			usage := lo.Map(at, func(j int, _ int) decimal.Decimal { return group.Points[j].Usage })
+			usage := make([]decimal.Decimal, len(at))
+			for k, j := range at {
+				usage[k] = group.Points[j].Usage
+			}
+
 			for k, part := range splitBilled(&share, usage, group.AggregationType) {
 				point := &group.Points[at[k]]
 				point.ComputedCommitmentUtilizedAmount = point.ComputedCommitmentUtilizedAmount.Add(part.ComputedCommitmentUtilizedAmount)
@@ -2749,7 +2753,9 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 	}
 
 	for _, group := range groups {
-		slices.SortStableFunc(group.Points, func(a, b events.UsageAnalyticPoint) int { return a.Timestamp.Compare(b.Timestamp) })
+		slices.SortStableFunc(group.Points, func(a, b events.UsageAnalyticPoint) int {
+			return a.Timestamp.Compare(b.Timestamp)
+		})
 	}
 }
 
@@ -2757,16 +2763,18 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 // starts at window, which holds the period's start.
 func periodPoints(points []events.UsageAnalyticPoint, bounds types.Period, window time.Time) []int {
 	var in []int
+	holding := -1
 	for j, point := range points {
 		if !point.Timestamp.Before(bounds.Start) && point.Timestamp.Before(bounds.End) {
 			in = append(in, j)
 		}
+		if point.Timestamp.Equal(window) {
+			holding = j
+		}
 	}
 
-	if len(in) == 0 {
-		if j := slices.IndexFunc(points, func(point events.UsageAnalyticPoint) bool { return point.Timestamp.Equal(window) }); j >= 0 {
-			in = append(in, j)
-		}
+	if len(in) == 0 && holding >= 0 {
+		in = append(in, holding)
 	}
 
 	return in
@@ -3111,10 +3119,13 @@ func (s *meterUsageService) calculateLineItemCommitments(
 	// A covered line's periods without a commitment bill at its own price, as those periods' invoices do.
 	priceService := NewPriceService(s.ServiceParams)
 	for i, period := range periods {
-		uncovered := lo.Filter(usage.Subscription.LineItems, func(item *subscription.SubscriptionLineItem, _ int) bool {
-			return covered[item.ID] && breakdownsByPeriod[i][item.ID] == nil &&
-				item.GetPeriodStart(period.Start).Before(item.GetPeriodEnd(period.End))
-		})
+		var uncovered []*subscription.SubscriptionLineItem
+		for _, item := range usage.Subscription.LineItems {
+			runs := item.GetPeriodStart(period.Start).Before(item.GetPeriodEnd(period.End))
+			if covered[item.ID] && breakdownsByPeriod[i][item.ID] == nil && runs {
+				uncovered = append(uncovered, item)
+			}
+		}
 		if len(uncovered) == 0 {
 			continue
 		}
@@ -3233,20 +3244,19 @@ func (s *meterUsageService) periodCommitments(
 		return nil, nil, err
 	}
 
-	isQueried := func(item *subscription.SubscriptionLineItem) bool { return selectedCharges[item.ID] != nil }
-	var commitmentIDs []string
-	for _, sc := range loader.commitments {
-		if lo.SomeBy(loader.scopeByCommitment[sc.ID].lineItems, isQueried) {
-			commitmentIDs = append(commitmentIDs, sc.ID)
-		}
+	queried := make(map[string]bool, len(selectedCharges))
+	for lineID := range selectedCharges {
+		queried[lineID] = true
 	}
+
+	commitmentIDs := loader.CommitmentsCovering(queried)
 	if len(commitmentIDs) == 0 {
 		return nil, nil, nil
 	}
 
 	// The lines read include those a meter filter left out. A period holding the whole range reuses the queried usage,
 	// except a running meter's, which bills its total.
-	affecting := loader.LinesAffecting(isQueried)
+	affecting := loader.LinesAffecting(queried)
 	wholeRange := period.Start.Equal(params.StartTime) && period.End.Equal(end)
 	var linesToRead []*subscription.SubscriptionLineItem
 	for _, item := range usage.Subscription.LineItems {
@@ -3254,7 +3264,7 @@ func (s *meterUsageService) periodCommitments(
 			continue
 		}
 
-		if wholeRange && isQueried(item) && !keepsRunningAggregate(usage.MeterMap[item.MeterID]) {
+		if wholeRange && queried[item.ID] && !keepsRunningAggregate(usage.MeterMap[item.MeterID]) {
 			commitmentCharges[item.ID] = []*dto.SubscriptionUsageByMetersResponse{selectedCharges[item.ID]}
 		} else if usage.PriceMap[item.PriceID] != nil && usage.MeterMap[item.MeterID] != nil {
 			linesToRead = append(linesToRead, item)
@@ -3332,9 +3342,10 @@ func (s *meterUsageService) periodCommitments(
 	for _, line := range trueUps {
 		commitmentID := lo.FromPtr(line.CommitmentID)
 		scope := loader.scopeByCommitment[commitmentID].lineItems
-		utilized := lo.Map(scope, func(item *subscription.SubscriptionLineItem, _ int) decimal.Decimal {
-			return utilizedByCommitment[commitmentID][item.ID]
-		})
+		utilized := make([]decimal.Decimal, len(scope))
+		for i, item := range scope {
+			utilized[i] = utilizedByCommitment[commitmentID][item.ID]
+		}
 
 		for i, share := range allocateCostByWeight(line.Amount, utilized) {
 			lineBreakdown := breakdownByLine[scope[i].ID]
@@ -3342,8 +3353,13 @@ func (s *meterUsageService) periodCommitments(
 		}
 	}
 
-	queried := lo.PickBy(breakdownByLine, func(lineID string, _ *types.CommitmentInfo) bool { return selectedCharges[lineID] != nil })
-	return queried, commitmentIDs, nil
+	for lineID := range breakdownByLine {
+		if !queried[lineID] {
+			delete(breakdownByLine, lineID)
+		}
+	}
+
+	return breakdownByLine, commitmentIDs, nil
 }
 
 // chargeCost prices a line's usage the way billing prices it: bucketed usage bucket by bucket, otherwise in one go.
