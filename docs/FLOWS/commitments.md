@@ -107,14 +107,17 @@ then returns the commitment's lines, which are appended to the usage charges.
 Analytics and previews use `newProjectedCommitmentLoader`, which prices a window inside the open period as if through
 the period's end but reads usage only up to the window's end: `attachCommitmentBreakdown`
 ([subscription.go:6712](../../internal/ee/service/subscription.go#L6712)) and `calculateLineItemCommitments`
-([meter_usage.go:2947](../../internal/ee/service/meter_usage.go#L2947)).
+([meter_usage.go:3065](../../internal/ee/service/meter_usage.go#L3065)).
 
 Usage analytics prices a range one billing period at a time, as each period's invoice bills it. For each period it
-builds the projected loader, reads usage only for the lines the loader handles (`HandledLineIDs`), and sums
-`BillingLines` per line into utilized, overage and true-up, so billing-terms commitments cost $0 and take no true-up.
-A covered line's periods without a commitment bill at its own price. A range no commitment overlaps is not cut into
-periods; one a commitment overlaps can span at most 366 billing periods. With `expand: ["instalments"]`, the response
-lists the instalments of the commitments it applied that were invoiced in the range (`ListInvoiced`, by `invoiced_at`).
+builds the projected loader, reads usage only for the lines the loader handles (`HandledLineIDs`) that run in the
+period, and sums `BillingLines` per line into utilized, overage and true-up, so billing-terms commitments cost $0 and
+take no true-up. A running SUM meter is read at its total at the period's end, as invoices bill it. A covered line's
+periods without a commitment bill at its own price. Each period's charges stay on that period's groups and points,
+shared by usage; a windowed request puts a period without usage on a point at its start. A range no commitment
+overlaps is not cut into periods; one a commitment overlaps can span at most 366 billing periods. With
+`expand: ["instalments"]`, the response lists the instalments of the commitments it applied that were invoiced in the
+range (`ListInvoiced`, by `invoiced_at`).
 
 ### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:59](../../internal/ee/service/billing_commitments.go#L59))
 
