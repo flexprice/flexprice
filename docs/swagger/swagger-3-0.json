@@ -27669,7 +27669,7 @@
           },
           "instalments": {
             "type": "array",
-            "description": "Instalments lists, with expand \"instalments\", the instalments of the v2 commitments the request applied that were\ninvoiced in the range. Property and source filters apply no commitments, so they list none.",
+            "description": "Instalments lists, with expand \"instalments\", the instalments invoiced in the range for the v2 commitments covering\na queried meter. Property and source filters apply no commitments, so they list none.",
             "items": {
               "$ref": "#/components/schemas/UsageAnalyticInstalment"
             }

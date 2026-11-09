@@ -72,7 +72,7 @@ API: `POST /v1/commitments` ([router.go:730](../../internal/api/router.go#L730))
    subscription's commitments lock (`commitments:<subscription_id>`), so concurrent creates and scope changes on one
    subscription see each other. An idempotency key seen before returns the original commitment (`findReplay`,
    `replayResponse`).
-3. **`insert` → `prepare`** ([commitment.go:289](../../internal/ee/service/commitment.go#L289)) validates and builds without writing:
+3. **`insert` → `prepare`** ([commitment.go:299](../../internal/ee/service/commitment.go#L299)) validates and builds without writing:
    - `loadCommitmentContext`: the subscription with **every line it has ever had**, their prices and meters. A term can
      reach back before the current lines.
    - `validateAgainstSubscription` ([commitment_validation.go:162](../../internal/ee/service/commitment_validation.go#L162)):
@@ -104,30 +104,35 @@ Both usage billing paths build a loader for the invoice period and hand it the l
 `HandledLineIDs()` lists the usage lines commitments price. Normal (and legacy v1) pricing skips them. `BillingLines()`
 then returns the commitment's lines, which are appended to the usage charges.
 
-Analytics and previews use `newProjectedCommitmentLoader`, which prices a window inside the open period as if through
-the period's end but reads usage only up to the window's end: `attachCommitmentBreakdown`
-([subscription.go:6712](../../internal/ee/service/subscription.go#L6712)) and `calculateLineItemCommitments`
-([meter_usage.go:3063](../../internal/ee/service/meter_usage.go#L3063)).
+Analytics and previews use `newProjectedCommitmentLoader`, which prices a window covering the open period from its
+start into today as if through the period's end, as its coming invoice will, but reads usage only up to the window's
+end. A window ending before today, or on a cancelled subscription, is priced to its own end (`projectedPeriodEnd`).
+Callers: `attachCommitmentBreakdown` ([subscription.go:6710](../../internal/ee/service/subscription.go#L6710)) and
+`calculateLineItemCommitments` ([meter_usage.go:3122](../../internal/ee/service/meter_usage.go#L3122)).
 
-Usage analytics prices a range one billing period at a time, as each period's invoice bills it. A period the range
-cuts gets its floor prorated to the part in range, except that a range starting at or before the open period's start
-prices that period through its end. For each period it builds the projected loader and reads usage only for the lines
-that run in the period and that a commitment covering a queried line can draw on, directly or through a line it shares
-with another commitment (`LinesAffecting`). It sums `BillingLines` per line into utilized, overage and true-up, so
-billing-terms commitments cost $0 and take no true-up. A running SUM meter is read at its total at the period's end, as
-invoices bill it. A covered line's periods without a commitment bill at its own price.
+Usage analytics prices a range one billing period at a time, as each period's invoice bills it; a period the range
+cuts gets its floor prorated to the part in range, apart from the projected open period. For each period it builds the
+projected loader and reads usage only for the lines that run in the period and that a commitment covering a queried
+line can draw on, directly or through a line it shares with another commitment (`LinesAffecting`). It sums
+`BillingLines` per line into utilized, overage and true-up, so billing-terms commitments cost $0 and take no true-up. A
+running SUM meter is read at its total at the period's end, as invoices bill it. A covered line's periods without a
+commitment bill at its own price.
 
-Each period's charges stay on that period's groups and points, shared by usage. A period inside a coarser window takes
-the usage of the window holding its start, and a windowed request puts a period without usage on a point at its start.
-A range no commitment overlaps is not cut into periods; one a commitment overlaps can span at most 366 billing periods.
-With `expand: ["instalments"]`, the response lists the instalments of the commitments it applied that were invoiced in
-the range (`ListInvoiced`, by `invoiced_at`).
+Each period's charges stay on that period's groups and points, shared by the usage billing priced: a bucketed price's
+summed buckets, not a window's peak. A point belongs to the period holding the middle of its window, so windows cut on
+other edges or in another timezone land on the period they mostly cover. A period without a point of its own takes the
+first window whose middle it holds, reusing a point whose window covers it. A range no commitment overlaps is not cut
+into periods; one a commitment overlaps can span at most 366 billing periods.
+
+With `expand: ["instalments"]`, the response lists the instalments invoiced in the range (`ListInvoiced`, by
+`invoiced_at`) for the commitments on the customer's subscriptions that cover a queried meter (`CoveringMeters`),
+whether or not the range has usage.
 
 ### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:59](../../internal/ee/service/billing_commitments.go#L59))
 
 1. `ListOverlapping`: active and terminated commitments whose term overlaps the invoice period.
 2. `loadCommitmentContext` once for the subscription.
-3. `load` per commitment ([billing_commitments.go:148](../../internal/ee/service/billing_commitments.go#L148)):
+3. `load` per commitment ([billing_commitments.go:157](../../internal/ee/service/billing_commitments.go#L157)):
    - Skip it when it ended before the period, or when none of its scope lines are billed by this invoice.
    - Load the committed price (quantity) and the overage price; build `amountOf`, which values capacity in money.
    - `commitmentPeriods(window)` returns the billing periods overlapping the invoice window, cut to the term.
@@ -138,11 +143,11 @@ the range (`ListInvoiced`, by `invoiced_at`).
 4. `sortCommitmentStack` sorts by priority, then start, then ID. `checkSharedLines` rejects a line shared by commitments
    of different stacks, which would bill its usage twice.
 
-### 6.3 Laying out a stack — `Stacks` ([billing_commitments.go:321](../../internal/ee/service/billing_commitments.go#L321))
+### 6.3 Laying out a stack — `Stacks` ([billing_commitments.go:351](../../internal/ee/service/billing_commitments.go#L351))
 
 Commitments are grouped into stacks by (type, measurement, bucket size). Each stack is laid out, then allocated.
 
-**Period measurement — `buildPeriodStack`** ([billing_commitments.go:693](../../internal/ee/service/billing_commitments.go#L693))
+**Period measurement — `buildPeriodStack`** ([billing_commitments.go:723](../../internal/ee/service/billing_commitments.go#L723))
 - Windows are the invoice period split at every commitment start and end, every line version edge, and every
   usage bucket key (`periodSplits`).
 - Bucketed prices put each bucket's usage in its own window (`splitLineIntoBuckets`). Other prices read their period
@@ -151,14 +156,14 @@ Commitments are grouped into stacks by (type, measurement, bucket size). Each st
 - Each commitment has **one pool**, the period's capacity. Windows where `appliesAt` is false (before its start, at or
   after its term end) get `noPool`.
 
-**Window measurement — `buildWindowStack`** ([billing_commitments.go:580](../../internal/ee/service/billing_commitments.go#L580))
+**Window measurement — `buildWindowStack`** ([billing_commitments.go:610](../../internal/ee/service/billing_commitments.go#L610))
 - Windows are the usage buckets of the elapsed period (`generateBucketStarts`), so an empty bucket still counts.
 - Each commitment gets **one pool per bucket** it applies to, each holding `value`. A bucket starting before the
   invoice period belongs to the previous invoice.
 - The floor counts the applying buckets with `activeBuckets`. `accruedAmount` values it as a difference of cumulative
   rounded values, so the partial floors of a period always add up to its whole floor.
 
-`appliesAt(c, t)` ([billing_commitments.go:644](../../internal/ee/service/billing_commitments.go#L644)) is the single
+`appliesAt(c, t)` ([billing_commitments.go:674](../../internal/ee/service/billing_commitments.go#L674)) is the single
 question "does the commitment's capacity apply at t": within its term (ending with the subscription when open-ended),
 and inside its active windows.
 
@@ -182,7 +187,7 @@ This file has no I/O.
   termination, outside its active windows): the line's own price, with no commitment metadata.
 - `absorbDrift` makes individually rounded rows add up to their rounded target.
 
-`BillingLines` then runs `coverWithBillingTerms` ([billing_commitments.go:404](../../internal/ee/service/billing_commitments.go#L404)).
+`BillingLines` then runs `coverWithBillingTerms` ([billing_commitments.go:434](../../internal/ee/service/billing_commitments.go#L434)).
 For billing-terms commitments it zeroes the utilized rows and drops the true-up, because their instalments carry the
 value. Overage is still billed.
 
@@ -216,7 +221,7 @@ Callers pass the span they need:
 
 ### 7.3 `containingPeriod` and whole seconds
 
-`containingPeriod(periods, window)` ([billing_commitments.go:1066](../../internal/ee/service/billing_commitments.go#L1066))
+`containingPeriod(periods, window)` ([billing_commitments.go:1096](../../internal/ee/service/billing_commitments.go#L1096))
 checks **containment in the regular billing period**, not equality with the commitment period. Example: a monthly
 subscription anchored on the 10th, and a monthly $100 commitment starting 15 Jan.
 

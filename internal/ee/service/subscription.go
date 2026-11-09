@@ -6718,7 +6718,7 @@ func (s *subscriptionService) attachCommitmentBreakdown(
 		return nil
 	}
 
-	breakdown, err := newBillingService(s.ServiceParams).commitmentUsageBreakdown(ctx, sub, response, start, end)
+	breakdown, err := newBillingService(s.ServiceParams).commitmentUsageBreakdown(ctx, sub, response, start, end, clock.Now())
 	if err != nil {
 		return err
 	}

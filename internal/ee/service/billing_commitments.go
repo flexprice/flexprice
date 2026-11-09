@@ -117,23 +117,17 @@ func (s *billingService) newCommitmentLoader(
 	return l, nil
 }
 
-// newProjectedCommitmentLoader loads commitments for [start, end) priced through the end of the billing period
-// holding end, reading usage only up to end.
+// newProjectedCommitmentLoader loads commitments for [start, end) priced through projectedPeriodEnd as of now, reading
+// usage only up to end.
 func (s *billingService) newProjectedCommitmentLoader(
 	ctx context.Context,
 	sub *subscription.Subscription,
-	start, end time.Time,
+	start, end, now time.Time,
 	charges map[string][]*dto.SubscriptionUsageByMetersResponse,
 	meters map[string]*meter.Meter,
 	source types.UsageSource,
 ) (*commitmentLoader, error) {
-	// An end inside the open billing period projects to its end, unless the window starts after that period does
-	// and so misses its earlier usage.
-	periodEnd := end
-	if !start.After(sub.CurrentPeriodStart) && end.After(sub.CurrentPeriodStart) && end.Before(sub.CurrentPeriodEnd) {
-		periodEnd = sub.CurrentPeriodEnd
-	}
-
+	periodEnd := projectedPeriodEnd(sub, start, end, now)
 	l, err := s.newCommitmentLoader(ctx, sub, start, periodEnd, periodEnd, charges, meters, source)
 	if err != nil {
 		return nil, err
@@ -141,6 +135,21 @@ func (s *billingService) newProjectedCommitmentLoader(
 
 	l.usageEnd = end
 	return l, nil
+}
+
+// projectedPeriodEnd returns the open period's end when [start, end) covers that period from its start into today, as
+// its coming invoice bills it, else end; a cancelled subscription bills no further.
+func projectedPeriodEnd(sub *subscription.Subscription, start, end, now time.Time) time.Time {
+	today := now.UTC().Truncate(24 * time.Hour)
+	if sub.SubscriptionStatus == types.SubscriptionStatusCancelled || !end.After(today) {
+		return end
+	}
+
+	if !start.After(sub.CurrentPeriodStart) && end.After(sub.CurrentPeriodStart) && end.Before(sub.CurrentPeriodEnd) {
+		return sub.CurrentPeriodEnd
+	}
+
+	return end
 }
 
 // load adds c with the billed lines it scopes, its prices and its period clipped to the window; it skips a
@@ -526,15 +535,15 @@ func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.Commitmen
 	return out, nil
 }
 
-// commitmentUsageBreakdown reports each commitment's usage for [start, end) as the period invoice would value it;
-// nil when none applies.
+// commitmentUsageBreakdown reports each commitment's usage for [start, end) as the period invoice would value it as of
+// now; nil when none applies.
 func (s *billingService) commitmentUsageBreakdown(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	usage *dto.GetUsageBySubscriptionResponse,
-	start, end time.Time,
+	start, end, now time.Time,
 ) ([]*dto.CommitmentUsageBreakdown, error) {
-	loader, err := s.newProjectedCommitmentLoader(ctx, sub, start, end, rawChargesByLine(sub, usage), nil, "")
+	loader, err := s.newProjectedCommitmentLoader(ctx, sub, start, end, now, rawChargesByLine(sub, usage), nil, "")
 	if err != nil || len(loader.commitments) == 0 {
 		return nil, err
 	}
