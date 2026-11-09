@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -168,15 +169,15 @@ func (s *invoiceService) missingInstalments(
 	return lo.Without(lo.Map(due, func(inst *billingterm.Instalment, _ int) string { return inst.ID }), billed...), nil
 }
 
-// claimInstalments marks the scheduled instalments on a finalizing invoice as billed by it, in the caller's
-// finalize transaction, and returns the ids of those it could not claim because they are no longer scheduled.
+// claimInstalments marks the scheduled instalments on a finalizing invoice as billed by it at its finalization, in the
+// caller's finalize transaction, and returns the ids of those it could not claim because they are no longer scheduled.
 func (s *invoiceService) claimInstalments(ctx context.Context, inv *invoice.Invoice) (unclaimed []string, err error) {
 	ids, err := s.billedInstalmentIDs(ctx, inv.ID)
 	if err != nil || len(ids) == 0 {
 		return nil, err
 	}
 
-	claimed, err := s.BillingInstalmentRepo.Claim(ctx, inv.ID, ids)
+	claimed, err := s.BillingInstalmentRepo.Claim(ctx, inv.ID, lo.FromPtrOr(inv.FinalizedAt, clock.Now()), ids)
 	if err != nil {
 		return nil, err
 	}

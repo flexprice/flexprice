@@ -66,31 +66,29 @@ func (s *CommitmentE2ESuite) TestFinalize_ClaimsInstalments() {
 	for _, inst := range s.billedInstalments(draft.ID) {
 		s.Equal(types.InstalmentStatusScheduled, inst.InstalmentStatus, "computing never claims")
 		s.Nil(inst.InvoiceID)
+		s.Nil(inst.InvoicedAt)
 	}
 
 	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
 	s.Require().NoError(invoices.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
-
-	billed := s.billedInstalments(draft.ID)
-	for _, inst := range billed {
-		s.Equal(types.InstalmentStatusInvoiced, inst.InstalmentStatus)
-		s.Equal(draft.ID, lo.FromPtr(inst.InvoiceID))
-	}
-	s.ElementsMatch(instalmentIDs(billed), s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
+	s.requireBilledBy(draft.ID, instalmentIDs(s.billedInstalments(draft.ID)))
+	s.ElementsMatch(instalmentIDs(s.billedInstalments(draft.ID)), s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
 }
 
 // requireBilledBy checks that the invoice is finalized and that its instalment lines bill exactly the instalments
-// want, each invoiced by it.
+// want, each invoiced by it when it was finalized.
 func (s *CommitmentE2ESuite) requireBilledBy(invoiceID string, want []string) {
 	stored, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), invoiceID)
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceStatusFinalized, stored.InvoiceStatus)
+	s.Require().NotNil(stored.FinalizedAt)
 
 	billed := s.billedInstalments(invoiceID)
 	s.ElementsMatch(want, instalmentIDs(billed))
 	for _, inst := range billed {
 		s.Equal(types.InstalmentStatusInvoiced, inst.InstalmentStatus)
 		s.Equal(invoiceID, lo.FromPtr(inst.InvoiceID))
+		s.True(stored.FinalizedAt.Equal(lo.FromPtr(inst.InvoicedAt)), "invoiced at %v, finalized at %v", inst.InvoicedAt, stored.FinalizedAt)
 	}
 }
 
@@ -529,6 +527,7 @@ func (s *CommitmentE2ESuite) TestVoid_ReschedulesInstalments() {
 	for _, inst := range rescheduled {
 		s.Equal(types.InstalmentStatusScheduled, inst.InstalmentStatus)
 		s.Nil(inst.InvoiceID)
+		s.Nil(inst.InvoicedAt)
 	}
 	s.ElementsMatch(instalmentIDs(rescheduled), s.instalmentEvents(types.WebhookEventBillingInstalmentUpdated))
 

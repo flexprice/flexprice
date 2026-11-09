@@ -45,7 +45,8 @@ type loadedScope struct {
 	bucket       types.WindowSize
 	overagePrice *price.Price
 	amountOf     amountFn
-	accrualStart time.Time // where the commitment period's capacity starts accruing
+	accrualStart time.Time      // where the commitment period's capacity starts accruing
+	location     *time.Location // the commitment's timezone, loaded once for its active windows
 }
 
 // stackKey groups commitments that can share lines: same type and measurement, and bucket size for windows.
@@ -240,6 +241,7 @@ func (l *commitmentLoader) load(
 		overagePrice: overagePrice,
 		amountOf:     amountOf,
 		accrualStart: period.Start,
+		location:     c.Location(),
 	}
 	l.commitments = append(l.commitments, &stackedCommitment{
 		Commitment:     c,
@@ -285,6 +287,55 @@ func (l *commitmentLoader) stackKeyOf(sc *stackedCommitment) stackKey {
 // HandledLineIDs returns the line items commitments price; normal pricing skips them.
 func (l *commitmentLoader) HandledLineIDs() map[string]bool {
 	return l.handledLineIDs
+}
+
+// CommitmentsCovering returns the IDs of the commitments whose scope holds one of the given lines.
+func (l *commitmentLoader) CommitmentsCovering(lineIDs map[string]bool) []string {
+	var ids []string
+	for _, sc := range l.commitments {
+		for _, item := range l.scopeByCommitment[sc.ID].lineItems {
+			if lineIDs[item.ID] {
+				ids = append(ids, sc.ID)
+				break
+			}
+		}
+	}
+
+	return ids
+}
+
+// LinesAffecting returns the lines whose usage can change what the commitments bill the given lines: the scopes of the
+// commitments covering one, widened by every commitment sharing a line with those, which draws on it too.
+func (l *commitmentLoader) LinesAffecting(lineIDs map[string]bool) map[string]bool {
+	affecting := map[string]bool{}
+	reached := map[string]bool{}
+	for grew := true; grew; {
+		grew = false
+		for _, sc := range l.commitments {
+			if reached[sc.ID] {
+				continue
+			}
+
+			scope := l.scopeByCommitment[sc.ID].lineItems
+			touches := false
+			for _, item := range scope {
+				if lineIDs[item.ID] || affecting[item.ID] {
+					touches = true
+					break
+				}
+			}
+			if !touches {
+				continue
+			}
+
+			reached[sc.ID], grew = true, true
+			for _, item := range scope {
+				affecting[item.ID] = true
+			}
+		}
+	}
+
+	return affecting
 }
 
 // Stacks builds one stack per type, measurement and bucket size from the loaded commitments and allocates each.
@@ -333,8 +384,8 @@ func (l *commitmentLoader) Stacks(ctx context.Context) ([]*commitmentStack, []*a
 	return stacks, allocs, nil
 }
 
-// usageLines returns the commitment lines at usage value, with true-ups, before any billing terms cover them. Usage
-// analytics reads these; invoices bill BillingLines.
+// usageLines returns the commitment lines at usage value, with true-ups, before any billing terms cover them. Invoices
+// and usage analytics read BillingLines instead.
 func (l *commitmentLoader) usageLines(ctx context.Context) ([]dto.CreateInvoiceLineItemRequest, error) {
 	stacks, allocs, err := l.Stacks(ctx)
 	if err != nil {
@@ -596,14 +647,24 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 
 // activeBuckets counts the buckets of the usage grid starting within span that the commitment's capacity applies to.
 func (l *commitmentLoader) activeBuckets(c *commitment.Commitment, span types.Period, bucket types.WindowSize) int64 {
-	starts := generateBucketStarts(span.Start.UTC(), span.End.UTC(), bucket, &l.sub.BillingAnchor)
-	return int64(lo.CountBy(starts, func(t time.Time) bool { return !t.Before(span.Start) && l.appliesAt(c, t) }))
+	anchor := &l.sub.BillingAnchor
+	var count int64
+	for start := truncateToBucketStart(span.Start.UTC(), bucket, anchor); start.Before(span.End); {
+		if !start.Before(span.Start) && l.appliesAt(c, start) {
+			count++
+		}
+
+		start = nextBucketStart(start, bucket, anchor)
+	}
+
+	return count
 }
 
 // appliesAt reports whether the commitment's capacity applies at t: within its term, which ends with the subscription
 // when it is open-ended, and inside its active windows.
 func (l *commitmentLoader) appliesAt(c *commitment.Commitment, t time.Time) bool {
-	return !t.Before(c.StartDate) && !endReached(termEnd(l.sub, c), t) && c.ActiveWindows.Contains(t, c.Location())
+	location := l.scopeByCommitment[c.ID].location
+	return !t.Before(c.StartDate) && !endReached(termEnd(l.sub, c), t) && c.ActiveWindows.Contains(t, location)
 }
 
 // windowOf returns the index of the window holding max(t, line start), or of the first window for an earlier one.

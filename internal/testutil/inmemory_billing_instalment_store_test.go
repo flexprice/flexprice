@@ -83,23 +83,26 @@ func TestInMemoryBillingInstalmentStore_ClaimRescheduleCancel(t *testing.T) {
 		cancelled := f.instalment("binst_c", "cmt_1", types.InstalmentStatusCancelled, f.start.AddDate(0, 2, 0))
 		f.seed(t, first, second, cancelled)
 
-		claimed, err := f.store.Claim(f.ctx, "inv_1", []string{first.ID, second.ID, cancelled.ID})
+		invoicedAt := f.start.Add(36 * time.Hour)
+		claimed, err := f.store.Claim(f.ctx, "inv_1", invoicedAt, []string{first.ID, second.ID, cancelled.ID})
 		require.NoError(t, err)
 		require.ElementsMatch(t, []string{first.ID, second.ID}, instalmentIDs(claimed))
 		for _, in := range claimed {
 			require.Equal(t, types.InstalmentStatusInvoiced, in.InstalmentStatus)
 			require.Equal(t, "inv_1", lo.FromPtr(in.InvoiceID))
+			require.Equal(t, invoicedAt, lo.FromPtr(in.InvoicedAt))
 		}
 
-		again, err := f.store.Claim(f.ctx, "inv_1", []string{first.ID, second.ID, cancelled.ID})
+		again, err := f.store.Claim(f.ctx, "inv_1", time.Now(), []string{first.ID, second.ID, cancelled.ID})
 		require.NoError(t, err)
 		require.Empty(t, again)
 
 		untouched := f.get(t, cancelled.ID)
 		require.Equal(t, types.InstalmentStatusCancelled, untouched.InstalmentStatus)
 		require.Nil(t, untouched.InvoiceID)
+		require.Nil(t, untouched.InvoicedAt)
 
-		none, err := f.store.Claim(f.ctx, "inv_1", nil)
+		none, err := f.store.Claim(f.ctx, "inv_1", time.Now(), nil)
 		require.NoError(t, err)
 		require.Empty(t, none)
 	})
@@ -107,11 +110,11 @@ func TestInMemoryBillingInstalmentStore_ClaimRescheduleCancel(t *testing.T) {
 	t.Run("reschedule moves only that invoice's invoiced rows", func(t *testing.T) {
 		f := newInstalmentFixture(t)
 		onFirst := f.instalment("binst_a", "cmt_1", types.InstalmentStatusInvoiced, f.start)
-		onFirst.InvoiceID = lo.ToPtr("inv_1")
+		onFirst.InvoiceID, onFirst.InvoicedAt = lo.ToPtr("inv_1"), lo.ToPtr(f.start)
 		alsoOnFirst := f.instalment("binst_b", "cmt_1", types.InstalmentStatusInvoiced, f.start.AddDate(0, 1, 0))
-		alsoOnFirst.InvoiceID = lo.ToPtr("inv_1")
+		alsoOnFirst.InvoiceID, alsoOnFirst.InvoicedAt = lo.ToPtr("inv_1"), lo.ToPtr(f.start)
 		onSecond := f.instalment("binst_c", "cmt_1", types.InstalmentStatusInvoiced, f.start.AddDate(0, 2, 0))
-		onSecond.InvoiceID = lo.ToPtr("inv_2")
+		onSecond.InvoiceID, onSecond.InvoicedAt = lo.ToPtr("inv_2"), lo.ToPtr(f.start)
 		cancelled := f.instalment("binst_d", "cmt_1", types.InstalmentStatusCancelled, f.start.AddDate(0, 3, 0))
 		cancelled.InvoiceID = lo.ToPtr("inv_1")
 		f.seed(t, onFirst, alsoOnFirst, onSecond, cancelled)
@@ -122,11 +125,13 @@ func TestInMemoryBillingInstalmentStore_ClaimRescheduleCancel(t *testing.T) {
 		for _, in := range rescheduled {
 			require.Equal(t, types.InstalmentStatusScheduled, in.InstalmentStatus)
 			require.Nil(t, in.InvoiceID)
+			require.Nil(t, in.InvoicedAt)
 		}
 
 		other := f.get(t, onSecond.ID)
 		require.Equal(t, types.InstalmentStatusInvoiced, other.InstalmentStatus)
 		require.Equal(t, "inv_2", lo.FromPtr(other.InvoiceID))
+		require.Equal(t, f.start, lo.FromPtr(other.InvoicedAt))
 
 		stillCancelled := f.get(t, cancelled.ID)
 		require.Equal(t, types.InstalmentStatusCancelled, stillCancelled.InstalmentStatus)
@@ -172,7 +177,7 @@ func TestInMemoryBillingInstalmentStore_ClaimRescheduleCancel(t *testing.T) {
 		f.seed(t, row)
 
 		otherCtx := types.SetEnvironmentID(f.ctx, "env_2")
-		claimed, err := f.store.Claim(otherCtx, "inv_1", []string{row.ID})
+		claimed, err := f.store.Claim(otherCtx, "inv_1", time.Now(), []string{row.ID})
 		require.NoError(t, err)
 		require.Empty(t, claimed)
 
@@ -313,4 +318,30 @@ func TestInMemoryBillingInstalmentStore_UpdateOnlyScheduled(t *testing.T) {
 			require.Equal(t, before, f.get(t, row.ID), "the row is left as it was")
 		})
 	}
+}
+
+func TestInMemoryBillingInstalmentStore_ListInvoiced(t *testing.T) {
+	f := newInstalmentFixture(t)
+	jan, feb := f.start, f.start.AddDate(0, 1, 0)
+	invoiced := func(id, ownerID string, at time.Time) *billingterm.Instalment {
+		in := f.instalment(id, ownerID, types.InstalmentStatusInvoiced, jan)
+		in.InvoiceID, in.InvoicedAt = lo.ToPtr("inv_"+id), lo.ToPtr(at)
+		return in
+	}
+
+	late := invoiced("binst_late", "cmt_1", jan.AddDate(0, 0, 20))
+	early := invoiced("binst_early", "cmt_1", jan)
+	atEnd := invoiced("binst_at_end", "cmt_1", feb)
+	otherOwner := invoiced("binst_other", "cmt_2", jan.Add(time.Hour))
+	scheduled := f.instalment("binst_scheduled", "cmt_1", types.InstalmentStatusScheduled, jan)
+	f.seed(t, late, early, atEnd, otherOwner, scheduled)
+
+	january := types.Period{Start: jan, End: feb}
+	got, err := f.store.ListInvoiced(f.ctx, types.BillingTermOwnerCommitment, []string{"cmt_1"}, january)
+	require.NoError(t, err)
+	require.Equal(t, []string{early.ID, late.ID}, instalmentIDs(got))
+
+	got, err = f.store.ListInvoiced(f.ctx, types.BillingTermOwnerCommitment, []string{"cmt_1", "cmt_2"}, january)
+	require.NoError(t, err)
+	require.Equal(t, []string{early.ID, otherOwner.ID, late.ID}, instalmentIDs(got))
 }

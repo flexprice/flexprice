@@ -62,6 +62,8 @@ const (
 	FieldInstalmentStatus = "instalment_status"
 	// FieldInvoiceID holds the string denoting the invoice_id field in the database.
 	FieldInvoiceID = "invoice_id"
+	// FieldInvoicedAt holds the string denoting the invoiced_at field in the database.
+	FieldInvoicedAt = "invoiced_at"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// Table holds the table name of the billinginstalment in the database.
@@ -95,6 +97,7 @@ var Columns = []string{
 	FieldDelivery,
 	FieldInstalmentStatus,
 	FieldInvoiceID,
+	FieldInvoicedAt,
 	FieldMetadata,
 }
 
@@ -269,6 +272,11 @@ func ByInstalmentStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByInvoiceID orders the results by the invoice_id field.
 func ByInvoiceID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInvoiceID, opts...).ToFunc()
+}
+
+// ByInvoicedAt orders the results by the invoiced_at field.
+func ByInvoicedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoicedAt, opts...).ToFunc()
 }
 
 // ByMetadata orders the results by the metadata field.

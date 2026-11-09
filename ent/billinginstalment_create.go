@@ -246,6 +246,20 @@ func (_c *BillingInstalmentCreate) SetNillableInvoiceID(v *string) *BillingInsta
 	return _c
 }
 
+// SetInvoicedAt sets the "invoiced_at" field.
+func (_c *BillingInstalmentCreate) SetInvoicedAt(v time.Time) *BillingInstalmentCreate {
+	_c.mutation.SetInvoicedAt(v)
+	return _c
+}
+
+// SetNillableInvoicedAt sets the "invoiced_at" field if the given value is not nil.
+func (_c *BillingInstalmentCreate) SetNillableInvoicedAt(v *time.Time) *BillingInstalmentCreate {
+	if v != nil {
+		_c.SetInvoicedAt(*v)
+	}
+	return _c
+}
+
 // SetMetadata sets the "metadata" field.
 func (_c *BillingInstalmentCreate) SetMetadata(v types.Metadata) *BillingInstalmentCreate {
 	_c.mutation.SetMetadata(v)
@@ -548,6 +562,10 @@ func (_c *BillingInstalmentCreate) createSpec() (*BillingInstalment, *sqlgraph.C
 	if value, ok := _c.mutation.InvoiceID(); ok {
 		_spec.SetField(billinginstalment.FieldInvoiceID, field.TypeString, value)
 		_node.InvoiceID = &value
+	}
+	if value, ok := _c.mutation.InvoicedAt(); ok {
+		_spec.SetField(billinginstalment.FieldInvoicedAt, field.TypeTime, value)
+		_node.InvoicedAt = &value
 	}
 	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(billinginstalment.FieldMetadata, field.TypeOther, value)
