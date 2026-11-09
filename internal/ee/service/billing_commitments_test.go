@@ -687,7 +687,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodSplitAtReplaceme
 		// One overage line per usage line: 6 from A's half and 3 from B's, at the shared $2 overage.
 		overage := loaderLinesOfKind(lines, types.CommitmentLineOverage)
 		s.Require().Len(overage, 1)
-		s.True(overage[0].Quantity.Round(6).Equal(dec("9")), "overage %s", overage[0].Quantity)
+		s.True(overage[0].Quantity.Equal(dec("9")), "overage %s", overage[0].Quantity)
 		s.True(overage[0].Amount.Equal(dec("18")), "overage %s", overage[0].Amount)
 		s.True(total.Equal(dec("33.5")), "total %s", total)
 		return lines
@@ -768,7 +768,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodStartsMidPeriod(
 	s.Equal([]int{-1, 0}, stacks[0].Commitments[0].PoolOf)
 	s.Equal([]decimal.Decimal{dec("20"), dec("20")}, stacks[0].Lines[0].Usage)
 	s.True(allocs[0].Commitments[0].Used.Equal(dec("20")), "used %s", allocs[0].Commitments[0].Used)
-	s.True(allocs[0].Commitments[0].Capacity.Round(6).Equal(dec("34")), "capacity %s", allocs[0].Commitments[0].Capacity)
+	s.True(allocs[0].Commitments[0].Capacity.Equal(dec("34")), "capacity %s", allocs[0].Commitments[0].Capacity)
 	s.True(allocs[0].Overage[0][0].Equal(dec("20")), "pre-start usage stays overage")
 	s.True(allocs[0].Overage[0][1].IsZero())
 
@@ -802,7 +802,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodEndsMidPeriod() 
 	s.Equal([]time.Time{periodStart, endAt}, stacks[0].Windows)
 	s.Equal([]int{0, -1}, stacks[0].Commitments[0].PoolOf)
 	s.True(allocs[0].Commitments[0].Used.Equal(dec("20")), "used %s", allocs[0].Commitments[0].Used)
-	s.True(allocs[0].Commitments[0].Capacity.Round(6).Equal(dec("28")), "capacity %s", allocs[0].Commitments[0].Capacity)
+	s.True(allocs[0].Commitments[0].Capacity.Equal(dec("28")), "capacity %s", allocs[0].Commitments[0].Capacity)
 	s.True(allocs[0].Overage[0][0].IsZero())
 	s.True(allocs[0].Overage[0][1].Equal(dec("20")), "post-end usage stays overage")
 
@@ -861,11 +861,11 @@ func (s *BillingServiceSuite) TestCommitmentLoader_OveragePriceSkipsUsageOutside
 
 			lines, total, err := usageLinesWithTotal(ctx, s.loaderFor(sub, s.meterUsage(sub), sub.CurrentPeriodStart, sub.CurrentPeriodEnd))
 			s.Require().NoError(err)
-			s.True(s.loaderLine(lines, types.CommitmentLineUtilized, c.ID).Quantity.Round(6).Equal(dec(tt.within)))
+			s.True(s.loaderLine(lines, types.CommitmentLineUtilized, c.ID).Quantity.Equal(dec(tt.within)))
 
 			overage := loaderLinesOfKind(lines, types.CommitmentLineOverage)
 			s.Require().Len(overage, 1)
-			s.True(overage[0].Quantity.Round(6).Equal(dec(tt.beyondCap)), "beyond-capacity overage %s", overage[0].Quantity)
+			s.True(overage[0].Quantity.Equal(dec(tt.beyondCap)), "beyond-capacity overage %s", overage[0].Quantity)
 			s.True(overage[0].Amount.Equal(dec(tt.beyondCap).Mul(dec("3"))), "beyond-capacity overage %s", overage[0].Amount)
 
 			plain := loaderLinesOfKind(lines, types.CommitmentLinePlain)
@@ -905,14 +905,14 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodPoolsAcrossTheSp
 	s.Equal([]int{-1, 0}, py.PoolOf)
 
 	// X's 25 serve 20 before the split and 5 after; Y takes the other 15 of the 17 it holds.
-	s.True(allocs[0].Commitments[0].Used.Round(6).Equal(dec("25")), "X used %s", allocs[0].Commitments[0].Used)
-	s.True(allocs[0].Commitments[1].Used.Round(6).Equal(dec("15")), "Y used %s", allocs[0].Commitments[1].Used)
-	s.True(allocs[0].Commitments[1].Unused.Round(6).Equal(dec("2")), "Y unused %s", allocs[0].Commitments[1].Unused)
+	s.True(allocs[0].Commitments[0].Used.Equal(dec("25")), "X used %s", allocs[0].Commitments[0].Used)
+	s.True(allocs[0].Commitments[1].Used.Equal(dec("15")), "Y used %s", allocs[0].Commitments[1].Used)
+	s.True(allocs[0].Commitments[1].Unused.Equal(dec("2")), "Y unused %s", allocs[0].Commitments[1].Unused)
 
 	lines, total, err := usageLinesWithTotal(ctx, l)
 	s.Require().NoError(err)
 	s.Empty(loaderLinesOfKind(lines, types.CommitmentLineOverage))
-	s.True(s.loaderLine(lines, types.CommitmentLineTrueUp, y.ID).Quantity.Round(6).Equal(dec("2")))
+	s.True(s.loaderLine(lines, types.CommitmentLineTrueUp, y.ID).Quantity.Equal(dec("2")))
 	// X 12.5 + Y 7.5 within + Y true-up 1.
 	s.True(total.Equal(dec("21")), "total %s", total)
 }

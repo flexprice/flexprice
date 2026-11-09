@@ -125,9 +125,10 @@ func clipCommitmentPeriod(
 	}
 
 	out.Clipped = true
-	out.ActiveBuckets, out.Capacity = periodCapacity(c, p, types.Period{Start: out.Start, End: out.End}, bucket, anchor)
-	_, before := periodCapacity(c, p, types.Period{Start: p.Start, End: out.Start}, bucket, anchor)
-	_, through := periodCapacity(c, p, types.Period{Start: p.Start, End: out.End}, bucket, anchor)
+	bucketsBefore, before := periodCapacity(c, p, types.Period{Start: p.Start, End: out.Start}, bucket, anchor)
+	bucketsThrough, through := periodCapacity(c, p, types.Period{Start: p.Start, End: out.End}, bucket, anchor)
+	// Buckets and capacity are steps between cumulative points of p, so the parts of a period add up to it.
+	out.ActiveBuckets, out.Capacity = bucketsThrough-bucketsBefore, through.Sub(before)
 	out.Amount = accruedAmount(amountOf, before, through, c.Currency)
 	return out
 }
@@ -147,6 +148,10 @@ func accruedAmount(
 	return amount
 }
 
+// capacityPrecision is the decimal places a prorated capacity keeps, the scale invoice line quantities and commitment
+// values are stored at.
+const capacityPrecision = 8
+
 // periodCapacity returns the buckets and capacity cp accrues within span: its active buckets for window measurement,
 // otherwise its share of the regular billing period.
 func periodCapacity(
@@ -157,9 +162,10 @@ func periodCapacity(
 	anchor time.Time,
 ) (int64, decimal.Decimal) {
 	if c.Measurement != types.CommitmentMeasurementWindow {
-		fraction := decimal.NewFromInt(int64(span.End.Sub(span.Start))).
-			Div(decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart))))
-		return 0, c.Value.Mul(fraction)
+		// Multiplying first keeps an exact share exact, such as 150 × 14/30 = 70; an inexact one rounds once.
+		elapsed := decimal.NewFromInt(int64(span.End.Sub(span.Start)))
+		full := decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart)))
+		return 0, c.Value.Mul(elapsed).DivRound(full, capacityPrecision)
 	}
 
 	// A bucket starting before the span belongs to the span that already counted it.
