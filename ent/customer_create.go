@@ -304,6 +304,12 @@ func (_c *CustomerCreate) SetNillableBillingEntityID(v *string) *CustomerCreate 
 	return _c
 }
 
+// SetSettings sets the "settings" field.
+func (_c *CustomerCreate) SetSettings(v *types.SettingsOverride) *CustomerCreate {
+	_c.mutation.SetSettings(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *CustomerCreate) SetID(v string) *CustomerCreate {
 	_c.mutation.SetID(v)
@@ -540,6 +546,10 @@ func (_c *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.BillingEntityID(); ok {
 		_spec.SetField(customer.FieldBillingEntityID, field.TypeString, value)
 		_node.BillingEntityID = &value
+	}
+	if value, ok := _c.mutation.Settings(); ok {
+		_spec.SetField(customer.FieldSettings, field.TypeJSON, value)
+		_node.Settings = value
 	}
 	return _node, _spec
 }

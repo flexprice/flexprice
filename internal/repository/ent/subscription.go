@@ -59,7 +59,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		sub.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	subscription, err := client.Subscription.Create().
+	create := client.Subscription.Create().
 		SetID(sub.ID).
 		SetTenantID(sub.TenantID).
 		SetLookupKey(sub.LookupKey).
@@ -102,8 +102,12 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
 		SetNillableParentSubscriptionID(sub.ParentSubscriptionID).
 		SetNillablePaymentTerms(sub.PaymentTerms).
-		SetSyncedPriceSequence(sub.SyncedPriceSequence).
-		Save(ctx)
+		SetSyncedPriceSequence(sub.SyncedPriceSequence)
+	// SetSettings(nil) would store JSON null, so leave the column NULL when there are no overrides.
+	if sub.Settings != nil {
+		create.SetSettings(sub.Settings)
+	}
+	subscription, err := create.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -291,6 +295,11 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		query.SetPaymentTerms(*sub.PaymentTerms)
 	} else {
 		query.ClearPaymentTerms()
+	}
+	if sub.Settings != nil {
+		query.SetSettings(sub.Settings)
+	} else {
+		query.ClearSettings()
 	}
 
 	// Handle nullable date fields - explicitly clear if nil

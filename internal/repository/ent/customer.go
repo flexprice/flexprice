@@ -59,7 +59,7 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		c.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	customer, err := client.Customer.Create().
+	create := client.Customer.Create().
 		SetID(c.ID).
 		SetTenantID(c.TenantID).
 		SetExternalID(c.ExternalID).
@@ -83,8 +83,12 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		SetUpdatedAt(c.UpdatedAt).
 		SetCreatedBy(c.CreatedBy).
 		SetUpdatedBy(c.UpdatedBy).
-		SetEnvironmentID(c.EnvironmentID).
-		Save(ctx)
+		SetEnvironmentID(c.EnvironmentID)
+	// SetSettings(nil) would store JSON null, so leave the column NULL when there are no overrides.
+	if c.Settings != nil {
+		create.SetSettings(c.Settings)
+	}
+	customer, err := create.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -364,6 +368,11 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		update.SetBillingCurrency(*c.BillingCurrency)
 	} else {
 		update.ClearBillingCurrency()
+	}
+	if c.Settings != nil {
+		update.SetSettings(c.Settings)
+	} else {
+		update.ClearSettings()
 	}
 
 	_, err := update.SaveReturning(ctx)

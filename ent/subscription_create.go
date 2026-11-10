@@ -618,6 +618,12 @@ func (_c *SubscriptionCreate) SetNillableSyncedPriceSequence(v *int64) *Subscrip
 	return _c
 }
 
+// SetSettings sets the "settings" field.
+func (_c *SubscriptionCreate) SetSettings(v *types.SettingsOverride) *SubscriptionCreate {
+	_c.mutation.SetSettings(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *SubscriptionCreate) SetID(v string) *SubscriptionCreate {
 	_c.mutation.SetID(v)
@@ -1240,6 +1246,10 @@ func (_c *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.SyncedPriceSequence(); ok {
 		_spec.SetField(subscription.FieldSyncedPriceSequence, field.TypeInt64, value)
 		_node.SyncedPriceSequence = value
+	}
+	if value, ok := _c.mutation.Settings(); ok {
+		_spec.SetField(subscription.FieldSettings, field.TypeJSON, value)
+		_node.Settings = value
 	}
 	if nodes := _c.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
