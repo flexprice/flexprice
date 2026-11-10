@@ -81,6 +81,9 @@ type CreditNoteLineItem func(*sql.Selector)
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 
+// EmailLog is the predicate function for emaillog builders.
+type EmailLog func(*sql.Selector)
+
 // Entitlement is the predicate function for entitlement builders.
 type Entitlement func(*sql.Selector)
 
