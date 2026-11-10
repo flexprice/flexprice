@@ -8849,6 +8849,144 @@
         ]
       }
     },
+    "/invoices/{id}/email": {
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Email invoice to customer",
+        "description": "Use when you want Flexprice to email a finalized invoice to the customer, with a link to the hosted invoice and the PDF attached. Sends to the customer's email unless `to` is given. Returns the queued email; delivery happens in the background.",
+        "operationId": "sendInvoiceEmail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Recipients overriding the customer's email",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendInvoiceEmailRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailLogResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request"
+      }
+    },
+    "/invoices/{id}/emails": {
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "List invoice emails",
+        "description": "Use when showing which emails were sent for an invoice and whether each was delivered. Newest first.",
+        "operationId": "listInvoiceEmails",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEmailLogsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
     "/invoices/{id}/finalize": {
       "post": {
         "tags": [
@@ -26621,6 +26759,96 @@
           }
         }
       },
+      "EmailLogResponse": {
+        "type": "object",
+        "properties": {
+          "cc_addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "delivered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "delivery_status": {
+            "$ref": "#/components/schemas/types.EmailDeliveryStatus"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.SystemEntityType"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "from_address": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.EmailProvider"
+          },
+          "provider_message_id": {
+            "type": "string"
+          },
+          "reply_to": {
+            "type": "string"
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "status_reason": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "template_key": {
+            "$ref": "#/components/schemas/types.EmailTemplateKey"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "to_addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/types.EmailTrigger"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
       "EntitlementResponse": {
         "type": "object",
         "properties": {
@@ -29056,6 +29284,20 @@
           }
         }
       },
+      "ListEmailLogsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailLogResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListEntityIntegrationMappingsResponse": {
         "type": "object",
         "properties": {
@@ -31376,6 +31618,25 @@
           },
           "usage": {
             "$ref": "#/components/schemas/CustomerUsageSummaryResponse"
+          }
+        }
+      },
+      "SendInvoiceEmailRequest": {
+        "type": "object",
+        "properties": {
+          "cc": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "to": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -42221,6 +42482,66 @@
         ],
         "x-speakeasy-name-override": "ContractStatus"
       },
+      "types.EmailDeliveryStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "sent",
+          "delivery_delayed",
+          "delivered",
+          "bounced",
+          "complained",
+          "failed",
+          "suppressed",
+          "skipped"
+        ],
+        "x-enum-varnames": [
+          "EmailDeliveryStatusQueued",
+          "EmailDeliveryStatusSent",
+          "EmailDeliveryStatusDeliveryDelayed",
+          "EmailDeliveryStatusDelivered",
+          "EmailDeliveryStatusBounced",
+          "EmailDeliveryStatusComplained",
+          "EmailDeliveryStatusFailed",
+          "EmailDeliveryStatusSuppressed",
+          "EmailDeliveryStatusSkipped"
+        ],
+        "x-speakeasy-name-override": "EmailDeliveryStatus"
+      },
+      "types.EmailProvider": {
+        "type": "string",
+        "enum": [
+          "resend",
+          "local"
+        ],
+        "x-enum-varnames": [
+          "EmailProviderResend",
+          "EmailProviderLocal"
+        ],
+        "x-speakeasy-name-override": "EmailProvider"
+      },
+      "types.EmailTemplateKey": {
+        "type": "string",
+        "enum": [
+          "invoice_finalized"
+        ],
+        "x-enum-varnames": [
+          "EmailTemplateInvoiceFinalized"
+        ],
+        "x-speakeasy-name-override": "EmailTemplateKey"
+      },
+      "types.EmailTrigger": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "manual"
+        ],
+        "x-enum-varnames": [
+          "EmailTriggerAuto",
+          "EmailTriggerManual"
+        ],
+        "x-speakeasy-name-override": "EmailTrigger"
+      },
       "types.EntitlementGrantScopeEntityType": {
         "type": "string",
         "enum": [
@@ -42543,6 +42864,48 @@
           }
         },
         "x-speakeasy-name-override": "SubscriptionConfigOverride"
+      },
+      "types.SystemEntityType": {
+        "type": "string",
+        "enum": [
+          "feature",
+          "customer",
+          "plan",
+          "subscription",
+          "invoice",
+          "payment",
+          "credit_note",
+          "refund",
+          "wallet",
+          "entitlement",
+          "checkout_session",
+          "payment_method",
+          "price",
+          "event",
+          "commitment",
+          "billing_term",
+          "billing_instalment"
+        ],
+        "x-enum-varnames": [
+          "SystemEntityTypeFeature",
+          "SystemEntityTypeCustomer",
+          "SystemEntityTypePlan",
+          "SystemEntityTypeSubscription",
+          "SystemEntityTypeInvoice",
+          "SystemEntityTypePayment",
+          "SystemEntityTypeCreditNote",
+          "SystemEntityTypeRefund",
+          "SystemEntityTypeWallet",
+          "SystemEntityTypeEntitlement",
+          "SystemEntityTypeCheckoutSession",
+          "SystemEntityTypePaymentMethod",
+          "SystemEntityTypePrice",
+          "SystemEntityTypeEvent",
+          "SystemEntityTypeCommitment",
+          "SystemEntityTypeBillingTerm",
+          "SystemEntityTypeBillingInstalment"
+        ],
+        "x-speakeasy-name-override": "SystemEntityType"
       },
       "types.TenantInternalStatus": {
         "type": "string",
