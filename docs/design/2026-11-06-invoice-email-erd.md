@@ -91,7 +91,7 @@ Indexes:
 Setting `email_notification_config` (existing `settings` table; no row = off):
 
 ```json
-{ "auto_send": { "enabled": false, "entities": ["invoice"] } }
+{ "attach_invoice_pdf": true, "auto_send": { "enabled": false, "entities": ["invoice"] } }
 ```
 
 Validation: when `enabled` is true, `entities` must be non-empty (only `invoice` in Phase 1) and the tenant must have `billing_details.help_email` or `billing_details.email`.
@@ -151,14 +151,14 @@ UI: Settings → Email (toggle, entity picker, From/Reply-To preview); invoice *
 
 ## Email template
 
-A compact copy of the hosted invoice page, rendered from `HostedInvoiceResponse` so both always agree.
+A one-column copy of the hosted invoice page, with its labels and states.
 
 | Part | Content |
 |---|---|
 | Subject | `Invoice <number> from <tenant name>` |
-| Summary | Number, status badge (Due / Overdue / Paid), amount, due or paid date |
+| Summary | Number, status badge (Due / Overdue / Paid), amount, due or paid date, Billed to, Invoice date |
 | Button | `View invoice`, linking to the hosted invoice (paying happens there); none without a hosted link (the PDF is attached) |
-| Charges | Group totals (Go port of `toGroups()`), max 10 groups, then subtotal, discount, tax, amount due |
+| Charges | Groups with their lines (Go port of `toGroups()`), up to 10 lines then "+ N more", then subtotal, discounts, prepaid credits, tax, total, amount due |
 | Footer | Tenant contact (`help_email` / `email`), Powered by Flexprice |
 
 - `html/template`, 600 px tables, inline styles, fixed hex colours from portal tokens, plus a text part.
@@ -166,6 +166,7 @@ A compact copy of the hosted invoice page, rendered from `HostedInvoiceResponse`
 - **Paid at finalization** (auto-charged): Paid badge, `Paid <date> with <method>`, same subject.
 - **PDF:** same source order as `GetInvoicePDFUrl` (invoice `invoice_pdf_url`, then billing provider, then Flexprice's stored PDF), factored into one helper. Attach Flexprice's stored PDF, rendering and uploading it first if missing (never re-render a stored one: it freezes tax numbers). An invoice's own `invoice_pdf_url` is shown as a link; billing-provider PDFs (expiring links) and stored PDFs over Resend's 40 MB cap are not attached, noted in `metadata`.
 - PDF bytes are fetched and sent inside one activity, never passed through Temporal payloads.
+- `attach_invoice_pdf: false` sends no PDF. A PDF that cannot be produced is retried for about 30 s, then the email goes without it (`metadata.pdf = unavailable`); it never blocks the email.
 
 ## One-time setup
 

@@ -71,6 +71,7 @@ const (
 	TemporalDraftAndComputeSubscriptionInvoiceWorkflow     TemporalWorkflowType = "DraftAndComputeSubscriptionInvoiceWorkflow"
 	TemporalEnvironmentCloneWorkflow                       TemporalWorkflowType = "EnvironmentCloneWorkflow"
 	TemporalBillingEntityEnableWorkflow                    TemporalWorkflowType = "BillingEntityEnableWorkflow"
+	TemporalSendEmailWorkflow                              TemporalWorkflowType = "SendEmailWorkflow"
 	TemporalExecuteExportWorkflow                          TemporalWorkflowType = "ExecuteExportWorkflow"
 	TemporalFinalizeDraftInvoiceWorkflow                   TemporalWorkflowType = "FinalizeDraftInvoiceWorkflow"
 	TemporalHubSpotDealSyncWorkflow                        TemporalWorkflowType = "HubSpotDealSyncWorkflow"
@@ -176,6 +177,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalDraftAndComputeSubscriptionInvoiceWorkflow,
 		TemporalEnvironmentCloneWorkflow,
 		TemporalBillingEntityEnableWorkflow,
+		TemporalSendEmailWorkflow,
 		TemporalExecuteExportWorkflow,
 		TemporalFinalizeDraftInvoiceWorkflow,
 		TemporalHubSpotDealSyncWorkflow,
@@ -249,7 +251,7 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueueSubscription
 	case TemporalProcessInvoiceWorkflow, TemporalFinalizeDraftInvoiceWorkflow, TemporalScheduleDraftFinalizationWorkflow, TemporalComputeInvoiceWorkflow, TemporalDraftAndComputeSubscriptionInvoiceWorkflow:
 		return TemporalTaskQueueInvoice
-	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow, TemporalEnvironmentCloneWorkflow, TemporalUsageAlertWorkflow, TemporalBillingEntityEnableWorkflow:
+	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow, TemporalEnvironmentCloneWorkflow, TemporalUsageAlertWorkflow, TemporalBillingEntityEnableWorkflow, TemporalSendEmailWorkflow:
 		return TemporalTaskQueueWorkflows
 	case TemporalReprocessRawEventsWorkflow, TemporalReplayDLQWorkflow:
 		return TemporalTaskQueueReprocessEvents
@@ -334,6 +336,7 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 			TemporalEnvironmentCloneWorkflow,
 			TemporalUsageAlertWorkflow,
 			TemporalBillingEntityEnableWorkflow,
+			TemporalSendEmailWorkflow,
 		}
 	case TemporalTaskQueueReprocessEvents:
 		return []TemporalWorkflowType{
