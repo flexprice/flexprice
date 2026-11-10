@@ -2678,6 +2678,7 @@ func TestRawChargesByLine_SplitsChargesAcrossLinesSharingAPrice(t *testing.T) {
 	require.Len(t, got["li_new"], 1)
 }
 
+// A bucket counts when it ends inside the span and the term, and the active windows hold its start.
 func TestActiveBuckets_CountsTheBucketsTheTermAndWindowsHold(t *testing.T) {
 	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	day := types.Period{Start: jan, End: jan.AddDate(0, 0, 1)}
@@ -2690,11 +2691,11 @@ func TestActiveBuckets_CountsTheBucketsTheTermAndWindowsHold(t *testing.T) {
 		want       int64
 	}{
 		{
-			name:       "minutes from a start inside the span",
+			name:       "minutes from a start inside a minute, which the term holds",
 			commitment: commitment.Commitment{StartDate: jan.Add(90 * time.Second)},
 			span:       types.Period{Start: jan, End: jan.Add(time.Hour)},
 			bucket:     types.WindowSizeMinute,
-			want:       58,
+			want:       59,
 		},
 		{
 			name:       "hours up to a termination",

@@ -164,21 +164,19 @@ func periodCapacity(
 		return 0, c.Value.Mul(elapsed).Div(full)
 	}
 
-	// A bucket starting before the span belongs to the span that already counted it.
-	first := truncateToBucketStart(span.Start, bucket, &anchor)
-	if first.Before(span.Start) {
-		first = nextBucketStart(first, bucket, &anchor)
-	}
+	// A bucket belongs to the span holding its end: the bucket span's start cuts counts, the one its end cuts does not.
+	first := truncateToBucketStart(span.Start.UTC(), bucket, &anchor)
+	cutByEnd := truncateToBucketStart(span.End.UTC(), bucket, &anchor)
 
 	var buckets int64
 	if dur, fixed := bucketDuration(bucket); fixed && len(c.ActiveWindows) == 0 {
 		// Count clock-aligned buckets arithmetically; walking a long term minute by minute is too slow.
-		if first.Before(span.End) {
-			buckets = int64(span.End.Sub(first)-1)/int64(dur) + 1
+		if first.Before(cutByEnd) {
+			buckets = int64(cutByEnd.Sub(first) / dur)
 		}
 	} else {
 		loc := c.Location()
-		for b := first; b.Before(span.End); b = nextBucketStart(b, bucket, &anchor) {
+		for b := first; b.Before(cutByEnd); b = nextBucketStart(b, bucket, &anchor) {
 			if c.ActiveWindows.Contains(b, loc) {
 				buckets++
 			}
