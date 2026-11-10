@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RevenueRecognitionHandler runs the revenue recognition backfill through the internal admin router.
+// RevenueRecognitionHandler starts revenue recognition backfills and runs, and reports them, through the internal admin router.
 type RevenueRecognitionHandler struct {
 	service adminsvc.RevenueRecognitionService
 }
@@ -33,8 +33,23 @@ func (h *RevenueRecognitionHandler) StartBackfill(c *gin.Context) {
 	c.JSON(http.StatusAccepted, run)
 }
 
-func (h *RevenueRecognitionHandler) GetBackfill(c *gin.Context) {
-	run, err := h.service.GetBackfill(c.Request.Context(), c.Param("workflow_id"), c.Query("run_id"))
+func (h *RevenueRecognitionHandler) StartRun(c *gin.Context) {
+	var req admin.StartRevenueRecognitionRunRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("Please check the request payload").Mark(ierr.ErrValidation))
+		return
+	}
+
+	run, err := h.service.StartRun(c.Request.Context(), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusAccepted, run)
+}
+
+func (h *RevenueRecognitionHandler) GetRun(c *gin.Context) {
+	run, err := h.service.GetRun(c.Request.Context(), c.Param("workflow_id"), c.Query("run_id"))
 	if err != nil {
 		c.Error(err)
 		return

@@ -14,17 +14,19 @@ import (
 	"go.temporal.io/api/serviceerror"
 )
 
-// RevenueRecognitionService rebuilds an environment's revenue recognition from history.
+// RevenueRecognitionService rebuilds an environment's revenue recognition from history and runs recognition on demand.
 type RevenueRecognitionService interface {
 	// StartBackfill starts the environment's backfill; one runs at a time, and only while revenue recognition is on.
-	StartBackfill(ctx context.Context, req admindto.StartRevenueRecognitionBackfillRequest) (*admindto.RevenueRecognitionBackfillRun, error)
-	// GetBackfill reports a backfill's state.
-	GetBackfill(ctx context.Context, workflowID, runID string) (*admindto.RevenueRecognitionBackfillRun, error)
+	StartBackfill(ctx context.Context, req admindto.StartRevenueRecognitionBackfillRequest) (*admindto.RevenueRecognitionRun, error)
+	// StartRun starts a recognition run, limited to a tenant or environment when given; one runs at a time per scope.
+	StartRun(ctx context.Context, req admindto.StartRevenueRecognitionRunRequest) (*admindto.RevenueRecognitionRun, error)
+	// GetRun reports a backfill's or recognition run's state.
+	GetRun(ctx context.Context, workflowID, runID string) (*admindto.RevenueRecognitionRun, error)
 }
 
-// backfillRuns is the slice of Temporal the backfill needs; like the DLQ replay it uses the raw client.
+// backfillRuns is the slice of Temporal the revenue recognition jobs need; like the DLQ replay it uses the raw client.
 type backfillRuns interface {
-	start(ctx context.Context, workflowID string, input tmodels.RevenueRecognitionBackfillInput) (runID string, err error)
+	start(ctx context.Context, workflowID string, workflow types.TemporalWorkflowType, input any) (runID string, err error)
 	describe(ctx context.Context, workflowID, runID string) (*replayRunState, error)
 }
 
@@ -38,7 +40,7 @@ func NewRevenueRecognitionService(params service.ServiceParams, settings service
 	return &revenueRecognitionService{ServiceParams: params, settings: settings, runs: &temporalBackfillRuns{temporalReplayRuns{client: client}}}
 }
 
-func (s *revenueRecognitionService) StartBackfill(ctx context.Context, req admindto.StartRevenueRecognitionBackfillRequest) (*admindto.RevenueRecognitionBackfillRun, error) {
+func (s *revenueRecognitionService) StartBackfill(ctx context.Context, req admindto.StartRevenueRecognitionBackfillRequest) (*admindto.RevenueRecognitionRun, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -62,48 +64,70 @@ func (s *revenueRecognitionService) StartBackfill(ctx context.Context, req admin
 			Mark(ierr.ErrValidation)
 	}
 
-	return s.startBackfill(ctx, req.TenantID, req.EnvironmentID)
+	return s.startRun(ctx, "revenue-recognition-backfill-"+req.EnvironmentID, types.TemporalRevenueRecognitionBackfillWorkflow,
+		tmodels.RevenueRecognitionBackfillInput{TenantID: req.TenantID, EnvironmentID: req.EnvironmentID})
 }
 
-func (s *revenueRecognitionService) GetBackfill(ctx context.Context, workflowID, runID string) (*admindto.RevenueRecognitionBackfillRun, error) {
-	state, err := s.runs.describe(ctx, workflowID, runID)
-	if _, ok := stderrors.AsType[*serviceerror.NotFound](err); ok {
-		return nil, ierr.WithError(err).WithHint("No backfill found with this workflow ID").Mark(ierr.ErrNotFound)
+func (s *revenueRecognitionService) StartRun(ctx context.Context, req admindto.StartRevenueRecognitionRunRequest) (*admindto.RevenueRecognitionRun, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
 	}
-	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Could not read the backfill workflow").Mark(ierr.ErrInternal)
+	scope := "all"
+	switch {
+	case req.EnvironmentID != "":
+		if _, err := environmentContext(ctx, s.ServiceParams, req.TenantID, req.EnvironmentID); err != nil {
+			return nil, err
+		}
+		scope = req.EnvironmentID
+	case req.TenantID != "":
+		if _, err := s.TenantRepo.GetByID(ctx, req.TenantID); err != nil {
+			return nil, err
+		}
+		scope = req.TenantID
 	}
 
-	return &admindto.RevenueRecognitionBackfillRun{
+	return s.startRun(ctx, "revenue-recognition-run-"+scope, types.TemporalRevenueRecognitionWorkflow,
+		tmodels.RevenueRecognitionInput{Since: req.Since, TenantID: req.TenantID, EnvironmentID: req.EnvironmentID})
+}
+
+func (s *revenueRecognitionService) GetRun(ctx context.Context, workflowID, runID string) (*admindto.RevenueRecognitionRun, error) {
+	state, err := s.runs.describe(ctx, workflowID, runID)
+	if _, ok := stderrors.AsType[*serviceerror.NotFound](err); ok {
+		return nil, ierr.WithError(err).WithHint("No run found with this workflow ID").Mark(ierr.ErrNotFound)
+	}
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("Could not read the workflow").Mark(ierr.ErrInternal)
+	}
+
+	return &admindto.RevenueRecognitionRun{
 		WorkflowID: workflowID, RunID: state.runID, Status: runStatus(state),
 		Attempt: state.attempt, LastError: state.lastFailure, StartedAt: state.startedAt, ClosedAt: state.closedAt,
 	}, nil
 }
 
-// startBackfill starts the environment's one backfill run.
-func (s *revenueRecognitionService) startBackfill(ctx context.Context, tenantID, environmentID string) (*admindto.RevenueRecognitionBackfillRun, error) {
-	workflowID := "revenue-recognition-backfill-" + environmentID
-	runID, err := s.runs.start(ctx, workflowID, tmodels.RevenueRecognitionBackfillInput{TenantID: tenantID, EnvironmentID: environmentID})
+// startRun starts workflow under workflowID; while a run is open there, another is refused.
+func (s *revenueRecognitionService) startRun(ctx context.Context, workflowID string, workflow types.TemporalWorkflowType, input any) (*admindto.RevenueRecognitionRun, error) {
+	runID, err := s.runs.start(ctx, workflowID, workflow, input)
 	if _, ok := stderrors.AsType[*serviceerror.WorkflowExecutionAlreadyStarted](err); ok {
-		return nil, ierr.WithError(err).WithHint("A backfill is already running for this environment").
+		return nil, ierr.WithError(err).WithHint("This job is already running; wait for it to finish").
 			WithReportableDetails(map[string]interface{}{"workflow_id": workflowID}).Mark(ierr.ErrAlreadyExists)
 	}
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Could not start the backfill workflow").Mark(ierr.ErrInternal)
+		return nil, ierr.WithError(err).WithHintf("Could not start %s", workflow).Mark(ierr.ErrInternal)
 	}
 
-	s.Logger.Info(ctx, "revenue recognition backfill started", "workflow_id", workflowID, "run_id", runID, "tenant_id", tenantID, "environment_id", environmentID)
-	return &admindto.RevenueRecognitionBackfillRun{WorkflowID: workflowID, RunID: runID, Status: admindto.ReplayStatusQueued}, nil
+	s.Logger.Info(ctx, "revenue recognition job started", "workflow", workflow, "workflow_id", workflowID, "run_id", runID)
+	return &admindto.RevenueRecognitionRun{WorkflowID: workflowID, RunID: runID, Status: admindto.ReplayStatusQueued}, nil
 }
 
 type temporalBackfillRuns struct{ temporalReplayRuns }
 
-func (r *temporalBackfillRuns) start(ctx context.Context, workflowID string, input tmodels.RevenueRecognitionBackfillInput) (string, error) {
+func (r *temporalBackfillRuns) start(ctx context.Context, workflowID string, workflow types.TemporalWorkflowType, input any) (string, error) {
 	run, err := r.client.StartWorkflow(ctx, tmodels.StartWorkflowOptions{
 		ID:                                       workflowID,
-		TaskQueue:                                types.TemporalRevenueRecognitionBackfillWorkflow.TaskQueueName(),
+		TaskQueue:                                workflow.TaskQueueName(),
 		WorkflowExecutionErrorWhenAlreadyStarted: true,
-	}, types.TemporalRevenueRecognitionBackfillWorkflow.String(), input)
+	}, workflow.String(), input)
 	if err != nil {
 		return "", err
 	}

@@ -18,14 +18,15 @@ import (
 const revrecEnvironmentID = "env_acme_prod"
 
 type fakeBackfillRuns struct {
-	startErr  error
-	startedID string
-	started   *tmodels.RevenueRecognitionBackfillInput
-	state     *replayRunState
+	startErr        error
+	startedID       string
+	startedWorkflow types.TemporalWorkflowType
+	started         any
+	state           *replayRunState
 }
 
-func (f *fakeBackfillRuns) start(_ context.Context, id string, in tmodels.RevenueRecognitionBackfillInput) (string, error) {
-	f.startedID, f.started = id, &in
+func (f *fakeBackfillRuns) start(_ context.Context, id string, workflow types.TemporalWorkflowType, in any) (string, error) {
+	f.startedID, f.startedWorkflow, f.started = id, workflow, in
 	return "run-1", f.startErr
 }
 
@@ -74,15 +75,59 @@ func TestRevenueRecognitionStartBackfill(t *testing.T) {
 	})
 }
 
-func TestRevenueRecognitionGetBackfill(t *testing.T) {
+func TestRevenueRecognitionGetRun(t *testing.T) {
 	svc, runs, _ := newRevenueRecognitionTestService(t)
-	_, err := svc.GetBackfill(context.Background(), "missing", "")
+	_, err := svc.GetRun(context.Background(), "missing", "")
 	require.True(t, ierr.IsNotFound(err))
 
 	runs.state = &replayRunState{runID: "run-1", status: enums.WORKFLOW_EXECUTION_STATUS_RUNNING, activityStarted: true, attempt: 2, lastFailure: "db down"}
-	run, err := svc.GetBackfill(context.Background(), "revenue-recognition-backfill-"+revrecEnvironmentID, "")
+	run, err := svc.GetRun(context.Background(), "revenue-recognition-backfill-"+revrecEnvironmentID, "")
 	require.NoError(t, err)
 	require.Equal(t, admindto.ReplayStatusRunning, run.Status)
 	require.Equal(t, int32(2), run.Attempt)
 	require.Equal(t, "db down", run.LastError)
+}
+
+func TestRevenueRecognitionStartRun(t *testing.T) {
+	tests := []struct {
+		name      string
+		req       admindto.StartRevenueRecognitionRunRequest
+		wantID    string
+		wantInput tmodels.RevenueRecognitionInput
+	}{
+		{name: "every enabled environment", wantID: "revenue-recognition-run-all"},
+		{name: "one tenant", req: admindto.StartRevenueRecognitionRunRequest{TenantID: settingsTenantID},
+			wantID: "revenue-recognition-run-" + settingsTenantID, wantInput: tmodels.RevenueRecognitionInput{TenantID: settingsTenantID}},
+		{name: "one environment", req: admindto.StartRevenueRecognitionRunRequest{TenantID: settingsTenantID, EnvironmentID: revrecEnvironmentID},
+			wantID:    "revenue-recognition-run-" + revrecEnvironmentID,
+			wantInput: tmodels.RevenueRecognitionInput{TenantID: settingsTenantID, EnvironmentID: revrecEnvironmentID}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, runs, _ := newRevenueRecognitionTestService(t)
+
+			run, err := svc.StartRun(context.Background(), tt.req)
+
+			require.NoError(t, err)
+			require.Equal(t, tt.wantID, run.WorkflowID)
+			require.Equal(t, admindto.ReplayStatusQueued, run.Status)
+			require.Equal(t, types.TemporalRevenueRecognitionWorkflow, runs.startedWorkflow)
+			require.Equal(t, tt.wantInput, runs.started)
+		})
+	}
+
+	t.Run("refused", func(t *testing.T) {
+		svc, runs, d := newRevenueRecognitionTestService(t)
+		d.withEnvironment(t, "tenant_other", "env_other")
+
+		_, err := svc.StartRun(context.Background(), admindto.StartRevenueRecognitionRunRequest{EnvironmentID: revrecEnvironmentID})
+		require.True(t, ierr.IsValidation(err), "an environment needs its tenant")
+		_, err = svc.StartRun(context.Background(), admindto.StartRevenueRecognitionRunRequest{TenantID: settingsTenantID, EnvironmentID: "env_other"})
+		require.True(t, ierr.IsNotFound(err), "another tenant's environment")
+		require.Nil(t, runs.started)
+
+		runs.startErr = serviceerror.NewWorkflowExecutionAlreadyStarted("running", "", "")
+		_, err = svc.StartRun(context.Background(), admindto.StartRevenueRecognitionRunRequest{})
+		require.True(t, ierr.IsAlreadyExists(err), "a run already open for the scope")
+	})
 }

@@ -23,13 +23,16 @@ func NewRevenueRecognitionActivities(journalService journalsvc.JournalService, l
 // RecognizeRevenueActivity runs recognition and heartbeats its cursor, so a retry resumes after the last finished contract.
 func (a *RevenueRecognitionActivities) RecognizeRevenueActivity(ctx context.Context, in cronModels.RecognizeRevenueActivityInput) error {
 	err := a.journalService.RunRecognition(ctx, journalsvc.RecognitionRunRequest{
-		Since:      in.Since,
-		AsOf:       in.AsOf,
-		Resume:     heartbeatCursor(ctx),
-		OnProgress: func(c journalsvc.RecognitionCursor) { activity.RecordHeartbeat(ctx, c) },
+		Since:         in.Since,
+		AsOf:          in.AsOf,
+		TenantID:      in.TenantID,
+		EnvironmentID: in.EnvironmentID,
+		Resume:        heartbeatCursor(ctx),
+		OnProgress:    func(c journalsvc.RecognitionCursor) { activity.RecordHeartbeat(ctx, c) },
 	})
 	if err != nil {
-		a.logger.Error(ctx, "revenue recognition run failed", "error", err, "since", in.Since, "as_of", in.AsOf)
+		a.logger.Error(ctx, "revenue recognition run failed", "error", err, "since", in.Since, "as_of", in.AsOf,
+			"tenant_id", in.TenantID, "environment_id", in.EnvironmentID)
 	}
 	return err
 }
