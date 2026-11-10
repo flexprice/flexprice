@@ -2678,6 +2678,7 @@ func TestRawChargesByLine_SplitsChargesAcrossLinesSharingAPrice(t *testing.T) {
 	require.Len(t, got["li_new"], 1)
 }
 
+// A bucket counts when it ends inside the span and the term, and the active windows hold its start.
 func TestActiveBuckets_CountsTheBucketsTheTermAndWindowsHold(t *testing.T) {
 	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	day := types.Period{Start: jan, End: jan.AddDate(0, 0, 1)}
