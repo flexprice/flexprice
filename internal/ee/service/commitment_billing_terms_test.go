@@ -1855,7 +1855,6 @@ func TestAnniversaryPeriods(t *testing.T) {
 				Value:       decimal.NewFromInt(100),
 				Currency:    "usd",
 				Measurement: types.CommitmentMeasurementBillingPeriod,
-				Timezone:    types.DefaultTimezone,
 				StartDate:   tt.start,
 				EndDate:     lo.ToPtr(tt.start.AddDate(1, 0, 0)),
 			}

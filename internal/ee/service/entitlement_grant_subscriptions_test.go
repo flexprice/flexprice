@@ -504,7 +504,6 @@ func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrant_IgnoresTerminat
 		Type:             types.COMMITMENT_TYPE_AMOUNT,
 		Value:            decimal.NewFromInt(10),
 		Measurement:      types.CommitmentMeasurementBillingPeriod,
-		Timezone:         "UTC",
 		Priority:         1,
 		StartDate:        fx.sub.CurrentPeriodStart.AddDate(0, -2, 0),
 		CommitmentStatus: types.CommitmentStatusTerminated,

@@ -20422,9 +20422,6 @@ const docTemplate = `{
                 "termination_invoice_id": {
                     "type": "string"
                 },
-                "timezone": {
-                    "type": "string"
-                },
                 "total_amount": {
                     "type": "string"
                 },
@@ -21316,9 +21313,6 @@ const docTemplate = `{
                 },
                 "subscription_id": {
                     "description": "SubscriptionID is required on POST /commitments and set server-side on inline commitments.",
-                    "type": "string"
-                },
-                "timezone": {
                     "type": "string"
                 },
                 "type": {

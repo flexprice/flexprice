@@ -26,7 +26,6 @@ type Commitment struct {
 	OveragePriceID      *string                           `json:"overage_price_id,omitempty"`
 	Measurement         types.CommitmentMeasurement       `json:"measurement"`
 	ActiveWindows       types.ActiveWindows               `json:"active_windows,omitempty"`
-	Timezone            string                            `json:"timezone"`
 	Priority            int                               `json:"priority"`
 	Binding             bool                              `json:"binding"`
 	CollectionMethod    *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
@@ -84,20 +83,6 @@ func (c *Commitment) EndedBy(t time.Time) bool {
 	return end != nil && (!end.After(t) || !end.After(c.StartDate))
 }
 
-// Location returns the commitment timezone, falling back to UTC.
-func (c *Commitment) Location() *time.Location {
-	if c == nil {
-		return time.UTC
-	}
-
-	loc, err := time.LoadLocation(c.Timezone)
-	if err != nil {
-		return time.UTC
-	}
-
-	return loc
-}
-
 func FromEnt(e *ent.Commitment) *Commitment {
 	if e == nil {
 		return nil
@@ -119,7 +104,6 @@ func FromEnt(e *ent.Commitment) *Commitment {
 		OveragePriceID:      e.OveragePriceID,
 		Measurement:         e.Measurement,
 		ActiveWindows:       e.ActiveWindows,
-		Timezone:            e.Timezone,
 		Priority:            e.Priority,
 		Binding:             e.Binding,
 		CollectionMethod:    e.CollectionMethod,
