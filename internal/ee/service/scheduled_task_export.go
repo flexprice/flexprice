@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"time"
 
 	"go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -23,7 +25,6 @@ func (s *scheduledTaskService) connectionJobConfig(ctx context.Context, req dto.
 	tenantID := types.GetTenantID(ctx)
 	envID := types.GetEnvironmentID(ctx)
 
-	// Fetch the connection to check if it's Flexprice-managed
 	conn, err := s.connectionRepo.Get(ctx, req.ConnectionID)
 	if err != nil {
 		s.logger.Error(ctx, "failed to get connection", "connection_id", req.ConnectionID, "error", err)
@@ -32,12 +33,10 @@ func (s *scheduledTaskService) connectionJobConfig(ctx context.Context, req dto.
 			Mark(ierr.ErrNotFound)
 	}
 
-	// Check if this is a Flexprice-managed S3 connection
 	jobConfig := req.JobConfig
 	isManaged := conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged
 
 	if conn.ProviderType == types.SecretProviderGCS && isManaged {
-		// GCS needs no region; skip S3 validation.
 		s.logger.Info(ctx, "handling flexprice-managed GCS connection for scheduled task",
 			"connection_id", req.ConnectionID,
 			"tenant_id", tenantID)
@@ -59,7 +58,7 @@ func (s *scheduledTaskService) connectionJobConfig(ctx context.Context, req dto.
 		jobConfig = &types.S3JobConfig{
 			Provider:             types.SecretProviderGCS,
 			Bucket:               s.config.FlexpriceGCSExports.Bucket,
-			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix, // Tenant + Environment isolation
+			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix,
 			Compression:          req.JobConfig.Compression,
 			ExportMetadataFields: req.JobConfig.ExportMetadataFields,
 		}
@@ -82,7 +81,6 @@ func (s *scheduledTaskService) connectionJobConfig(ctx context.Context, req dto.
 			"connection_id", req.ConnectionID,
 			"tenant_id", tenantID)
 
-		// For Flexprice-managed: validate only compression and encryption first
 		if req.JobConfig == nil {
 			return nil, ierr.NewError("job config is required for flexprice-managed S3").
 				WithHint("S3 job configuration must be provided").
@@ -94,17 +92,15 @@ func (s *scheduledTaskService) connectionJobConfig(ctx context.Context, req dto.
 			return nil, err
 		}
 
-		// Populate bucket, region, and key_prefix from config
 		jobConfig = &types.S3JobConfig{
 			Bucket:               s.config.FlexpriceS3Exports.Bucket,
 			Region:               s.config.FlexpriceS3Exports.Region,
-			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix, // Tenant + Environment isolation
+			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix,
 			Compression:          req.JobConfig.Compression,
 			Encryption:           req.JobConfig.Encryption,
 			ExportMetadataFields: req.JobConfig.ExportMetadataFields,
 		}
 
-		// Set defaults if not provided
 		if jobConfig.Compression == "" {
 			jobConfig.Compression = types.S3CompressionTypeNone
 		}
@@ -121,7 +117,6 @@ func (s *scheduledTaskService) connectionJobConfig(ctx context.Context, req dto.
 			"compression", jobConfig.Compression,
 			"encryption", jobConfig.Encryption)
 
-		// Final validation after population
 		if err := jobConfig.Validate(); err != nil {
 			s.logger.Error(ctx, "invalid populated job config for flexprice-managed S3", "error", err)
 			return nil, err
@@ -130,13 +125,11 @@ func (s *scheduledTaskService) connectionJobConfig(ctx context.Context, req dto.
 			return nil, err
 		}
 	} else {
-		// Custom GCS is not supported; only managed GCS.
 		if conn.ProviderType == types.SecretProviderGCS {
 			return nil, ierr.NewError("custom GCS storage is not supported").
 				WithHint("Only Flexprice-managed GCS storage is supported").
 				Mark(ierr.ErrValidation)
 		}
-		// Provider from connection, not caller JSON.
 		if req.JobConfig != nil {
 			req.JobConfig.Provider = conn.ProviderType
 		}
@@ -157,7 +150,7 @@ func (s *scheduledTaskService) connectionJobConfig(ctx context.Context, req dto.
 		return nil, err
 	}
 
-	// Customer-owned buckets must be reachable and writable with the connection's keys before the export is saved.
+	// Probe customer buckets before saving.
 	if !isManaged {
 		probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
@@ -170,7 +163,6 @@ func (s *scheduledTaskService) connectionJobConfig(ctx context.Context, req dto.
 			return nil, err
 		}
 
-		// Exports write under <key_prefix>/<entity_type>/, so probe that folder.
 		markerKey := storage.ObjectKey(jobConfig.KeyPrefix, string(req.EntityType), "flexprice-write-check", "txt", false)
 		if err := exportStorage.ValidateWrite(probeCtx, markerKey); err != nil {
 			s.logger.Error(ctx, "export bucket is not writable with the connection's credentials",
@@ -241,7 +233,7 @@ func (s *scheduledTaskService) scheduleSpec(task *scheduledtask.ScheduledTask) (
 }
 
 // replaceScheduleSpec keeps pause state.
-func (s *scheduledTaskService) replaceScheduleSpec(ctx context.Context, scheduleID string, spec client.ScheduleSpec) error {
+func (s *scheduledTaskService) replaceScheduleSpec(ctx context.Context, scheduleID string, spec client.ScheduleSpec) (bool, error) {
 	handle := s.temporalClient.GetScheduleHandle(ctx, scheduleID)
 	err := handle.Update(ctx, client.ScheduleUpdateOptions{
 		DoUpdate: func(in client.ScheduleUpdateInput) (*client.ScheduleUpdate, error) {
@@ -249,12 +241,17 @@ func (s *scheduledTaskService) replaceScheduleSpec(ctx context.Context, schedule
 			return &client.ScheduleUpdate{Schedule: &in.Description.Schedule}, nil
 		},
 	})
+	var notFound *serviceerror.NotFound
+	if errors.As(err, &notFound) {
+		s.logger.Info(ctx, "temporal schedule not found; skipping spec sync", "schedule_id", scheduleID)
+		return false, nil
+	}
 	if err != nil {
-		return ierr.WithError(err).
+		return false, ierr.WithError(err).
 			WithHint("Failed to update Temporal schedule").
 			Mark(ierr.ErrInternal)
 	}
-	return nil
+	return true, nil
 }
 
 // updateExportSettings applies name, schedule.
@@ -275,22 +272,22 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 	}
 	task.UpdatedBy = types.GetUserID(ctx)
 
-	syncTemporal := scheduleChanged && s.temporalClient != nil && task.TemporalScheduleID != ""
-	if syncTemporal {
+	synced := false
+	if scheduleChanged && s.temporalClient != nil && task.TemporalScheduleID != "" {
 		spec, err := s.scheduleSpec(task)
 		if err != nil {
 			return err
 		}
-		if err := s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec); err != nil {
+		if synced, err = s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec); err != nil {
 			return err
 		}
 	}
 
 	if err := s.repo.UpdateSettings(ctx, task); err != nil {
 		s.logger.Error(ctx, "failed to update scheduled task settings", "id", task.ID, "error", err)
-		if syncTemporal {
+		if synced {
 			if spec, specErr := s.scheduleSpec(&previous); specErr == nil {
-				if revertErr := s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec); revertErr != nil {
+				if _, revertErr := s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec); revertErr != nil {
 					s.logger.Error(ctx, "failed to revert temporal schedule spec", "id", task.ID, "error", revertErr)
 				}
 			}

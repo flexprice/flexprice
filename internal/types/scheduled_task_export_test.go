@@ -1,6 +1,10 @@
 package types
 
-import "testing"
+import (
+	"testing"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
+)
 
 func intPtr(v int) *int { return &v }
 
@@ -23,6 +27,7 @@ func TestExportScheduleValidate(t *testing.T) {
 		{"minute 60", ScheduledTaskIntervalDaily, ExportSchedule{Minute: 60, Timezone: "UTC"}, true},
 		{"bad tz", ScheduledTaskIntervalDaily, ExportSchedule{Timezone: "Mars/Base"}, true},
 		{"empty tz", ScheduledTaskIntervalDaily, ExportSchedule{}, true},
+		{"local tz", ScheduledTaskIntervalDaily, ExportSchedule{Timezone: "Local"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -48,6 +53,10 @@ func TestValidateExportSchedule(t *testing.T) {
 		{"daily nil", ScheduledTaskIntervalDaily, nil, false},
 		{"hourly nil", ScheduledTaskIntervalHourly, nil, false},
 		{"daily non-nil", ScheduledTaskIntervalDaily, daily, false},
+		{"15min non-nil", ScheduledTaskIntervalEvery15Minutes, daily, true},
+		{"30min non-nil", ScheduledTaskIntervalEvery30Minutes, daily, true},
+		{"custom non-nil", ScheduledTaskIntervalCustom, daily, true},
+		{"15min nil", ScheduledTaskIntervalEvery15Minutes, nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -55,5 +64,12 @@ func TestValidateExportSchedule(t *testing.T) {
 				t.Fatalf("err=%v wantErr=%v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestLocationBadTimezoneIsValidationError(t *testing.T) {
+	_, err := (&ExportSchedule{Timezone: "Mars/Base"}).Location()
+	if !ierr.IsValidation(err) {
+		t.Fatalf("want validation error, got %v", err)
 	}
 }

@@ -17,7 +17,7 @@ type Repository interface {
 	// Update updates an existing scheduled task
 	Update(ctx context.Context, task *ScheduledTask) error
 
-	// UpdateSettings writes name, enabled, schedule, temporal schedule ID and updated_by; nil/empty values clear
+	// UpdateSettings writes editable settings.
 	UpdateSettings(ctx context.Context, task *ScheduledTask) error
 
 	// Delete deletes a scheduled task

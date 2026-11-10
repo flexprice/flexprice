@@ -31,7 +31,7 @@ func NewScheduledTaskHandler(
 // @Description Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.
 // @Description connection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression.
 // @Description interval is hourly, daily, weekly, monthly or manual; clients should tolerate new values. schedule ({hour, minute, day_of_week, day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual.
-// @Description Each run exports the previous period ending 15 minutes before the scheduled start in the schedule timezone, so a run started between 00:00 and 00:14 local time covers the period before that.
+// @Description Window = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json

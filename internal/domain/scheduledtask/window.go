@@ -8,9 +8,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// IngestionBuffer delays runs for late events.
-const IngestionBuffer = 15 * time.Minute
-
 // Window returns UTC run bounds.
 func Window(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule, scheduledStart time.Time) (time.Time, time.Time, error) {
 	loc := time.UTC
@@ -26,7 +23,7 @@ func Window(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule
 		}
 	}
 
-	b := scheduledStart.Add(-IngestionBuffer).In(loc)
+	b := scheduledStart.In(loc)
 	y, m, d := b.Date()
 	var start, end time.Time
 	switch interval {

@@ -13,7 +13,7 @@ This change evolves that model, not a parallel one:
 
 - new **sources** (later phase): predefined reports (`report`) and saved custom views (`analytics_view`), alongside the existing entity types;
 - a **one-off export from the customer tab** (later phase), scoped to one customer and listed later in the Exports tab;
-- new **destinations** (email is a later phase; the console copy is built only for exports without a connection): a console copy of every run, plus email, alongside the existing S3 connection;
+- new **destinations**: a console copy of every run and email (later phase), alongside the existing S3 connection; Phase 1 builds the console copy only for exports without a connection;
 - weekly, monthly and on-demand-only exports at a chosen time and timezone.
 
 Existing exports keep working unchanged.
@@ -33,7 +33,7 @@ Built in Phase 1: weekly, monthly and manual intervals with schedule and timezon
 ## Non-goals (v1)
 
 - XLSX, PDF, dashboard exports (FLE-1612 items 3-4 stay deferred).
-- Converting existing exports to the new style, or editing them beyond `enabled`.
+- Converting existing exports to the new style. Phase 1 PUT accepts name and schedule.
 - Custom SQL and operator-authored templates: parked (see "Not covered").
 - Per-recipient authorization, recipient accounts, unsubscribe.
 - 15- and 30-minute schedules for new-style exports.
@@ -116,7 +116,7 @@ Destinations are derived: console copy = `managed_copy`; S3 = `connection_id != 
 - `report` (predefined, built-in key from `GET /analytics/reports`): new-style only; requires `source_config.report_key` that exists, plus optional `report_params` (the report's own filters, never a time range); same intervals, `period` rule, windows, row cap and `requireReports()` + `EntityAnalytics` checks as `analytics_view`. It runs through `RunReport(key, ReportQueryRequest)` with the resolved UTC range.
 - **Customer-tab one-off**: a new-style create with `interval=manual`, `origin=customer_tab`, `run_now=true` and `source_config.customer_external_ids` holding exactly the one customer. The server creates the definition (auto-named, visible in the Exports tab) and starts one run. Allowed sources are those that can scope to a customer: `wallet_ledger` today, `analytics_view` and `report` where the family has an `external_customer_id` filter, and any other entity exporter only after it gains a customer filter; other combinations are rejected with a clear error.
 - Existing sources in new-style: no `period`; hourly, daily, weekly, monthly, manual allowed.
-- `schedule` required unless `interval=manual`; IANA timezone. Email destinations are rejected on `hourly` exports. There is no minimum fire time: windows are computed 15 minutes before the fire instant (section 2).
+- `schedule` required unless `interval=manual`; IANA timezone. Email destinations are rejected on `hourly` exports. There is no minimum fire time: the window is the previous full period before the fire instant (section 2).
 - `metadata_fields` live in `source_config` for new-style exports; legacy rows keep them in `job_config`.
 - Every new-style write path (update, run, resume, start schedule) rejects rows with `Status` `deleted` or `archived`, because the repository does not filter on status.
 - Repository: add explicit methods for the new columns that can also clear `job_config`, `temporal_schedule_id` and `email_config` (the existing `Update` cannot), and `DetachConnection(connectionID)` used by connection deletion (below).
@@ -128,12 +128,12 @@ Task status: no new values. A new-style run is `COMPLETED` once the managed copy
 
 ### 2. Windows
 
-**Phase 1 as built.** Window = previous period (day, Monday-to-Monday week, calendar month; hourly = previous hour) ending at the scheduled start minus 15 minutes, in the schedule's timezone, converted to UTC instants. Runs at 00:00-00:14 local land one period earlier. `manual` exports use the previous UTC day unless `/run` gives a window. Exports without a schedule keep today's windows. The report and view rules below are later phases.
+**Phase 1 as built.** Window = previous period (day, Monday-to-Monday week, calendar month; hourly = previous hour) ending at the latest period boundary at or before the scheduled start, in the schedule's timezone, converted to UTC instants. `manual` exports use the previous UTC day unless `/run` gives a window. Exports without a schedule keep today's windows. The report and view rules below are later phases.
 
-The window is computed in the `details` step from the **scheduled start time minus 15 minutes** (an ingestion buffer, replacing the legacy cron's :15; the fire time itself is the user's choice), never from wall clock, so catch-up runs after downtime get the correct historical window. It is stored on the `Task` on the first attempt; retries reuse it.
+The window is computed in the `details` step from the **scheduled start time** (no ingestion buffer; the fire time is the user's choice), never from wall clock, so catch-up runs after downtime get the correct historical window. It is stored on the `Task` on the first attempt; retries reuse it.
 
 - **Existing sources**: the previous period at the export's frequency in the **schedule's timezone** (previous local day, previous local Monday-to-Monday week, previous local calendar month; hourly = previous hour), converted to exact UTC instants. Weekly and monthly windows do not depend on the weekday or day chosen. `manual` exports use the previous UTC day unless `/run` supplies a window.
-- **`analytics_view` and `report`, scheduled**: the previous **UTC** period at the export's frequency (UTC day, Monday-to-Monday week, calendar month), counted back from the buffered instant, applied as an absolute date-only range `YYYY-MM-DD..YYYY-MM-DD` (inclusive start, exclusive end). Report data is bucketed in UTC days, so this guarantees the UTC period has closed for any timezone. Example: a daily 00:30 Asia/Kolkata export fires at 19:00 UTC and covers the UTC day before the one still in progress. The UI must say these windows are UTC.
+- **`analytics_view` and `report`, scheduled**: the previous **UTC** period at the export's frequency (UTC day, Monday-to-Monday week, calendar month), counted back from the scheduled start, applied as an absolute date-only range `YYYY-MM-DD..YYYY-MM-DD` (inclusive start, exclusive end). Report data is bucketed in UTC days, so this guarantees the UTC period has closed for any timezone. Example: a daily 00:30 Asia/Kolkata export fires at 19:00 UTC and covers the UTC day before the one still in progress. The UI must say these windows are UTC.
 - **`analytics_view` and `report`, `manual`**: `/run` uses `period.range` if set, else the previous UTC day. A custom `start_time`+`end_time` must be whole UTC days.
 - **`/run` on a new-style export** never passes an automatic window as a custom one: `triggerForceRun` is changed so only a user-supplied window reaches the workflow. An empty body means the period the schedule would export now by the rules above. `customer_external_ids` on `/run` overrides `source_config` and is allowed for wallet_ledger only.
 
@@ -266,9 +266,9 @@ Custom SQL is parked. If revived: first an operator-authored `template` source (
 2. (Later phase; no `destinations` object in Phase 1.) Destinations are derived from columns; at most one S3 and one email; a Flexprice-managed connection cannot be an S3 destination.
 3. (Later phase.) Managed copy is plain CSV; S3 compression applies at upload; new-style S3 keys include the task id.
 4. (Later phase.) A new-style run is `COMPLETED` once the managed copy exists; delivery results in masked metadata; no new status or task type; no definition snapshot.
-5. Extend `ExecuteExportWorkflow` behind `workflow.GetVersion` and a creation flag; no separate redeliver workflow in v1.
-6. Email carries only a console deeplink, plain text, at-least-once, per-tenant hourly cap, no email on hourly exports; recipients must be tenant users and are stored as emails.
-7. Existing-source windows use the schedule's timezone; scheduled report windows are the previous UTC period (the UI says UTC); both computed 15 minutes before the fire instant.
+5. (Later phase.) Extend `ExecuteExportWorkflow` behind `workflow.GetVersion` and a creation flag; no separate redeliver workflow in v1.
+6. (Later phase.) Email carries only a console deeplink, plain text, at-least-once, per-tenant hourly cap, no email on hourly exports; recipients must be tenant users and are stored as emails.
+7. Existing-source windows use the schedule's timezone; scheduled report windows are the previous UTC period (the UI says UTC); both computed from the fire instant.
 8. Report exports invent no presets: scheduled ones use the previous UTC period of their frequency, `manual` ones an absolute range or the view's own range.
 9. `/run` with an empty body means the period the schedule would export now; only a user-supplied window is passed as a custom window; disabled and deleted exports are refused.
 10. ~~`style` filter~~ Removed: `GET /tasks/scheduled` returns all exports, no flag.
