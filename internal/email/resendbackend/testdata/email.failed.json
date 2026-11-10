@@ -1,0 +1,13 @@
+{
+  "type": "email.failed",
+  "created_at": "2026-11-06T10:00:00.000Z",
+  "data": {
+    "created_at": "2026-11-06T09:59:58.000Z",
+    "email_id": "4ef9a417-02e9-4d39-ad75-9611e0fcc33c",
+    "from": "\"Acme\" <invoices+tenant_01jx@mail.flexprice.io>",
+    "to": ["someone@example.com"],
+    "subject": "Invoice INV-0001 from Acme",
+    "failed": {"reason": "reached_daily_quota"},
+    "tags": [{"name": "region", "value": "us"}, {"name": "email_log_id", "value": "email_01jx"}]
+  }
+}

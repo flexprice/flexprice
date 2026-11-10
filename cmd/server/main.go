@@ -29,6 +29,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
 	revenuereportsvc "github.com/flexprice/flexprice/internal/ee/service/revenuereport"
 	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
+	"github.com/flexprice/flexprice/internal/email"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
@@ -274,6 +275,8 @@ func main() {
 			// (invoices/exports/imports). Provided before service params so any
 			// service can reach it via ServiceParams.StorageResolver.
 			provideStorageResolver,
+			// Customer email provider (resend or log), chosen by email.provider.
+			email.NewProvider,
 			syncExport.NewExportService,
 			fx.Annotate(service.NewServiceParams, fx.ResultTags(`name:"base"`)),
 			service.NewOAuthService,
