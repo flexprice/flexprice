@@ -39,6 +39,12 @@ const (
 	FieldJobConfig = "job_config"
 	// FieldTemporalScheduleID holds the string denoting the temporal_schedule_id field in the database.
 	FieldTemporalScheduleID = "temporal_schedule_id"
+	// FieldName holds the string denoting the name field in the database.
+	FieldName = "name"
+	// FieldManagedCopy holds the string denoting the managed_copy field in the database.
+	FieldManagedCopy = "managed_copy"
+	// FieldSchedule holds the string denoting the schedule field in the database.
+	FieldSchedule = "schedule"
 	// Table holds the table name of the scheduledtask in the database.
 	Table = "scheduled_tasks"
 )
@@ -59,6 +65,9 @@ var Columns = []string{
 	FieldEnabled,
 	FieldJobConfig,
 	FieldTemporalScheduleID,
+	FieldName,
+	FieldManagedCopy,
+	FieldSchedule,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -84,14 +93,16 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultEnvironmentID holds the default value on creation for the "environment_id" field.
 	DefaultEnvironmentID string
-	// ConnectionIDValidator is a validator for the "connection_id" field. It is called by the builders before save.
-	ConnectionIDValidator func(string) error
+	// DefaultConnectionID holds the default value on creation for the "connection_id" field.
+	DefaultConnectionID string
 	// EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
 	EntityTypeValidator func(string) error
 	// IntervalValidator is a validator for the "interval" field. It is called by the builders before save.
 	IntervalValidator func(string) error
 	// DefaultEnabled holds the default value on creation for the "enabled" field.
 	DefaultEnabled bool
+	// DefaultManagedCopy holds the default value on creation for the "managed_copy" field.
+	DefaultManagedCopy bool
 )
 
 // OrderOption defines the ordering options for the ScheduledTask queries.
@@ -160,4 +171,14 @@ func ByEnabled(opts ...sql.OrderTermOption) OrderOption {
 // ByTemporalScheduleID orders the results by the temporal_schedule_id field.
 func ByTemporalScheduleID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTemporalScheduleID, opts...).ToFunc()
+}
+
+// ByName orders the results by the name field.
+func ByName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByManagedCopy orders the results by the managed_copy field.
+func ByManagedCopy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldManagedCopy, opts...).ToFunc()
 }

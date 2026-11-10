@@ -2635,12 +2635,15 @@ var (
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "connection_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "connection_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "interval", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
 		{Name: "job_config", Type: field.TypeJSON, Nullable: true},
 		{Name: "temporal_schedule_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "name", Type: field.TypeString, Nullable: true},
+		{Name: "managed_copy", Type: field.TypeBool, Default: false},
+		{Name: "schedule", Type: field.TypeJSON, Nullable: true},
 	}
 	// ScheduledTasksTable holds the schema information for the "scheduled_tasks" table.
 	ScheduledTasksTable = &schema.Table{

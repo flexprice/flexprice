@@ -35,7 +35,8 @@ func (ScheduledTask) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			NotEmpty().
+			Optional().
+			Default("").
 			Comment("Reference to the connection (S3, etc.) to use for export"),
 		field.String("entity_type").
 			SchemaType(map[string]string{
@@ -63,6 +64,16 @@ func (ScheduledTask) Fields() []ent.Field {
 			}).
 			Optional().
 			Comment("Temporal schedule ID for the recurring workflow"),
+		field.String("name").
+			Optional().
+			Nillable().
+			Comment("Display name of the export"),
+		field.Bool("managed_copy").
+			Default(false).
+			Comment("Export to Flexprice managed bucket instead of a connection"),
+		field.JSON("schedule", &types.ExportSchedule{}).
+			Optional().
+			Comment("Run time of the export"),
 	}
 }
 
