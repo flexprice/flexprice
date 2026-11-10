@@ -155,6 +155,63 @@ func (s *PriceServiceSuite) TestGetPrice() {
 	s.Nil(resp)
 }
 
+func (s *PriceServiceSuite) TestGetPriceHistory() {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1, t2 := t0.AddDate(0, 1, 0), t0.AddDate(0, 2, 0)
+
+	newPrice := func(id string, entityType types.PriceEntityType, entityID, parentID string, start time.Time, end *time.Time) *price.Price {
+		return &price.Price{
+			ID:            id,
+			Amount:        decimal.NewFromInt(100),
+			Currency:      "usd",
+			EntityType:    entityType,
+			EntityID:      entityID,
+			ParentPriceID: parentID,
+			StartDate:     lo.ToPtr(start),
+			EndDate:       end,
+			BaseModel:     types.GetDefaultBaseModel(s.ctx),
+		}
+	}
+
+	// Created newest first so the result order comes from the sort, not insertion.
+	for _, p := range []*price.Price{
+		newPrice("p3", types.PRICE_ENTITY_TYPE_PLAN, "plan-1", "p1", t2, nil),
+		newPrice("p2", types.PRICE_ENTITY_TYPE_PLAN, "plan-1", "p1", t1, lo.ToPtr(t2)),
+		newPrice("p1", types.PRICE_ENTITY_TYPE_PLAN, "plan-1", "", t0, lo.ToPtr(t1)),
+		newPrice("override", types.PRICE_ENTITY_TYPE_SUBSCRIPTION, "sub-1", "p1", t1, nil),
+		newPrice("unrelated", types.PRICE_ENTITY_TYPE_PLAN, "plan-1", "", t0, nil),
+	} {
+		s.Require().NoError(s.priceRepo.Create(s.ctx, p))
+	}
+
+	tests := []struct {
+		name    string
+		id      string
+		wantIDs []string
+		wantErr bool
+	}{
+		{name: "from root", id: "p1", wantIDs: []string{"p1", "p2", "p3"}},
+		{name: "from latest version", id: "p3", wantIDs: []string{"p1", "p2", "p3"}},
+		{name: "never edited", id: "unrelated", wantIDs: []string{"unrelated"}},
+		{name: "subscription override rejected", id: "override", wantErr: true},
+		{name: "not found", id: "missing", wantErr: true},
+		{name: "empty id", id: "", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			resp, err := s.priceService.GetPriceHistory(s.ctx, tt.id)
+			if tt.wantErr {
+				s.Error(err)
+				s.Nil(resp)
+				return
+			}
+			s.Require().NoError(err)
+			s.Equal(tt.wantIDs, lo.Map(resp.Items, func(r *dto.PriceResponse, _ int) string { return r.ID }))
+		})
+	}
+}
+
 func (s *PriceServiceSuite) TestGetPrices() {
 	// Prepopulate the repository with prices associated with a plan_id
 	_ = s.priceRepo.Create(s.ctx, &price.Price{
@@ -1495,6 +1552,86 @@ func (s *PriceServiceSuite) TestCalculateCostWithBreakup_TieredSlabEdgeCases() {
 				tc.description)
 		})
 	}
+}
+
+func (s *PriceServiceSuite) TestCalculateCost_PackageTiers() {
+	d := decimal.RequireFromString
+	upTo := func(v uint64) *uint64 { return &v }
+	pkg := func(size int, round types.RoundType) *price.TransformQuantity {
+		return &price.TransformQuantity{DivideBy: size, Round: round}
+	}
+	tiered := func(mode types.BillingTier, tiers ...price.PriceTier) func() *price.Price {
+		return func() *price.Price {
+			return &price.Price{
+				ID:           "price-package-tiers",
+				Currency:     "inr",
+				BillingModel: types.BILLING_MODEL_TIERED,
+				TierMode:     mode,
+				Tiers:        append([]price.PriceTier(nil), tiers...),
+			}
+		}
+	}
+
+	slabCustomer := tiered(types.BILLING_TIER_SLAB,
+		price.PriceTier{UpTo: upTo(200), UnitAmount: d("0"), FlatAmount: lo.ToPtr(d("10000"))},
+		price.PriceTier{UpTo: upTo(500), UnitAmount: d("0"), FlatAmount: lo.ToPtr(d("20000"))},
+		price.PriceTier{UpTo: upTo(1000), UnitAmount: d("0"), FlatAmount: lo.ToPtr(d("40000"))},
+		price.PriceTier{UnitAmount: d("1000"), TransformQuantity: pkg(100, types.ROUND_UP)},
+	)
+	// API calls: up to 100,000 at ₹50 per 1,000; above that every call at ₹40 per 1,000.
+	volumeAPICalls := tiered(types.BILLING_TIER_VOLUME,
+		price.PriceTier{UpTo: upTo(100_000), UnitAmount: d("50"), TransformQuantity: pkg(1000, types.ROUND_UP)},
+		price.PriceTier{UnitAmount: d("40"), TransformQuantity: pkg(1000, types.ROUND_UP)},
+	)
+
+	testCases := []struct {
+		name     string
+		price    func() *price.Price
+		quantity string
+		want     string
+	}{
+		{"slab band 1", slabCustomer, "150", "10000"},
+		{"slab bands 1 and 2", slabCustomer, "400", "30000"},
+		{"slab at boundary", slabCustomer, "1000", "70000"},
+		{"slab just over boundary", slabCustomer, "1001", "71000"},
+		{"slab partial package", slabCustomer, "1050", "71000"},
+		{"slab exact multiple", slabCustomer, "1500", "75000"},
+		{"slab zero usage", slabCustomer, "0", "0"},
+		{"volume partial package", volumeAPICalls, "45500", "2300"},
+		{"volume at boundary", volumeAPICalls, "100000", "5000"},
+		{"volume above boundary prices all units at the next tier", volumeAPICalls, "250000", "10000"},
+		{"decimal usage rounds up", tiered(types.BILLING_TIER_SLAB,
+			price.PriceTier{UnitAmount: d("7"), TransformQuantity: pkg(100, types.ROUND_UP)},
+		), "50.5", "7"},
+		{"empty round rounds up", tiered(types.BILLING_TIER_SLAB,
+			price.PriceTier{UnitAmount: d("7"), TransformQuantity: pkg(100, "")},
+		), "150", "14"},
+		{"slab round down drops partial package", tiered(types.BILLING_TIER_SLAB,
+			price.PriceTier{UpTo: upTo(1000), UnitAmount: d("0"), FlatAmount: lo.ToPtr(d("40000"))},
+			price.PriceTier{UnitAmount: d("1000"), TransformQuantity: pkg(100, types.ROUND_DOWN)},
+		), "1250", "42000"},
+		{"volume round down", tiered(types.BILLING_TIER_VOLUME,
+			price.PriceTier{UnitAmount: d("7"), TransformQuantity: pkg(100, types.ROUND_DOWN)},
+		), "250", "14"},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			want := d(tc.want)
+			quantity := d(tc.quantity)
+
+			cost := s.priceService.CalculateCost(s.ctx, tc.price(), quantity)
+			s.True(want.Equal(cost), "CalculateCost: want %s, got %s", want, cost)
+
+			breakup := s.priceService.CalculateCostWithBreakup(s.ctx, tc.price(), quantity, false)
+			s.True(want.Equal(breakup.FinalCost), "CalculateCostWithBreakup: want %s, got %s", want, breakup.FinalCost)
+		})
+	}
+
+	s.Run("breakup reports per-unit rate of a package tier", func() {
+		s.True(d("0.05").Equal(s.priceService.CalculateCostWithBreakup(s.ctx, volumeAPICalls(), d("45500"), false).TierUnitAmount))
+		s.True(d("10").Equal(s.priceService.CalculateCostWithBreakup(s.ctx, slabCustomer(), d("1050"), false).TierUnitAmount))
+	})
 }
 
 func (s *PriceServiceSuite) TestDeletePrice_Comprehensive() {

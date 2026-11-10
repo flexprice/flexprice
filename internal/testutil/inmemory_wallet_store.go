@@ -870,6 +870,99 @@ func (s *InMemoryWalletStore) GetWalletDebitsForExport(ctx context.Context, tena
 	return results, nil
 }
 
+// ListWalletIDsForLedgerExport mirrors the Postgres listing without the customer filter or late
+// payments, which need other stores.
+func (s *InMemoryWalletStore) ListWalletIDsForLedgerExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, customerExternalIDs []string) ([]string, error) {
+	allTransactions, err := s.transactions.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve transactions for export").
+			Mark(ierr.ErrDatabase)
+	}
+	var walletIDs []string
+	for _, tx := range allTransactions {
+		if tx.TenantID == tenantID && tx.EnvironmentID == envID && tx.TxStatus == types.TransactionStatusCompleted &&
+			!tx.CreatedAt.Before(startTime) && tx.CreatedAt.Before(endTime) {
+			walletIDs = append(walletIDs, tx.WalletID)
+		}
+	}
+	walletIDs = lo.Uniq(walletIDs)
+	sort.Strings(walletIDs)
+	return walletIDs, nil
+}
+
+// GetWalletLedgerForExport mirrors the Postgres export without paid amounts or invoice paid times,
+// which need other stores.
+func (s *InMemoryWalletStore) GetWalletLedgerForExport(ctx context.Context, tenantID, envID string, walletIDs []string, startTime, endTime time.Time) ([]*wallet.WalletLedgerExportData, error) {
+	allTransactions, err := s.transactions.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve transactions for export").
+			Mark(ierr.ErrDatabase)
+	}
+
+	var results []*wallet.WalletLedgerExportData
+	isChild := make(map[string]bool)
+	for _, tx := range allTransactions {
+		if tx.TenantID != tenantID || tx.EnvironmentID != envID || tx.TxStatus != types.TransactionStatusCompleted {
+			continue
+		}
+		isChild[tx.ID] = tx.ParentTransactionID != ""
+		if !lo.Contains(walletIDs, tx.WalletID) || tx.CreatedAt.Before(startTime) || !tx.CreatedAt.Before(endTime) {
+			continue
+		}
+		row := wallet.WalletLedgerExportData{
+			TransactionID:       tx.ID,
+			Type:                tx.Type,
+			TransactionReason:   tx.TransactionReason,
+			WalletID:            tx.WalletID,
+			Currency:            tx.Currency,
+			InvoiceID:           tx.SourceID,
+			Credits:             tx.CreditAmount,
+			CreditBalanceBefore: tx.CreditBalanceBefore,
+			CreditBalanceAfter:  tx.CreditBalanceAfter,
+			EffectiveAt:         tx.CreatedAt,
+			CreatedAt:           tx.CreatedAt,
+		}
+		if tx.Type != types.TransactionTypeDebit || len(tx.ConsumptionBreakdown) == 0 {
+			results = append(results, &row)
+			continue
+		}
+		balance := tx.CreditBalanceBefore
+		for _, c := range tx.ConsumptionBreakdown {
+			batch := row
+			batch.CreditTransactionID = c.CreditTransactionID
+			batch.Credits = c.Credits
+			batch.CreditBalanceBefore = balance
+			balance = balance.Sub(c.Credits)
+			batch.CreditBalanceAfter = balance
+			results = append(results, &batch)
+		}
+		if drawn := tx.CreditBalanceBefore.Sub(balance); tx.CreditAmount.GreaterThan(drawn) {
+			rest := row
+			rest.Credits = tx.CreditAmount.Sub(drawn)
+			rest.CreditBalanceBefore = balance
+			rest.CreditBalanceAfter = balance.Sub(rest.Credits)
+			results = append(results, &rest)
+		}
+	}
+
+	sort.SliceStable(results, func(i, j int) bool {
+		a, b := results[i], results[j]
+		if a.WalletID != b.WalletID {
+			return a.WalletID < b.WalletID
+		}
+		if !a.EffectiveAt.Equal(b.EffectiveAt) {
+			return a.EffectiveAt.Before(b.EffectiveAt)
+		}
+		if aBonus, bBonus := isChild[a.TransactionID], isChild[b.TransactionID]; aBonus != bBonus {
+			return bBonus
+		}
+		return a.TransactionID < b.TransactionID
+	})
+	return results, nil
+}
+
 // GetCreditsAvailableBreakdown retrieves the breakdown of available credits by type
 func (s *InMemoryWalletStore) GetCreditsAvailableBreakdown(ctx context.Context, walletID string) (*types.CreditBreakdown, error) {
 	// Get all completed credit transactions for this wallet

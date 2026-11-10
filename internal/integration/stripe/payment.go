@@ -7,6 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+	"github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/webhook"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -16,10 +23,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
-	"github.com/stripe/stripe-go/v82"
-	"github.com/stripe/stripe-go/v82/webhook"
 )
 
 const refundLockTTL = 15 * time.Minute
@@ -114,7 +117,7 @@ func computeCheckoutDiscount(session *stripe.CheckoutSession, requestedAmount de
 			AmountOff:      lo.TernaryF(d.Coupon != nil, func() int64 { return d.Coupon.AmountOff }, func() int64 { return 0 }),
 			PercentOff:     lo.TernaryF(d.Coupon != nil, func() float64 { return d.Coupon.PercentOff }, func() float64 { return 0 }),
 			PromotionCode:  lo.TernaryF(d.PromotionCode != nil, func() string { return d.PromotionCode.Code }, func() string { return "" }),
-			AppliedAt:      time.Now().UTC(),
+			AppliedAt:      clock.Now(),
 		})
 	}
 
@@ -524,7 +527,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(ctx context.Context, req *Char
 	}
 
 	// Create PaymentIntent with saved payment method
-	amountInCents := req.Amount.Mul(decimal.NewFromInt(100)).IntPart()
+	amountInCents := types.ToSmallestUnit(req.Amount, req.Currency)
 	params := &stripe.PaymentIntentCreateParams{
 		Amount:        stripe.Int64(amountInCents),
 		Currency:      stripe.String(req.Currency),
@@ -701,7 +704,7 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, sessionID string,
 		paymentIntentID = session.PaymentIntent.ID
 		paymentStatus = string(session.PaymentIntent.Status)
 		if session.PaymentIntent.Amount > 0 {
-			amount = decimal.NewFromInt(session.PaymentIntent.Amount).Div(decimal.NewFromInt(100))
+			amount = types.FromSmallestUnit(session.PaymentIntent.Amount, string(session.PaymentIntent.Currency))
 		}
 		if session.PaymentIntent.Currency != "" {
 			currency = string(session.PaymentIntent.Currency)
@@ -733,7 +736,7 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, sessionID string,
 	if amount.IsZero() && session.LineItems != nil && len(session.LineItems.Data) > 0 {
 		item := session.LineItems.Data[0]
 		if item.AmountTotal > 0 {
-			amount = decimal.NewFromInt(item.AmountTotal).Div(decimal.NewFromInt(100))
+			amount = types.FromSmallestUnit(item.AmountTotal, string(item.Currency))
 		}
 		if item.Currency != "" && currency == "" {
 			currency = string(item.Currency)
@@ -834,7 +837,7 @@ func (s *PaymentService) GetPaymentStatusByPaymentIntent(ctx context.Context, pa
 	// Convert amount from cents to decimal
 	var amount decimal.Decimal
 	if paymentIntent.Amount > 0 {
-		amount = decimal.NewFromInt(paymentIntent.Amount).Div(decimal.NewFromInt(100))
+		amount = types.FromSmallestUnit(paymentIntent.Amount, string(paymentIntent.Currency))
 	}
 
 	// Get currency
@@ -1684,7 +1687,7 @@ func (s *PaymentService) ProcessExternalStripePayment(ctx context.Context, payme
 	}
 
 	// Reconcile invoice with external payment
-	amount := decimal.NewFromInt(paymentIntent.Amount).Div(decimal.NewFromInt(100))
+	amount := types.FromSmallestUnit(paymentIntent.Amount, string(paymentIntent.Currency))
 	err = s.reconcileInvoiceWithExternalPayment(ctx, flexpriceInvoiceID, amount, invoiceService)
 	if err != nil {
 		s.logger.Error(ctx, "failed to reconcile invoice with external payment",
@@ -1782,7 +1785,7 @@ func (s *PaymentService) hasSettledInvoicePaymentIntent(ctx context.Context, str
 // CreateExternalPaymentRecord creates a payment record in the given status for an external Stripe payment
 func (s *PaymentService) CreateExternalPaymentRecord(ctx context.Context, paymentIntent *stripe.PaymentIntent, invoiceID string, status types.PaymentStatus, eventID string, paymentService interfaces.PaymentService) error {
 	// Convert amount from cents to decimal
-	amount := decimal.NewFromInt(paymentIntent.Amount).Div(decimal.NewFromInt(100))
+	amount := types.FromSmallestUnit(paymentIntent.Amount, string(paymentIntent.Currency))
 
 	// Create payment record
 	gatewayType := types.PaymentGatewayTypeStripe
@@ -1829,7 +1832,7 @@ func (s *PaymentService) CreateExternalPaymentRecord(ctx context.Context, paymen
 	}
 
 	// Update payment to the final status with all Stripe details (same as regular Stripe charge)
-	now := time.Now().UTC()
+	now := clock.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(status)),
 		GatewayPaymentID: lo.ToPtr(paymentIntent.ID),
@@ -2219,7 +2222,7 @@ func (s *PaymentService) recordLateCaptureRefund(
 	refundID string,
 	paymentService interfaces.PaymentService,
 ) error {
-	now := time.Now().UTC()
+	now := clock.Now()
 	metadata := existingPayment.Metadata
 	if refundID != "" {
 		metadata = lo.Assign(existingPayment.Metadata, types.Metadata{"stripe_refund_id": refundID})

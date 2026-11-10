@@ -7,8 +7,13 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/settings"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
+	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
+	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -162,5 +167,85 @@ func TestAsyncRevenueFactsUpdate_RunsImmediatelyOutsideTransaction(t *testing.T)
 	case <-ran:
 	case <-time.After(5 * time.Second):
 		t.Fatal("the update never ran")
+	}
+}
+
+func TestNotifySubscriptionChanged_WritesOnlyWhenRevRecEnabled(t *testing.T) {
+	tests := []struct {
+		name          string
+		setting       map[string]interface{}
+		wantContracts int
+	}{
+		{name: "no setting", wantContracts: 0},
+		{name: "disabled", setting: map[string]interface{}{"enabled": false}, wantContracts: 0},
+		{name: "enabled", setting: map[string]interface{}{"enabled": true}, wantContracts: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := testutil.SetupContext()
+			subRepo := testutil.NewInMemorySubscriptionStore()
+			sub := &subscription.Subscription{
+				ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+				CustomerID:         "cust_1",
+				Currency:           "usd",
+				SubscriptionStatus: types.SubscriptionStatusActive,
+				BaseModel:          types.GetDefaultBaseModel(ctx),
+			}
+			require.NoError(t, subRepo.Create(ctx, sub))
+			lineItemRepo := testutil.NewInMemorySubscriptionLineItemStore()
+			subRepo.SetLineItemStore(lineItemRepo)
+			require.NoError(t, lineItemRepo.Create(ctx, &subscription.SubscriptionLineItem{
+				ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+				SubscriptionID: sub.ID,
+				PriceID:        "price_1",
+				// Usage has no period segment, so the gate test needs no billing engine.
+				PriceType:     types.PRICE_TYPE_USAGE,
+				BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+				BaseModel:     types.GetDefaultBaseModel(ctx),
+			}))
+
+			settingsRepo := testutil.NewInMemorySettingsStore()
+			if tt.setting != nil {
+				require.NoError(t, settingsRepo.Create(ctx, &settings.Setting{
+					ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+					Key:           types.SettingKeyRevenueRecognitionConfig,
+					Value:         tt.setting,
+					EnvironmentID: types.GetEnvironmentID(ctx),
+					BaseModel:     types.GetDefaultBaseModel(ctx),
+				}))
+			}
+
+			contractRepo := testutil.NewInMemoryContractStore()
+			pobRepo := testutil.NewInMemoryPOBStore(contractRepo)
+			params := ServiceParams{
+				Logger:          logger.NewNoopLogger(),
+				SubRepo:         subRepo,
+				SettingsRepo:    settingsRepo,
+				ContractService: contractsvc.NewContractService(contractRepo),
+				POBService: pobsvc.NewPerformanceObligationService(pobRepo, contractRepo, subRepo, testutil.NewInMemoryInvoiceStore(),
+					testutil.NewInMemoryTaxAppliedStore(), testutil.NewInMemoryRevenueFactStore()),
+			}
+			NotifySubscriptionChanged(ctx, params, sub.ID)
+
+			countContracts := func() int {
+				count, err := contractRepo.Count(ctx, nil)
+				require.NoError(t, err)
+				return count
+			}
+			countPOBs := func() int {
+				count, err := pobRepo.Count(ctx, nil)
+				require.NoError(t, err)
+				return count
+			}
+			// One line item, so one POB alongside the contract.
+			if tt.wantContracts > 0 {
+				require.Eventually(t, func() bool { return countContracts() == tt.wantContracts && countPOBs() == tt.wantContracts }, 5*time.Second, 10*time.Millisecond)
+				return
+			}
+			time.Sleep(300 * time.Millisecond)
+			require.Equal(t, 0, countContracts())
+			require.Equal(t, 0, countPOBs())
+		})
 	}
 }

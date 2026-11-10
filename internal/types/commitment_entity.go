@@ -86,15 +86,27 @@ func (s CommitmentStatus) Validate() error {
 	})
 }
 
+// CommitmentRate names a commitment's rate price: the committed rate or the overage rate.
+type CommitmentRate string
+
+const (
+	CommitmentRateCommitted CommitmentRate = "committed"
+	CommitmentRateOverage   CommitmentRate = "overage"
+)
+
 // CommitmentLineKind tags invoice lines produced for a commitment.
 type CommitmentLineKind string
 
 const (
-	CommitmentLineWithin     CommitmentLineKind = "within_commitment"
-	CommitmentLineOnDemand   CommitmentLineKind = "on_demand"
-	CommitmentLineTrueUp     CommitmentLineKind = "true_up"
-	CommitmentLineInstalment CommitmentLineKind = "instalment"
-	CommitmentLineSettlement CommitmentLineKind = "settlement"
+	CommitmentLineUtilized        CommitmentLineKind = "utilized"
+	CommitmentLineOverage         CommitmentLineKind = "overage"
+	CommitmentLineTrueUp          CommitmentLineKind = "true_up"
+	CommitmentLineInstalment      CommitmentLineKind = "instalment"
+	CommitmentLineSettlement      CommitmentLineKind = "settlement"
+	CommitmentLineCancellationFee CommitmentLineKind = "cancellation_fee"
+
+	// CommitmentLinePlain is usage no commitment covers; its rows carry no commitment metadata.
+	CommitmentLinePlain CommitmentLineKind = ""
 )
 
 func validateEnum[T ~string](field string, v T, allowed []T) error {

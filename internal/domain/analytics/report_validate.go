@@ -29,6 +29,7 @@ type ReportQuery struct {
 	Filters    []ReportQueryFilter
 	Compare    string
 	Limit      int
+	Offset     int
 	Sort       []ReportQuerySort
 }
 
@@ -93,6 +94,11 @@ func (req *ReportQuery) ValidateAgainst(e *ReportCatalogEntry, maxRows int) erro
 	if req.Limit < 0 || (maxRows > 0 && req.Limit > maxRows) {
 		return ierr.NewErrorf("limit %d not allowed", req.Limit).
 			WithHint(fmt.Sprintf("limit must be between 0 and %d (0 = no limit)", maxRows)).
+			Mark(ierr.ErrValidation)
+	}
+	if req.Offset < 0 || (req.Offset > 0 && (req.Limit == 0 || req.Shape != string(types.ShapeBreakdown) || len(req.Sort) > 0)) {
+		return ierr.NewError("offset not allowed").
+			WithHint("offset needs a breakdown with a limit and the default sort").
 			Mark(ierr.ErrValidation)
 	}
 	if req.Limit > 0 && req.Shape != string(types.ShapeBreakdown) {

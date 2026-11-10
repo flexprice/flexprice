@@ -6,21 +6,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // razorpayMinExpireByBuffer is the minimum expire_by window applied when an
 // invoice's due date is in the past or too close to now (e.g. wallet top-ups
-// which are created with DueDate = time.Now()). 15 minutes is Razorpay's
+// which are created with DueDate = clock.Now()). 15 minutes is Razorpay's
 // hard minimum requirement.
 const razorpayMinExpireByBuffer = 15 * time.Minute
 
@@ -28,11 +32,6 @@ const razorpayMinExpireByBuffer = 15 * time.Minute
 // since Razorpay checks the bound on receipt and a timestamp landing exactly on the
 // floor arrives under it.
 const razorpayExpireBySafetyMargin = 2 * time.Minute
-
-// autoChargeLockTTL is the Redis distributed lock TTL for auto-charge operations.
-// Set longer than a typical HTTP timeout since gateway errors are treated as
-// ambiguous (network timeout vs. definitive failure can't be reliably told apart).
-const autoChargeLockTTL = 15 * time.Minute
 
 // SyncInvoiceResult carries data the caller must persist (e.g. payment-link
 // URLs) back to invoice metadata; done by the caller to avoid a circular
@@ -96,7 +95,7 @@ func (s *InvoiceSyncService) SyncInvoice(
 	inv *invoice.Invoice,
 	customerService interfaces.CustomerService,
 ) (*SyncInvoiceResult, error) {
-	charged, err := s.tryAutoCharge(ctx, inv)
+	charged, err := s.TryAutoCharge(ctx, inv)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +160,11 @@ func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 		}
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
 	gatewayType := string(types.PaymentGatewayTypeRazorpay)
 	newPayment := &payment.Payment{
 		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
@@ -169,6 +173,7 @@ func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 		DestinationID:     inv.ID,
 		PaymentMethodType: paymentMethodType,
 		PaymentGateway:    &gatewayType,
+		ConnectionID:      lo.ToPtr(conn.ID),
 		Amount:            inv.AmountRemaining,
 		Currency:          inv.Currency,
 		PaymentStatus:     types.PaymentStatusInitiated,
@@ -192,12 +197,12 @@ func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 	return newPayment, false, nil
 }
 
-// tryAutoCharge resolves the customer's Razorpay tokens; if a usable token
+// TryAutoCharge resolves the customer's Razorpay tokens; if a usable token
 // exists it calls executeAutoCharge and returns (true, nil). If token probing
 // fails for any reason it logs and returns (false, nil) so the caller falls
 // through to SyncInvoiceToRazorpay. Only hard errors from executeAutoCharge are
 // propagated.
-func (s *InvoiceSyncService) tryAutoCharge(
+func (s *InvoiceSyncService) TryAutoCharge(
 	ctx context.Context,
 	inv *invoice.Invoice,
 ) (charged bool, err error) {
@@ -244,7 +249,7 @@ func (s *InvoiceSyncService) tryAutoCharge(
 
 // executeAutoCharge acquires a distributed lock, re-validates invoice/payment state,
 // submits the charge to Razorpay via PaymentSvc.AutoCharge, and marks the payment
-// as PROCESSING. Called only after tryAutoCharge has confirmed a usable token.
+// as PROCESSING. Called only after TryAutoCharge has confirmed a usable token.
 func (s *InvoiceSyncService) executeAutoCharge(
 	ctx context.Context,
 	inv *invoice.Invoice,
@@ -261,6 +266,22 @@ func (s *InvoiceSyncService) executeAutoCharge(
 		return nil
 	}
 
+	lock, err := payments.LockInvoiceCharge(ctx, s.locker, s.paymentRepo, inv.EnvironmentID, inv.ID, "")
+	if ierr.IsAlreadyExists(err) {
+		s.logger.Info(ctx, "a charge is already in progress for this invoice, skipping",
+			"invoice_id", inv.ID)
+		return nil
+	}
+	if err != nil {
+		s.logger.Error(ctx, "failed to acquire auto-charge lock", "invoice_id", inv.ID, "error", err)
+		return err
+	}
+	defer func() {
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			s.logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", inv.ID, "error", releaseErr)
+		}
+	}()
+
 	pymnt, skip, err := s.findOrCreateAutoChargePayment(ctx, inv, paymentMethodType)
 	if err != nil {
 		return err
@@ -270,23 +291,6 @@ func (s *InvoiceSyncService) executeAutoCharge(
 			"invoice_id", inv.ID)
 		return nil
 	}
-
-	lockKey := fmt.Sprintf("razorpay:autocharge:%s:%s:%s", types.GetTenantID(ctx), inv.EnvironmentID, inv.ID)
-	lock, err := s.locker.AcquireLock(ctx, lockKey, autoChargeLockTTL)
-	if err != nil {
-		s.logger.Error(ctx, "failed to acquire auto-charge lock", "invoice_id", inv.ID, "error", err)
-		return err
-	}
-	if !lock.AcquiredSuccessfully() {
-		s.logger.Info(ctx, "auto-charge already in progress for this invoice, skipping",
-			"invoice_id", inv.ID)
-		return nil
-	}
-	defer func() {
-		if releaseErr := lock.Release(ctx); releaseErr != nil {
-			s.logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", inv.ID, "error", releaseErr)
-		}
-	}()
 
 	freshInv, err := s.invoiceRepo.Get(ctx, inv.ID)
 	if err != nil {
@@ -345,7 +349,7 @@ func (s *InvoiceSyncService) executeAutoCharge(
 	}
 
 	// Persist audit mappings (non-fatal — charge is already submitted).
-	s.createAutoChargeMappings(ctx, inv.ID, pymnt.ID, result)
+	s.createAutoChargeMappings(ctx, inv.ID, pymnt, result)
 
 	s.logger.Info(ctx, "auto-charge submitted successfully",
 		"invoice_id", inv.ID,
@@ -363,19 +367,21 @@ func (s *InvoiceSyncService) executeAutoCharge(
 //     from the invoice→razorpay_invoice mapping created on the send-invoice path)
 //   - payment → Razorpay payment (pay_xxx, omitted when AlreadySubmitted and no ID)
 //
+// Both mappings take the connection recorded on the payment.
 // Both writes are best-effort: failures are logged but do not abort the charge.
 // The primary reconciliation path (notes.flexprice_payment_id on the webhook) is
 // independent of these mappings.
 func (s *InvoiceSyncService) createAutoChargeMappings(
 	ctx context.Context,
 	invoiceID string,
-	paymentID string,
+	pymnt *payment.Payment,
 	result *AutoChargeResult,
 ) {
 	if s.entityIntegrationMappingRepo == nil {
 		return
 	}
 
+	paymentID := pymnt.ID
 	environmentID := types.GetEnvironmentID(ctx)
 
 	// 1. Invoice → Razorpay order
@@ -391,6 +397,7 @@ func (s *InvoiceSyncService) createAutoChargeMappings(
 			},
 			EnvironmentID: environmentID,
 			BaseModel:     types.GetDefaultBaseModel(ctx),
+			ConnectionID:  pymnt.ConnectionID,
 		}
 		if err := s.entityIntegrationMappingRepo.Create(ctx, orderMapping); err != nil {
 			s.logger.Info(ctx, "failed to create invoice→order mapping (non-fatal)",
@@ -410,6 +417,7 @@ func (s *InvoiceSyncService) createAutoChargeMappings(
 			ProviderEntityID: result.RazorpayPaymentID,
 			EnvironmentID:    environmentID,
 			BaseModel:        types.GetDefaultBaseModel(ctx),
+			ConnectionID:     pymnt.ConnectionID,
 		}
 		if err := s.entityIntegrationMappingRepo.Create(ctx, paymentMapping); err != nil {
 			s.logger.Info(ctx, "failed to create payment→razorpay_payment mapping (non-fatal)",
@@ -562,9 +570,9 @@ func (s *InvoiceSyncService) buildInvoiceData(
 
 	// Add due date if available (Unix timestamp in seconds).
 	// Razorpay requires expire_by to be at least 15 minutes in the future.
-	// Wallet top-up invoices have DueDate = time.Now(), so we clamp upward.
+	// Wallet top-up invoices have DueDate = clock.Now(), so we clamp upward.
 	if flexInvoice.DueDate != nil {
-		minExpireBy := time.Now().UTC().Add(razorpayMinExpireByBuffer)
+		minExpireBy := clock.Now().Add(razorpayMinExpireByBuffer)
 		expireBy := *flexInvoice.DueDate
 		if expireBy.Before(minExpireBy) {
 			expireBy = minExpireBy
@@ -728,6 +736,11 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		metadata["razorpay_payment_url"] = razorpayShortURL
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityType:       types.IntegrationEntityTypeInvoice,
@@ -737,6 +750,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		Metadata:         metadata,
 		EnvironmentID:    environmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
@@ -760,10 +774,16 @@ func (s *InvoiceSyncService) GetExistingRazorpayMapping(
 	ctx context.Context,
 	flexInvoiceID string,
 ) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityType:    types.IntegrationEntityTypeInvoice,
 		EntityID:      flexInvoiceID,
 		ProviderTypes: []string{string(types.SecretProviderRazorpay)},
+		ConnectionID:  conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -792,11 +812,17 @@ func (s *InvoiceSyncService) GetFlexPriceInvoiceID(ctx context.Context, razorpay
 	s.logger.Debug(ctx, "looking up FlexPrice invoice ID from Razorpay invoice ID",
 		"razorpay_invoice_id", razorpayInvoiceID)
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		ProviderEntityIDs: []string{razorpayInvoiceID},
 		EntityType:        types.IntegrationEntityTypeInvoice,
 		ProviderTypes:     []string{string(types.SecretProviderRazorpay)},
 		QueryFilter:       types.NewDefaultQueryFilter(),
+		ConnectionID:      conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)

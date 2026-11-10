@@ -4,8 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/metrics"
-	"time"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -14,8 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // Handler handles Razorpay webhook events
@@ -182,7 +185,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 
 	// Standalone payment (no checkout session) — update status and reconcile directly.
 	paymentStatus := string(types.PaymentStatusSucceeded)
-	now := time.Now()
+	now := clock.Now()
 
 	// Convert amount from smallest currency unit (paise) to standard unit
 	amount := decimal.NewFromInt(payment.Amount).Div(decimal.NewFromInt(100))
@@ -308,6 +311,16 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		return nil
 	}
 
+	// Razorpay issues a new pay_ id per attempt, so a known one is a redelivered webhook.
+	if lo.ContainsBy(paymentRecord.Attempts, func(a *dto.PaymentAttemptResponse) bool {
+		return lo.FromPtr(a.GatewayAttemptID) == payment.ID
+	}) {
+		h.logger.Info(ctx, "ignoring redelivered payment.failed webhook",
+			"flexprice_payment_id", flexpricePaymentID,
+			"razorpay_payment_id", payment.ID)
+		return nil
+	}
+
 	// Build error message
 	errorMsg := "Payment failed"
 	if payment.ErrorDescription != "" {
@@ -327,10 +340,18 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		// A session that is no longer pending has already been cleaned up, so nothing
 		// can settle this payment now and the decline is final.
 		if session == nil || session.CheckoutStatus == types.CheckoutStatusPending {
+			metadata := lo.OmitByValues(types.Metadata{
+				"error_code":   payment.ErrorCode,
+				"error_reason": payment.ErrorReason,
+				"error_source": payment.ErrorSource,
+				"error_step":   payment.ErrorStep,
+				"method":       string(payment.Method),
+			}, []string{""})
 			if err := h.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
 				FlexpricePaymentID: flexpricePaymentID,
 				GatewayPaymentID:   payment.ID,
 				ErrorMessage:       errorMsg,
+				Metadata:           metadata,
 			}); err != nil {
 				h.logger.Error(ctx, "failed to record failed attempt for payment link",
 					"error", err,
@@ -343,7 +364,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 
 	// Update payment status to failed
 	paymentStatus := string(types.PaymentStatusFailed)
-	now := time.Now()
+	now := clock.Now()
 
 	// Determine payment method ID based on payment method type
 	paymentMethodID := getPaymentMethodID(payment)
@@ -394,12 +415,18 @@ func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
+	conn, err := h.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mappings, err := services.EntityIntegrationMappingService.GetEntityIntegrationMappings(
 		ctx,
 		&types.EntityIntegrationMappingFilter{
 			ProviderEntityIDs: []string{paymentLinkID},
 			ProviderTypes:     []string{string(types.CheckoutPaymentProviderRazorpay)},
 			EntityType:        types.IntegrationEntityTypePayment,
+			ConnectionID:      conn.ID,
 		},
 	)
 	if err != nil {
@@ -426,12 +453,18 @@ func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWe
 		return nil
 	}
 
+	conn, err := h.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mappings, err := services.EntityIntegrationMappingService.GetEntityIntegrationMappings(
 		ctx,
 		&types.EntityIntegrationMappingFilter{
 			ProviderEntityIDs: []string{paymentLinkID},
 			ProviderTypes:     []string{string(types.CheckoutPaymentProviderRazorpay)},
 			EntityType:        types.IntegrationEntityTypePayment,
+			ConnectionID:      conn.ID,
 		},
 	)
 	if err != nil {

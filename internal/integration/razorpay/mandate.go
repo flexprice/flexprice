@@ -6,11 +6,16 @@ import (
 	"strings"
 	"time"
 
-	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/interfaces"
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+
+	"github.com/flexprice/flexprice/internal/domain/payment"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/payments"
+	"github.com/flexprice/flexprice/internal/interfaces"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // toPaise converts a major-unit decimal (rupees) to paise for Razorpay API calls.
@@ -68,12 +73,6 @@ func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
 	}
 	out := &interfaces.ProviderRecurringPaymentDetails{Status: toRecurringPaymentStatus(status)}
 
-	// Razorpay declines charges on a card whose issuer no longer supports recurring,
-	// even while the mandate still reads confirmed.
-	if t.cardRecurringUnsupported() && out.Status == types.RecurringPaymentStatusActive {
-		out.Status = types.RecurringPaymentStatusRejected
-	}
-
 	if t.MaxAmount > 0 {
 		major := fromPaise(t.MaxAmount)
 		out.MaxAmount = &major
@@ -83,7 +82,7 @@ func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
 		expiresAt := time.Unix(t.ExpiredAt, 0).UTC()
 		out.AutoChargeableTill = &expiresAt
 
-		if time.Now().UTC().After(expiresAt) && !lo.Contains([]types.RecurringPaymentStatus{
+		if clock.Now().After(expiresAt) && !lo.Contains([]types.RecurringPaymentStatus{
 			types.RecurringPaymentStatusRejected, types.RecurringPaymentStatusCancelled,
 		}, out.Status) {
 			out.Status = types.RecurringPaymentStatusExpired
@@ -91,10 +90,6 @@ func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
 	}
 
 	return out
-}
-
-func (t Token) cardRecurringUnsupported() bool {
-	return t.Card != nil && t.Card.Flows != nil && t.Card.Flows.Recurring != nil && !*t.Card.Flows.Recurring
 }
 
 func (t Token) cardDetails() *interfaces.ProviderCardDetails {
@@ -143,7 +138,7 @@ func SelectUsableToken(
 	preferredMethod types.PaymentMethodType,
 	invoiceTotal decimal.Decimal,
 ) (*interfaces.ProviderPaymentMethod, bool) {
-	now := time.Now().UTC()
+	now := clock.Now()
 	usable := lo.Filter(methods, func(pm *interfaces.ProviderPaymentMethod, _ int) bool {
 		expiresAt, maxAmount := pm.RecurringAutoChargeableTill(), pm.RecurringMaxAmount()
 
@@ -160,6 +155,20 @@ func SelectUsableToken(
 	return lo.MaxBy(usable, func(a, b *interfaces.ProviderPaymentMethod) bool {
 		return a.CreatedAt.After(b.CreatedAt)
 	}), true
+}
+
+// NoUsableTokenError reports that the customer has no mandate that can pay p.
+func NoUsableTokenError(p *payment.Payment, customerID string) error {
+	return ierr.NewError("no usable razorpay token for payment method").
+		WithHintf("No active %s mandate covering this amount was found at Razorpay, or the customer is not synced to Razorpay. Collect one first, or use payment_method_type PAYMENT_LINK.", p.PaymentMethodType).
+		WithReportableDetails(map[string]interface{}{
+			"payment_id":          p.ID,
+			"invoice_id":          p.DestinationID,
+			"customer_id":         customerID,
+			"payment_method_type": p.PaymentMethodType,
+			"amount":              p.Amount.String(),
+		}).
+		Mark(ierr.ErrValidation)
 }
 
 // razorpaySubscriptionMethod maps a FlexPrice PaymentMethodType to the Razorpay
@@ -272,6 +281,16 @@ func (a *CheckoutAdapter) TryAutoChargingSavedMethod(
 			"customer_id", req.CustomerID, "error", err)
 		return nil, false, nil
 	}
+
+	lock, err := payments.LockInvoiceCharge(ctx, a.Svc.locker, a.Svc.invoiceSyncSvc.paymentRepo, custResp.Customer.EnvironmentID, req.InvoiceID, "")
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() {
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			a.Svc.logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", req.InvoiceID, "error", releaseErr)
+		}
+	}()
 
 	result, charged, err := a.Svc.ChargeSavedToken(ctx, ChargeSavedTokenRequest{
 		Customer:           custResp.Customer,

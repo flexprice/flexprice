@@ -3,9 +3,13 @@ package export
 import (
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"sort"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
@@ -22,6 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // Exporter defines the interface for entity-specific exporters
@@ -273,12 +278,16 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// exportObjectKey builds <key_prefix>/<entity>/<entity>-<start>-<end>.csv[.gz].
+// exportObjectKey builds <key_prefix>/<entity>/<entity>-<start>-<end>[-customers-<digest>].csv[.gz].
+// A customer-filtered run gets its own key so it never replaces the full export of the same window.
 func exportObjectKey(request *dto.ExportRequest, exporter Exporter) string {
 	startTimeStr := request.StartTime.Format("060102150405")
 	endTimeStr := request.EndTime.Format("060102150405")
 	filenamePrefix := exporter.GetFilenamePrefix()
 	filename := fmt.Sprintf("%s-%s-%s", filenamePrefix, startTimeStr, endTimeStr)
+	if len(request.CustomerExternalIDs) > 0 {
+		filename += "-customers-" + customerFilterDigest(request.CustomerExternalIDs)
+	}
 	return storage.ObjectKey(request.JobConfig.KeyPrefix, filenamePrefix, filename, "csv", request.JobConfig.Compression == types.S3CompressionTypeGzip)
 }
 
@@ -349,6 +358,12 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 			return nil
 		}
 		return NewWalletDebitExporter(s.walletRepo, s.logger)
+	case types.ScheduledTaskEntityTypeWalletLedger:
+		if s.walletRepo == nil {
+			s.logger.Info(context.Background(), "wallet repository not configured for wallet ledger export")
+			return nil
+		}
+		return NewWalletLedgerExporter(s.walletRepo, s.logger)
 	case types.ScheduledTaskEntityTypeCreditUsage:
 		if s.walletRepo == nil || s.walletBalanceGetter == nil || s.customerRepo == nil {
 			s.logger.Info(context.Background(), "wallet or customer repository not configured for credit usage export",
@@ -375,4 +390,14 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 	default:
 		return nil
 	}
+}
+
+// customerFilterDigest names a customer selection independently of its order.
+func customerFilterDigest(customerExternalIDs []string) string {
+	ids := lo.Uniq(customerExternalIDs)
+	sort.Strings(ids)
+	// JSON, not a joined string: an ID may contain the separator.
+	encoded, _ := json.Marshal(ids)
+	sum := sha256.Sum256(encoded)
+	return hex.EncodeToString(sum[:6])
 }

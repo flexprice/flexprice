@@ -155,6 +155,7 @@ type ReportQueryRequest struct {
 	Filters    []ReportFilter `json:"filters,omitempty"`
 	Compare    string         `json:"compare,omitempty" enums:"previous_period,previous_year"`
 	Limit      int            `json:"limit,omitempty"`
+	Offset     int            `json:"offset,omitempty" minimum:"0"`
 	Sort       []ReportSort   `json:"sort,omitempty"`
 }
 
@@ -177,7 +178,7 @@ func (req *ReportQueryRequest) ValidateForReport(key string, maxRows int) (*anal
 func (req *ReportQueryRequest) toQuery() *analytics.ReportQuery {
 	q := &analytics.ReportQuery{
 		Shape: req.Shape, Dimensions: req.Dimensions, Grain: req.Grain,
-		Compare: req.Compare, Currency: req.Currency, Limit: req.Limit,
+		Compare: req.Compare, Currency: req.Currency, Limit: req.Limit, Offset: req.Offset,
 	}
 	for _, f := range req.Filters {
 		q.Filters = append(q.Filters, analytics.ReportQueryFilter{Field: f.Field, Op: f.Op, Value: f.Value})

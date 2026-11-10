@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 type TenantService interface {
@@ -122,7 +124,7 @@ func (s *tenantService) UpdateTenant(ctx context.Context, id string, req dto.Upd
 	}
 
 	// Update the timestamp
-	existingTenant.UpdatedAt = time.Now()
+	existingTenant.UpdatedAt = clock.Now()
 
 	// Save the updated tenant
 	if err := s.TenantRepo.Update(ctx, existingTenant); err != nil {

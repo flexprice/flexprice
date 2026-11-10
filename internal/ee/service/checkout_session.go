@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
@@ -16,7 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
 )
 
 // Checkout charge modes, a metrics label; "none" means the gateway was not contacted yet.
@@ -109,6 +112,10 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 			WithHint("The customer must be active to create a checkout session").
 			WithReportableDetails(map[string]any{"customer_id": customer.ID, "status": customer.Status}).
 			Mark(ierr.ErrValidation)
+	}
+	ctx, err = s.scopeCheckout(ctx, customer.ID, req.PaymentProvider)
+	if err != nil {
+		return nil, err
 	}
 
 	session := req.ToCheckoutSession(ctx, customer.ID)
@@ -303,6 +310,7 @@ func (s *checkoutSessionService) Cancel(ctx context.Context, id string) (*dto.Ch
 			Mark(ierr.ErrValidation)
 	}
 
+	ctx = types.WithForceWriter(ctx)
 	session, err := s.CheckoutSessionRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -561,7 +569,7 @@ func archiveDraftInvoice(ctx context.Context, sp ServiceParams, invoiceID string
 const cleanupExpiredBatchSize = 1000
 
 func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, effectiveDate *time.Time) (*types.CheckoutSessionCleanupResult, error) {
-	cutoff := time.Now().UTC()
+	cutoff := clock.Now()
 	if effectiveDate != nil {
 		cutoff = effectiveDate.UTC()
 	}
@@ -628,7 +636,7 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 	}
 
 	// Atomic claim: only one concurrent caller gets n > 0.
-	now := time.Now().UTC()
+	now := clock.Now()
 	ctx = activity.WithAction(ctx, sessionID, activity.CheckoutSessionCompleted)
 	claimed, err := s.CheckoutSessionRepo.MarkCompleted(ctx, sessionID, now, mergedResult)
 	if err != nil {
@@ -691,7 +699,7 @@ func (s *checkoutSessionService) publishCheckoutEvent(ctx context.Context, sessi
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(payload),
 		EntityType:    types.SystemEntityTypeCheckoutSession,
 		EntityID:      session.ID,
@@ -820,6 +828,19 @@ func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv 
 	})
 }
 
+// scopeCheckout puts the customer's billing entity in ctx and rejects a provider that entity has not connected.
+func (s *checkoutSessionService) scopeCheckout(ctx context.Context, customerID string, provider types.CheckoutPaymentProvider) (context.Context, error) {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+	if err != nil {
+		return ctx, err
+	}
+	gateway, ok := provider.ToPaymentGateway()
+	if !ok {
+		return ctx, nil
+	}
+	return ctx, requireProviderConnected(ctx, s.ServiceParams, types.SecretProvider(gateway))
+}
+
 // StartPayFirstCheckoutSession creates a checkout session on an existing DRAFT invoice,
 // fulfills payment + provider link, and publishes checkout.session.initiated.
 // On session create failure the draft is archived. On fulfill failure the session is cleaned up.
@@ -871,7 +892,7 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 		return nil, err
 	}
 
-	if err := s.fulfillCheckoutSession(ctx, session, req.DraftInvoice); err != nil {
+	terminate := func(ctx context.Context, err error) error {
 		if _, cleanupErr := s.terminateCheckoutSession(ctx, session, err); cleanupErr != nil {
 			s.Logger.Error(ctx, "checkout cleanup failed after pay-first fulfillment error",
 				"session_id", session.ID,
@@ -879,7 +900,14 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 				"original_err", err,
 			)
 		}
-		return nil, err
+		return err
+	}
+	ctx, err := s.scopeCheckout(ctx, req.CustomerID, session.PaymentProvider)
+	if err != nil {
+		return nil, terminate(ctx, err)
+	}
+	if err := s.fulfillCheckoutSession(ctx, session, req.DraftInvoice); err != nil {
+		return nil, terminate(ctx, err)
 	}
 
 	sessionResp := s.toPollableResponse(ctx, session, false)

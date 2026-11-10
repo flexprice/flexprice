@@ -2,7 +2,8 @@ package webhook
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -197,7 +198,7 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 		flexpricePayment = adopted
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 
 	if err := h.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: flexpricePaymentID,
@@ -389,7 +390,7 @@ func (h *Handler) voidOrRefundAuthPayment(ctx context.Context, flexpricePaymentI
 		if lifecycleErr := h.lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
-			VoidedAt:           time.Now().UTC(),
+			VoidedAt:           clock.Now(),
 		}); lifecycleErr != nil {
 			h.logger.Error(ctx, "failed to record payment voided",
 				"flexprice_payment_id", flexpricePaymentID,
@@ -423,7 +424,7 @@ func (h *Handler) voidOrRefundAuthPayment(ctx context.Context, flexpricePaymentI
 	if lifecycleErr := h.lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   gatewayPaymentID,
-		RefundedAt:         time.Now().UTC(),
+		RefundedAt:         clock.Now(),
 	}); lifecycleErr != nil {
 		h.logger.Error(ctx, "failed to record payment refunded",
 			"flexprice_payment_id", flexpricePaymentID,
@@ -446,10 +447,16 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment *moyasar.Moy
 		"moyasar_payment_id", payment.ID,
 		"moyasar_invoice_id", moyasarInvoiceID)
 
+	conn, err := h.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		ProviderTypes:     []string{string(types.SecretProviderMoyasar)},
 		ProviderEntityIDs: []string{moyasarInvoiceID},
 		EntityType:        types.IntegrationEntityTypeInvoice,
+		ConnectionID:      conn.ID,
 	}
 
 	mappings, err := h.entityIntegrationMappingRepo.List(ctx, filter)
@@ -505,7 +512,6 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, payment *moyasar.Moya
 		h.logger.Info(ctx, "payment_failed has no flexprice_payment_id, skipping", "moyasar_payment_id", payment.ID)
 		return nil
 	}
-
 	errorMessage := "payment failed"
 	if payment.Source != nil && payment.Source.Message != "" {
 		errorMessage = payment.Source.Message
@@ -514,7 +520,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, payment *moyasar.Moya
 	if err := h.lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   payment.ID,
-		FailedAt:           time.Now().UTC(),
+		FailedAt:           clock.Now(),
 		ErrorMessage:       errorMessage,
 	}); err != nil {
 		h.logger.Error(ctx, "failed to record payment failure",

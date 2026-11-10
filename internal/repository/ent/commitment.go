@@ -3,7 +3,10 @@ package ent
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	entcommitment "github.com/flexprice/flexprice/ent/commitment"
@@ -15,7 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
 )
 
 type commitmentRepository struct {
@@ -72,7 +74,7 @@ func (r *commitmentRepository) Create(ctx context.Context, c *domain.Commitment)
 		SetNillableTotalAmount(c.TotalAmount).
 		SetNillableInstalmentInvoicing(c.InstalmentInvoicing).
 		SetStartDate(c.StartDate).
-		SetEndDate(c.EndDate).
+		SetNillableEndDate(c.EndDate).
 		SetNillableOnEarlyTermination(c.OnEarlyTermination).
 		SetNillableIdempotencyKey(c.IdempotencyKey).
 		SetMetadata(c.Metadata).
@@ -184,7 +186,7 @@ func (r *commitmentRepository) Update(ctx context.Context, c *domain.Commitment)
 		SetInvoiceLabel(c.InvoiceLabel).
 		SetMetadata(c.Metadata).
 		SetNillableTerminatedAt(c.TerminatedAt).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if c.CommitmentStatus != "" {
@@ -214,6 +216,40 @@ func (r *commitmentRepository) Update(ctx context.Context, c *domain.Commitment)
 
 	SetSpanSuccess(span)
 	return domain.FromEnt(row), nil
+}
+
+func (r *commitmentRepository) Delete(ctx context.Context, id string) error {
+	span := StartRepositorySpan(ctx, "commitment", "delete", map[string]interface{}{
+		"commitment_id": id,
+	})
+	defer FinishSpan(span)
+
+	_, err := r.client.Writer(ctx).Commitment.UpdateOneID(id).
+		Where(
+			entcommitment.TenantID(types.GetTenantID(ctx)),
+			entcommitment.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entcommitment.Status(string(types.StatusPublished)),
+		).
+		SetStatus(string(types.StatusArchived)).
+		SetUpdatedAt(clock.Now()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHintf("Commitment %s not found", id).
+				Mark(ierr.ErrNotFound)
+		}
+
+		return ierr.WithError(err).
+			WithHint("Failed to delete commitment").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return nil
 }
 
 func (r *commitmentRepository) List(ctx context.Context, filter *domain.Filter) ([]*domain.Commitment, error) {
@@ -317,7 +353,7 @@ func applyCommitmentFilter(q *ent.CommitmentQuery, f *domain.Filter) (*ent.Commi
 	}
 
 	if f.ActiveFrom != nil {
-		preds = append(preds, entcommitment.EndDateGT(*f.ActiveFrom))
+		preds = append(preds, entcommitment.Or(entcommitment.EndDateIsNil(), entcommitment.EndDateGT(*f.ActiveFrom)))
 	}
 
 	if f.ActiveTo != nil {

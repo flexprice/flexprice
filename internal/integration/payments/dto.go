@@ -46,6 +46,7 @@ type RecordFailedAttemptParams struct {
 	FlexpricePaymentID string
 	GatewayPaymentID   string
 	ErrorMessage       string
+	Metadata           types.Metadata
 }
 
 // RecordPaymentFailureParams holds inputs for marking a payment FAILED.

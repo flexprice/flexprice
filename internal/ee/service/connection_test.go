@@ -55,6 +55,9 @@ func newConnectionServiceWithRealFactoryForTest(t *testing.T, cfg *config.Config
 		Config:             cfg,
 		ConnectionRepo:     connRepo,
 		IntegrationFactory: factory,
+		DB:                 testutil.NewMockPostgresClient(log),
+		TenantRepo:         testutil.NewInMemoryTenantStore(),
+		SettingsRepo:       testutil.NewInMemorySettingsStore(),
 	}
 
 	return NewConnectionService(params, encSvc), connRepo
@@ -81,6 +84,9 @@ func newConnectionServiceForTest(t *testing.T) (ConnectionService, *testutil.InM
 		Logger:         log,
 		Config:         cfg,
 		ConnectionRepo: connRepo,
+		DB:             testutil.NewMockPostgresClient(log),
+		TenantRepo:     testutil.NewInMemoryTenantStore(),
+		SettingsRepo:   testutil.NewInMemorySettingsStore(),
 	}
 
 	return NewConnectionService(params, encSvc), connRepo
@@ -146,6 +152,9 @@ func newConnectionServiceForTestWithConfig(t *testing.T, cfg *config.Configurati
 		Logger:         log,
 		Config:         cfg,
 		ConnectionRepo: connRepo,
+		DB:             testutil.NewMockPostgresClient(log),
+		TenantRepo:     testutil.NewInMemoryTenantStore(),
+		SettingsRepo:   testutil.NewInMemorySettingsStore(),
 	}
 
 	return NewConnectionService(params, encSvc), connRepo
@@ -661,4 +670,83 @@ func TestUpdateConnection_StripeSecrets_RejectedForOtherProviders(t *testing.T) 
 		},
 	})
 	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+}
+
+func TestUpdateConnection_S3KeyRotation(t *testing.T) {
+	svc, connRepo := newConnectionServiceForTest(t)
+	ctx := testutil.SetupContext()
+	encSvc, err := security.NewEncryptionService(&config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}, logger.NewNoopLogger())
+	require.NoError(t, err)
+	decrypt := func(v string) string {
+		out, err := encSvc.Decrypt(v)
+		require.NoError(t, err)
+		return out
+	}
+
+	s3Conn, err := svc.CreateConnection(ctx, dto.CreateConnectionRequest{
+		Name:         "Customer S3",
+		ProviderType: types.SecretProviderS3,
+		SyncConfig:   &types.SyncConfig{Storage: &types.StorageExportConfig{Bucket: "bucket", Region: "ap-south-1"}},
+		EncryptedSecretData: types.ConnectionMetadata{
+			S3: &types.S3ConnectionMetadata{AWSAccessKeyID: "AKIAOLD", AWSSecretAccessKey: "old-secret", AWSSessionToken: "old-token"},
+		},
+	})
+	require.NoError(t, err)
+
+	t.Run("keys are rotated, an omitted session token is cleared and the bucket is kept", func(t *testing.T) {
+		_, err := svc.UpdateConnection(ctx, s3Conn.ID, dto.UpdateConnectionRequest{
+			EncryptedSecretData: &types.ConnectionMetadata{
+				S3: &types.S3ConnectionMetadata{AWSAccessKeyID: "AKIANEW", AWSSecretAccessKey: "new-secret"},
+			},
+		})
+		require.NoError(t, err)
+
+		stored, err := connRepo.Get(ctx, s3Conn.ID)
+		require.NoError(t, err)
+		require.Equal(t, "AKIANEW", decrypt(stored.EncryptedSecretData.S3.AWSAccessKeyID))
+		require.Equal(t, "new-secret", decrypt(stored.EncryptedSecretData.S3.AWSSecretAccessKey))
+		require.Empty(t, stored.EncryptedSecretData.S3.AWSSessionToken)
+		require.Equal(t, "bucket", stored.SyncConfig.Storage.Bucket)
+	})
+
+	t.Run("a key without its secret is rejected", func(t *testing.T) {
+		_, err := svc.UpdateConnection(ctx, s3Conn.ID, dto.UpdateConnectionRequest{
+			EncryptedSecretData: &types.ConnectionMetadata{S3: &types.S3ConnectionMetadata{AWSAccessKeyID: "AKIA"}},
+		})
+		require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+	})
+
+	t.Run("s3 secrets on another provider are rejected", func(t *testing.T) {
+		stripeConn, err := svc.CreateConnection(ctx, dto.CreateConnectionRequest{
+			Name:         "Stripe",
+			ProviderType: types.SecretProviderStripe,
+			EncryptedSecretData: types.ConnectionMetadata{
+				Stripe: &types.StripeConnectionMetadata{PublishableKey: "pk", SecretKey: "sk", WebhookSecret: "wh"},
+			},
+		})
+		require.NoError(t, err)
+		_, err = svc.UpdateConnection(ctx, stripeConn.ID, dto.UpdateConnectionRequest{
+			EncryptedSecretData: &types.ConnectionMetadata{
+				S3: &types.S3ConnectionMetadata{AWSAccessKeyID: "AKIA", AWSSecretAccessKey: "secret"},
+			},
+		})
+		require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+	})
+
+	t.Run("no-op update does not bump updated_at", func(t *testing.T) {
+		before, err := connRepo.Get(ctx, s3Conn.ID)
+		require.NoError(t, err)
+
+		_, err = svc.UpdateConnection(ctx, s3Conn.ID, dto.UpdateConnectionRequest{
+			Name:       before.Name,
+			SyncConfig: before.SyncConfig,
+		})
+		require.NoError(t, err)
+
+		after, err := connRepo.Get(ctx, s3Conn.ID)
+		require.NoError(t, err)
+		require.Equal(t, before.UpdatedAt, after.UpdatedAt)
+	})
 }

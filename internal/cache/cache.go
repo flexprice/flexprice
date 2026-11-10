@@ -128,8 +128,11 @@ func GenerateKey(ctx context.Context, prefix string, params ...any) string {
 	if ctx != nil {
 		tenantId := types.GetTenantID(ctx)
 		environmentId := types.GetEnvironmentID(ctx)
-		if tenantId != "" && environmentId != "" {
-			parts = append(parts, tenantId, environmentId)
+		if tenantId != "" {
+			parts = append(parts, tenantId)
+			if environmentId != "" {
+				parts = append(parts, environmentId)
+			}
 		}
 	}
 

@@ -81,13 +81,14 @@ func NewExportActivity(
 
 // ExportDataInput represents input for exporting data
 type ExportDataInput struct {
-	EntityType   types.ScheduledTaskEntityType
-	ConnectionID string
-	TenantID     string
-	EnvID        string
-	StartTime    time.Time
-	EndTime      time.Time
-	JobConfig    *types.S3JobConfig
+	EntityType          types.ScheduledTaskEntityType
+	ConnectionID        string
+	TenantID            string
+	EnvID               string
+	StartTime           time.Time
+	EndTime             time.Time
+	JobConfig           *types.S3JobConfig
+	CustomerExternalIDs []string
 }
 
 // ExportDataOutput represents output from export
@@ -112,13 +113,14 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 
 	// Create export request
 	request := &dto.ExportRequest{
-		EntityType:   input.EntityType,
-		ConnectionID: input.ConnectionID,
-		TenantID:     input.TenantID,
-		EnvID:        input.EnvID,
-		StartTime:    input.StartTime,
-		EndTime:      input.EndTime,
-		JobConfig:    input.JobConfig,
+		EntityType:          input.EntityType,
+		ConnectionID:        input.ConnectionID,
+		TenantID:            input.TenantID,
+		EnvID:               input.EnvID,
+		StartTime:           input.StartTime,
+		EndTime:             input.EndTime,
+		JobConfig:           input.JobConfig,
+		CustomerExternalIDs: input.CustomerExternalIDs,
 	}
 
 	// Use the ExportService which handles routing to the correct exporter

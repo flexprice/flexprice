@@ -13,6 +13,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/billingentity"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -34,6 +36,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
@@ -113,6 +116,7 @@ type Stores struct {
 	AlertRepo                    alert.Repository
 	GroupRepo                    group.Repository
 	MeterUsageRepo               events.MeterUsageRepository
+	MeterUsageCheckpointRepo     meterusagecheckpoint.Repository
 	PlanPriceSyncRepo            planpricesync.Repository
 	AddonPriceSyncRepo           addonpricesync.Repository
 	CheckoutSessionRepo          domainCheckout.Repository
@@ -122,6 +126,9 @@ type Stores struct {
 	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
 	SelfBillingPostgresRepo      domainsb.PostgresRepository
 	CommitmentRepo               commitment.Repository
+	BillingTermRepo              billingterm.TermRepository
+	BillingInstalmentRepo        billingterm.InstalmentRepository
+	BillingEntityRepo            billingentity.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -284,6 +291,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		AlertRepo:                    NewInMemoryAlertSettingsStore(),
 		GroupRepo:                    NewInMemoryGroupStore(),
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
+		MeterUsageCheckpointRepo:     NewInMemoryMeterUsageCheckpointStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
 		AddonPriceSyncRepo:           addonPriceSyncStore,
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
@@ -293,6 +301,9 @@ func (s *BaseServiceTestSuite) setupStores() {
 		SelfBillingClickHouseRepo:    selfBillingStore,
 		SelfBillingPostgresRepo:      selfBillingStore,
 		CommitmentRepo:               NewInMemoryCommitmentStore(),
+		BillingTermRepo:              NewInMemoryBillingTermStore(),
+		BillingInstalmentRepo:        NewInMemoryBillingInstalmentStore(),
+		BillingEntityRepo:            NewInMemoryBillingEntityStore(),
 	}
 
 	// Cache stores
@@ -354,6 +365,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.AlertRepo.(*InMemoryAlertSettingsStore).Clear()
 	s.stores.GroupRepo.(*InMemoryGroupStore).Clear()
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
+	s.stores.MeterUsageCheckpointRepo.(*InMemoryMeterUsageCheckpointStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
 	s.stores.AddonPriceSyncRepo.(*InMemoryAddonPriceSyncStore).Clear()
 	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()
@@ -362,6 +374,9 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.RevenueFactRepo.(*InMemoryRevenueFactStore).Clear()
 	s.stores.SelfBillingClickHouseRepo.(*InMemorySelfBillingStore).Clear()
 	s.stores.CommitmentRepo.(*InMemoryCommitmentStore).Clear()
+	s.stores.BillingTermRepo.(*InMemoryBillingTermStore).Clear()
+	s.stores.BillingInstalmentRepo.(*InMemoryBillingInstalmentStore).Clear()
+	s.stores.BillingEntityRepo.(*InMemoryBillingEntityStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

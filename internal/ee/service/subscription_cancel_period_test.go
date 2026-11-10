@@ -1,12 +1,19 @@
 package service
 
 import (
+	"encoding/json"
+	"net/http"
+	"strings"
 	"time"
 
+	cockroachErrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -214,6 +221,50 @@ func (s *SubscriptionServiceSuite) TestCalculateBillingPeriods_InvertedStoredPer
 	_, err := s.service.(*subscriptionService).CalculateBillingPeriods(s.GetContext(), sub.ID)
 	s.Error(err)
 	s.Contains(err.Error(), "inverted")
+}
+
+func (s *SubscriptionServiceSuite) TestUpdateSubscription_ProrationBehavior() {
+	periodStart := s.testData.now.Add(-5 * 24 * time.Hour)
+	periodEnd := s.testData.now.Add(25 * 24 * time.Hour)
+	sub := &subscription.Subscription{
+		ID:                 "sub_update_proration",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          periodStart,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		BillingAnchor:      periodStart,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		Timezone:           types.DefaultTimezone,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub))
+
+	behavior := types.ProrationBehaviorCreateProrations
+	_, err := s.service.UpdateSubscription(s.GetContext(), sub.ID, dto.UpdateSubscriptionRequest{
+		ProrationBehavior: &behavior,
+	})
+	s.NoError(err)
+
+	updated, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), sub.ID)
+	s.NoError(err)
+	s.Equal(types.ProrationBehaviorCreateProrations, updated.ProrationBehavior)
+
+	_, err = s.service.UpdateSubscription(s.GetContext(), sub.ID, dto.UpdateSubscriptionRequest{})
+	s.NoError(err)
+	updated, err = s.GetStores().SubscriptionRepo.Get(s.GetContext(), sub.ID)
+	s.NoError(err)
+	s.Equal(types.ProrationBehaviorCreateProrations, updated.ProrationBehavior)
+
+	bad := types.ProrationBehavior("sometimes")
+	_, err = s.service.UpdateSubscription(s.GetContext(), sub.ID, dto.UpdateSubscriptionRequest{
+		ProrationBehavior: &bad,
+	})
+	s.Error(err)
 }
 
 // PUT cancel_at inside the current period must shorten current_period_end to cancel_at.
@@ -519,4 +570,81 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription_ImmediateOnNotYetStart
 	s.True(cancelled.CurrentPeriodEnd.Equal(*cancelled.EndDate),
 		"current_period_end (%s) must close at end_date (%s)",
 		cancelled.CurrentPeriodEnd, *cancelled.EndDate)
+}
+
+// TestCancelSubscription_ExistingFinalizedProrationInvoiceReturnsConflict asserts a cancel whose period is already invoiced returns 409 with that invoice's ID.
+func (s *SubscriptionServiceSuite) TestCancelSubscription_ExistingFinalizedProrationInvoiceReturnsConflict() {
+	periodStart := s.testData.now.Add(-5 * 24 * time.Hour).UTC()
+	cancelAt := s.testData.now.Add(-1 * time.Hour).UTC()
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_cancel_existing_proration_invoice",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   s.testData.now.Add(25 * 24 * time.Hour),
+		BillingAnchor:      s.testData.now.Add(-30 * 24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		Timezone:           types.DefaultTimezone,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub))
+
+	// Finalized invoice for exactly the period the cancel would bill: current period start → cancel_at.
+	existing := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      sub.CustomerID,
+		SubscriptionID:  lo.ToPtr(sub.ID),
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        sub.Currency,
+		AmountDue:       decimal.NewFromInt(10),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromInt(10),
+		PeriodStart:     lo.ToPtr(periodStart),
+		PeriodEnd:       lo.ToPtr(cancelAt),
+		BillingReason:   string(types.InvoiceBillingReasonProration),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), existing))
+
+	_, err := s.service.CancelSubscription(s.GetContext(), sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:               types.CancellationTypeImmediate,
+		CancelAt:                       lo.ToPtr(cancelAt),
+		ProrationBehavior:              types.ProrationBehaviorCreateProrations,
+		CancelImmediatelyInvoicePolicy: types.CancelImmediatelyInvoicePolicyGenerateInvoice,
+		Reason:                         "test_existing_proration_invoice",
+	})
+	s.Require().Error(err)
+	s.True(ierr.IsAlreadyExists(err), "existing invoice must surface as already exists, got: %v", err)
+	s.False(ierr.IsDatabase(err), "existing invoice must not be marked as a database error")
+
+	// ResolveError ranges over a map, so a second 5xx mark would flip the status between runs.
+	for i := 0; i < 50; i++ {
+		status, code := ierr.ResolveError(err)
+		s.Equal(http.StatusConflict, status)
+		s.Equal(ierr.ErrCodeAlreadyExists, code)
+	}
+
+	// Read the way the error middleware builds the response body.
+	var details map[string]any
+	for _, sdp := range cockroachErrors.GetAllSafeDetails(err) {
+		for _, payload := range sdp.SafeDetails {
+			if strings.HasPrefix(payload, "__json__:") {
+				s.Require().NoError(json.Unmarshal([]byte(strings.TrimPrefix(payload, "__json__:")), &details))
+			}
+		}
+	}
+	s.Equal(existing.ID, details["invoice_id"])
+
+	// The conflict is raised before the subscription is updated, so it stays uncancelled.
+	after, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), sub.ID)
+	s.NoError(err)
+	s.Equal(types.SubscriptionStatusActive, after.SubscriptionStatus)
+	s.Nil(after.CancelAt)
 }

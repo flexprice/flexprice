@@ -73,6 +73,7 @@ func (s *SubscriptionChangeV2Suite) serviceParams() ServiceParams {
 		EventRepo:                  st.EventRepo,
 		MeterRepo:                  st.MeterRepo,
 		MeterUsageRepo:             st.MeterUsageRepo,
+		MeterUsageCheckpointRepo:   st.MeterUsageCheckpointRepo,
 		CustomerRepo:               st.CustomerRepo,
 		InvoiceRepo:                st.InvoiceRepo,
 		HostedInvoiceTokenRepo:     st.HostedInvoiceTokenRepo,
@@ -980,14 +981,12 @@ func (s *SubscriptionChangeV2Suite) TestCharacterisePlanChange_Upgrade_FullEntit
 	s.Run("entitlement_grants", func() {
 		closed, err := s.GetStores().EntitlementGrantRepo.Get(ctx, closingGrant.ID)
 		s.Require().NoError(err)
-		s.True(closed.ValidTo.Equal(at), "the outgoing plan's window ends at the swap")
-		s.True(closed.ValidFrom.Equal(s.td.periodStart), "closing must not move the window start")
+		s.True(closed.ValidTo.Equal(s.td.periodEnd), "without an incoming grant config, the existing window expires naturally")
+		s.True(closed.ValidFrom.Equal(s.td.periodStart))
 
-		// TODAY no successor is opened for the target plan's entitlement: the swap closes
-		// and leaves the feature ungranted until the evaluator's next tick. Addon attach
-		// opens the successor itself. Divergence 5 is what adds a second row here.
-		s.Len(s.allEntitlementGrants(), 1,
-			"TODAY: a plan change closes windows but opens no successors")
+		// These fixtures use legacy entitlements, without grant configuration, so
+		// the shared addon flow does not open a successor.
+		s.Len(s.allEntitlementGrants(), 1)
 	})
 
 	s.Run("money", func() {
@@ -1192,4 +1191,33 @@ func (s *SubscriptionChangeV2Suite) TestCharacterisePlanChange_PreviewWritesNoth
 	s.True(quoted.Equal(executed.ChangedResources.Invoices[0].Invoice.AmountDue),
 		"quoted %s but billed %s", quoted, executed.ChangedResources.Invoices[0].Invoice.AmountDue)
 	s.Equal(preview.ChangeType, executed.ChangeType)
+}
+
+// A target plan price already scheduled to end ends the line item the change gives it, whether
+// the line is carried onto that price or opened for it, so it does not stay live next to the
+// price that replaces it.
+func (s *SubscriptionChangeV2Suite) TestExecute_TargetPriceEndDateEndsTheLineItem() {
+	ctx := s.GetContext()
+	cutover := time.Now().UTC().AddDate(0, 0, 7).Truncate(time.Second)
+
+	target := s.createPlan("Ending", "ending")
+	// Bills identically to the starter base fee, so the current line is carried onto it
+	carriedPrice := s.createFixedPrice(target.ID, "base_fee", 20)
+	// New to the target plan, so a line is opened for it
+	openedPrice := s.createFixedPrice(target.ID, "support_fee", 30)
+	for _, p := range []*price.Price{carriedPrice, openedPrice} {
+		p.EndDate = &cutover
+		s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, p, true))
+	}
+
+	_, err := s.svc.ExecutePlanChange(ctx, s.td.sub.ID, s.changeRequest(target.ID, types.ProrationBehaviorNone), time.Now().UTC())
+	s.Require().NoError(err)
+
+	items := lo.KeyBy(s.allLineItems(), func(li *subscription.SubscriptionLineItem) string { return li.PriceID })
+	carried, opened := items[carriedPrice.ID], items[openedPrice.ID]
+	s.Require().NotNil(carried)
+	s.Require().NotNil(opened)
+	s.Equal(s.td.baseLine.ID, carried.ID, "the starter base line is carried onto the target price, not reopened")
+	s.True(carried.EndDate.Equal(cutover), "the carried line must end at the target price's end date")
+	s.True(opened.EndDate.Equal(cutover), "the opened line must end at the target price's end date")
 }

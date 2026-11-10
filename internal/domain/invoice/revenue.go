@@ -3,8 +3,37 @@ package invoice
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
+
+// LineNets is each line's net amount less its pro rata share of the invoice's inclusive tax, keyed by line ID.
+// e.g. lines netting 60 and 40 with 12 inclusive tax → 52.80 and 35.20.
+func (i *Invoice) LineNets(taxes []*taxapplied.TaxApplied) map[string]decimal.Decimal {
+	nets := lo.SliceToMap(i.LineItems, func(li *InvoiceLineItem) (string, decimal.Decimal) { return li.ID, li.NetAmount() })
+
+	inclusiveTax := decimal.Zero
+	for _, t := range taxes {
+		if t.EntityType == types.TaxRateEntityTypeInvoice && t.EntityID == i.ID &&
+			t.TaxBehavior == types.TaxBehaviorInclusive && !t.IsReversal() {
+			inclusiveTax = inclusiveTax.Add(t.TaxAmount)
+		}
+	}
+	if inclusiveTax.IsZero() {
+		return nets
+	}
+
+	shares := utils.AllocateProRata(nets, inclusiveTax, types.GetCurrencyPrecision(i.Currency))
+	return lo.MapValues(nets, func(net decimal.Decimal, id string) decimal.Decimal { return net.Sub(shares[id]) })
+}
+
+// NetAmount is the line's amount less its line and invoice-level discounts, before tax.
+func (li *InvoiceLineItem) NetAmount() decimal.Decimal {
+	return li.Amount.Sub(li.LineItemDiscount).Sub(li.InvoiceLevelDiscount)
+}
 
 // RevenueByCustomerRow represents a single row from the revenue aggregation query,
 // grouped by customer_id, price_type, and currency.

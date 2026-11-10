@@ -9,5 +9,5 @@ import (
 )
 
 func TestAnalyzer(t *testing.T) {
-	analysistest.Run(t, analysistest.TestData(), loglint.Analyzer, "sample")
+	analysistest.Run(t, analysistest.TestData(), loglint.Analyzer, "sample", "internal/ee/service")
 }

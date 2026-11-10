@@ -12,6 +12,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/billingentity"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -35,6 +37,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -60,8 +63,13 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
+	accountingPeriodRepo "github.com/flexprice/flexprice/internal/repository/accountingperiod"
 	clickhouseRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
+	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
+	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
+	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
+	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"go.uber.org/fx"
 )
@@ -176,8 +184,26 @@ func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {
 	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.InMemoryCache, p.RedisCache)
 }
 
+func NewMeterUsageCheckpointRepository(p RepositoryParams) meterusagecheckpoint.Repository {
+	return entRepo.NewMeterUsageCheckpointRepository(p.EntClient, p.Logger)
+}
+
 func NewCommitmentRepository(p RepositoryParams) commitment.Repository {
 	return entRepo.NewCommitmentRepository(p.EntClient, p.Logger)
+}
+
+// NewBillingTermRepository provides the billing term repository.
+func NewBillingTermRepository(p RepositoryParams) billingterm.TermRepository {
+	return entRepo.NewBillingTermRepository(p.EntClient, p.Logger)
+}
+
+// NewBillingInstalmentRepository provides the billing instalment repository.
+func NewBillingInstalmentRepository(p RepositoryParams) billingterm.InstalmentRepository {
+	return entRepo.NewBillingInstalmentRepository(p.EntClient, p.Logger)
+}
+
+func NewBillingEntityRepository(p RepositoryParams) billingentity.Repository {
+	return entRepo.NewBillingEntityRepository(p.EntClient, p.Logger)
 }
 
 func NewEntitlementGrantRepository(p RepositoryParams) entitlementgrant.Repository {
@@ -272,6 +298,26 @@ func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
 	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.InMemoryCache)
 }
 
+func NewProductRepository(p RepositoryParams) productRepo.Repository {
+	return productRepo.NewRepository(p.EntClient, p.Logger)
+}
+
+func NewContractRepository(p RepositoryParams) contractRepo.Repository {
+	return contractRepo.NewRepository(p.EntClient, p.Logger)
+}
+
+func NewPerformanceObligationRepository(p RepositoryParams) pobRepo.Repository {
+	return pobRepo.NewRepository(p.EntClient, p.Logger)
+}
+
+func NewAccountingPeriodRepository(p RepositoryParams) accountingPeriodRepo.Repository {
+	return accountingPeriodRepo.NewRepository(p.EntClient, p.Logger)
+}
+
+func NewJournalRepository(p RepositoryParams) journalRepo.Repository {
+	return journalRepo.NewRepository(p.EntClient, p.Logger)
+}
+
 func NewAddonRepository(p RepositoryParams) addon.Repository {
 	return entRepo.NewAddonRepository(p.EntClient, p.Logger, p.InMemoryCache)
 }
@@ -346,4 +392,12 @@ func NewSelfBillingClickHouseRepository(p RepositoryParams) domainsb.ClickHouseR
 
 func NewSelfBillingPostgresRepository(p RepositoryParams) domainsb.PostgresRepository {
 	return entRepo.NewSelfBillingRepository(p.EntClient, p.Logger)
+}
+
+func NewEventDeletionRequestRepository(p RepositoryParams) events.DeletionRequestRepository {
+	return entRepo.NewEventDeletionRequestRepository(p.EntClient, p.Logger)
+}
+
+func NewEventDeletionLogRepository(p RepositoryParams) events.DeletedEventsLogRepository {
+	return clickhouseRepo.NewEventDeletionLogRepository(p.ClickHouseDB, p.Logger)
 }

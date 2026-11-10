@@ -4,6 +4,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -11,7 +15,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // RazorpayCustomerService defines the interface for Razorpay customer operations
@@ -70,10 +73,16 @@ func (s *CustomerService) EnsureCustomerSyncedToRazorpay(ctx context.Context, cu
 
 	// Check if customer is synced via integration mapping table
 	if s.entityIntegrationMappingRepo != nil {
+		conn, err := s.client.GetConnection(ctx)
+		if err != nil {
+			return nil, err
+		}
+
 		filter := &types.EntityIntegrationMappingFilter{
 			EntityID:      customerID,
 			EntityType:    types.IntegrationEntityTypeCustomer,
 			ProviderTypes: []string{string(types.SecretProviderRazorpay)},
+			ConnectionID:  conn.ID,
 		}
 
 		existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -162,6 +171,11 @@ func (s *CustomerService) CreateCustomerInRazorpay(ctx context.Context, customer
 
 // SyncCustomerToRazorpay creates a customer in Razorpay and stores the mapping
 func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceCustomer *customer.Customer) (string, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	// Prepare customer data for Razorpay
 	customerData := map[string]interface{}{
 		"name": flexpriceCustomer.Name,
@@ -220,10 +234,11 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 		Metadata: map[string]interface{}{
 			"created_via":          "flexprice_to_provider",
 			"razorpay_customer_id": razorpayCustomerID,
-			"synced_at":            time.Now().UTC().Format(time.RFC3339),
+			"synced_at":            clock.Now().Format(time.RFC3339),
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
+		ConnectionID:  lo.ToPtr(conn.ID),
 	}
 
 	err = s.entityIntegrationMappingRepo.Create(ctx, mapping)
@@ -245,10 +260,16 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 
 // GetRazorpayCustomerID retrieves the Razorpay customer ID for a FlexPrice customer
 func (s *CustomerService) GetRazorpayCustomerID(ctx context.Context, customerID string) (string, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityID:      customerID,
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{string(types.SecretProviderRazorpay)},
+		ConnectionID:  conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)

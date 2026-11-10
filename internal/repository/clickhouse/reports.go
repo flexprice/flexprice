@@ -1,6 +1,7 @@
 package clickhouse
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -10,6 +11,7 @@ import (
 	"hash"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	clickhouse_go "github.com/ClickHouse/clickhouse-go/v2"
@@ -20,6 +22,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/analytics"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
@@ -35,6 +38,10 @@ type ReportsRepository struct {
 	cfg    config.ReportsConfig
 	logger *logger.Logger
 	cache  cache.RedisCache
+	source string
+
+	usageConn   driver.Conn
+	usageSource string
 }
 
 func NewReportsRepository(cfg *config.Configuration, log *logger.Logger, rc cache.RedisCache) (*ReportsRepository, error) {
@@ -49,6 +56,10 @@ func NewReportsRepository(cfg *config.Configuration, log *logger.Logger, rc cach
 		return r, nil
 	}
 	opts := cfg.ClickHouse.GetClientOptions()
+	if r.cfg.Address != "" {
+		opts.Addr = []string{r.cfg.Address}
+	}
+	r.source = strings.Join(opts.Addr, ",")
 	opts.Auth = clickhouse_go.Auth{
 		Database: r.cfg.Database,
 		Username: r.cfg.Username,
@@ -59,6 +70,19 @@ func NewReportsRepository(cfg *config.Configuration, log *logger.Logger, rc cach
 		return nil, ierr.WithError(err).WithHint("open reports clickhouse connection").Mark(ierr.ErrSystem)
 	}
 	r.conn = conn
+	if !r.cfg.UsageOnEventsClickHouse {
+		return r, nil
+	}
+	r.cfg.UsageDatabase = cmp.Or(r.cfg.UsageDatabase, cfg.ClickHouse.Database)
+	usageOpts := cfg.ClickHouse.GetClientOptions()
+	usageOpts.Auth.Database = r.cfg.UsageDatabase
+	usageConn, err := clickhouse_go.Open(usageOpts)
+	if err != nil {
+		_ = conn.Close()
+		return nil, ierr.WithError(err).WithHint("open usage clickhouse connection").Mark(ierr.ErrSystem)
+	}
+	r.usageConn = usageConn
+	r.usageSource = strings.Join(usageOpts.Addr, ",")
 	return r, nil
 }
 
@@ -90,11 +114,22 @@ func (r *ReportsRepository) RunReport(ctx context.Context, rv *analytics.Resolve
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.run(ctx, q)
+	rows, err := r.forReport(rv).run(ctx, q)
 	if err != nil {
 		return nil, err
 	}
 	return reportResult(q, rows, r.cfg.MaxResultRows)
+}
+
+// forReport targets the usage server for usage-backed metrics.
+func (r *ReportsRepository) forReport(rv *analytics.ResolvedView) *ReportsRepository {
+	if r.usageConn == nil || rv == nil || !slices.Contains(rv.Metrics, types.MetricEventsVolume) {
+		return r
+	}
+	u := *r
+	u.conn = r.usageConn
+	u.source = r.usageSource
+	return &u
 }
 
 func (r *ReportsRepository) buildReport(rv *analytics.ResolvedView, tenantID, environmentID string) (*reportQuery, error) {
@@ -136,7 +171,7 @@ func (r *ReportsRepository) cached(ctx context.Context, q *reportQuery, fetch fu
 	if !r.resultCacheOn() {
 		return fetch()
 	}
-	key := reportCacheKey(ctx, q)
+	key := reportCacheKey(ctx, r.source, q)
 	if v, ok := r.cache.Get(ctx, key); ok {
 		if rows, ok := cache.UnmarshalCacheValue[[][]string](v); ok {
 			return *rows, nil
@@ -153,8 +188,9 @@ func (r *ReportsRepository) cached(ctx context.Context, q *reportQuery, fetch fu
 }
 
 // Params carry tenant and environment.
-func reportCacheKey(ctx context.Context, q *reportQuery) string {
+func reportCacheKey(ctx context.Context, source string, q *reportQuery) string {
 	h := sha256.New()
+	writeLengthPrefixed(h, source)
 	writeLengthPrefixed(h, q.SQL)
 	for _, k := range slices.Sorted(maps.Keys(q.Params)) {
 		writeLengthPrefixed(h, k)

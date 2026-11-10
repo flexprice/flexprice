@@ -7,6 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	domainevents "github.com/flexprice/flexprice/internal/domain/events"
@@ -15,8 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/gin-gonic/gin"
-	"github.com/samber/lo"
 )
 
 type EventsHandler struct {
@@ -24,16 +27,18 @@ type EventsHandler struct {
 	rawEventsReprocessingService service.RawEventsReprocessingService
 	rawEventConsumptionService   service.RawEventConsumptionService
 	meterUsageService            service.MeterUsageService
+	eventDeletionService         service.EventDeletionService
 	config                       *config.Configuration
 	log                          *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, meterUsageService service.MeterUsageService, config *config.Configuration, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, meterUsageService service.MeterUsageService, eventDeletionService service.EventDeletionService, config *config.Configuration, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
 		eventService:                 eventService,
 		rawEventsReprocessingService: rawEventsReprocessingService,
 		rawEventConsumptionService:   rawEventConsumptionService,
 		meterUsageService:            meterUsageService,
+		eventDeletionService:         eventDeletionService,
 		config:                       config,
 		log:                          log,
 	}
@@ -389,6 +394,11 @@ func (h *EventsHandler) QueryEvents(c *gin.Context) {
 // @Summary Get usage analytics
 // @ID getUsageAnalytics
 // @Description Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.
+// @Description Groups and regular-meter time-series points contain usage-proportional cost allocations, not independently priced charges.
+// @Description Source/property filters return the unfiltered usage charge for the same time range multiplied by filtered quantity / full quantity; groups split that filtered share. Filtered costs exclude commitments and true-up.
+// @Description When full quantity is zero, no proportional rate is defined; costs retain direct per-group/per-bucket pricing.
+// @Description Analytics are eventually consistent: concurrent ingestion or late events can make filtered allocations approximate across separate reads. These allocations are not an invoice preview.
+// @Description For non-additive meters such as MAX, quantities use the meter's aggregation, so individual group shares can change when filtering or grouping changes.
 // @Tags Events
 // @Accept json
 // @Produce json
@@ -447,7 +457,7 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 const eventLookupDefaultLookback = 14 * 24 * time.Hour
 
 func parseEventLookupWindow(startTimeStr, endTimeStr string) (domainevents.TimeRange, error) {
-	window := domainevents.TimeRange{End: time.Now().UTC()}
+	window := domainevents.TimeRange{End: clock.Now()}
 	var err error
 	if endTimeStr != "" {
 		if window.End, err = time.Parse(time.RFC3339, endTimeStr); err != nil {
@@ -490,7 +500,7 @@ func parseStartAndEndTime(startTimeStr, endTimeStr string) (time.Time, time.Time
 
 func validateStartAndEndTime(startTime, endTime time.Time) (time.Time, time.Time, error) {
 	if endTime.IsZero() {
-		endTime = time.Now()
+		endTime = clock.Now()
 	}
 
 	if startTime.IsZero() {
@@ -650,4 +660,38 @@ func (h *EventsHandler) ReprocessUnprocessedRawEvents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// @Summary Delete events
+// @ID deleteEvents
+// @Description Hard-deletes ingested events and the meter usage they produced for the named customers and period, optionally narrowed by feature or by exact event id. Refused when anything in scope has already been invoiced. Irreversible.
+// @Tags Events
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "delete"
+// @Param request body dto.DeleteEventsRequest true "Deletion scope"
+// @Success 200 {object} dto.DeleteEventsResponse
+// @Header 200 {string} X-Request-ID "Identifies this deletion in deleted_events_logs"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request, or a guard refused the deletion"
+// @Failure 403 {object} ierr.ErrorResponse "Caller lacks the capability, or is a service account"
+// @Failure 409 {object} ierr.ErrorResponse "A deletion is already in progress for a customer in this request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /events/delete [post]
+func (h *EventsHandler) DeleteEvents(c *gin.Context) {
+	var req dto.DeleteEventsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.eventDeletionService.Delete(c.Request.Context(), &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }

@@ -13,7 +13,6 @@ type Repository interface {
 	Get(ctx context.Context, id string) (*Price, error)
 	// GetLinkedCustomerID returns the customer the price is linked to, in any status; "" when it has none.
 	GetLinkedCustomerID(ctx context.Context, id string) (string, error)
-	GetByPlanID(ctx context.Context, planID string) ([]*Price, error)
 	List(ctx context.Context, filter *types.PriceFilter) ([]*Price, error)
 	Count(ctx context.Context, filter *types.PriceFilter) (int, error)
 	ListAll(ctx context.Context, filter *types.PriceFilter) ([]*Price, error)

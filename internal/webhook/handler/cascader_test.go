@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -9,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	cascaderules "github.com/flexprice/flexprice/internal/webhook/handler/cascade_rules"
 	"github.com/stretchr/testify/require"
 )
@@ -244,4 +246,49 @@ func TestNewEventCascader_NoCycleOK(t *testing.T) {
 			},
 		)
 	})
+}
+
+func commitmentEvent(t *testing.T, name types.WebhookEventName, subscriptionID string) *types.WebhookEvent {
+	t.Helper()
+	event, err := types.NewWebhookEvent(name).
+		WithEntity(types.SystemEntityTypeCommitment, "cmt_1").
+		WithPayload(webhookDto.InternalCommitmentEvent{CommitmentID: "cmt_1", SubscriptionID: subscriptionID, TenantID: "ten_1"}).
+		Build()
+	require.NoError(t, err)
+	event.TenantID, event.EnvironmentID, event.UserID = "ten_1", "env_1", "usr_1"
+	return event
+}
+
+func TestCascade_CommitmentCreated_YieldsSubscriptionUpdated(t *testing.T) {
+	t.Parallel()
+
+	c := NewEventCascader(testLogger(t), nil, cascaderules.NewCommitmentCascadeRule(testLogger(t))).(*eventCascader)
+	cascaded := c.Cascade(context.Background(), commitmentEvent(t, types.WebhookEventCommitmentCreated, "sub_123"))
+
+	require.Len(t, cascaded, 1)
+	require.Equal(t, types.WebhookEventSubscriptionUpdated, cascaded[0].EventName)
+	require.Equal(t, types.SystemEntityTypeSubscription, cascaded[0].EntityType)
+	require.Equal(t, "sub_123", cascaded[0].EntityID)
+	require.Equal(t, "ten_1", cascaded[0].TenantID)
+	require.Equal(t, "env_1", cascaded[0].EnvironmentID)
+	require.Equal(t, 1, cascaded[0].CascadeDepth)
+
+	var payload webhookDto.InternalSubscriptionEvent
+	require.NoError(t, json.Unmarshal(cascaded[0].Payload, &payload))
+	require.Equal(t, "sub_123", payload.SubscriptionID)
+	require.Equal(t, "ten_1", payload.TenantID)
+}
+
+func TestCascade_CommitmentUpdatedOrTerminatedOrWithoutSubscription_YieldsNothing(t *testing.T) {
+	t.Parallel()
+
+	c := NewEventCascader(testLogger(t), nil, cascaderules.NewCommitmentCascadeRule(testLogger(t))).(*eventCascader)
+	for _, event := range []*types.WebhookEvent{
+		commitmentEvent(t, types.WebhookEventCommitmentUpdated, "sub_123"),
+		commitmentEvent(t, types.WebhookEventCommitmentTerminated, "sub_123"),
+		commitmentEvent(t, types.WebhookEventCommitmentCreated, ""),
+		{EventName: types.WebhookEventCommitmentCreated, EntityID: "cmt_1", Payload: json.RawMessage(`{`)},
+	} {
+		require.Empty(t, c.Cascade(context.Background(), event), "event %s", event.EventName)
+	}
 }

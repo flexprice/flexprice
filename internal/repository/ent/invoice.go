@@ -6,6 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"entgo.io/ent/dialect/sql"
+	"github.com/lib/pq"
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoice"
@@ -19,8 +25,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
-	"github.com/samber/lo"
 )
 
 type invoiceRepository struct {
@@ -98,7 +102,8 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetRefundedAmount(inv.RefundedAmount).
 		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 		SetNillableIssueDate(inv.IssueDate).
-		SetCustomCurrency(inv.CustomCurrency)
+		SetCustomCurrency(inv.CustomCurrency).
+		SetNillableBillingEntityID(inv.BillingEntityID)
 
 	// Keep fx_conversion SQL NULL ("never converted"); never write a jsonb null.
 	if inv.FxConversion != nil {
@@ -213,7 +218,8 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetEnvironmentID(inv.EnvironmentID).
 			SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 			SetNillableIssueDate(inv.IssueDate).
-			SetCustomCurrency(inv.CustomCurrency)
+			SetCustomCurrency(inv.CustomCurrency).
+			SetNillableBillingEntityID(inv.BillingEntityID)
 
 		// fx_conversion stays SQL NULL until conversion.
 		if inv.FxConversion != nil {
@@ -281,6 +287,8 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetQuantity(item.Quantity).
 					SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 					SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
+					SetNillableCommitmentID(item.CommitmentID).
+					SetNillableBillingInstalmentID(item.BillingInstalmentID).
 					SetNillableParentLineItemID(item.ParentLineItemID).
 					SetCurrency(item.Currency).
 					SetNillablePeriodStart(item.PeriodStart).
@@ -377,6 +385,8 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetCurrency(item.Currency).
 				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
+				SetNillableCommitmentID(item.CommitmentID).
+				SetNillableBillingInstalmentID(item.BillingInstalmentID).
 				SetNillableParentLineItemID(item.ParentLineItemID).
 				SetNillablePeriodStart(item.PeriodStart).
 				SetNillablePeriodEnd(item.PeriodEnd).
@@ -449,7 +459,7 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(time.Now()).
+			SetUpdatedAt(clock.Now()).
 			Save(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("line item removal failed").Mark(ierr.ErrDatabase)
@@ -609,7 +619,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetNillableRecalculatedInvoiceID(inv.RecalculatedInvoiceID).
 		SetNillableInvoiceNumber(inv.InvoiceNumber).
 		SetNillableBillingSequence(inv.BillingSequence).
-		SetUpdatedAt(time.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetTotal(inv.Total).
 		SetSubtotal(inv.Subtotal).
@@ -627,6 +637,14 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	// load it must not wipe the conversion record.
 	if inv.FxConversion != nil {
 		query.SetFxConversion(inv.FxConversion)
+	}
+
+	// Frozen at finalize like fx_conversion; never cleared by an update.
+	if inv.BillingEntity != nil {
+		query.SetBillingEntity(inv.BillingEntity)
+	}
+	if inv.BillingEntityID != nil {
+		query.SetBillingEntityID(*inv.BillingEntityID)
 	}
 
 	if inv.TaxExemptionReasonCode != nil {
@@ -689,7 +707,7 @@ func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id str
 		SetPeriodEnd(periodEnd).
 		SetBillingReason(billingReason).
 		SetIdempotencyKey(idempotencyKey).
-		SetUpdatedAt(time.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		AddVersion(1).
 		SaveReturning(ctx)
@@ -726,7 +744,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(time.Now()).
+			SetUpdatedAt(clock.Now()).
 			Save(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("line item deletion failed").Mark(ierr.ErrDatabase)
@@ -742,7 +760,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(time.Now()).
+			SetUpdatedAt(clock.Now()).
 			SaveReturning(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("invoice deletion failed").Mark(ierr.ErrDatabase)
@@ -817,44 +835,36 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 	return result, nil
 }
 
-// ListAllTenant retrieves invoices across all tenants (skips tenant/environment filters).
-// NOTE: This is a potentially expensive operation — use only for scheduled jobs.
-func (r *invoiceRepository) ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*domainInvoice.Invoice, error) {
-	span := StartRepositorySpan(ctx, "invoice", "list_all_tenant", map[string]interface{}{
-		"filter": filter,
+// ListFinalizationCandidates returns computed drafts across all tenants with id > afterID.
+// It pre-filters only; IsInvoiceFinalizationDue stays authoritative.
+func (r *invoiceRepository) ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*domainInvoice.Invoice, error) {
+	span := StartRepositorySpan(ctx, "invoice", "list_finalization_candidates", map[string]interface{}{
+		"after_id": afterID,
+		"limit":    limit,
 	})
 	defer FinishSpan(span)
 
-	if filter == nil {
-		filter = &types.InvoiceFilter{
-			QueryFilter: types.NewDefaultQueryFilter(),
-		}
-	}
-
-	if err := filter.Validate(); err != nil {
-		SetSpanError(span, err)
-		return nil, fmt.Errorf("invalid filter: %w", err)
-	}
-
-	client := r.client.Reader(ctx)
-	query := client.Invoice.Query()
-
-	if filter == nil || len(filter.Sort) == 0 {
-		query = ApplySorting(query, filter, r.queryOpts)
-	}
-	query = ApplyPagination(query, filter, r.queryOpts)
-	query = r.queryOpts.ApplyStatusFilter(query, filter.GetStatus())
-
-	// Apply entity-specific filters (status, type, etc.) but NOT tenant/environment
-	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to apply query options").
-			Mark(ierr.ErrDatabase)
-	}
-
-	invoices, err := query.All(ctx)
+	invoices, err := r.client.Reader(ctx).Invoice.Query().
+		Where(
+			invoice.Status(string(types.StatusPublished)),
+			invoice.InvoiceStatus(types.InvoiceStatusDraft),
+			invoice.LastComputedAtNotNil(),
+			invoice.IDGT(afterID),
+			func(s *sql.Selector) {
+				// Mirrors the cheap checks in IsInvoiceFinalizationDue.
+				s.Where(sql.ExprP(fmt.Sprintf(
+					"COALESCE(%[1]s, '') <> '%[2]s' AND NOT COALESCE(%[1]s = '%[3]s' AND %[4]s < %[5]s, false)",
+					s.C(invoice.FieldBillingReason),
+					types.InvoiceBillingReasonSubscriptionCreate,
+					types.InvoiceBillingReasonSubscriptionCycle,
+					s.C(invoice.FieldLastComputedAt),
+					s.C(invoice.FieldPeriodEnd),
+				)))
+			},
+		).
+		Order(ent.Asc(invoice.FieldID)).
+		Limit(limit).
+		All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).WithHint("invoice listing failed").Mark(ierr.ErrDatabase)
@@ -893,6 +903,57 @@ func (r *invoiceRepository) Count(ctx context.Context, filter *types.InvoiceFilt
 		return 0, ierr.WithError(err).WithHint("invoice counting failed").Mark(ierr.ErrDatabase)
 	}
 	return count, nil
+}
+
+func (r *invoiceRepository) AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	span := StartRepositorySpan(ctx, "invoice", "assign_default_billing_entities", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": environmentID,
+		"limit":          limit,
+	})
+	defer FinishSpan(span)
+
+	var batchLimit any
+	if limit > 0 {
+		batchLimit = limit
+	}
+
+	query := `
+		WITH batch AS (
+			SELECT i.id, be.id AS billing_entity_id
+			FROM invoices i
+			JOIN billing_entities be
+				ON be.tenant_id = i.tenant_id
+				AND be.environment_id = i.environment_id
+				AND be.is_default
+				AND be.status = 'published'
+			WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.billing_entity_id IS NULL
+			LIMIT $3
+		)
+		UPDATE invoices i
+		SET billing_entity_id = batch.billing_entity_id
+		FROM batch
+		WHERE i.id = batch.id AND i.billing_entity_id IS NULL`
+
+	result, err := r.client.Writer(ctx).ExecContext(ctx, query, tenantID, environmentID, batchLimit)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to assign invoices to their default billing entity").
+			Mark(ierr.ErrDatabase)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to read assigned invoices").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return int(count), nil
 }
 
 func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string) (*domainInvoice.Invoice, error) {
@@ -1007,7 +1068,7 @@ func (r *invoiceRepository) getYearMonth(format types.InvoiceNumberFormat, timez
 	}
 
 	// Get current time in the specified timezone
-	now := time.Now().In(loc)
+	now := clock.Now().In(loc)
 
 	switch format {
 	case types.InvoiceNumberFormatYYYYMM:
@@ -1026,7 +1087,7 @@ func (r *invoiceRepository) getYearMonth(format types.InvoiceNumberFormat, timez
 	}
 }
 
-func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig) (string, error) {
+func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig, prefix string) (string, error) {
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "get_next_invoice_number", map[string]interface{}{})
@@ -1036,35 +1097,38 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceCon
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
-	// Use raw SQL for atomic increment since ent doesn't support RETURNING with OnConflict
-	query := `
-		INSERT INTO invoice_sequences (tenant_id,environment_id,year_month, last_value, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		ON CONFLICT (tenant_id, environment_id, year_month) DO UPDATE
-		SET last_value = invoice_sequences.last_value + 1,
+	// One counter per prefix and period. The statements name no unique index, so a later
+	// index change cannot break them mid-rollout.
+	incrementQuery := `
+		UPDATE invoice_sequences
+		SET last_value = last_value + 1,
 			updated_at = CURRENT_TIMESTAMP
+		WHERE tenant_id = $1 AND environment_id = $2 AND prefix = $4 AND year_month = $3
+		RETURNING last_value`
+	insertQuery := `
+		INSERT INTO invoice_sequences (tenant_id, environment_id, year_month, prefix, last_value, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT DO NOTHING
 		RETURNING last_value`
 
-	var lastValue int64
-	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, tenantID, environmentID, yearMonth, invoiceConfig.InvoiceNumberStartSequence)
+	lastValue, found, err := r.queryInvoiceSequence(ctx, incrementQuery, tenantID, environmentID, yearMonth, prefix)
+	if err == nil && !found {
+		lastValue, found, err = r.queryInvoiceSequence(ctx, insertQuery, tenantID, environmentID, yearMonth, prefix, invoiceConfig.InvoiceNumberStartSequence)
+	}
+	if err == nil && !found {
+		// Another finalization created the row first; it is committed and visible now.
+		lastValue, found, err = r.queryInvoiceSequence(ctx, incrementQuery, tenantID, environmentID, yearMonth, prefix)
+	}
 	if err != nil {
-		return "", ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
+		return "", err
 	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		if err := rows.Err(); err != nil {
-			return "", ierr.WithError(err).WithHint("failed to fetch sequence value").Mark(ierr.ErrDatabase)
-		}
+	if !found {
 		return "", ierr.NewError("no sequence value returned").Mark(ierr.ErrInternal)
-	}
-
-	if err := rows.Scan(&lastValue); err != nil {
-		return "", ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
 	}
 
 	r.logger.Info(ctx, "generated invoice number",
 		"tenant_id", tenantID,
+		"prefix", prefix,
 		"year_month", yearMonth,
 		"sequence", lastValue)
 
@@ -1072,7 +1136,29 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceCon
 	sequenceFormat := fmt.Sprintf("%%0%dd", invoiceConfig.InvoiceNumberSuffixLength)
 	paddedSequence := fmt.Sprintf(sequenceFormat, lastValue)
 
-	return fmt.Sprintf("%s%s%s%s%s", invoiceConfig.InvoiceNumberPrefix, invoiceConfig.InvoiceNumberSeparator, yearMonth, invoiceConfig.InvoiceNumberSeparator, paddedSequence), nil
+	return fmt.Sprintf("%s%s%s%s%s", prefix, invoiceConfig.InvoiceNumberSeparator, yearMonth, invoiceConfig.InvoiceNumberSeparator, paddedSequence), nil
+}
+
+// queryInvoiceSequence runs a statement returning last_value; found is false when it returned no row.
+func (r *invoiceRepository) queryInvoiceSequence(ctx context.Context, query string, args ...any) (int64, bool, error) {
+	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return 0, false, ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return 0, false, ierr.WithError(err).WithHint("failed to fetch sequence value").Mark(ierr.ErrDatabase)
+		}
+		return 0, false, nil
+	}
+
+	var lastValue int64
+	if err := rows.Scan(&lastValue); err != nil {
+		return 0, false, ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
+	}
+	return lastValue, true, nil
 }
 
 func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error) {
@@ -1176,10 +1262,14 @@ func (o InvoiceQueryOptions) GetFieldResolver(field string) (string, error) {
 	return fieldName, nil
 }
 
-func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.InvoiceFilter, query InvoiceQuery) (InvoiceQuery, error) {
+func (o InvoiceQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.InvoiceFilter, query InvoiceQuery) (InvoiceQuery, error) {
 	var err error
 	if f == nil {
 		return query, nil
+	}
+
+	if f.BillingEntityID != "" {
+		query = query.Where(invoice.BillingEntityID(f.BillingEntityID))
 	}
 
 	// Apply entity-specific filters
@@ -1246,11 +1336,20 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.PeriodEndLTE != nil {
 		query = query.Where(invoice.PeriodEndLTE(*f.PeriodEndLTE))
 	}
+	if f.PeriodStartLT != nil {
+		query = query.Where(invoice.PeriodStartLT(*f.PeriodStartLT))
+	}
+	if f.PeriodEndGT != nil {
+		query = query.Where(invoice.PeriodEndGT(*f.PeriodEndGT))
+	}
 	if f.FinalizedAtGTE != nil {
 		query = query.Where(invoice.FinalizedAtGTE(*f.FinalizedAtGTE))
 	}
 	if f.VoidedAtGTE != nil {
 		query = query.Where(invoice.VoidedAtGTE(*f.VoidedAtGTE))
+	}
+	if f.UpdatedAtGTE != nil {
+		query = query.Where(invoice.UpdatedAtGTE(*f.UpdatedAtGTE))
 	}
 
 	if f.Filters != nil {

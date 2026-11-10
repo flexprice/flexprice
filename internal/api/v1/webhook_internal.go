@@ -23,6 +23,7 @@ var _ = []any{
 	(*webhookDto.AlertWebhookPayload)(nil),
 	(*webhookDto.SpendAlertEvent)(nil),
 	(*webhookDto.EntitlementWebhookPayload)(nil),
+	(*webhookDto.CommitmentWebhookPayload)(nil),
 	(*webhookDto.WalletWebhookPayload)(nil),
 	(*webhookDto.TransactionWebhookPayload)(nil),
 	(*webhookDto.TransactionUpdatedWebhookPayload)(nil),
@@ -372,6 +373,16 @@ func WebhookEventPaymentSuccess() {}
 // @Router /webhook-events/payment.failed [post]
 func WebhookEventPaymentFailed() {}
 
+// WebhookEventPaymentAttemptFailed godoc
+// @Summary payment.attempt.failed
+// @Description Fired when one charge attempt is declined and the payment stays open for retry. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.PaymentAttemptWebhookPayload "Webhook payload"
+// @Router /webhook-events/payment.attempt.failed [post]
+func WebhookEventPaymentAttemptFailed() {}
+
 // WebhookEventPaymentPending godoc
 // @Summary payment.pending
 // @Description Fired when a payment is pending processing. Doc-only for parsing.
@@ -451,6 +462,96 @@ func WebhookEventEntitlementUpdated() {}
 // @Success 200 {object} webhookDto.EntitlementWebhookPayload "Webhook payload"
 // @Router /webhook-events/entitlement.deleted [post]
 func WebhookEventEntitlementDeleted() {}
+
+// WebhookEventCommitmentCreated godoc
+// @Summary commitment.created
+// @Description Fired when a commitment is created on a subscription. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.CommitmentWebhookPayload "Webhook payload"
+// @Router /webhook-events/commitment.created [post]
+func WebhookEventCommitmentCreated() {}
+
+// WebhookEventCommitmentUpdated godoc
+// @Summary commitment.updated
+// @Description Fired when a commitment's descriptive fields are updated. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.CommitmentWebhookPayload "Webhook payload"
+// @Router /webhook-events/commitment.updated [post]
+func WebhookEventCommitmentUpdated() {}
+
+// WebhookEventCommitmentTerminated godoc
+// @Summary commitment.terminated
+// @Description Fired when a commitment is terminated. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.CommitmentWebhookPayload "Webhook payload"
+// @Router /webhook-events/commitment.terminated [post]
+func WebhookEventCommitmentTerminated() {}
+
+// WebhookEventBillingTermsCreated godoc
+// @Summary billing_terms.created
+// @Description Fired when billing terms are saved against an entity (like a commitment). Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.BillingTermsWebhookPayload "Webhook payload"
+// @Router /webhook-events/billing_terms.created [post]
+func WebhookEventBillingTermsCreated() {}
+
+// WebhookEventBillingTermsUpdated godoc
+// @Summary billing_terms.updated
+// @Description Fired when an entity's (like a commitment's) billing terms are replaced. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.BillingTermsWebhookPayload "Webhook payload"
+// @Router /webhook-events/billing_terms.updated [post]
+func WebhookEventBillingTermsUpdated() {}
+
+// WebhookEventBillingInstalmentCreated godoc
+// @Summary billing_instalment.created
+// @Description Fired when a billing instalment is scheduled for an entity (like a commitment). Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.BillingInstalmentWebhookPayload "Webhook payload"
+// @Router /webhook-events/billing_instalment.created [post]
+func WebhookEventBillingInstalmentCreated() {}
+
+// WebhookEventBillingInstalmentUpdated godoc
+// @Summary billing_instalment.updated
+// @Description Fired when a trigger moves a billing instalment's bill date, or a voided invoice puts it back on schedule. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.BillingInstalmentWebhookPayload "Webhook payload"
+// @Router /webhook-events/billing_instalment.updated [post]
+func WebhookEventBillingInstalmentUpdated() {}
+
+// WebhookEventBillingInstalmentCancelled godoc
+// @Summary billing_instalment.cancelled
+// @Description Fired when a billing instalment is cancelled. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.BillingInstalmentWebhookPayload "Webhook payload"
+// @Router /webhook-events/billing_instalment.cancelled [post]
+func WebhookEventBillingInstalmentCancelled() {}
+
+// WebhookEventBillingInstalmentInvoiced godoc
+// @Summary billing_instalment.invoiced
+// @Description Fired when the invoice carrying a billing instalment is finalized. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.BillingInstalmentWebhookPayload "Webhook payload"
+// @Router /webhook-events/billing_instalment.invoiced [post]
+func WebhookEventBillingInstalmentInvoiced() {}
 
 // WebhookEventWalletCreated godoc
 // @Summary wallet.created

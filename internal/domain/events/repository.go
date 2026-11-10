@@ -12,7 +12,6 @@ type Repository interface {
 	InsertEvent(ctx context.Context, event *Event) error
 	BulkInsertEvents(ctx context.Context, events []*Event) error
 	GetUsage(ctx context.Context, params *UsageParams) (*AggregationResult, error)
-	GetUsageWithFilters(ctx context.Context, params *UsageWithFiltersParams) ([]*AggregationResult, error)
 	GetEvents(ctx context.Context, params *GetEventsParams) ([]*Event, uint64, error)
 	GetEventByID(ctx context.Context, eventID string) (*Event, error)
 	// ListEventsByID returns unmerged events-table rows for the customer's event id with timestamp in window, newest ingested_at first.
@@ -38,9 +37,6 @@ type ProcessedEventRepository interface {
 
 	// Check for duplicate event using unique_hash
 	IsDuplicate(ctx context.Context, subscriptionID, meterID string, periodID uint64, uniqueHash string) (bool, error)
-
-	// Get free and billable quantity to date for a subscription line item
-	GetLineItemUsage(ctx context.Context, subLineItemID string, periodID uint64) (qty decimal.Decimal, freeUnits decimal.Decimal, err error)
 
 	// Get usage cost to date for a customer's subscription in a billing period
 	GetPeriodCost(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) (decimal.Decimal, error)
@@ -224,25 +220,6 @@ type EventCountPoint struct {
 type EventCountResult struct {
 	TotalCount uint64            `json:"total_count"`
 	Points     []EventCountPoint `json:"points,omitempty"`
-}
-
-// FilterGroup represents a group of filters with priority
-type FilterGroup struct {
-	// ID is the identifier for the filter group. We are using the price ID
-	// as the unique identifier for the filter group as of now
-	ID string `json:"id"`
-
-	// Priority is the priority of the filter group for deduping events matching multiple filter groups
-	Priority int `json:"priority"`
-
-	// Filters are the actual filters where the key is the $properties.key
-	// and the values are all the predefined filter values
-	Filters map[string][]string `json:"filters"`
-}
-
-type UsageWithFiltersParams struct {
-	*UsageParams
-	FilterGroups []FilterGroup // Ordered list of filter groups, from most specific to least specific
 }
 
 // Cost Usage Params

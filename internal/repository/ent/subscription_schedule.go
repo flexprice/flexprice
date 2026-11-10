@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	domainSub "github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -109,9 +110,13 @@ func (r *subscriptionScheduleRepository) Get(ctx context.Context, id string) (*d
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("subscription schedule not found: %w", err)
+			return nil, ierr.WithError(err).
+				WithHintf("Subscription schedule %s was not found", id).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get subscription schedule: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get subscription schedule").
+			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)

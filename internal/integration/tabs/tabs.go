@@ -6,6 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -15,8 +20,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type TabsInvoiceService interface {
@@ -164,10 +167,16 @@ func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceS
 
 // getExistingInvoiceMapping returns the published Tabs mapping for the invoice, if any.
 func (s *InvoiceService) getExistingInvoiceMapping(ctx context.Context, invoiceID string) (*entityintegrationmapping.EntityIntegrationMapping, bool, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = invoiceID
 	filter.EntityType = types.IntegrationEntityTypeInvoice
 	filter.ProviderTypes = []string{string(types.SecretProviderTabs)}
+	filter.ConnectionID = conn.ID
 	filter.Status = lo.ToPtr(types.StatusPublished)
 
 	existing, err := s.mappingRepo.List(ctx, filter)
@@ -187,6 +196,11 @@ func (s *InvoiceService) persistInvoiceMapping(ctx context.Context, existing *en
 		return s.mappingRepo.Update(ctx, existing)
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         inv.ID,
@@ -196,6 +210,7 @@ func (s *InvoiceService) persistInvoiceMapping(ctx context.Context, existing *en
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 		Metadata:         tabsInvoiceMetadata(contractID, tabsCustomerID, tabsInvoiceID, obligationIDs),
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 	return s.mappingRepo.Create(ctx, mapping)
 }
@@ -208,7 +223,7 @@ func tabsInvoiceMetadata(contractID, tabsCustomerID, tabsInvoiceID string, oblig
 		"tabs_customer_id": tabsCustomerID,
 		"tabs_invoice_id":  tabsInvoiceID,
 		"obligation_ids":   obligationIDs,
-		"synced_at":        time.Now().UTC().Format(time.RFC3339),
+		"synced_at":        clock.Now().Format(time.RFC3339),
 	}
 }
 
@@ -255,9 +270,15 @@ func (s *InvoiceService) getMappingsByObligationIDs(ctx context.Context, obligat
 		return nil, nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityType = types.IntegrationEntityTypeInvoiceLineItem
 	filter.ProviderTypes = []string{string(types.SecretProviderTabs)}
+	filter.ConnectionID = conn.ID
 	filter.ProviderEntityIDs = obligationIDs
 	filter.Status = lo.ToPtr(types.StatusPublished)
 
@@ -309,10 +330,16 @@ func metadataStrings(m map[string]interface{}, key string) []string {
 // ensureCustomer returns the Tabs customer id for a flexprice customer, creating it (async job) and
 // mapping it on first use. Idempotent: an existing mapping is returned without calling Tabs.
 func (s *InvoiceService) ensureCustomer(ctx context.Context, cust *customer.Customer, currency string) (string, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = cust.ID
 	filter.EntityType = types.IntegrationEntityTypeCustomer
 	filter.ProviderTypes = []string{string(types.SecretProviderTabs)}
+	filter.ConnectionID = conn.ID
 	filter.Status = lo.ToPtr(types.StatusPublished)
 
 	existing, err := s.mappingRepo.List(ctx, filter)
@@ -354,6 +381,7 @@ func (s *InvoiceService) ensureCustomer(ctx context.Context, cust *customer.Cust
 		ProviderEntityID: tabsCustomerID,
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 	if err = s.mappingRepo.Create(ctx, mapping); err != nil {
 		return "", err
@@ -367,10 +395,16 @@ func (s *InvoiceService) ensureCustomer(ctx context.Context, cust *customer.Cust
 // ensureContract returns the Tabs contract id for a flexprice subscription, creating and mapping it on
 // first use. Idempotent: an existing mapping is returned without calling Tabs.
 func (s *InvoiceService) ensureContract(ctx context.Context, subscriptionID, tabsCustomerID string) (string, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = subscriptionID
 	filter.EntityType = types.IntegrationEntityTypeSubscription
 	filter.ProviderTypes = []string{string(types.SecretProviderTabs)}
+	filter.ConnectionID = conn.ID
 	filter.Status = lo.ToPtr(types.StatusPublished)
 
 	existing, err := s.mappingRepo.List(ctx, filter)
@@ -402,6 +436,7 @@ func (s *InvoiceService) ensureContract(ctx context.Context, subscriptionID, tab
 		ProviderEntityID: contract.Payload.ID,
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 	if err = s.mappingRepo.Create(ctx, mapping); err != nil {
 		return "", err
@@ -560,7 +595,11 @@ func (s *InvoiceService) resolveCategoryProducts(ctx context.Context, lineItems 
 
 	// The environment's price -> product mappings yield each category's existing product (from the
 	// metadata) and the prices already mapped.
-	existing, err := s.mappingRepo.List(ctx, newTabsPriceMappingFilter())
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := s.mappingRepo.List(ctx, newTabsPriceMappingFilter(conn.ID))
 	if err != nil {
 		return nil, err
 	}
@@ -598,10 +637,11 @@ func (s *InvoiceService) resolveCategoryProducts(ctx context.Context, lineItems 
 }
 
 // newTabsPriceMappingFilter returns the filter for the environment's published price -> Tabs-product mappings.
-func newTabsPriceMappingFilter() *types.EntityIntegrationMappingFilter {
+func newTabsPriceMappingFilter(connectionID string) *types.EntityIntegrationMappingFilter {
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityType = types.IntegrationEntityTypePrice
 	filter.ProviderTypes = []string{string(types.SecretProviderTabs)}
+	filter.ConnectionID = connectionID
 	filter.Status = lo.ToPtr(types.StatusPublished)
 	return filter
 }
@@ -623,6 +663,11 @@ func (s *InvoiceService) createCategoryProduct(ctx context.Context, category cha
 
 // mapPriceToProduct persists a price -> Tabs-product mapping, recording the category in the metadata.
 func (s *InvoiceService) mapPriceToProduct(ctx context.Context, priceID, productID string, category chargeCategory) error {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         priceID,
@@ -632,6 +677,7 @@ func (s *InvoiceService) mapPriceToProduct(ctx context.Context, priceID, product
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 		Metadata:         map[string]interface{}{"tabs_category": string(category)},
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 	if err := s.mappingRepo.Create(ctx, mapping); err != nil {
 		return err
@@ -648,10 +694,16 @@ func (s *InvoiceService) getLineItemObligationMappings(ctx context.Context, line
 		return nil, nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityIDs = ids
 	filter.EntityType = types.IntegrationEntityTypeInvoiceLineItem
 	filter.ProviderTypes = []string{string(types.SecretProviderTabs)}
+	filter.ConnectionID = conn.ID
 	filter.Status = lo.ToPtr(types.StatusPublished)
 
 	return s.mappingRepo.List(ctx, filter)
@@ -670,6 +722,11 @@ func groupAlreadySynced(items []*invoice.InvoiceLineItem, synced map[string]stru
 
 // mapLineItemsToObligation persists a line-item -> Tabs-obligation mapping for every line item.
 func (s *InvoiceService) mapLineItemsToObligation(ctx context.Context, items []*invoice.InvoiceLineItem, obligationID string) error {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	for _, li := range items {
 		if li.ID == "" {
 			continue
@@ -682,6 +739,7 @@ func (s *InvoiceService) mapLineItemsToObligation(ctx context.Context, items []*
 			ProviderEntityID: obligationID,
 			EnvironmentID:    types.GetEnvironmentID(ctx),
 			BaseModel:        types.GetDefaultBaseModel(ctx),
+			ConnectionID:     lo.ToPtr(conn.ID),
 		}
 		if err := s.mappingRepo.Create(ctx, mapping); err != nil {
 			return err

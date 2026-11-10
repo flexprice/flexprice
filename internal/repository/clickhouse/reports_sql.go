@@ -93,6 +93,9 @@ func buildBillingQueryWithUsage(rv *analytics.ResolvedView, db, usageDB, tenantI
 		"to":             rv.Time.To.UTC().Format(chTimeLayout),
 	}
 	if sq.Build != nil {
+		if rv.Offset > 0 {
+			return nil, ierr.NewErrorf("offset not supported for metric %q", bm.Metric).Mark(ierr.ErrValidation)
+		}
 		return sq.Build(buildInput{
 			RV:      rv,
 			DB:      db,
@@ -189,11 +192,14 @@ func buildBillingQueryWithUsage(rv *analytics.ResolvedView, db, usageDB, tenantI
 	}
 	if rv.Shape == types.ShapeBreakdown {
 		b.WriteString(" ORDER BY " + measure + " DESC")
+		if len(groups) > 0 {
+			b.WriteString(", " + strings.Join(groups, ", "))
+		}
 	} else if len(groups) > 0 {
 		b.WriteString(" ORDER BY " + strings.Join(groups, ", "))
 	}
 	topN := billingTopN(rv, bm.Metric)
-	b.WriteString(topNLimit(topN, rv.Limit, maxRows))
+	b.WriteString(topNLimit(topN, rv.Limit, rv.Offset, maxRows))
 
 	return &reportQuery{SQL: b.String(), Params: params, Columns: cols, TopN: topN}, nil
 }
@@ -217,12 +223,16 @@ func sqlTopN(shape types.Shape, limit int, sort []*analytics.SortSpec, metric st
 	return false
 }
 
-func topNLimit(topN bool, limit, maxRows int) string {
+func topNLimit(topN bool, limit, offset, maxRows int) string {
+	skip := ""
+	if offset > 0 && topN {
+		skip = " OFFSET " + strconv.Itoa(offset)
+	}
 	switch {
 	case topN && maxRows > 0:
-		return " LIMIT " + strconv.Itoa(min(limit, maxRows))
+		return " LIMIT " + strconv.Itoa(min(limit, maxRows)) + skip
 	case topN:
-		return " LIMIT " + strconv.Itoa(limit)
+		return " LIMIT " + strconv.Itoa(limit) + skip
 	case maxRows > 0:
 		// One extra row detects overflow.
 		return " LIMIT " + strconv.Itoa(maxRows+1)

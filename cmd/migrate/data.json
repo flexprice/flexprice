@@ -1,6 +1,30 @@
 {
     "data": [
         {
+            "name": "billing_instalment.cancelled",
+            "description": "Fired when a billing instalment is cancelled"
+        },
+        {
+            "name": "billing_instalment.created",
+            "description": "Fired when a billing instalment is scheduled for an entity (like a commitment)"
+        },
+        {
+            "name": "billing_instalment.invoiced",
+            "description": "Fired when the invoice carrying a billing instalment is finalized"
+        },
+        {
+            "name": "billing_instalment.updated",
+            "description": "Fired when a trigger moves a billing instalment's bill date, or a voided invoice puts it back on schedule"
+        },
+        {
+            "name": "billing_terms.created",
+            "description": "Fired when billing terms are saved against an entity (like a commitment)"
+        },
+        {
+            "name": "billing_terms.updated",
+            "description": "Fired when an entity's (like a commitment's) billing terms are replaced"
+        },
+        {
             "name": "checkout.session.completed",
             "description": "Payment was confirmed. The subscription is now active and the invoice is finalized."
         },
@@ -15,6 +39,18 @@
         {
             "name": "checkout.session.initiated",
             "description": "A Checkout Session was created and a payment URL was returned to the customer."
+        },
+        {
+            "name": "commitment.created",
+            "description": "Fired when a commitment is created on a subscription"
+        },
+        {
+            "name": "commitment.terminated",
+            "description": "Fired when a commitment is terminated"
+        },
+        {
+            "name": "commitment.updated",
+            "description": "Fired when a commitment's descriptive fields are updated"
         },
         {
             "name": "credit_note.created",
@@ -111,6 +147,10 @@
         {
             "name": "payment.failed",
             "description": "Fired when a payment attempt fails"
+        },
+        {
+            "name": "payment.attempt.failed",
+            "description": "Fired when a charge attempt fails and the payment stays open for retry"
         },
         {
             "name": "payment.pending",

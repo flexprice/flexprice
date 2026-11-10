@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -127,6 +128,12 @@ func (s *InMemoryInvoiceLineItemStore) List(ctx context.Context, filter *types.I
 			if !found {
 				continue
 			}
+		}
+		if filter != nil && len(filter.EntityIDs) > 0 && !lo.Contains(filter.EntityIDs, lo.FromPtr(item.EntityID)) {
+			continue
+		}
+		if filter != nil && filter.EntityType != nil && lo.FromPtr(item.EntityType) != *filter.EntityType {
+			continue
 		}
 		result = append(result, item)
 	}

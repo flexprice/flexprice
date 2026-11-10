@@ -5,6 +5,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCreditGrant "github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainEntitlement "github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -15,8 +20,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type PlanService = interfaces.PlanService
@@ -417,7 +420,7 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 // while maintaining proper billing continuity and respecting all price overrides.
 // Time complexity: O(n) where n is the number of plan prices.
 func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.SyncPlanPricesResponse, error) {
-	syncStartTime := time.Now()
+	syncStartTime := clock.Mono()
 
 	lineItemsFoundForCreation := 0
 	lineItemsCreated := 0
@@ -434,7 +437,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 		Limit:  1000,
 	}
 
-	terminationStartTime := time.Now()
+	terminationStartTime := clock.Mono()
 	terminationIteration := 0
 	for {
 		terminationIteration++
@@ -450,7 +453,12 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 	}
 	terminationTotalDuration := time.Since(terminationStartTime)
 
-	creationStartTime := time.Now()
+	commitmentsOn, err := NewCommitmentService(s.ServiceParams).IsEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	creationStartTime := clock.Mono()
 	cursorSubID := ""
 
 	creationIteration := 0
@@ -531,6 +539,19 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 			}
 
 			lineItem := createPlanLineItem(ctx, sub, price, plan)
+			// A usage price joining a subscription can break an active commitment's scope rules (meter, bucket size, overage);
+			// with commitments on it is checked and inserted under the commitments lock, and a violating price is logged and skipped.
+			if commitmentsOn && price.Type == types.PRICE_TYPE_USAGE {
+				created, err := createPriceSyncLine(ctx, s.ServiceParams, sub, price, lineItem)
+				if err != nil {
+					return nil, err
+				}
+
+				if created {
+					lineItemsCreated++
+				}
+				continue
+			}
 			lineItemsToCreate = append(lineItemsToCreate, lineItem)
 		}
 
@@ -611,7 +632,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 // The line-item construction logic (display name, quantity, metadata, etc.)
 // is reused from `createPlanLineItem` to avoid behavior drift.
 func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto.SyncPlanPricesResponse, error) {
-	syncStartTime := time.Now()
+	syncStartTime := clock.Mono()
 
 	plan, err := s.PlanRepo.Get(ctx, planID)
 	if err != nil {
@@ -635,6 +656,11 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 		}, nil
 	}
 
+	commitmentsOn, err := NewCommitmentService(s.ServiceParams).IsEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Page through stale subs, doing discover → create → terminate → stamp.
 	lineItemsFoundForCreation := 0
 	lineItemsCreated := 0
@@ -648,6 +674,7 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 
 	for {
 		pageIteration++
+		pageStart := clock.Mono()
 		missingPairs, subIDsInPage, listErr := s.PlanPriceSyncRepo.ListPlanLineItemsToCreateV2(ctx, planpricesync.ListPlanLineItemsToCreateV2Params{
 			PlanID:    planID,
 			TargetSeq: targetSeq,
@@ -659,12 +686,14 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 		if len(subIDsInPage) == 0 {
 			break
 		}
+		findDuration := time.Since(pageStart)
+		var pageCreationDuration time.Duration
 
 		lineItemsFoundForCreation += len(missingPairs)
 
 		// 1. Build & insert any missing line items for this page.
 		if len(missingPairs) > 0 {
-			creationStart := time.Now()
+			creationStart := clock.Mono()
 			priceIDs := lo.Uniq(lo.Map(missingPairs, func(pair planpricesync.PlanLineItemCreationDelta, _ int) string { return pair.PriceID }))
 			subscriptionIDs := lo.Uniq(lo.Map(missingPairs, func(pair planpricesync.PlanLineItemCreationDelta, _ int) string { return pair.SubscriptionID }))
 
@@ -709,7 +738,21 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 						}).
 						Mark(ierr.ErrDatabase)
 				}
-				lineItems = append(lineItems, createPlanLineItem(ctx, sub, price, plan))
+				lineItem := createPlanLineItem(ctx, sub, price, plan)
+				// A usage price joining a subscription can break an active commitment's scope rules (meter, bucket size, overage);
+				// with commitments on it is checked and inserted under the commitments lock, and a violating price is logged and skipped.
+				if commitmentsOn && price.Type == types.PRICE_TYPE_USAGE {
+					created, err := createPriceSyncLine(ctx, s.ServiceParams, sub, price, lineItem)
+					if err != nil {
+						return nil, err
+					}
+
+					if created {
+						lineItemsCreated++
+					}
+					continue
+				}
+				lineItems = append(lineItems, lineItem)
 			}
 
 			// Page size is 4000 subs but each sub can match multiple prices,
@@ -732,20 +775,13 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 				}
 			}
 			lineItemsCreated += len(lineItems)
-			creationTotalDuration += time.Since(creationStart)
+			pageCreationDuration = time.Since(creationStart)
+			creationTotalDuration += pageCreationDuration
 		}
 
-		// 2. Terminate live plan line items for this page's subs whose price
-		//    has ended. Scoping to the page's subs keeps each UPDATE bounded
-		//    (no plan-wide row locks) and lets the SLI index on
-		//    (tenant, env, subscription_id, status) drive the lookup.
-		//    Running this between create and stamp closes the race where a
-		//    price ends after we cached it but before we stamp the sub — the
-		//    just-created LI gets cleaned up in the same page so the stamp
-		//    truly means "caught up". Subs already stamped earlier in this
-		//    run aren't re-checked; any LI leaked for them by a mid-run
-		//    price-end is picked up by the next sync invocation.
-		terminationStart := time.Now()
+		// 2. End line items whose price ended after each sub's synced_price_sequence;
+		//    reads that value, so it must run before stamping.
+		terminationStart := clock.Mono()
 		terminated, terr := s.PlanPriceSyncRepo.TerminatePlanPricesLineItemsV2(ctx, planpricesync.TerminatePlanPricesLineItemsV2Params{
 			PlanID: planID,
 			SubIDs: subIDsInPage,
@@ -755,12 +791,13 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 			return nil, terr
 		}
 		lineItemsTerminated += terminated
-		terminationTotalDuration += time.Since(terminationStart)
+		pageTerminationDuration := time.Since(terminationStart)
+		terminationTotalDuration += pageTerminationDuration
 
 		// 3. Stamp this page's subs as caught up. This is the progress
 		//    marker — if we crash before reaching here, the same subs
 		//    re-appear in the next run's discovery.
-		stampStart := time.Now()
+		stampStart := clock.Mono()
 		stamped, serr := s.PlanPriceSyncRepo.StampSubsAsSynced(ctx, planpricesync.StampSubsAsSyncedParams{
 			TargetSeq: targetSeq,
 			SubIDs:    subIDsInPage,
@@ -769,7 +806,20 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 			return nil, serr
 		}
 		subsStamped += stamped
-		stampTotalDuration += time.Since(stampStart)
+		pageStampDuration := time.Since(stampStart)
+		stampTotalDuration += pageStampDuration
+
+		s.Logger.Info(ctx, "plan_price_sync.page_completed",
+			"plan_id", planID,
+			"page", pageIteration,
+			"subs", len(subIDsInPage),
+			"line_items_found", len(missingPairs),
+			"line_items_terminated", terminated,
+			"find_ms", findDuration.Milliseconds(),
+			"create_ms", pageCreationDuration.Milliseconds(),
+			"terminate_ms", pageTerminationDuration.Milliseconds(),
+			"stamp_ms", pageStampDuration.Milliseconds(),
+			"page_ms", time.Since(pageStart).Milliseconds())
 	}
 
 	totalSyncDuration := time.Since(syncStartTime)

@@ -137,6 +137,7 @@ func (s *AutoChargePaymentSuite) SetupTest() {
 	s.ctx = types.SetEnvironmentID(s.ctx, "env_test")
 	s.paymentRepo = newInlinePaymentStore()
 	s.svc = &InvoiceSyncService{
+		client:      &stubCustomerClient{},
 		paymentRepo: s.paymentRepo,
 		logger:      logger.NewNoopLogger(),
 	}

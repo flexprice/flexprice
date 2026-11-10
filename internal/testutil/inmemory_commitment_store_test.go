@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +35,7 @@ func TestInMemoryCommitmentStore_ActiveWindowAndIsolation(t *testing.T) {
 			Timezone:         "UTC",
 			Binding:          true,
 			StartDate:        start,
-			EndDate:          end,
+			EndDate:          lo.ToPtr(end),
 			CommitmentStatus: types.CommitmentStatusActive,
 			EnvironmentID:    "env1",
 			BaseModel: types.BaseModel{
@@ -51,6 +52,11 @@ func TestInMemoryCommitmentStore_ActiveWindowAndIsolation(t *testing.T) {
 	_, err = store.Create(ctx, mk("cmt_b", "sub_1", jan.AddDate(2, 0, 0), jan.AddDate(3, 0, 0)))
 	require.NoError(t, err)
 
+	openEnded := mk("cmt_open", "sub_1", jan.AddDate(0, 1, 0), time.Time{})
+	openEnded.EndDate = nil
+	_, err = store.Create(ctx, openEnded)
+	require.NoError(t, err)
+
 	archived := mk("cmt_archived", "sub_1", jan, jan.AddDate(1, 0, 0))
 	archived.Status = types.StatusArchived
 	_, err = store.Create(ctx, archived)
@@ -63,8 +69,7 @@ func TestInMemoryCommitmentStore_ActiveWindowAndIsolation(t *testing.T) {
 
 	got, err := store.List(ctx, f)
 	require.NoError(t, err)
-	require.Len(t, got, 1)
-	require.Equal(t, "cmt_a", got[0].ID)
+	require.ElementsMatch(t, []string{"cmt_a", "cmt_open"}, lo.Map(got, func(c *commitment.Commitment, _ int) string { return c.ID }))
 
 	otherEnv := context.WithValue(ctx, types.CtxEnvironmentID, "env2")
 	got, err = store.List(otherEnv, f)
@@ -82,11 +87,11 @@ func TestInMemoryCommitmentStore_ActiveWindowAndIsolation(t *testing.T) {
 
 	got, err = store.List(ctx, nil)
 	require.NoError(t, err)
-	require.Len(t, got, 2)
+	require.Len(t, got, 3)
 
 	count, err := store.Count(ctx, nil)
 	require.NoError(t, err)
-	require.Equal(t, 2, count)
+	require.Equal(t, 3, count)
 }
 
 func TestInMemoryCommitmentStore_Update(t *testing.T) {
@@ -109,7 +114,7 @@ func TestInMemoryCommitmentStore_Update(t *testing.T) {
 			Measurement:      types.CommitmentMeasurementBillingPeriod,
 			Timezone:         "UTC",
 			StartDate:        jan,
-			EndDate:          jan.AddDate(1, 0, 0),
+			EndDate:          lo.ToPtr(jan.AddDate(1, 0, 0)),
 			CommitmentStatus: types.CommitmentStatusActive,
 			EnvironmentID:    "env1",
 			BaseModel: types.BaseModel{
@@ -147,7 +152,7 @@ func TestInMemoryCommitmentStore_Update(t *testing.T) {
 		change := newCommitment()
 		change.Name = "Renamed"
 		change.Value = decimal.NewFromInt(999)
-		change.EndDate = jan.AddDate(5, 0, 0)
+		change.EndDate = lo.ToPtr(jan.AddDate(5, 0, 0))
 		change.SubscriptionID = "sub_other"
 		change.CommitmentStatus = ""
 
@@ -159,7 +164,7 @@ func TestInMemoryCommitmentStore_Update(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "Renamed", got.Name)
 		require.True(t, got.Value.Equal(decimal.NewFromInt(100)))
-		require.Equal(t, jan.AddDate(1, 0, 0), got.EndDate)
+		require.Equal(t, jan.AddDate(1, 0, 0), *got.EndDate)
 		require.Equal(t, "sub_1", got.SubscriptionID)
 		require.Equal(t, types.CommitmentStatusActive, got.CommitmentStatus)
 	})

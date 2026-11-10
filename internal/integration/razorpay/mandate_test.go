@@ -285,7 +285,7 @@ func TestNormalizeRazorpayToken(t *testing.T) {
 			wantRecurring: types.RecurringPaymentStatusActive,
 		},
 		{
-			name: "confirmed mandate on a card without recurring support is rejected",
+			name: "confirmed mandate on a card with flows.recurring false stays active",
 			raw: map[string]interface{}{
 				"id": "token_Tcc26RAH6R0pD2", "method": "card", "status": "active", "recurring": true, "recurring_details": confirmed,
 				"card": map[string]interface{}{
@@ -295,7 +295,7 @@ func TestNormalizeRazorpayToken(t *testing.T) {
 				"expired_at": future, "max_amount": float64(1500000),
 			},
 			wantActive:    true,
-			wantRecurring: types.RecurringPaymentStatusRejected,
+			wantRecurring: types.RecurringPaymentStatusActive,
 		},
 		{
 			name: "card with recurring support keeps its mandate status",
@@ -359,19 +359,6 @@ func TestSelectUsableTokenRequiresLiveMandate(t *testing.T) {
 	vaulted := &interfaces.ProviderPaymentMethod{GatewayMethodID: "tok_vaulted", Method: types.PaymentMethodTypeCard, Active: true}
 
 	_, ok := SelectUsableToken([]*interfaces.ProviderPaymentMethod{pending, vaulted}, types.PaymentMethodTypeCard, decimal.Zero)
-	assert.False(t, ok)
-}
-
-func TestSelectUsableTokenSkipsCardWithoutRecurringSupport(t *testing.T) {
-	ineligible, err := NormalizeRazorpayToken(map[string]interface{}{
-		"id": "token_Tcc26RAH6R0pD2", "method": "card", "status": "active", "recurring": true,
-		"recurring_details": map[string]interface{}{"status": "confirmed"},
-		"card":              map[string]interface{}{"flows": map[string]interface{}{"recurring": false}},
-		"max_amount":        float64(1500000),
-	})
-	require.NoError(t, err)
-
-	_, ok := SelectUsableToken([]*interfaces.ProviderPaymentMethod{ineligible}, types.PaymentMethodTypeCard, decimal.NewFromInt(1))
 	assert.False(t, ok)
 }
 

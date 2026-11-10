@@ -3,7 +3,10 @@ package ent
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/customer"
@@ -17,7 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
 )
 
 type customerRepository struct {
@@ -65,6 +67,7 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		SetEmail(c.Email).
 		SetNillableContact(c.Contact).
 		SetNillableBillingCurrency(c.BillingCurrency).
+		SetNillableBillingEntityID(c.BillingEntityID).
 		SetContactPersons(c.ToEntContactPersons()).
 		SetAddressLine1(c.AddressLine1).
 		SetAddressLine2(c.AddressLine2).
@@ -352,7 +355,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetTimezone(c.Timezone).
 		SetTaxTreatment(c.TaxTreatment).
 		SetMetadata(c.Metadata).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	// SetNillable is a no-op on nil, so it cannot clear a column. Callers load the customer before
@@ -418,7 +421,7 @@ func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainC
 			customer.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 
@@ -515,6 +518,10 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 		return query, nil
 	}
 
+	if f.BillingEntityID != "" {
+		query = query.Where(customer.BillingEntityID(f.BillingEntityID))
+	}
+
 	if f.ExternalID != "" {
 		query = query.Where(customer.ExternalID(f.ExternalID))
 	}
@@ -604,4 +611,69 @@ func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCu
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixCustomer, customer.ID)
 	r.redisCache.Delete(ctx, cacheKey)
+}
+
+func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	span := StartRepositorySpan(ctx, "customer", "assign_default_billing_entities", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": environmentID,
+		"limit":          limit,
+	})
+	defer FinishSpan(span)
+
+	var batchLimit any
+	if limit > 0 {
+		batchLimit = limit
+	}
+
+	query := `
+		WITH batch AS (
+			SELECT c.id, be.id AS billing_entity_id
+			FROM customers c
+			JOIN billing_entities be
+				ON be.tenant_id = c.tenant_id
+				AND be.environment_id = c.environment_id
+				AND be.is_default
+				AND be.status = 'published'
+			WHERE c.tenant_id = $1 AND c.environment_id = $2 AND c.billing_entity_id IS NULL
+			LIMIT $3
+		)
+		UPDATE customers c
+		SET billing_entity_id = batch.billing_entity_id
+		FROM batch
+		WHERE c.id = batch.id AND c.billing_entity_id IS NULL
+		RETURNING c.id`
+
+	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, tenantID, environmentID, batchLimit)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to assign customers to their default billing entity").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			SetSpanError(span, err)
+			return count, ierr.WithError(err).
+				WithHint("Failed to read assigned customers").
+				Mark(ierr.ErrDatabase)
+		}
+		r.DeleteCache(ctx, &domainCustomer.Customer{ID: id})
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return count, ierr.WithError(err).
+			WithHint("Failed to read assigned customers").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return count, nil
 }

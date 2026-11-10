@@ -145,6 +145,23 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Immutable(),
+		// predecessor_line_item_id points to the line item this version replaced.
+		// Set once when the version is created; nil for line items that replaced nothing.
+		field.String("predecessor_line_item_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
+		// successor_line_item_id points to the version that replaced this line item.
+		// Cleared when that version is cancelled before it starts.
+		field.String("successor_line_item_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
 		field.JSON("metadata", map[string]string{}).
 			Optional().
 			SchemaType(map[string]string{

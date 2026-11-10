@@ -90,6 +90,8 @@ func (s *OrphanedCardCheckSuite) SetupTest() {
 		CustomerRepo:     s.GetStores().CustomerRepo,
 		InvoiceRepo:      s.GetStores().InvoiceRepo,
 		PaymentRepo:      s.GetStores().PaymentRepo,
+		SettingsRepo:     s.GetStores().SettingsRepo,
+		ConnectionRepo:   s.GetStores().ConnectionRepo,
 		EventPublisher:   s.GetPublisher(),
 		WebhookPublisher: s.GetWebhookPublisher(),
 	}

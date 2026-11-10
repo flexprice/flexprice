@@ -128,6 +128,7 @@ func (s *InvoiceServiceSuite) setupService() {
 		InvoiceRepo:                  s.invoiceRepo,
 		HostedInvoiceTokenRepo:       s.GetStores().HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:          s.GetStores().InvoiceLineItemRepo,
+		BillingInstalmentRepo:        s.GetStores().BillingInstalmentRepo,
 		EntitlementRepo:              s.GetStores().EntitlementRepo,
 		EnvironmentRepo:              s.GetStores().EnvironmentRepo,
 		FeatureRepo:                  s.GetStores().FeatureRepo,
@@ -1461,6 +1462,7 @@ func (s *InvoiceServiceSuite) TestUpdatePaymentStatusWithPayments() {
 					ConnectionRepo:         s.GetStores().ConnectionRepo,
 					EntitlementRepo:        s.GetStores().EntitlementRepo,
 					EnvironmentRepo:        s.GetStores().EnvironmentRepo,
+					SettingsRepo:           s.GetStores().SettingsRepo,
 					FeatureRepo:            s.GetStores().FeatureRepo,
 					TenantRepo:             s.GetStores().TenantRepo,
 					UserRepo:               s.GetStores().UserRepo,
@@ -3364,18 +3366,19 @@ func (s *InvoiceServiceSuite) TestCreateDraftInvoiceForSubscription_PeriodStartC
 	}
 }
 
-func (s *InvoiceServiceSuite) seedInvoiceConfigDelay(seconds int) {
+func (s *InvoiceServiceSuite) seedInvoiceFinalizationConfig(autoFinalize bool, delaySeconds int) {
 	svc := NewSettingsService(s.service.(*invoiceService).ServiceParams).(*settingsService)
 	cfg, err := GetSetting[types.InvoiceConfig](svc, s.GetContext(), types.SettingKeyInvoiceConfig)
 	s.Require().NoError(err)
-	cfg.FinalizationDelaySeconds = seconds
+	cfg.AutoFinalize = autoFinalize
+	cfg.FinalizationDelaySeconds = delaySeconds
 	s.Require().NoError(UpdateSetting(svc, s.GetContext(), types.SettingKeyInvoiceConfig, cfg))
 }
 
 func (s *InvoiceServiceSuite) TestIsFinalizationDue_SkipsSubscriptionCreateDrafts() {
 	ctx := s.GetContext()
 	s.invoiceRepo.Clear()
-	s.seedInvoiceConfigDelay(0)
+	s.seedInvoiceFinalizationConfig(true, 0)
 
 	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: s.testData.subscription.CurrentPeriodStart, PeriodEnd: s.testData.subscription.CurrentPeriodEnd, ReferencePoint: types.ReferencePointPeriodStart})
 	s.Require().NoError(err)
@@ -3394,7 +3397,7 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_SkipsSubscriptionCreateDraft
 func (s *InvoiceServiceSuite) TestIsFinalizationDue_CycleDraftAfterPeriodEndIsDue() {
 	ctx := s.GetContext()
 	s.invoiceRepo.Clear()
-	s.seedInvoiceConfigDelay(0)
+	s.seedInvoiceFinalizationConfig(true, 0)
 
 	periodStart := s.testData.now.Add(-40 * 24 * time.Hour)
 	periodEnd := s.testData.now.Add(-10 * 24 * time.Hour)
@@ -3404,12 +3407,163 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_CycleDraftAfterPeriodEndIsDu
 	computedAt := periodEnd.Add(time.Hour)
 	inv, err := s.invoiceRepo.Get(ctx, draft.ID)
 	s.Require().NoError(err)
+	inv.CreatedAt = computedAt
 	inv.LastComputedAt = &computedAt
 	s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
 
 	due, err := s.service.IsFinalizationDue(ctx, draft.ID)
 	s.Require().NoError(err)
 	s.True(due, "a computed cycle draft whose period has ended should finalize")
+}
+
+func (s *InvoiceServiceSuite) TestIsFinalizationDue_AutoFinalizeDefaultsOnWhenKeyMissing() {
+	ctx := s.GetContext()
+	s.invoiceRepo.Clear()
+	s.seedInvoiceFinalizationConfig(true, 1800)
+
+	// Tenants saved invoice_config before auto_finalize existed, so their stored value has no such key.
+	svc := NewSettingsService(s.service.(*invoiceService).ServiceParams).(*settingsService)
+	stored, err := svc.fetchSetting(ctx, types.SettingKeyInvoiceConfig)
+	s.Require().NoError(err)
+	delete(stored.Value, "auto_finalize")
+	s.Require().NoError(svc.SettingsRepo.Update(ctx, stored))
+
+	cfg, err := GetSetting[types.InvoiceConfig](svc, ctx, types.SettingKeyInvoiceConfig)
+	s.Require().NoError(err)
+	s.True(cfg.AutoFinalize)
+
+	now := time.Now().UTC()
+	periodEnd := now.Add(-3 * time.Hour)
+	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodEnd.Add(-30 * 24 * time.Hour), PeriodEnd: periodEnd, ReferencePoint: types.ReferencePointPeriodEnd})
+	s.Require().NoError(err)
+
+	computedAt := now.Add(-time.Hour)
+	inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	inv.CreatedAt = now.Add(-10 * 24 * time.Hour)
+	inv.LastComputedAt = &computedAt
+	s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
+
+	due, err := s.service.IsFinalizationDue(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.True(due)
+}
+
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_ManualFinalizeIgnoresAutoFinalize() {
+	ctx := s.GetContext()
+	s.invoiceRepo.Clear()
+	s.seedInvoiceFinalizationConfig(false, 1800)
+
+	computedAt := time.Now().UTC().Add(-time.Hour)
+	draftInvoice := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(50),
+		Total:           decimal.NewFromFloat(50),
+		Subtotal:        decimal.NewFromFloat(50),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(50),
+		LastComputedAt:  &computedAt,
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draftInvoice))
+
+	due, err := s.service.IsFinalizationDue(ctx, draftInvoice.ID)
+	s.Require().NoError(err)
+	s.False(due)
+
+	s.Require().NoError(s.service.FinalizeInvoice(ctx, draftInvoice.ID, dto.FinalizeInvoiceRequest{}))
+
+	finalized, err := s.invoiceRepo.Get(ctx, draftInvoice.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, finalized.InvoiceStatus)
+}
+
+func (s *InvoiceServiceSuite) TestIsFinalizationDue_DelayAnchor() {
+	ctx := s.GetContext()
+	const delay = 2 * time.Hour
+
+	tests := []struct {
+		name           string
+		referencePoint types.InvoiceReferencePoint
+		periodEndAgo   time.Duration
+		createdAgo     time.Duration
+		computedAgo    time.Duration
+		wantDue        bool
+	}{
+		// created_at + delay has passed, period_end + delay has not.
+		{name: "cycle created mid-period, inside period end delay", referencePoint: types.ReferencePointPeriodEnd, periodEndAgo: time.Hour, createdAgo: 10 * 24 * time.Hour, computedAgo: 30 * time.Minute, wantDue: false},
+		{name: "cycle created mid-period, past period end delay", referencePoint: types.ReferencePointPeriodEnd, periodEndAgo: 3 * time.Hour, createdAgo: 10 * 24 * time.Hour, computedAgo: 150 * time.Minute, wantDue: true},
+		{name: "cycle created after period end, inside created delay", referencePoint: types.ReferencePointPeriodEnd, periodEndAgo: 3 * time.Hour, createdAgo: time.Hour, computedAgo: 30 * time.Minute, wantDue: false},
+		{name: "cycle recomputed just now, past period end delay", referencePoint: types.ReferencePointPeriodEnd, periodEndAgo: 3 * time.Hour, createdAgo: 10 * 24 * time.Hour, computedAgo: time.Minute, wantDue: true},
+		{name: "proration computed just now", referencePoint: types.ReferencePointCancel, periodEndAgo: 3 * time.Hour, createdAgo: 10 * 24 * time.Hour, computedAgo: time.Minute, wantDue: false},
+		{name: "proration computed past the delay", referencePoint: types.ReferencePointCancel, periodEndAgo: 3 * time.Hour, createdAgo: 10 * 24 * time.Hour, computedAgo: 3 * time.Hour, wantDue: true},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.invoiceRepo.Clear()
+			s.seedInvoiceFinalizationConfig(true, int(delay.Seconds()))
+
+			now := time.Now().UTC()
+			periodEnd := now.Add(-tt.periodEndAgo)
+			periodStart := periodEnd.Add(-30 * 24 * time.Hour)
+			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: tt.referencePoint})
+			s.Require().NoError(err)
+
+			computedAt := now.Add(-tt.computedAgo)
+			inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+			s.Require().NoError(err)
+			inv.CreatedAt = now.Add(-tt.createdAgo)
+			inv.LastComputedAt = &computedAt
+			s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
+
+			due, err := s.service.IsFinalizationDue(ctx, draft.ID)
+			s.Require().NoError(err)
+			s.Equal(tt.wantDue, due)
+		})
+	}
+}
+
+func (s *InvoiceServiceSuite) TestIsFinalizationDue_AutoFinalize() {
+	tests := []struct {
+		name         string
+		autoFinalize bool
+		delaySeconds int
+		wantDue      bool
+	}{
+		{name: "auto finalize off", autoFinalize: false, delaySeconds: 0, wantDue: false},
+		{name: "auto finalize on with delay elapsed", autoFinalize: true, delaySeconds: 1800, wantDue: true},
+		{name: "auto finalize on with delay pending", autoFinalize: true, delaySeconds: 7200, wantDue: false},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.invoiceRepo.Clear()
+			s.seedInvoiceFinalizationConfig(tt.autoFinalize, tt.delaySeconds)
+
+			periodStart := s.testData.now.Add(-40 * 24 * time.Hour)
+			periodEnd := s.testData.now.Add(-10 * 24 * time.Hour)
+			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: types.ReferencePointPeriodEnd})
+			s.Require().NoError(err)
+
+			computedAt := time.Now().UTC().Add(-time.Hour)
+			inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+			s.Require().NoError(err)
+			inv.CreatedAt = computedAt
+			inv.LastComputedAt = &computedAt
+			s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
+
+			due, err := s.service.IsFinalizationDue(ctx, draft.ID)
+			s.Require().NoError(err)
+			s.Equal(tt.wantDue, due)
+		})
+	}
 }
 
 // A listed invoice must carry the same tax_summary the detail endpoint returns. The page's
@@ -3617,4 +3771,93 @@ func (s *InvoiceServiceSuite) TestPublishInvoiceSyncWebhook_IgnoresOtherProvider
 	s.Empty(lo.Filter(s.GetPublishedWebhooks(), func(e *types.WebhookEvent, _ int) bool {
 		return e.EntityID == "inv_razorpay_only"
 	}))
+}
+
+// A commitment renders overage and plain usage for one line item and period without a commitment id, so a recompute
+// tells them apart by kind; a duplicate an earlier compute left behind is archived.
+func (s *InvoiceServiceSuite) TestReconcileLineItems_KeysUncommittedRowsByKind() {
+	ctx := s.GetContext()
+	start, end := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
+	row := func(metadata types.Metadata, amount int64) dto.CreateInvoiceLineItemRequest {
+		return dto.CreateInvoiceLineItemRequest{
+			SubscriptionLineItemID: lo.ToPtr("subs_line_reconcile"),
+			Amount:                 decimal.NewFromInt(amount),
+			Quantity:               decimal.NewFromInt(1),
+			PeriodStart:            &start,
+			PeriodEnd:              &end,
+			Metadata:               metadata,
+		}
+	}
+	overage := row(types.Metadata{types.MetadataKeyCommitmentLineKind: string(types.CommitmentLineOverage)}, 6)
+	plain := row(nil, 10)
+
+	draft := &invoice.Invoice{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:     s.testData.customer.ID,
+		SubscriptionID: &s.testData.subscription.ID,
+		InvoiceType:    types.InvoiceTypeSubscription,
+		InvoiceStatus:  types.InvoiceStatusDraft,
+		Currency:       "usd",
+		PeriodStart:    &start,
+		PeriodEnd:      &end,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	draft.LineItems = []*invoice.InvoiceLineItem{
+		overage.ToInvoiceLineItem(ctx, draft),
+		overage.ToInvoiceLineItem(ctx, draft),
+		plain.ToInvoiceLineItem(ctx, draft),
+	}
+	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
+	inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+
+	got, err := s.service.(*invoiceService).reconcileLineItems(ctx, inv, []dto.CreateInvoiceLineItemRequest{overage, plain})
+	s.Require().NoError(err)
+	s.Len(got, 2)
+	for _, item := range got {
+		s.Contains([]string{draft.LineItems[1].ID, draft.LineItems[2].ID}, item.ID, "each computed row reuses its stored row")
+	}
+
+	after, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Len(after.LineItems, 2, "the duplicate left by an earlier compute is archived")
+}
+
+func (s *InvoiceServiceSuite) TestHasMarketplaceMapping() {
+	tests := []struct {
+		name     string
+		provider types.SecretProvider
+		status   types.Status
+		want     bool
+	}{
+		{name: "published marketplace mapping", provider: types.SecretProviderAWSMarketplace, status: types.StatusPublished, want: true},
+		{name: "archived marketplace mapping", provider: types.SecretProviderGCPMarketplace, status: types.StatusArchived, want: true},
+		{name: "non-marketplace mapping", provider: types.SecretProviderStripe, status: types.StatusPublished, want: false},
+		{name: "no mapping", want: false},
+	}
+
+	subscriptionService := NewSubscriptionService(ServiceParams{EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo})
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			subscriptionID := fmt.Sprintf("sub_mp_%d", i)
+			if tt.provider != "" {
+				baseModel := types.GetDefaultBaseModel(ctx)
+				baseModel.Status = tt.status
+				s.Require().NoError(s.GetStores().EntityIntegrationMappingRepo.Create(ctx, &entityintegrationmapping.EntityIntegrationMapping{
+					ID:               "eim_" + subscriptionID,
+					EntityID:         subscriptionID,
+					EntityType:       types.IntegrationEntityTypeSubscription,
+					ProviderType:     string(tt.provider),
+					ProviderEntityID: "ext_" + subscriptionID,
+					EnvironmentID:    types.GetEnvironmentID(ctx),
+					BaseModel:        baseModel,
+				}))
+			}
+
+			mapped, err := subscriptionService.HasMarketplaceMapping(ctx, subscriptionID)
+			s.Require().NoError(err)
+			s.Equal(tt.want, mapped)
+		})
+	}
 }

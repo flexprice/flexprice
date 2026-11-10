@@ -9,6 +9,7 @@ import (
 	paddleintg "github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
@@ -18,6 +19,7 @@ type CustomerSyncActivities struct {
 	integrationFactory *integration.Factory
 	customerService    interfaces.CustomerService
 	invoiceRepo        invoice.Repository
+	entityScope        interfaces.BillingEntityScope
 	logger             *logger.Logger
 }
 
@@ -25,12 +27,14 @@ func NewCustomerSyncActivities(
 	integrationFactory *integration.Factory,
 	customerService interfaces.CustomerService,
 	invoiceRepo invoice.Repository,
+	entityScope interfaces.BillingEntityScope,
 	logger *logger.Logger,
 ) *CustomerSyncActivities {
 	return &CustomerSyncActivities{
 		integrationFactory: integrationFactory,
 		customerService:    customerService,
 		invoiceRepo:        invoiceRepo,
+		entityScope:        entityScope,
 		logger:             logger,
 	}
 }
@@ -40,6 +44,11 @@ func NewCustomerSyncActivities(
 func (a *CustomerSyncActivities) SyncCustomerToPaddle(ctx context.Context, input models.PaddleCustomerSyncWorkflowInput) error {
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, input.InvoiceID, "")
+	if err != nil {
+		return err
+	}
 
 	paddleIntegration, err := a.integrationFactory.GetPaddleIntegration(ctx)
 	if err != nil {
@@ -76,6 +85,11 @@ func (a *CustomerSyncActivities) SyncCustomerToPaddle(ctx context.Context, input
 func (a *CustomerSyncActivities) EnsureCustomerSyncedToPaddle(ctx context.Context, input models.PaddleCustomerSyncWorkflowInput) error {
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, input.InvoiceID, "")
+	if err != nil {
+		return err
+	}
 
 	customerID := input.CustomerID
 	if customerID == "" && input.InvoiceID != "" {

@@ -10,7 +10,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // UserService adds, removes and lists a tenant's users for the admin portal. Adding and removing
@@ -104,29 +103,11 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 
 	ctx = types.SetTenantID(ctx, req.TenantID)
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Same lock as the dashboard's remove, so two removals cannot both pass the last-user check.
+		// Same lock as the dashboard's remove, so its last-user check cannot miss this removal.
 		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "user_removal:" + req.TenantID}); err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to acquire tenant lock for user removal").
 				Mark(ierr.ErrInternal)
-		}
-
-		// Limit 1 still returns the full count, since the total is counted before the limit applies.
-		_, humans, err := s.UserRepo.ListByFilter(ctx, &types.UserFilter{
-			QueryFilter: &types.QueryFilter{
-				Limit:  lo.ToPtr(1),
-				Offset: lo.ToPtr(0),
-				Status: lo.ToPtr(types.StatusPublished),
-			},
-			Type: lo.ToPtr(types.UserTypeUser),
-		})
-		if err != nil {
-			return err
-		}
-		if humans <= 1 {
-			return ierr.NewError("cannot remove the last user in the tenant").
-				WithHint("At least one user must remain in the tenant").
-				Mark(ierr.ErrValidation)
 		}
 
 		if err := s.UserRepo.Delete(ctx, target.ID); err != nil {

@@ -3,7 +3,11 @@ package ent
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/creditnote"
@@ -15,8 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
-	"github.com/samber/lo"
 )
 
 type creditnoteRepository struct {
@@ -333,7 +335,7 @@ func (r *creditnoteRepository) RemoveLineItems(ctx context.Context, creditNoteID
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(time.Now()).
+			SetUpdatedAt(clock.Now()).
 			Save(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("line item removal failed").Mark(ierr.ErrDatabase)
@@ -402,7 +404,7 @@ func (r *creditnoteRepository) Update(ctx context.Context, cn *domainCreditNote.
 		SetMetadata(cn.Metadata).
 		SetNillableVoidedAt(cn.VoidedAt).
 		SetNillableFinalizedAt(cn.FinalizedAt).
-		SetUpdatedAt(time.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	// Execute update
@@ -464,7 +466,7 @@ func (r *creditnoteRepository) Delete(ctx context.Context, id string) error {
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(time.Now()).
+			SetUpdatedAt(clock.Now()).
 			Save(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("line item deletion failed").Mark(ierr.ErrDatabase)
@@ -480,7 +482,7 @@ func (r *creditnoteRepository) Delete(ctx context.Context, id string) error {
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(time.Now()).
+			SetUpdatedAt(clock.Now()).
 			SaveReturning(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("credit note deletion failed").Mark(ierr.ErrDatabase)
@@ -643,6 +645,10 @@ func (o CreditNoteQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 	}
 	if len(f.CreditNoteStatus) > 0 {
 		query = query.Where(creditnote.CreditNoteStatusIn(f.CreditNoteStatus...))
+	}
+
+	if f.UpdatedAtGTE != nil {
+		query = query.Where(creditnote.UpdatedAtGTE(*f.UpdatedAtGTE))
 	}
 
 	// Apply time range filters

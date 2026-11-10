@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type EntityIntegrationMappingService = interfaces.EntityIntegrationMappingService
@@ -29,6 +33,9 @@ func (s *entityIntegrationMappingService) CreateEntityIntegrationMapping(ctx con
 	}
 
 	mapping := req.ToEntityIntegrationMapping(ctx)
+	if err := s.setProviderConnection(ctx, mapping); err != nil {
+		return nil, err
+	}
 
 	// Validate the mapping
 	if err := entityintegrationmapping.Validate(mapping); err != nil {
@@ -143,8 +150,12 @@ func (s *entityIntegrationMappingService) UpdateEntityIntegrationMapping(ctx con
 	}
 
 	// Update timestamps
-	mapping.UpdatedAt = time.Now().UTC()
+	mapping.UpdatedAt = clock.Now()
 	mapping.UpdatedBy = types.GetUserID(ctx)
+
+	if err := s.setProviderConnection(ctx, mapping); err != nil {
+		return nil, err
+	}
 
 	// Validate the updated mapping
 	if err := entityintegrationmapping.Validate(mapping); err != nil {
@@ -195,19 +206,79 @@ func (s *entityIntegrationMappingService) DeleteEntityIntegrationMapping(ctx con
 	return nil
 }
 
+// setProviderConnection fills a missing connection with the provider's connection in scope; none leaves it nil.
+func (s *entityIntegrationMappingService) setProviderConnection(ctx context.Context, mapping *entityintegrationmapping.EntityIntegrationMapping) error {
+	provider := types.SecretProvider(mapping.ProviderType)
+	if mapping.ConnectionID != nil || provider.Validate() != nil {
+		return nil
+	}
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, provider)
+	if ierr.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	mapping.ConnectionID = lo.ToPtr(conn.ID)
+	return nil
+}
+
+// linkConnection scopes ctx to the linked record and returns its connection for the provider, nil when there is none.
+func (s *entityIntegrationMappingService) linkConnection(ctx context.Context, entityType types.IntegrationEntityType, entityID string, provider types.SecretProvider) (context.Context, *connection.Connection, error) {
+	scope := NewBillingEntityService(s.ServiceParams)
+
+	var err error
+	switch entityType {
+	case types.IntegrationEntityTypeCustomer:
+		ctx, err = scope.ScopeToCustomer(ctx, entityID)
+	case types.IntegrationEntityTypeInvoice:
+		ctx, err = scope.ScopeToInvoice(ctx, entityID)
+	case types.IntegrationEntityTypeSubscription:
+		ctx, err = scope.ScopeToSubscription(ctx, entityID)
+	default:
+		connections, err := s.ConnectionRepo.List(ctx, &types.ConnectionFilter{
+			QueryFilter:  types.NewNoLimitPublishedQueryFilter(),
+			ProviderType: provider,
+		})
+		if err != nil {
+			return ctx, nil, err
+		}
+		if len(connections) > 1 {
+			return ctx, nil, ierr.NewErrorf("more than one %s connection exists; this mapping can't be linked to a single account", provider).
+				WithHintf("More than one %s connection exists; this mapping can't be linked to a single account", provider).
+				WithReportableDetails(map[string]any{
+					"provider_type": provider,
+					"entity_type":   entityType,
+					"entity_id":     entityID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if len(connections) == 0 {
+			return ctx, nil, nil
+		}
+		return ctx, connections[0], nil
+	}
+	if err != nil {
+		return ctx, nil, err
+	}
+
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, provider)
+	if ierr.IsNotFound(err) {
+		return ctx, nil, nil
+	}
+	return ctx, conn, err
+}
+
 func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Context, req dto.LinkIntegrationMappingRequest) (*dto.LinkIntegrationMappingResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
-	connections, err := s.ConnectionRepo.List(ctx, &types.ConnectionFilter{
-		QueryFilter:  types.NewNoLimitPublishedQueryFilter(),
-		ProviderType: types.SecretProvider(req.ProviderType),
-	})
+	ctx, conn, err := s.linkConnection(ctx, req.EntityType, req.EntityID, types.SecretProvider(req.ProviderType))
 	if err != nil {
 		return nil, err
 	}
-	if len(connections) == 0 {
+	if conn == nil {
 		return nil, ierr.NewError(fmt.Sprintf("no active connection found for provider %s", req.ProviderType)).
 			WithHint("Create a connection for this provider before linking entities").
 			Mark(ierr.ErrValidation)
@@ -216,6 +287,7 @@ func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Con
 	if err := s.applyEntitySideEffects(ctx, req); err != nil {
 		return nil, err
 	}
+	req.ConnectionID = lo.ToPtr(conn.ID)
 	mapping, err := s.upsertEntityMapping(ctx, req)
 	if err != nil {
 		return nil, err
@@ -296,6 +368,7 @@ func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Contex
 		ProviderTypes: []string{
 			req.ProviderType,
 		},
+		ConnectionID: lo.FromPtr(req.ConnectionID),
 	}
 	existing, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
@@ -307,13 +380,14 @@ func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Contex
 		metadata = map[string]interface{}{}
 	}
 	metadata["linked_via"] = "integrations_mapping_link_api"
-	metadata["linked_at"] = time.Now().UTC().Format(time.RFC3339)
+	metadata["linked_at"] = clock.Now().Format(time.RFC3339)
 
 	if len(existing) > 0 {
 		mapping := existing[0]
 		mapping.ProviderEntityID = req.ProviderEntityID
 		mapping.Metadata = metadata
-		mapping.UpdatedAt = time.Now().UTC()
+		mapping.ConnectionID = req.ConnectionID
+		mapping.UpdatedAt = clock.Now()
 		mapping.UpdatedBy = types.GetUserID(ctx)
 		if err := s.EntityIntegrationMappingRepo.Update(ctx, mapping); err != nil {
 			return nil, err
@@ -329,9 +403,13 @@ func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Contex
 		ProviderEntityID: req.ProviderEntityID,
 		Metadata:         metadata,
 		EnvironmentID:    types.GetEnvironmentID(ctx),
+		ConnectionID:     req.ConnectionID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
 	if err := entityintegrationmapping.Validate(mapping); err != nil {
+		return nil, err
+	}
+	if err := entityintegrationmapping.ValidateConnection(mapping); err != nil {
 		return nil, err
 	}
 	if err := s.EntityIntegrationMappingRepo.Create(ctx, mapping); err != nil {

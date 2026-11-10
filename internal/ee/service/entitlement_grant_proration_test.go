@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
@@ -343,6 +344,212 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_BehaviorNone_Gr
 	s.True(live.ValidTo.Equal(s.testData.subscription.CurrentPeriodEnd))
 }
 
+// A never-reset allowance is compared with the running total, so a mid-cycle change grants it
+// in full; a resetting meter on the same change is still prorated.
+// seedNeverGrantFeature writes a metered feature on a never-reset SUM meter.
+func (s *SubscriptionServiceSuite) seedNeverGrantFeature(featureID string) string {
+	ctx := s.GetContext()
+	m := &meter.Meter{ID: "meter_" + featureID, Name: featureID, EventName: featureID,
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "qty"}, ResetUsage: types.ResetUsageNever,
+		BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	s.Require().NoError(s.GetStores().FeatureRepo.Create(ctx, &feature.Feature{ID: featureID, Name: featureID,
+		Type: types.FeatureTypeMetered, MeterID: m.ID, BaseModel: types.GetDefaultBaseModel(ctx)}))
+	return featureID
+}
+
+// A never-reset allowance follows the change's proration like any other: the prorated quota
+// under create_prorations, the full quota under none.
+func (s *SubscriptionServiceSuite) TestResolveGrantProration_NeverResetMeterFollowsProration() {
+	featureID := s.seedNeverGrantFeature("feat_eg_never")
+	never := s.seedGrantEC("ent_eg_never", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 150, "")
+
+	for behavior, want := range map[types.ProrationBehavior]decimal.Decimal{
+		types.ProrationBehaviorCreateProrations: s.expectedProrated(150),
+		types.ProrationBehaviorNone:             decimal.NewFromInt(150),
+	} {
+		grants, err := s.grantService().resolveGrantProration(s.GetContext(), s.testData.subscription,
+			[]*entitlement.Entitlement{never}, nil, s.testData.now, behavior, grantProrationSourcePlanChange)
+		s.Require().NoError(err)
+		s.Require().Len(grants, 1)
+		s.True(grants[0].Quota.Equal(want), "%s: expected %s, got %s", behavior, want, grants[0].Quota)
+	}
+}
+
+// An addon on a never-reset feature tops up the plan's cap with its own quota, prorated or
+// in full as the attach is, and carries no leftover.
+func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_NeverReset_FollowsAttachProration() {
+	for _, tc := range []struct {
+		name     string
+		behavior types.ProrationBehavior
+		want     func() decimal.Decimal
+	}{
+		{"prorated", types.ProrationBehaviorCreateProrations, func() decimal.Decimal { return decimal.NewFromInt(10).Add(s.expectedProrated(100)) }},
+		{"full", types.ProrationBehaviorNone, func() decimal.Decimal { return decimal.NewFromInt(110) }},
+	} {
+		s.Run(tc.name, func() {
+			featureID := s.seedNeverGrantFeature("feat_never_attach_" + tc.name)
+			s.seedGrantEC("ent_aaa_never_plan_"+tc.name, featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
+			s.seedCycleGrant("ent_aaa_never_plan_"+tc.name, featureID, 10)
+
+			s.seedGrantAddon("addon_never_attach_"+tc.name, "ent_zzz_never_addon_"+tc.name, featureID, 100, "")
+			s.Require().NoError(s.attachAddon("addon_never_attach_"+tc.name, s.testData.now, tc.behavior))
+
+			live := s.liveRow(featureID)
+			s.Require().NotNil(live)
+			s.True(live.Quota.Equal(tc.want()), "expected %s, got %s", tc.want(), live.Quota)
+			s.assertTiled(featureID)
+		})
+	}
+}
+
+// A second prorated addon keeps the first addon's prorated share: the live cap carries as
+// it stands rather than being rebuilt from each config's full quota.
+func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_NeverReset_SecondAddonKeepsProratedCap() {
+	featureID := s.seedNeverGrantFeature("feat_never_two_addons")
+	s.seedGrantEC("ent_aaa_never_two_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
+	s.seedCycleGrant("ent_aaa_never_two_plan", featureID, 10)
+
+	s.seedGrantAddon("addon_never_two_a", "ent_zzz_never_two_a", featureID, 100, "")
+	s.seedGrantAddon("addon_never_two_b", "ent_zzz_never_two_b", featureID, 50, "")
+	s.Require().NoError(s.attachAddon("addon_never_two_a", s.testData.now, types.ProrationBehaviorCreateProrations))
+	s.Require().NoError(s.attachAddon("addon_never_two_b", s.testData.now, types.ProrationBehaviorCreateProrations))
+
+	want := decimal.NewFromInt(10).Add(s.expectedProrated(100)).Add(s.expectedProrated(50))
+	live := s.liveRow(featureID)
+	s.Require().NotNil(live)
+	s.True(live.Quota.Equal(want), "expected %s, got %s", want, live.Quota)
+}
+
+// A detached addon leaves its window open; a later attach on the same feature must not
+// inherit that quota. e.g. A=100 detached, then B=50 attached: the cap is 50, not 150.
+func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_NeverReset_ReattachIgnoresDetachedAddon() {
+	featureID := s.seedNeverGrantFeature("feat_never_reattach")
+	s.seedGrantAddon("addon_never_reattach_a", "ent_never_reattach_a", featureID, 100, "")
+	s.seedGrantAddon("addon_never_reattach_b", "ent_never_reattach_b", featureID, 50, "")
+	s.seedCycleGrant("ent_never_reattach_a", featureID, 100)
+
+	s.Require().NoError(s.attachAddon("addon_never_reattach_b", s.testData.now, types.ProrationBehaviorNone))
+
+	live := s.liveRow(featureID)
+	s.Require().NotNil(live)
+	s.True(live.Quota.Equal(decimal.NewFromInt(50)), "expected 50, got %s", live.Quota)
+	s.assertTiled(featureID)
+}
+
+// Only a leaving grant config rebuilds a never-reset cap; a plan change also lists configs
+// without one, and those give no quota to take off.
+func (s *SubscriptionServiceSuite) TestGrantChangeConfig_RemovesFeature_OnlyGrantConfigs() {
+	legacy := &entitlement.Entitlement{FeatureID: "feat_rm_legacy", UsageLimit: lo.ToPtr(int64(100))}
+	grant := &entitlement.Entitlement{FeatureID: "feat_rm_grant", GrantQuota: lo.ToPtr(decimal.NewFromInt(100))}
+	cfg := &GrantChangeConfig{entitlementsToRemove: []*entitlement.Entitlement{legacy, grant, nil}}
+
+	s.False(cfg.removesFeature("feat_rm_legacy"))
+	s.True(cfg.removesFeature("feat_rm_grant"))
+	s.False(cfg.removesFeature("feat_rm_other"))
+}
+
+// Removing an addon from a never-reset feature takes its quota off the cap at once, whatever
+// the proration: the cap is always the configs still on the feature.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NeverReset_DropsAddonQuotaAtOnce() {
+	for _, tc := range []struct {
+		name     string
+		behavior types.ProrationBehavior
+		want     int64
+	}{
+		{"prorated", types.ProrationBehaviorCreateProrations, 10},
+		{"unprorated", types.ProrationBehaviorNone, 10},
+	} {
+		s.Run(tc.name, func() {
+			featureID := s.seedNeverGrantFeature("feat_never_rm_" + tc.name)
+			s.seedGrantEC("ent_aaa_never_rm_plan_"+tc.name, featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
+			s.seedGrantAddon("addon_never_rm_"+tc.name, "ent_zzz_never_rm_"+tc.name, featureID, 100, "")
+			s.seedCycleGrant("ent_aaa_never_rm_plan_"+tc.name, featureID, 110)
+
+			s.Require().NoError(s.runGrantPass(nil, []GrantSource{{
+				ChangeType:        types.ScheduleTypeImmediate,
+				EffectiveDate:     s.testData.now,
+				ProrationSettings: dto.NewProrationSettings(tc.behavior),
+				Origin:            grantProrationSourceAddonDetach,
+				AddonID:           "addon_never_rm_" + tc.name,
+			}}))
+
+			live := s.liveRow(featureID)
+			s.Require().NotNil(live)
+			s.True(live.Quota.Equal(decimal.NewFromInt(tc.want)), "expected %d, got %s", tc.want, live.Quota)
+			s.assertTiled(featureID)
+		})
+	}
+}
+
+// An addon attached twice counts twice; removing one attachment takes out one copy.
+// e.g. plan 10 + 2 x addon 100 = 210; one removed = 110.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NeverReset_OneOfTwoAttachments() {
+	featureID := s.seedNeverGrantFeature("feat_never_twice")
+	s.seedGrantEC("ent_aaa_never_twice_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
+	s.seedCycleGrant("ent_aaa_never_twice_plan", featureID, 10)
+	s.seedGrantAddon("addon_never_twice", "ent_zzz_never_twice", featureID, 100, "")
+
+	s.Require().NoError(s.attachAddon("addon_never_twice", s.testData.now, types.ProrationBehaviorNone))
+	s.Require().NoError(s.attachAddon("addon_never_twice", s.testData.now, types.ProrationBehaviorNone))
+	s.Require().True(s.liveRow(featureID).Quota.Equal(decimal.NewFromInt(210)), "got %s", s.liveRow(featureID).Quota)
+
+	s.Require().NoError(s.runGrantPass(nil, []GrantSource{{
+		ChangeType:        types.ScheduleTypeImmediate,
+		EffectiveDate:     s.testData.now,
+		ProrationSettings: dto.NewProrationSettings(types.ProrationBehaviorNone),
+		Origin:            grantProrationSourceAddonDetach,
+		AddonID:           "addon_never_twice",
+	}}))
+
+	live := s.liveRow(featureID)
+	s.Require().NotNil(live)
+	s.True(live.Quota.Equal(decimal.NewFromInt(110)), "expected 110, got %s", live.Quota)
+}
+
+// Swapping an addon for another size on a never-reset feature reopens the cap as the plan's
+// quota plus the new addon's, prorated or full; the old addon's quota drops out.
+// e.g. plan 100 + addon 500 = 600; to 1000 unprorated = 1100, to 200 = 300.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Swap_NeverReset_CapIsPlanPlusNewAddon() {
+	for _, tc := range []struct {
+		name     string
+		newQuota int64
+		behavior types.ProrationBehavior
+		want     func() decimal.Decimal
+	}{
+		{"upgrade", 1000, types.ProrationBehaviorNone, func() decimal.Decimal { return decimal.NewFromInt(1100) }},
+		{"downgrade", 200, types.ProrationBehaviorNone, func() decimal.Decimal { return decimal.NewFromInt(300) }},
+		{"upgrade_prorated", 1000, types.ProrationBehaviorCreateProrations, func() decimal.Decimal { return decimal.NewFromInt(100).Add(s.expectedProrated(1000)) }},
+	} {
+		s.Run(tc.name, func() {
+			featureID := s.seedNeverGrantFeature("feat_never_swap_" + tc.name)
+			s.seedGrantEC("ent_aaa_never_swap_plan_"+tc.name, featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 100, "")
+			s.seedGrantAddon("addon_never_swap_old_"+tc.name, "ent_zzz_never_swap_old_"+tc.name, featureID, 500, "")
+			s.seedGrantAddon("addon_never_swap_new_"+tc.name, "ent_zzz_never_swap_new_"+tc.name, featureID, tc.newQuota, "")
+			s.seedCycleGrant("ent_aaa_never_swap_plan_"+tc.name, featureID, 600)
+
+			change := func(addonID string) GrantSource {
+				return GrantSource{
+					ChangeType:        types.ScheduleTypeImmediate,
+					EffectiveDate:     s.testData.now,
+					ProrationSettings: dto.NewProrationSettings(tc.behavior),
+					Origin:            grantProrationSourceAddonsModify,
+					AddonID:           addonID,
+				}
+			}
+			s.Require().NoError(s.runGrantPass(
+				[]GrantSource{change("addon_never_swap_new_" + tc.name)},
+				[]GrantSource{change("addon_never_swap_old_" + tc.name)},
+			))
+
+			live := s.liveRow(featureID)
+			s.Require().NotNil(live)
+			s.True(live.Quota.Equal(tc.want()), "expected %s, got %s", tc.want(), live.Quota)
+			s.assertTiled(featureID)
+		})
+	}
+}
+
 // An attach at the period start covers the whole cycle, so the coefficient is 1
 // and the full quota lands — the row must not be left at the plan's allowance
 // while the addon's credits are granted in full.
@@ -389,12 +596,9 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_ZeroQuota_Skips
 	s.Empty(s.grantsForFeature(featureID), "a non-positive prorated quota writes no row")
 }
 
-// A parallel EC owns its own slot, and the evaluator opens that slot with the EC's full
-// quota — a standalone budget, not a top-up of a pool. So the attach writes no row of its
-// own; it only ends the feature's live windows at the change, which hands every slot back
-// to the evaluator to reissue. The allowance is replenished rather than prorated: an
-// immutable window cannot be topped up in place, so a mid-cycle addon resets the feature.
-func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_Parallel_ClosedForEvaluatorToReissue() {
+// A parallel EC owns its own slot, so the attach writes no row and leaves the surviving
+// plan window running with its balance; reissuing it would refill a partly used allowance.
+func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_Parallel_SurvivingSlotKeepsRunning() {
 	featureID := s.seedGrantFeature("feat_eg_par")
 	s.seedGrantEC("ent_aaa_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID,
 		1000, types.EntitlementAggregationModeParallel)
@@ -407,14 +611,12 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_Parallel_Closed
 	s.Require().Len(rows, 1, "the attach must not write parallel rows itself, got %d", len(rows))
 
 	got := rows[0]
-	s.Equal(planRow.ID, got.ID, "the plan's row is closed in place, not replaced")
+	s.Equal(planRow.ID, got.ID, "the plan's row is left in place")
 	s.Equal("ent_aaa_plan", got.EntitlementConfigID)
-	s.True(got.Quota.Equal(decimal.NewFromInt(1000)), "the closed window keeps the quota it ran with")
+	s.True(got.Quota.Equal(decimal.NewFromInt(1000)), "the window keeps its quota")
 	s.True(got.ValidFrom.Equal(s.testData.subscription.CurrentPeriodStart), "the window's start never moves")
-	s.False(got.ValidTo.Before(s.testData.now),
-		"the window must end at the change so the evaluator can reissue the slot: got %s, change at %s",
-		got.ValidTo, s.testData.now)
-	s.True(got.ValidTo.Before(s.testData.subscription.CurrentPeriodEnd), "it must no longer run to the cycle end")
+	s.True(got.ValidTo.Equal(s.testData.subscription.CurrentPeriodEnd),
+		"the surviving window must still run to the cycle end: got %s", got.ValidTo)
 }
 
 // hour/day/week grants are usage-anchored and open post-attach on their own, so
@@ -643,9 +845,9 @@ func (s *SubscriptionServiceSuite) TestGrantBatch_Add_NowPlusPeriodEnd_OnlyNowAf
 		"only the immediate add contributes this cycle, expected %s got %s", want, rows[1].Quota)
 }
 
-// A parallel EC owns its slot outright, so the pass opens nothing for it — the tick
-// reissues it. The additive feature in the same batch is still segmented.
-func (s *SubscriptionServiceSuite) TestGrantBatch_Add_ParallelFeature_ClosedForTickNotReopened() {
+// A parallel EC owns its slot outright, so the pass opens nothing for it and leaves the
+// surviving parallel window running. The additive feature in the same batch is still segmented.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Add_ParallelFeature_SurvivingSlotNotClosed() {
 	par := s.seedGrantFeature("feat_b_add_par")
 	add := s.seedGrantFeature("feat_b_add_additive")
 	s.seedGrantEC("ent_b_par_plan", par, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 400,
@@ -664,8 +866,8 @@ func (s *SubscriptionServiceSuite) TestGrantBatch_Add_ParallelFeature_ClosedForT
 	}, nil))
 
 	parRows := s.sortedGrantsForFeature(par)
-	s.Require().Len(parRows, 1, "the parallel slot is closed and left to the tick, got %d rows", len(parRows))
-	s.assertCutAtChange(parRows[0])
+	s.Require().Len(parRows, 1, "the pass writes no parallel row, got %d rows", len(parRows))
+	s.True(parRows[0].ValidTo.Equal(s.periodEnd()), "the surviving parallel window must not be cut")
 
 	s.Require().Len(s.sortedGrantsForFeature(add), 2)
 	s.True(s.liveRow(add).Quota.Equal(decimal.NewFromInt(1000).Add(s.expectedProrated(600))))
@@ -870,6 +1072,36 @@ func (s *SubscriptionServiceSuite) TestGrantBatch_Swap_LastECOnFeature_CarriesQu
 	want := decimal.NewFromInt(600).Add(s.expectedProrated(300))
 	s.True(rows[1].Quota.Equal(want),
 		"the leaving addon's granted quota must carry, expected %s got %s", want, rows[1].Quota)
+}
+
+// An unlimited incoming config has no prorated segment, so the carried-forward successor
+// must take it in: it opens unlimited, on the lowest-id config's slot.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Swap_UnlimitedIncoming_SuccessorIsUnlimited() {
+	featureID := s.seedGrantFeature("feat_b_unl")
+	s.seedGrantEC("ent_b_unl_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedCycleGrant("ent_b_unl_plan", featureID, 1000)
+
+	out := s.seedGrantEC("ent_b_unl_out", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_unl_out", 600, "")
+	in := s.seedGrantEC("ent_b_unl_in", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_unl_in", 1, "")
+	in.GrantQuota = nil
+	_, err := s.GetStores().EntitlementRepo.Update(s.GetContext(), in)
+	s.Require().NoError(err)
+	s.Require().True(s.ecByID(in.ID).IsUnlimitedGrant())
+
+	s.Require().NoError(s.runGrantPass(
+		[]GrantSource{s.source(s.testData.now, grantProrationSourceAddonAttach, in)},
+		[]GrantSource{s.source(s.testData.now, grantProrationSourceAddonDetach, out)},
+	))
+
+	rows := s.sortedGrantsForFeature(featureID)
+	s.Require().Len(rows, 2, "one closed window plus one successor, got %d", len(rows))
+	s.assertCutAtChange(rows[0])
+	s.assertTiled(featureID)
+
+	successor := rows[1]
+	s.True(successor.Unlimited, "an unlimited incoming config must make the successor unlimited")
+	s.True(successor.Quota.IsZero(), "an unlimited window stores no quota, got %s", successor.Quota)
+	s.Equal("ent_b_unl_in", successor.EntitlementConfigID, "the successor holds the lowest-id config's slot")
 }
 
 // Add and remove on unrelated features must not leak into each other.

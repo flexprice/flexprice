@@ -58,6 +58,7 @@ const (
 	TemporalCreditGrantProcessingWorkflow                  TemporalWorkflowType = "CreditGrantProcessingWorkflow"
 	TemporalSubscriptionAutoCancellationWorkflow           TemporalWorkflowType = "SubscriptionAutoCancellationWorkflow"
 	TemporalSubscriptionOverdueInvoicesWorkflow            TemporalWorkflowType = "SubscriptionOverdueInvoicesWorkflow"
+	TemporalBillingInstalmentsDueWorkflow                  TemporalWorkflowType = "BillingInstalmentsDueWorkflow"
 	TemporalWalletCreditExpiryWorkflow                     TemporalWorkflowType = "WalletCreditExpiryWorkflow"
 	TemporalSubscriptionBillingPeriodsWorkflow             TemporalWorkflowType = "SubscriptionBillingPeriodsWorkflow"
 	TemporalSubscriptionRenewalDueAlertsWorkflow           TemporalWorkflowType = "SubscriptionRenewalDueAlertsWorkflow"
@@ -69,6 +70,7 @@ const (
 	TemporalCustomerOnboardingWorkflow                     TemporalWorkflowType = "CustomerOnboardingWorkflow"
 	TemporalDraftAndComputeSubscriptionInvoiceWorkflow     TemporalWorkflowType = "DraftAndComputeSubscriptionInvoiceWorkflow"
 	TemporalEnvironmentCloneWorkflow                       TemporalWorkflowType = "EnvironmentCloneWorkflow"
+	TemporalBillingEntityEnableWorkflow                    TemporalWorkflowType = "BillingEntityEnableWorkflow"
 	TemporalExecuteExportWorkflow                          TemporalWorkflowType = "ExecuteExportWorkflow"
 	TemporalFinalizeDraftInvoiceWorkflow                   TemporalWorkflowType = "FinalizeDraftInvoiceWorkflow"
 	TemporalHubSpotDealSyncWorkflow                        TemporalWorkflowType = "HubSpotDealSyncWorkflow"
@@ -113,6 +115,7 @@ const (
 	TemporalMarketplaceSubscriptionFinalUsageFlushWorkflow TemporalWorkflowType = "MarketplaceSubscriptionFinalUsageFlushWorkflow"
 	TemporalMarketplaceUsageSnapshotWorkflow               TemporalWorkflowType = "MarketplaceUsageSnapshotWorkflow"
 	TemporalMarketplaceUsageReportWorkflow                 TemporalWorkflowType = "MarketplaceUsageReportWorkflow"
+	TemporalRevenueRecognitionBackfillWorkflow             TemporalWorkflowType = "RevenueRecognitionBackfillWorkflow"
 )
 
 // temporalCronWorkflowTypes is the single list of schedule/worker cron workflows (keeps
@@ -121,6 +124,7 @@ var temporalCronWorkflowTypes = []TemporalWorkflowType{
 	TemporalCreditGrantProcessingWorkflow,
 	TemporalSubscriptionAutoCancellationWorkflow,
 	TemporalSubscriptionOverdueInvoicesWorkflow,
+	TemporalBillingInstalmentsDueWorkflow,
 	TemporalWalletCreditExpiryWorkflow,
 	TemporalSubscriptionBillingPeriodsWorkflow,
 	TemporalSubscriptionRenewalDueAlertsWorkflow,
@@ -129,6 +133,7 @@ var temporalCronWorkflowTypes = []TemporalWorkflowType{
 	TemporalDailyDraftAndComputeWorkflow,
 	TemporalMarketplaceUsageSnapshotWorkflow,
 	TemporalMarketplaceUsageReportWorkflow,
+	TemporalRevenueRecognitionBackfillWorkflow,
 }
 
 var workflowTypesExcludedFromTrackingCore = []TemporalWorkflowType{
@@ -170,6 +175,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalCustomerOnboardingWorkflow,
 		TemporalDraftAndComputeSubscriptionInvoiceWorkflow,
 		TemporalEnvironmentCloneWorkflow,
+		TemporalBillingEntityEnableWorkflow,
 		TemporalExecuteExportWorkflow,
 		TemporalFinalizeDraftInvoiceWorkflow,
 		TemporalHubSpotDealSyncWorkflow,
@@ -243,7 +249,7 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueueSubscription
 	case TemporalProcessInvoiceWorkflow, TemporalFinalizeDraftInvoiceWorkflow, TemporalScheduleDraftFinalizationWorkflow, TemporalComputeInvoiceWorkflow, TemporalDraftAndComputeSubscriptionInvoiceWorkflow:
 		return TemporalTaskQueueInvoice
-	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow, TemporalEnvironmentCloneWorkflow, TemporalUsageAlertWorkflow:
+	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow, TemporalEnvironmentCloneWorkflow, TemporalUsageAlertWorkflow, TemporalBillingEntityEnableWorkflow:
 		return TemporalTaskQueueWorkflows
 	case TemporalReprocessRawEventsWorkflow, TemporalReplayDLQWorkflow:
 		return TemporalTaskQueueReprocessEvents
@@ -327,6 +333,7 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 			TemporalPrepareProcessedEventsWorkflow,
 			TemporalEnvironmentCloneWorkflow,
 			TemporalUsageAlertWorkflow,
+			TemporalBillingEntityEnableWorkflow,
 		}
 	case TemporalTaskQueueReprocessEvents:
 		return []TemporalWorkflowType{

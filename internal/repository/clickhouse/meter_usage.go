@@ -235,7 +235,7 @@ func (r *MeterUsageRepository) GetUsageMultiMeter(ctx context.Context, params *e
 
 	aggregator := GetMeterUsageAggregator(params.AggregationType)
 	// Extract aggregation expressions from the aggregator type
-	aggExpr, countExpr := getMeterUsageAggExprs(aggregator)
+	aggExpr, countExpr := getMeterUsageAggExprs(aggregator, params.UseFinal)
 	query := BuildMultiMeterQuery(aggExpr, countExpr, params, r.qb)
 	_, args := r.qb.BuildWhereClause(params)
 
@@ -332,6 +332,9 @@ func (r *MeterUsageRepository) executeMultiMeterWindowedQuery(ctx context.Contex
 		res.EventCount += point.EventCount
 		res.Points = append(res.Points, point)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).WithHint("Error iterating meter_usage multi-meter window rows").Mark(ierr.ErrDatabase)
+	}
 
 	results := make([]*events.MeterUsageAggregationResult, 0, len(meterResults))
 	for _, res := range meterResults {
@@ -361,6 +364,9 @@ func (r *MeterUsageRepository) executeMultiMeterScalarQuery(ctx context.Context,
 			TotalValue:      value,
 			EventCount:      eventCount,
 		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).WithHint("Error iterating meter_usage multi-meter rows").Mark(ierr.ErrDatabase)
 	}
 
 	return results, nil
@@ -732,7 +738,7 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 	if len(groupByResult.Aliases) > 0 {
 		selectColumns = append(selectColumns, groupByResult.Aliases...)
 	}
-	aggColumns := buildMeterUsageAggregationColumns(params.AggregationTypes)
+	aggColumns := buildMeterUsageAggregationColumns(params.AggregationTypes, params.UseFinal)
 	selectColumns = append(selectColumns, aggColumns...)
 	if !sourceInGroupBy {
 		selectColumns = append(selectColumns, "groupUniqArray(source) AS sources")
@@ -906,8 +912,8 @@ func joinSelect(cols []string) string {
 
 // getMeterUsageAggExprs returns the SQL expression pair for a given aggregator.
 // This bridges the aggregator strategy with multi-meter queries that need raw expressions.
-func getMeterUsageAggExprs(agg MeterUsageAggregator) (aggExpr string, countExpr string) {
-	countExpr = "COUNT(DISTINCT id)"
+func getMeterUsageAggExprs(agg MeterUsageAggregator, useFinal bool) (aggExpr string, countExpr string) {
+	countExpr = eventCountExpr(useFinal)
 
 	switch agg.(type) {
 	case *MeterUsageSumAggregator:
@@ -944,7 +950,7 @@ func getMeterUsageAggExprs(agg MeterUsageAggregator) (aggExpr string, countExpr 
 // queries still get all values in a single round-trip; for single-aggregation
 // queries (the common case) total_usage and the matching per-type column will
 // hold the same value, which is harmless.
-func buildMeterUsageAggregationColumns(aggTypes []types.AggregationType) []string {
+func buildMeterUsageAggregationColumns(aggTypes []types.AggregationType, useFinal bool) []string {
 	aggSet := make(map[types.AggregationType]bool, len(aggTypes))
 	for _, aggType := range aggTypes {
 		aggSet[aggType] = true
@@ -988,8 +994,7 @@ func buildMeterUsageAggregationColumns(aggTypes []types.AggregationType) []strin
 		columns = append(columns, "toUInt64(0) AS count_unique_usage")
 	}
 
-	// event_count is the total distinct event count for every query.
-	columns = append(columns, "COUNT(DISTINCT id) AS event_count")
+	columns = append(columns, eventCountExpr(useFinal)+" AS event_count")
 
 	return columns
 }
@@ -1243,16 +1248,20 @@ func (r *MeterUsageRepository) GetUsageActivitySince(ctx context.Context, params
 	return activity, nil
 }
 
-// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage record for a single event, or nil if not yet processed.
-func (r *MeterUsageRepository) GetEventsByEventIDAndExternalCustomerID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*events.MeterUsage, error) {
+// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage rows for a single event
+// within window, one per meter it matched, or none if not yet processed.
+func (r *MeterUsageRepository) GetEventsByEventIDAndExternalCustomerID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string, window events.TimeRange) ([]*events.MeterUsage, error) {
 	span := StartRepositorySpan(ctx, "meter_usage", "get_events_by_event_id_and_external_customer_id", map[string]interface{}{
 		"tenant_id":            tenantID,
 		"environment_id":       environmentID,
 		"external_customer_id": externalCustomerID,
 		"event_id":             eventID,
+		"start_time":           window.Start,
+		"end_time":             window.End,
 	})
 	defer FinishSpan(span)
 
+	// LIMIT 1 BY meter_id keeps the latest row per meter while duplicates are still unmerged.
 	query := `
 		SELECT
 			id,
@@ -1272,47 +1281,62 @@ func (r *MeterUsageRepository) GetEventsByEventIDAndExternalCustomerID(ctx conte
 		  AND environment_id = ?
 		  AND external_customer_id = ?
 		  AND id = ?
-		LIMIT 1
+		  AND timestamp >= ?
+		  AND timestamp < ?
+		ORDER BY meter_id, ingested_at DESC
+		LIMIT 1 BY meter_id
 		SETTINGS max_memory_usage = 96636764160
 	`
 
-	var usage events.MeterUsage
-	var propertiesJSON string
-
-	err := r.store.GetConn().QueryRow(ctx, query, tenantID, environmentID, externalCustomerID, eventID).Scan(
-		&usage.ID,
-		&usage.TenantID,
-		&usage.EnvironmentID,
-		&usage.ExternalCustomerID,
-		&usage.EventName,
-		&usage.Source,
-		&usage.Timestamp,
-		&usage.IngestedAt,
-		&propertiesJSON,
-		&usage.MeterID,
-		&usage.QtyTotal,
-		&usage.UniqueHash,
-	)
+	rows, err := r.store.GetConn().Query(ctx, query, tenantID, environmentID, externalCustomerID, eventID, window.Start, window.End)
 	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
-			SetSpanSuccess(span)
-			return nil, nil
-		}
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to query meter_usage by event ID").
 			Mark(ierr.ErrDatabase)
 	}
+	defer rows.Close()
 
-	if propertiesJSON != "" {
-		if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
-			r.logger.Error(ctx, "failed to parse properties JSON", "event_id", usage.ID, "error", err)
-			usage.Properties = make(map[string]interface{})
+	var out []*events.MeterUsage
+	for rows.Next() {
+		var usage events.MeterUsage
+		var propertiesJSON string
+		if err := rows.Scan(
+			&usage.ID,
+			&usage.TenantID,
+			&usage.EnvironmentID,
+			&usage.ExternalCustomerID,
+			&usage.EventName,
+			&usage.Source,
+			&usage.Timestamp,
+			&usage.IngestedAt,
+			&propertiesJSON,
+			&usage.MeterID,
+			&usage.QtyTotal,
+			&usage.UniqueHash,
+		); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan meter_usage row").
+				Mark(ierr.ErrDatabase)
 		}
+		if propertiesJSON != "" {
+			if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
+				r.logger.Error(ctx, "failed to parse properties JSON", "event_id", usage.ID, "error", err)
+				usage.Properties = make(map[string]interface{})
+			}
+		}
+		out = append(out, &usage)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating meter_usage rows").
+			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
-	return &usage, nil
+	return out, nil
 }
 
 // GetPropertyKeys samples the latest rows of each meter and returns the keys by merged count, highest first.

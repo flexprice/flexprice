@@ -74,7 +74,7 @@ jobs:
         # the GHCR :<sha> this pushes (promoted to :main post-approval), so a GHCR
         # failure on main must fail the build, not slip through silently.
         continue-on-error: ${{ github.ref_name != 'main' }}
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
           registry: ghcr.io
           username: ${{ vars.GHCR_USERNAME || github.actor }}
@@ -321,6 +321,7 @@ jobs:
     # `vars` and not `env`: the env context is not available in a job-level `if`.
     if: >-
       ${{ always() &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v')) &&
           vars.DB_MIGRATIONS_ENABLED == 'true' &&
           github.event.inputs.skip_migrations != 'true' &&
           needs.build.result == 'success' &&
@@ -381,6 +382,7 @@ jobs:
     # which registers a task definition referencing an image that was never pushed.
     if: >-
       ${{ always() &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v')) &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
@@ -467,7 +469,7 @@ jobs:
       packages: write # GHCR imagetools push
     steps:
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
           registry: ghcr.io
           username: ${{ vars.GHCR_USERNAME || github.actor }}

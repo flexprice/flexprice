@@ -40,6 +40,8 @@ const (
 	ExpandSubscriptionLineItems     ExpandableField = "subscription_line_items"
 	ExpandIntegrations              ExpandableField = "integrations"
 	ExpandPriceSyncStatus           ExpandableField = "price_sync_status"
+	ExpandCommitments               ExpandableField = "commitments"
+	ExpandInstalments               ExpandableField = "instalments"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -79,7 +81,7 @@ var (
 
 	// SubscriptionExpandConfig defines what can be expanded on a subscription
 	SubscriptionExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandPlan, ExpandCustomer, ExpandPrices, ExpandMeters, ExpandSchedule, ExpandCouponAssociations, ExpandCoupon, ExpandSubscriptionLineItems, ExpandEntitlements},
+		AllowedFields: []ExpandableField{ExpandPlan, ExpandCustomer, ExpandPrices, ExpandMeters, ExpandSchedule, ExpandCouponAssociations, ExpandCoupon, ExpandSubscriptionLineItems, ExpandEntitlements, ExpandCommitments},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandPlan:                  {ExpandPrices},
 			ExpandCustomer:              {},
@@ -88,6 +90,7 @@ var (
 			ExpandCouponAssociations:    {ExpandCoupon},
 			ExpandSubscriptionLineItems: {ExpandPrices, ExpandMeters},
 			ExpandEntitlements:          {},
+			ExpandCommitments:           {},
 		},
 	}
 
