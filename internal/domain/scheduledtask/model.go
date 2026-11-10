@@ -21,7 +21,7 @@ type ScheduledTask struct {
 	ManagedCopy        bool
 	Schedule           *types.ExportSchedule
 	Status             types.Status
-	CreatedAt         time.Time
+	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	CreatedBy          string
 	UpdatedBy          string

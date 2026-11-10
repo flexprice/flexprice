@@ -313,7 +313,7 @@ func (r *ScheduledTaskRepository) entToModel(entTask *ent.ScheduledTask) *domain
 		Name:               lo.FromPtr(entTask.Name),
 		ManagedCopy:        entTask.ManagedCopy,
 		Schedule:           entTask.Schedule,
-		Status:            types.Status(entTask.Status),
+		Status:             types.Status(entTask.Status),
 		CreatedAt:          entTask.CreatedAt,
 		UpdatedAt:          entTask.UpdatedAt,
 		CreatedBy:          entTask.CreatedBy,
