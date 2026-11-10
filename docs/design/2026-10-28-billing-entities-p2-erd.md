@@ -70,7 +70,7 @@ the event is rejected, as for any unknown connection.
    variation.
 3. A refund of an earlier payment goes through the connection that took it.
 
-Variation: the connection that took the payment was removed → the refund fails and the customer is credited to their wallet. Customers
+Variation: the connection that took the payment was removed, as after a move → the refund fails and the customer is credited to their wallet. Customers
 and saved payment methods are not copied to the new account; the admin re-syncs them.
 
 ## 3. Scope
@@ -109,7 +109,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 | FR-2 | In an `enabling` or `enabled` environment, each connection belongs to exactly one entity and each entity has at most one published connection per provider. An off environment keeps at most one published connection per provider. Storage providers keep today's rule and belong to no entity. | UC1 | Second Stripe connection for X → 409; Stripe for X and for Y → both saved; second Stripe on an off environment → 409 as today. |
 | FR-3 | Enabling makes the default entity the owner of every existing non-storage connection; a connection created while enabling belongs to the default entity. | UC1 | After enable, every connection except S3/GCS shows the default entity's ID. |
 | FR-4 | Connection list accepts an optional `billing_entity_id` filter; connection Get and List carry `billing_entity_id` (null for off environments and storage). | UC1 | Filter by X → X's connections only; off environment → field null. |
-| FR-5 | A connection's owner never changes after create; an entity moves to another account by removing its connection and creating one. Customers and saved payment methods are not copied. | UC6 | Update with `billing_entity_id` → owner unchanged; remove X's Stripe, create Stripe for X → new connection owned by X. |
+| FR-5 | A connection's owner never changes once set (at create, or by enable per FR-3); an entity moves to another account by removing its connection and creating one. Customers and saved payment methods are not copied. | UC6 | Update with `billing_entity_id` → owner unchanged; remove X's Stripe, create Stripe for X → new connection owned by X. |
 | FR-6 | Every provider call for a record uses the connection owned by the record's customer's entity; with none, the call behaves as if the provider were not connected. A call never uses another entity's connection. | UC2, UC3 | X on Stripe 1, Y on Stripe 2: charge Y's invoice → Stripe 2 only. Y without Razorpay: Razorpay payment link for Y → 400 provider not connected. |
 | FR-7 | For an entity with a connection for the provider, auto-charge, checkout, payment links, saved payment methods, hosted invoice payment and wallet top-up links work as for the default entity; Phase 1's guard applies only when the entity has no connection for that provider. | UC2 | Non-default customer with saved Stripe card and `charge_automatically` → charged through the entity's Stripe; hosted page shows `pay.enabled: true`. |
 | FR-8 | Gateway choice: an explicitly requested provider; else today's rule over the customer's allowed connections. | UC2 | Entity on Razorpay and Stripe, customer with a Stripe card only → auto-charge through Stripe. A payment link created through the API still names its provider. |
@@ -120,7 +120,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 | FR-13 | The existing per-environment webhook URL of each provider stays and is served by the default entity's connection. | UC4 | Event on the old Stripe URL → applied as the default entity. |
 | FR-14 | A customer created from a provider event belongs to the entity of the connection that sent it; the email match against existing customers only considers that entity's customers. | UC4 | Stripe 2 (Y) customer-created event → Flexprice customer with Y. X already has a customer with the same email → a new customer with Y. |
 | FR-17 | A connection can be removed whatever the state of its entity's invoices and subscriptions; the removed connection keeps its owner. | UC6 | Remove Y's Stripe with open invoices → 200; Y's next charge → no gateway, invoice stays pending. |
-| FR-18 | A gateway refund uses the connection recorded on the payment; a payment without one uses the connection of its customer's entity for the payment's provider. A removed connection fails the refund, and the customer is credited to their wallet instead. | UC6 | Y moves from Razorpay A to Razorpay B, refund a payment taken in A → refunded in A; A removed → refund failed with "the connection that took this payment was removed", wallet credited. |
+| FR-18 | A gateway refund uses the connection recorded on the payment; a payment without one uses the connection of its customer's entity for the payment's provider. A removed connection fails the refund, and the customer is credited to their wallet instead. | UC6 | Refund a payment taken in Y's Razorpay A → refunded in A; Y moves to Razorpay B (A removed), refund a payment taken in A → refund failed with "the connection that took this payment was removed", wallet credited. |
 
 ## 5. Non-functional requirements
 <!-- erd:locked -->
@@ -156,7 +156,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 | Piece | What it gives us | Reuse as-is / extend / replace |
 |---|---|---|
 | Connections and their API | Create, read, list, update, remove (archive) per environment; encrypted secrets; one published connection per provider, except storage | Extend: entity on create, list filter and response; duplicate check per entity |
-| Connection lookup by provider | The single path almost every provider client, service and webhook uses to load "the" connection, from a cached per-environment list | Extend: resolves by the entity or connection carried in the request context |
+| Connection lookup by provider | The single path almost every provider client, service and webhook uses to load "the" connection, from a cached per-environment list | Extend: resolves by the entity carried in the request context |
 | Published-connections cache | Per-environment cached list, cleared on every connection write | Reuse: the list carries each connection's owner |
 | Phase 1 entity resolution | Customer's entity, default-entity fallback while enabling, mode short-circuit for off environments | Reuse to set the entity for each provider call |
 | Phase 1 integration guard | Skip or reject points at auto-charge, checkout, pay-first checkout, payment methods, setup intents, payments, hosted page pay, sync APIs, mark-paid dispatch, integration event dispatcher | Extend: the condition becomes "the entity has a connection for this provider" |
@@ -366,7 +366,8 @@ sequenceDiagram
   the connection for X in one submit. Webhook fields keep the off-environment rules (required for Stripe,
   Paddle and Whop). Off environments see today's page.
 - **Exports:** unchanged; S3 and GCS stay environment-wide.
-- **Connection settings:** owner entity, changeable to an entity without a connection for that provider.
+- **Connection settings:** owner entity, read-only; moving an entity is remove the connection, then connect
+  the new account (FR-5).
 
 ## 10. Cross-cutting concerns
 <!-- erd:locked -->
