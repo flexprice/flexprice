@@ -685,9 +685,8 @@ func (l *commitmentLoader) coversBucket(c *commitment.Commitment, start time.Tim
 	return l.holdsBucket(c, start, bucket) && c.ActiveWindows.Contains(start, l.scopeByCommitment[c.ID].location)
 }
 
-// bucketSpan returns the part of the period whose usage buckets this period bills for line. A bucket belongs to the
-// period holding its end: while a commitment carries the line across a period edge that cuts a bucket, the earlier
-// period leaves the bucket to the later one, which reads it from the bucket's start.
+// bucketSpan returns the part of the period whose buckets it bills for line. While a commitment carries the line across
+// an edge that cuts a bucket, the later period, holding the bucket's end, bills it from the bucket's start.
 func (l *commitmentLoader) bucketSpan(stack *commitmentStack, line *usageLine, bucket types.WindowSize) types.Period {
 	anchor := &l.sub.BillingAnchor
 	cutByStart := truncateToBucketStart(l.periodStart.UTC(), bucket, anchor)
