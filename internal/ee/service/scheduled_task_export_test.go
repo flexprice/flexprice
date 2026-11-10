@@ -36,6 +36,8 @@ func (r *exportRepoFake) Create(_ context.Context, t *scheduledtask.ScheduledTas
 	return nil
 }
 
+func (r *exportRepoFake) Update(context.Context, *scheduledtask.ScheduledTask) error { return nil }
+
 func (r *exportRepoFake) Get(context.Context, string) (*scheduledtask.ScheduledTask, error) {
 	return r.task, nil
 }
@@ -80,6 +82,13 @@ type exportHandleFake struct {
 	spec    client.ScheduleSpec
 	paused  bool
 	updates []client.ScheduleSpec
+	pauses  int
+}
+
+func (h *exportHandleFake) Pause(context.Context, client.SchedulePauseOptions) error {
+	h.paused = true
+	h.pauses++
+	return nil
 }
 
 func (h *exportHandleFake) Update(_ context.Context, opts client.ScheduleUpdateOptions) error {
@@ -327,4 +336,40 @@ func TestRun_OldRowUnchanged(t *testing.T) {
 	input := tc.args[0].(exportWorkflows.ExecuteExportWorkflowInput)
 	require.NotNil(t, input.CustomStartTime)
 	require.NotNil(t, input.CustomEndTime)
+}
+
+func intervalRow(interval types.ScheduledTaskInterval) *scheduledtask.ScheduledTask {
+	row := scheduledRow(&types.ExportSchedule{Hour: 1, Timezone: "UTC", DayOfWeek: new(int), DayOfMonth: new(int)})
+	row.Interval = interval
+	return row
+}
+
+func TestUpdate_RenameWeeklyKeepsSchedule(t *testing.T) {
+	handle := &exportHandleFake{}
+	tc := &exportTemporalFake{handle: handle}
+	repo := &exportRepoFake{task: intervalRow(types.ScheduledTaskIntervalWeekly)}
+	s := newExportService(repo, tc)
+	before := *repo.task.Schedule
+
+	name := "x"
+	_, err := s.UpdateScheduledTask(exportCtx(), "st_1", dto.UpdateScheduledTaskRequest{Name: &name})
+	require.NoError(t, err)
+	require.Equal(t, "x", repo.settings.Name)
+	require.Equal(t, before, *repo.settings.Schedule)
+	require.Empty(t, handle.updates)
+}
+
+func TestUpdate_RenameAndDisableMonthly(t *testing.T) {
+	handle := &exportHandleFake{}
+	tc := &exportTemporalFake{handle: handle}
+	repo := &exportRepoFake{task: intervalRow(types.ScheduledTaskIntervalMonthly)}
+	s := newExportService(repo, tc)
+
+	name, enabled := "x", false
+	resp, err := s.UpdateScheduledTask(exportCtx(), "st_1", dto.UpdateScheduledTaskRequest{Name: &name, Enabled: &enabled})
+	require.NoError(t, err)
+	require.Equal(t, "x", repo.settings.Name)
+	require.False(t, resp.Enabled)
+	require.Equal(t, 1, handle.pauses)
+	require.Empty(t, handle.updates)
 }
