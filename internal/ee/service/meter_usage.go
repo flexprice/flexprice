@@ -263,6 +263,9 @@ type GetSubscriptionMeterUsageRequest struct {
 	// (multi-counts the true-up amount across rows). Default (false) is what
 	// every user-facing caller uses.
 	ForceApplyCommitment bool
+
+	// LineItems are the active line items at StartTime; nil loads them.
+	LineItems []*subscription.SubscriptionLineItem
 }
 
 // usageQueryGroup batches usage queries with the same period and aggregation settings.
@@ -486,9 +489,12 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 	}
 
 	// 4. Get line items for this subscription
-	lineItems, err := s.ListUsageLineItems(ctx, sub, usageStartTime, req.LifetimeUsage)
-	if err != nil {
-		return nil, err
+	lineItems := req.LineItems
+	if lineItems == nil || req.LifetimeUsage {
+		lineItems, err = s.ListUsageLineItems(ctx, sub, usageStartTime, req.LifetimeUsage)
+		if err != nil {
+			return nil, err
+		}
 	}
 	sub.LineItems = lineItems
 
@@ -2547,12 +2553,15 @@ func (s *meterUsageService) ListUsageLineItems(ctx context.Context, sub *subscri
 	if sub.SubscriptionType == types.SubscriptionTypeInherited && lo.FromPtr(sub.ParentSubscriptionID) != "" {
 		ownerID = lo.FromPtr(sub.ParentSubscriptionID)
 	}
-	if !lifetime {
-		return listActiveLineItems(ctx, s.SubscriptionLineItemRepo, ownerID, from)
-	}
 	filter := types.NewNoLimitSubscriptionLineItemFilter()
 	filter.SubscriptionIDs = []string{ownerID}
-	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	if lifetime {
+		filter.ActiveFilter = false
+		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	} else {
+		filter.ActiveFilter = true
+		filter.CurrentPeriodStart = &from
+	}
 	return s.SubscriptionLineItemRepo.List(ctx, filter)
 }
 

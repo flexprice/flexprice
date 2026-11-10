@@ -2167,6 +2167,8 @@ type GetUsageBySubscriptionRequest struct {
 	// Source indicates the caller context. When "invoice_creation", ClickHouse queries use FINAL.
 	// Optional; omit for default (no FINAL).
 	Source string `json:"-"`
+	// LineItems are the active line items at StartTime; nil loads them.
+	LineItems []*subscription.SubscriptionLineItem `json:"-"`
 }
 
 type GetUsageBySubscriptionResponse struct {
