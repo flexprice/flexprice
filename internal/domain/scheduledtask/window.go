@@ -8,10 +8,10 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// IngestionBuffer is how long a run waits for late events.
+// IngestionBuffer delays runs for late events.
 const IngestionBuffer = 15 * time.Minute
 
-// Window returns the UTC data window for a run scheduled at scheduledStart.
+// Window returns UTC bounds for a run.
 func Window(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule, scheduledStart time.Time) (time.Time, time.Time, error) {
 	loc := time.UTC
 	if interval != types.ScheduledTaskIntervalManual {
@@ -31,7 +31,7 @@ func Window(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule
 	var start, end time.Time
 	switch interval {
 	case types.ScheduledTaskIntervalHourly:
-		end = time.Date(y, m, d, b.Hour(), 0, 0, 0, loc)
+		end = b.Add(-time.Duration(b.Minute())*time.Minute - time.Duration(b.Second())*time.Second - time.Duration(b.Nanosecond()))
 		start = end.Add(-time.Hour)
 	case types.ScheduledTaskIntervalDaily, types.ScheduledTaskIntervalManual:
 		end = time.Date(y, m, d, 0, 0, 0, 0, loc)
@@ -51,7 +51,7 @@ func Window(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule
 	return start.UTC(), end.UTC(), nil
 }
 
-// Cron returns the cron expression for a schedule, evaluated in its timezone.
+// Cron returns the schedule's cron expression.
 func Cron(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule) (string, error) {
 	if interval == types.ScheduledTaskIntervalManual {
 		return "", ierr.NewError("manual exports have no cron").
