@@ -367,7 +367,7 @@ func (s *CommitmentE2ESuite) TestInstalments_DisabledSettingAddsNothing() {
 
 // An instalment back on schedule though its commitment was terminated before it fell due, as a void used to leave one,
 // is left off the subscription invoices rather than billed again.
-func (s *CommitmentE2ESuite) TestInstalments_SkipThoseTerminatedBeforeDue() {
+func (s *CommitmentE2ESuite) TestInstalments_SkipThoseATerminationCancelled() {
 	ctx := s.GetContext()
 	feb, mar, feb15 := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0), s.jan.AddDate(0, 1, 14)
 	sub, instalments, february := s.billedThroughMarch("skip_terminated", types.InstalmentDeliverySubscriptionInvoice)

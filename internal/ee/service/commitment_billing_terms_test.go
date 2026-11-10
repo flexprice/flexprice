@@ -1447,7 +1447,7 @@ func (s *CommitmentE2ESuite) TestBillDueInstalments_SkipsMissingSubscriptionOrCo
 
 // An instalment back on schedule though its commitment was terminated before it fell due, as a void used to leave one,
 // is skipped by the run and stays scheduled rather than being billed again.
-func (s *CommitmentE2ESuite) TestBillDueInstalments_SkipsInstalmentsTerminatedBeforeDue() {
+func (s *CommitmentE2ESuite) TestBillDueInstalments_SkipsInstalmentsATerminationCancelled() {
 	ctx := s.GetContext()
 	feb15 := s.jan.AddDate(0, 1, 14)
 	sub, instalments, marchInvoice := s.billedThroughMarch("skip_terminated", types.InstalmentDeliverySeparateInvoice)
@@ -1806,7 +1806,7 @@ func (s *CommitmentE2ESuite) TestPlanInstalments_AnEditStartsAtTheAnniversaryPer
 }
 
 // A terminated commitment still owes the instalments due by its termination, one falling due at that instant included.
-func TestTerminatedBeforeDue(t *testing.T) {
+func TestCancelledByTermination(t *testing.T) {
 	mar := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name         string
@@ -1822,7 +1822,7 @@ func TestTerminatedBeforeDue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &commitment.Commitment{CommitmentStatus: tt.status, TerminatedAt: tt.terminatedAt}
-			require.Equal(t, tt.want, terminatedBeforeDue(c, &billingterm.Instalment{BillOn: mar}))
+			require.Equal(t, tt.want, cancelledByTermination(c, &billingterm.Instalment{BillOn: mar}))
 		})
 	}
 }

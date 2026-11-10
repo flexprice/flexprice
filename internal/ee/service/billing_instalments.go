@@ -27,9 +27,8 @@ func instalmentBillAt(referencePoint types.InvoiceReferencePoint, periodStart, p
 	}
 }
 
-// dueInstalments returns the subscriptions' scheduled subscription-invoice instalments due by billAt, in billing
-// order, and their commitments by id; none while commitments_v2 is off. It skips an instalment whose commitment was
-// terminated before it fell due.
+// dueInstalments returns the subscriptions' scheduled subscription-invoice instalments due by billAt that no termination
+// cancelled, in billing order, with their commitments by ID; none while commitments_v2 is off.
 func dueInstalments(
 	ctx context.Context,
 	params ServiceParams,
@@ -52,24 +51,49 @@ func dueInstalments(
 		return nil, nil, err
 	}
 
-	filter := commitment.NewNoLimitFilter()
-	filter.IDs = lo.Uniq(lo.Map(scheduled, func(i *billingterm.Instalment, _ int) string { return i.OwnerID }))
-	owners, err := params.CommitmentRepo.List(ctx, filter)
+	commitments, err := instalmentCommitments(ctx, params.CommitmentRepo, scheduled)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ownerByID := lo.KeyBy(owners, func(c *commitment.Commitment) string { return c.ID })
-	due := make([]*billingterm.Instalment, 0, len(scheduled))
+	billable := make([]*billingterm.Instalment, 0, len(scheduled))
 	for _, inst := range scheduled {
-		if c, ok := ownerByID[inst.OwnerID]; ok && terminatedBeforeDue(c, inst) {
-			continue
+		if !cancelledByTermination(commitments[inst.OwnerID], inst) {
+			billable = append(billable, inst)
 		}
-
-		due = append(due, inst)
 	}
 
-	return due, ownerByID, nil
+	return billable, commitments, nil
+}
+
+// instalmentCommitments returns the commitments owning the instalments, by ID.
+func instalmentCommitments(
+	ctx context.Context,
+	repo commitment.Repository,
+	instalments []*billingterm.Instalment,
+) (map[string]*commitment.Commitment, error) {
+	if len(instalments) == 0 {
+		return map[string]*commitment.Commitment{}, nil
+	}
+
+	ownerIDs := make([]string, 0, len(instalments))
+	for _, inst := range instalments {
+		ownerIDs = append(ownerIDs, inst.OwnerID)
+	}
+
+	filter := commitment.NewNoLimitFilter()
+	filter.IDs = lo.Uniq(ownerIDs)
+	owners, err := repo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	byID := make(map[string]*commitment.Commitment, len(owners))
+	for _, c := range owners {
+		byID[c.ID] = c
+	}
+
+	return byID, nil
 }
 
 // dueInstalmentLines returns the subscription's scheduled subscription-invoice instalments due by billAt as fixed lines.
@@ -78,7 +102,7 @@ func (s *billingService) dueInstalmentLines(
 	sub *subscription.Subscription,
 	billAt time.Time,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
-	instalments, ownerByID, err := dueInstalments(ctx, s.ServiceParams, []string{sub.ID}, billAt)
+	instalments, commitments, err := dueInstalments(ctx, s.ServiceParams, []string{sub.ID}, billAt)
 	if err != nil || len(instalments) == 0 {
 		return nil, decimal.Zero, err
 	}
@@ -86,7 +110,7 @@ func (s *billingService) dueInstalmentLines(
 	lines := make([]dto.CreateInvoiceLineItemRequest, 0, len(instalments))
 	total := decimal.Zero
 	for _, i := range instalments {
-		c, ok := ownerByID[i.OwnerID]
+		c, ok := commitments[i.OwnerID]
 		if !ok {
 			return nil, decimal.Zero, ierr.NewErrorf("commitment %s of instalment %s not found", i.OwnerID, i.ID).
 				WithHint("A scheduled instalment must belong to a commitment").

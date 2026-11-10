@@ -717,6 +717,51 @@ func (s *CommitmentE2ESuite) requireVoided(march *billingterm.Instalment, owed b
 	s.Empty(s.instalmentEvents(types.WebhookEventBillingInstalmentUpdated))
 }
 
+// A draft computed before voids checked terminations can bill an instalment a termination cancelled. Finalizing it
+// recomputes the draft without the instalment; a manually edited draft is never recomputed, so its finalize fails.
+func (s *CommitmentE2ESuite) TestFinalize_StaleDraftDropsAnInstalmentATerminationCancelled() {
+	mar, feb15 := s.jan.AddDate(0, 2, 0), s.jan.AddDate(0, 1, 14)
+	for i, manuallyEdited := range []bool{false, true} {
+		s.Run(fmt.Sprintf("manually edited %v", manuallyEdited), func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+			sub, instalments, february := s.billedThroughMarch(fmt.Sprintf("stale_draft_%d", i), types.InstalmentDeliverySubscriptionInvoice)
+			march := instalments[2]
+			_, err := s.commitments.Terminate(ctx, march.OwnerID, dto.TerminateCommitmentRequest{EffectiveAt: &feb15})
+			s.Require().NoError(err)
+
+			// What a void did before it checked terminations: March's instalment back on schedule, on the next draft.
+			_, err = s.GetStores().BillingInstalmentRepo.Reschedule(ctx, february)
+			s.Require().NoError(err)
+			s.recordFrom(s.tokens, "api", mar.AddDate(0, 0, 9), "100")
+			draft := s.computedDraft(invoices, sub.ID, types.Period{Start: mar, End: mar.AddDate(0, 1, 0)})
+			terminated, err := s.GetStores().CommitmentRepo.Get(ctx, march.OwnerID)
+			s.Require().NoError(err)
+			line := instalmentLine(terminated, march)
+			s.Require().NoError(s.GetStores().InvoiceLineItemRepo.Create(ctx, line.ToInvoiceLineItem(ctx, draft)))
+			if manuallyEdited {
+				draft.IsManuallyEdited = true
+				s.Require().NoError(s.GetStores().InvoiceRepo.Update(ctx, draft))
+			}
+
+			err = invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{})
+			s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(march.ID).InstalmentStatus, "the instalment is not billed")
+			if manuallyEdited {
+				s.Require().Error(err)
+				s.ErrorIs(err, errStaleDraft)
+				return
+			}
+
+			s.Require().NoError(err)
+			finalized, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
+			s.Require().NoError(err)
+			s.Equal(types.InvoiceStatusFinalized, finalized.InvoiceStatus)
+			s.Empty(s.storedInstalmentLines(draft.ID))
+		})
+	}
+}
+
 // The staging case: voiding March's separate invoice reschedules its instalment for the next run only while the
 // commitment still owes it; terminated back to 15 Feb, it cancels the instalment and the run bills nothing.
 func (s *CommitmentE2ESuite) TestVoid_SeparateInvoiceAfterTermination() {
