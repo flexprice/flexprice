@@ -264,7 +264,7 @@ type GetSubscriptionMeterUsageRequest struct {
 	// every user-facing caller uses.
 	ForceApplyCommitment bool
 
-	// LineItems are the active line items at StartTime; nil loads them.
+	// LineItems are the active line items at StartTime; empty loads them.
 	LineItems []*subscription.SubscriptionLineItem
 }
 
@@ -490,7 +490,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 
 	// 4. Get line items for this subscription
 	lineItems := req.LineItems
-	if lineItems == nil || req.LifetimeUsage {
+	if len(lineItems) == 0 || req.LifetimeUsage {
 		lineItems, err = s.ListUsageLineItems(ctx, sub, usageStartTime, req.LifetimeUsage)
 		if err != nil {
 			return nil, err

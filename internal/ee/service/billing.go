@@ -1656,7 +1656,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	// Line items loaded via GetWithLineItems are filtered by sub.CurrentPeriodStart; for historical
 	// periods (recalculation, past invoices) reload using the invoice billing period start.
 	lineItems := params.LineItems
-	if lineItems == nil {
+	if len(lineItems) == 0 {
 		var err error
 		lineItems, err = listActiveLineItems(ctx, s.SubscriptionLineItemRepo, sub.ID, periodStart)
 		if err != nil {
@@ -2430,7 +2430,7 @@ func (s *billingService) calculateMeterUsageCharges(
 
 				// Inherited subs bill the parent's line items.
 				var windowLineItems []*subscription.SubscriptionLineItem
-				if periodLineItems != nil && w.Start.Equal(periodStart) && sub.SubscriptionType != types.SubscriptionTypeInherited {
+				if len(periodLineItems) > 0 && w.Start.Equal(periodStart) && sub.SubscriptionType != types.SubscriptionTypeInherited {
 					windowLineItems = slices.Clone(periodLineItems)
 				}
 

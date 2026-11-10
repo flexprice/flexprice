@@ -969,7 +969,7 @@ func (s *invoiceService) saveCompletedCycleUsageCheckpoints(ctx context.Context,
 	subscriptionForInvoicePeriod := *sub
 	subscriptionForInvoicePeriod.CurrentPeriodStart = *inv.PeriodStart
 	items := periodItems
-	if items == nil {
+	if len(items) == 0 {
 		items, err = listActiveLineItems(ctx, s.SubscriptionLineItemRepo, sub.ID, *inv.PeriodStart)
 		if err != nil {
 			return err
