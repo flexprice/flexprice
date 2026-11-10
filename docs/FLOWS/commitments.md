@@ -108,7 +108,7 @@ Analytics and previews use `newProjectedCommitmentLoader`, which prices a window
 start into today as if through the period's end, as its coming invoice will, but reads usage only up to the window's
 end. A window ending before today, or on a cancelled subscription, is priced to its own end (`projectedPeriodEnd`).
 Callers: `attachCommitmentBreakdown` ([subscription.go:6710](../../internal/ee/service/subscription.go#L6710)) and
-`calculateLineItemCommitments` ([meter_usage.go:3122](../../internal/ee/service/meter_usage.go#L3122)).
+`calculateLineItemCommitments` ([meter_usage.go:3189](../../internal/ee/service/meter_usage.go#L3189)).
 
 Usage analytics prices a range one billing period at a time, as each period's invoice bills it; a period the range
 cuts gets its floor prorated to the part in range, apart from the projected open period. For each period it builds the
@@ -119,14 +119,15 @@ running SUM meter is read at its total at the period's end, as invoices bill it.
 commitment bill at its own price.
 
 Each period's charges stay on that period's groups and points, shared by the usage billing priced: a bucketed price's
-summed buckets, not a window's peak. A point belongs to the period holding the middle of its window, so windows cut on
-other edges or in another timezone land on the period they mostly cover. A period without a point of its own takes the
-first window whose middle it holds, reusing a point whose window covers it. A range no commitment overlaps is not cut
-into periods; one a commitment overlaps can span at most 366 billing periods.
+summed buckets, not a window's peak. A point belongs to the period holding the middle of its window (`pointWindows`,
+with each window's real length in the customer's timezone), so windows cut on other edges or in another timezone land on
+the period they mostly cover. A period without a point of its own takes the first window whose middle it holds or, when
+it is shorter than a window, the window holding its own middle, reusing a point already there. A range no commitment
+overlaps is not cut into periods; one a commitment overlaps can span at most 366 billing periods.
 
 With `expand: ["instalments"]`, the response lists the instalments invoiced in the range (`ListInvoiced`, by
-`invoiced_at`) for the commitments on the customer's subscriptions that cover a queried meter (`CoveringMeters`),
-whether or not the range has usage.
+`invoiced_at`) for the commitments on the customer's subscriptions that covered a queried meter during their term
+(`CoveringMeters`), whether or not the range has usage. A range in which no usage line runs lists none.
 
 ### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:59](../../internal/ee/service/billing_commitments.go#L59))
 

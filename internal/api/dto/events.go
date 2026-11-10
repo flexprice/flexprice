@@ -392,7 +392,7 @@ type GetUsageAnalyticsResponse struct {
 	Items           []UsageAnalyticItem  `json:"items"`
 	CustomAnalytics []CustomAnalyticItem `json:"custom_analytics,omitempty"`
 	// Instalments lists, with expand "instalments", the instalments invoiced in the range for the v2 commitments covering
-	// a queried meter. Property and source filters apply no commitments, so they list none.
+	// a queried meter; it is empty with property or source filters, or when no usage line runs in the range.
 	Instalments []UsageAnalyticInstalment `json:"instalments,omitempty"`
 	// TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes "instalments".
 	TotalCostWithInstalments *decimal.Decimal `json:"total_cost_with_instalments,omitempty" swaggertype:"string"`

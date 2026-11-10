@@ -323,6 +323,8 @@ type AnalyticsData struct {
 	LineTotals map[string]decimal.Decimal
 	// LineBilledPeriods is what each billing period bills the lines v2 commitments cover: utilized, overage and true-up.
 	LineBilledPeriods map[string][]billedPeriod
+	// Location is the customer's timezone, which the usage windows are cut in.
+	Location *time.Location
 }
 
 // windowAnchor returns the anchor the subscription's usage windows were cut with: the request's, else its billing anchor.
@@ -1509,6 +1511,11 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 			BillingAnchor:        params.BillingAnchor,
 			ForceApplyCommitment: params.ForceApplyCommitment,
 		},
+	}
+
+	data.Location = time.UTC
+	if location, err := time.LoadLocation(params.Timezone); err == nil {
+		data.Location = location
 	}
 
 	// Set currency from first subscription
@@ -2707,13 +2714,12 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 	}
 
 	// A bucketed price keeps its points at the bucket when that is coarser than the request window.
-	anchor := data.windowAnchor(groups[0].SubscriptionID)
 	bucket := price.ResolveBucketSize(data.Prices[groups[0].PriceID], data.Meters[groups[0].MeterID])
 	grain := data.Params.WindowSize
 	if grain != "" {
 		grain = grain.Max(bucket)
 	}
-	half := time.Duration(grain.ToMinutes()) * time.Minute / 2
+	windows := newPointWindows(grain, data.windowAnchor(groups[0].SubscriptionID), data.Location)
 
 	// Bucket points belong to v1 commitment time buckets, which no v2 commitment covers, so only points are reset.
 	rangeUsage := make([]decimal.Decimal, len(groups))
@@ -2744,19 +2750,15 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 			bounds.End = time.Date(9999, time.January, 1, 0, 0, 0, 0, time.UTC)
 		}
 
-		// A period with no point of its own takes the first window whose middle it holds.
 		var fill time.Time
 		if grain != "" {
-			fill = truncateToBucketStart(bp.period.Start.UTC(), grain, anchor)
-			if fill.Add(half).Before(bp.period.Start) {
-				fill = truncateToBucketStart(bp.period.Start.Add(2*half).UTC(), grain, anchor)
-			}
+			fill = windows.fillWindow(bp.period)
 		}
 
 		pointsIn := make([][]int, len(groups))
 		weights := make([]decimal.Decimal, len(groups))
 		for gi, group := range groups {
-			pointsIn[gi] = periodPoints(group.Points, bounds, fill, half)
+			pointsIn[gi] = windows.periodPoints(group.Points, bounds, fill)
 			for _, j := range pointsIn[gi] {
 				if additive {
 					weights[gi] = weights[gi].Add(group.Points[j].Billed())
@@ -2810,17 +2812,82 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 	}
 }
 
+// pointWindows cuts time into the windows analytics points cover: the grain, months starting on the anchor's day, in
+// the customer's timezone, as meter_usage cuts them.
+type pointWindows struct {
+	grain    types.WindowSize
+	anchor   *time.Time
+	location *time.Location
+}
+
+// newPointWindows returns the windows of grain from the anchor's day in location, UTC when location is nil.
+func newPointWindows(grain types.WindowSize, anchor *time.Time, location *time.Location) pointWindows {
+	if location == nil {
+		location = time.UTC
+	}
+
+	return pointWindows{grain: grain, anchor: anchor, location: location}
+}
+
+// startOf returns the start of the window holding t.
+func (w pointWindows) startOf(t time.Time) time.Time {
+	return truncateToBucketStart(t.In(w.location), w.grain, w.anchor).UTC()
+}
+
+// endOf returns the end of the window starting at start; months run to the next anchor day, not a fixed 30 days.
+func (w pointWindows) endOf(start time.Time) time.Time {
+	local := start.In(w.location)
+	switch w.grain {
+	case types.WindowSizeMonth:
+		shift := 0
+		if w.anchor != nil {
+			shift = w.anchor.Day() - 1
+		}
+
+		month := local.AddDate(0, 0, -shift)
+		return time.Date(month.Year(), month.Month()+1, 1, 0, 0, 0, 0, w.location).AddDate(0, 0, shift).UTC()
+	case types.WindowSizeWeek:
+		return local.AddDate(0, 0, 7).UTC()
+	case types.WindowSizeDay:
+		return local.AddDate(0, 0, 1).UTC()
+	}
+
+	return start.Add(time.Duration(w.grain.ToMinutes()) * time.Minute)
+}
+
+// middleOf returns the middle of the window starting at start.
+func (w pointWindows) middleOf(start time.Time) time.Time {
+	return start.Add(w.endOf(start).Sub(start) / 2)
+}
+
+// fillWindow returns the start of the window that carries the charges of a period without points of its own: the
+// first window whose middle the period holds, else, for a period shorter than a window, the window holding its middle.
+func (w pointWindows) fillWindow(period types.Period) time.Time {
+	start := w.startOf(period.Start)
+	if w.middleOf(start).Before(period.Start) {
+		start = w.endOf(start)
+	}
+
+	if !w.middleOf(start).Before(period.End) {
+		return w.startOf(period.Start.Add(period.End.Sub(period.Start) / 2))
+	}
+
+	return start
+}
+
 // periodPoints returns the indexes of the points whose windows have their middle in bounds or, with none, of the point
-// whose window holds the middle of the fill window; half is half a window.
-func periodPoints(points []events.UsageAnalyticPoint, bounds types.Period, fill time.Time, half time.Duration) []int {
-	middle := fill.Add(half)
+// whose window holds the middle of the fill window.
+func (w pointWindows) periodPoints(points []events.UsageAnalyticPoint, bounds types.Period, fill time.Time) []int {
+	fillMiddle := w.middleOf(fill)
 	var in []int
 	holding := -1
 	for j, point := range points {
-		if at := point.Timestamp.Add(half); !at.Before(bounds.Start) && at.Before(bounds.End) {
+		end := w.endOf(point.Timestamp)
+		middle := point.Timestamp.Add(end.Sub(point.Timestamp) / 2)
+		if !middle.Before(bounds.Start) && middle.Before(bounds.End) {
 			in = append(in, j)
 		}
-		if !fill.IsZero() && !middle.Before(point.Timestamp) && middle.Before(point.Timestamp.Add(2*half)) {
+		if !fill.IsZero() && !fillMiddle.Before(point.Timestamp) && fillMiddle.Before(end) {
 			holding = j
 		}
 	}
@@ -3137,7 +3204,8 @@ func (s *meterUsageService) calculateLineItemCommitments(
 	// The open period's loader prices through the period end, so the lookup reaches it too.
 	sub := usage.Subscription
 	now := clock.Now()
-	overlapping, err := svc.ListOverlapping(ctx, sub.ID, params.StartTime, projectedPeriodEnd(sub, params.StartTime, end, now))
+	lookupEnd := projectedPeriodEnd(sub, params.StartTime, end, now)
+	overlapping, err := svc.ListOverlapping(ctx, sub.ID, params.StartTime, lookupEnd)
 	if err != nil || len(overlapping) == 0 {
 		return nil, err
 	}
@@ -3502,7 +3570,8 @@ func (s *meterUsageService) processPointsWithBuckets(
 	}
 
 	s.captureBucketPoints(p.item, lineItem)
-	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, p.data.windowAnchor(p.item.SubscriptionID))
+	anchor := p.data.windowAnchor(p.item.SubscriptionID)
+	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, anchor)
 
 	return cost
 }
@@ -3566,7 +3635,8 @@ func (s *meterUsageService) processSingleBucket(
 	if needsWindowedFill && p.bucketSize != "" {
 		cost := s.fillWindowsAndApplyCommitment(p, lineItem)
 		s.captureBucketPoints(p.item, lineItem)
-		p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, p.data.windowAnchor(p.item.SubscriptionID))
+		anchor := p.data.windowAnchor(p.item.SubscriptionID)
+		p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, anchor)
 		return cost
 	}
 

@@ -921,8 +921,8 @@ func cancellationFeeLine(
 	}, nil
 }
 
-// CoveringMeters returns the IDs of the subscription's active and terminated commitments whose scope covers one of its
-// usage lines on the given meters.
+// CoveringMeters returns the IDs of the subscription's active and terminated commitments whose scope covers, during their
+// term, one of its usage lines on the given meters.
 func (s *commitmentService) CoveringMeters(ctx context.Context, subscriptionID string, meterIDs []string) ([]string, error) {
 	commitments, err := s.CommitmentRepo.List(ctx, commitment.NewSubscriptionFilter(
 		subscriptionID, types.CommitmentStatusActive, types.CommitmentStatusTerminated,
@@ -943,8 +943,8 @@ func (s *commitmentService) CoveringMeters(ctx context.Context, subscriptionID s
 
 	var ids []string
 	for _, c := range commitments {
-		for _, li := range cc.Lines {
-			if li.PriceType == types.PRICE_TYPE_USAGE && meters[li.MeterID] && commitmentCoversLine(c, li, cc.Prices[li.PriceID]) {
+		for _, li := range scopeLinesInPeriod(c, cc, c.StartDate, c.EffectiveEnd()) {
+			if meters[li.MeterID] {
 				ids = append(ids, c.ID)
 				break
 			}
