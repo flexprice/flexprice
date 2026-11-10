@@ -604,6 +604,13 @@ email:
   reply_to: "" # Reply-to address for emails
   calendar_url: "" # Calendar booking URL for onboarding
   zapier_webhook_url: "" # Zapier webhook URL for user signup (set via FLEXPRICE_EMAIL_ZAPIER_WEBHOOK_URL environment variable)
+  provider: "log" # resend | log (log writes rendered emails to disk instead of sending)
+  resend:
+    api_key: "" # FLEXPRICE_EMAIL_RESEND_API_KEY
+    webhook_secret: "" # Signing secret of this region's Resend webhook (FLEXPRICE_EMAIL_RESEND_WEBHOOK_SECRET)
+  sender_domain: "mail.flexprice.io"
+  sender_local_part: "invoices"
+  region_tag: "" # us | ca | in | staging; delivery events tagged with another region are dropped
 
 rbac:
   roles_config_path: "internal/config/rbac/roles.json" # Path to the roles.json file

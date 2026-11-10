@@ -1178,6 +1178,18 @@ type EmailConfig struct {
 	ReplyTo          string `mapstructure:"reply_to" validate:"omitempty"`
 	CalendarURL      string `mapstructure:"calendar_url" validate:"omitempty"`
 	ZapierWebhookURL string `mapstructure:"zapier_webhook_url" validate:"omitempty"`
+
+	// Customer invoice emails.
+	Provider        string            `mapstructure:"provider" validate:"omitempty,oneof=resend log"`
+	Resend          ResendEmailConfig `mapstructure:"resend"`
+	SenderDomain    string            `mapstructure:"sender_domain" validate:"omitempty"`
+	SenderLocalPart string            `mapstructure:"sender_local_part" validate:"omitempty"`
+	RegionTag       string            `mapstructure:"region_tag" validate:"omitempty"`
+}
+
+type ResendEmailConfig struct {
+	APIKey        string `mapstructure:"api_key" validate:"omitempty"`
+	WebhookSecret string `mapstructure:"webhook_secret" validate:"omitempty"`
 }
 
 type CheckoutConfig struct {
