@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -547,4 +548,54 @@ func (s *CommitmentServiceSuite) TestCreate_RejectsSamePriorityOverFutureCutoff(
 	b.StartDate = time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
 	_, err = s.svc.Create(s.GetContext(), b)
 	s.requireValidation(err, "priority")
+}
+
+// Active windows must hold whole usage buckets, which are cut in UTC, under every offset their timezone takes.
+func TestRejectSplitBuckets(t *testing.T) {
+	jan := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	window := func(startHour, startMinute, endHour, endMinute int) types.ActiveWindows {
+		return types.ActiveWindows{{
+			Start: types.Bucket{Hour: startHour, Minute: startMinute},
+			End:   types.Bucket{Hour: endHour, Minute: endMinute},
+		}}
+	}
+	tests := []struct {
+		name     string
+		size     types.WindowSize
+		timezone string
+		windows  types.ActiveWindows
+		end      *time.Time
+		wantEdge string // empty when the windows hold whole buckets
+	}{
+		{name: "no windows", size: types.WindowSizeHour},
+		{name: "whole hours", size: types.WindowSizeHour, windows: window(10, 0, 15, 0)},
+		{name: "an edge inside an hour", size: types.WindowSizeHour, windows: window(10, 0, 14, 45), wantEdge: "14:45"},
+		{name: "the same edge on a 15-minute grid", size: types.WindowSize15Min, windows: window(10, 0, 14, 45)},
+		{name: "any minute", size: types.WindowSizeMinute, windows: window(10, 7, 14, 53)},
+		{name: "whole hours in Kolkata split UTC hours", size: types.WindowSizeHour, timezone: "Asia/Kolkata", windows: window(9, 0, 21, 0), wantEdge: "09:00"},
+		{name: "half past in Kolkata is on the hour in UTC", size: types.WindowSizeHour, timezone: "Asia/Kolkata", windows: window(9, 30, 21, 30)},
+		{name: "New York hours across daylight saving", size: types.WindowSizeHour, timezone: "America/New_York", windows: window(7, 0, 19, 0)},
+		{name: "New York 6 hours once daylight saving starts", size: types.WindowSize6Hour, timezone: "America/New_York", windows: window(7, 0, 19, 0), wantEdge: "07:00"},
+		{name: "New York 6 hours in a winter term", size: types.WindowSize6Hour, timezone: "America/New_York", windows: window(7, 0, 19, 0), end: lo.ToPtr(jan.AddDate(0, 2, 0))},
+		{name: "the whole UTC day", size: types.WindowSizeDay, windows: window(0, 0, 24, 0)},
+		{name: "part of a day", size: types.WindowSizeDay, windows: window(8, 0, 20, 0), wantEdge: "08:00"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &commitment.Commitment{
+				StartDate:     jan,
+				EndDate:       tt.end,
+				Timezone:      lo.CoalesceOrEmpty(tt.timezone, "UTC"),
+				ActiveWindows: tt.windows,
+			}
+			err := rejectSplitBuckets(c, tt.size)
+			if tt.wantEdge == "" {
+				require.NoError(t, err)
+				return
+			}
+
+			require.True(t, ierr.IsValidation(err), "want a validation error, got %v", err)
+			require.Contains(t, err.Error(), tt.wantEdge)
+		})
+	}
 }

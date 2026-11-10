@@ -279,6 +279,10 @@ func (s *commitmentService) validateTermLines(
 		if err := rejectCalendarBuckets(sizes[0]); err != nil {
 			return err
 		}
+
+		if err := rejectSplitBuckets(c, sizes[0]); err != nil {
+			return err
+		}
 	}
 
 	for _, li := range lines {
@@ -327,6 +331,41 @@ func rejectCalendarBuckets(size types.WindowSize) error {
 	return ierr.NewError(reason).
 		WithHint("Use a daily or shorter bucket size for window commitments").
 		Mark(ierr.ErrValidation)
+}
+
+// rejectSplitBuckets rejects active windows that split usage buckets. Buckets are cut in UTC, so every window edge must
+// fall on the bucket grid under each UTC offset the commitment's timezone takes in the first year of its term.
+func rejectSplitBuckets(c *commitment.Commitment, size types.WindowSize) error {
+	if len(c.ActiveWindows) == 0 {
+		return nil
+	}
+
+	minutes := size.ToMinutes()
+	until := c.Until(c.StartDate.AddDate(1, 0, 0))
+	for t := c.StartDate.In(c.Location()); t.Before(until); {
+		_, offset := t.Zone()
+		for _, w := range c.ActiveWindows {
+			for _, edge := range []types.Bucket{w.Start, w.End} {
+				if (edge.MinuteOfDay()-offset/60)%minutes == 0 {
+					continue
+				}
+
+				return ierr.NewErrorf("active window edge %02d:%02d %s splits %s usage buckets", edge.Hour, edge.Minute, c.Timezone, size).
+					WithHintf("Usage buckets are cut in UTC, so at UTC offset %s each window edge must fall on the %s bucket grid",
+						t.Format("-07:00"), size).
+					Mark(ierr.ErrValidation)
+			}
+		}
+
+		_, next := t.ZoneBounds()
+		if next.IsZero() {
+			break
+		}
+
+		t = next
+	}
+
+	return nil
 }
 
 // rejectOffCadencePrice rejects a scope price that does not bill every subscription period, since a commitment's

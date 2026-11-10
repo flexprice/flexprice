@@ -80,6 +80,8 @@ API: `POST /v1/commitments` ([router.go:730](../../internal/api/router.go#L730))
      - `validateScopeEntity`: the scope names something real.
      - `validateTermLines`: over the whole term the scoped lines must not have entitled meters, must be on one meter
        where needed, share one bucket size for windows, carry no legacy commitment fields, and bill every period.
+       `active_windows` must hold whole usage buckets (`rejectSplitBuckets`): buckets are cut in UTC, so each window
+       edge must fall on the bucket grid under every UTC offset the commitment's timezone takes in its first year.
      - `validateOverlaps`: commitments sharing a line must agree on type, measurement, bucket size and overage price,
        and differ in priority while they allocate together. `blocksUntil` lets a commitment keep blocking until the
        end of the billing period holding its end, because that period's invoice still allocates it.
@@ -159,14 +161,16 @@ Commitments are grouped into stacks by (type, measurement, bucket size). Each st
 
 **Window measurement — `buildWindowStack`** ([billing_commitments.go:610](../../internal/ee/service/billing_commitments.go#L610))
 - Windows are the usage buckets of the elapsed period (`generateBucketStarts`), so an empty bucket still counts.
-- Each commitment gets **one pool per bucket** it applies to, each holding `value`. A bucket starting before the
-  invoice period belongs to the previous invoice.
+- Each commitment gets **one pool per bucket** it covers, each holding `value`. A bucket belongs to the period holding
+  its end. While a commitment carries a line across a period edge that cuts a bucket, the later period bills the whole
+  bucket, reading its usage from the bucket's start (`bucketSpan`); otherwise each side bills its own part.
 - The floor counts the applying buckets with `activeBuckets`. `accruedAmount` values it as a difference of cumulative
   rounded values, so the partial floors of a period always add up to its whole floor.
 
-`appliesAt(c, t)` ([billing_commitments.go:674](../../internal/ee/service/billing_commitments.go#L674)) is the single
-question "does the commitment's capacity apply at t": within its term (ending with the subscription when open-ended),
-and inside its active windows.
+A commitment covers a bucket when its term holds the bucket's end and its active windows hold the bucket's start
+(`coversBucket`, `holdsBucket` [billing_commitments.go:676](../../internal/ee/service/billing_commitments.go#L676)).
+Period stacks ask `appliesAt(c, t)` instead: within the term (ending with the subscription when open-ended), and inside
+the active windows.
 
 ### 6.4 Allocating — `allocate` ([commitment_engine.go:137](../../internal/ee/service/commitment_engine.go#L137))
 
@@ -203,7 +207,7 @@ Returns the subscription billing periods overlapping `span`, each cut to the com
 - Each period records its uncut **regular** billing period (`FullStart`, `FullEnd`, from the period grid), which is
   what proration divides by.
 - `periodCapacity` gives the capacity within a span: for `billing_period`, `value × (span length / regular period
-  length)`; for `window`, `value ×` the buckets that start in it (counted arithmetically for clock buckets, walked when
+  length)`; for `window`, `value ×` the buckets that end in it (counted arithmetically for clock buckets, walked when
   there are active windows or calendar buckets).
 
 Callers pass the span they need:
