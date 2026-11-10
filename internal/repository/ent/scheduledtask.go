@@ -53,6 +53,9 @@ func (r *ScheduledTaskRepository) Create(ctx context.Context, task *domainst.Sch
 	if task.Schedule != nil {
 		create = create.SetSchedule(task.Schedule)
 	}
+	if task.SourceConfig != nil {
+		create = create.SetSourceConfig(task.SourceConfig)
+	}
 	if task.JobConfig != nil {
 		create = create.SetJobConfig(task.JobConfig)
 	}
@@ -315,6 +318,7 @@ func (r *ScheduledTaskRepository) entToModel(entTask *ent.ScheduledTask) *domain
 		Name:               lo.FromPtr(entTask.Name),
 		ManagedCopy:        entTask.ManagedCopy,
 		Schedule:           entTask.Schedule,
+		SourceConfig:       entTask.SourceConfig,
 		Status:             types.Status(entTask.Status),
 		CreatedAt:          entTask.CreatedAt,
 		UpdatedAt:          entTask.UpdatedAt,

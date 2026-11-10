@@ -21,6 +21,8 @@ type CreateScheduledTaskRequest struct {
 	Enabled   bool                        `json:"enabled"`
 	JobConfig *types.S3JobConfig          `json:"job_config,omitempty"`
 	Schedule  *types.ExportSchedule       `json:"schedule,omitempty"`
+	// Required for report and analytics_view exports.
+	SourceConfig *types.ExportSourceConfig `json:"source_config,omitempty"`
 }
 
 const maxScheduledTaskNameLength = 120
@@ -56,6 +58,16 @@ func (r *CreateScheduledTaskRequest) Validate() error {
 		return err
 	}
 
+	if err := r.SourceConfig.Validate(r.EntityType); err != nil {
+		return err
+	}
+
+	if r.EntityType.IsReportSource() {
+		if err := r.validateReportSource(); err != nil {
+			return err
+		}
+	}
+
 	if r.ConnectionID != "" {
 		if r.JobConfig == nil {
 			return ierr.NewError("job_config is required").
@@ -84,6 +96,28 @@ func (r *CreateScheduledTaskRequest) Validate() error {
 		}
 	}
 
+	return nil
+}
+
+func (r *CreateScheduledTaskRequest) validateReportSource() error {
+	switch r.Interval {
+	case types.ScheduledTaskIntervalDaily, types.ScheduledTaskIntervalWeekly, types.ScheduledTaskIntervalMonthly:
+		if r.Schedule == nil {
+			return ierr.NewError("schedule is required").
+				WithHint("Scheduled report exports require a schedule").
+				Mark(ierr.ErrValidation)
+		}
+	case types.ScheduledTaskIntervalManual:
+	default:
+		return ierr.NewError("invalid interval for report export").
+			WithHint("Use daily, weekly, monthly or manual").
+			Mark(ierr.ErrValidation)
+	}
+	if r.JobConfig != nil && len(r.JobConfig.ExportMetadataFields) > 0 {
+		return ierr.NewError("export_metadata_fields not supported").
+			WithHint("Report exports do not take metadata fields").
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 
@@ -117,15 +151,16 @@ type ScheduledTaskResponse struct {
 	ConnectionID  string                        `json:"connection_id"`
 	EntityType    types.ScheduledTaskEntityType `json:"entity_type"`
 	// "custom" is excluded from API.
-	Interval    types.ScheduledTaskInterval `json:"interval" enums:"hourly,daily,weekly,monthly,manual"`
-	Enabled     bool                        `json:"enabled"`
-	JobConfig   *types.S3JobConfig          `json:"job_config"`
-	Name        string                      `json:"name,omitempty"`
-	ManagedCopy bool                        `json:"managed_copy,omitempty"`
-	Schedule    *types.ExportSchedule       `json:"schedule,omitempty"`
-	Status      string                      `json:"status"`
-	CreatedAt   time.Time                   `json:"created_at"`
-	UpdatedAt   time.Time                   `json:"updated_at"`
+	Interval     types.ScheduledTaskInterval `json:"interval" enums:"hourly,daily,weekly,monthly,manual"`
+	Enabled      bool                        `json:"enabled"`
+	JobConfig    *types.S3JobConfig          `json:"job_config"`
+	Name         string                      `json:"name,omitempty"`
+	ManagedCopy  bool                        `json:"managed_copy,omitempty"`
+	Schedule     *types.ExportSchedule       `json:"schedule,omitempty"`
+	SourceConfig *types.ExportSourceConfig   `json:"source_config,omitempty"`
+	Status       string                      `json:"status"`
+	CreatedAt    time.Time                   `json:"created_at"`
+	UpdatedAt    time.Time                   `json:"updated_at"`
 }
 
 // ListScheduledTasksResponse represents a list of scheduled tasks
@@ -145,6 +180,7 @@ func ToScheduledTaskResponse(task *scheduledtask.ScheduledTask) *ScheduledTaskRe
 		Name:          task.Name,
 		ManagedCopy:   task.ManagedCopy,
 		Schedule:      task.Schedule,
+		SourceConfig:  task.SourceConfig,
 		Status:        string(task.Status),
 		CreatedAt:     task.CreatedAt,
 		UpdatedAt:     task.UpdatedAt,
