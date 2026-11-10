@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
@@ -166,19 +167,21 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 	ctx = types.SetTenantID(ctx, request.TenantID)
 	ctx = types.SetEnvironmentID(ctx, request.EnvID)
 
-	conn, err := s.connectionRepo.Get(ctx, request.ConnectionID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get connection for export").
-			Mark(ierr.ErrDatabase)
-	}
+	if !request.ManagedCopy {
+		conn, err := s.connectionRepo.Get(ctx, request.ConnectionID)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to get connection for export").
+				Mark(ierr.ErrDatabase)
+		}
 
-	switch conn.ProviderType {
-	case types.SecretProviderS3, types.SecretProviderGCS:
-	default:
-		return nil, ierr.NewError("unsupported provider type").
-			WithHintf("Provider type '%s' is not supported for exports", conn.ProviderType).
-			Mark(ierr.ErrValidation)
+		switch conn.ProviderType {
+		case types.SecretProviderS3, types.SecretProviderGCS:
+		default:
+			return nil, ierr.NewError("unsupported provider type").
+				WithHintf("Provider type '%s' is not supported for exports", conn.ProviderType).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	store, err := s.resolveExportStore(ctx, request)
@@ -312,7 +315,37 @@ func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.Exp
 			Mark(ierr.ErrValidation)
 	}
 
+	if request.ManagedCopy {
+		return s.resolvePlatformExportStore(ctx, request)
+	}
+
 	return s.storageResolver.ForConnectionExport(ctx, request.ConnectionID, request.JobConfig)
+}
+
+// resolvePlatformExportStore returns the Flexprice bucket after checking the job config targets it and this tenant's prefix.
+func (s *ExportService) resolvePlatformExportStore(ctx context.Context, request *dto.ExportRequest) (storage.Storage, error) {
+	store, err := s.storageResolver.ForPlatform(ctx, storage.PurposeExport)
+	if err != nil {
+		return nil, err
+	}
+
+	_, bucket, _, err := storage.ParseFileURL(store.FileURL("x"))
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := request.JobConfig
+	cfgProvider := cfg.Provider
+	if cfgProvider == "" {
+		cfgProvider = types.SecretProviderS3
+	}
+	prefix := fmt.Sprintf("exports/%s/%s/", types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
+	if cfg.Bucket != bucket || string(cfgProvider) != string(store.Provider()) || !strings.HasPrefix(cfg.KeyPrefix, prefix) {
+		return nil, ierr.NewError("managed export destination mismatch").
+			WithHint("job config does not match the Flexprice export bucket or tenant prefix").
+			Mark(ierr.ErrValidation)
+	}
+	return store, nil
 }
 
 func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.ExportRequest, exporter Exporter, store storage.Storage, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
