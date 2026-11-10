@@ -1,6 +1,7 @@
 package export
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -350,6 +351,22 @@ func (s *ExportService) resolvePlatformExportStore(ctx context.Context, request 
 
 func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.ExportRequest, exporter Exporter, store storage.Storage, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
 	key := exportObjectKey(request, exporter)
+	gzipped := request.JobConfig.Compression == types.S3CompressionTypeGzip
+	body := csvBytes
+	if gzipped {
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		_, err := gz.Write(csvBytes)
+		if err == nil {
+			err = gz.Close()
+		}
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to compress export").
+				Mark(ierr.ErrSystem)
+		}
+		body = buf.Bytes()
+	}
 
 	// Use resolved destination, not JobConfig.Bucket.
 	s.logger.Info(ctx, "uploading export",
@@ -357,11 +374,12 @@ func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.Export
 		"provider", store.Provider(),
 		"destination", store.FileURL(key))
 
-	uploadResponse, err := store.Upload(ctx, &storage.UploadRequest{
-		Key:      key,
-		Data:     csvBytes,
-		Format:   storage.UploadFormatCSV,
-		Compress: request.JobConfig.Compression == types.S3CompressionTypeGzip,
+	uploadResponse, err := store.UploadStream(ctx, &storage.StreamUploadRequest{
+		Key:              key,
+		Body:             bytes.NewReader(body),
+		Format:           storage.UploadFormatCSV,
+		Gzipped:          gzipped,
+		UncompressedSize: int64(len(csvBytes)),
 	})
 	if err != nil {
 		return nil, ierr.WithError(err).
