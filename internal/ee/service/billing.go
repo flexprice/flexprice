@@ -1788,7 +1788,8 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// Combine both sets of line items
 		combinedLineItems := append(arrearLineItems, advanceLineItems...)
 		if len(combinedLineItems) == 0 && len(instalments) == 0 {
-			return zeroAmountInvoice, nil
+			// A parent that ended this period has nothing of its own left, but still bills its children.
+			return s.mergeGroupedInvoicingChildren(ctx, sub, zeroAmountInvoice, periodStart, periodEnd, referencePoint)
 		}
 
 		// For current period arrear charges (meter_usage path when enabled for
@@ -1973,7 +1974,17 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		return nil, err
 	}
 
-	// For parent subscriptions, merge line items from all grouped_invoicing children.
+	return s.mergeGroupedInvoicingChildren(ctx, sub, invReq, periodStart, periodEnd, referencePoint)
+}
+
+// mergeGroupedInvoicingChildren adds a parent's grouped_invoicing children's charges to its invoice request.
+func (s *billingService) mergeGroupedInvoicingChildren(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	invReq *dto.CreateInvoiceRequest,
+	periodStart, periodEnd time.Time,
+	referencePoint types.InvoiceReferencePoint,
+) (*dto.CreateInvoiceRequest, error) {
 	if sub.SubscriptionType == types.SubscriptionTypeParent {
 		children, err := getGroupedInvoicingChildren(ctx, s.ServiceParams, sub, false)
 		if err != nil {

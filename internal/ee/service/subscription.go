@@ -4121,14 +4121,14 @@ func (s *subscriptionService) CascadeCancelToGroupedInvoicingSubscriptions(ctx c
 	if err != nil {
 		return nil, err
 	}
+	children = lo.Reject(children, func(child *subscription.Subscription, _ int) bool {
+		return child.SubscriptionStatus == types.SubscriptionStatusCancelled
+	})
 	if len(children) == 0 {
 		return nil, nil
 	}
 
-	endDate := parentSub.EndDate
-	if endDate == nil {
-		endDate = parentSub.CancelAt
-	}
+	endDate := subscriptionEndDate(parentSub)
 	if endDate == nil {
 		return nil, ierr.NewError("cancelled parent subscription has no end date").
 			WithHint("The parent subscription must have an end date before its grouped children can be cancelled").

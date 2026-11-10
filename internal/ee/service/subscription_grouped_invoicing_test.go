@@ -546,4 +546,28 @@ func (s *SubscriptionGroupedInvoicingTestSuite) TestCancelParentAtPeriodEnd_Canc
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), types.SubscriptionStatusCancelled, cancelledChild.SubscriptionStatus)
 	require.True(s.T(), cancelledChild.EndDate.Equal(*scheduledParent.CancelAt))
+
+	// The parent's final invoice is computed after the cancellation and must still carry the child.
+	billed, err := getGroupedInvoicingChildren(ctx, s.subscriptionService.ServiceParams, scheduledParent, false)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), []string{child.ID}, lo.Map(billed, func(sub *subscription.Subscription, _ int) string { return sub.ID }))
+}
+
+func (s *SubscriptionGroupedInvoicingTestSuite) TestCancelledParentInvoice_LeavesOutChildrenCancelledEarlier() {
+	ctx := s.GetContext()
+	start := time.Now().UTC().Truncate(time.Second).AddDate(0, 0, -10)
+	parent := s.makeParentSub(s.createTestCustomer().ID, start, start)
+	earlier, _ := s.makeGroupedChild(parent)
+	earlierEnd := start.AddDate(0, 0, 2)
+	earlier.SubscriptionStatus = types.SubscriptionStatusCancelled
+	earlier.EndDate = &earlierEnd
+	require.NoError(s.T(), s.GetStores().SubscriptionRepo.Update(ctx, earlier))
+
+	parentEnd := start.AddDate(0, 0, 5)
+	parent.SubscriptionStatus = types.SubscriptionStatusCancelled
+	parent.EndDate = &parentEnd
+
+	billed, err := getGroupedInvoicingChildren(ctx, s.subscriptionService.ServiceParams, parent, false)
+	require.NoError(s.T(), err)
+	require.Empty(s.T(), billed)
 }

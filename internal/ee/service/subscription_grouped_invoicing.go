@@ -272,9 +272,30 @@ func getGroupedInvoicingChildren(
 		filter.SubscriptionStatus = append(filter.SubscriptionStatus, types.SubscriptionStatusDraft)
 	}
 
+	// A cancelled parent's final invoice still carries the children cancelled with it.
+	parentEnd := subscriptionEndDate(parent)
+	if parent.SubscriptionStatus == types.SubscriptionStatusCancelled && parentEnd != nil {
+		filter.SubscriptionStatus = append(filter.SubscriptionStatus, types.SubscriptionStatusCancelled)
+	}
+
 	filter.WithLineItems = withLineItems
 
-	return sp.SubRepo.List(ctx, filter)
+	children, err := sp.SubRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	return lo.Filter(children, func(child *subscription.Subscription, _ int) bool {
+		return child.SubscriptionStatus != types.SubscriptionStatusCancelled ||
+			(child.EndDate != nil && child.EndDate.Equal(*parentEnd))
+	}), nil
+}
+
+// subscriptionEndDate is when a cancelled subscription stops: its end date, else its scheduled cancel date.
+func subscriptionEndDate(sub *subscription.Subscription) *time.Time {
+	if sub.EndDate != nil {
+		return sub.EndDate
+	}
+	return sub.CancelAt
 }
 
 // invoicingSubscription returns the subscription whose invoice carries sub's charges: the parent for a grouped child, else sub.
