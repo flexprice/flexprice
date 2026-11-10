@@ -124,6 +124,12 @@ func (Payment) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+		field.String("connection_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
 	}
 }
 

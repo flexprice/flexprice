@@ -5,9 +5,12 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
@@ -17,11 +20,14 @@ import (
 // BillingEntityService owns billing entities and each environment's billing entity mode.
 type BillingEntityService interface {
 	BillingEntityEnabler
+	interfaces.BillingEntityScope
 
 	// WithMode runs fn in a transaction with the mode read from the database; before enabled it holds the shared enable lock.
 	WithMode(ctx context.Context, fn func(txCtx context.Context, mode types.BillingEntityMode) error) error
-	// ResolveBillingEntityID is the entity a new customer gets: the one asked for when enabled, else the default; nil when off.
+	// ResolveBillingEntityID is the entity a new customer or connection gets; nil when off.
 	ResolveBillingEntityID(ctx context.Context, mode types.BillingEntityMode, billingEntityID *string) (*string, error)
+	// ResolveConnectionOwner returns the billing entity a new connection belongs to.
+	ResolveConnectionOwner(ctx context.Context, mode types.BillingEntityMode, provider types.SecretProvider, billingEntityID *string, hasClientConnectionID bool) (*string, error)
 	// EffectiveEntity is the customer's entity; a customer the enable backfill has not reached belongs to the default.
 	EffectiveEntity(ctx context.Context, cust *customer.Customer) (*billingentity.BillingEntity, error)
 	ValidateFilter(ctx context.Context, billingEntityID string) error
@@ -214,6 +220,30 @@ func (s *billingEntityService) entityInEnvironment(ctx context.Context, id strin
 	return entity, nil
 }
 
+func (s *billingEntityService) ResolveConnectionOwner(ctx context.Context, mode types.BillingEntityMode, provider types.SecretProvider, billingEntityID *string, hasClientConnectionID bool) (*string, error) {
+	if connection.IsStorageProvider(provider) {
+		if lo.FromPtr(billingEntityID) != "" {
+			return nil, errStorageHasNoEntity(provider)
+		}
+		return nil, nil
+	}
+	owner, err := s.ResolveBillingEntityID(ctx, mode, billingEntityID)
+	if err != nil || hasClientConnectionID || lo.FromPtr(billingEntityID) == "" {
+		return owner, err
+	}
+	def, err := s.ResolveBillingEntityID(ctx, mode, nil)
+	if err != nil {
+		return nil, err
+	}
+	if *owner != *def {
+		return nil, ierr.NewError("id is required for a non-default billing entity").
+			WithHint("Send the connection id (conn_ followed by a ULID) used in its webhook URL; a connection without one belongs to the default billing entity").
+			WithReportableDetails(map[string]any{"billing_entity_id": *owner}).
+			Mark(ierr.ErrValidation)
+	}
+	return owner, nil
+}
+
 func (s *billingEntityService) EffectiveEntity(ctx context.Context, cust *customer.Customer) (*billingentity.BillingEntity, error) {
 	if cust == nil {
 		return nil, nil
@@ -238,6 +268,104 @@ func (s *billingEntityService) EffectiveEntity(ctx context.Context, cust *custom
 		return nil, err
 	}
 	return def, nil
+}
+
+func (s *billingEntityService) ScopeToCustomer(ctx context.Context, customerID string) (context.Context, error) {
+	if mode, err := s.mode(ctx); err != nil || mode == types.BillingEntityModeOff {
+		return ctx, err
+	}
+	cust, err := s.CustomerRepo.Get(ctx, customerID)
+	if err != nil {
+		return ctx, err
+	}
+	entity, err := s.EffectiveEntity(ctx, cust)
+	if err != nil || entity == nil {
+		return ctx, err
+	}
+	return types.SetBillingEntityID(ctx, entity.ID), nil
+}
+
+func (s *billingEntityService) ScopeToInvoice(ctx context.Context, invoiceID string) (context.Context, error) {
+	if mode, err := s.mode(ctx); err != nil || mode == types.BillingEntityModeOff {
+		return ctx, err
+	}
+	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return ctx, err
+	}
+	if id := lo.FromPtr(inv.BillingEntityID); id != "" {
+		return types.SetBillingEntityID(ctx, id), nil
+	}
+	return s.ScopeToCustomer(ctx, inv.CustomerID)
+}
+
+func (s *billingEntityService) ScopeToSubscription(ctx context.Context, subscriptionID string) (context.Context, error) {
+	if mode, err := s.mode(ctx); err != nil || mode == types.BillingEntityModeOff {
+		return ctx, err
+	}
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return ctx, err
+	}
+	return s.ScopeToCustomer(ctx, sub.CustomerID)
+}
+
+func (s *billingEntityService) ScopeToDefault(ctx context.Context) (context.Context, error) {
+	if mode, err := s.mode(ctx); err != nil || mode == types.BillingEntityModeOff {
+		return ctx, err
+	}
+	def, err := s.BillingEntityRepo.GetDefault(ctx)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return ctx, nil
+		}
+		return ctx, err
+	}
+	return types.SetBillingEntityID(ctx, def.ID), nil
+}
+
+func (s *billingEntityService) ScopeToConnection(ctx context.Context, connectionID string, provider types.SecretProvider) (context.Context, error) {
+	conn, err := s.ConnectionRepo.Get(ctx, connectionID)
+	if err != nil {
+		return ctx, err
+	}
+	if conn.ProviderType != provider {
+		return ctx, ierr.NewError("connection not found").
+			WithHintf("Connection %s is not a %s connection", connectionID, provider).
+			WithReportableDetails(map[string]any{"connection_id": connectionID}).
+			Mark(ierr.ErrNotFound)
+	}
+	return connection.WithOwner(ctx, conn), nil
+}
+
+func (s *billingEntityService) ScopeToPayment(ctx context.Context, p *payment.Payment) (context.Context, error) {
+	connectionID := lo.FromPtr(p.ConnectionID)
+	if connectionID == "" {
+		if mode, err := s.mode(ctx); err != nil || mode == types.BillingEntityModeOff {
+			return ctx, err
+		}
+		customerID, err := s.PaymentRepo.GetLinkedCustomerID(ctx, p.ID)
+		if err != nil || customerID == "" {
+			return ctx, err
+		}
+		return s.ScopeToCustomer(ctx, customerID)
+	}
+
+	conn, err := s.ConnectionRepo.Get(ctx, connectionID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return ctx, ierr.NewError("payment connection was removed").
+				WithHintf("The connection %s that took this payment was removed", connectionID).
+				WithReportableDetails(map[string]any{"payment_id": p.ID, "connection_id": connectionID}).
+				Mark(ierr.ErrValidation)
+		}
+		return ctx, err
+	}
+	return connection.WithOwner(ctx, conn), nil
+}
+
+func (s *billingEntityService) RequireProviderConnected(ctx context.Context, provider types.SecretProvider) error {
+	return requireProviderConnected(ctx, s.ServiceParams, provider)
 }
 
 func (s *billingEntityService) ValidateFilter(ctx context.Context, billingEntityID string) error {
@@ -338,13 +466,45 @@ func (s *billingEntityService) Update(ctx context.Context, id string, req dto.Up
 	return &dto.BillingEntityResponse{BillingEntity: updated}, nil
 }
 
+// providerConnected reports whether the billing entity in ctx has a connection for the provider; without one in ctx it is true.
+func providerConnected(ctx context.Context, params ServiceParams, provider types.SecretProvider) (bool, error) {
+	if types.GetBillingEntityID(ctx) == "" {
+		return true, nil
+	}
+	if _, err := params.ConnectionRepo.GetByProvider(ctx, provider); err != nil {
+		if ierr.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// requireProviderConnected rejects a request for a provider the billing entity in ctx has no connection for.
+func requireProviderConnected(ctx context.Context, params ServiceParams, provider types.SecretProvider) error {
+	connected, err := providerConnected(ctx, params, provider)
+	if err != nil {
+		return err
+	}
+	if !connected {
+		return ierr.NewError("provider not connected").
+			WithHintf("%s is not connected for this customer's billing entity", provider).
+			WithReportableDetails(map[string]any{
+				"provider":          provider,
+				"billing_entity_id": types.GetBillingEntityID(ctx),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // requireSameBillingEntity rejects combining customers of different billing entities on one invoice.
 func requireSameBillingEntity(ctx context.Context, params ServiceParams, customerID, otherCustomerID string) error {
 	if customerID == otherCustomerID {
 		return nil
 	}
-	beService := &billingEntityService{ServiceParams: params}
-	mode, err := beService.mode(ctx)
+	beService := NewBillingEntityService(params)
+	mode, err := beService.Status(ctx)
 	if err != nil {
 		return err
 	}

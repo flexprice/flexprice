@@ -23,6 +23,16 @@ func GenerateUUIDWithPrefix(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, GenerateUUID())
 }
 
+// IsPrefixedUUID reports whether id is what GenerateUUIDWithPrefix produces: the prefix, an underscore and a valid ULID.
+func IsPrefixedUUID(id, prefix string) bool {
+	rest, ok := strings.CutPrefix(id, prefix+"_")
+	if !ok {
+		return false
+	}
+	_, err := ulid.ParseStrict(rest)
+	return err == nil
+}
+
 var (
 	sidGenerator *shortid.Shortid
 	once         sync.Once

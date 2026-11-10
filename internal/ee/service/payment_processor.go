@@ -49,6 +49,10 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	if err != nil {
 		return nil, err
 	}
+	ctx, err = NewBillingEntityService(p.ServiceParams).ScopeToPayment(ctx, paymentObj)
+	if err != nil {
+		return paymentObj, err
+	}
 
 	// For payment links, accept both INITIATED and PENDING statuses
 	// For other payment methods, only accept PENDING status
@@ -1070,8 +1074,13 @@ func (p *paymentProcessor) DispatchMarkPaid(ctx context.Context, invoiceID strin
 	if p.ConnectionRepo == nil {
 		return
 	}
+	ctx, err := NewBillingEntityService(p.ServiceParams).ScopeToInvoice(ctx, invoiceID)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to resolve billing entity for mark-paid", "error", err, "invoice_id", invoiceID)
+		return
+	}
 
-	connections, err := p.ConnectionRepo.ListAllPublished(ctx)
+	connections, err := p.ConnectionRepo.ListPublishedInScope(ctx)
 	if err != nil {
 		p.Logger.Error(ctx, "failed to list published connections, skipping mark-paid dispatch",
 			"error", err, "invoice_id", invoiceID)
@@ -1263,13 +1272,17 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 	}
 
 	paymentService := NewPaymentService(p.ServiceParams)
-	if _, err := paymentService.UpdatePayment(ctx, paymentObj.ID, *updateReq); err != nil {
+	updated, err := paymentService.UpdatePayment(ctx, paymentObj.ID, *updateReq)
+	if err != nil {
 		p.Logger.Error(ctx, "failed to update payment status to succeeded",
 			"error", err,
 			"payment_id", paymentObj.ID,
 		)
 		return err
 	}
+	// The caller saves paymentObj again; keep the gateway and connection the charge recorded.
+	paymentObj.PaymentGateway = updated.PaymentGateway
+	paymentObj.ConnectionID = updated.ConnectionID
 
 	p.Logger.Info(ctx, "successfully processed card payment",
 		"payment_id", paymentObj.ID,

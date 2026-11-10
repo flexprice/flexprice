@@ -171,10 +171,11 @@ func (c *paymentSourceClient) AssignPaymentRole(_ context.Context, _, paymentSou
 }
 
 func newOwnershipAdapter(sources ...*paymentSourceModel.PaymentSource) (*PaymentMethodAdapter, *paymentSourceClient) {
-	client := &paymentSourceClient{sources: sources}
+	client := &paymentSourceClient{ChargebeeClient: connClient{}, sources: sources}
 	return &PaymentMethodAdapter{
 		Client: client,
 		CustomerSvc: &CustomerService{CustomerServiceParams{
+			Client: client,
 			EntityIntegrationMappingRepo: mappingStore{
 				chargebeeCustomerIDByEntityID: map[string]string{"cust_ours": "cb_cust_ours"},
 			},

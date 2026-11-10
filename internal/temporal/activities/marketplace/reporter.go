@@ -118,10 +118,7 @@ type marketplaceConnection struct {
 // hasAgreementFor reports whether the subscription holds an agreement on this connection's
 // marketplace, which is what makes a usage record for it reportable here.
 //
-// A subscription is never mapped to a connection: an entity mapping records the subscription's
-// identifier on a marketplace (license_arn, usage_reporting_id, resource_id) against a provider type,
-// and a connection is only the credentials for talking to that provider. Replacing the connection
-// leaves the agreement untouched.
+// An agreement reports through the connection it was registered under.
 func (marketplaceConn *marketplaceConnection) hasAgreementFor(subscriptionID string) bool {
 	switch marketplaceConn.conn.ProviderType {
 	case types.SecretProviderAWSMarketplace:
@@ -160,6 +157,7 @@ func (r *MarketplaceReporter) reportRecordToMarketplaces(
 			continue
 		}
 
+		ctx := connection.WithOwner(ctx, marketplaceConn.conn)
 		var entry types.UsageRecordSyncEntry
 		var ok bool
 		switch marketplaceConn.conn.ProviderType {
@@ -282,7 +280,7 @@ func (r *MarketplaceReporter) authAWSConnection(ctx context.Context, conn *conne
 		return awssdk.Credentials{}, "", nil, err
 	}
 
-	mappings, err := r.loadAWSMappings(ctx)
+	mappings, err := r.loadAWSMappings(ctx, conn.ID)
 	if err != nil {
 		r.logger.Error(ctx, "marketplace usage report: failed to load entity mappings", "marketplace", conn.ProviderType,
 			"tenant_id", tenantID, "environment_id", environmentID, "connection_id", conn.ID, "error", err, "stage", "load_mappings")
@@ -408,15 +406,15 @@ func (r *MarketplaceReporter) reportAWSRecord(ctx context.Context, rec *usagerec
 	}, true
 }
 
-// loadAWSMappings loads the subscription, customer and plan mappings for the current tenant/
-// environment and indexes them for lookup while reporting.
-func (r *MarketplaceReporter) loadAWSMappings(ctx context.Context) (*awsConnectionMappings, error) {
+// loadAWSMappings indexes the connection's subscription, customer and plan mappings.
+func (r *MarketplaceReporter) loadAWSMappings(ctx context.Context, connectionID string) (*awsConnectionMappings, error) {
 	providerType := string(types.SecretProviderAWSMarketplace)
 
 	subMappings, err := r.entityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypeSubscription,
 		ProviderTypes: []string{providerType},
+		ConnectionID:  connectionID,
 	})
 	if err != nil {
 		return nil, err
@@ -425,6 +423,7 @@ func (r *MarketplaceReporter) loadAWSMappings(ctx context.Context) (*awsConnecti
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{providerType},
+		ConnectionID:  connectionID,
 	})
 	if err != nil {
 		return nil, err
@@ -433,6 +432,7 @@ func (r *MarketplaceReporter) loadAWSMappings(ctx context.Context) (*awsConnecti
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypePlan,
 		ProviderTypes: []string{providerType},
+		ConnectionID:  connectionID,
 	})
 	if err != nil {
 		return nil, err
@@ -485,7 +485,7 @@ func (r *MarketplaceReporter) authGCPConnection(ctx context.Context, conn *conne
 		return nil, nil, err
 	}
 
-	mappings, err := r.loadGCPMappings(ctx)
+	mappings, err := r.loadGCPMappings(ctx, conn.ID)
 	if err != nil {
 		r.logger.Error(ctx, "marketplace usage report: failed to load entity mappings", "marketplace", conn.ProviderType,
 			"tenant_id", tenantID, "environment_id", environmentID, "connection_id", conn.ID, "error", err, "stage", "load_mappings")
@@ -562,15 +562,15 @@ func (r *MarketplaceReporter) reportGCPRecord(ctx context.Context, rec *usagerec
 	}, true
 }
 
-// loadGCPMappings loads the subscription and plan mappings for the current tenant/environment and
-// indexes them for lookup while reporting.
-func (r *MarketplaceReporter) loadGCPMappings(ctx context.Context) (*gcpConnectionMappings, error) {
+// loadGCPMappings indexes the connection's subscription and plan mappings.
+func (r *MarketplaceReporter) loadGCPMappings(ctx context.Context, connectionID string) (*gcpConnectionMappings, error) {
 	providerType := string(types.SecretProviderGCPMarketplace)
 
 	subMappings, err := r.entityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypeSubscription,
 		ProviderTypes: []string{providerType},
+		ConnectionID:  connectionID,
 	})
 	if err != nil {
 		return nil, err
@@ -579,6 +579,7 @@ func (r *MarketplaceReporter) loadGCPMappings(ctx context.Context) (*gcpConnecti
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypePlan,
 		ProviderTypes: []string{providerType},
+		ConnectionID:  connectionID,
 	})
 	if err != nil {
 		return nil, err
@@ -637,7 +638,7 @@ func (r *MarketplaceReporter) authAzureConnection(ctx context.Context, conn *con
 		return azuremarketplace.Token{}, nil, err
 	}
 
-	mappings, err := r.loadAzureMappings(ctx)
+	mappings, err := r.loadAzureMappings(ctx, conn.ID)
 	if err != nil {
 		r.logger.Error(ctx, "marketplace usage report: failed to load entity mappings", "marketplace", conn.ProviderType,
 			"tenant_id", tenantID, "environment_id", environmentID, "connection_id", conn.ID, "error", err, "stage", "load_mappings")
@@ -725,15 +726,15 @@ func (r *MarketplaceReporter) reportAzureRecord(ctx context.Context, rec *usager
 	}, true
 }
 
-// loadAzureMappings loads the subscription and plan mappings for the current tenant/environment and
-// indexes them for lookup while reporting.
-func (r *MarketplaceReporter) loadAzureMappings(ctx context.Context) (*azureConnectionMappings, error) {
+// loadAzureMappings indexes the connection's subscription and plan mappings.
+func (r *MarketplaceReporter) loadAzureMappings(ctx context.Context, connectionID string) (*azureConnectionMappings, error) {
 	providerType := string(types.SecretProviderAzureMarketplace)
 
 	subMappings, err := r.entityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypeSubscription,
 		ProviderTypes: []string{providerType},
+		ConnectionID:  connectionID,
 	})
 	if err != nil {
 		return nil, err
@@ -742,6 +743,7 @@ func (r *MarketplaceReporter) loadAzureMappings(ctx context.Context) (*azureConn
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypePlan,
 		ProviderTypes: []string{providerType},
+		ConnectionID:  connectionID,
 	})
 	if err != nil {
 		return nil, err
