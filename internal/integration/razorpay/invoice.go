@@ -31,6 +31,14 @@ const razorpayMinExpireByBuffer = 15 * time.Minute
 // floor arrives under it.
 const razorpayExpireBySafetyMargin = 2 * time.Minute
 
+// clampExpireBy lifts t to the earliest expire_by Razorpay accepts.
+func clampExpireBy(t time.Time) time.Time {
+	if floor := clock.Now().Add(razorpayMinExpireByBuffer + razorpayExpireBySafetyMargin); t.Before(floor) {
+		return floor
+	}
+	return t
+}
+
 // InvoiceSyncService syncs FlexPrice invoices with Razorpay.
 type InvoiceSyncService struct {
 	client                       RazorpayClient
@@ -200,16 +208,9 @@ func (s *InvoiceSyncService) buildInvoiceData(
 		"notes":        notes,
 	}
 
-	// Add due date if available (Unix timestamp in seconds).
-	// Razorpay requires expire_by to be at least 15 minutes in the future.
-	// Wallet top-up invoices have DueDate = clock.Now(), so we clamp upward.
+	// Wallet top-up invoices have DueDate = clock.Now(), so the clamp lifts it.
 	if flexInvoice.DueDate != nil {
-		minExpireBy := clock.Now().Add(razorpayMinExpireByBuffer)
-		expireBy := *flexInvoice.DueDate
-		if expireBy.Before(minExpireBy) {
-			expireBy = minExpireBy
-		}
-		invoiceData["expire_by"] = expireBy.Unix()
+		invoiceData["expire_by"] = clampExpireBy(*flexInvoice.DueDate).Unix()
 	}
 
 	s.logger.Info(ctx, "built invoice data for Razorpay",
@@ -236,7 +237,7 @@ func (s *InvoiceSyncService) buildLineItems(flexInvoice *invoice.Invoice) (map[s
 		}
 
 		// Get item name with fallback
-		itemName := s.getLineItemName(item)
+		itemName := lineItemName(item)
 
 		// Get item description (entity type for clarity)
 		itemDescription := s.getLineItemDescription(item)
@@ -272,8 +273,20 @@ func (s *InvoiceSyncService) buildLineItems(flexInvoice *invoice.Invoice) (map[s
 	return lineItems, nil
 }
 
-// getLineItemName extracts the display name for a line item
-func (s *InvoiceSyncService) getLineItemName(item *invoice.InvoiceLineItem) string {
+// linkDescription formats "<customer> | <first item> [+N more]" for Razorpay links.
+func linkDescription(customerName string, itemNames []string) string {
+	if len(itemNames) == 0 {
+		return customerName + " | Payment"
+	}
+	label := lo.CoalesceOrEmpty(itemNames[0], DefaultItemName)
+	if more := len(itemNames) - 1; more > 0 {
+		label = fmt.Sprintf("%s +%d more", label, more)
+	}
+	return customerName + " | " + label
+}
+
+// lineItemName extracts the display name for a line item
+func lineItemName(item *invoice.InvoiceLineItem) string {
 	// Priority: DisplayName > PlanDisplayName > Default
 	if item.DisplayName != nil && *item.DisplayName != "" {
 		return *item.DisplayName
