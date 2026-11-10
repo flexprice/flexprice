@@ -15777,7 +15777,7 @@
           "Scheduled Tasks"
         ],
         "summary": "List scheduled tasks",
-        "description": "Use when listing or managing scheduled tasks in an admin UI. Returns a list; supports filtering by status, type, and pagination.",
+        "description": "Use when listing or managing scheduled tasks in an admin UI. Returns all exports, including those without a connection; supports filtering and pagination.",
         "operationId": "listScheduledTasks",
         "parameters": [
           {
@@ -15872,7 +15872,7 @@
           "Scheduled Tasks"
         ],
         "summary": "Create scheduled task",
-        "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.",
+        "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression.\ninterval is hourly, daily, weekly, monthly or manual; clients should tolerate new values. schedule ({hour, minute, day_of_week, day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual.\nEach run exports the previous period ending 15 minutes before the scheduled start in the schedule timezone, so a run started between 00:00 and 00:14 local time covers the period before that.",
         "operationId": "createScheduledTask",
         "requestBody": {
           "description": "Scheduled Task",
@@ -16103,7 +16103,7 @@
           "Scheduled Tasks"
         ],
         "summary": "Update a scheduled task",
-        "description": "Use when pausing or resuming a scheduled task. Only the enabled field can be changed.",
+        "description": "Use when pausing, resuming, renaming or rescheduling a scheduled task. Send at least one of enabled, name or schedule.",
         "operationId": "updateScheduledTask",
         "parameters": [
           {
@@ -16117,7 +16117,7 @@
           }
         ],
         "requestBody": {
-          "description": "Update request (enabled: true/false to pause/resume)",
+          "description": "Update request (enabled, name, schedule)",
           "content": {
             "application/json": {
               "schema": {
@@ -16243,7 +16243,7 @@
           "Scheduled Tasks"
         ],
         "summary": "Trigger force run",
-        "description": "Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.",
+        "description": "Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.\nWithout a time range, scheduled and manual exports run for the previous period and the response start and end times are zero.",
         "operationId": "triggerScheduledTaskRun",
         "parameters": [
           {
@@ -25435,10 +25435,8 @@
       },
       "CreateScheduledTaskRequest": {
         "required": [
-          "connection_id",
           "entity_type",
-          "interval",
-          "job_config"
+          "interval"
         ],
         "type": "object",
         "properties": {
@@ -25456,6 +25454,12 @@
           },
           "job_config": {
             "$ref": "#/components/schemas/types.S3JobConfig"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/types.ExportSchedule"
           }
         }
       },
@@ -31132,6 +31136,15 @@
           "job_config": {
             "$ref": "#/components/schemas/types.S3JobConfig"
           },
+          "managed_copy": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/types.ExportSchedule"
+          },
           "status": {
             "type": "string"
           },
@@ -34343,13 +34356,16 @@
         }
       },
       "UpdateScheduledTaskRequest": {
-        "required": [
-          "enabled"
-        ],
         "type": "object",
         "properties": {
           "enabled": {
             "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/types.ExportSchedule"
           }
         }
       },
@@ -39452,7 +39468,10 @@
           "30MIN",
           "custom",
           "hourly",
-          "daily"
+          "daily",
+          "weekly",
+          "monthly",
+          "manual"
         ],
         "x-enum-comments": {
           "ScheduledTaskIntervalCustom": "10 minutes for testing"
@@ -39462,7 +39481,10 @@
           "ScheduledTaskIntervalEvery30Minutes",
           "ScheduledTaskIntervalCustom",
           "ScheduledTaskIntervalHourly",
-          "ScheduledTaskIntervalDaily"
+          "ScheduledTaskIntervalDaily",
+          "ScheduledTaskIntervalWeekly",
+          "ScheduledTaskIntervalMonthly",
+          "ScheduledTaskIntervalManual"
         ],
         "x-speakeasy-name-override": "ScheduledTaskInterval"
       },
@@ -42250,6 +42272,27 @@
           "EntitlementGrantScopeGroup"
         ],
         "x-speakeasy-name-override": "EntitlementGrantScopeEntityType"
+      },
+      "types.ExportSchedule": {
+        "type": "object",
+        "properties": {
+          "day_of_month": {
+            "type": "integer"
+          },
+          "day_of_week": {
+            "type": "integer"
+          },
+          "hour": {
+            "type": "integer"
+          },
+          "minute": {
+            "type": "integer"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "ExportSchedule"
       },
       "types.ImprovementDirection": {
         "type": "string",
