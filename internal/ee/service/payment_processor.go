@@ -467,19 +467,6 @@ func (p *paymentProcessor) handleRazorpayTokenCharge(ctx context.Context, paymen
 }
 
 func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
-	// Extract success URL and cancel URL from metadata
-	successURL := ""
-	cancelURL := ""
-
-	if paymentObj.Metadata != nil {
-		if url, exists := paymentObj.Metadata["success_url"]; exists {
-			successURL = url
-		}
-		if url, exists := paymentObj.Metadata["cancel_url"]; exists {
-			cancelURL = url
-		}
-	}
-
 	// Prepare metadata for payment link request
 	linkMetadata := make(map[string]string)
 	if paymentObj.Metadata != nil {
@@ -500,8 +487,8 @@ func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context
 		CustomerID: invoice.CustomerID,
 		Amount:     paymentObj.Amount,
 		Currency:   paymentObj.Currency,
-		SuccessURL: successURL,
-		CancelURL:  cancelURL,
+		SuccessURL: gatewayURL(paymentObj, "success_url"),
+		CancelURL:  gatewayURL(paymentObj, "cancel_url"),
 		Metadata:   linkMetadata,
 		PaymentID:  paymentObj.ID,
 	}
