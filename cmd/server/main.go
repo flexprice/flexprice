@@ -196,6 +196,7 @@ func main() {
 			repository.NewTaxRateRepository,
 			repository.NewFXRateRepository,
 			repository.NewHostedInvoiceTokenRepository,
+			repository.NewEmailLogRepository,
 			repository.NewTaxAssociationRepository,
 			repository.NewCouponRepository,
 			repository.NewCouponAssociationRepository,

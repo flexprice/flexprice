@@ -1215,6 +1215,73 @@ var (
 			},
 		},
 	}
+	// EmailLogsColumns holds the columns for the "email_logs" table.
+	EmailLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "template_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "trigger", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "from_address", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(320)"}},
+		{Name: "reply_to", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(320)"}},
+		{Name: "to_addresses", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "cc_addresses", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "subject", Type: field.TypeString, Size: 2147483647},
+		{Name: "provider", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "provider_message_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "delivery_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(30)"}},
+		{Name: "status_reason", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "sent_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "delivered_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// EmailLogsTable holds the schema information for the "email_logs" table.
+	EmailLogsTable = &schema.Table{
+		Name:       "email_logs",
+		Columns:    EmailLogsColumns,
+		PrimaryKey: []*schema.Column{EmailLogsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "emaillog_provider_provider_message_id",
+				Unique:  true,
+				Columns: []*schema.Column{EmailLogsColumns[18], EmailLogsColumns[19]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "provider_message_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "idx_email_log_entity_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[8], EmailLogsColumns[9], EmailLogsColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						EmailLogsColumns[3].Name: true,
+					},
+				},
+			},
+			{
+				Name:    "idx_email_log_auto_once",
+				Unique:  true,
+				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[9], EmailLogsColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "\"trigger\" = 'auto'",
+				},
+			},
+			{
+				Name:    "emaillog_tenant_id_environment_id_delivery_status_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[20], EmailLogsColumns[3]},
+			},
+		},
+	}
 	// EntitlementsColumns holds the columns for the "entitlements" table.
 	EntitlementsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -3685,6 +3752,7 @@ var (
 		CreditNotesTable,
 		CreditNoteLineItemsTable,
 		CustomersTable,
+		EmailLogsTable,
 		EntitlementsTable,
 		EntitlementGrantsTable,
 		EntityIntegrationMappingsTable,

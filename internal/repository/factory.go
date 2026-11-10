@@ -25,6 +25,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -284,6 +285,10 @@ func NewFXRateRepository(p RepositoryParams) fxrate.Repository {
 
 func NewHostedInvoiceTokenRepository(p RepositoryParams) hostedinvoicetoken.Repository {
 	return entRepo.NewHostedInvoiceTokenRepository(p.EntClient, p.Logger)
+}
+
+func NewEmailLogRepository(p RepositoryParams) emaillog.Repository {
+	return entRepo.NewEmailLogRepository(p.EntClient, p.Logger)
 }
 
 func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {

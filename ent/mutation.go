@@ -36,6 +36,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/emaillog"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
@@ -124,6 +125,7 @@ const (
 	TypeCreditNote                       = "CreditNote"
 	TypeCreditNoteLineItem               = "CreditNoteLineItem"
 	TypeCustomer                         = "Customer"
+	TypeEmailLog                         = "EmailLog"
 	TypeEntitlement                      = "Entitlement"
 	TypeEntitlementGrant                 = "EntitlementGrant"
 	TypeEntityIntegrationMapping         = "EntityIntegrationMapping"
@@ -34960,6 +34962,1787 @@ func (m *CustomerMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *CustomerMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Customer edge %s", name)
+}
+
+// EmailLogMutation represents an operation that mutates the EmailLog nodes in the graph.
+type EmailLogMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *string
+	tenant_id           *string
+	status              *string
+	created_at          *time.Time
+	updated_at          *time.Time
+	created_by          *string
+	updated_by          *string
+	environment_id      *string
+	entity_type         *types.SystemEntityType
+	entity_id           *string
+	customer_id         *string
+	template_key        *types.EmailTemplateKey
+	trigger             *types.EmailTrigger
+	from_address        *string
+	reply_to            *string
+	to_addresses        *[]string
+	appendto_addresses  []string
+	cc_addresses        *[]string
+	appendcc_addresses  []string
+	subject             *string
+	provider            *types.EmailProvider
+	provider_message_id *string
+	delivery_status     *types.EmailDeliveryStatus
+	status_reason       *string
+	sent_at             *time.Time
+	delivered_at        *time.Time
+	metadata            *types.Metadata
+	clearedFields       map[string]struct{}
+	done                bool
+	oldValue            func(context.Context) (*EmailLog, error)
+	predicates          []predicate.EmailLog
+}
+
+var _ ent.Mutation = (*EmailLogMutation)(nil)
+
+// emaillogOption allows management of the mutation configuration using functional options.
+type emaillogOption func(*EmailLogMutation)
+
+// newEmailLogMutation creates new mutation for the EmailLog entity.
+func newEmailLogMutation(c config, op Op, opts ...emaillogOption) *EmailLogMutation {
+	m := &EmailLogMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeEmailLog,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withEmailLogID sets the ID field of the mutation.
+func withEmailLogID(id string) emaillogOption {
+	return func(m *EmailLogMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *EmailLog
+		)
+		m.oldValue = func(ctx context.Context) (*EmailLog, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().EmailLog.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withEmailLog sets the old EmailLog of the mutation.
+func withEmailLog(node *EmailLog) emaillogOption {
+	return func(m *EmailLogMutation) {
+		m.oldValue = func(context.Context) (*EmailLog, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m EmailLogMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m EmailLogMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of EmailLog entities.
+func (m *EmailLogMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *EmailLogMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *EmailLogMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().EmailLog.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *EmailLogMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *EmailLogMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *EmailLogMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *EmailLogMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *EmailLogMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *EmailLogMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *EmailLogMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *EmailLogMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *EmailLogMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *EmailLogMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *EmailLogMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *EmailLogMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *EmailLogMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *EmailLogMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *EmailLogMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[emaillog.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *EmailLogMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[emaillog.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *EmailLogMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, emaillog.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *EmailLogMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *EmailLogMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *EmailLogMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[emaillog.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *EmailLogMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[emaillog.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *EmailLogMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, emaillog.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *EmailLogMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *EmailLogMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *EmailLogMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[emaillog.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *EmailLogMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[emaillog.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *EmailLogMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, emaillog.FieldEnvironmentID)
+}
+
+// SetEntityType sets the "entity_type" field.
+func (m *EmailLogMutation) SetEntityType(tet types.SystemEntityType) {
+	m.entity_type = &tet
+}
+
+// EntityType returns the value of the "entity_type" field in the mutation.
+func (m *EmailLogMutation) EntityType() (r types.SystemEntityType, exists bool) {
+	v := m.entity_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityType returns the old "entity_type" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldEntityType(ctx context.Context) (v types.SystemEntityType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityType: %w", err)
+	}
+	return oldValue.EntityType, nil
+}
+
+// ResetEntityType resets all changes to the "entity_type" field.
+func (m *EmailLogMutation) ResetEntityType() {
+	m.entity_type = nil
+}
+
+// SetEntityID sets the "entity_id" field.
+func (m *EmailLogMutation) SetEntityID(s string) {
+	m.entity_id = &s
+}
+
+// EntityID returns the value of the "entity_id" field in the mutation.
+func (m *EmailLogMutation) EntityID() (r string, exists bool) {
+	v := m.entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityID returns the old "entity_id" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityID: %w", err)
+	}
+	return oldValue.EntityID, nil
+}
+
+// ResetEntityID resets all changes to the "entity_id" field.
+func (m *EmailLogMutation) ResetEntityID() {
+	m.entity_id = nil
+}
+
+// SetCustomerID sets the "customer_id" field.
+func (m *EmailLogMutation) SetCustomerID(s string) {
+	m.customer_id = &s
+}
+
+// CustomerID returns the value of the "customer_id" field in the mutation.
+func (m *EmailLogMutation) CustomerID() (r string, exists bool) {
+	v := m.customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomerID returns the old "customer_id" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldCustomerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomerID: %w", err)
+	}
+	return oldValue.CustomerID, nil
+}
+
+// ResetCustomerID resets all changes to the "customer_id" field.
+func (m *EmailLogMutation) ResetCustomerID() {
+	m.customer_id = nil
+}
+
+// SetTemplateKey sets the "template_key" field.
+func (m *EmailLogMutation) SetTemplateKey(ttk types.EmailTemplateKey) {
+	m.template_key = &ttk
+}
+
+// TemplateKey returns the value of the "template_key" field in the mutation.
+func (m *EmailLogMutation) TemplateKey() (r types.EmailTemplateKey, exists bool) {
+	v := m.template_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemplateKey returns the old "template_key" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldTemplateKey(ctx context.Context) (v types.EmailTemplateKey, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemplateKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemplateKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemplateKey: %w", err)
+	}
+	return oldValue.TemplateKey, nil
+}
+
+// ResetTemplateKey resets all changes to the "template_key" field.
+func (m *EmailLogMutation) ResetTemplateKey() {
+	m.template_key = nil
+}
+
+// SetTrigger sets the "trigger" field.
+func (m *EmailLogMutation) SetTrigger(tt types.EmailTrigger) {
+	m.trigger = &tt
+}
+
+// Trigger returns the value of the "trigger" field in the mutation.
+func (m *EmailLogMutation) Trigger() (r types.EmailTrigger, exists bool) {
+	v := m.trigger
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTrigger returns the old "trigger" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldTrigger(ctx context.Context) (v types.EmailTrigger, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTrigger is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTrigger requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTrigger: %w", err)
+	}
+	return oldValue.Trigger, nil
+}
+
+// ResetTrigger resets all changes to the "trigger" field.
+func (m *EmailLogMutation) ResetTrigger() {
+	m.trigger = nil
+}
+
+// SetFromAddress sets the "from_address" field.
+func (m *EmailLogMutation) SetFromAddress(s string) {
+	m.from_address = &s
+}
+
+// FromAddress returns the value of the "from_address" field in the mutation.
+func (m *EmailLogMutation) FromAddress() (r string, exists bool) {
+	v := m.from_address
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFromAddress returns the old "from_address" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldFromAddress(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFromAddress is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFromAddress requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFromAddress: %w", err)
+	}
+	return oldValue.FromAddress, nil
+}
+
+// ResetFromAddress resets all changes to the "from_address" field.
+func (m *EmailLogMutation) ResetFromAddress() {
+	m.from_address = nil
+}
+
+// SetReplyTo sets the "reply_to" field.
+func (m *EmailLogMutation) SetReplyTo(s string) {
+	m.reply_to = &s
+}
+
+// ReplyTo returns the value of the "reply_to" field in the mutation.
+func (m *EmailLogMutation) ReplyTo() (r string, exists bool) {
+	v := m.reply_to
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReplyTo returns the old "reply_to" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldReplyTo(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReplyTo is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReplyTo requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReplyTo: %w", err)
+	}
+	return oldValue.ReplyTo, nil
+}
+
+// ResetReplyTo resets all changes to the "reply_to" field.
+func (m *EmailLogMutation) ResetReplyTo() {
+	m.reply_to = nil
+}
+
+// SetToAddresses sets the "to_addresses" field.
+func (m *EmailLogMutation) SetToAddresses(s []string) {
+	m.to_addresses = &s
+	m.appendto_addresses = nil
+}
+
+// ToAddresses returns the value of the "to_addresses" field in the mutation.
+func (m *EmailLogMutation) ToAddresses() (r []string, exists bool) {
+	v := m.to_addresses
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToAddresses returns the old "to_addresses" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldToAddresses(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToAddresses is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToAddresses requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToAddresses: %w", err)
+	}
+	return oldValue.ToAddresses, nil
+}
+
+// AppendToAddresses adds s to the "to_addresses" field.
+func (m *EmailLogMutation) AppendToAddresses(s []string) {
+	m.appendto_addresses = append(m.appendto_addresses, s...)
+}
+
+// AppendedToAddresses returns the list of values that were appended to the "to_addresses" field in this mutation.
+func (m *EmailLogMutation) AppendedToAddresses() ([]string, bool) {
+	if len(m.appendto_addresses) == 0 {
+		return nil, false
+	}
+	return m.appendto_addresses, true
+}
+
+// ResetToAddresses resets all changes to the "to_addresses" field.
+func (m *EmailLogMutation) ResetToAddresses() {
+	m.to_addresses = nil
+	m.appendto_addresses = nil
+}
+
+// SetCcAddresses sets the "cc_addresses" field.
+func (m *EmailLogMutation) SetCcAddresses(s []string) {
+	m.cc_addresses = &s
+	m.appendcc_addresses = nil
+}
+
+// CcAddresses returns the value of the "cc_addresses" field in the mutation.
+func (m *EmailLogMutation) CcAddresses() (r []string, exists bool) {
+	v := m.cc_addresses
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCcAddresses returns the old "cc_addresses" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldCcAddresses(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCcAddresses is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCcAddresses requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCcAddresses: %w", err)
+	}
+	return oldValue.CcAddresses, nil
+}
+
+// AppendCcAddresses adds s to the "cc_addresses" field.
+func (m *EmailLogMutation) AppendCcAddresses(s []string) {
+	m.appendcc_addresses = append(m.appendcc_addresses, s...)
+}
+
+// AppendedCcAddresses returns the list of values that were appended to the "cc_addresses" field in this mutation.
+func (m *EmailLogMutation) AppendedCcAddresses() ([]string, bool) {
+	if len(m.appendcc_addresses) == 0 {
+		return nil, false
+	}
+	return m.appendcc_addresses, true
+}
+
+// ClearCcAddresses clears the value of the "cc_addresses" field.
+func (m *EmailLogMutation) ClearCcAddresses() {
+	m.cc_addresses = nil
+	m.appendcc_addresses = nil
+	m.clearedFields[emaillog.FieldCcAddresses] = struct{}{}
+}
+
+// CcAddressesCleared returns if the "cc_addresses" field was cleared in this mutation.
+func (m *EmailLogMutation) CcAddressesCleared() bool {
+	_, ok := m.clearedFields[emaillog.FieldCcAddresses]
+	return ok
+}
+
+// ResetCcAddresses resets all changes to the "cc_addresses" field.
+func (m *EmailLogMutation) ResetCcAddresses() {
+	m.cc_addresses = nil
+	m.appendcc_addresses = nil
+	delete(m.clearedFields, emaillog.FieldCcAddresses)
+}
+
+// SetSubject sets the "subject" field.
+func (m *EmailLogMutation) SetSubject(s string) {
+	m.subject = &s
+}
+
+// Subject returns the value of the "subject" field in the mutation.
+func (m *EmailLogMutation) Subject() (r string, exists bool) {
+	v := m.subject
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubject returns the old "subject" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldSubject(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubject is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubject requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubject: %w", err)
+	}
+	return oldValue.Subject, nil
+}
+
+// ResetSubject resets all changes to the "subject" field.
+func (m *EmailLogMutation) ResetSubject() {
+	m.subject = nil
+}
+
+// SetProvider sets the "provider" field.
+func (m *EmailLogMutation) SetProvider(tp types.EmailProvider) {
+	m.provider = &tp
+}
+
+// Provider returns the value of the "provider" field in the mutation.
+func (m *EmailLogMutation) Provider() (r types.EmailProvider, exists bool) {
+	v := m.provider
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProvider returns the old "provider" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldProvider(ctx context.Context) (v types.EmailProvider, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProvider is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProvider requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProvider: %w", err)
+	}
+	return oldValue.Provider, nil
+}
+
+// ResetProvider resets all changes to the "provider" field.
+func (m *EmailLogMutation) ResetProvider() {
+	m.provider = nil
+}
+
+// SetProviderMessageID sets the "provider_message_id" field.
+func (m *EmailLogMutation) SetProviderMessageID(s string) {
+	m.provider_message_id = &s
+}
+
+// ProviderMessageID returns the value of the "provider_message_id" field in the mutation.
+func (m *EmailLogMutation) ProviderMessageID() (r string, exists bool) {
+	v := m.provider_message_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProviderMessageID returns the old "provider_message_id" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldProviderMessageID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProviderMessageID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProviderMessageID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProviderMessageID: %w", err)
+	}
+	return oldValue.ProviderMessageID, nil
+}
+
+// ClearProviderMessageID clears the value of the "provider_message_id" field.
+func (m *EmailLogMutation) ClearProviderMessageID() {
+	m.provider_message_id = nil
+	m.clearedFields[emaillog.FieldProviderMessageID] = struct{}{}
+}
+
+// ProviderMessageIDCleared returns if the "provider_message_id" field was cleared in this mutation.
+func (m *EmailLogMutation) ProviderMessageIDCleared() bool {
+	_, ok := m.clearedFields[emaillog.FieldProviderMessageID]
+	return ok
+}
+
+// ResetProviderMessageID resets all changes to the "provider_message_id" field.
+func (m *EmailLogMutation) ResetProviderMessageID() {
+	m.provider_message_id = nil
+	delete(m.clearedFields, emaillog.FieldProviderMessageID)
+}
+
+// SetDeliveryStatus sets the "delivery_status" field.
+func (m *EmailLogMutation) SetDeliveryStatus(tds types.EmailDeliveryStatus) {
+	m.delivery_status = &tds
+}
+
+// DeliveryStatus returns the value of the "delivery_status" field in the mutation.
+func (m *EmailLogMutation) DeliveryStatus() (r types.EmailDeliveryStatus, exists bool) {
+	v := m.delivery_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeliveryStatus returns the old "delivery_status" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldDeliveryStatus(ctx context.Context) (v types.EmailDeliveryStatus, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeliveryStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeliveryStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeliveryStatus: %w", err)
+	}
+	return oldValue.DeliveryStatus, nil
+}
+
+// ResetDeliveryStatus resets all changes to the "delivery_status" field.
+func (m *EmailLogMutation) ResetDeliveryStatus() {
+	m.delivery_status = nil
+}
+
+// SetStatusReason sets the "status_reason" field.
+func (m *EmailLogMutation) SetStatusReason(s string) {
+	m.status_reason = &s
+}
+
+// StatusReason returns the value of the "status_reason" field in the mutation.
+func (m *EmailLogMutation) StatusReason() (r string, exists bool) {
+	v := m.status_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatusReason returns the old "status_reason" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldStatusReason(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatusReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatusReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatusReason: %w", err)
+	}
+	return oldValue.StatusReason, nil
+}
+
+// ClearStatusReason clears the value of the "status_reason" field.
+func (m *EmailLogMutation) ClearStatusReason() {
+	m.status_reason = nil
+	m.clearedFields[emaillog.FieldStatusReason] = struct{}{}
+}
+
+// StatusReasonCleared returns if the "status_reason" field was cleared in this mutation.
+func (m *EmailLogMutation) StatusReasonCleared() bool {
+	_, ok := m.clearedFields[emaillog.FieldStatusReason]
+	return ok
+}
+
+// ResetStatusReason resets all changes to the "status_reason" field.
+func (m *EmailLogMutation) ResetStatusReason() {
+	m.status_reason = nil
+	delete(m.clearedFields, emaillog.FieldStatusReason)
+}
+
+// SetSentAt sets the "sent_at" field.
+func (m *EmailLogMutation) SetSentAt(t time.Time) {
+	m.sent_at = &t
+}
+
+// SentAt returns the value of the "sent_at" field in the mutation.
+func (m *EmailLogMutation) SentAt() (r time.Time, exists bool) {
+	v := m.sent_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSentAt returns the old "sent_at" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldSentAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSentAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSentAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSentAt: %w", err)
+	}
+	return oldValue.SentAt, nil
+}
+
+// ClearSentAt clears the value of the "sent_at" field.
+func (m *EmailLogMutation) ClearSentAt() {
+	m.sent_at = nil
+	m.clearedFields[emaillog.FieldSentAt] = struct{}{}
+}
+
+// SentAtCleared returns if the "sent_at" field was cleared in this mutation.
+func (m *EmailLogMutation) SentAtCleared() bool {
+	_, ok := m.clearedFields[emaillog.FieldSentAt]
+	return ok
+}
+
+// ResetSentAt resets all changes to the "sent_at" field.
+func (m *EmailLogMutation) ResetSentAt() {
+	m.sent_at = nil
+	delete(m.clearedFields, emaillog.FieldSentAt)
+}
+
+// SetDeliveredAt sets the "delivered_at" field.
+func (m *EmailLogMutation) SetDeliveredAt(t time.Time) {
+	m.delivered_at = &t
+}
+
+// DeliveredAt returns the value of the "delivered_at" field in the mutation.
+func (m *EmailLogMutation) DeliveredAt() (r time.Time, exists bool) {
+	v := m.delivered_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeliveredAt returns the old "delivered_at" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldDeliveredAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeliveredAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeliveredAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeliveredAt: %w", err)
+	}
+	return oldValue.DeliveredAt, nil
+}
+
+// ClearDeliveredAt clears the value of the "delivered_at" field.
+func (m *EmailLogMutation) ClearDeliveredAt() {
+	m.delivered_at = nil
+	m.clearedFields[emaillog.FieldDeliveredAt] = struct{}{}
+}
+
+// DeliveredAtCleared returns if the "delivered_at" field was cleared in this mutation.
+func (m *EmailLogMutation) DeliveredAtCleared() bool {
+	_, ok := m.clearedFields[emaillog.FieldDeliveredAt]
+	return ok
+}
+
+// ResetDeliveredAt resets all changes to the "delivered_at" field.
+func (m *EmailLogMutation) ResetDeliveredAt() {
+	m.delivered_at = nil
+	delete(m.clearedFields, emaillog.FieldDeliveredAt)
+}
+
+// SetMetadata sets the "metadata" field.
+func (m *EmailLogMutation) SetMetadata(t types.Metadata) {
+	m.metadata = &t
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *EmailLogMutation) Metadata() (r types.Metadata, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldMetadata(ctx context.Context) (v types.Metadata, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *EmailLogMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[emaillog.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *EmailLogMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[emaillog.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *EmailLogMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, emaillog.FieldMetadata)
+}
+
+// Where appends a list predicates to the EmailLogMutation builder.
+func (m *EmailLogMutation) Where(ps ...predicate.EmailLog) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the EmailLogMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *EmailLogMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.EmailLog, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *EmailLogMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *EmailLogMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (EmailLog).
+func (m *EmailLogMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *EmailLogMutation) Fields() []string {
+	fields := make([]string, 0, 24)
+	if m.tenant_id != nil {
+		fields = append(fields, emaillog.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, emaillog.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, emaillog.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, emaillog.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, emaillog.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, emaillog.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, emaillog.FieldEnvironmentID)
+	}
+	if m.entity_type != nil {
+		fields = append(fields, emaillog.FieldEntityType)
+	}
+	if m.entity_id != nil {
+		fields = append(fields, emaillog.FieldEntityID)
+	}
+	if m.customer_id != nil {
+		fields = append(fields, emaillog.FieldCustomerID)
+	}
+	if m.template_key != nil {
+		fields = append(fields, emaillog.FieldTemplateKey)
+	}
+	if m.trigger != nil {
+		fields = append(fields, emaillog.FieldTrigger)
+	}
+	if m.from_address != nil {
+		fields = append(fields, emaillog.FieldFromAddress)
+	}
+	if m.reply_to != nil {
+		fields = append(fields, emaillog.FieldReplyTo)
+	}
+	if m.to_addresses != nil {
+		fields = append(fields, emaillog.FieldToAddresses)
+	}
+	if m.cc_addresses != nil {
+		fields = append(fields, emaillog.FieldCcAddresses)
+	}
+	if m.subject != nil {
+		fields = append(fields, emaillog.FieldSubject)
+	}
+	if m.provider != nil {
+		fields = append(fields, emaillog.FieldProvider)
+	}
+	if m.provider_message_id != nil {
+		fields = append(fields, emaillog.FieldProviderMessageID)
+	}
+	if m.delivery_status != nil {
+		fields = append(fields, emaillog.FieldDeliveryStatus)
+	}
+	if m.status_reason != nil {
+		fields = append(fields, emaillog.FieldStatusReason)
+	}
+	if m.sent_at != nil {
+		fields = append(fields, emaillog.FieldSentAt)
+	}
+	if m.delivered_at != nil {
+		fields = append(fields, emaillog.FieldDeliveredAt)
+	}
+	if m.metadata != nil {
+		fields = append(fields, emaillog.FieldMetadata)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *EmailLogMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case emaillog.FieldTenantID:
+		return m.TenantID()
+	case emaillog.FieldStatus:
+		return m.Status()
+	case emaillog.FieldCreatedAt:
+		return m.CreatedAt()
+	case emaillog.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case emaillog.FieldCreatedBy:
+		return m.CreatedBy()
+	case emaillog.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case emaillog.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case emaillog.FieldEntityType:
+		return m.EntityType()
+	case emaillog.FieldEntityID:
+		return m.EntityID()
+	case emaillog.FieldCustomerID:
+		return m.CustomerID()
+	case emaillog.FieldTemplateKey:
+		return m.TemplateKey()
+	case emaillog.FieldTrigger:
+		return m.Trigger()
+	case emaillog.FieldFromAddress:
+		return m.FromAddress()
+	case emaillog.FieldReplyTo:
+		return m.ReplyTo()
+	case emaillog.FieldToAddresses:
+		return m.ToAddresses()
+	case emaillog.FieldCcAddresses:
+		return m.CcAddresses()
+	case emaillog.FieldSubject:
+		return m.Subject()
+	case emaillog.FieldProvider:
+		return m.Provider()
+	case emaillog.FieldProviderMessageID:
+		return m.ProviderMessageID()
+	case emaillog.FieldDeliveryStatus:
+		return m.DeliveryStatus()
+	case emaillog.FieldStatusReason:
+		return m.StatusReason()
+	case emaillog.FieldSentAt:
+		return m.SentAt()
+	case emaillog.FieldDeliveredAt:
+		return m.DeliveredAt()
+	case emaillog.FieldMetadata:
+		return m.Metadata()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *EmailLogMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case emaillog.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case emaillog.FieldStatus:
+		return m.OldStatus(ctx)
+	case emaillog.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case emaillog.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case emaillog.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case emaillog.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case emaillog.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case emaillog.FieldEntityType:
+		return m.OldEntityType(ctx)
+	case emaillog.FieldEntityID:
+		return m.OldEntityID(ctx)
+	case emaillog.FieldCustomerID:
+		return m.OldCustomerID(ctx)
+	case emaillog.FieldTemplateKey:
+		return m.OldTemplateKey(ctx)
+	case emaillog.FieldTrigger:
+		return m.OldTrigger(ctx)
+	case emaillog.FieldFromAddress:
+		return m.OldFromAddress(ctx)
+	case emaillog.FieldReplyTo:
+		return m.OldReplyTo(ctx)
+	case emaillog.FieldToAddresses:
+		return m.OldToAddresses(ctx)
+	case emaillog.FieldCcAddresses:
+		return m.OldCcAddresses(ctx)
+	case emaillog.FieldSubject:
+		return m.OldSubject(ctx)
+	case emaillog.FieldProvider:
+		return m.OldProvider(ctx)
+	case emaillog.FieldProviderMessageID:
+		return m.OldProviderMessageID(ctx)
+	case emaillog.FieldDeliveryStatus:
+		return m.OldDeliveryStatus(ctx)
+	case emaillog.FieldStatusReason:
+		return m.OldStatusReason(ctx)
+	case emaillog.FieldSentAt:
+		return m.OldSentAt(ctx)
+	case emaillog.FieldDeliveredAt:
+		return m.OldDeliveredAt(ctx)
+	case emaillog.FieldMetadata:
+		return m.OldMetadata(ctx)
+	}
+	return nil, fmt.Errorf("unknown EmailLog field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EmailLogMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case emaillog.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case emaillog.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case emaillog.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case emaillog.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case emaillog.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case emaillog.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case emaillog.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case emaillog.FieldEntityType:
+		v, ok := value.(types.SystemEntityType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityType(v)
+		return nil
+	case emaillog.FieldEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityID(v)
+		return nil
+	case emaillog.FieldCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomerID(v)
+		return nil
+	case emaillog.FieldTemplateKey:
+		v, ok := value.(types.EmailTemplateKey)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemplateKey(v)
+		return nil
+	case emaillog.FieldTrigger:
+		v, ok := value.(types.EmailTrigger)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTrigger(v)
+		return nil
+	case emaillog.FieldFromAddress:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFromAddress(v)
+		return nil
+	case emaillog.FieldReplyTo:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReplyTo(v)
+		return nil
+	case emaillog.FieldToAddresses:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToAddresses(v)
+		return nil
+	case emaillog.FieldCcAddresses:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCcAddresses(v)
+		return nil
+	case emaillog.FieldSubject:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubject(v)
+		return nil
+	case emaillog.FieldProvider:
+		v, ok := value.(types.EmailProvider)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProvider(v)
+		return nil
+	case emaillog.FieldProviderMessageID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProviderMessageID(v)
+		return nil
+	case emaillog.FieldDeliveryStatus:
+		v, ok := value.(types.EmailDeliveryStatus)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeliveryStatus(v)
+		return nil
+	case emaillog.FieldStatusReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatusReason(v)
+		return nil
+	case emaillog.FieldSentAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSentAt(v)
+		return nil
+	case emaillog.FieldDeliveredAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeliveredAt(v)
+		return nil
+	case emaillog.FieldMetadata:
+		v, ok := value.(types.Metadata)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
+	}
+	return fmt.Errorf("unknown EmailLog field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *EmailLogMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *EmailLogMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EmailLogMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown EmailLog numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *EmailLogMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(emaillog.FieldCreatedBy) {
+		fields = append(fields, emaillog.FieldCreatedBy)
+	}
+	if m.FieldCleared(emaillog.FieldUpdatedBy) {
+		fields = append(fields, emaillog.FieldUpdatedBy)
+	}
+	if m.FieldCleared(emaillog.FieldEnvironmentID) {
+		fields = append(fields, emaillog.FieldEnvironmentID)
+	}
+	if m.FieldCleared(emaillog.FieldCcAddresses) {
+		fields = append(fields, emaillog.FieldCcAddresses)
+	}
+	if m.FieldCleared(emaillog.FieldProviderMessageID) {
+		fields = append(fields, emaillog.FieldProviderMessageID)
+	}
+	if m.FieldCleared(emaillog.FieldStatusReason) {
+		fields = append(fields, emaillog.FieldStatusReason)
+	}
+	if m.FieldCleared(emaillog.FieldSentAt) {
+		fields = append(fields, emaillog.FieldSentAt)
+	}
+	if m.FieldCleared(emaillog.FieldDeliveredAt) {
+		fields = append(fields, emaillog.FieldDeliveredAt)
+	}
+	if m.FieldCleared(emaillog.FieldMetadata) {
+		fields = append(fields, emaillog.FieldMetadata)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *EmailLogMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *EmailLogMutation) ClearField(name string) error {
+	switch name {
+	case emaillog.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case emaillog.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case emaillog.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case emaillog.FieldCcAddresses:
+		m.ClearCcAddresses()
+		return nil
+	case emaillog.FieldProviderMessageID:
+		m.ClearProviderMessageID()
+		return nil
+	case emaillog.FieldStatusReason:
+		m.ClearStatusReason()
+		return nil
+	case emaillog.FieldSentAt:
+		m.ClearSentAt()
+		return nil
+	case emaillog.FieldDeliveredAt:
+		m.ClearDeliveredAt()
+		return nil
+	case emaillog.FieldMetadata:
+		m.ClearMetadata()
+		return nil
+	}
+	return fmt.Errorf("unknown EmailLog nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *EmailLogMutation) ResetField(name string) error {
+	switch name {
+	case emaillog.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case emaillog.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case emaillog.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case emaillog.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case emaillog.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case emaillog.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case emaillog.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case emaillog.FieldEntityType:
+		m.ResetEntityType()
+		return nil
+	case emaillog.FieldEntityID:
+		m.ResetEntityID()
+		return nil
+	case emaillog.FieldCustomerID:
+		m.ResetCustomerID()
+		return nil
+	case emaillog.FieldTemplateKey:
+		m.ResetTemplateKey()
+		return nil
+	case emaillog.FieldTrigger:
+		m.ResetTrigger()
+		return nil
+	case emaillog.FieldFromAddress:
+		m.ResetFromAddress()
+		return nil
+	case emaillog.FieldReplyTo:
+		m.ResetReplyTo()
+		return nil
+	case emaillog.FieldToAddresses:
+		m.ResetToAddresses()
+		return nil
+	case emaillog.FieldCcAddresses:
+		m.ResetCcAddresses()
+		return nil
+	case emaillog.FieldSubject:
+		m.ResetSubject()
+		return nil
+	case emaillog.FieldProvider:
+		m.ResetProvider()
+		return nil
+	case emaillog.FieldProviderMessageID:
+		m.ResetProviderMessageID()
+		return nil
+	case emaillog.FieldDeliveryStatus:
+		m.ResetDeliveryStatus()
+		return nil
+	case emaillog.FieldStatusReason:
+		m.ResetStatusReason()
+		return nil
+	case emaillog.FieldSentAt:
+		m.ResetSentAt()
+		return nil
+	case emaillog.FieldDeliveredAt:
+		m.ResetDeliveredAt()
+		return nil
+	case emaillog.FieldMetadata:
+		m.ResetMetadata()
+		return nil
+	}
+	return fmt.Errorf("unknown EmailLog field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *EmailLogMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *EmailLogMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *EmailLogMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *EmailLogMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *EmailLogMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *EmailLogMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *EmailLogMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown EmailLog unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *EmailLogMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown EmailLog edge %s", name)
 }
 
 // EntitlementMutation represents an operation that mutates the Entitlement nodes in the graph.

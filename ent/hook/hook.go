@@ -309,6 +309,18 @@ func (f CustomerFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomerMutation", m)
 }
 
+// The EmailLogFunc type is an adapter to allow the use of ordinary
+// function as EmailLog mutator.
+type EmailLogFunc func(context.Context, *ent.EmailLogMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EmailLogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EmailLogMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EmailLogMutation", m)
+}
+
 // The EntitlementFunc type is an adapter to allow the use of ordinary
 // function as Entitlement mutator.
 type EntitlementFunc func(context.Context, *ent.EntitlementMutation) (ent.Value, error)

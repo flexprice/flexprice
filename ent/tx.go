@@ -64,6 +64,8 @@ type Tx struct {
 	CreditNoteLineItem *CreditNoteLineItemClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
+	// EmailLog is the client for interacting with the EmailLog builders.
+	EmailLog *EmailLogClient
 	// Entitlement is the client for interacting with the Entitlement builders.
 	Entitlement *EntitlementClient
 	// EntitlementGrant is the client for interacting with the EntitlementGrant builders.
@@ -314,6 +316,7 @@ func (tx *Tx) init() {
 	tx.CreditNote = NewCreditNoteClient(tx.config)
 	tx.CreditNoteLineItem = NewCreditNoteLineItemClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
+	tx.EmailLog = NewEmailLogClient(tx.config)
 	tx.Entitlement = NewEntitlementClient(tx.config)
 	tx.EntitlementGrant = NewEntitlementGrantClient(tx.config)
 	tx.EntityIntegrationMapping = NewEntityIntegrationMappingClient(tx.config)
