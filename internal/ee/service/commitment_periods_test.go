@@ -349,8 +349,8 @@ func TestClipCommitmentPeriod_PartialFloorsSumToTheRoundedWhole(t *testing.T) {
 	}
 }
 
-// A prorated capacity multiplies before it divides, so an exact share stays exact and an inexact one rounds once, to
-// capacityPrecision; the term's value carries no noise either.
+// A prorated capacity multiplies before it divides, so an exact share stays exact and an inexact one keeps the
+// division's full precision; the term's value carries no noise either.
 func TestCommitmentPeriods_ProratedCapacityHasNoNoise(t *testing.T) {
 	day := func(month time.Month, d int) time.Time { return time.Date(2027, month, d, 0, 0, 0, 0, time.UTC) }
 	tests := []struct {
@@ -375,22 +375,27 @@ func TestCommitmentPeriods_ProratedCapacityHasNoNoise(t *testing.T) {
 		{
 			name:  "100 from 6 Aug holds 26 of August's 31 days",
 			value: "100", rate: "1", start: day(time.August, 6), end: day(time.September, 1),
-			wantCapacity: "83.87096774", wantValue: "83.87096774",
+			wantCapacity: "83.8709677419354839", wantValue: "83.8709677419354839",
 		},
 		{
-			name:  "a third of 100 rounds down",
+			name:  "a third of 100",
 			value: "100", rate: "1", start: day(time.April, 21), end: day(time.May, 1),
-			wantCapacity: "33.33333333", wantValue: "33.33333333",
+			wantCapacity: "33.3333333333333333", wantValue: "33.3333333333333333",
 		},
 		{
-			name:  "two thirds of 100 round up",
+			name:  "two thirds of 100",
 			value: "100", rate: "1", start: day(time.April, 11), end: day(time.May, 1),
-			wantCapacity: "66.66666667", wantValue: "66.66666667",
+			wantCapacity: "66.6666666666666667", wantValue: "66.6666666666666667",
 		},
 		{
 			name:  "a whole period keeps the value",
 			value: "150", rate: "1", start: day(time.April, 1), end: day(time.June, 1),
 			wantCapacity: "150", wantValue: "300",
+		},
+		{
+			name:  "a tiny capacity at a high rate keeps its prorated value",
+			value: "0.00000001", rate: "100000000", start: day(time.April, 17), end: day(time.May, 1),
+			wantCapacity: "0.0000000046666667", wantValue: "0.46666667",
 		},
 	}
 	for _, tc := range tests {
@@ -438,7 +443,7 @@ func TestClipCommitmentPeriod_PartialCapacitiesSumToTheWhole(t *testing.T) {
 		{
 			name:  "thirds of 100",
 			value: "100", bounds: []time.Time{day(11), day(21)},
-			want: []string{"33.33333333", "33.33333334", "33.33333333"}, wantBuckets: []int64{0, 0, 0},
+			want: []string{"33.3333333333333333", "33.3333333333333334", "33.3333333333333333"}, wantBuckets: []int64{0, 0, 0},
 		},
 		{
 			name:  "thirds of 2 a day",

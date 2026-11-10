@@ -148,10 +148,6 @@ func accruedAmount(
 	return amount
 }
 
-// capacityPrecision is the decimal places a prorated capacity keeps, the scale invoice line quantities and commitment
-// values are stored at.
-const capacityPrecision = 8
-
 // periodCapacity returns the buckets and capacity cp accrues within span: its active buckets for window measurement,
 // otherwise its share of the regular billing period.
 func periodCapacity(
@@ -162,10 +158,10 @@ func periodCapacity(
 	anchor time.Time,
 ) (int64, decimal.Decimal) {
 	if c.Measurement != types.CommitmentMeasurementWindow {
-		// Multiplying first keeps an exact share exact, such as 150 × 14/30 = 70; an inexact one rounds once.
+		// Multiplying first keeps an exact share exact: 150 × 14/30 is 70, not 70.000000000000005.
 		elapsed := decimal.NewFromInt(int64(span.End.Sub(span.Start)))
 		full := decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart)))
-		return 0, c.Value.Mul(elapsed).DivRound(full, capacityPrecision)
+		return 0, c.Value.Mul(elapsed).Div(full)
 	}
 
 	// A bucket starting before the span belongs to the span that already counted it.
