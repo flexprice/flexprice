@@ -3780,66 +3780,89 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 }
 
 func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePDFRequest) (string, error) {
-	id := req.InvoiceID
-
-	// get invoice
-	inv, err := s.InvoiceRepo.Get(ctx, id)
+	inv, err := s.InvoiceRepo.Get(ctx, req.InvoiceID)
 	if err != nil {
 		return "", err
 	}
 
+	src, err := s.pdfSource(ctx, inv, req.ForceGenerate)
+	if err != nil {
+		return "", err
+	}
+	if src.url != "" {
+		return src.url, nil
+	}
+	return src.store.PresignGet(ctx, src.key, src.presignExpiry)
+}
+
+// invoicePDFSource is where an invoice's PDF lives: a link from the invoice or its billing
+// provider, or Flexprice's stored copy at key (data is set when it was just rendered).
+type invoicePDFSource struct {
+	url           string
+	store         storage.Storage
+	key           string
+	presignExpiry time.Duration
+	data          []byte
+}
+
+// pdfSource resolves the invoice's PDF in order: its own link, its billing provider's, then
+// Flexprice's stored copy, rendered and uploaded only when missing or forced.
+func (s *invoiceService) pdfSource(ctx context.Context, inv *invoice.Invoice, forceGenerate bool) (*invoicePDFSource, error) {
 	if inv.InvoicePDFURL != nil {
-		return lo.FromPtr(inv.InvoicePDFURL), nil
+		return &invoicePDFSource{url: lo.FromPtr(inv.InvoicePDFURL)}, nil
 	}
 
-	if url, err := s.billingProviderPDFURL(ctx, id); err == nil && url != "" {
-		return url, nil
+	if url, err := s.billingProviderPDFURL(ctx, inv.ID); err == nil && url != "" {
+		return &invoicePDFSource{url: url}, nil
 	}
 
 	store, err := s.StorageResolver.ForPlatform(ctx, storage.PurposeInvoice)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	bc, err := s.StorageResolver.BucketConfigFor(storage.PurposeInvoice)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	key := storage.ObjectKey(bc.KeyPrefix, "", fmt.Sprintf("%s/%s", inv.TenantID, id), "pdf", false)
 
 	presignExpiry, parseErr := time.ParseDuration(bc.PresignExpiryDuration)
 	if parseErr != nil {
-		return "", ierr.WithError(parseErr).
+		return nil, ierr.WithError(parseErr).
 			WithHint("Invalid invoice PDF presign expiry duration").
 			Mark(ierr.ErrValidation)
 	}
 
-	if !req.ForceGenerate {
-		exists, err := store.Exists(ctx, key)
+	src := &invoicePDFSource{
+		store:         store,
+		key:           storage.ObjectKey(bc.KeyPrefix, "", fmt.Sprintf("%s/%s", inv.TenantID, inv.ID), "pdf", false),
+		presignExpiry: presignExpiry,
+	}
+
+	if !forceGenerate {
+		exists, err := store.Exists(ctx, src.key)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if exists {
-			return store.PresignGet(ctx, key, presignExpiry)
+			return src, nil
 		}
 	}
 
-	data, err := s.GetInvoicePDF(ctx, dto.InvoicePDFRequest{InvoiceID: id})
+	src.data, err = s.GetInvoicePDF(ctx, dto.InvoicePDFRequest{InvoiceID: inv.ID})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	_, err = store.Upload(ctx, &storage.UploadRequest{
-		Key:    key,
-		Data:   data,
+		Key:    src.key,
+		Data:   src.data,
 		Format: storage.UploadFormatPDF,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	return store.PresignGet(ctx, key, presignExpiry)
+	return src, nil
 }
 
 // billingProviderPDFURL returns the enabled billing provider's own rendering of
