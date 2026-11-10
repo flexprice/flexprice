@@ -1120,7 +1120,6 @@ func (s *MeterUsageServiceSuite) newCommitment(
 		Type:               types.COMMITMENT_TYPE_AMOUNT,
 		Value:              dec(value),
 		Measurement:        types.CommitmentMeasurementBillingPeriod,
-		Timezone:           "UTC",
 		Priority:           1,
 		Binding:            true,
 		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),

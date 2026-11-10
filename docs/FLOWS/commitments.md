@@ -10,7 +10,7 @@ The design decisions behind this code live in `docs/design/2026-10-07-FLE-1513-c
 A commitment promises that a subscription will use at least some **capacity** on a **scope** of its usage lines, over a
 **term**. The capacity is an amount (`type: amount`, money) or a quantity (`type: quantity`, units valued at a
 committed price). It renews every subscription billing period (`measurement: billing_period`) or every usage bucket,
-such as every hour (`measurement: window`, optionally limited to `active_windows` times of day). When an invoice is
+such as every hour (`measurement: window`, optionally limited to `active_windows` UTC times of day). When an invoice is
 computed, the scoped usage is poured into the capacity. Usage that fits is billed on **utilized** lines, usage beyond
 it on **overage** lines. A **binding** commitment also bills the unused rest of its capacity as a **true-up**. Under
 `collection_method: billing_terms` the commitment's whole value is billed on a schedule of **instalments** instead, so
@@ -80,8 +80,7 @@ API: `POST /v1/commitments` ([router.go:730](../../internal/api/router.go#L730))
      - `validateScopeEntity`: the scope names something real.
      - `validateTermLines`: over the whole term the scoped lines must not have entitled meters, must be on one meter
        where needed, share one bucket size for windows, carry no legacy commitment fields, and bill every period.
-       `active_windows` must hold whole usage buckets: `rejectSplitBuckets` moves them to UTC, where buckets are cut,
-       by the timezone's offset at the commitment start and checks them with v1's `ValidateWindowAlignment`.
+       `active_windows` must hold whole usage buckets, checked with v1's `ValidateWindowAlignment`.
      - `validateOverlaps`: commitments sharing a line must agree on type, measurement, bucket size and overage price,
        and differ in priority while they allocate together. `blocksUntil` lets a commitment keep blocking until the
        end of the billing period holding its end, because that period's invoice still allocates it.

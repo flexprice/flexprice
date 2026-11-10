@@ -280,7 +280,11 @@ func (s *commitmentService) validateTermLines(
 			return err
 		}
 
-		if err := rejectSplitBuckets(c, sizes[0]); err != nil {
+		// Active windows must hold whole usage buckets, by v1's rule for time-of-day buckets.
+		windows := lo.Map(c.ActiveWindows, func(w types.ActiveWindow, _ int) types.TimeOfDayBucket {
+			return types.TimeOfDayBucket{Start: w.Start, End: w.End}
+		})
+		if err := types.TimeOfDayBuckets(windows).ValidateWindowAlignment(sizes[0].ToMinutes()); err != nil {
 			return err
 		}
 	}
@@ -331,26 +335,6 @@ func rejectCalendarBuckets(size types.WindowSize) error {
 	return ierr.NewError(reason).
 		WithHint("Use a daily or shorter bucket size for window commitments").
 		Mark(ierr.ErrValidation)
-}
-
-// rejectSplitBuckets rejects active windows that split usage buckets, by v1's rule. Buckets are cut in UTC and the
-// windows are in the commitment's timezone, so they are moved to UTC by its offset at the commitment start.
-func rejectSplitBuckets(c *commitment.Commitment, size types.WindowSize) error {
-	start := c.StartDate.In(c.Location())
-	_, offset := start.Zone()
-	inUTC := lo.Map(c.ActiveWindows, func(w types.ActiveWindow, _ int) types.TimeOfDayBucket {
-		return types.TimeOfDayBucket{Start: w.Start.Add(-offset / 60), End: w.End.Add(-offset / 60)}
-	})
-
-	// v1's error speaks of UTC buckets, and the API shows its hint, so the windows get their own error.
-	if types.TimeOfDayBuckets(inUTC).ValidateWindowAlignment(size.ToMinutes()) != nil {
-		return ierr.NewErrorf("active_windows in %s split %s usage buckets", c.Timezone, size).
-			WithHintf("Usage buckets are cut in UTC and %s is UTC%s, so each active window must start and end on the %s grid in UTC",
-				c.Timezone, start.Format("-07:00"), size).
-			Mark(ierr.ErrValidation)
-	}
-
-	return nil
 }
 
 // rejectOffCadencePrice rejects a scope price that does not bill every subscription period, since a commitment's

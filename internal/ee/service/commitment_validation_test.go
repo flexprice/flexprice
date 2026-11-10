@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -162,7 +161,6 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 			r.ActiveWindows = types.ActiveWindows{{Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 21}}}
 		}, false},
 		{"C12 negative priority", func(r *dto.CreateCommitmentRequest) { r.Priority = -1 }, false},
-		{"C11 bad timezone", func(r *dto.CreateCommitmentRequest) { r.Timezone = "Mars/Base" }, false},
 		{"C13 non-binding with collection method", func(r *dto.CreateCommitmentRequest) {
 			r.Binding = lo.ToPtr(false)
 			r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionPerPeriod)
@@ -548,50 +546,4 @@ func (s *CommitmentServiceSuite) TestCreate_RejectsSamePriorityOverFutureCutoff(
 	b.StartDate = time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
 	_, err = s.svc.Create(s.GetContext(), b)
 	s.requireValidation(err, "priority")
-}
-
-// Active windows must hold whole usage buckets, which are cut in UTC, once moved to UTC from their timezone.
-func TestRejectSplitBuckets(t *testing.T) {
-	jan := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	window := func(startHour, startMinute, endHour, endMinute int) types.ActiveWindows {
-		return types.ActiveWindows{{
-			Start: types.Bucket{Hour: startHour, Minute: startMinute},
-			End:   types.Bucket{Hour: endHour, Minute: endMinute},
-		}}
-	}
-	tests := []struct {
-		name     string
-		size     types.WindowSize
-		timezone string
-		windows  types.ActiveWindows
-		wantErr  bool
-	}{
-		{name: "no windows", size: types.WindowSizeHour},
-		{name: "whole hours", size: types.WindowSizeHour, windows: window(10, 0, 15, 0)},
-		{name: "an edge inside an hour", size: types.WindowSizeHour, windows: window(10, 0, 14, 45), wantErr: true},
-		{name: "the same edge on a 15-minute grid", size: types.WindowSize15Min, windows: window(10, 0, 14, 45)},
-		{name: "any minute", size: types.WindowSizeMinute, windows: window(10, 7, 14, 53)},
-		{name: "whole hours in Kolkata split UTC hours", size: types.WindowSizeHour, timezone: "Asia/Kolkata", windows: window(9, 0, 21, 0), wantErr: true},
-		{name: "half past in Kolkata is on the hour in UTC", size: types.WindowSizeHour, timezone: "Asia/Kolkata", windows: window(9, 30, 21, 30)},
-		{name: "whole hours in New York", size: types.WindowSizeHour, timezone: "America/New_York", windows: window(7, 0, 19, 0)},
-		{name: "the whole UTC day", size: types.WindowSizeDay, windows: window(0, 0, 24, 0)},
-		{name: "part of a day", size: types.WindowSizeDay, windows: window(8, 0, 20, 0), wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := &commitment.Commitment{
-				StartDate:     jan,
-				Timezone:      lo.CoalesceOrEmpty(tt.timezone, "UTC"),
-				ActiveWindows: tt.windows,
-			}
-			err := rejectSplitBuckets(c, tt.size)
-			if !tt.wantErr {
-				require.NoError(t, err)
-				return
-			}
-
-			require.True(t, ierr.IsValidation(err), "want a validation error, got %v", err)
-			require.Contains(t, err.Error(), string(tt.size))
-		})
-	}
 }

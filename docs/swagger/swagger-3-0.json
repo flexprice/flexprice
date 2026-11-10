@@ -23411,9 +23411,6 @@
           "termination_invoice_id": {
             "type": "string"
           },
-          "timezone": {
-            "type": "string"
-          },
           "total_amount": {
             "type": "string"
           },
@@ -24284,9 +24281,6 @@
           "subscription_id": {
             "type": "string",
             "description": "SubscriptionID is required on POST /commitments and set server-side on inline commitments."
-          },
-          "timezone": {
-            "type": "string"
           },
           "type": {
             "$ref": "#/components/schemas/types.CommitmentType"

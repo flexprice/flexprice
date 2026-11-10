@@ -1642,7 +1642,7 @@ func (s *CommitmentServiceSuite) TestValidation_RejectsWindowsThatSplitBuckets()
 	req.Measurement = types.CommitmentMeasurementWindow
 	req.ActiveWindows = types.ActiveWindows{{Start: types.Bucket{Hour: 10}, End: types.Bucket{Hour: 14, Minute: 45}}}
 	_, err := s.svc.Create(ctx, req)
-	s.requireValidation(err, "split", string(types.WindowSizeHour))
+	s.requireValidation(err, "multiple of the bucket size")
 
 	req.ActiveWindows[0].End = types.Bucket{Hour: 15}
 	_, err = s.svc.Create(ctx, req)
