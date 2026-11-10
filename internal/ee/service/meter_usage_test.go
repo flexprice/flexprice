@@ -7535,6 +7535,7 @@ func (s *MeterUsageServiceSuite) TestCommitments_FutureUsageTakesNoCharges() {
 		costs[point.Timestamp] = point.Cost
 	}
 	s.True(costs[thisMonth].Equal(dec("150")), "this month costs %s", costs[thisMonth])
+	s.Require().Contains(costs, nextMonth, "next month's usage has no point")
 	s.True(costs[nextMonth].IsZero(), "next month costs %s", costs[nextMonth])
 }
 
@@ -7547,7 +7548,16 @@ func (f *failingUsageStore) GetDistinctMeterIDs(context.Context, *events.MeterUs
 	return nil, ierr.NewError("usage store unavailable").Mark(ierr.ErrDatabase)
 }
 
-// A failing usage read fails the request instead of reporting the customer's usage as zero.
+// noCostsheet answers cost analytics as a tenant without an active costsheet does.
+type noCostsheet struct {
+	CostSheetUsageTrackingService
+}
+
+func (noCostsheet) GetCostAnalyticsFromMeterUsage(context.Context, *dto.GetCostAnalyticsRequest) (*dto.GetCostAnalyticsResponse, error) {
+	return nil, ierr.NewError("no active costsheet found").Mark(ierr.ErrNotFound)
+}
+
+// A failing usage read fails the request instead of reporting the customer's usage, or their revenue, as zero.
 func (s *MeterUsageServiceSuite) TestAnalytics_UsageReadErrorsAreReturned() {
 	ctx := s.GetContext()
 	m := s.createMeterWithAggregation(ctx, "meter_failing_read", "api_call", types.AggregationSum)
@@ -7560,6 +7570,15 @@ func (s *MeterUsageServiceSuite) TestAnalytics_UsageReadErrorsAreReturned() {
 	_, err := svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
 		TenantID:           types.GetTenantID(ctx),
 		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.Require().Error(err)
+	s.True(ierr.IsDatabase(err), "got %v", err)
+
+	revenue := NewRevenueAnalyticsService(svc.ServiceParams, noCostsheet{})
+	_, err = revenue.GetDetailedCostAnalytics(ctx, &dto.GetCostAnalyticsRequest{
 		ExternalCustomerID: s.customer.ExternalID,
 		StartTime:          s.periodStart,
 		EndTime:            s.periodEnd,
