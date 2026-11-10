@@ -120,6 +120,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		Name:               req.Name,
 		ManagedCopy:        managedCopy,
 		Schedule:           req.Schedule,
+		SourceConfig:       req.SourceConfig,
 		Status:             types.StatusPublished,
 		CreatedAt:          now,
 		UpdatedAt:          now,

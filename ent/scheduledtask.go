@@ -50,7 +50,9 @@ type ScheduledTask struct {
 	// Export to Flexprice managed bucket instead of a connection
 	ManagedCopy bool `json:"managed_copy,omitempty"`
 	// Run time of the export
-	Schedule     *types.ExportSchedule `json:"schedule,omitempty"`
+	Schedule *types.ExportSchedule `json:"schedule,omitempty"`
+	// Report or analytics view an export reads
+	SourceConfig *types.ExportSourceConfig `json:"source_config,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -59,7 +61,7 @@ func (*ScheduledTask) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case scheduledtask.FieldJobConfig, scheduledtask.FieldSchedule:
+		case scheduledtask.FieldJobConfig, scheduledtask.FieldSchedule, scheduledtask.FieldSourceConfig:
 			values[i] = new([]byte)
 		case scheduledtask.FieldEnabled, scheduledtask.FieldManagedCopy:
 			values[i] = new(sql.NullBool)
@@ -189,6 +191,14 @@ func (_m *ScheduledTask) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field schedule: %w", err)
 				}
 			}
+		case scheduledtask.FieldSourceConfig:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field source_config", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.SourceConfig); err != nil {
+					return fmt.Errorf("unmarshal field source_config: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -274,6 +284,9 @@ func (_m *ScheduledTask) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("schedule=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Schedule))
+	builder.WriteString(", ")
+	builder.WriteString("source_config=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SourceConfig))
 	builder.WriteByte(')')
 	return builder.String()
 }
