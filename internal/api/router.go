@@ -79,6 +79,7 @@ type Handlers struct {
 	MeterUsage               *v1.MeterUsageHandler
 	CheckoutSession          *v1.CheckoutSessionHandler
 	Analytics                *v1.AnalyticsHandler
+	CostAnalytics            *v1.CostAnalyticsHandler
 
 	// Enterprise handlers
 	SAML *saml.Handler
@@ -267,6 +268,7 @@ func NewRouter(
 		{
 			analytics.POST("/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.Query)
 			analytics.POST("/revenue", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.GetRevenueAnalytics)
+			analytics.POST("/cost/query", read(types.EntityAnalytics, types.ActionRead), handlers.CostAnalytics.Query)
 			analytics.POST("/views", write(types.EntityAnalytics, types.ActionWrite), handlers.Analytics.CreateView)
 			analytics.GET("/views", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.ListViews)
 			analytics.GET("/views/:id", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.GetView)

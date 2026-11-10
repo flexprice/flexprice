@@ -152,7 +152,9 @@ type Query struct {
 	Sort                Sort
 	Metrics             []Metric
 	Deduplicate         bool
-	Limit, Offset       int
+	// WithLineItemIDs adds the line items behind each row, for expanding rows to prices and plans.
+	WithLineItemIDs bool
+	Limit, Offset   int
 }
 
 // Validate checks the parts of the query the SQL builder relies on.
@@ -268,12 +270,13 @@ type LineWindow struct {
 // Row is one group of the result. Group values follow Query.GroupBy; an empty value means the
 // events had no such key.
 type Row struct {
-	Group      []string
-	Cost       decimal.Decimal // unrounded
-	Quantity   decimal.Decimal
-	EventCount uint64
-	Columns    map[string]decimal.Decimal // cost per column value, when columns are requested
-	Metrics    map[string]MetricValue     // keyed by Metric.Name()
+	Group       []string
+	Cost        decimal.Decimal // unrounded
+	Quantity    decimal.Decimal
+	EventCount  uint64
+	Columns     map[string]decimal.Decimal // cost per column value, when columns are requested
+	Metrics     map[string]MetricValue     // keyed by Metric.Name()
+	LineItemIDs []string                   // with Query.WithLineItemIDs
 }
 
 // MetricValue is one metric of a row.

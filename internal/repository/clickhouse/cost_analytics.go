@@ -82,6 +82,7 @@ func (r *costAnalyticsRepository) run(ctx context.Context, params *costanalytics
 			cost, qty               string
 			events                  uint64
 			columns                 map[string]string
+			lineIDs                 []string
 			metricCounts            = make([]uint64, len(q.Metrics))
 			metricValues            = make([][]string, len(q.Metrics))
 			totalCount, totalEvents uint64
@@ -96,6 +97,9 @@ func (r *costAnalyticsRepository) run(ctx context.Context, params *costanalytics
 		targets = append(targets, &cost, &qty, &events)
 		if q.Columns != nil {
 			targets = append(targets, &columns)
+		}
+		if q.WithLineItemIDs {
+			targets = append(targets, &lineIDs)
 		}
 		for i := range q.Metrics {
 			targets = append(targets, &metricCounts[i], &metricValues[i])
@@ -137,6 +141,10 @@ func (r *costAnalyticsRepository) run(ctx context.Context, params *costanalytics
 			EventCount: events,
 			Columns:    decMap(columns),
 			Metrics:    make(map[string]costanalytics.MetricValue, len(q.Metrics)),
+		}
+		if q.WithLineItemIDs {
+			sort.Strings(lineIDs)
+			row.LineItemIDs = lineIDs
 		}
 		for i, m := range q.Metrics {
 			v := costanalytics.MetricValue{Count: metricCounts[i]}

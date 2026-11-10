@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/costanalytics"
 	"github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_application"
@@ -356,6 +357,10 @@ func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 
 func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
 	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
+}
+
+func NewCostAnalyticsRepository(p RepositoryParams) costanalytics.Repository {
+	return clickhouseRepo.NewCostAnalyticsRepository(p.ClickHouseDB, p.Logger)
 }
 
 func NewActivityRepository(p RepositoryParams) domainActivity.Repository {

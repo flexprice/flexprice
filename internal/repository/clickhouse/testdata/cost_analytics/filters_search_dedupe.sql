@@ -13,6 +13,7 @@ lines AS (
 priced AS (
     SELECT
         mu.qty_total AS qty,
+        l.line_id AS line_id,
         toDecimal256(mu.qty_total, 15) * l.unit_price AS cost,
         if(JSONType(mu.properties, 'user') = 'String', JSONExtractString(mu.properties, 'user'), JSONExtractRaw(mu.properties, 'user')) AS k0,
         toString(mu.source) AS k1,

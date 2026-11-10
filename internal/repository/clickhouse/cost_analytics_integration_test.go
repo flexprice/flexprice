@@ -140,10 +140,11 @@ func randomCostQuery(rng *rand.Rand, dedupe bool) *costanalytics.Query {
 
 	q := &costanalytics.Query{
 		Start: oct1, End: nov1, Timezone: time.UTC,
-		GroupBy:     pick(1 + rng.Intn(3)),
-		Deduplicate: dedupe,
-		Limit:       1 + rng.Intn(8),
-		Offset:      rng.Intn(10),
+		GroupBy:         pick(1 + rng.Intn(3)),
+		Deduplicate:     dedupe,
+		WithLineItemIDs: rng.Intn(2) == 0,
+		Limit:           1 + rng.Intn(8),
+		Offset:          rng.Intn(10),
 		Sort: costanalytics.Sort{
 			Field: []costanalytics.SortField{costanalytics.SortTotal, costanalytics.SortName, costanalytics.SortUsage, costanalytics.SortEventCount}[rng.Intn(4)],
 			Desc:  rng.Intn(2) == 0,
@@ -262,6 +263,7 @@ func requireSameCostRow(t *testing.T, label string, want, got costanalytics.Row)
 	require.True(t, want.Cost.Equal(got.Cost), "%s cost: want %s got %s", label, want.Cost, got.Cost)
 	require.True(t, want.Quantity.Equal(got.Quantity), "%s quantity: want %s got %s", label, want.Quantity, got.Quantity)
 	require.Equal(t, want.EventCount, got.EventCount, "%s event_count", label)
+	require.Equal(t, want.LineItemIDs, got.LineItemIDs, "%s line item ids", label)
 	require.Len(t, got.Columns, len(want.Columns), "%s columns: want %v got %v", label, want.Columns, got.Columns)
 	for k, v := range want.Columns {
 		require.True(t, v.Equal(got.Columns[k]), "%s column %q: want %s got %s", label, k, v, got.Columns[k])

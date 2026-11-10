@@ -156,6 +156,7 @@ func (b *costSQLBuilder) pricedCTE() string {
 
 	cols := []string{
 		"mu.qty_total AS qty",
+		"l.line_id AS line_id",
 		fmt.Sprintf("toDecimal256(mu.qty_total, %d) * l.unit_price AS cost", costQtyScale),
 	}
 	for i, k := range b.keys {
@@ -192,6 +193,9 @@ func (b *costSQLBuilder) groupedCTE() string {
 	cols = append(cols, "sum(cost) AS g_cost", "sum(qty) AS g_qty", "count() AS g_events")
 	if b.query.Columns != nil {
 		cols = append(cols, fmt.Sprintf("sumMap(map(%s, cost)) AS g_columns", b.alias(*b.query.Columns)))
+	}
+	if b.query.WithLineItemIDs {
+		cols = append(cols, "groupUniqArray(line_id) AS g_line_ids")
 	}
 	for i, m := range b.query.Metrics {
 		a := b.alias(m.Key)
@@ -240,6 +244,9 @@ func (b *costSQLBuilder) outerSelect() string {
 	cols = append(cols, "toString(g_cost)", "toString(g_qty)", "g_events")
 	if b.query.Columns != nil {
 		cols = append(cols, "mapApply((k, v) -> (k, toString(v)), g_columns)")
+	}
+	if b.query.WithLineItemIDs {
+		cols = append(cols, "g_line_ids")
 	}
 	for i := range b.query.Metrics {
 		cols = append(cols, fmt.Sprintf("m%d_count", i), fmt.Sprintf("m%d_values", i))

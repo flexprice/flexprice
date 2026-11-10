@@ -24,6 +24,7 @@ func NewInMemoryCostAnalyticsStore(usage *InMemoryMeterUsageStore) *InMemoryCost
 }
 
 type pricedEvent struct {
+	lineID    string
 	qty, cost decimal.Decimal
 	keys      map[costanalytics.Key]string
 }
@@ -31,6 +32,7 @@ type pricedEvent struct {
 type costGroup struct {
 	row     costanalytics.Row
 	metrics []map[string]bool
+	lines   map[string]bool
 }
 
 func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params *costanalytics.QueryParams) (*costanalytics.Result, error) {
@@ -55,6 +57,7 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 			g = &costGroup{
 				row:     costanalytics.Row{Group: group, Cost: decimal.Zero, Quantity: decimal.Zero, Metrics: map[string]costanalytics.MetricValue{}},
 				metrics: make([]map[string]bool, len(q.Metrics)),
+				lines:   map[string]bool{},
 			}
 			for i := range g.metrics {
 				g.metrics[i] = map[string]bool{}
@@ -67,6 +70,7 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 		g.row.Cost = g.row.Cost.Add(ev.cost)
 		g.row.Quantity = g.row.Quantity.Add(ev.qty)
 		g.row.EventCount++
+		g.lines[ev.lineID] = true
 		if q.Columns != nil {
 			c := ev.keys[*q.Columns]
 			g.row.Columns[c] = g.row.Columns[c].Add(ev.cost)
@@ -94,6 +98,10 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 				sort.Strings(v.Values)
 			}
 			g.row.Metrics[m.Name()] = v
+		}
+		if q.WithLineItemIDs {
+			g.row.LineItemIDs = lo.Keys(g.lines)
+			sort.Strings(g.row.LineItemIDs)
 		}
 		totals.Cost = totals.Cost.Add(g.row.Cost)
 		totals.Quantity = totals.Quantity.Add(g.row.Quantity)
@@ -141,9 +149,10 @@ func (s *InMemoryCostAnalyticsStore) pricedEvents(params *costanalytics.QueryPar
 			}
 			qty := r.QtyTotal.Truncate(15)
 			out = append(out, pricedEvent{
-				qty:  qty,
-				cost: qty.Mul(l.UnitPrice),
-				keys: costKeyValues(q, r, l, ts),
+				lineID: l.LineItemID,
+				qty:    qty,
+				cost:   qty.Mul(l.UnitPrice),
+				keys:   costKeyValues(q, r, l, ts),
 			})
 		}
 	}

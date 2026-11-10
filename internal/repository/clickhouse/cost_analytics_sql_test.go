@@ -116,6 +116,7 @@ func TestBuildCostBreakdownSQL_Golden(t *testing.T) {
 					{Type: costanalytics.MetricDistinct, Key: keyUser},
 				}
 				q.Sort = costanalytics.Sort{Field: costanalytics.SortColumn, Column: "run", Desc: true}
+				q.WithLineItemIDs = true
 			}),
 			lines: []costanalytics.LineWindow{
 				goldenLine("li_1", "m_tokens", oct1, nov1, "0.002"),

@@ -13,6 +13,7 @@ lines AS (
 priced AS (
     SELECT
         mu.qty_total AS qty,
+        l.line_id AS line_id,
         toDecimal256(mu.qty_total, 15) * l.unit_price AS cost,
         l.feature_id AS k0,
         if(JSONType(mu.properties, 'app') = 'String', JSONExtractString(mu.properties, 'app'), JSONExtractRaw(mu.properties, 'app')) AS k1,
@@ -36,6 +37,7 @@ grouped AS (
         sum(qty) AS g_qty,
         count() AS g_events,
         sumMap(map(k1, cost)) AS g_columns,
+        groupUniqArray(line_id) AS g_line_ids,
         uniqExactIf(k2, k2 != '') AS m0_count,
         groupUniqArrayIf(6)(k2, k2 != '') AS m0_values,
         uniqExactIf(k3, k3 != '') AS m1_count,
@@ -49,6 +51,7 @@ SELECT
     toString(g_qty),
     g_events,
     mapApply((k, v) -> (k, toString(v)), g_columns),
+    g_line_ids,
     m0_count,
     m0_values,
     m1_count,
