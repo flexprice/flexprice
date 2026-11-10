@@ -117,6 +117,7 @@ func TestExport_ManagedCopyRejectsForeignPrefix(t *testing.T) {
 		{"other env", platformCfg("exports/t1/e2/st_1")},
 		{"no exports root", platformCfg("t1/e1/st_1")},
 		{"prefix without trailing scope", platformCfg("exports/t1/e1")},
+		{"dot-dot traversal", platformCfg("exports/t1/e1/../e2/st_1")},
 		{"foreign bucket", &types.S3JobConfig{Bucket: "customer-bucket", Provider: types.SecretProviderS3, KeyPrefix: "exports/t1/e1/st_1"}},
 		{"provider mismatch", &types.S3JobConfig{Bucket: "platform-bucket", Provider: types.SecretProviderGCS, KeyPrefix: "exports/t1/e1/st_1"}},
 	}

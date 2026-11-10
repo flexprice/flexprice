@@ -256,7 +256,7 @@ type ExportRequest struct {
 	JobConfig    *types.S3JobConfig            `json:"job_config"` // S3 job configuration from scheduled_tasks
 	// Only exports that support it read this; empty means every customer.
 	CustomerExternalIDs []string `json:"customer_external_ids,omitempty"`
-	// Writes to the Flexprice bucket; no connection is used.
+	// Writes to the Flexprice bucket.
 	ManagedCopy bool `json:"managed_copy,omitempty"`
 }
 

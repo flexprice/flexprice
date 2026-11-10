@@ -322,7 +322,7 @@ func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.Exp
 	return s.storageResolver.ForConnectionExport(ctx, request.ConnectionID, request.JobConfig)
 }
 
-// resolvePlatformExportStore returns the Flexprice bucket after checking the job config targets it and this tenant's prefix.
+// Platform store, validated against job config.
 func (s *ExportService) resolvePlatformExportStore(ctx context.Context, request *dto.ExportRequest) (storage.Storage, error) {
 	store, err := s.storageResolver.ForPlatform(ctx, storage.PurposeExport)
 	if err != nil {
@@ -340,7 +340,7 @@ func (s *ExportService) resolvePlatformExportStore(ctx context.Context, request 
 		cfgProvider = types.SecretProviderS3
 	}
 	prefix := fmt.Sprintf("exports/%s/%s/", types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
-	if cfg.Bucket != bucket || string(cfgProvider) != string(store.Provider()) || !strings.HasPrefix(cfg.KeyPrefix, prefix) {
+	if cfg.Bucket != bucket || string(cfgProvider) != string(store.Provider()) || !strings.HasPrefix(cfg.KeyPrefix, prefix) || strings.Contains(cfg.KeyPrefix, "..") {
 		return nil, ierr.NewError("managed export destination mismatch").
 			WithHint("job config does not match the Flexprice export bucket or tenant prefix").
 			Mark(ierr.ErrValidation)
