@@ -574,6 +574,10 @@ type fakeSettingsService struct {
 	listTenantID string
 	listResp     *admindto.ListSettingsResponse
 	listErr      error
+
+	getTenantID      string
+	getEnvironmentID string
+	getKey           types.SettingKey
 }
 
 func (f *fakeSettingsService) UpdateTenantConfig(_ context.Context, req admindto.UpdateTenantConfigRequest) (*admindto.TenantConfigResponse, error) {
@@ -582,9 +586,14 @@ func (f *fakeSettingsService) UpdateTenantConfig(_ context.Context, req admindto
 	return f.resp, f.err
 }
 
-func (f *fakeSettingsService) ListTenantSettings(_ context.Context, tenantID string) (*admindto.ListSettingsResponse, error) {
+func (f *fakeSettingsService) ListTenantSettings(_ context.Context, tenantID, _ string) (*admindto.ListSettingsResponse, error) {
 	f.listTenantID = tenantID
 	return f.listResp, f.listErr
+}
+
+func (f *fakeSettingsService) GetTenantSetting(_ context.Context, tenantID, environmentID string, key types.SettingKey) (*admindto.SettingResponse, error) {
+	f.getTenantID, f.getEnvironmentID, f.getKey = tenantID, environmentID, key
+	return &admindto.SettingResponse{Key: key}, nil
 }
 
 func newSettingsTestServer(settings *fakeSettingsService) *Server {
@@ -783,4 +792,19 @@ func TestListTenantSettingsRoute(t *testing.T) {
 			assert.Equal(t, tt.wantTenantID, fake.listTenantID)
 		})
 	}
+}
+
+func TestGetTenantSettingRoute(t *testing.T) {
+	fake := &fakeSettingsService{}
+	server := newSettingsTestServer(fake)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/tenants/tenant_1/settings/invoice_config?environment_id=env_1", nil)
+	req.Header.Set(secretHeader, "test-secret")
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "tenant_1", fake.getTenantID)
+	assert.Equal(t, "env_1", fake.getEnvironmentID)
+	assert.Equal(t, types.SettingKeyInvoiceConfig, fake.getKey)
 }

@@ -392,6 +392,8 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.CommitmentsV2Config](s, ctx, key)
 	case types.SettingKeyRevenueRecognitionConfig:
 		return getSettingByKey[types.RevenueRecognitionConfig](s, ctx, key)
+	case types.SettingKeyRevenueAnalyticsConfig:
+		return getSettingByKey[types.RevenueAnalyticsConfig](s, ctx, key)
 	case types.SettingKeyBillingEntityConfig:
 		return getSettingByKey[types.BillingEntityConfig](s, ctx, key)
 	default:

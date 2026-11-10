@@ -9,7 +9,6 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	tmodels "github.com/flexprice/flexprice/internal/temporal/models"
-	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/stretchr/testify/require"
@@ -42,11 +41,7 @@ func (f *fakeBackfillRuns) describe(context.Context, string, string) (*replayRun
 func newRevenueRecognitionTestService(t *testing.T) (*revenueRecognitionService, *fakeBackfillRuns, *settingsTestDeps) {
 	t.Helper()
 	d := newSettingsTestDeps(t)
-	envs := testutil.NewInMemoryEnvironmentStore()
-	ctx := types.SetTenantID(context.Background(), settingsTenantID)
-	require.NoError(t, envs.Create(ctx, &environment.Environment{ID: revrecEnvironmentID, Name: "Production",
-		BaseModel: types.BaseModel{TenantID: settingsTenantID, Status: types.StatusPublished}}))
-	d.params.EnvironmentRepo = envs
+	d.withEnvironment(t, settingsTenantID, revrecEnvironmentID)
 
 	runs := &fakeBackfillRuns{}
 	return &revenueRecognitionService{ServiceParams: d.params, settings: service.NewSettingsService(d.params), runs: runs}, runs, d

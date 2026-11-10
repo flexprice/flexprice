@@ -8,6 +8,7 @@ import (
 
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/ee/service"
@@ -226,6 +227,18 @@ func (d *settingsTestDeps) storeSetting(t *testing.T, tenantID string, key types
 	}))
 }
 
+// withEnvironment saves an environment owned by tenantID.
+func (d *settingsTestDeps) withEnvironment(t *testing.T, tenantID, environmentID string) {
+	t.Helper()
+	envs, ok := d.params.EnvironmentRepo.(*testutil.InMemoryEnvironmentStore)
+	if !ok {
+		envs = testutil.NewInMemoryEnvironmentStore()
+		d.params.EnvironmentRepo = envs
+	}
+	require.NoError(t, envs.Create(types.SetTenantID(context.Background(), tenantID), &environment.Environment{ID: environmentID, Name: "Production",
+		BaseModel: types.BaseModel{TenantID: tenantID, Status: types.StatusPublished}}))
+}
+
 // withSAML switches SAML on for the deployment, as auth.saml.enabled does.
 func (d *settingsTestDeps) withSAML() {
 	d.params.Config = &config.Configuration{}
@@ -267,7 +280,7 @@ func TestListTenantSettings(t *testing.T) {
 				tt.setup(t, d)
 			}
 
-			resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID)
+			resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID, "")
 
 			require.NoError(t, err)
 			body, err := json.Marshal(resp)
@@ -290,7 +303,7 @@ func TestListTenantSettingsWithSAML(t *testing.T) {
 		d := newSettingsTestDeps(t)
 		d.withSAML()
 
-		resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID)
+		resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID, "")
 
 		require.NoError(t, err)
 		saml := samlItem(t, resp)
@@ -304,7 +317,7 @@ func TestListTenantSettingsWithSAML(t *testing.T) {
 		d.storeSetting(t, settingsTenantID, types.SettingKeySAMLConfig,
 			map[string]interface{}{"enabled": true, "default_role": "all_writer"}, time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC))
 
-		resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID)
+		resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID, "")
 
 		require.NoError(t, err)
 		saml := samlItem(t, resp)
@@ -320,7 +333,7 @@ func TestListTenantSettingsUnknownTenant(t *testing.T) {
 	d := newSettingsTestDeps(t)
 	d.params.TenantRepo = notFoundTenantStore{InMemoryTenantStore: d.tenants}
 
-	resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), "tenant_missing")
+	resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), "tenant_missing", "")
 
 	require.Error(t, err)
 	assert.True(t, ierr.IsNotFound(err))
@@ -340,9 +353,81 @@ func TestListTenantSettingsReadError(t *testing.T) {
 	d := newSettingsTestDeps(t)
 	d.params.SettingsRepo = failingSettingsReadStore{InMemorySettingsStore: d.settings}
 
-	resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID)
+	resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID, "")
 
 	require.Error(t, err)
 	assert.True(t, ierr.IsDatabase(err))
 	assert.Nil(t, resp)
+}
+
+func TestListTenantSettingsForEnvironment(t *testing.T) {
+	t.Run("lists the tenant-wide keys first, then every setting of the environment", func(t *testing.T) {
+		d := newSettingsTestDeps(t)
+		d.withEnvironment(t, settingsTenantID, revrecEnvironmentID)
+		ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), settingsTenantID), revrecEnvironmentID)
+		require.NoError(t, d.settings.Create(ctx, &settings.Setting{
+			ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING), Key: types.SettingKeyInvoiceConfig, EnvironmentID: revrecEnvironmentID,
+			Value:     map[string]interface{}{"prefix": "ACME"},
+			BaseModel: types.BaseModel{TenantID: settingsTenantID, Status: types.StatusPublished},
+		}))
+
+		resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID, revrecEnvironmentID)
+
+		require.NoError(t, err)
+		defaults, err := types.GetDefaultSettings()
+		require.NoError(t, err)
+		keys := lo.Map(resp.Items, func(item *admindto.SettingResponse, _ int) types.SettingKey { return item.Key })
+		assert.Len(t, keys, len(defaults)-1, "every key but saml_config, which is off")
+		assert.Equal(t, types.SettingKeyTenantConfig, keys[0])
+		invoice, ok := lo.Find(resp.Items, func(item *admindto.SettingResponse) bool { return item.Key == types.SettingKeyInvoiceConfig })
+		require.True(t, ok)
+		assert.False(t, invoice.IsDefault)
+		assert.Equal(t, "ACME", invoice.Value["prefix"])
+	})
+
+	t.Run("an environment of another tenant is not found", func(t *testing.T) {
+		d := newSettingsTestDeps(t)
+		d.withEnvironment(t, "tenant_other", "env_other")
+
+		resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID, "env_other")
+
+		require.Error(t, err)
+		assert.True(t, ierr.IsNotFound(err))
+		assert.Nil(t, resp)
+	})
+}
+
+func TestGetTenantSetting(t *testing.T) {
+	tests := []struct {
+		name          string
+		environmentID string
+		key           types.SettingKey
+		wantErr       func(error) bool
+	}{
+		{name: "a tenant-wide key needs no environment", key: types.SettingKeyTenantConfig},
+		{name: "an environment key is read from the environment", environmentID: revrecEnvironmentID, key: types.SettingKeyRevenueAnalyticsConfig},
+		{name: "an environment key without an environment", key: types.SettingKeyInvoiceConfig, wantErr: ierr.IsValidation},
+		{name: "an unknown key", environmentID: revrecEnvironmentID, key: "no_such_key", wantErr: ierr.IsValidation},
+		{name: "saml_config while SAML is off", key: types.SettingKeySAMLConfig, wantErr: ierr.IsNotFound},
+		{name: "an environment of another tenant", environmentID: "env_other", key: types.SettingKeyInvoiceConfig, wantErr: ierr.IsNotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := newSettingsTestDeps(t)
+			d.withEnvironment(t, settingsTenantID, revrecEnvironmentID)
+			d.withEnvironment(t, "tenant_other", "env_other")
+
+			resp, err := newTestSettingsService(d.params).GetTenantSetting(context.Background(), settingsTenantID, tt.environmentID, tt.key)
+
+			if tt.wantErr != nil {
+				require.Error(t, err)
+				assert.True(t, tt.wantErr(err))
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.key, resp.Key)
+			assert.True(t, resp.IsDefault)
+		})
+	}
 }

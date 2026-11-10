@@ -115,7 +115,7 @@ func NewSettingResponse(setting *dto.SettingResponse) *SettingResponse {
 	}
 	resp := &SettingResponse{Key: setting.Key, Value: setting.Value, IsDefault: setting.ID == ""}
 	if !resp.IsDefault {
-		resp.UpdatedAt = setting.UpdatedAt.UTC().Format(time.RFC3339)
+		resp.UpdatedAt = setting.UpdatedAt.UTC().Format(time.RFC3339Nano)
 	}
 	return resp
 }

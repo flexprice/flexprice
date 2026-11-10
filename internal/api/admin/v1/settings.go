@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto/admin"
 	adminsvc "github.com/flexprice/flexprice/internal/ee/service/admin"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -36,7 +37,17 @@ func (h *SettingsHandler) UpdateTenantConfig(c *gin.Context) {
 }
 
 func (h *SettingsHandler) ListTenantSettings(c *gin.Context) {
-	resp, err := h.service.ListTenantSettings(c.Request.Context(), c.Param("tenant_id"))
+	resp, err := h.service.ListTenantSettings(c.Request.Context(), c.Param("tenant_id"), c.Query("environment_id"))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *SettingsHandler) GetTenantSetting(c *gin.Context) {
+	resp, err := h.service.GetTenantSetting(c.Request.Context(), c.Param("tenant_id"), c.Query("environment_id"), types.SettingKey(c.Param("key")))
 	if err != nil {
 		c.Error(err)
 		return

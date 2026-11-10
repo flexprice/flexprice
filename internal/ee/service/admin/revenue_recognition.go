@@ -45,7 +45,7 @@ func (s *revenueRecognitionService) UpdateConfig(ctx context.Context, req admind
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	ctx, err := s.environmentContext(ctx, req.TenantID, req.EnvironmentID)
+	ctx, err := environmentContext(ctx, s.ServiceParams, req.TenantID, req.EnvironmentID)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (s *revenueRecognitionService) StartBackfill(ctx context.Context, req admin
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	ctx, err := s.environmentContext(ctx, req.TenantID, req.EnvironmentID)
+	ctx, err := environmentContext(ctx, s.ServiceParams, req.TenantID, req.EnvironmentID)
 	if err != nil {
 		return nil, err
 	}
@@ -127,26 +127,6 @@ func (s *revenueRecognitionService) startBackfill(ctx context.Context, tenantID,
 
 	s.Logger.Info(ctx, "revenue recognition backfill started", "workflow_id", workflowID, "run_id", runID, "tenant_id", tenantID, "environment_id", environmentID)
 	return &admindto.RevenueRecognitionBackfillRun{WorkflowID: workflowID, RunID: runID, Status: admindto.ReplayStatusQueued}, nil
-}
-
-// environmentContext is ctx scoped to the environment, once the tenant exists and owns it.
-func (s *revenueRecognitionService) environmentContext(ctx context.Context, tenantID, environmentID string) (context.Context, error) {
-	if _, err := s.TenantRepo.GetByID(ctx, tenantID); err != nil {
-		return nil, err
-	}
-
-	ctx = types.SetTenantID(ctx, tenantID)
-	env, err := s.EnvironmentRepo.Get(ctx, environmentID)
-	if err != nil {
-		return nil, err
-	}
-	if env.TenantID != tenantID {
-		return nil, ierr.NewError("environment not found").
-			WithHint("The environment does not belong to this tenant").
-			Mark(ierr.ErrNotFound)
-	}
-
-	return types.SetEnvironmentID(ctx, environmentID), nil
 }
 
 type temporalBackfillRuns struct{ temporalReplayRuns }

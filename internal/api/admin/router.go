@@ -71,6 +71,7 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 				tenantByID.GET("/environments", handlers.Environment.ListEnvironments)
 				tenantByID.GET("/users", handlers.User.ListUsersForTenant)
 				tenantByID.GET("/settings", handlers.Settings.ListTenantSettings)
+				tenantByID.GET("/settings/:key", handlers.Settings.GetTenantSetting)
 			}
 		}
 
