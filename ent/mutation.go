@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/ent/alertsettings"
 	"github.com/flexprice/flexprice/ent/analyticsview"
 	"github.com/flexprice/flexprice/ent/auth"
+	"github.com/flexprice/flexprice/ent/billingentity"
 	"github.com/flexprice/flexprice/ent/billinginstalment"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/billingterm"
@@ -105,6 +106,7 @@ const (
 	TypeAlertSettings                    = "AlertSettings"
 	TypeAnalyticsView                    = "AnalyticsView"
 	TypeAuth                             = "Auth"
+	TypeBillingEntity                    = "BillingEntity"
 	TypeBillingInstalment                = "BillingInstalment"
 	TypeBillingSequence                  = "BillingSequence"
 	TypeBillingTerm                      = "BillingTerm"
@@ -7375,6 +7377,1011 @@ func (m *AuthMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Auth edge %s", name)
 }
 
+// BillingEntityMutation represents an operation that mutates the BillingEntity nodes in the graph.
+type BillingEntityMutation struct {
+	config
+	op                    Op
+	typ                   string
+	id                    *string
+	tenant_id             *string
+	status                *string
+	created_at            *time.Time
+	updated_at            *time.Time
+	created_by            *string
+	updated_by            *string
+	environment_id        *string
+	name                  *string
+	is_default            *bool
+	invoice_number_prefix *string
+	billing_details       *types.BillingDetails
+	metadata              *map[string]string
+	clearedFields         map[string]struct{}
+	done                  bool
+	oldValue              func(context.Context) (*BillingEntity, error)
+	predicates            []predicate.BillingEntity
+}
+
+var _ ent.Mutation = (*BillingEntityMutation)(nil)
+
+// billingentityOption allows management of the mutation configuration using functional options.
+type billingentityOption func(*BillingEntityMutation)
+
+// newBillingEntityMutation creates new mutation for the BillingEntity entity.
+func newBillingEntityMutation(c config, op Op, opts ...billingentityOption) *BillingEntityMutation {
+	m := &BillingEntityMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBillingEntity,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBillingEntityID sets the ID field of the mutation.
+func withBillingEntityID(id string) billingentityOption {
+	return func(m *BillingEntityMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BillingEntity
+		)
+		m.oldValue = func(ctx context.Context) (*BillingEntity, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BillingEntity.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBillingEntity sets the old BillingEntity of the mutation.
+func withBillingEntity(node *BillingEntity) billingentityOption {
+	return func(m *BillingEntityMutation) {
+		m.oldValue = func(context.Context) (*BillingEntity, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BillingEntityMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BillingEntityMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of BillingEntity entities.
+func (m *BillingEntityMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BillingEntityMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BillingEntityMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BillingEntity.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *BillingEntityMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *BillingEntityMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *BillingEntityMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *BillingEntityMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *BillingEntityMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *BillingEntityMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *BillingEntityMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *BillingEntityMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *BillingEntityMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *BillingEntityMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *BillingEntityMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *BillingEntityMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *BillingEntityMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *BillingEntityMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *BillingEntityMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[billingentity.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *BillingEntityMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[billingentity.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *BillingEntityMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, billingentity.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *BillingEntityMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *BillingEntityMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *BillingEntityMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[billingentity.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *BillingEntityMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[billingentity.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *BillingEntityMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, billingentity.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *BillingEntityMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *BillingEntityMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *BillingEntityMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[billingentity.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *BillingEntityMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[billingentity.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *BillingEntityMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, billingentity.FieldEnvironmentID)
+}
+
+// SetName sets the "name" field.
+func (m *BillingEntityMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *BillingEntityMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *BillingEntityMutation) ResetName() {
+	m.name = nil
+}
+
+// SetIsDefault sets the "is_default" field.
+func (m *BillingEntityMutation) SetIsDefault(b bool) {
+	m.is_default = &b
+}
+
+// IsDefault returns the value of the "is_default" field in the mutation.
+func (m *BillingEntityMutation) IsDefault() (r bool, exists bool) {
+	v := m.is_default
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsDefault returns the old "is_default" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldIsDefault(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsDefault is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsDefault requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsDefault: %w", err)
+	}
+	return oldValue.IsDefault, nil
+}
+
+// ResetIsDefault resets all changes to the "is_default" field.
+func (m *BillingEntityMutation) ResetIsDefault() {
+	m.is_default = nil
+}
+
+// SetInvoiceNumberPrefix sets the "invoice_number_prefix" field.
+func (m *BillingEntityMutation) SetInvoiceNumberPrefix(s string) {
+	m.invoice_number_prefix = &s
+}
+
+// InvoiceNumberPrefix returns the value of the "invoice_number_prefix" field in the mutation.
+func (m *BillingEntityMutation) InvoiceNumberPrefix() (r string, exists bool) {
+	v := m.invoice_number_prefix
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceNumberPrefix returns the old "invoice_number_prefix" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldInvoiceNumberPrefix(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceNumberPrefix is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceNumberPrefix requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceNumberPrefix: %w", err)
+	}
+	return oldValue.InvoiceNumberPrefix, nil
+}
+
+// ResetInvoiceNumberPrefix resets all changes to the "invoice_number_prefix" field.
+func (m *BillingEntityMutation) ResetInvoiceNumberPrefix() {
+	m.invoice_number_prefix = nil
+}
+
+// SetBillingDetails sets the "billing_details" field.
+func (m *BillingEntityMutation) SetBillingDetails(td types.BillingDetails) {
+	m.billing_details = &td
+}
+
+// BillingDetails returns the value of the "billing_details" field in the mutation.
+func (m *BillingEntityMutation) BillingDetails() (r types.BillingDetails, exists bool) {
+	v := m.billing_details
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingDetails returns the old "billing_details" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldBillingDetails(ctx context.Context) (v types.BillingDetails, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingDetails is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingDetails requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingDetails: %w", err)
+	}
+	return oldValue.BillingDetails, nil
+}
+
+// ResetBillingDetails resets all changes to the "billing_details" field.
+func (m *BillingEntityMutation) ResetBillingDetails() {
+	m.billing_details = nil
+}
+
+// SetMetadata sets the "metadata" field.
+func (m *BillingEntityMutation) SetMetadata(value map[string]string) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *BillingEntityMutation) Metadata() (r map[string]string, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldMetadata(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *BillingEntityMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[billingentity.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *BillingEntityMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[billingentity.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *BillingEntityMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, billingentity.FieldMetadata)
+}
+
+// Where appends a list predicates to the BillingEntityMutation builder.
+func (m *BillingEntityMutation) Where(ps ...predicate.BillingEntity) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BillingEntityMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BillingEntityMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BillingEntity, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BillingEntityMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BillingEntityMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BillingEntity).
+func (m *BillingEntityMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BillingEntityMutation) Fields() []string {
+	fields := make([]string, 0, 12)
+	if m.tenant_id != nil {
+		fields = append(fields, billingentity.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, billingentity.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, billingentity.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, billingentity.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, billingentity.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, billingentity.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, billingentity.FieldEnvironmentID)
+	}
+	if m.name != nil {
+		fields = append(fields, billingentity.FieldName)
+	}
+	if m.is_default != nil {
+		fields = append(fields, billingentity.FieldIsDefault)
+	}
+	if m.invoice_number_prefix != nil {
+		fields = append(fields, billingentity.FieldInvoiceNumberPrefix)
+	}
+	if m.billing_details != nil {
+		fields = append(fields, billingentity.FieldBillingDetails)
+	}
+	if m.metadata != nil {
+		fields = append(fields, billingentity.FieldMetadata)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BillingEntityMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case billingentity.FieldTenantID:
+		return m.TenantID()
+	case billingentity.FieldStatus:
+		return m.Status()
+	case billingentity.FieldCreatedAt:
+		return m.CreatedAt()
+	case billingentity.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case billingentity.FieldCreatedBy:
+		return m.CreatedBy()
+	case billingentity.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case billingentity.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case billingentity.FieldName:
+		return m.Name()
+	case billingentity.FieldIsDefault:
+		return m.IsDefault()
+	case billingentity.FieldInvoiceNumberPrefix:
+		return m.InvoiceNumberPrefix()
+	case billingentity.FieldBillingDetails:
+		return m.BillingDetails()
+	case billingentity.FieldMetadata:
+		return m.Metadata()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BillingEntityMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case billingentity.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case billingentity.FieldStatus:
+		return m.OldStatus(ctx)
+	case billingentity.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case billingentity.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case billingentity.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case billingentity.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case billingentity.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case billingentity.FieldName:
+		return m.OldName(ctx)
+	case billingentity.FieldIsDefault:
+		return m.OldIsDefault(ctx)
+	case billingentity.FieldInvoiceNumberPrefix:
+		return m.OldInvoiceNumberPrefix(ctx)
+	case billingentity.FieldBillingDetails:
+		return m.OldBillingDetails(ctx)
+	case billingentity.FieldMetadata:
+		return m.OldMetadata(ctx)
+	}
+	return nil, fmt.Errorf("unknown BillingEntity field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BillingEntityMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case billingentity.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case billingentity.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case billingentity.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case billingentity.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case billingentity.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case billingentity.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case billingentity.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case billingentity.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case billingentity.FieldIsDefault:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsDefault(v)
+		return nil
+	case billingentity.FieldInvoiceNumberPrefix:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceNumberPrefix(v)
+		return nil
+	case billingentity.FieldBillingDetails:
+		v, ok := value.(types.BillingDetails)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingDetails(v)
+		return nil
+	case billingentity.FieldMetadata:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BillingEntity field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BillingEntityMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BillingEntityMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BillingEntityMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown BillingEntity numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BillingEntityMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(billingentity.FieldCreatedBy) {
+		fields = append(fields, billingentity.FieldCreatedBy)
+	}
+	if m.FieldCleared(billingentity.FieldUpdatedBy) {
+		fields = append(fields, billingentity.FieldUpdatedBy)
+	}
+	if m.FieldCleared(billingentity.FieldEnvironmentID) {
+		fields = append(fields, billingentity.FieldEnvironmentID)
+	}
+	if m.FieldCleared(billingentity.FieldMetadata) {
+		fields = append(fields, billingentity.FieldMetadata)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BillingEntityMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BillingEntityMutation) ClearField(name string) error {
+	switch name {
+	case billingentity.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case billingentity.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case billingentity.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case billingentity.FieldMetadata:
+		m.ClearMetadata()
+		return nil
+	}
+	return fmt.Errorf("unknown BillingEntity nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BillingEntityMutation) ResetField(name string) error {
+	switch name {
+	case billingentity.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case billingentity.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case billingentity.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case billingentity.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case billingentity.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case billingentity.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case billingentity.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case billingentity.FieldName:
+		m.ResetName()
+		return nil
+	case billingentity.FieldIsDefault:
+		m.ResetIsDefault()
+		return nil
+	case billingentity.FieldInvoiceNumberPrefix:
+		m.ResetInvoiceNumberPrefix()
+		return nil
+	case billingentity.FieldBillingDetails:
+		m.ResetBillingDetails()
+		return nil
+	case billingentity.FieldMetadata:
+		m.ResetMetadata()
+		return nil
+	}
+	return fmt.Errorf("unknown BillingEntity field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BillingEntityMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BillingEntityMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BillingEntityMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BillingEntityMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BillingEntityMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BillingEntityMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BillingEntityMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown BillingEntity unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BillingEntityMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown BillingEntity edge %s", name)
+}
+
 // BillingInstalmentMutation represents an operation that mutates the BillingInstalment nodes in the graph.
 type BillingInstalmentMutation struct {
 	config
@@ -7405,6 +8412,7 @@ type BillingInstalmentMutation struct {
 	delivery             *types.InstalmentDelivery
 	instalment_status    *types.InstalmentStatus
 	invoice_id           *string
+	invoiced_at          *time.Time
 	metadata             *types.Metadata
 	clearedFields        map[string]struct{}
 	done                 bool
@@ -8471,6 +9479,55 @@ func (m *BillingInstalmentMutation) ResetInvoiceID() {
 	delete(m.clearedFields, billinginstalment.FieldInvoiceID)
 }
 
+// SetInvoicedAt sets the "invoiced_at" field.
+func (m *BillingInstalmentMutation) SetInvoicedAt(t time.Time) {
+	m.invoiced_at = &t
+}
+
+// InvoicedAt returns the value of the "invoiced_at" field in the mutation.
+func (m *BillingInstalmentMutation) InvoicedAt() (r time.Time, exists bool) {
+	v := m.invoiced_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoicedAt returns the old "invoiced_at" field's value of the BillingInstalment entity.
+// If the BillingInstalment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingInstalmentMutation) OldInvoicedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoicedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoicedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoicedAt: %w", err)
+	}
+	return oldValue.InvoicedAt, nil
+}
+
+// ClearInvoicedAt clears the value of the "invoiced_at" field.
+func (m *BillingInstalmentMutation) ClearInvoicedAt() {
+	m.invoiced_at = nil
+	m.clearedFields[billinginstalment.FieldInvoicedAt] = struct{}{}
+}
+
+// InvoicedAtCleared returns if the "invoiced_at" field was cleared in this mutation.
+func (m *BillingInstalmentMutation) InvoicedAtCleared() bool {
+	_, ok := m.clearedFields[billinginstalment.FieldInvoicedAt]
+	return ok
+}
+
+// ResetInvoicedAt resets all changes to the "invoiced_at" field.
+func (m *BillingInstalmentMutation) ResetInvoicedAt() {
+	m.invoiced_at = nil
+	delete(m.clearedFields, billinginstalment.FieldInvoicedAt)
+}
+
 // SetMetadata sets the "metadata" field.
 func (m *BillingInstalmentMutation) SetMetadata(t types.Metadata) {
 	m.metadata = &t
@@ -8554,7 +9611,7 @@ func (m *BillingInstalmentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BillingInstalmentMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, billinginstalment.FieldTenantID)
 	}
@@ -8627,6 +9684,9 @@ func (m *BillingInstalmentMutation) Fields() []string {
 	if m.invoice_id != nil {
 		fields = append(fields, billinginstalment.FieldInvoiceID)
 	}
+	if m.invoiced_at != nil {
+		fields = append(fields, billinginstalment.FieldInvoicedAt)
+	}
 	if m.metadata != nil {
 		fields = append(fields, billinginstalment.FieldMetadata)
 	}
@@ -8686,6 +9746,8 @@ func (m *BillingInstalmentMutation) Field(name string) (ent.Value, bool) {
 		return m.InstalmentStatus()
 	case billinginstalment.FieldInvoiceID:
 		return m.InvoiceID()
+	case billinginstalment.FieldInvoicedAt:
+		return m.InvoicedAt()
 	case billinginstalment.FieldMetadata:
 		return m.Metadata()
 	}
@@ -8745,6 +9807,8 @@ func (m *BillingInstalmentMutation) OldField(ctx context.Context, name string) (
 		return m.OldInstalmentStatus(ctx)
 	case billinginstalment.FieldInvoiceID:
 		return m.OldInvoiceID(ctx)
+	case billinginstalment.FieldInvoicedAt:
+		return m.OldInvoicedAt(ctx)
 	case billinginstalment.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -8924,6 +9988,13 @@ func (m *BillingInstalmentMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetInvoiceID(v)
 		return nil
+	case billinginstalment.FieldInvoicedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoicedAt(v)
+		return nil
 	case billinginstalment.FieldMetadata:
 		v, ok := value.(types.Metadata)
 		if !ok {
@@ -8982,6 +10053,9 @@ func (m *BillingInstalmentMutation) ClearedFields() []string {
 	if m.FieldCleared(billinginstalment.FieldInvoiceID) {
 		fields = append(fields, billinginstalment.FieldInvoiceID)
 	}
+	if m.FieldCleared(billinginstalment.FieldInvoicedAt) {
+		fields = append(fields, billinginstalment.FieldInvoicedAt)
+	}
 	if m.FieldCleared(billinginstalment.FieldMetadata) {
 		fields = append(fields, billinginstalment.FieldMetadata)
 	}
@@ -9019,6 +10093,9 @@ func (m *BillingInstalmentMutation) ClearField(name string) error {
 		return nil
 	case billinginstalment.FieldInvoiceID:
 		m.ClearInvoiceID()
+		return nil
+	case billinginstalment.FieldInvoicedAt:
+		m.ClearInvoicedAt()
 		return nil
 	case billinginstalment.FieldMetadata:
 		m.ClearMetadata()
@@ -9102,6 +10179,9 @@ func (m *BillingInstalmentMutation) ResetField(name string) error {
 		return nil
 	case billinginstalment.FieldInvoiceID:
 		m.ResetInvoiceID()
+		return nil
+	case billinginstalment.FieldInvoicedAt:
+		m.ResetInvoicedAt()
 		return nil
 	case billinginstalment.FieldMetadata:
 		m.ResetMetadata()
@@ -9739,35 +10819,36 @@ func (m *BillingSequenceMutation) ResetEdge(name string) error {
 // BillingTermMutation represents an operation that mutates the BillingTerm nodes in the graph.
 type BillingTermMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *string
-	tenant_id       *string
-	status          *string
-	created_at      *time.Time
-	updated_at      *time.Time
-	created_by      *string
-	updated_by      *string
-	environment_id  *string
-	owner_type      *types.BillingTermOwnerType
-	owner_id        *string
-	kind            *types.BillingTermKind
-	value_type      *types.BillingTermValueType
-	value           *decimal.Decimal
-	bill_trigger    *types.InstalmentBillTrigger
-	bill_on         *time.Time
-	start_date      *time.Time
-	end_date        *time.Time
-	period_count    *int
-	addperiod_count *int
-	invoice_cadence *types.InvoiceCadence
-	split           *types.BillingTermSplit
-	invoice_label   *string
-	metadata        *types.Metadata
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*BillingTerm, error)
-	predicates      []predicate.BillingTerm
+	op                   Op
+	typ                  string
+	id                   *string
+	tenant_id            *string
+	status               *string
+	created_at           *time.Time
+	updated_at           *time.Time
+	created_by           *string
+	updated_by           *string
+	environment_id       *string
+	owner_type           *types.BillingTermOwnerType
+	owner_id             *string
+	kind                 *types.BillingTermKind
+	value_type           *types.BillingTermValueType
+	value                *decimal.Decimal
+	bill_trigger         *types.InstalmentBillTrigger
+	bill_on              *time.Time
+	start_date           *time.Time
+	end_date             *time.Time
+	period_count         *int
+	addperiod_count      *int
+	invoice_cadence      *types.InvoiceCadence
+	split                *types.BillingTermSplit
+	instalment_invoicing *types.InstalmentDelivery
+	invoice_label        *string
+	metadata             *types.Metadata
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*BillingTerm, error)
+	predicates           []predicate.BillingTerm
 }
 
 var _ ent.Mutation = (*BillingTermMutation)(nil)
@@ -10722,6 +11803,55 @@ func (m *BillingTermMutation) ResetSplit() {
 	delete(m.clearedFields, billingterm.FieldSplit)
 }
 
+// SetInstalmentInvoicing sets the "instalment_invoicing" field.
+func (m *BillingTermMutation) SetInstalmentInvoicing(td types.InstalmentDelivery) {
+	m.instalment_invoicing = &td
+}
+
+// InstalmentInvoicing returns the value of the "instalment_invoicing" field in the mutation.
+func (m *BillingTermMutation) InstalmentInvoicing() (r types.InstalmentDelivery, exists bool) {
+	v := m.instalment_invoicing
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInstalmentInvoicing returns the old "instalment_invoicing" field's value of the BillingTerm entity.
+// If the BillingTerm object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingTermMutation) OldInstalmentInvoicing(ctx context.Context) (v *types.InstalmentDelivery, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInstalmentInvoicing is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInstalmentInvoicing requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInstalmentInvoicing: %w", err)
+	}
+	return oldValue.InstalmentInvoicing, nil
+}
+
+// ClearInstalmentInvoicing clears the value of the "instalment_invoicing" field.
+func (m *BillingTermMutation) ClearInstalmentInvoicing() {
+	m.instalment_invoicing = nil
+	m.clearedFields[billingterm.FieldInstalmentInvoicing] = struct{}{}
+}
+
+// InstalmentInvoicingCleared returns if the "instalment_invoicing" field was cleared in this mutation.
+func (m *BillingTermMutation) InstalmentInvoicingCleared() bool {
+	_, ok := m.clearedFields[billingterm.FieldInstalmentInvoicing]
+	return ok
+}
+
+// ResetInstalmentInvoicing resets all changes to the "instalment_invoicing" field.
+func (m *BillingTermMutation) ResetInstalmentInvoicing() {
+	m.instalment_invoicing = nil
+	delete(m.clearedFields, billingterm.FieldInstalmentInvoicing)
+}
+
 // SetInvoiceLabel sets the "invoice_label" field.
 func (m *BillingTermMutation) SetInvoiceLabel(s string) {
 	m.invoice_label = &s
@@ -10854,7 +11984,7 @@ func (m *BillingTermMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BillingTermMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 22)
 	if m.tenant_id != nil {
 		fields = append(fields, billingterm.FieldTenantID)
 	}
@@ -10912,6 +12042,9 @@ func (m *BillingTermMutation) Fields() []string {
 	if m.split != nil {
 		fields = append(fields, billingterm.FieldSplit)
 	}
+	if m.instalment_invoicing != nil {
+		fields = append(fields, billingterm.FieldInstalmentInvoicing)
+	}
 	if m.invoice_label != nil {
 		fields = append(fields, billingterm.FieldInvoiceLabel)
 	}
@@ -10964,6 +12097,8 @@ func (m *BillingTermMutation) Field(name string) (ent.Value, bool) {
 		return m.InvoiceCadence()
 	case billingterm.FieldSplit:
 		return m.Split()
+	case billingterm.FieldInstalmentInvoicing:
+		return m.InstalmentInvoicing()
 	case billingterm.FieldInvoiceLabel:
 		return m.InvoiceLabel()
 	case billingterm.FieldMetadata:
@@ -11015,6 +12150,8 @@ func (m *BillingTermMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldInvoiceCadence(ctx)
 	case billingterm.FieldSplit:
 		return m.OldSplit(ctx)
+	case billingterm.FieldInstalmentInvoicing:
+		return m.OldInstalmentInvoicing(ctx)
 	case billingterm.FieldInvoiceLabel:
 		return m.OldInvoiceLabel(ctx)
 	case billingterm.FieldMetadata:
@@ -11161,6 +12298,13 @@ func (m *BillingTermMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSplit(v)
 		return nil
+	case billingterm.FieldInstalmentInvoicing:
+		v, ok := value.(types.InstalmentDelivery)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInstalmentInvoicing(v)
+		return nil
 	case billingterm.FieldInvoiceLabel:
 		v, ok := value.(string)
 		if !ok {
@@ -11253,6 +12397,9 @@ func (m *BillingTermMutation) ClearedFields() []string {
 	if m.FieldCleared(billingterm.FieldSplit) {
 		fields = append(fields, billingterm.FieldSplit)
 	}
+	if m.FieldCleared(billingterm.FieldInstalmentInvoicing) {
+		fields = append(fields, billingterm.FieldInstalmentInvoicing)
+	}
 	if m.FieldCleared(billingterm.FieldInvoiceLabel) {
 		fields = append(fields, billingterm.FieldInvoiceLabel)
 	}
@@ -11305,6 +12452,9 @@ func (m *BillingTermMutation) ClearField(name string) error {
 		return nil
 	case billingterm.FieldSplit:
 		m.ClearSplit()
+		return nil
+	case billingterm.FieldInstalmentInvoicing:
+		m.ClearInstalmentInvoicing()
 		return nil
 	case billingterm.FieldInvoiceLabel:
 		m.ClearInvoiceLabel()
@@ -11376,6 +12526,9 @@ func (m *BillingTermMutation) ResetField(name string) error {
 		return nil
 	case billingterm.FieldSplit:
 		m.ResetSplit()
+		return nil
+	case billingterm.FieldInstalmentInvoicing:
+		m.ResetInstalmentInvoicing()
 		return nil
 	case billingterm.FieldInvoiceLabel:
 		m.ResetInvoiceLabel()
@@ -15916,6 +17069,7 @@ type ConnectionMutation struct {
 	encrypted_secret_data *map[string]interface{}
 	metadata              *map[string]interface{}
 	sync_config           **types.SyncConfig
+	billing_entity_id     *string
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*Connection, error)
@@ -16536,6 +17690,55 @@ func (m *ConnectionMutation) ResetSyncConfig() {
 	delete(m.clearedFields, connection.FieldSyncConfig)
 }
 
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (m *ConnectionMutation) SetBillingEntityID(s string) {
+	m.billing_entity_id = &s
+}
+
+// BillingEntityID returns the value of the "billing_entity_id" field in the mutation.
+func (m *ConnectionMutation) BillingEntityID() (r string, exists bool) {
+	v := m.billing_entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingEntityID returns the old "billing_entity_id" field's value of the Connection entity.
+// If the Connection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ConnectionMutation) OldBillingEntityID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingEntityID: %w", err)
+	}
+	return oldValue.BillingEntityID, nil
+}
+
+// ClearBillingEntityID clears the value of the "billing_entity_id" field.
+func (m *ConnectionMutation) ClearBillingEntityID() {
+	m.billing_entity_id = nil
+	m.clearedFields[connection.FieldBillingEntityID] = struct{}{}
+}
+
+// BillingEntityIDCleared returns if the "billing_entity_id" field was cleared in this mutation.
+func (m *ConnectionMutation) BillingEntityIDCleared() bool {
+	_, ok := m.clearedFields[connection.FieldBillingEntityID]
+	return ok
+}
+
+// ResetBillingEntityID resets all changes to the "billing_entity_id" field.
+func (m *ConnectionMutation) ResetBillingEntityID() {
+	m.billing_entity_id = nil
+	delete(m.clearedFields, connection.FieldBillingEntityID)
+}
+
 // Where appends a list predicates to the ConnectionMutation builder.
 func (m *ConnectionMutation) Where(ps ...predicate.Connection) {
 	m.predicates = append(m.predicates, ps...)
@@ -16570,7 +17773,7 @@ func (m *ConnectionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ConnectionMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.tenant_id != nil {
 		fields = append(fields, connection.FieldTenantID)
 	}
@@ -16607,6 +17810,9 @@ func (m *ConnectionMutation) Fields() []string {
 	if m.sync_config != nil {
 		fields = append(fields, connection.FieldSyncConfig)
 	}
+	if m.billing_entity_id != nil {
+		fields = append(fields, connection.FieldBillingEntityID)
+	}
 	return fields
 }
 
@@ -16639,6 +17845,8 @@ func (m *ConnectionMutation) Field(name string) (ent.Value, bool) {
 		return m.Metadata()
 	case connection.FieldSyncConfig:
 		return m.SyncConfig()
+	case connection.FieldBillingEntityID:
+		return m.BillingEntityID()
 	}
 	return nil, false
 }
@@ -16672,6 +17880,8 @@ func (m *ConnectionMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldMetadata(ctx)
 	case connection.FieldSyncConfig:
 		return m.OldSyncConfig(ctx)
+	case connection.FieldBillingEntityID:
+		return m.OldBillingEntityID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Connection field %s", name)
 }
@@ -16765,6 +17975,13 @@ func (m *ConnectionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSyncConfig(v)
 		return nil
+	case connection.FieldBillingEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingEntityID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Connection field %s", name)
 }
@@ -16813,6 +18030,9 @@ func (m *ConnectionMutation) ClearedFields() []string {
 	if m.FieldCleared(connection.FieldSyncConfig) {
 		fields = append(fields, connection.FieldSyncConfig)
 	}
+	if m.FieldCleared(connection.FieldBillingEntityID) {
+		fields = append(fields, connection.FieldBillingEntityID)
+	}
 	return fields
 }
 
@@ -16844,6 +18064,9 @@ func (m *ConnectionMutation) ClearField(name string) error {
 		return nil
 	case connection.FieldSyncConfig:
 		m.ClearSyncConfig()
+		return nil
+	case connection.FieldBillingEntityID:
+		m.ClearBillingEntityID()
 		return nil
 	}
 	return fmt.Errorf("unknown Connection nullable field %s", name)
@@ -16888,6 +18111,9 @@ func (m *ConnectionMutation) ResetField(name string) error {
 		return nil
 	case connection.FieldSyncConfig:
 		m.ResetSyncConfig()
+		return nil
+	case connection.FieldBillingEntityID:
+		m.ResetBillingEntityID()
 		return nil
 	}
 	return fmt.Errorf("unknown Connection field %s", name)
@@ -31848,6 +33074,7 @@ type CustomerMutation struct {
 	tax_treatment         *types.TaxTreatment
 	contact_persons       *[]*schema.ContactPerson
 	appendcontact_persons []*schema.ContactPerson
+	billing_entity_id     *string
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*Customer, error)
@@ -32961,6 +34188,55 @@ func (m *CustomerMutation) ResetContactPersons() {
 	delete(m.clearedFields, customer.FieldContactPersons)
 }
 
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (m *CustomerMutation) SetBillingEntityID(s string) {
+	m.billing_entity_id = &s
+}
+
+// BillingEntityID returns the value of the "billing_entity_id" field in the mutation.
+func (m *CustomerMutation) BillingEntityID() (r string, exists bool) {
+	v := m.billing_entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingEntityID returns the old "billing_entity_id" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldBillingEntityID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingEntityID: %w", err)
+	}
+	return oldValue.BillingEntityID, nil
+}
+
+// ClearBillingEntityID clears the value of the "billing_entity_id" field.
+func (m *CustomerMutation) ClearBillingEntityID() {
+	m.billing_entity_id = nil
+	m.clearedFields[customer.FieldBillingEntityID] = struct{}{}
+}
+
+// BillingEntityIDCleared returns if the "billing_entity_id" field was cleared in this mutation.
+func (m *CustomerMutation) BillingEntityIDCleared() bool {
+	_, ok := m.clearedFields[customer.FieldBillingEntityID]
+	return ok
+}
+
+// ResetBillingEntityID resets all changes to the "billing_entity_id" field.
+func (m *CustomerMutation) ResetBillingEntityID() {
+	m.billing_entity_id = nil
+	delete(m.clearedFields, customer.FieldBillingEntityID)
+}
+
 // Where appends a list predicates to the CustomerMutation builder.
 func (m *CustomerMutation) Where(ps ...predicate.Customer) {
 	m.predicates = append(m.predicates, ps...)
@@ -32995,7 +34271,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 23)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -33062,6 +34338,9 @@ func (m *CustomerMutation) Fields() []string {
 	if m.contact_persons != nil {
 		fields = append(fields, customer.FieldContactPersons)
 	}
+	if m.billing_entity_id != nil {
+		fields = append(fields, customer.FieldBillingEntityID)
+	}
 	return fields
 }
 
@@ -33114,6 +34393,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.TaxTreatment()
 	case customer.FieldContactPersons:
 		return m.ContactPersons()
+	case customer.FieldBillingEntityID:
+		return m.BillingEntityID()
 	}
 	return nil, false
 }
@@ -33167,6 +34448,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldTaxTreatment(ctx)
 	case customer.FieldContactPersons:
 		return m.OldContactPersons(ctx)
+	case customer.FieldBillingEntityID:
+		return m.OldBillingEntityID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Customer field %s", name)
 }
@@ -33330,6 +34613,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetContactPersons(v)
 		return nil
+	case customer.FieldBillingEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingEntityID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
 }
@@ -33405,6 +34695,9 @@ func (m *CustomerMutation) ClearedFields() []string {
 	if m.FieldCleared(customer.FieldContactPersons) {
 		fields = append(fields, customer.FieldContactPersons)
 	}
+	if m.FieldCleared(customer.FieldBillingEntityID) {
+		fields = append(fields, customer.FieldBillingEntityID)
+	}
 	return fields
 }
 
@@ -33463,6 +34756,9 @@ func (m *CustomerMutation) ClearField(name string) error {
 		return nil
 	case customer.FieldContactPersons:
 		m.ClearContactPersons()
+		return nil
+	case customer.FieldBillingEntityID:
+		m.ClearBillingEntityID()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer nullable field %s", name)
@@ -33537,6 +34833,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldContactPersons:
 		m.ResetContactPersons()
+		return nil
+	case customer.FieldBillingEntityID:
+		m.ResetBillingEntityID()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
@@ -37448,6 +38747,7 @@ type EntityIntegrationMappingMutation struct {
 	entity_type        *string
 	provider_type      *string
 	provider_entity_id *string
+	connection_id      *string
 	metadata           *map[string]interface{}
 	clearedFields      map[string]struct{}
 	done               bool
@@ -37994,6 +39294,55 @@ func (m *EntityIntegrationMappingMutation) ResetProviderEntityID() {
 	m.provider_entity_id = nil
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (m *EntityIntegrationMappingMutation) SetConnectionID(s string) {
+	m.connection_id = &s
+}
+
+// ConnectionID returns the value of the "connection_id" field in the mutation.
+func (m *EntityIntegrationMappingMutation) ConnectionID() (r string, exists bool) {
+	v := m.connection_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConnectionID returns the old "connection_id" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldConnectionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConnectionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConnectionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConnectionID: %w", err)
+	}
+	return oldValue.ConnectionID, nil
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (m *EntityIntegrationMappingMutation) ClearConnectionID() {
+	m.connection_id = nil
+	m.clearedFields[entityintegrationmapping.FieldConnectionID] = struct{}{}
+}
+
+// ConnectionIDCleared returns if the "connection_id" field was cleared in this mutation.
+func (m *EntityIntegrationMappingMutation) ConnectionIDCleared() bool {
+	_, ok := m.clearedFields[entityintegrationmapping.FieldConnectionID]
+	return ok
+}
+
+// ResetConnectionID resets all changes to the "connection_id" field.
+func (m *EntityIntegrationMappingMutation) ResetConnectionID() {
+	m.connection_id = nil
+	delete(m.clearedFields, entityintegrationmapping.FieldConnectionID)
+}
+
 // SetMetadata sets the "metadata" field.
 func (m *EntityIntegrationMappingMutation) SetMetadata(value map[string]interface{}) {
 	m.metadata = &value
@@ -38077,7 +39426,7 @@ func (m *EntityIntegrationMappingMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntityIntegrationMappingMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.tenant_id != nil {
 		fields = append(fields, entityintegrationmapping.FieldTenantID)
 	}
@@ -38110,6 +39459,9 @@ func (m *EntityIntegrationMappingMutation) Fields() []string {
 	}
 	if m.provider_entity_id != nil {
 		fields = append(fields, entityintegrationmapping.FieldProviderEntityID)
+	}
+	if m.connection_id != nil {
+		fields = append(fields, entityintegrationmapping.FieldConnectionID)
 	}
 	if m.metadata != nil {
 		fields = append(fields, entityintegrationmapping.FieldMetadata)
@@ -38144,6 +39496,8 @@ func (m *EntityIntegrationMappingMutation) Field(name string) (ent.Value, bool) 
 		return m.ProviderType()
 	case entityintegrationmapping.FieldProviderEntityID:
 		return m.ProviderEntityID()
+	case entityintegrationmapping.FieldConnectionID:
+		return m.ConnectionID()
 	case entityintegrationmapping.FieldMetadata:
 		return m.Metadata()
 	}
@@ -38177,6 +39531,8 @@ func (m *EntityIntegrationMappingMutation) OldField(ctx context.Context, name st
 		return m.OldProviderType(ctx)
 	case entityintegrationmapping.FieldProviderEntityID:
 		return m.OldProviderEntityID(ctx)
+	case entityintegrationmapping.FieldConnectionID:
+		return m.OldConnectionID(ctx)
 	case entityintegrationmapping.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -38265,6 +39621,13 @@ func (m *EntityIntegrationMappingMutation) SetField(name string, value ent.Value
 		}
 		m.SetProviderEntityID(v)
 		return nil
+	case entityintegrationmapping.FieldConnectionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConnectionID(v)
+		return nil
 	case entityintegrationmapping.FieldMetadata:
 		v, ok := value.(map[string]interface{})
 		if !ok {
@@ -38311,6 +39674,9 @@ func (m *EntityIntegrationMappingMutation) ClearedFields() []string {
 	if m.FieldCleared(entityintegrationmapping.FieldEnvironmentID) {
 		fields = append(fields, entityintegrationmapping.FieldEnvironmentID)
 	}
+	if m.FieldCleared(entityintegrationmapping.FieldConnectionID) {
+		fields = append(fields, entityintegrationmapping.FieldConnectionID)
+	}
 	if m.FieldCleared(entityintegrationmapping.FieldMetadata) {
 		fields = append(fields, entityintegrationmapping.FieldMetadata)
 	}
@@ -38336,6 +39702,9 @@ func (m *EntityIntegrationMappingMutation) ClearField(name string) error {
 		return nil
 	case entityintegrationmapping.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case entityintegrationmapping.FieldConnectionID:
+		m.ClearConnectionID()
 		return nil
 	case entityintegrationmapping.FieldMetadata:
 		m.ClearMetadata()
@@ -38380,6 +39749,9 @@ func (m *EntityIntegrationMappingMutation) ResetField(name string) error {
 		return nil
 	case entityintegrationmapping.FieldProviderEntityID:
 		m.ResetProviderEntityID()
+		return nil
+	case entityintegrationmapping.FieldConnectionID:
+		m.ResetConnectionID()
 		return nil
 	case entityintegrationmapping.FieldMetadata:
 		m.ResetMetadata()
@@ -46362,6 +47734,8 @@ type InvoiceMutation struct {
 	total                         *decimal.Decimal
 	custom_currency               **types.CustomCurrency
 	fx_conversion                 **types.FxConversion
+	billing_entity                **types.InvoiceBillingEntity
+	billing_entity_id             *string
 	description                   *string
 	due_date                      *time.Time
 	paid_at                       *time.Time
@@ -47569,6 +48943,104 @@ func (m *InvoiceMutation) FxConversionCleared() bool {
 func (m *InvoiceMutation) ResetFxConversion() {
 	m.fx_conversion = nil
 	delete(m.clearedFields, invoice.FieldFxConversion)
+}
+
+// SetBillingEntity sets the "billing_entity" field.
+func (m *InvoiceMutation) SetBillingEntity(tbe *types.InvoiceBillingEntity) {
+	m.billing_entity = &tbe
+}
+
+// BillingEntity returns the value of the "billing_entity" field in the mutation.
+func (m *InvoiceMutation) BillingEntity() (r *types.InvoiceBillingEntity, exists bool) {
+	v := m.billing_entity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingEntity returns the old "billing_entity" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldBillingEntity(ctx context.Context) (v *types.InvoiceBillingEntity, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingEntity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingEntity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingEntity: %w", err)
+	}
+	return oldValue.BillingEntity, nil
+}
+
+// ClearBillingEntity clears the value of the "billing_entity" field.
+func (m *InvoiceMutation) ClearBillingEntity() {
+	m.billing_entity = nil
+	m.clearedFields[invoice.FieldBillingEntity] = struct{}{}
+}
+
+// BillingEntityCleared returns if the "billing_entity" field was cleared in this mutation.
+func (m *InvoiceMutation) BillingEntityCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldBillingEntity]
+	return ok
+}
+
+// ResetBillingEntity resets all changes to the "billing_entity" field.
+func (m *InvoiceMutation) ResetBillingEntity() {
+	m.billing_entity = nil
+	delete(m.clearedFields, invoice.FieldBillingEntity)
+}
+
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (m *InvoiceMutation) SetBillingEntityID(s string) {
+	m.billing_entity_id = &s
+}
+
+// BillingEntityID returns the value of the "billing_entity_id" field in the mutation.
+func (m *InvoiceMutation) BillingEntityID() (r string, exists bool) {
+	v := m.billing_entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingEntityID returns the old "billing_entity_id" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldBillingEntityID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingEntityID: %w", err)
+	}
+	return oldValue.BillingEntityID, nil
+}
+
+// ClearBillingEntityID clears the value of the "billing_entity_id" field.
+func (m *InvoiceMutation) ClearBillingEntityID() {
+	m.billing_entity_id = nil
+	m.clearedFields[invoice.FieldBillingEntityID] = struct{}{}
+}
+
+// BillingEntityIDCleared returns if the "billing_entity_id" field was cleared in this mutation.
+func (m *InvoiceMutation) BillingEntityIDCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldBillingEntityID]
+	return ok
+}
+
+// ResetBillingEntityID resets all changes to the "billing_entity_id" field.
+func (m *InvoiceMutation) ResetBillingEntityID() {
+	m.billing_entity_id = nil
+	delete(m.clearedFields, invoice.FieldBillingEntityID)
 }
 
 // SetDescription sets the "description" field.
@@ -48806,7 +50278,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 47)
+	fields := make([]string, 0, 49)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -48881,6 +50353,12 @@ func (m *InvoiceMutation) Fields() []string {
 	}
 	if m.fx_conversion != nil {
 		fields = append(fields, invoice.FieldFxConversion)
+	}
+	if m.billing_entity != nil {
+		fields = append(fields, invoice.FieldBillingEntity)
+	}
+	if m.billing_entity_id != nil {
+		fields = append(fields, invoice.FieldBillingEntityID)
 	}
 	if m.description != nil {
 		fields = append(fields, invoice.FieldDescription)
@@ -49006,6 +50484,10 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.CustomCurrency()
 	case invoice.FieldFxConversion:
 		return m.FxConversion()
+	case invoice.FieldBillingEntity:
+		return m.BillingEntity()
+	case invoice.FieldBillingEntityID:
+		return m.BillingEntityID()
 	case invoice.FieldDescription:
 		return m.Description()
 	case invoice.FieldDueDate:
@@ -49109,6 +50591,10 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldCustomCurrency(ctx)
 	case invoice.FieldFxConversion:
 		return m.OldFxConversion(ctx)
+	case invoice.FieldBillingEntity:
+		return m.OldBillingEntity(ctx)
+	case invoice.FieldBillingEntityID:
+		return m.OldBillingEntityID(ctx)
 	case invoice.FieldDescription:
 		return m.OldDescription(ctx)
 	case invoice.FieldDueDate:
@@ -49336,6 +50822,20 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFxConversion(v)
+		return nil
+	case invoice.FieldBillingEntity:
+		v, ok := value.(*types.InvoiceBillingEntity)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingEntity(v)
+		return nil
+	case invoice.FieldBillingEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingEntityID(v)
 		return nil
 	case invoice.FieldDescription:
 		v, ok := value.(string)
@@ -49587,6 +51087,12 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldFxConversion) {
 		fields = append(fields, invoice.FieldFxConversion)
 	}
+	if m.FieldCleared(invoice.FieldBillingEntity) {
+		fields = append(fields, invoice.FieldBillingEntity)
+	}
+	if m.FieldCleared(invoice.FieldBillingEntityID) {
+		fields = append(fields, invoice.FieldBillingEntityID)
+	}
 	if m.FieldCleared(invoice.FieldDescription) {
 		fields = append(fields, invoice.FieldDescription)
 	}
@@ -49699,6 +51205,12 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldFxConversion:
 		m.ClearFxConversion()
+		return nil
+	case invoice.FieldBillingEntity:
+		m.ClearBillingEntity()
+		return nil
+	case invoice.FieldBillingEntityID:
+		m.ClearBillingEntityID()
 		return nil
 	case invoice.FieldDescription:
 		m.ClearDescription()
@@ -49842,6 +51354,12 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldFxConversion:
 		m.ResetFxConversion()
+		return nil
+	case invoice.FieldBillingEntity:
+		m.ResetBillingEntity()
+		return nil
+	case invoice.FieldBillingEntityID:
+		m.ResetBillingEntityID()
 		return nil
 	case invoice.FieldDescription:
 		m.ResetDescription()
@@ -53055,6 +54573,7 @@ type InvoiceSequenceMutation struct {
 	tenant_id      *string
 	environment_id *string
 	year_month     *string
+	prefix         *string
 	last_value     *int64
 	addlast_value  *int64
 	created_at     *time.Time
@@ -53284,6 +54803,55 @@ func (m *InvoiceSequenceMutation) ResetYearMonth() {
 	m.year_month = nil
 }
 
+// SetPrefix sets the "prefix" field.
+func (m *InvoiceSequenceMutation) SetPrefix(s string) {
+	m.prefix = &s
+}
+
+// Prefix returns the value of the "prefix" field in the mutation.
+func (m *InvoiceSequenceMutation) Prefix() (r string, exists bool) {
+	v := m.prefix
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPrefix returns the old "prefix" field's value of the InvoiceSequence entity.
+// If the InvoiceSequence object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceSequenceMutation) OldPrefix(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPrefix is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPrefix requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPrefix: %w", err)
+	}
+	return oldValue.Prefix, nil
+}
+
+// ClearPrefix clears the value of the "prefix" field.
+func (m *InvoiceSequenceMutation) ClearPrefix() {
+	m.prefix = nil
+	m.clearedFields[invoicesequence.FieldPrefix] = struct{}{}
+}
+
+// PrefixCleared returns if the "prefix" field was cleared in this mutation.
+func (m *InvoiceSequenceMutation) PrefixCleared() bool {
+	_, ok := m.clearedFields[invoicesequence.FieldPrefix]
+	return ok
+}
+
+// ResetPrefix resets all changes to the "prefix" field.
+func (m *InvoiceSequenceMutation) ResetPrefix() {
+	m.prefix = nil
+	delete(m.clearedFields, invoicesequence.FieldPrefix)
+}
+
 // SetLastValue sets the "last_value" field.
 func (m *InvoiceSequenceMutation) SetLastValue(i int64) {
 	m.last_value = &i
@@ -53446,7 +55014,7 @@ func (m *InvoiceSequenceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceSequenceMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicesequence.FieldTenantID)
 	}
@@ -53455,6 +55023,9 @@ func (m *InvoiceSequenceMutation) Fields() []string {
 	}
 	if m.year_month != nil {
 		fields = append(fields, invoicesequence.FieldYearMonth)
+	}
+	if m.prefix != nil {
+		fields = append(fields, invoicesequence.FieldPrefix)
 	}
 	if m.last_value != nil {
 		fields = append(fields, invoicesequence.FieldLastValue)
@@ -53479,6 +55050,8 @@ func (m *InvoiceSequenceMutation) Field(name string) (ent.Value, bool) {
 		return m.EnvironmentID()
 	case invoicesequence.FieldYearMonth:
 		return m.YearMonth()
+	case invoicesequence.FieldPrefix:
+		return m.Prefix()
 	case invoicesequence.FieldLastValue:
 		return m.LastValue()
 	case invoicesequence.FieldCreatedAt:
@@ -53500,6 +55073,8 @@ func (m *InvoiceSequenceMutation) OldField(ctx context.Context, name string) (en
 		return m.OldEnvironmentID(ctx)
 	case invoicesequence.FieldYearMonth:
 		return m.OldYearMonth(ctx)
+	case invoicesequence.FieldPrefix:
+		return m.OldPrefix(ctx)
 	case invoicesequence.FieldLastValue:
 		return m.OldLastValue(ctx)
 	case invoicesequence.FieldCreatedAt:
@@ -53535,6 +55110,13 @@ func (m *InvoiceSequenceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetYearMonth(v)
+		return nil
+	case invoicesequence.FieldPrefix:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPrefix(v)
 		return nil
 	case invoicesequence.FieldLastValue:
 		v, ok := value.(int64)
@@ -53605,6 +55187,9 @@ func (m *InvoiceSequenceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicesequence.FieldEnvironmentID) {
 		fields = append(fields, invoicesequence.FieldEnvironmentID)
 	}
+	if m.FieldCleared(invoicesequence.FieldPrefix) {
+		fields = append(fields, invoicesequence.FieldPrefix)
+	}
 	return fields
 }
 
@@ -53622,6 +55207,9 @@ func (m *InvoiceSequenceMutation) ClearField(name string) error {
 	case invoicesequence.FieldEnvironmentID:
 		m.ClearEnvironmentID()
 		return nil
+	case invoicesequence.FieldPrefix:
+		m.ClearPrefix()
+		return nil
 	}
 	return fmt.Errorf("unknown InvoiceSequence nullable field %s", name)
 }
@@ -53638,6 +55226,9 @@ func (m *InvoiceSequenceMutation) ResetField(name string) error {
 		return nil
 	case invoicesequence.FieldYearMonth:
 		m.ResetYearMonth()
+		return nil
+	case invoicesequence.FieldPrefix:
+		m.ResetPrefix()
 		return nil
 	case invoicesequence.FieldLastValue:
 		m.ResetLastValue()
@@ -58112,6 +59703,7 @@ type PaymentMutation struct {
 	voided_at           *time.Time
 	recorded_at         *time.Time
 	error_message       *string
+	connection_id       *string
 	clearedFields       map[string]struct{}
 	attempts            map[string]struct{}
 	removedattempts     map[string]struct{}
@@ -59392,6 +60984,55 @@ func (m *PaymentMutation) ResetErrorMessage() {
 	delete(m.clearedFields, payment.FieldErrorMessage)
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (m *PaymentMutation) SetConnectionID(s string) {
+	m.connection_id = &s
+}
+
+// ConnectionID returns the value of the "connection_id" field in the mutation.
+func (m *PaymentMutation) ConnectionID() (r string, exists bool) {
+	v := m.connection_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConnectionID returns the old "connection_id" field's value of the Payment entity.
+// If the Payment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentMutation) OldConnectionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConnectionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConnectionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConnectionID: %w", err)
+	}
+	return oldValue.ConnectionID, nil
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (m *PaymentMutation) ClearConnectionID() {
+	m.connection_id = nil
+	m.clearedFields[payment.FieldConnectionID] = struct{}{}
+}
+
+// ConnectionIDCleared returns if the "connection_id" field was cleared in this mutation.
+func (m *PaymentMutation) ConnectionIDCleared() bool {
+	_, ok := m.clearedFields[payment.FieldConnectionID]
+	return ok
+}
+
+// ResetConnectionID resets all changes to the "connection_id" field.
+func (m *PaymentMutation) ResetConnectionID() {
+	m.connection_id = nil
+	delete(m.clearedFields, payment.FieldConnectionID)
+}
+
 // AddAttemptIDs adds the "attempts" edge to the PaymentAttempt entity by ids.
 func (m *PaymentMutation) AddAttemptIDs(ids ...string) {
 	if m.attempts == nil {
@@ -59480,7 +61121,7 @@ func (m *PaymentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PaymentMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 28)
 	if m.tenant_id != nil {
 		fields = append(fields, payment.FieldTenantID)
 	}
@@ -59562,6 +61203,9 @@ func (m *PaymentMutation) Fields() []string {
 	if m.error_message != nil {
 		fields = append(fields, payment.FieldErrorMessage)
 	}
+	if m.connection_id != nil {
+		fields = append(fields, payment.FieldConnectionID)
+	}
 	return fields
 }
 
@@ -59624,6 +61268,8 @@ func (m *PaymentMutation) Field(name string) (ent.Value, bool) {
 		return m.RecordedAt()
 	case payment.FieldErrorMessage:
 		return m.ErrorMessage()
+	case payment.FieldConnectionID:
+		return m.ConnectionID()
 	}
 	return nil, false
 }
@@ -59687,6 +61333,8 @@ func (m *PaymentMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldRecordedAt(ctx)
 	case payment.FieldErrorMessage:
 		return m.OldErrorMessage(ctx)
+	case payment.FieldConnectionID:
+		return m.OldConnectionID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Payment field %s", name)
 }
@@ -59885,6 +61533,13 @@ func (m *PaymentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetErrorMessage(v)
 		return nil
+	case payment.FieldConnectionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConnectionID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Payment field %s", name)
 }
@@ -59960,6 +61615,9 @@ func (m *PaymentMutation) ClearedFields() []string {
 	if m.FieldCleared(payment.FieldErrorMessage) {
 		fields = append(fields, payment.FieldErrorMessage)
 	}
+	if m.FieldCleared(payment.FieldConnectionID) {
+		fields = append(fields, payment.FieldConnectionID)
+	}
 	return fields
 }
 
@@ -60018,6 +61676,9 @@ func (m *PaymentMutation) ClearField(name string) error {
 		return nil
 	case payment.FieldErrorMessage:
 		m.ClearErrorMessage()
+		return nil
+	case payment.FieldConnectionID:
+		m.ClearConnectionID()
 		return nil
 	}
 	return fmt.Errorf("unknown Payment nullable field %s", name)
@@ -60107,6 +61768,9 @@ func (m *PaymentMutation) ResetField(name string) error {
 		return nil
 	case payment.FieldErrorMessage:
 		m.ResetErrorMessage()
+		return nil
+	case payment.FieldConnectionID:
+		m.ResetConnectionID()
 		return nil
 	}
 	return fmt.Errorf("unknown Payment field %s", name)

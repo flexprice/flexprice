@@ -92,10 +92,16 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		return nil, err
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityType = types.IntegrationEntityTypeInvoice
 	filter.EntityID = req.InvoiceID
 	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+	filter.ConnectionID = conn.ID
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	mappings, err := s.mappingRepo.List(ctx, filter)
 	if err != nil {
@@ -170,6 +176,7 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 			"flexprice_invoice":   req.InvoiceID,
 			"zoho_invoice_number": zohoInv.InvoiceNumber,
 		},
+		ConnectionID: lo.ToPtr(conn.ID),
 	}
 	mapping.TenantID = flexInvoice.TenantID
 	if err := s.mappingRepo.Create(ctx, mapping); err != nil {
@@ -358,10 +365,16 @@ func (s *InvoiceService) markPaidIfFlexpricePaid(ctx context.Context, flexpriceI
 // balance means Zoho already considers the invoice settled (whether from a prior call
 // here, or from the existing inbound "Zoho invoice paid" webhook), so this is a no-op.
 func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInvoiceID string) error {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityType = types.IntegrationEntityTypeInvoice
 	filter.EntityID = flexpriceInvoiceID
 	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+	filter.ConnectionID = conn.ID
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	mappings, err := s.mappingRepo.List(ctx, filter)
 	if err != nil {

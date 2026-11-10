@@ -8,6 +8,7 @@ import (
 	moyasarintegration "github.com/flexprice/flexprice/internal/integration/moyasar"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
@@ -18,6 +19,7 @@ type InvoiceSyncActivities struct {
 	integrationFactory *integration.Factory
 	customerService    interfaces.CustomerService
 	invoiceService     interfaces.InvoiceService
+	entityScope        interfaces.BillingEntityScope
 	logger             *logger.Logger
 }
 
@@ -26,12 +28,14 @@ func NewInvoiceSyncActivities(
 	integrationFactory *integration.Factory,
 	customerService interfaces.CustomerService,
 	invoiceService interfaces.InvoiceService,
+	entityScope interfaces.BillingEntityScope,
 	logger *logger.Logger,
 ) *InvoiceSyncActivities {
 	return &InvoiceSyncActivities{
 		integrationFactory: integrationFactory,
 		customerService:    customerService,
 		invoiceService:     invoiceService,
+		entityScope:        entityScope,
 		logger:             logger,
 	}
 }
@@ -55,6 +59,11 @@ func (a *InvoiceSyncActivities) SyncInvoiceToMoyasar(
 
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, input.InvoiceID, "")
+	if err != nil {
+		return err
+	}
 
 	moyasarIntegration, err := a.integrationFactory.GetMoyasarIntegration(ctx)
 	if err != nil {

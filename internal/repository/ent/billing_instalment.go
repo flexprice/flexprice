@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	entbillinginstalment "github.com/flexprice/flexprice/ent/billinginstalment"
@@ -69,6 +70,7 @@ func (r *billingInstalmentRepository) CreateMany(ctx context.Context, instalment
 			SetDelivery(in.Delivery).
 			SetInstalmentStatus(in.InstalmentStatus).
 			SetNillableInvoiceID(in.InvoiceID).
+			SetNillableInvoicedAt(in.InvoicedAt).
 			SetMetadata(in.Metadata).
 			SetTenantID(in.TenantID).
 			SetEnvironmentID(environmentID).
@@ -140,6 +142,47 @@ func (r *billingInstalmentRepository) List(ctx context.Context, filter *billingt
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list billing instalments").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return billingterm.InstalmentsFromEnt(rows), nil
+}
+
+func (r *billingInstalmentRepository) ListInvoiced(
+	ctx context.Context,
+	ownerType types.BillingTermOwnerType,
+	ownerIDs []string,
+	period types.Period,
+) ([]*billingterm.Instalment, error) {
+	if len(ownerIDs) == 0 {
+		return []*billingterm.Instalment{}, nil
+	}
+
+	span := StartRepositorySpan(ctx, "billing_instalment", "list_invoiced", map[string]interface{}{
+		"owner_type": ownerType,
+		"owners":     len(ownerIDs),
+	})
+	defer FinishSpan(span)
+
+	rows, err := r.client.Reader(ctx).BillingInstalment.Query().
+		Where(r.scope(ctx)...).
+		Where(
+			entbillinginstalment.OwnerTypeEQ(ownerType),
+			entbillinginstalment.OwnerIDIn(ownerIDs...),
+			entbillinginstalment.InstalmentStatusEQ(types.InstalmentStatusInvoiced),
+			entbillinginstalment.InvoicedAtGTE(period.Start),
+			entbillinginstalment.InvoicedAtLT(period.End),
+		).
+		Order(
+			ent.Asc(entbillinginstalment.FieldInvoicedAt),
+			ent.Asc(entbillinginstalment.FieldID),
+		).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list invoiced billing instalments").
 			Mark(ierr.ErrDatabase)
 	}
 
@@ -266,7 +309,7 @@ func (r *billingInstalmentRepository) Cancel(ctx context.Context, ownerType type
 	return billingterm.InstalmentsFromEnt(rows), nil
 }
 
-func (r *billingInstalmentRepository) Claim(ctx context.Context, invoiceID string, ids []string) ([]*billingterm.Instalment, error) {
+func (r *billingInstalmentRepository) Claim(ctx context.Context, invoiceID string, invoicedAt time.Time, ids []string) ([]*billingterm.Instalment, error) {
 	if len(ids) == 0 {
 		return []*billingterm.Instalment{}, nil
 	}
@@ -285,6 +328,7 @@ func (r *billingInstalmentRepository) Claim(ctx context.Context, invoiceID strin
 		).
 		SetInstalmentStatus(types.InstalmentStatusInvoiced).
 		SetInvoiceID(invoiceID).
+		SetInvoicedAt(invoicedAt).
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
@@ -292,6 +336,41 @@ func (r *billingInstalmentRepository) Claim(ctx context.Context, invoiceID strin
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to claim billing instalments").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return billingterm.InstalmentsFromEnt(rows), nil
+}
+
+func (r *billingInstalmentRepository) CancelInvoiced(ctx context.Context, invoiceID string, ids []string) ([]*billingterm.Instalment, error) {
+	if len(ids) == 0 {
+		return []*billingterm.Instalment{}, nil
+	}
+
+	span := StartRepositorySpan(ctx, "billing_instalment", "cancel_invoiced", map[string]interface{}{
+		"invoice_id": invoiceID,
+		"count":      len(ids),
+	})
+	defer FinishSpan(span)
+
+	rows, err := r.client.Writer(ctx).BillingInstalment.Update().
+		Where(r.scope(ctx)...).
+		Where(
+			entbillinginstalment.IDIn(ids...),
+			entbillinginstalment.InvoiceID(invoiceID),
+			entbillinginstalment.InstalmentStatusEQ(types.InstalmentStatusInvoiced),
+		).
+		SetInstalmentStatus(types.InstalmentStatusCancelled).
+		ClearInvoiceID().
+		ClearInvoicedAt().
+		SetUpdatedAt(clock.Now()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SaveReturning(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to cancel invoiced billing instalments").
 			Mark(ierr.ErrDatabase)
 	}
 
@@ -313,6 +392,7 @@ func (r *billingInstalmentRepository) Reschedule(ctx context.Context, invoiceID 
 		).
 		SetInstalmentStatus(types.InstalmentStatusScheduled).
 		ClearInvoiceID().
+		ClearInvoicedAt().
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)

@@ -23,6 +23,7 @@ const (
 
 // HubSpotClient defines the interface for HubSpot API operations
 type HubSpotClient interface {
+	GetConnection(ctx context.Context) (*connection.Connection, error)
 	GetHubSpotConfig(ctx context.Context) (*HubSpotConfig, error)
 	GetDecryptedHubSpotConfig(conn *connection.Connection) (*HubSpotConfig, error)
 	VerifyWebhookSignatureV3(method string, uri string, requestBody []byte, timestamp string, signature string, clientSecret string) bool
@@ -673,6 +674,11 @@ func (c *Client) AssociateInvoiceToContact(ctx context.Context, invoiceID, conta
 	}
 
 	return nil
+}
+
+// GetConnection returns the HubSpot connection for the current context.
+func (c *Client) GetConnection(ctx context.Context) (*connection.Connection, error) {
+	return c.connectionRepo.GetByProvider(ctx, types.SecretProviderHubSpot)
 }
 
 // HasHubSpotConnection checks if the tenant has a HubSpot connection available

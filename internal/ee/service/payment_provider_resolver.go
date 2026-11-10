@@ -58,6 +58,11 @@ type ProviderCapabilities struct {
 }
 
 func (s *PaymentProviderResolver) ListProviders(ctx context.Context, customerID string) ([]ProviderCapabilities, error) {
+	ctx, err := s.scopeToCustomer(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+
 	gateways, err := s.ConfiguredGateways(ctx)
 	if err != nil {
 		return nil, err
@@ -93,6 +98,11 @@ func (s *PaymentProviderResolver) ResolveProvider(
 		if err := requested.Validate(); err != nil {
 			return "", err
 		}
+	}
+
+	ctx, err := s.scopeToCustomer(ctx, customerID)
+	if err != nil {
+		return "", err
 	}
 
 	gateways, err := s.ConfiguredGateways(ctx)
@@ -143,8 +153,9 @@ func (s *PaymentProviderResolver) ResolveProvider(
 	}
 }
 
+// ConfiguredGateways lists the payment gateways connected for the billing entity in ctx.
 func (s *PaymentProviderResolver) ConfiguredGateways(ctx context.Context) ([]types.PaymentGatewayType, error) {
-	connections, err := s.ConnectionRepo.ListAllPublished(ctx)
+	connections, err := s.ConnectionRepo.ListPublishedInScope(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -168,4 +179,12 @@ func (s *PaymentProviderResolver) ConfiguredGateways(ctx context.Context) ([]typ
 
 	sort.Slice(gateways, func(i, j int) bool { return gateways[i] < gateways[j] })
 	return gateways, nil
+}
+
+// scopeToCustomer puts the customer's billing entity in ctx; an empty customer leaves ctx unchanged.
+func (s *PaymentProviderResolver) scopeToCustomer(ctx context.Context, customerID string) (context.Context, error) {
+	if customerID == "" {
+		return ctx, nil
+	}
+	return NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -30,6 +31,10 @@ import (
 type webhookTestRazorpayClient struct {
 	razorpay.RazorpayClient
 	refundCalls []string // razorpayPaymentID per call
+}
+
+func (c *webhookTestRazorpayClient) GetConnection(_ context.Context) (*connection.Connection, error) {
+	return &connection.Connection{ID: "conn_test", ProviderType: types.SecretProviderRazorpay}, nil
 }
 
 func (c *webhookTestRazorpayClient) FetchPayment(_ context.Context, _ string) (map[string]interface{}, error) {
@@ -376,6 +381,17 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RepeatedDeclines_Recor
 
 	s.Len(s.paymentSvc.failedAttempts(), 2)
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus)
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_UPITokenCharge_SealsPayment() {
+	s.paymentSvc.payment.PaymentMethodType = types.PaymentMethodTypeUPI
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusProcessing
+
+	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+
+	s.NoError(err)
+	s.Empty(s.paymentSvc.failedAttempts())
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RedeliveredDecline_RecordsNoAttempt() {

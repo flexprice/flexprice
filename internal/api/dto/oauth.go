@@ -7,15 +7,22 @@ import (
 
 // InitiateOAuthRequest represents a generic request to initiate OAuth for any provider
 type InitiateOAuthRequest struct {
+	// ID is an optional client-generated connection id (conn_ followed by a ULID); generated when empty.
+	ID          string              `json:"id,omitempty"`
 	Provider    types.OAuthProvider `json:"provider" binding:"required"`    // e.g., "quickbooks"
 	Name        string              `json:"name" binding:"required"`        // Connection name
 	Credentials map[string]string   `json:"credentials" binding:"required"` // Provider-specific credentials (all required for the provider)
 	Metadata    map[string]string   `json:"metadata" binding:"required"`    // Provider-specific metadata (all required for the provider)
 	SyncConfig  *types.SyncConfig   `json:"sync_config"`                    // Optional sync configuration for the connection
+	// BillingEntityID owns the connection; only accepted when billing entities are enabled.
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 }
 
 // Validate validates the OAuth init request with provider-specific rules
 func (r *InitiateOAuthRequest) Validate() error {
+	if err := ValidateConnectionID(r.ID); err != nil {
+		return err
+	}
 	switch r.Provider {
 	case types.OAuthProviderQuickBooks:
 		// Validate required credentials

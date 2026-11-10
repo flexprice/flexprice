@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -24,6 +25,23 @@ import (
 )
 
 // ── fake provider ────────────────────────────────────────────────────────────
+
+// seedCheckoutConnections gives the environment a connection for each gateway the fake stands in for.
+func seedCheckoutConnections(s *testutil.BaseServiceTestSuite) {
+	ctx := s.GetContext()
+	for _, provider := range []types.SecretProvider{types.SecretProviderRazorpay, types.SecretProviderChargebee} {
+		id := "conn_" + string(provider)
+		if _, err := s.GetStores().ConnectionRepo.Get(ctx, id); err == nil {
+			continue
+		}
+		s.Require().NoError(s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+			ID:            id,
+			ProviderType:  provider,
+			EnvironmentID: types.GetEnvironmentID(ctx),
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		}))
+	}
+}
 
 // fakeCheckoutProvider stands in for a gateway adapter. It records every call so a
 // test can assert not just the outcome but whether the gateway was contacted at
@@ -142,6 +160,7 @@ func (s *CheckoutPollSuite) SetupTest() {
 	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, pl))
 
 	s.GetIntegrationFactory().SetCheckoutProvider(s.provider)
+	seedCheckoutConnections(&s.BaseServiceTestSuite)
 	s.svc = NewCheckoutSessionService(s.buildParams()).(*checkoutSessionService)
 }
 

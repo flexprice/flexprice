@@ -11,6 +11,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // QuickBooksCustomerService defines the interface for QuickBooks customer operations
@@ -41,10 +42,16 @@ func NewCustomerService(params CustomerServiceParams) QuickBooksCustomerService 
 
 // GetQuickBooksCustomerID retrieves the QuickBooks customer ID from entity mapping
 func (s *CustomerService) GetQuickBooksCustomerID(ctx context.Context, flexpriceCustomerID string) (string, error) {
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityType = types.IntegrationEntityTypeCustomer
 	filter.EntityID = flexpriceCustomerID
 	filter.ProviderTypes = []string{string(types.SecretProviderQuickBooks)}
+	filter.ConnectionID = conn.ID
 
 	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
@@ -213,6 +220,11 @@ func (s *CustomerService) createCustomerMapping(
 		return err
 	}
 
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         flexPriceCustomerID,
@@ -225,6 +237,7 @@ func (s *CustomerService) createCustomerMapping(
 		},
 		EnvironmentID: flexpriceCustomer.EnvironmentID,
 		BaseModel:     types.GetDefaultBaseModel(ctx),
+		ConnectionID:  lo.ToPtr(conn.ID),
 	}
 	mapping.TenantID = flexpriceCustomer.TenantID
 

@@ -105,10 +105,23 @@ type UsageAnalyticPoint struct {
 	ComputedOverageAmount            decimal.Decimal `swaggertype:"string"` // Overage charge amount
 	ComputedTrueUpAmount             decimal.Decimal `swaggertype:"string"` // True-up amount charged
 
+	// BilledUsage is what billing prices in the window when it merges a bucketed meter's buckets: their sum, where
+	// Usage holds the peak for MAX. It is zero for points read straight from meter_usage.
+	BilledUsage decimal.Decimal `swaggertype:"string"`
+
 	// All aggregation values for this time point
 	MaxUsage         decimal.Decimal `swaggertype:"string"` // MAX(qty_total * sign)
 	LatestUsage      decimal.Decimal `swaggertype:"string"` // argMax(qty_total, timestamp)
 	CountUniqueUsage uint64          // COUNT(DISTINCT unique_hash)
+}
+
+// Billed returns the quantity billing prices in the point's window: its buckets' sum when merged, else its usage.
+func (p UsageAnalyticPoint) Billed() decimal.Decimal {
+	if !p.BilledUsage.IsZero() {
+		return p.BilledUsage
+	}
+
+	return p.Usage
 }
 
 // MaxBucketFeatureInfo describes a feature aggregated as MAX over bucketed windows.

@@ -5,9 +5,12 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -20,9 +23,10 @@ import (
 // errStaleDraft is the cause of refusing to finalize or charge a draft that bills instalments no longer scheduled.
 var errStaleDraft = errors.New("draft bills instalments that are no longer scheduled")
 
-// refreshDraftInstalments recomputes a subscription draft whose instalments changed since it was computed: it bills one
-// an edit cancelled or another invoice claimed, or misses one that fell due, like a triggered milestone.
-func (s *invoiceService) refreshDraftInstalments(
+// refreshStaleDraft recomputes a subscription draft that went stale since it was computed: it bills an instalment an
+// edit cancelled or another invoice claimed, misses one that fell due, like a triggered milestone, or predates a change
+// to one of the subscription's commitments.
+func (s *invoiceService) refreshStaleDraft(
 	ctx context.Context,
 	inv *invoice.Invoice,
 	source dto.InvoiceStateChangeSource,
@@ -43,20 +47,40 @@ func (s *invoiceService) refreshDraftInstalments(
 		return err
 	}
 
-	missing, err := s.missingInstalments(ctx, inv, billed)
+	enabled, err := newCommitmentService(s.ServiceParams).IsEnabled(ctx)
 	if err != nil {
 		return err
 	}
 
-	if len(stale) == 0 && len(missing) == 0 {
+	var missing []string
+	var changed bool
+	if enabled {
+		subscriptionIDs, err := s.invoicedSubscriptionIDs(ctx, *inv.SubscriptionID)
+		if err != nil {
+			return err
+		}
+
+		if missing, err = s.missingInstalments(ctx, subscriptionIDs, inv, billed); err != nil {
+			return err
+		}
+
+		if inv.LastComputedAt != nil {
+			if changed, err = s.commitmentChangedSince(ctx, subscriptionIDs, *inv.LastComputedAt); err != nil {
+				return err
+			}
+		}
+	}
+
+	if len(stale) == 0 && len(missing) == 0 && !changed {
 		return nil
 	}
 
-	s.Logger.Info(ctx, "invoice.instalments_recomputed",
-		"operation", "invoice.instalments_recomputed",
+	s.Logger.Info(ctx, "invoice.stale_draft_recomputed",
+		"operation", "invoice.stale_draft_recomputed",
 		"invoice_id", inv.ID,
 		"stale_instalment_ids", stale,
 		"missing_instalment_ids", missing,
+		"commitment_changed", changed,
 	)
 
 	recomputed, _, err := s.ComputeInvoice(ctx, inv.ID, &dto.InvoiceComputeRequest{InvoiceStateChangeSource: source})
@@ -68,7 +92,39 @@ func (s *invoiceService) refreshDraftInstalments(
 	return nil
 }
 
-// staleInstalments returns those of the billed instalments that are no longer scheduled.
+// invoicedSubscriptionIDs returns the subscriptions whose charges the subscription's invoices carry: itself and, for a
+// parent, its grouped children.
+func (s *invoiceService) invoicedSubscriptionIDs(ctx context.Context, subscriptionID string) ([]string, error) {
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	children, err := getGroupedInvoicingChildren(ctx, s.ServiceParams, sub, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return append([]string{sub.ID}, lo.Map(children, func(child *subscription.Subscription, _ int) string {
+		return child.ID
+	})...), nil
+}
+
+// commitmentChangedSince reports whether a commitment of the subscriptions was written after computedAt, which a draft
+// computed then does not reflect. A compute overlapping the write can still stamp a later time; the post-commit
+// recompute covers that.
+func (s *invoiceService) commitmentChangedSince(ctx context.Context, subscriptionIDs []string, computedAt time.Time) (bool, error) {
+	filter := commitment.NewNoLimitFilter()
+	filter.SubscriptionIDs = subscriptionIDs
+	listed, err := s.CommitmentRepo.List(ctx, filter)
+	if err != nil {
+		return false, err
+	}
+
+	return lo.SomeBy(listed, func(c *commitment.Commitment) bool { return c.UpdatedAt.After(computedAt) }), nil
+}
+
+// staleInstalments returns those of the billed instalments that are no longer scheduled or that a termination cancelled.
 func (s *invoiceService) staleInstalments(ctx context.Context, billed []string) ([]string, error) {
 	if len(billed) == 0 {
 		return nil, nil
@@ -82,12 +138,29 @@ func (s *invoiceService) staleInstalments(ctx context.Context, billed []string) 
 		return nil, err
 	}
 
-	return lo.Without(billed, lo.Map(scheduled, func(inst *billingterm.Instalment, _ int) string { return inst.ID })...), nil
+	commitments, err := instalmentCommitments(ctx, s.CommitmentRepo, scheduled)
+	if err != nil {
+		return nil, err
+	}
+
+	var owed []string
+	for _, inst := range scheduled {
+		if !cancelledByTermination(commitments[inst.OwnerID], inst) {
+			owed = append(owed, inst.ID)
+		}
+	}
+
+	return lo.Without(billed, owed...), nil
 }
 
-// missingInstalments returns the scheduled instalments due within a subscription draft that it does not bill; a
-// parent's draft also bills its grouped children's.
-func (s *invoiceService) missingInstalments(ctx context.Context, inv *invoice.Invoice, billed []string) ([]string, error) {
+// missingInstalments returns the scheduled instalments of the subscriptions due within a subscription draft that it
+// does not bill.
+func (s *invoiceService) missingInstalments(
+	ctx context.Context,
+	subscriptionIDs []string,
+	inv *invoice.Invoice,
+	billed []string,
+) ([]string, error) {
 	// A trial-start invoice drops its instalments and a paused period's invoice is never computed.
 	reason := types.InvoiceBillingReason(inv.BillingReason)
 	if reason == types.InvoiceBillingReasonSubscriptionTrialStart || reason == types.InvoiceBillingReasonSubscriptionPaused ||
@@ -100,25 +173,7 @@ func (s *invoiceService) missingInstalments(ctx context.Context, inv *invoice.In
 		return nil, nil
 	}
 
-	enabled, err := newCommitmentService(s.ServiceParams).IsEnabled(ctx)
-	if err != nil || !enabled {
-		return nil, err
-	}
-
-	sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	children, err := getGroupedInvoicingChildren(ctx, s.ServiceParams, sub, false)
-	if err != nil {
-		return nil, err
-	}
-
-	subscriptionIDs := append([]string{sub.ID}, lo.Map(children, func(child *subscription.Subscription, _ int) string {
-		return child.ID
-	})...)
-	due, err := dueInstalments(ctx, s.ServiceParams, subscriptionIDs, billAt)
+	due, _, err := dueInstalments(ctx, s.ServiceParams, subscriptionIDs, billAt)
 	if err != nil {
 		return nil, err
 	}
@@ -126,15 +181,21 @@ func (s *invoiceService) missingInstalments(ctx context.Context, inv *invoice.In
 	return lo.Without(lo.Map(due, func(inst *billingterm.Instalment, _ int) string { return inst.ID }), billed...), nil
 }
 
-// claimInstalments marks the scheduled instalments on a finalizing invoice as billed by it, in the caller's
-// finalize transaction, and returns the ids of those it could not claim because they are no longer scheduled.
+// claimInstalments marks a finalizing invoice's owed instalments as billed by it at its finalization, in the caller's
+// finalize transaction, and returns the ids of the rest: no longer scheduled, or cancelled by a termination.
 func (s *invoiceService) claimInstalments(ctx context.Context, inv *invoice.Invoice) (unclaimed []string, err error) {
 	ids, err := s.billedInstalmentIDs(ctx, inv.ID)
 	if err != nil || len(ids) == 0 {
 		return nil, err
 	}
 
-	claimed, err := s.BillingInstalmentRepo.Claim(ctx, inv.ID, ids)
+	stale, err := s.staleInstalments(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	owed := lo.Without(ids, stale...)
+	claimed, err := s.BillingInstalmentRepo.Claim(ctx, inv.ID, lo.FromPtrOr(inv.FinalizedAt, clock.Now()), owed)
 	if err != nil {
 		return nil, err
 	}
@@ -262,8 +323,8 @@ func (s *invoiceService) billedInstalmentIDs(ctx context.Context, invoiceID stri
 	}), nil
 }
 
-// rescheduleInstalments puts a voided invoice's instalments back on schedule in the void transaction, under their
-// commitments' locks so an edit sizing its plan by the invoiced instalments never runs halfway through it.
+// rescheduleInstalments puts a voided invoice's instalments back on schedule and cancels those a termination no longer
+// owes, in the void transaction and under their commitments' locks, so an edit never sees the void half done.
 func (s *invoiceService) rescheduleInstalments(ctx context.Context, invoiceID string) error {
 	ids, err := s.billedInstalmentIDs(ctx, invoiceID)
 	if err != nil || len(ids) == 0 {
@@ -284,11 +345,30 @@ func (s *invoiceService) rescheduleInstalments(ctx context.Context, invoiceID st
 		}
 	}
 
+	// Read under the locks, so a termination that committed while the void waited is seen.
+	byID, err := instalmentCommitments(ctx, s.CommitmentRepo, billed)
+	if err != nil {
+		return err
+	}
+
+	var cancelIDs []string
+	for _, inst := range billed {
+		if cancelledByTermination(byID[inst.OwnerID], inst) {
+			cancelIDs = append(cancelIDs, inst.ID)
+		}
+	}
+
+	cancelled, err := s.BillingInstalmentRepo.CancelInvoiced(ctx, invoiceID, cancelIDs)
+	if err != nil {
+		return err
+	}
+
 	rescheduled, err := s.BillingInstalmentRepo.Reschedule(ctx, invoiceID)
 	if err != nil {
 		return err
 	}
 
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentUpdated, rescheduled)
 	return nil
 }

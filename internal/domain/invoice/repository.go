@@ -21,6 +21,9 @@ type Repository interface {
 	// ListFinalizationCandidates pages computed drafts across all tenants by id (scheduled jobs only).
 	ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*Invoice, error)
 	Count(ctx context.Context, filter *types.InvoiceFilter) (int, error)
+	// AssignDefaultBillingEntities sets up to limit (all when limit <= 0) of the environment's invoices
+	// without an entity to its default entity, bypassing the activity log.
+	AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error)
 
 	// Edge-specific operations
 	// TODO: AddLineItems and RemoveLineItems are candidates for future removal
@@ -46,7 +49,8 @@ type Repository interface {
 
 	// GetNextInvoiceNumber generates and returns the next invoice number for a tenant
 	// Format: INV-YYYYMM-XXXXX
-	GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig) (string, error)
+	// The prefix is recorded on the period's counter row and printed in the number.
+	GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig, prefix string) (string, error)
 
 	// GetNextBillingSequence returns the next billing sequence number for a subscription
 	GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error)

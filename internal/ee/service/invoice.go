@@ -81,6 +81,9 @@ type InvoiceService interface {
 	AttemptPayment(ctx context.Context, id string) error
 	GetInvoicePDF(ctx context.Context, req dto.InvoicePDFRequest) ([]byte, error)
 	GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePDFRequest) (string, error)
+	// GetInvoiceBillingEntity is the billing entity frozen at finalization, else the customer's entity now; nil means the tenant bills.
+	// An issued invoice without a frozen billing entity predates billing entities, so the tenant stays its biller.
+	GetInvoiceBillingEntity(ctx context.Context, inv *invoice.Invoice) (*types.InvoiceBillingEntity, error)
 	RecalculateInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
@@ -256,7 +259,12 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 				return nil
 			}
 			s.Logger.Info(ctx, "invoice already exists, returning existing invoice")
-			return ierr.NewError("invoice already exists").WithHint("invoice already exists").Mark(ierr.ErrAlreadyExists)
+			return ierr.NewError("invoice already exists").
+				WithHint("invoice already exists").
+				WithReportableDetails(map[string]interface{}{
+					"invoice_id": existing.ID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
 		}
 
 		// 3. For subscription invoices, check period uniqueness (when no caller key) and get billing sequence.
@@ -284,7 +292,12 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 						"subscription_id", *req.SubscriptionID,
 						"period_start", *req.PeriodStart,
 						"period_end", *req.PeriodEnd)
-					return ierr.NewError("invoice already exists").WithHint("invoice already exists for this period").Mark(ierr.ErrAlreadyExists)
+					return ierr.NewError("invoice already exists").
+						WithHint("invoice already exists for this period").
+						WithReportableDetails(map[string]interface{}{
+							"invoice_id": existingForPeriod.ID,
+						}).
+						Mark(ierr.ErrAlreadyExists)
 				}
 			}
 
@@ -305,6 +318,17 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 		inv.IdempotencyKey = &idempKey
 		inv.BillingSequence = billingSeq
 		inv.InvoiceStatus = types.InvoiceStatusDraft
+		cust, err := s.CustomerRepo.Get(txCtx, inv.CustomerID)
+		if err != nil {
+			return err
+		}
+		billingEntity, err := NewBillingEntityService(s.ServiceParams).EffectiveEntity(txCtx, cust)
+		if err != nil {
+			return err
+		}
+		if billingEntity != nil {
+			inv.BillingEntityID = lo.ToPtr(billingEntity.ID)
+		}
 
 		// Entities bill in the custom currency, invoices in fiat. Amounts live in
 		// custom_currency; the fiat columns are projected from it.
@@ -1240,6 +1264,10 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		filter.CustomerID = customer.ID
 	}
 
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
+		return nil, err
+	}
+
 	invoices, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -1333,7 +1361,7 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 		return err
 	}
 
-	if err := s.refreshDraftInstalments(ctx, inv, req.InvoiceStateChangeSource); err != nil {
+	if err := s.refreshStaleDraft(ctx, inv, req.InvoiceStateChangeSource); err != nil {
 		return err
 	}
 
@@ -1529,11 +1557,19 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 			if err != nil {
 				return ierr.WithError(err).WithHint("Failed to get invoice configuration").Mark(ierr.ErrValidation)
 			}
-			invoiceNumber, err := s.InvoiceRepo.GetNextInvoiceNumber(txCtx, &invoiceConfig)
+			prefix, err := s.numberPrefixFor(txCtx, lockedInv, &invoiceConfig)
+			if err != nil {
+				return err
+			}
+			invoiceNumber, err := s.InvoiceRepo.GetNextInvoiceNumber(txCtx, &invoiceConfig, prefix)
 			if err != nil {
 				return err
 			}
 			lockedInv.InvoiceNumber = &invoiceNumber
+		}
+
+		if err := s.freezeBillingEntity(txCtx, lockedInv); err != nil {
+			return err
 		}
 
 		// Trial-start invoices are always $0 but must NOT be auto-succeeded here.
@@ -1598,7 +1634,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 
 // IsFinalizationDue checks whether a draft invoice's finalization delay has elapsed.
 // Returns true if the invoice should be finalized now (delay elapsed or no delay configured).
-// Returns false if the invoice is not a draft or the delay has not yet elapsed.
+// Returns false if the invoice is not a draft, auto finalization is off, or the delay has not yet elapsed.
 func (s *invoiceService) IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error) {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
@@ -1670,11 +1706,21 @@ func (s *invoiceService) IsInvoiceFinalizationDue(ctx context.Context, inv *invo
 		return false, ierr.WithError(err).WithHint("failed to load invoice config for finalization check").Mark(ierr.ErrDatabase)
 	}
 
+	// Without auto finalization the draft waits for the user to finalize it manually.
+	if !invoiceConfig.AutoFinalize {
+		return false, nil
+	}
+
 	if invoiceConfig.FinalizationDelaySeconds == 0 {
 		return true, nil
 	}
 
-	dueAt := inv.LastComputedAt.Add(time.Duration(invoiceConfig.FinalizationDelaySeconds) * time.Second)
+	// Cycle drafts are recomputed daily, so their delay counts from period close instead of the last compute.
+	anchor := *inv.LastComputedAt
+	if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCycle) && inv.PeriodEnd != nil {
+		anchor = lo.Latest(inv.CreatedAt, *inv.PeriodEnd)
+	}
+	dueAt := anchor.Add(time.Duration(invoiceConfig.FinalizationDelaySeconds) * time.Second)
 	return clock.Now().After(dueAt), nil
 }
 
@@ -1949,7 +1995,7 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		return ierr.NewError("invoice has not been computed").WithHint("Invoice must be computed before processing").Mark(ierr.ErrValidation)
 	}
 
-	if err := s.refreshDraftInstalments(ctx, inv, dto.InvoiceStateChangeSource{}); err != nil {
+	if err := s.refreshStaleDraft(ctx, inv, dto.InvoiceStateChangeSource{}); err != nil {
 		return err
 	}
 
@@ -1998,6 +2044,11 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 // SyncInvoiceToStripeIfEnabled syncs the invoice to Stripe if Stripe connection is enabled.
 func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoiceID string, collectionMethod string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
@@ -2131,6 +2182,11 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 		return err
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	if inv.AmountRemaining.IsZero() {
 		s.Logger.Debug(ctx, "invoice amount remaining is zero, skipping Razorpay sync",
 			"invoice_id", inv.ID)
@@ -2216,6 +2272,11 @@ func (s *invoiceService) SyncInvoiceToChargebeeIfEnabled(ctx context.Context, in
 		return err
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	// Check if Chargebee connection exists
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderChargebee)
 	if err != nil || conn == nil {
@@ -2270,6 +2331,11 @@ func (s *invoiceService) SyncInvoiceToChargebeeIfEnabled(ctx context.Context, in
 // SyncInvoiceToQuickBooksIfEnabled syncs the invoice to QuickBooks if QuickBooks connection is enabled.
 func (s *invoiceService) SyncInvoiceToQuickBooksIfEnabled(ctx context.Context, invoiceID string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
@@ -2336,6 +2402,11 @@ func (s *invoiceService) SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, in
 		return err
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderZohoBooks)
 	if err != nil || conn == nil {
 		if err != nil && !ierr.IsNotFound(err) {
@@ -2377,6 +2448,11 @@ func (s *invoiceService) SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, in
 // saved payment method (token), the invoice is also charged automatically; otherwise
 // the invoice is synced as a Moyasar invoice link so the customer can pay manually.
 func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderMoyasar)
 	if err != nil {
 		if ierr.IsNotFound(err) {
@@ -3433,6 +3509,12 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 		return nil
 	}
 
+	// An entity without a gateway connection finds none below, so only wallets pay.
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	// If Stripe outbound invoice sync is enabled for this tenant/environment,
 	// skip automatic payment and let Stripe/record-payment flows be the source of truth.
 	conn, connErr := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
@@ -3625,6 +3707,11 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePD
 // this invoice, or "" when none applies. The first connection with outbound
 // invoice sync enabled wins.
 func (s *invoiceService) billingProviderPDFURL(ctx context.Context, invoiceID string) (string, error) {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, invoiceID)
+	if err != nil {
+		return "", err
+	}
+
 	providers, err := NewBillingProviderResolver(s.ServiceParams).ListProviders(ctx)
 	if err != nil || len(providers) == 0 {
 		return "", err
@@ -3741,6 +3828,15 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			"customer_id", inv.CustomerID)
 	}
 
+	billingEntity, err := s.GetInvoiceBillingEntity(ctx, &inv.Invoice)
+	if err != nil {
+		return nil, err
+	}
+	biller := tenant
+	if billingEntity != nil {
+		biller = billingEntityAsTenant(tenant, billingEntity)
+	}
+
 	// Convert to InvoiceData
 	data := &pdf.InvoiceData{
 		ID:                         inv.ID,
@@ -3756,7 +3852,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		BillingReason:              inv.BillingReason,
 		Notes:                      "",  // resolved from invoice metadata
 		VAT:                        0.0, // resolved from invoice metadata
-		Biller:                     s.getBillerInfo(tenant, billerTaxIDs),
+		Biller:                     s.getBillerInfo(biller, billerTaxIDs),
 		PeriodStart:                pdf.CustomTime{Time: lo.FromPtr(inv.PeriodStart)},
 		PeriodEnd:                  pdf.CustomTime{Time: lo.FromPtr(inv.PeriodEnd)},
 		Recipient:                  s.getRecipientInfo(customer, customerTaxIDs),
@@ -4304,7 +4400,7 @@ func (s *invoiceService) reconcileLineItems(
 		PeriodStart         time.Time
 		PeriodEnd           time.Time
 	}
-	// Commitment lines are keyed by commitment and line kind too: stacked commitments and overage
+	// Commitment lines are keyed by commitment and line kind too: stacked commitments, overage and plain usage
 	// share a subscription line item, and true-up or settlement lines have none. Instalment lines are
 	// keyed by their instalment, since two instalments of a commitment can cover the same period.
 	keyOf := func(item *invoice.InvoiceLineItem) (reconcileKey, bool) {
@@ -4313,12 +4409,12 @@ func (s *invoiceService) reconcileLineItems(
 		}
 
 		k := reconcileKey{
-			PeriodStart: *item.PeriodStart,
-			PeriodEnd:   *item.PeriodEnd,
+			PeriodStart:    *item.PeriodStart,
+			PeriodEnd:      *item.PeriodEnd,
+			CommitmentKind: item.Metadata[types.MetadataKeyCommitmentLineKind],
 		}
 		if item.CommitmentID != nil {
 			k.CommitmentID = *item.CommitmentID
-			k.CommitmentKind = item.Metadata[types.MetadataKeyCommitmentLineKind]
 			k.BillingInstalmentID = lo.FromPtr(item.BillingInstalmentID)
 			k.SubLineItemID = lo.FromPtr(item.SubscriptionLineItemID)
 			return k, true
@@ -4333,11 +4429,16 @@ func (s *invoiceService) reconcileLineItems(
 
 	// Items missing PeriodStart/PeriodEnd (legacy pre-migration or hand-crafted) are silently ignored here
 	// same contract as the pre-fan-out reconciler, which ignored items missing SubscriptionLineItemID. They stay in the DB untouched.
+	// A key held twice keeps its last row; the others are archived.
+	var toArchiveIDs []string
 	existingByKey := make(map[reconcileKey]*invoice.InvoiceLineItem, len(existing))
 	for _, item := range existing {
 		k, ok := keyOf(item)
 		if !ok {
 			continue
+		}
+		if held, dup := existingByKey[k]; dup {
+			toArchiveIDs = append(toArchiveIDs, held.ID)
 		}
 		existingByKey[k] = item
 	}
@@ -4375,7 +4476,6 @@ func (s *invoiceService) reconcileLineItems(
 
 	// Archive old items that no longer appear in the new calculation.
 	// An existing invoice line item whose key is not re-emitted by the fresh calculation gets archived.
-	var toArchiveIDs []string
 	for _, item := range existingByKey {
 		toArchiveIDs = append(toArchiveIDs, item.ID)
 	}
@@ -5778,6 +5878,10 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 	}
 	if inv.SubscriptionID == nil {
 		return nil // No subscription to sync for non-subscription invoices
+	}
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
 	}
 
 	payload, err := json.Marshal(map[string]string{"invoice_id": invoiceID})

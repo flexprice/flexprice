@@ -100,6 +100,13 @@ func (BillingTerm) Fields() []ent.Field {
 			Immutable().
 			GoType(types.BillingTermSplit("")),
 
+		field.String("instalment_invoicing").
+			SchemaType(varchar("30")).
+			Optional().
+			Nillable().
+			Immutable().
+			GoType(types.InstalmentDelivery("")),
+
 		field.String("invoice_label").
 			SchemaType(varchar("255")).
 			Optional().

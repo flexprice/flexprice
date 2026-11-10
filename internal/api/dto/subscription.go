@@ -962,6 +962,9 @@ type SubscriptionResponse struct {
 	Entitlements []*AggregatedFeature `json:"entitlements,omitempty"`
 
 	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
+
+	// Commitments are the commitments created with the subscription; set on create only.
+	Commitments []*CommitmentResponse `json:"commitments,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -994,10 +997,29 @@ type SubscriptionResponseV2 struct {
 	// Pauses are included when subscription has pause status
 	Pauses []*subscription.SubscriptionPause `json:"pauses,omitempty"`
 
+	// Commitments are included when "commitments" is in expand parameter
+	Commitments []*CommitmentResponse `json:"commitments,omitempty"`
+
 	// PlanPricesOutOfSync is true when the subscription's synced_price_sequence
 	// is behind the plan's current max prices.sequence — i.e. plan-price
 	// changes have not yet been reconciled into this subscription's line items.
 	PlanPricesOutOfSync bool `json:"plan_prices_out_of_sync"`
+}
+
+// ApplyDefaults fills the creation config's defaults, starts the subscription now unless given a start, and puts its
+// dates on whole seconds like every billing period edge.
+func (r *CreateSubscriptionRequest) ApplyDefaults() {
+	r.SubscriptionCreationConfig.ApplyDefaults()
+
+	r.StartDate = types.WholeSecondPtr(lo.CoalesceOrEmpty(r.StartDate, lo.ToPtr(clock.Now())))
+	r.EndDate = types.WholeSecondPtr(r.EndDate)
+	r.BillingAnchor = types.WholeSecondPtr(r.BillingAnchor)
+	r.TrialStart = types.WholeSecondPtr(r.TrialStart)
+	r.TrialEnd = types.WholeSecondPtr(r.TrialEnd)
+	for i := range r.Phases {
+		r.Phases[i].StartDate = r.Phases[i].StartDate.Truncate(time.Second)
+		r.Phases[i].EndDate = types.WholeSecondPtr(r.Phases[i].EndDate)
+	}
 }
 
 func (r *CreateSubscriptionRequest) validateCheckoutCompatibility() error {
@@ -1060,7 +1082,7 @@ func (r *CreateSubscriptionRequest) validateCommitments() error {
 			c.Scope.EntityID = "pending"
 		}
 
-		c.ApplyDefaults(lo.CoalesceOrEmpty(r.Timezone, types.DefaultTimezone))
+		c.ApplyDefaults()
 		if err := c.Validate(); err != nil {
 			return err
 		}
@@ -1237,8 +1259,8 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		r.StartDate = &now
 	}
 
-	if r.EndDate != nil && r.EndDate.Before(*r.StartDate) {
-		return ierr.NewError("end_date cannot be before start_date").
+	if r.EndDate != nil && !r.EndDate.After(*r.StartDate) {
+		return ierr.NewError("end_date must be after start_date").
 			WithHint("End date must be after start date").
 			WithReportableDetails(map[string]interface{}{
 				"start_date": *r.StartDate,

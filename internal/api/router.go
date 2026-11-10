@@ -53,6 +53,7 @@ type Handlers struct {
 	Refund                   *v1.RefundHandler
 	Tax                      *v1.TaxHandler
 	FXRate                   *v1.FXRateHandler
+	BillingEntity            *v1.BillingEntityHandler
 	Coupon                   *v1.CouponHandler
 	Commitment               *v1.CommitmentHandler
 	Webhook                  *v1.WebhookHandler
@@ -638,6 +639,16 @@ func NewRouter(
 			fxRates.DELETE("/:id", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.DeleteFXRate)
 		}
 
+		billingEntities := v1Private.Group("/billing-entities")
+		{
+			billingEntities.GET("", observe(types.EntityBillingEntity), handlers.BillingEntity.ListBillingEntities)
+			billingEntities.POST("/enable", write(types.EntityBillingEntity, types.ActionWrite, superAdminOnly), handlers.BillingEntity.EnableBillingEntities)
+			billingEntities.GET("/status", observe(types.EntityBillingEntity), handlers.BillingEntity.GetBillingEntitiesStatus)
+			billingEntities.POST("", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.CreateBillingEntity)
+			billingEntities.GET("/:id", observe(types.EntityBillingEntity), handlers.BillingEntity.GetBillingEntity)
+			billingEntities.PUT("/:id", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.UpdateBillingEntity)
+		}
+
 		taxAssociations := tax.Group("/associations")
 		{
 			taxAssociations.POST("", write(types.EntityTax, types.ActionWrite), handlers.Tax.CreateTaxAssociation)
@@ -878,6 +889,7 @@ func NewRouter(
 	webhooks := v1Public.Group("/webhooks")
 	webhooks.Use(middleware.WebhookBodyLimitMiddleware(middleware.MaxWebhookBodyBytes), middleware.WebhookActorMiddleware, middleware.WebhookLoggingMiddleware(logger, webhookRequestRepo))
 	{
+		// Each route also takes ?connection={connection_id} to verify and apply the event as that connection
 		// Stripe webhook endpoint: POST /v1/webhooks/stripe/{tenant_id}/{environment_id}
 		webhooks.POST("/stripe/:tenant_id/:environment_id", handlers.Webhook.HandleStripeWebhook)
 		// HubSpot webhook endpoint: POST /v1/webhooks/hubspot/{tenant_id}/{environment_id}

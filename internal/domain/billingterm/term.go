@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -32,14 +33,22 @@ type Term struct {
 	InvoiceCadence *types.InvoiceCadence   `json:"invoice_cadence,omitempty"`
 	Split          *types.BillingTermSplit `json:"split,omitempty"`
 
+	// InstalmentInvoicing delivers its instalments, the owner's delivery by default.
+	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
+
 	// InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number
-	// all of the owner's instalments together.
+	// the owner's instalments whose labels use them.
 	InvoiceLabel *string        `json:"invoice_label,omitempty"`
 	Metadata     types.Metadata `json:"metadata,omitempty" activity:"drop"`
 
 	EnvironmentID string `json:"environment_id"`
 
 	types.BaseModel
+}
+
+// LabelTemplate is the label its instalments take before numbering: its invoice_label, or the default.
+func (t *Term) LabelTemplate() string {
+	return lo.CoalesceOrEmpty(lo.FromPtr(t.InvoiceLabel), DefaultInvoiceLabel)
 }
 
 // recurringOnlyField names the first field set on the term that only recurring terms use, or returns "".
@@ -79,22 +88,23 @@ func TermFromEnt(e *ent.BillingTerm) *Term {
 	}
 
 	return &Term{
-		ID:             e.ID,
-		OwnerType:      e.OwnerType,
-		OwnerID:        e.OwnerID,
-		Kind:           e.Kind,
-		ValueType:      e.ValueType,
-		Value:          e.Value,
-		BillTrigger:    e.BillTrigger,
-		BillOn:         e.BillOn,
-		StartDate:      e.StartDate,
-		EndDate:        e.EndDate,
-		PeriodCount:    e.PeriodCount,
-		InvoiceCadence: e.InvoiceCadence,
-		Split:          e.Split,
-		InvoiceLabel:   e.InvoiceLabel,
-		Metadata:       e.Metadata,
-		EnvironmentID:  e.EnvironmentID,
+		ID:                  e.ID,
+		OwnerType:           e.OwnerType,
+		OwnerID:             e.OwnerID,
+		Kind:                e.Kind,
+		ValueType:           e.ValueType,
+		Value:               e.Value,
+		BillTrigger:         e.BillTrigger,
+		BillOn:              e.BillOn,
+		StartDate:           e.StartDate,
+		EndDate:             e.EndDate,
+		PeriodCount:         e.PeriodCount,
+		InvoiceCadence:      e.InvoiceCadence,
+		Split:               e.Split,
+		InstalmentInvoicing: e.InstalmentInvoicing,
+		InvoiceLabel:        e.InvoiceLabel,
+		Metadata:            e.Metadata,
+		EnvironmentID:       e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

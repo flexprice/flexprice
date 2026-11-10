@@ -64,6 +64,7 @@ func (r *billingTermRepository) CreateMany(ctx context.Context, terms []*billing
 			SetNillablePeriodCount(t.PeriodCount).
 			SetNillableInvoiceCadence(t.InvoiceCadence).
 			SetNillableSplit(t.Split).
+			SetNillableInstalmentInvoicing(t.InstalmentInvoicing).
 			SetNillableInvoiceLabel(t.InvoiceLabel).
 			SetMetadata(t.Metadata).
 			SetTenantID(t.TenantID).
@@ -98,6 +99,31 @@ func (r *billingTermRepository) List(ctx context.Context, ownerType types.Billin
 		Where(
 			entbillingterm.OwnerTypeEQ(ownerType),
 			entbillingterm.OwnerID(ownerID),
+		).
+		Order(ent.Asc(entbillingterm.FieldID)).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list billing terms").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return billingterm.TermsFromEnt(rows), nil
+}
+
+func (r *billingTermRepository) ListByIDs(ctx context.Context, ids []string) ([]*billingterm.Term, error) {
+	span := StartRepositorySpan(ctx, "billing_term", "list_by_ids", map[string]interface{}{
+		"count": len(ids),
+	})
+	defer FinishSpan(span)
+
+	rows, err := r.client.Reader(ctx).BillingTerm.Query().
+		Where(
+			entbillingterm.TenantID(types.GetTenantID(ctx)),
+			entbillingterm.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entbillingterm.IDIn(ids...),
 		).
 		Order(ent.Asc(entbillingterm.FieldID)).
 		All(ctx)

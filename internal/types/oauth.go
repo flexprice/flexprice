@@ -82,6 +82,12 @@ type OAuthSession struct {
 	// Sync configuration (optional)
 	SyncConfig *SyncConfig `json:"sync_config"` // Optional sync configuration for the connection
 
+	// Owning billing entity, resolved when the session is stored
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
+
+	// ConnectionID is the client-generated id for the pending connection; generated when empty
+	ConnectionID string `json:"connection_id,omitempty"`
+
 	// CSRF protection
 	CSRFState string `json:"csrf_state"` // Random 32-byte hex string for state validation
 

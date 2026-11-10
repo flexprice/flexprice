@@ -449,7 +449,7 @@ func (s *CommitmentE2ESuite) TestMidPeriodPriceEdit_CommitmentSpansBothVersions(
 }
 
 // A commitment added halfway through a quarter has a floor for the half it covers; usage before it starts bills
-// as overage.
+// as plain usage.
 func (s *CommitmentE2ESuite) TestQuarterlyCommitmentCreatedMidPeriod_ProratesItsFirstFloor() {
 	tokens := s.planWith("quarterly", types.BILLING_PERIOD_QUARTER, s.tokens, "1")
 	sub := s.subscribe(tokens, s.jan)
@@ -464,7 +464,7 @@ func (s *CommitmentE2ESuite) TestQuarterlyCommitmentCreatedMidPeriod_ProratesIts
 	s.requireInvoice(s.invoiceFor(sub.ID, s.jan, s.jan.AddDate(0, 3, 0)), "650",
 		wantLine{types.CommitmentLineUtilized, "Quarterly floor", "300", "300"},
 		wantLine{types.CommitmentLineTrueUp, "Quarterly floor (unused)", "1", "150"},
-		wantLine{types.CommitmentLineOverage, "Tokens", "200", "200"},
+		wantLine{types.CommitmentLinePlain, "Tokens", "200", "200"},
 	)
 }
 
@@ -482,7 +482,7 @@ func (s *CommitmentE2ESuite) TestInlineCommitment_BillsOnTheFirstInvoice() {
 }
 
 // Terminated on 11 Jan with a $500 fee: January's floor shrinks to the ten days the commitment ran, usage after
-// it bills as overage, and the fee is billed on its own one-off invoice.
+// it bills as plain usage, and the fee is billed on its own one-off invoice.
 func (s *CommitmentE2ESuite) TestTerminateMidPeriod_ClipsTheFloorAndBillsTheFee() {
 	tokens := s.planWith("terminated", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	sub := s.subscribe(tokens, s.jan)
@@ -499,7 +499,7 @@ func (s *CommitmentE2ESuite) TestTerminateMidPeriod_ClipsTheFloorAndBillsTheFee(
 	fee, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), *terminated.TerminationInvoiceID)
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceTypeOneOff, fee.InvoiceType)
-	s.Equal(string(types.InvoiceBillingReasonProration), fee.BillingReason)
+	s.Equal(string(types.InvoiceBillingReasonCommitmentTermination), fee.BillingReason)
 	s.True(fee.AmountDue.Equal(dec("500")), "fee invoice %s", fee.AmountDue)
 	feeLines, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), fee.ID)
 	s.Require().NoError(err)
@@ -513,12 +513,12 @@ func (s *CommitmentE2ESuite) TestTerminateMidPeriod_ClipsTheFloorAndBillsTheFee(
 	s.requireInvoice(s.invoiceFor(sub.ID, s.jan, s.jan.AddDate(0, 1, 0)), "130",
 		wantLine{types.CommitmentLineUtilized, "Platform floor", "400", "40"},
 		wantLine{types.CommitmentLineTrueUp, "Platform floor (unused)", "1", "60"},
-		wantLine{types.CommitmentLineOverage, "Tokens", "300", "30"},
+		wantLine{types.CommitmentLinePlain, "Tokens", "300", "30"},
 	)
 }
 
 // A $310 monthly floor for exactly one year from 15 Jan: January bills the 17 days from the start, a middle month
-// the full floor, and the next January the 14 days to the end, with usage after the end billed as overage.
+// the full floor, and the next January the 14 days to the end, with usage after the end billed as plain usage.
 func (s *CommitmentE2ESuite) TestOneYearCommitmentFromMidPeriod_ProratesItsFirstAndLastFloors() {
 	tokens := s.planWith("one_year", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	sub := s.subscribe(tokens, s.jan)
@@ -537,7 +537,7 @@ func (s *CommitmentE2ESuite) TestOneYearCommitmentFromMidPeriod_ProratesItsFirst
 	s.requireInvoice(s.invoiceFor(sub.ID, s.jan, s.jan.AddDate(0, 1, 0)), "190",
 		wantLine{types.CommitmentLineUtilized, "Annual floor", "1000", "100"},
 		wantLine{types.CommitmentLineTrueUp, "Annual floor (unused)", "1", "70"},
-		wantLine{types.CommitmentLineOverage, "Tokens", "200", "20"},
+		wantLine{types.CommitmentLinePlain, "Tokens", "200", "20"},
 	)
 
 	// June 2026: the full $310 floor against $200 used.
@@ -552,8 +552,69 @@ func (s *CommitmentE2ESuite) TestOneYearCommitmentFromMidPeriod_ProratesItsFirst
 	s.requireInvoice(s.invoiceFor(sub.ID, lastJan, lastJan.AddDate(0, 1, 0)), "190",
 		wantLine{types.CommitmentLineUtilized, "Annual floor", "600", "60"},
 		wantLine{types.CommitmentLineTrueUp, "Annual floor (unused)", "1", "80"},
-		wantLine{types.CommitmentLineOverage, "Tokens", "500", "50"},
+		wantLine{types.CommitmentLinePlain, "Tokens", "500", "50"},
 	)
+}
+
+// A floor of 150 a month from 17 Apr holds exactly 70 for April's last 14 of 30 days, so the commitment's value and
+// April's invoice lines carry no noise from the proration, and a package-priced floor bills 7 packages, not 8.
+func (s *CommitmentE2ESuite) TestCommitmentFromMidPeriod_ProratesItsFloorExactly() {
+	apr, may := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	start, end := time.Date(2026, 4, 17, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name      string
+		committed *dto.CommitmentPriceInput // prices a quantity floor; nil for an amount floor
+		used      string
+		value     string
+		total     string
+		lines     []wantLine
+	}{
+		{
+			// $70 for April, then $150 for each of May, June and July; April's 80 tokens at $1 run $10 over its floor.
+			name:  "amount floor",
+			used:  "80",
+			value: "520",
+			total: "80",
+			lines: []wantLine{
+				{types.CommitmentLineUtilized, "Floor", "70", "70"},
+				{types.CommitmentLineOverage, "Tokens", "10", "10"},
+			},
+		},
+		{
+			// 7 packages of 10 tokens at $5 for April, then 15 a month; the 30 used fill 3 and the other 40 bill unused.
+			name: "package-priced quantity floor",
+			committed: &dto.CommitmentPriceInput{
+				BillingModel:      types.BILLING_MODEL_PACKAGE,
+				Amount:            lo.ToPtr(dec("5")),
+				TransformQuantity: &price.TransformQuantity{DivideBy: 10, Round: types.ROUND_UP},
+			},
+			used:  "30",
+			value: "260",
+			total: "35",
+			lines: []wantLine{
+				{types.CommitmentLineUtilized, "Floor", "30", "15"},
+				{types.CommitmentLineTrueUp, "Floor (unused)", "40", "20"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			tokens := s.planWith("prorated_floor", types.BILLING_PERIOD_MONTHLY, s.tokens, "1")
+			sub := s.subscribe(tokens, s.jan)
+			req := floorRequest("Floor", tokens.ID, "150", start, end)
+			if tt.committed != nil {
+				req.Type, req.CommittedPrice = types.COMMITMENT_TYPE_QUANTITY, tt.committed
+			}
+
+			created := s.commit(sub.ID, req)
+			s.Equal(tt.value, created.CommitmentValue.String())
+
+			s.record(s.tokens, time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC), tt.used)
+			s.requireInvoice(s.invoiceFor(sub.ID, apr, may), tt.total, tt.lines...)
+		})
+	}
 }
 
 // tokenSlabs bills the first 100 tokens at $0.50 and the rest at $0.25.
@@ -684,13 +745,22 @@ func (s *CommitmentE2ESuite) TestAnalytics_UngroupedLineCarriesTheCommitment() {
 	s.True(item.CommitmentInfo.ComputedTrueUpAmount.Equal(dec("50")))
 }
 
-// A query ending mid-period projects the commitment to its period end: covered usage is not
-// misreported as overage against a to-date capacity, and the floor is the one the invoice bills.
-func (s *CommitmentE2ESuite) TestAnalytics_MidWindowQueryProjectsToThePeriodEnd() {
+// A query ending mid-period before today is priced as that window's invoice prices it, with the floor prorated to the
+// window; only a window reaching today projects the open period's floor to its end.
+func (s *CommitmentE2ESuite) TestAnalytics_PastMidPeriodQueryPricesItsOwnWindow() {
 	tokens := s.planWith("analytics_midwindow", types.BILLING_PERIOD_MONTHLY, s.tokens, "0", tokenSlabs...)
 	sub := s.subscribe(tokens, s.jan)
 	s.commit(sub.ID, floorRequest("Platform floor", tokens.ID, "150", s.jan, s.jan.AddDate(0, 6, 0)))
 	s.recordSourcedTokens()
+
+	end := s.jan.AddDate(0, 0, 20)
+	invoice := s.invoiceFor(sub.ID, s.jan, end)
+	billed := map[types.CommitmentLineKind]decimal.Decimal{}
+	for _, line := range invoice.LineItems {
+		kind := types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind])
+		billed[kind] = billed[kind].Add(line.Amount)
+	}
+	s.True(billed[types.CommitmentLineOverage].IsPositive(), "the prorated floor leaves overage: %v", billed)
 
 	for _, groupBy := range [][]string{nil, {"source"}} {
 		resp, err := s.analytics.GetDetailedAnalytics(s.GetContext(), &events.MeterUsageDetailedAnalyticsParams{
@@ -698,7 +768,7 @@ func (s *CommitmentE2ESuite) TestAnalytics_MidWindowQueryProjectsToThePeriodEnd(
 			EnvironmentID:      types.GetEnvironmentID(s.GetContext()),
 			ExternalCustomerID: s.customer.ExternalID,
 			StartTime:          s.jan,
-			EndTime:            s.jan.AddDate(0, 0, 20),
+			EndTime:            end,
 			GroupBy:            groupBy,
 		})
 		s.Require().NoError(err)
@@ -712,10 +782,10 @@ func (s *CommitmentE2ESuite) TestAnalytics_MidWindowQueryProjectsToThePeriodEnd(
 			overage = overage.Add(item.CommitmentInfo.ComputedOverageAmount)
 		}
 
-		s.True(total.Equal(dec("150")), "group_by %v: total %s", groupBy, total)
-		s.True(utilized.Equal(dec("100")), "group_by %v: utilized %s", groupBy, utilized)
-		s.True(trueUp.Equal(dec("50")), "group_by %v: true-up %s", groupBy, trueUp)
-		s.True(overage.IsZero(), "group_by %v: overage %s", groupBy, overage)
+		s.True(total.Equal(invoice.AmountDue), "group_by %v: total %s, invoice %s", groupBy, total, invoice.AmountDue)
+		s.True(utilized.Equal(billed[types.CommitmentLineUtilized]), "group_by %v: utilized %s", groupBy, utilized)
+		s.True(overage.Equal(billed[types.CommitmentLineOverage]), "group_by %v: overage %s", groupBy, overage)
+		s.True(trueUp.Equal(billed[types.CommitmentLineTrueUp]), "group_by %v: true-up %s", groupBy, trueUp)
 	}
 }
 
@@ -953,7 +1023,8 @@ func (s *CommitmentE2ESuite) TestE2E_A4_Milestones() {
 }
 
 // A6: $100 a month for 2026, with a $300 deposit. The deposit is billed on 1 Jan, the first three months bill only
-// usage above the commitment, and from April each month's invoice carries its $100.
+// usage above the commitment, and from April each month's invoice carries its $100. The deposit's own label takes no
+// number, so the monthly instalments count 1 to 9.
 func (s *CommitmentE2ESuite) TestE2E_A6_Deposit() {
 	apr, end := s.jan.AddDate(0, 3, 0), s.jan.AddDate(1, 0, 0)
 	tokens := s.planWith("a6", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
@@ -976,6 +1047,10 @@ func (s *CommitmentE2ESuite) TestE2E_A6_Deposit() {
 	opening := s.openingInvoice(sub.ID)
 	s.requireBilled(opening, "300", wantLine{types.CommitmentLineInstalment, "Platform - Deposit", "1", "300"})
 	deposit := s.billedInstalments(opening.ID)[0]
+	s.Require().Len(sub.Commitments, 1)
+	returned, ok := lo.Find(sub.Commitments[0].Instalments, func(i *billingterm.Instalment) bool { return i.ID == deposit.ID })
+	s.Require().True(ok)
+	s.Equal(types.InstalmentStatusInvoiced, returned.InstalmentStatus, "the response shows the deposit the opening invoice billed")
 	s.True(deposit.ServicePeriodStart.Equal(s.jan) && deposit.ServicePeriodEnd.Equal(end), "a once instalment's service period is the term")
 
 	// $80 of usage in January, $150 in February and $100 in April.
@@ -991,7 +1066,7 @@ func (s *CommitmentE2ESuite) TestE2E_A6_Deposit() {
 	s.requireBilled(s.billPeriod(sub.ID, s.jan.AddDate(0, 2, 0)), "0")
 
 	for month := 3; month < 12; month++ {
-		want := []wantLine{{types.CommitmentLineInstalment, fmt.Sprintf("Platform - Instalment %d of 10", month-1), "1", "100"}}
+		want := []wantLine{{types.CommitmentLineInstalment, fmt.Sprintf("Platform - Instalment %d of 9", month-2), "1", "100"}}
 		if month == 3 {
 			want = append(want, wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "1000", "0"})
 		}
@@ -1067,7 +1142,7 @@ func (s *CommitmentE2ESuite) TestE2E_B1_SeparateInvoice() {
 	// The August invoice, issued on 1 Sep, carries no instalment although all three are due by then.
 	s.requireBilled(s.billPeriod(sub.ID, aug), "20",
 		wantLine{types.CommitmentLineUtilized, "Platform (covered by commitment)", "500", "0"},
-		wantLine{types.CommitmentLineOverage, "Tokens", "200", "20"},
+		wantLine{types.CommitmentLinePlain, "Tokens", "200", "20"},
 	)
 
 	s.Require().NoError(s.commitments.BillDueInstalments(s.GetContext()))

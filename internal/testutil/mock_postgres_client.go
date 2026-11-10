@@ -64,6 +64,11 @@ func (c *MockPostgresClient) LockWithWait(ctx context.Context, req postgres.Lock
 	return nil
 }
 
+// LockSharedWithWait is a no-op for mock client
+func (c *MockPostgresClient) LockSharedWithWait(ctx context.Context, req postgres.LockRequest) error {
+	return nil
+}
+
 func (c *MockPostgresClient) Close() error {
 	return nil
 }

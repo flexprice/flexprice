@@ -35,6 +35,8 @@ const (
 	FieldProviderType = "provider_type"
 	// FieldProviderEntityID holds the string denoting the provider_entity_id field in the database.
 	FieldProviderEntityID = "provider_entity_id"
+	// FieldConnectionID holds the string denoting the connection_id field in the database.
+	FieldConnectionID = "connection_id"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// Table holds the table name of the entityintegrationmapping in the database.
@@ -55,6 +57,7 @@ var Columns = []string{
 	FieldEntityType,
 	FieldProviderType,
 	FieldProviderEntityID,
+	FieldConnectionID,
 	FieldMetadata,
 }
 
@@ -152,4 +155,9 @@ func ByProviderType(opts ...sql.OrderTermOption) OrderOption {
 // ByProviderEntityID orders the results by the provider_entity_id field.
 func ByProviderEntityID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProviderEntityID, opts...).ToFunc()
+}
+
+// ByConnectionID orders the results by the connection_id field.
+func ByConnectionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConnectionID, opts...).ToFunc()
 }

@@ -215,8 +215,8 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		PriceType:               priceType,
 		MeterID:                 meterID,
 		MeterDisplayName:        meterDisplayName,
-		PriceUnitID:             e.PriceUnitID,
-		PriceUnit:               e.PriceUnit,
+		PriceUnitID:             nilIfEmpty(e.PriceUnitID),
+		PriceUnit:               nilIfEmpty(e.PriceUnit),
 		DisplayName:             displayName,
 		Quantity:                e.Quantity,
 		Currency:                e.Currency,
@@ -275,4 +275,11 @@ func (li *SubscriptionLineItem) GetPeriodEnd(defaultPeriodEnd time.Time) time.Ti
 		return li.EndDate
 	}
 	return defaultPeriodEnd
+}
+
+func nilIfEmpty(s *string) *string {
+	if s == nil || *s == "" {
+		return nil
+	}
+	return s
 }

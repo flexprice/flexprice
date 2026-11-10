@@ -63,7 +63,7 @@ func (s *CommitmentE2ESuite) markInvoiced(req *dto.CreateInvoiceRequest) {
 		return *line.BillingInstalmentID
 	})
 
-	invoiced, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE), ids)
+	invoiced, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE), time.Now(), ids)
 	s.Require().NoError(err)
 	s.Require().Len(invoiced, len(ids))
 }
@@ -363,4 +363,54 @@ func (s *CommitmentE2ESuite) TestInstalments_DisabledSettingAddsNothing() {
 
 	s.Empty(instalmentLines(s.invoiceAt(types.ReferencePointPeriodStart, sub.ID, s.jan, feb)))
 	s.Empty(instalmentLines(s.invoiceFor(sub.ID, s.jan, feb)))
+}
+
+// An instalment back on schedule though its commitment was terminated before it fell due, as a void used to leave one,
+// is left off the subscription invoices rather than billed again.
+func (s *CommitmentE2ESuite) TestInstalments_SkipThoseATerminationCancelled() {
+	ctx := s.GetContext()
+	feb, mar, feb15 := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0), s.jan.AddDate(0, 1, 14)
+	sub, instalments, february := s.billedThroughMarch("skip_terminated", types.InstalmentDeliverySubscriptionInvoice)
+	march := instalments[2]
+	_, err := s.commitments.Terminate(ctx, march.OwnerID, dto.TerminateCommitmentRequest{EffectiveAt: &feb15})
+	s.Require().NoError(err)
+
+	_, err = s.GetStores().BillingInstalmentRepo.Reschedule(ctx, february)
+	s.Require().NoError(err)
+	s.Require().Equal(types.InstalmentStatusScheduled, s.instalmentStatus(march.ID).InstalmentStatus)
+
+	s.Empty(instalmentLines(s.invoiceFor(sub.ID, feb, mar)))
+	s.Empty(instalmentLines(s.invoiceFor(sub.ID, mar, mar.AddDate(0, 1, 0))))
+}
+
+// A term can deliver differently from its commitment: the upfront bills on its own invoice on its date while the
+// monthly instalments go on the subscription invoices.
+func (s *CommitmentE2ESuite) TestDelivery_PerTerm() {
+	ctx := s.GetContext()
+	start := s.jan.AddDate(0, 0, 14)
+	tokens := s.planWith("delivery_per_term", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan)
+	upfront := dto.BillingTermInput{
+		Kind:                types.BillingTermKindOnce,
+		ValueType:           types.BillingTermValueFixed,
+		Value:               lo.ToPtr(dec("300")),
+		InstalmentInvoicing: lo.ToPtr(types.InstalmentDeliverySeparateInvoice),
+	}
+	monthly := dto.BillingTermInput{
+		Kind:           types.BillingTermKindRecurring,
+		ValueType:      types.BillingTermValueRemainder,
+		InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear),
+	}
+	committed := s.commit(sub.ID, termsRequest("Platform", tokens.ID, "100", start, start.AddDate(1, 0, 0), upfront, monthly))
+	first, second := committed.Instalments[0], committed.Instalments[1]
+	s.Require().Equal(types.InstalmentDeliverySeparateInvoice, first.Delivery)
+	s.Require().Equal(types.InstalmentDeliverySubscriptionInvoice, second.Delivery)
+
+	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
+	separate := s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms)
+	s.Require().Len(separate, 1, "only the upfront bills on its own invoice")
+	s.requireBilledBy(separate[0].ID, []string{first.ID})
+
+	january := s.billPeriod(sub.ID, s.jan)
+	s.requireBilledBy(january.ID, []string{second.ID})
 }

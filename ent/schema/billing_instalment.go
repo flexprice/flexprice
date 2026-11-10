@@ -111,6 +111,11 @@ func (BillingInstalment) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
+		// invoiced_at is when the invoice billing the instalment was finalized; voiding that invoice clears it.
+		field.Time("invoiced_at").
+			Optional().
+			Nillable(),
+
 		field.Other("metadata", types.Metadata{}).
 			SchemaType(map[string]string{"postgres": "jsonb"}).
 			Optional().
@@ -125,5 +130,7 @@ func (BillingInstalment) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "subscription_id", "instalment_status", "bill_on"),
 		index.Fields("tenant_id", "environment_id", "instalment_status", "delivery", "bill_on"),
 		index.Fields("tenant_id", "environment_id", "invoice_id"),
+		index.Fields("tenant_id", "environment_id", "owner_id", "invoiced_at").
+			StorageKey("idx_billing_instalments_tenant_env_owner_invoiced_at"),
 	}
 }

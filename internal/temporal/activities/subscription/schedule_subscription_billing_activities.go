@@ -10,6 +10,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 
@@ -131,6 +132,11 @@ func (s *SubscriptionActivities) ScheduleBillingActivity(ctx context.Context, in
 					PeriodEnd:      sub.CurrentPeriodEnd,
 				},
 			)
+			if ierr.IsAlreadyExists(err) {
+				logger.Info("Billing workflow already running, skipping",
+					"subscription_id", sub.ID)
+				continue
+			}
 			if err != nil {
 				// Log error but continue processing other subscriptions
 				logger.Error("Failed to start workflow for subscription",

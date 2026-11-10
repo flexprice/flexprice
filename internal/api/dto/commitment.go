@@ -100,24 +100,24 @@ type CreateCommitmentRequest struct {
 	Binding            *bool                             `json:"binding,omitempty"` // default false
 	CollectionMethod   *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
 	// BillingTerms apply only to collection_method billing_terms, which requires at least one.
-	BillingTerms []BillingTermInput `json:"billing_terms,omitempty" validate:"omitempty,min=1,max=20,dive"`
-	// InstalmentInvoicing applies only to collection_method billing_terms.
+	BillingTerms []BillingTermInput `json:"billing_terms,omitempty" validate:"omitempty,min=1,max=100,dive"`
+	// InstalmentInvoicing applies only to collection_method billing_terms; a billing term may set its own.
 	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
-	// StartDate and EndDate must be whole seconds.
-	StartDate time.Time `json:"start_date" validate:"required,whole_second"`
+	// StartDate and EndDate within a second after a billing period edge are taken as that edge.
+	StartDate time.Time `json:"start_date" validate:"required"`
 	// EndDate is exclusive; omit it for an open-ended commitment, which bills every period until terminated.
-	EndDate  *time.Time     `json:"end_date,omitempty" validate:"omitempty,whole_second"`
+	EndDate  *time.Time     `json:"end_date,omitempty"`
 	Metadata types.Metadata `json:"metadata,omitempty"`
 }
 
-// ApplyDefaults fills label, timezone and the binding-dependent settings.
-func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
+// ApplyDefaults fills the label, the timezone active_windows are read in (UTC) and the binding-dependent settings.
+func (r *CreateCommitmentRequest) ApplyDefaults() {
 	if r.InvoiceLabel == "" {
 		r.InvoiceLabel = r.Name
 	}
 
 	if r.Timezone == "" {
-		r.Timezone = subTimezone
+		r.Timezone = types.DefaultTimezone
 	}
 
 	if r.Binding == nil {
@@ -328,17 +328,26 @@ type UpdateCommitmentRequest struct {
 	InvoiceLabel       *string        `json:"invoice_label,omitempty" validate:"omitempty,min=1,max=255"`
 	InvoiceDescription *string        `json:"invoice_description,omitempty" validate:"omitempty,max=500"`
 	Metadata           types.Metadata `json:"metadata,omitempty"`
+
+	// EndDate can't be changed yet; terminate the commitment to end it.
+	EndDate *time.Time `json:"end_date,omitempty"`
 }
 
 func (r *UpdateCommitmentRequest) Validate() error {
+	if r.EndDate != nil {
+		return ierr.NewError("changing end_date is not supported yet").
+			WithHint("Terminate the commitment to end it").
+			Mark(ierr.ErrValidation)
+	}
+
 	return validator.ValidateRequest(r)
 }
 
 // TerminateCommitmentRequest ends a commitment now. effective_at may not be in the future; cancellation_fee is billed
 // in the commitment currency.
 type TerminateCommitmentRequest struct {
-	// EffectiveAt defaults to now; a given one must be a whole second.
-	EffectiveAt     *time.Time            `json:"effective_at,omitempty" validate:"omitempty,whole_second"`
+	// EffectiveAt defaults to now; within a second after a billing period edge it is taken as that edge.
+	EffectiveAt     *time.Time            `json:"effective_at,omitempty"`
 	CancellationFee *CancellationFeeInput `json:"cancellation_fee,omitempty"`
 }
 

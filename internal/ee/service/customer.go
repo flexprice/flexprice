@@ -50,7 +50,19 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 		}
 	}
 
-	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	billingEntityService := NewBillingEntityService(s.ServiceParams)
+	if err := billingEntityService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
+		requested := req.BillingEntityID
+		// Inbound provider events carry their connection's entity in ctx.
+		if requested == nil && mode == types.BillingEntityModeEnabled && types.GetBillingEntityID(txCtx) != "" {
+			requested = lo.ToPtr(types.GetBillingEntityID(txCtx))
+		}
+		billingEntityID, err := billingEntityService.ResolveBillingEntityID(txCtx, mode, requested)
+		if err != nil {
+			return err
+		}
+		cust.BillingEntityID = billingEntityID
+
 		if err := s.CustomerRepo.Create(txCtx, cust); err != nil {
 			// No need to wrap the error as the repository already returns properly formatted errors
 			return err
@@ -71,11 +83,15 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 			}
 		}
 
-		// If no tax rate overrides are provided, link the tenant tax rate to the customer
+		// If no tax rate overrides are provided, link the entity's (or, without one, the tenant's) default rates
 		if req.TaxRateOverrides == nil {
 			filter := types.NewNoLimitTaxAssociationFilter()
 			filter.EntityType = types.TaxRateEntityTypeTenant
 			filter.EntityID = types.GetTenantID(txCtx)
+			if cust.BillingEntityID != nil {
+				filter.EntityType = types.TaxRateEntityTypeBillingEntity
+				filter.EntityID = *cust.BillingEntityID
+			}
 			filter.AutoApply = lo.ToPtr(true)
 			tenantTaxAssociations, err := taxService.ListTaxAssociations(txCtx, filter)
 			if err != nil {
@@ -139,6 +155,9 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 
 	// Validate expand fields
 	if err := filter.GetExpand().Validate(types.CustomerExpandConfig); err != nil {
+		return nil, err
+	}
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
 		return nil, err
 	}
 
@@ -306,8 +325,16 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventCustomerUpdated, cust.ID)
-	s.syncCustomerUpdateToZoho(ctx, cust)
-	s.syncCustomerUpdateToStripe(ctx, &before, cust)
+
+	syncCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, cust.ID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to resolve billing entity, customer update not pushed to integrations",
+			"error", err,
+			"customer_id", cust.ID)
+		return &dto.CustomerResponse{Customer: cust}, nil
+	}
+	s.syncCustomerUpdateToZoho(syncCtx, cust)
+	s.syncCustomerUpdateToStripe(syncCtx, &before, cust)
 
 	return &dto.CustomerResponse{Customer: cust}, nil
 }

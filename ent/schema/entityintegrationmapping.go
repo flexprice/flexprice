@@ -8,7 +8,7 @@ import (
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 )
 
-var Idx_entity_integration_mapping_unique = "idx_entity_integration_mapping_unique"
+var Idx_entity_integration_mapping_unique = "idx_entity_integration_mapping_connection_unique"
 
 // EntityIntegrationMapping holds the schema definition for the EntityIntegrationMapping entity.
 type EntityIntegrationMapping struct {
@@ -52,6 +52,12 @@ func (EntityIntegrationMapping) Fields() []ent.Field {
 				"postgres": "varchar(255)",
 			}).
 			NotEmpty(),
+		field.String("connection_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
 		// Metadata as JSON field for provider-specific data
 		field.JSON("metadata", map[string]interface{}{}).
 			Optional(),
@@ -67,8 +73,8 @@ func (EntityIntegrationMapping) Edges() []ent.Edge {
 func (EntityIntegrationMapping) Indexes() []ent.Index {
 	return []ent.Index{
 		// Primary composite index with optimal column order for PostgreSQL
-		// tenant_id, environment_id, entity_type, entity_id, provider_type
-		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "provider_type").
+		// tenant_id, environment_id, entity_type, entity_id, provider_type, connection_id
+		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "provider_type", "connection_id").
 			Unique().
 			StorageKey(Idx_entity_integration_mapping_unique).
 			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),

@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // NomodCustomerService defines the interface for Nomod customer operations
@@ -69,10 +70,16 @@ func (s *CustomerService) EnsureCustomerSyncedToNomod(ctx context.Context, custo
 
 	// Check if customer is synced via integration mapping table
 	if s.entityIntegrationMappingRepo != nil {
+		conn, err := s.client.GetConnection(ctx)
+		if err != nil {
+			return nil, err
+		}
+
 		filter := &types.EntityIntegrationMappingFilter{
 			EntityID:      customerID,
 			EntityType:    types.IntegrationEntityTypeCustomer,
 			ProviderTypes: []string{string(types.SecretProviderNomod)},
+			ConnectionID:  conn.ID,
 		}
 
 		existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -161,6 +168,11 @@ func (s *CustomerService) CreateCustomerInNomod(ctx context.Context, customerID 
 
 // SyncCustomerToNomod creates a customer in Nomod and stores the mapping
 func (s *CustomerService) SyncCustomerToNomod(ctx context.Context, flexpriceCustomer *customer.Customer) (string, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	// Prepare customer data for Nomod
 	req := CreateCustomerRequest{
 		FirstName: flexpriceCustomer.Name,
@@ -200,6 +212,7 @@ func (s *CustomerService) SyncCustomerToNomod(ctx context.Context, flexpriceCust
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
+		ConnectionID:  lo.ToPtr(conn.ID),
 	}
 
 	err = s.entityIntegrationMappingRepo.Create(ctx, mapping)
@@ -221,10 +234,16 @@ func (s *CustomerService) SyncCustomerToNomod(ctx context.Context, flexpriceCust
 
 // GetNomodCustomerID retrieves the Nomod customer ID for a FlexPrice customer
 func (s *CustomerService) GetNomodCustomerID(ctx context.Context, customerID string) (string, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityID:      customerID,
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{string(types.SecretProviderNomod)},
+		ConnectionID:  conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
