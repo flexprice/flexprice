@@ -2269,6 +2269,7 @@ func (s *subscriptionService) CancelSubscription(
 	prorationCreditKey := s.buildCancellationProrationKey(subscription, req, effectiveDate)
 
 	var prorationDetails []dto.ProrationDetail
+	var cancelledGroupedChildIDs []string
 	totalCreditAmount := decimal.Zero
 
 	// Trialing subscriptions have not been charged yet, so generating a
@@ -2388,6 +2389,14 @@ func (s *subscriptionService) CancelSubscription(
 			return err
 		}
 
+		groupedChildren, err := s.CascadeCancelToGroupedInvoicingSubscriptions(ctx, subscription)
+		if err != nil {
+			return err
+		}
+		for _, child := range groupedChildren {
+			cancelledGroupedChildIDs = append(cancelledGroupedChildIDs, child.ID)
+		}
+
 		// Step 7a/7b/8: Terminate addon associations, addon/plan line items, and credit grants.
 		// Only done here for immediate cancellations. For end_of_period/scheduled_date, this is
 		// deferred to the point where the cancellation actually fires (processSubscriptionPeriod's
@@ -2436,10 +2445,17 @@ func (s *subscriptionService) CancelSubscription(
 		return nil, err
 	}
 	NotifySubscriptionChanged(ctx, s.ServiceParams, subscription.ID)
+	for _, childID := range cancelledGroupedChildIDs {
+		NotifySubscriptionChanged(ctx, s.ServiceParams, childID)
+	}
 
 	if !req.SuppressWebhook {
 		// Step 10: Publish events
 		s.publishCancellationEvents(ctx, subscription, req.CancellationType)
+		for _, childID := range cancelledGroupedChildIDs {
+			s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, childID)
+			s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, childID)
+		}
 	}
 
 	// Gate on the resulting status, not the request's cancellation type: only an immediate
@@ -3695,6 +3711,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 	}
 
 	isSubscriptionCancelled := false
+	var cancelledGroupedChildren []*subscription.Subscription
 	// Use db's WithTx for atomic operations
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		if sub.SubscriptionStatus == types.SubscriptionStatusActive {
@@ -3845,6 +3862,11 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			if err := s.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
 				return err
 			}
+			children, err := s.CascadeCancelToGroupedInvoicingSubscriptions(ctx, sub)
+			if err != nil {
+				return err
+			}
+			cancelledGroupedChildren = children
 		}
 
 		// Process pending plan changes at period end (only if subscription is still active)
@@ -3878,6 +3900,10 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 	if isSubscriptionCancelled {
 		s.PublishCancellationEvents(ctx, sub)
+		for _, child := range cancelledGroupedChildren {
+			NotifySubscriptionChanged(ctx, s.ServiceParams, child.ID)
+			s.PublishCancellationEvents(ctx, child)
+		}
 	}
 
 	return nil
@@ -4103,6 +4129,72 @@ func (s *subscriptionService) CascadeCancelToInheritedSubscriptions(ctx context.
 		}
 	}
 	return nil
+}
+
+// CascadeCancelToGroupedInvoicingSubscriptions cancels the live grouped_invoicing children of a cancelled
+// parent and ends their resources at the parent's end date. Returns the cancelled children.
+// Call it in the transaction that cancels the parent, so both commit together.
+func (s *subscriptionService) CascadeCancelToGroupedInvoicingSubscriptions(ctx context.Context, parentSub *subscription.Subscription) ([]*subscription.Subscription, error) {
+	if parentSub.SubscriptionStatus != types.SubscriptionStatusCancelled {
+		return nil, nil
+	}
+	children, err := getGroupedInvoicingChildren(ctx, s.ServiceParams, parentSub, false)
+	if err != nil {
+		return nil, err
+	}
+	children = lo.Reject(children, func(child *subscription.Subscription, _ int) bool {
+		return child.SubscriptionStatus == types.SubscriptionStatusCancelled
+	})
+	if len(children) == 0 {
+		return nil, nil
+	}
+
+	endDate := subscriptionEndDate(parentSub)
+	if endDate == nil {
+		return nil, ierr.NewError("cancelled parent subscription has no end date").
+			WithHint("The parent subscription must have an end date before its grouped children can be cancelled").
+			WithReportableDetails(map[string]interface{}{"subscription_id": parentSub.ID}).
+			Mark(ierr.ErrInternal)
+	}
+	reason := parentSub.Metadata["cancellation_reason"]
+
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		for _, child := range children {
+			child.SubscriptionStatus = types.SubscriptionStatusCancelled
+			child.CancelledAt = parentSub.CancelledAt
+			child.CancelAt = parentSub.CancelAt
+			child.CancelAtPeriodEnd = parentSub.CancelAtPeriodEnd
+			child.EndDate = endDate
+			child.CurrentPeriodStart = parentSub.CurrentPeriodStart
+			child.CurrentPeriodEnd = parentSub.CurrentPeriodEnd
+			if child.Metadata == nil {
+				child.Metadata = make(map[string]string)
+			}
+			child.Metadata["cancellation_type"] = parentSub.Metadata["cancellation_type"]
+			child.Metadata["cancellation_reason"] = reason
+
+			if err := s.SubRepo.Update(activity.WithAction(ctx, child.ID, activity.SubscriptionCancelled), child); err != nil {
+				return ierr.WithError(err).
+					WithHintf("Failed to cascade cancel to grouped invoicing subscription %s", child.ID).
+					Mark(ierr.ErrInternal)
+			}
+			if err := s.cancelAllPendingSchedules(ctx, child.ID); err != nil {
+				return err
+			}
+			if err := s.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+				SubscriptionID:     child.ID,
+				EffectiveDate:      *endDate,
+				CancellationReason: reason,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return children, nil
 }
 
 // cancelInheritedSubscriptionAtPeriodEnd cancels an inherited subscription that was
