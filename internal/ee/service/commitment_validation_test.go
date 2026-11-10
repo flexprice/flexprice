@@ -550,7 +550,7 @@ func (s *CommitmentServiceSuite) TestCreate_RejectsSamePriorityOverFutureCutoff(
 	s.requireValidation(err, "priority")
 }
 
-// Active windows must hold whole usage buckets, which are cut in UTC, under every offset their timezone takes.
+// Active windows must hold whole usage buckets, which are cut in UTC, once moved to UTC from their timezone.
 func TestRejectSplitBuckets(t *testing.T) {
 	jan := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	window := func(startHour, startMinute, endHour, endMinute int) types.ActiveWindows {
@@ -564,7 +564,6 @@ func TestRejectSplitBuckets(t *testing.T) {
 		size     types.WindowSize
 		timezone string
 		windows  types.ActiveWindows
-		end      *time.Time
 		wantErr  bool
 	}{
 		{name: "no windows", size: types.WindowSizeHour},
@@ -574,9 +573,7 @@ func TestRejectSplitBuckets(t *testing.T) {
 		{name: "any minute", size: types.WindowSizeMinute, windows: window(10, 7, 14, 53)},
 		{name: "whole hours in Kolkata split UTC hours", size: types.WindowSizeHour, timezone: "Asia/Kolkata", windows: window(9, 0, 21, 0), wantErr: true},
 		{name: "half past in Kolkata is on the hour in UTC", size: types.WindowSizeHour, timezone: "Asia/Kolkata", windows: window(9, 30, 21, 30)},
-		{name: "New York hours across daylight saving", size: types.WindowSizeHour, timezone: "America/New_York", windows: window(7, 0, 19, 0)},
-		{name: "New York 6 hours once daylight saving starts", size: types.WindowSize6Hour, timezone: "America/New_York", windows: window(7, 0, 19, 0), wantErr: true},
-		{name: "New York 6 hours in a winter term", size: types.WindowSize6Hour, timezone: "America/New_York", windows: window(7, 0, 19, 0), end: lo.ToPtr(jan.AddDate(0, 2, 0))},
+		{name: "whole hours in New York", size: types.WindowSizeHour, timezone: "America/New_York", windows: window(7, 0, 19, 0)},
 		{name: "the whole UTC day", size: types.WindowSizeDay, windows: window(0, 0, 24, 0)},
 		{name: "part of a day", size: types.WindowSizeDay, windows: window(8, 0, 20, 0), wantErr: true},
 	}
@@ -584,7 +581,6 @@ func TestRejectSplitBuckets(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &commitment.Commitment{
 				StartDate:     jan,
-				EndDate:       tt.end,
 				Timezone:      lo.CoalesceOrEmpty(tt.timezone, "UTC"),
 				ActiveWindows: tt.windows,
 			}

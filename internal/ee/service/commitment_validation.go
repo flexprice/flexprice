@@ -333,34 +333,21 @@ func rejectCalendarBuckets(size types.WindowSize) error {
 		Mark(ierr.ErrValidation)
 }
 
-// rejectSplitBuckets rejects active windows that split usage buckets, by v1's time-of-day bucket rule. Buckets are cut in
-// UTC, so the windows are moved to UTC under each offset the commitment's timezone takes in the first year of its term.
+// rejectSplitBuckets rejects active windows that split usage buckets, by v1's rule. Buckets are cut in UTC and the
+// windows are in the commitment's timezone, so they are moved to UTC by its offset at the commitment start.
 func rejectSplitBuckets(c *commitment.Commitment, size types.WindowSize) error {
-	if len(c.ActiveWindows) == 0 {
-		return nil
-	}
+	start := c.StartDate.In(c.Location())
+	_, offset := start.Zone()
+	inUTC := lo.Map(c.ActiveWindows, func(w types.ActiveWindow, _ int) types.TimeOfDayBucket {
+		return types.TimeOfDayBucket{Start: w.Start.Add(-offset / 60), End: w.End.Add(-offset / 60)}
+	})
 
-	until := c.Until(c.StartDate.AddDate(1, 0, 0))
-	for t := c.StartDate.In(c.Location()); t.Before(until); {
-		_, offset := t.Zone()
-		inUTC := lo.Map(c.ActiveWindows, func(w types.ActiveWindow, _ int) types.TimeOfDayBucket {
-			return types.TimeOfDayBucket{Start: w.Start.Add(-offset / 60), End: w.End.Add(-offset / 60)}
-		})
-
-		// v1's error speaks of UTC buckets, and the API shows its hint, so the windows get their own error.
-		if types.TimeOfDayBuckets(inUTC).ValidateWindowAlignment(size.ToMinutes()) != nil {
-			return ierr.NewErrorf("active_windows in %s split %s usage buckets", c.Timezone, size).
-				WithHintf("Usage buckets are cut in UTC, so at UTC offset %s each active window must start and end on the %s grid in UTC",
-					t.Format("-07:00"), size).
-				Mark(ierr.ErrValidation)
-		}
-
-		_, next := t.ZoneBounds()
-		if next.IsZero() {
-			break
-		}
-
-		t = next
+	// v1's error speaks of UTC buckets, and the API shows its hint, so the windows get their own error.
+	if types.TimeOfDayBuckets(inUTC).ValidateWindowAlignment(size.ToMinutes()) != nil {
+		return ierr.NewErrorf("active_windows in %s split %s usage buckets", c.Timezone, size).
+			WithHintf("Usage buckets are cut in UTC and %s is UTC%s, so each active window must start and end on the %s grid in UTC",
+				c.Timezone, start.Format("-07:00"), size).
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil

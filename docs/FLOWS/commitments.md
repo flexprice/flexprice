@@ -80,9 +80,8 @@ API: `POST /v1/commitments` ([router.go:730](../../internal/api/router.go#L730))
      - `validateScopeEntity`: the scope names something real.
      - `validateTermLines`: over the whole term the scoped lines must not have entitled meters, must be on one meter
        where needed, share one bucket size for windows, carry no legacy commitment fields, and bill every period.
-       `active_windows` must hold whole usage buckets (`rejectSplitBuckets`). Buckets are cut in UTC, so the windows
-       are moved to UTC under every offset the commitment's timezone takes in its first year and checked with v1's
-       `ValidateWindowAlignment`.
+       `active_windows` must hold whole usage buckets: `rejectSplitBuckets` moves them to UTC, where buckets are cut,
+       by the timezone's offset at the commitment start and checks them with v1's `ValidateWindowAlignment`.
      - `validateOverlaps`: commitments sharing a line must agree on type, measurement, bucket size and overage price,
        and differ in priority while they allocate together. `blocksUntil` lets a commitment keep blocking until the
        end of the billing period holding its end, because that period's invoice still allocates it.
