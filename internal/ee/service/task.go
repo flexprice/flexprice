@@ -1378,8 +1378,9 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 
 // presignManagedCopy presigns a run file in the platform export bucket.
 func (s *taskService) presignManagedCopy(ctx context.Context, t *task.Task, st *scheduledtask.ScheduledTask, bucket, key string) (string, error) {
-	prefix := fmt.Sprintf("exports/%s/%s/", types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
-	if t.TaskType != types.TaskTypeExport ||
+	tenantID, envID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	prefix := fmt.Sprintf("exports/%s/%s/", tenantID, envID)
+	if tenantID == "" || envID == "" || t.TaskType != types.TaskTypeExport ||
 		st.JobConfig == nil || bucket != st.JobConfig.Bucket ||
 		!strings.HasPrefix(key, prefix) || strings.Contains(key, "..") {
 		s.Logger.Info(ctx, "managed export file check failed", "task_id", t.ID, "bucket", bucket)
