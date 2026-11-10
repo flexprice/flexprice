@@ -4113,6 +4113,7 @@ func (s *subscriptionService) CascadeCancelToInheritedSubscriptions(ctx context.
 
 // CascadeCancelToGroupedInvoicingSubscriptions cancels the live grouped_invoicing children of a cancelled
 // parent and ends their resources at the parent's end date. Returns the cancelled children.
+// Call it in the transaction that cancels the parent, so both commit together.
 func (s *subscriptionService) CascadeCancelToGroupedInvoicingSubscriptions(ctx context.Context, parentSub *subscription.Subscription) ([]*subscription.Subscription, error) {
 	if parentSub.SubscriptionStatus != types.SubscriptionStatusCancelled {
 		return nil, nil
@@ -4137,35 +4138,41 @@ func (s *subscriptionService) CascadeCancelToGroupedInvoicingSubscriptions(ctx c
 	}
 	reason := parentSub.Metadata["cancellation_reason"]
 
-	for _, child := range children {
-		child.SubscriptionStatus = types.SubscriptionStatusCancelled
-		child.CancelledAt = parentSub.CancelledAt
-		child.CancelAt = parentSub.CancelAt
-		child.CancelAtPeriodEnd = parentSub.CancelAtPeriodEnd
-		child.EndDate = endDate
-		child.CurrentPeriodStart = parentSub.CurrentPeriodStart
-		child.CurrentPeriodEnd = parentSub.CurrentPeriodEnd
-		if child.Metadata == nil {
-			child.Metadata = make(map[string]string)
-		}
-		child.Metadata["cancellation_type"] = parentSub.Metadata["cancellation_type"]
-		child.Metadata["cancellation_reason"] = reason
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		for _, child := range children {
+			child.SubscriptionStatus = types.SubscriptionStatusCancelled
+			child.CancelledAt = parentSub.CancelledAt
+			child.CancelAt = parentSub.CancelAt
+			child.CancelAtPeriodEnd = parentSub.CancelAtPeriodEnd
+			child.EndDate = endDate
+			child.CurrentPeriodStart = parentSub.CurrentPeriodStart
+			child.CurrentPeriodEnd = parentSub.CurrentPeriodEnd
+			if child.Metadata == nil {
+				child.Metadata = make(map[string]string)
+			}
+			child.Metadata["cancellation_type"] = parentSub.Metadata["cancellation_type"]
+			child.Metadata["cancellation_reason"] = reason
 
-		if err := s.SubRepo.Update(activity.WithAction(ctx, child.ID, activity.SubscriptionCancelled), child); err != nil {
-			return nil, ierr.WithError(err).
-				WithHintf("Failed to cascade cancel to grouped invoicing subscription %s", child.ID).
-				Mark(ierr.ErrInternal)
+			if err := s.SubRepo.Update(activity.WithAction(ctx, child.ID, activity.SubscriptionCancelled), child); err != nil {
+				return ierr.WithError(err).
+					WithHintf("Failed to cascade cancel to grouped invoicing subscription %s", child.ID).
+					Mark(ierr.ErrInternal)
+			}
+			if err := s.cancelAllPendingSchedules(ctx, child.ID); err != nil {
+				return err
+			}
+			if err := s.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+				SubscriptionID:     child.ID,
+				EffectiveDate:      *endDate,
+				CancellationReason: reason,
+			}); err != nil {
+				return err
+			}
 		}
-		if err := s.cancelAllPendingSchedules(ctx, child.ID); err != nil {
-			return nil, err
-		}
-		if err := s.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
-			SubscriptionID:     child.ID,
-			EffectiveDate:      *endDate,
-			CancellationReason: reason,
-		}); err != nil {
-			return nil, err
-		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return children, nil
 }
