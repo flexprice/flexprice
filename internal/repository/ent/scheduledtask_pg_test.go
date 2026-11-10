@@ -16,9 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Run with:
-//
-//	go test -tags pgintegration ./internal/repository/ent -run TestScheduledTaskRepository_NewColumns -v
+// Needs the pgintegration build tag.
 func TestScheduledTaskRepository_NewColumns(t *testing.T) {
 	cfg, err := config.NewConfig()
 	require.NoError(t, err)

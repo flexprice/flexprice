@@ -7,6 +7,7 @@ import (
 	"time"
 
 	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -79,10 +80,11 @@ func (r exportResolverFake) ForConnectionExport(context.Context, string, *types.
 
 type exportHandleFake struct {
 	models.ScheduleHandle
-	spec    client.ScheduleSpec
-	paused  bool
-	updates []client.ScheduleSpec
-	pauses  int
+	spec      client.ScheduleSpec
+	paused    bool
+	updates   []client.ScheduleSpec
+	pauses    int
+	updateErr error
 }
 
 func (h *exportHandleFake) Pause(context.Context, client.SchedulePauseOptions) error {
@@ -92,6 +94,9 @@ func (h *exportHandleFake) Pause(context.Context, client.SchedulePauseOptions) e
 }
 
 func (h *exportHandleFake) Update(_ context.Context, opts client.ScheduleUpdateOptions) error {
+	if h.updateErr != nil {
+		return h.updateErr
+	}
 	spec := h.spec
 	out, err := opts.DoUpdate(client.ScheduleUpdateInput{
 		Description: client.ScheduleDescription{Schedule: client.Schedule{
@@ -297,6 +302,18 @@ func TestUpdate_ScheduleUpdatesTemporalThenDB(t *testing.T) {
 	require.Equal(t, "Asia/Kolkata", handle.updates[0].TimeZoneName)
 	require.NotNil(t, repo.settings)
 	require.Equal(t, "nightly", repo.settings.Name)
+	require.Equal(t, kolkata(), repo.settings.Schedule)
+}
+
+func TestUpdate_TemporalScheduleGoneStillSavesDB(t *testing.T) {
+	handle := &exportHandleFake{updateErr: serviceerror.NewNotFound("schedule gone")}
+	tc := &exportTemporalFake{handle: handle}
+	repo := &exportRepoFake{task: scheduledRow(nil)}
+	s := newExportService(repo, tc)
+
+	_, err := s.UpdateScheduledTask(exportCtx(), "st_1", dto.UpdateScheduledTaskRequest{Schedule: kolkata()})
+	require.NoError(t, err)
+	require.NotNil(t, repo.settings)
 	require.Equal(t, kolkata(), repo.settings.Schedule)
 }
 
