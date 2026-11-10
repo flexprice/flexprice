@@ -40,3 +40,35 @@ func (s *InMemoryEmailLogStore) Get(ctx context.Context, id string) (*emaillog.E
 func (s *InMemoryEmailLogStore) Update(ctx context.Context, e *emaillog.EmailLog) error {
 	return s.InMemoryStore.Update(ctx, e.ID, e)
 }
+
+func (s *InMemoryEmailLogStore) List(ctx context.Context, filter *types.EmailLogFilter) ([]*emaillog.EmailLog, error) {
+	if filter == nil {
+		filter = types.NewEmailLogFilter()
+	}
+	return s.InMemoryStore.List(ctx, filter, emailLogFilterFn, emailLogSortFn)
+}
+
+func (s *InMemoryEmailLogStore) Count(ctx context.Context, filter *types.EmailLogFilter) (int, error) {
+	if filter == nil {
+		filter = types.NewEmailLogFilter()
+	}
+	return s.InMemoryStore.Count(ctx, filter, emailLogFilterFn)
+}
+
+func emailLogFilterFn(ctx context.Context, e *emaillog.EmailLog, filter interface{}) bool {
+	f, ok := filter.(*types.EmailLogFilter)
+	if !ok {
+		return false
+	}
+	if e.TenantID != types.GetTenantID(ctx) || e.EnvironmentID != types.GetEnvironmentID(ctx) {
+		return false
+	}
+	if f.EntityType != "" && e.EntityType != f.EntityType {
+		return false
+	}
+	return len(f.EntityIDs) == 0 || lo.Contains(f.EntityIDs, e.EntityID)
+}
+
+func emailLogSortFn(i, j *emaillog.EmailLog) bool {
+	return i.CreatedAt.After(j.CreatedAt)
+}

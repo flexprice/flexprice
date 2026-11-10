@@ -1,6 +1,10 @@
 package emaillog
 
-import "context"
+import (
+	"context"
+
+	"github.com/flexprice/flexprice/internal/types"
+)
 
 // Repository is the persistence contract for customer email logs.
 type Repository interface {
@@ -12,4 +16,7 @@ type Repository interface {
 
 	// Update saves the delivery fields: provider message id, status, reason, timestamps and metadata.
 	Update(ctx context.Context, e *EmailLog) error
+
+	List(ctx context.Context, filter *types.EmailLogFilter) ([]*EmailLog, error)
+	Count(ctx context.Context, filter *types.EmailLogFilter) (int, error)
 }
