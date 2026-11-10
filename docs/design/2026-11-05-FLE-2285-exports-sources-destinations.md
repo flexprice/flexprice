@@ -11,7 +11,8 @@ An "export" in Flexprice is already a row in `scheduled_tasks` (the portal lists
 
 This change evolves that model, not a parallel one:
 
-- new **source**: saved reports (`analytics_view`);
+- new **sources**: predefined reports (`report`) and saved custom views (`analytics_view`), alongside the existing entity types;
+- a **one-off export from the customer tab**, scoped to one customer and listed later in the Exports tab;
 - new **destinations**: a console copy of every run, plus email, alongside the existing S3 connection;
 - weekly, monthly and on-demand-only exports at a chosen time and timezone.
 
@@ -19,7 +20,8 @@ Existing exports keep working unchanged.
 
 ## Goals
 
-1. Export a saved report (`analytics_view`) to CSV, on demand or on a schedule.
+1. Export an existing entity type, a predefined report (`report`) or a saved view (`analytics_view`) to CSV, on demand or on a schedule.
+7. One-off, customer-scoped export started from the customer tab; it shows up as a run in the Exports tab.
 2. Every run of a new-style export keeps a **managed copy** that the console downloads.
 3. Optional destinations: **S3 connection** (existing) and **email** (new). Email is a notification only: a deeplink to the run in the console, never a file, data or download link.
 4. Weekly, monthly and manual (on-demand only) exports with time and timezone.
@@ -30,7 +32,7 @@ Existing exports keep working unchanged.
 
 - XLSX, PDF, dashboard exports (FLE-1612 items 3-4 stay deferred).
 - Converting existing exports to the new style, or editing them beyond `enabled`.
-- Raw SQL or operator-authored report templates (see "Not covered").
+- Custom SQL and operator-authored templates: parked (see "Not covered").
 - Per-recipient authorization, recipient accounts, unsubscribe.
 - 15- and 30-minute schedules for new-style exports.
 - Exporting unsaved ad-hoc queries (save the report first).
@@ -75,10 +77,11 @@ Column changes (`make generate-ent`, `make generate-migration`; no backfill):
 |---|---|
 | `connection_id` | drop `NotEmpty`; optional, default `""` |
 | `interval` | allowlist gains `weekly`, `monthly`, `manual` (no Temporal schedule; run only through `/run`) |
-| `entity_type` | allowlist gains `analytics_view` |
+| `entity_type` | allowlist gains `report` and `analytics_view` |
+| `origin` | nullable string: `console` (default) or `customer_tab` |
 | `name` | nullable string |
 | `managed_copy` | bool, default `false`. `true` marks a **new-style** export |
-| `source_config` | nullable jsonb `{view_id?, metadata_fields?, customer_external_ids?}` |
+| `source_config` | nullable jsonb `{view_id?, report_key?, report_params?, metadata_fields?, customer_external_ids?}` |
 | `period` | nullable jsonb `{range?}`; allowed for `manual` `analytics_view` exports only |
 | `schedule` | nullable jsonb `{hour, minute, day_of_week?, day_of_month? (1-28), timezone (IANA)}`; frequency is the `interval` column |
 | `email_config` | nullable jsonb `{recipients: []}` |
@@ -91,6 +94,8 @@ Destinations are derived: console copy = `managed_copy`; S3 = `connection_id != 
 - New-style `destinations`: at most one `s3` (`connection_id` + `job_config`) and one `email` (`recipients`); console copy implicit; S3 optional.
   - `s3` goes through the same connection checks as today's create, extracted into one shared helper. A **Flexprice-managed connection is rejected** as an `s3` destination (the managed copy already covers it and would duplicate the object in the same bucket).
 - `analytics_view`: new-style only; requires `source_config.view_id` (exists, published, in tenant and environment); the view must resolve with no supplied variables (`ResolveVariables(def, nil)` succeeds, else rejected); `period.range` is allowed only for `manual` exports, as an absolute `YYYY-MM-DD..YYYY-MM-DD` range or empty (the view's own range); scheduled exports always use the previous UTC period of their frequency (section 2); `interval` in `daily|weekly|monthly|manual`; guarded by `requireReports()` and an explicit service-layer check of `EntityAnalytics` read on create, update and run.
+- `report` (predefined, built-in key from `GET /analytics/reports`): new-style only; requires `source_config.report_key` that exists, plus optional `report_params` (the report's own filters, never a time range); same intervals, `period` rule, windows, row cap and `requireReports()` + `EntityAnalytics` checks as `analytics_view`. It runs through `RunReport(key, ReportQueryRequest)` with the resolved UTC range.
+- **Customer-tab one-off**: a new-style create with `interval=manual`, `origin=customer_tab`, `run_now=true` and `source_config.customer_external_ids` holding exactly the one customer. The server creates the definition (auto-named, visible in the Exports tab) and starts one run. Allowed sources are those that can scope to a customer: `wallet_ledger` today, `analytics_view` and `report` where the family has an `external_customer_id` filter, and any other entity exporter only after it gains a customer filter; other combinations are rejected with a clear error.
 - Existing sources in new-style: no `period`; hourly, daily, weekly, monthly, manual allowed.
 - `schedule` required unless `interval=manual`; IANA timezone. Email destinations are rejected on `hourly` exports. There is no minimum fire time: windows are computed 15 minutes before the fire instant (section 2).
 - `metadata_fields` live in `source_config` for new-style exports; legacy rows keep them in `job_config`.
@@ -107,8 +112,8 @@ Task status: no new values. A new-style run is `COMPLETED` once the managed copy
 The window is computed in the `details` step from the **scheduled start time minus 15 minutes** (an ingestion buffer, replacing the legacy cron's :15; the fire time itself is the user's choice), never from wall clock, so catch-up runs after downtime get the correct historical window. It is stored on the `Task` on the first attempt; retries reuse it.
 
 - **Existing sources**: the previous period at the export's frequency in the **schedule's timezone** (previous local day, previous local Monday-to-Monday week, previous local calendar month; hourly = previous hour), converted to exact UTC instants. Weekly and monthly windows do not depend on the weekday or day chosen. `manual` exports use the previous UTC day unless `/run` supplies a window.
-- **`analytics_view`, scheduled**: the previous **UTC** period at the export's frequency (UTC day, Monday-to-Monday week, calendar month), counted back from the buffered instant, applied as an absolute date-only range `YYYY-MM-DD..YYYY-MM-DD` (inclusive start, exclusive end). Report data is bucketed in UTC days, so this guarantees the UTC period has closed for any timezone. Example: a daily 00:30 Asia/Kolkata export fires at 19:00 UTC and covers the UTC day before the one still in progress. The UI must say these windows are UTC.
-- **`analytics_view`, `manual`**: `/run` uses `period.range` if set, else the previous UTC day. A custom `start_time`+`end_time` must be whole UTC days.
+- **`analytics_view` and `report`, scheduled**: the previous **UTC** period at the export's frequency (UTC day, Monday-to-Monday week, calendar month), counted back from the buffered instant, applied as an absolute date-only range `YYYY-MM-DD..YYYY-MM-DD` (inclusive start, exclusive end). Report data is bucketed in UTC days, so this guarantees the UTC period has closed for any timezone. Example: a daily 00:30 Asia/Kolkata export fires at 19:00 UTC and covers the UTC day before the one still in progress. The UI must say these windows are UTC.
+- **`analytics_view` and `report`, `manual`**: `/run` uses `period.range` if set, else the previous UTC day. A custom `start_time`+`end_time` must be whole UTC days.
 - **`/run` on a new-style export** never passes an automatic window as a custom one: `triggerForceRun` is changed so only a user-supplied window reaches the workflow. An empty body means the period the schedule would export now by the rules above. `customer_external_ids` on `/run` overrides `source_config` and is allowed for wallet_ledger only.
 
 ### 3. Run flow
@@ -122,6 +127,7 @@ The window is computed in the `details` step from the **scheduled start time min
    - `true`: `GenerateExport`: produce CSV; write plain CSV to `ForPlatform(PurposeExport)` at `exports/{tenant}/{env}/{scheduled_task_id}/{sanitized_task_id}.csv` (task id with characters outside `A-Za-z0-9_-` replaced by `-`); set `file_url`, size, count, `storage`, status `COMPLETED` in the same activity (retried until it succeeds; a failed completion never leaves the task in PROCESSING). Then `DeliverS3` and `SendEmail` run in parallel; each **returns** its result and does not write the task. A single `RecordDeliveries` activity then writes `deliveries` once (no concurrent metadata writers).
 4. **Generate**:
    - existing sources: `PrepareData` with an `ExportRequest` built from the export (minimal `JobConfig` carrying only `metadata_fields`, plus `CustomerExternalIDs`). `StreamingExporter` sources use `PrepareData` in v1 and buffer in memory as today.
+   - `report`: same adapter; builds the `ReportQueryRequest` from `report_key`, `report_params` and the resolved range.
    - `analytics_view`: new adapter. Load the published view; copy its definition and apply the absolute range; usage and billing run through `ExecuteView(def, nil)`, report family builds a `ReportQueryRequest` from the saved settings and calls `RunReport`. Adapter-side row cap: fail the run when the result exceeds `ReportsRepo.MaxRows()` (report family) or 1,000,000 rows (usage and billing), never truncating silently. A deleted or unpublished view fails the run with a clear reason (views are not version-pinned; the run records `view_updated_at`).
 5. **DeliverS3**: read the managed copy and call `store.Upload(UploadRequest{Key, Data, Format: CSV, Compress: gzip})` through `ForConnectionExport`. New-style key: `{key_prefix}/{entity}/{entity}-{start}-{end}-{task_id_short}.csv[.gz]` (a new key function; the legacy function is unchanged), so two runs never overwrite each other and a retry overwrites only its own object.
 6. **SendEmail**: one plain-text email per recipient with the console deeplink (section 4). Re-validate recipients first. The activity checks `resp.Success`; at-least-once delivery, with a Resend idempotency key `exports-{task_id}-{hash(recipient)}` where the client supports it (add support to the wrapper). A crash between send and record can duplicate one email; accepted. Abuse limits: a per-tenant cap on emails per hour (`exports.max_emails_per_hour`, run is still `COMPLETED` and the delivery is recorded as `rate_limited`), no email on hourly exports, and the export name is stripped of control characters, limited to 120 characters and kept out of the subject line.
@@ -148,7 +154,7 @@ Limits: query timeout 5 minutes, activity retries 3, validation errors non-retry
 
 Reuse `/tasks/scheduled`; extend its DTOs.
 
-- `POST /tasks/scheduled`: legacy flat shape or new shape (`name`, `entity_type`, `source_config`, `period`, `interval`, `schedule`, `destinations{s3?, email?}`, `enabled`).
+- `POST /tasks/scheduled`: legacy flat shape or new shape (`name`, `entity_type`, `source_config`, `period`, `interval`, `schedule`, `destinations{s3?, email?}`, `enabled`, `origin?`, `run_now?`). With `run_now=true` (manual only) the response carries the started run's `workflow_id`, which is the task id.
 - `GET /tasks/scheduled`: new query param `style=legacy|managed|all`, **default `legacy`**, so existing portal, SDK and MCP clients never receive new-style rows (new enum values, empty `connection_id`) until they opt in with `all`. Responses for legacy rows are unchanged; new fields are omitted when null. `GET /tasks/scheduled/:id` and the run list return new-style rows by id as before. Enum fields in the OpenAPI spec are declared open so strict generated SDKs tolerate the new values; a generated-SDK decode test covers it.
 - `PUT /tasks/scheduled/:id`: legacy rows accept `enabled` only and still require it (400 otherwise). New-style rows accept `name`, `source_config`, `period`, `schedule`, `destinations`, `enabled` (optional), through the new repository methods, with status checks. In-flight runs are unaffected.
 - `DELETE`: unchanged for legacy. For new-style it sets `StatusDeleted` and removes the Temporal schedule; runs and managed copies stay downloadable.
@@ -188,11 +194,32 @@ Reuse `/tasks/scheduled`; extend its DTOs.
 
 ## Rollout
 
-PR stack: (1) schema, domain, DTOs, validation, repository methods, list `style` filter; (2) windows, managed copy, `analytics_view` adapter, workflow branch, download branch; (3) `DeliverS3`, `SendEmail` with the deeplink and the email wrapper's masked logging, `exports.console_base_url` config, per-tenant email cap, `RecordDeliveries`; (4) update endpoint, connection detach, swagger, SDK regeneration. Creating new-style exports is behind a deployment flag (`exports.managed_enabled`, default off) that is turned on only after the export workers run the new code; otherwise a new-style row could be picked up by old workers (empty connection, daily default window, unregistered activities). Rollout order: workers first, then the flag. Analytics sources are also gated by `requireReports()`. Legacy rows default `managed_copy=false`, so nothing changes for them.
+Four phases. Each merges and ships on its own behind `exports.managed_enabled`, and each has an exit check.
+
+**Phase 1: foundation and existing sources (console copy only).**
+- Schema (all new columns, `origin`, optional `connection_id`, new interval and entity values), domain, DTOs, validation, repository methods, list `style` filter.
+- Windows (section 2) for existing sources, `schedule` to Temporal cron with timezone, `manual` interval, `/run` change.
+- Workflow branch behind `workflow.GetVersion`, `GenerateExport` writing the managed copy, completion in the same activity, idempotent create task, download branch.
+- Update and delete endpoints for new-style rows; swagger and SDK regeneration.
+- Exit: a new-style export of an existing entity type, daily and manual, produces a console-downloadable CSV with correct local-timezone windows; legacy exports are untouched.
+
+**Phase 2: report sources.**
+- `report` and `analytics_view` adapters, UTC windows, row caps, `requireReports()` gating, `EntityAnalytics` checks on create, update, run and download, `view_updated_at` recording.
+- Exit: a predefined report and a saved view each export on a schedule and manually; a user without analytics read cannot create or download them.
+
+**Phase 3: destinations.**
+- `DeliverS3`, `SendEmail` with the deeplink, `RecordDeliveries`, masked-address logging in the email wrapper, `exports.console_base_url`, per-tenant email cap, connection detach on delete.
+- Exit: the staging check in "Testing" (email with deeplink only, S3 object, broken email leaves the managed copy downloadable).
+
+**Phase 4: customer-tab one-off.**
+- `origin`, `run_now`, customer scope validation per source, and the customer filter for any entity exporter that lacks one (otherwise it stays unsupported).
+- Exit: from the customer tab, a one-off export for one customer appears in the Exports tab and downloads.
+
+Flag: creating new-style exports is behind a deployment flag (`exports.managed_enabled`, default off) that is turned on only after the export workers run the new code; otherwise a new-style row could be picked up by old workers (empty connection, daily default window, unregistered activities). Rollout order: workers first, then the flag. Analytics sources are also gated by `requireReports()`. Legacy rows default `managed_copy=false`, so nothing changes for them.
 
 ## Not covered
 
-Raw SQL or operator-authored report templates (for example a wallet-balance and usage report that needs balances over time and several source tables). It would be a new source type, `template`, under this same model: a reviewed query with typed parameters, tenant and environment bound server-side, read-only. Decide separately.
+Custom SQL is parked. If revived: first an operator-authored `template` source (reviewed query, typed parameters, tenant, environment and window bound server-side, read-only); tenant-written SQL only later, behind a read-only ClickHouse user with row policies, a table allowlist and query limits. Neither is designed here.
 
 ## Calls made by me (please check)
 
@@ -212,6 +239,9 @@ Raw SQL or operator-authored report templates (for example a wallet-balance and 
 14. Monthly day 1-28; at most one S3 and one email destination.
 15. All eight existing sources work in new-style via `PrepareData` (no streaming yet); usage and billing report row cap 500,000 (matches events).
 16. Redeliver is deferred.
+17. Predefined reports are a separate `report` source (built-in reports have no saved-view row); they share the analytics windows and checks.
+18. A customer-tab one-off creates a visible, auto-named manual export (`origin=customer_tab`) plus one run; no separate ad-hoc run record.
+19. Custom SQL is parked; phases ship in order console copy, report sources, destinations, customer one-off.
 
 ## Needs an owner outside this repo
 
@@ -219,6 +249,7 @@ Raw SQL or operator-authored report templates (for example a wallet-balance and 
 
 ## Open for the implementer
 
+- Which entity exporters can take a customer filter (only `wallet_ledger` is verified), and whether report-family reports expose `external_customer_id`.
 - Exact CSV flattening against `dto.AnalyticsQueryResult` (columns, buckets, currency split).
 - Shape of the `ReportQueryRequest` built from a saved report-family view.
 - Temporal schedule `Overlap` and `CatchupWindow` values that satisfy the catch-up rule.
