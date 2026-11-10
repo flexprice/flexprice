@@ -157,14 +157,14 @@ A compact copy of the hosted invoice page, rendered from `HostedInvoiceResponse`
 |---|---|
 | Subject | `Invoice <number> from <tenant name>` |
 | Summary | Number, status badge (Due / Overdue / Paid), amount, due or paid date |
-| Button | `Pay <amount>` when payable online, else `View invoice`; Download PDF if no hosted link |
+| Button | `View invoice`, linking to the hosted invoice (paying happens there); none without a hosted link (the PDF is attached) |
 | Charges | Group totals (Go port of `toGroups()`), max 10 groups, then subtotal, discount, tax, amount due |
 | Footer | Tenant contact (`help_email` / `email`), Powered by Flexprice |
 
 - `html/template`, 600 px tables, inline styles, fixed hex colours from portal tokens, plus a text part.
-- **Hosted link:** issued at finalization. If `hosted_invoice.base_url` is empty or no active token exists, the button falls back to Download PDF. Invoices synced to Stripe use Stripe's hosted URL, as the page does.
-- **Paid at finalization** (auto-charged): Paid badge, `Paid <date> with <method>`, `View invoice` button, same subject.
-- **PDF:** same source order as `GetInvoicePDFUrl` (invoice `invoice_pdf_url`, then billing provider, then Flexprice's stored PDF), factored into one helper. Attach Flexprice's stored PDF, rendering and uploading it first if missing (never re-render a stored one: it freezes tax numbers). Billing-provider PDFs are link-only. Over Resend's 40 MB cap: link only, noted in `metadata`.
+- **Hosted link:** issued at finalization. If `hosted_invoice.base_url` is empty or no active token exists, the email has no button. Invoices synced to Stripe use Stripe's hosted URL, as the page does.
+- **Paid at finalization** (auto-charged): Paid badge, `Paid <date> with <method>`, same subject.
+- **PDF:** same source order as `GetInvoicePDFUrl` (invoice `invoice_pdf_url`, then billing provider, then Flexprice's stored PDF), factored into one helper. Attach Flexprice's stored PDF, rendering and uploading it first if missing (never re-render a stored one: it freezes tax numbers). An invoice's own `invoice_pdf_url` is shown as a link; billing-provider PDFs (expiring links) and stored PDFs over Resend's 40 MB cap are not attached, noted in `metadata`.
 - PDF bytes are fetched and sent inside one activity, never passed through Temporal payloads.
 
 ## One-time setup
@@ -202,7 +202,8 @@ type Provider interface {
 - Resend adapter sends with `Idempotency-Key = email_log.id`, tags (tenant, environment, email id, region) and our own `Message-ID: <email_log.id@mail.flexprice.io>`.
 - Service `internal/ee/service/email_notification.go`: `SendInvoiceEmail` loads invoice, customer, tenant and setting, inserts `queued`, starts the workflow.
 - Workflow retries 429/5xx; 4xx marks `failed`.
-- Auto trigger in the integration-events dispatch list, workflow id `invoice-email-auto-<invoice_id>` so redelivery never double-sends.
+- One generic `SendEmailWorkflow` (id `wf_send_email_<email_log_id>`) delivers every email; a composer per `template_key` builds its content.
+- Auto trigger in the integration-events dispatch list; the one-auto-email index stops redelivery from double-sending.
 - Everything ships behind `email.enabled` plus a set `email.provider`; with no provider, customer emails stay off.
 
 ## Testing
