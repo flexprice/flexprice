@@ -89,6 +89,8 @@ type Handlers struct {
 	CustomerPortal *v1.CustomerPortalHandler
 	SelfBilling    *v1.SelfBillingHandler
 	HostedInvoice  *v1.HostedInvoiceHandler
+
+	EmailNotification *v1.EmailNotificationHandler
 }
 
 func NewRouter(
@@ -528,6 +530,8 @@ func NewRouter(
 			invoices.POST("/:id/recalculate", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.RecalculateInvoice)
 			invoices.POST("/:id/recalculate-v2", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.RecalculateInvoiceV2)
 			invoices.POST("/:id/comms/trigger", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.TriggerCommunication)
+			invoices.POST("/:id/email", write(types.EntityInvoice, types.ActionWrite), handlers.EmailNotification.SendInvoiceEmail)
+			invoices.GET("/:id/emails", observe(types.EntityInvoice), handlers.EmailNotification.ListInvoiceEmails)
 			invoices.POST("/:id/webhook/trigger", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.TriggerWebhook)
 		}
 
