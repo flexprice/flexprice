@@ -84,11 +84,27 @@ func TestScheduledTaskRepository_NewColumns(t *testing.T) {
 	require.Equal(t, "", gotOld.Name)
 	require.False(t, gotOld.ManagedCopy)
 	require.Nil(t, gotOld.Schedule)
+	require.Nil(t, gotOld.SourceConfig)
+
+	srcCfg := &types.ExportSourceConfig{ReportKey: "invoice_total", ReportParams: &types.ReportParams{Shape: "timeseries", Dimensions: []string{"customer"}}}
+	reportRow := &scheduledtask.ScheduledTask{
+		ID:           "st_" + runID + "_report",
+		EntityType:   types.ScheduledTaskEntityTypeReport,
+		Interval:     types.ScheduledTaskIntervalManual,
+		Enabled:      true,
+		ManagedCopy:  true,
+		SourceConfig: srcCfg,
+		Status:       types.StatusPublished,
+	}
+	require.NoError(t, repo.Create(ctx, reportRow))
+	gotReport, err := repo.Get(ctx, reportRow.ID)
+	require.NoError(t, err)
+	require.Equal(t, srcCfg, gotReport.SourceConfig)
 
 	rows, err := repo.List(ctx, &scheduledtask.ListFilters{})
 	require.NoError(t, err)
 	ids := lo.Map(rows, func(r *scheduledtask.ScheduledTask, _ int) string { return r.ID })
-	require.ElementsMatch(t, []string{newRow.ID, oldRow.ID}, ids)
+	require.ElementsMatch(t, []string{newRow.ID, oldRow.ID, reportRow.ID}, ids)
 
 	got.Name = "Renamed"
 	got.Enabled = false

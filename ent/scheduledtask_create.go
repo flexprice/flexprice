@@ -205,6 +205,12 @@ func (_c *ScheduledTaskCreate) SetSchedule(v *types.ExportSchedule) *ScheduledTa
 	return _c
 }
 
+// SetSourceConfig sets the "source_config" field.
+func (_c *ScheduledTaskCreate) SetSourceConfig(v *types.ExportSourceConfig) *ScheduledTaskCreate {
+	_c.mutation.SetSourceConfig(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ScheduledTaskCreate) SetID(v string) *ScheduledTaskCreate {
 	_c.mutation.SetID(v)
@@ -420,6 +426,10 @@ func (_c *ScheduledTaskCreate) createSpec() (*ScheduledTask, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.Schedule(); ok {
 		_spec.SetField(scheduledtask.FieldSchedule, field.TypeJSON, value)
 		_node.Schedule = value
+	}
+	if value, ok := _c.mutation.SourceConfig(); ok {
+		_spec.SetField(scheduledtask.FieldSourceConfig, field.TypeJSON, value)
+		_node.SourceConfig = value
 	}
 	return _node, _spec
 }
