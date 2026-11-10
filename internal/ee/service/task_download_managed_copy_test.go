@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/task"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/storage/storagetypes"
 	"github.com/flexprice/flexprice/internal/types"
@@ -69,7 +71,7 @@ type downloadFixture struct {
 
 func (s *TaskServiceSuite) newDownloadFixture(st *scheduledtask.ScheduledTask, tk *task.Task) *downloadFixture {
 	t := s.T()
-	ctx := s.GetContext()
+	ctx := types.SetEnvironmentID(s.GetContext(), "env_test")
 
 	r := &downloadResolver{
 		platform: &downloadStore{fakeImportStorage: *newFakeImportStorage(), bucket: "platform-bkt"},
@@ -131,39 +133,50 @@ func (s *TaskServiceSuite) TestDownload_ManagedCopyPresigns() {
 	require.Equal(t, 0, f.resolver.connCall)
 }
 
+func (s *TaskServiceSuite) requireRejected(f *downloadFixture, id string) {
+	_, err := f.svc.GenerateDownloadURL(f.ctx, id)
+	s.Require().Error(err)
+	s.Require().True(ierr.IsValidation(err), "want validation error, got %v", err)
+	s.Require().Equal(0, f.resolver.platformCall)
+	s.Require().Equal(0, f.resolver.connCall)
+}
+
+func (s *TaskServiceSuite) setFileURL(f *downloadFixture, id, fileURL string) {
+	repo := f.svc.(*taskService).TaskRepo
+	tk, err := repo.Get(f.ctx, id)
+	s.Require().NoError(err)
+	tk.FileURL = fileURL
+	s.Require().NoError(repo.Update(f.ctx, tk))
+}
+
 func (s *TaskServiceSuite) TestDownload_ManagedCopyRejectsOtherTenantKey() {
-	t := s.T()
-	f := s.newDownloadFixture(managedScheduledTask("platform-bkt"), exportTask("t1", "s3://platform-bkt/exports/other/env/sched_1/run.csv"))
-	_, err := f.svc.GenerateDownloadURL(f.ctx, "t1")
-	require.Error(t, err)
-	require.Equal(t, 0, f.resolver.platformCall)
+	cases := map[string]func(prefix string) string{
+		"other tenant":       func(string) string { return "s3://platform-bkt/exports/other/env/sched_1/run.csv" },
+		"no trailing slash":  func(p string) string { return "s3://platform-bkt/" + p[:len(p)-1] + "x/run.csv" },
+		"traversal":          func(p string) string { return "s3://platform-bkt/" + p + "../other/run.csv" },
+		"non-exports prefix": func(string) string { return "s3://platform-bkt/invoices/run.csv" },
+	}
+	for name, fileURL := range cases {
+		s.Run(name, func() {
+			id := "t_" + strings.ReplaceAll(name, " ", "_")
+			f := s.newDownloadFixture(managedScheduledTask("platform-bkt"), exportTask(id, ""))
+			s.setFileURL(f, id, fileURL(f.prefix))
+			s.requireRejected(f, id)
+		})
+	}
+}
 
-	// prefix without trailing slash must not match
-	f2 := s.newDownloadFixture(managedScheduledTask("platform-bkt"), exportTask("t2", ""))
-	tk, _ := f2.svc.(*taskService).TaskRepo.Get(f2.ctx, "t2")
-	tk.FileURL = "s3://platform-bkt/" + f2.prefix[:len(f2.prefix)-1] + "x/run.csv"
-	require.NoError(t, f2.svc.(*taskService).TaskRepo.Update(f2.ctx, tk))
-	_, err = f2.svc.GenerateDownloadURL(f2.ctx, "t2")
-	require.Error(t, err)
-
-	// traversal
-	tk.FileURL = "s3://platform-bkt/" + f2.prefix + "../other/run.csv"
-	require.NoError(t, f2.svc.(*taskService).TaskRepo.Update(f2.ctx, tk))
-	_, err = f2.svc.GenerateDownloadURL(f2.ctx, "t2")
-	require.Error(t, err)
-	require.Equal(t, 0, f2.resolver.platformCall)
+func (s *TaskServiceSuite) TestDownload_ManagedCopyRejectsEmptyEnvironment() {
+	f := s.newDownloadFixture(managedScheduledTask("platform-bkt"), exportTask("t1", ""))
+	s.setFileURL(f, "t1", "s3://platform-bkt/exports/"+types.GetTenantID(f.ctx)+"//sched_1/run.csv")
+	f.ctx = types.SetEnvironmentID(f.ctx, "")
+	s.requireRejected(f, "t1")
 }
 
 func (s *TaskServiceSuite) TestDownload_ManagedCopyRejectsBucketMismatch() {
-	t := s.T()
 	f := s.newDownloadFixture(managedScheduledTask("platform-bkt"), exportTask("t1", ""))
-	tk, _ := f.svc.(*taskService).TaskRepo.Get(f.ctx, "t1")
-	tk.FileURL = "s3://other-bkt/" + f.prefix + "sched_1/run.csv"
-	require.NoError(t, f.svc.(*taskService).TaskRepo.Update(f.ctx, tk))
-
-	_, err := f.svc.GenerateDownloadURL(f.ctx, "t1")
-	require.Error(t, err)
-	require.Equal(t, 0, f.resolver.platformCall)
+	s.setFileURL(f, "t1", "s3://other-bkt/"+f.prefix+"sched_1/run.csv")
+	s.requireRejected(f, "t1")
 }
 
 func (s *TaskServiceSuite) TestDownload_ConnectionPathUnchanged() {
