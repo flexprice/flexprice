@@ -95,6 +95,7 @@ type CreateCommitmentRequest struct {
 	OveragePrice       *CommitmentPriceInput             `json:"overage_price,omitempty"`
 	Measurement        types.CommitmentMeasurement       `json:"measurement" validate:"required"`
 	ActiveWindows      types.ActiveWindows               `json:"active_windows,omitempty"`
+	Timezone           string                            `json:"timezone,omitempty" swaggerignore:"true"`
 	Priority           int                               `json:"priority"`
 	Binding            *bool                             `json:"binding,omitempty"` // default false
 	CollectionMethod   *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
@@ -172,6 +173,9 @@ func (r *CreateCommitmentRequest) Validate() error {
 		return ierr.Validation("overage_price is supported only on quantity commitments")
 	case len(r.ActiveWindows) > 0 && r.Measurement != types.CommitmentMeasurementWindow:
 		return ierr.Validation("active_windows require measurement=window")
+	// Windows are UTC: a client still sending another zone gets an error rather than shifted windows.
+	case r.Timezone != "" && r.Timezone != types.DefaultTimezone:
+		return ierr.Validation("timezone is no longer supported: send active_windows as UTC times")
 	}
 
 	if err := r.validatePrices(); err != nil {
