@@ -6579,6 +6579,7 @@ func toSubscriptionMeterUsageRequest(req *dto.GetUsageBySubscriptionRequest) *Ge
 		// Billing for a Parent subscription must roll up every inherited
 		// child's usage — that is the consolidated-invoice contract.
 		IncludeChildren: true,
+		LineItems:       req.LineItems,
 	}
 }
 

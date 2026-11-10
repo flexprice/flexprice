@@ -186,9 +186,13 @@ func (s *billingService) CalculateFixedCharges(
 			continue
 		}
 
-		price, err := priceService.GetPrice(ctx, item.PriceID)
-		if err != nil {
-			return nil, err
+		price := item.Price
+		if price == nil {
+			resp, err := priceService.GetPrice(ctx, item.PriceID)
+			if err != nil {
+				return nil, err
+			}
+			price = resp.Price
 		}
 
 		var amount decimal.Decimal
@@ -196,7 +200,7 @@ func (s *billingService) CalculateFixedCharges(
 
 		// ONETIME charge: full amount, no proration; service period = line item start (billing date).
 		if price.BillingPeriod == types.BILLING_PERIOD_ONETIME {
-			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
+			amount = priceService.CalculateCost(ctx, price, item.Quantity)
 			linePeriodStart = item.StartDate
 			// For one-time charges the service period collapses to a single point (the billing date).
 			// If EndDate is not explicitly set, use StartDate so PeriodStart == PeriodEnd.
@@ -249,7 +253,7 @@ func (s *billingService) CalculateFixedCharges(
 
 			var skip bool
 			amount, skip, err = prorateFixedCharge(sub, item, anchor,
-				priceService.CalculateCost(ctx, price.Price, item.Quantity), serviceablePeriod, subPeriodStart)
+				priceService.CalculateCost(ctx, price, item.Quantity), serviceablePeriod, subPeriodStart)
 			if err != nil {
 				return nil, err
 			}
@@ -290,7 +294,7 @@ func (s *billingService) CalculateFixedCharges(
 
 				serviceablePeriod := types.Period{Start: effectiveStart, End: effectiveEnd}
 				wAmount, skip, err := prorateFixedCharge(sub, item, sub.BillingAnchor,
-					priceService.CalculateCost(ctx, price.Price, item.Quantity), serviceablePeriod, w.Start)
+					priceService.CalculateCost(ctx, price, item.Quantity), serviceablePeriod, w.Start)
 				if err != nil {
 					return nil, err
 				}
@@ -1651,13 +1655,13 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	// Line items loaded via GetWithLineItems are filtered by sub.CurrentPeriodStart; for historical
 	// periods (recalculation, past invoices) reload using the invoice billing period start.
-	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
-	lineItemFilter.SubscriptionIDs = []string{sub.ID}
-	lineItemFilter.ActiveFilter = true
-	lineItemFilter.CurrentPeriodStart = &periodStart
-	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
-	if err != nil {
-		return nil, err
+	lineItems := params.LineItems
+	if len(lineItems) == 0 {
+		var err error
+		lineItems, err = listActiveLineItems(ctx, s.SubscriptionLineItemRepo, sub.ID, periodStart)
+		if err != nil {
+			return nil, err
+		}
 	}
 	sub.LineItems = lineItems
 
@@ -1801,6 +1805,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			periodEnd,
 			classification.HasUsageCharges, // Include usage for arrear
 			&asOf,
+			lineItems,
 		)
 		if err != nil {
 			return nil, err
@@ -1815,6 +1820,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			nextPeriodEnd,
 			false, // No usage for advance
 			&asOf,
+			nil,
 		)
 		if err != nil {
 			return nil, err
@@ -1845,6 +1851,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			periodEnd,
 			classification.HasUsageCharges, // Include usage for arrear
 			&asOf,
+			lineItems,
 		)
 		if err != nil {
 			return nil, err
@@ -1859,6 +1866,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			nextPeriodEnd,
 			false, // No usage for advance
 			&asOf,
+			nil,
 		)
 		if err != nil {
 			return nil, err
@@ -1936,6 +1944,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			periodEnd,
 			true, // Include usage for arrear
 			&asOf,
+			lineItems,
 		)
 		if err != nil {
 			return nil, err
@@ -2341,7 +2350,7 @@ func (s *billingService) SumUsageAmountForSubscription(
 	sub *subscription.Subscription,
 	periodStart, periodEnd time.Time,
 ) (decimal.Decimal, error) {
-	result, err := s.calculateMeterUsageCharges(ctx, sub, sub.LineItems, periodStart, periodEnd, true, nil)
+	result, err := s.calculateMeterUsageCharges(ctx, sub, sub.LineItems, periodStart, periodEnd, true, nil, nil)
 	if err != nil {
 		return decimal.Zero, err
 	}
@@ -2359,6 +2368,8 @@ func (s *billingService) SumUsageAmountForSubscription(
 // subscription cadence (e.g. monthly metered on quarterly sub) trigger one
 // GetMeterUsageBySubscription call per sub-window and emit one line item per
 // sub-window. Same-cadence USAGE line items keep today's single-call behavior.
+//
+// periodLineItems, when set, are the active line items at periodStart.
 func (s *billingService) calculateMeterUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -2367,6 +2378,7 @@ func (s *billingService) calculateMeterUsageCharges(
 	periodEnd time.Time,
 	includeUsage bool,
 	asOfOverride *time.Time,
+	periodLineItems []*subscription.SubscriptionLineItem,
 ) (*dto.BillingCalculationResult, error) {
 	filteredSub := *sub
 	filteredSub.LineItems = lineItems
@@ -2416,11 +2428,18 @@ func (s *billingService) calculateMeterUsageCharges(
 				windowSub := *sub
 				windowSub.LineItems = groupItems
 
+				// Inherited subs bill the parent's line items.
+				var windowLineItems []*subscription.SubscriptionLineItem
+				if len(periodLineItems) > 0 && w.Start.Equal(periodStart) && sub.SubscriptionType != types.SubscriptionTypeInherited {
+					windowLineItems = slices.Clone(periodLineItems)
+				}
+
 				usage, err := subscriptionService.GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 					SubscriptionID: sub.ID,
 					StartTime:      w.Start,
 					EndTime:        w.End,
 					Source:         string(types.UsageSourceInvoiceCreation),
+					LineItems:      windowLineItems,
 				})
 				if err != nil {
 					return nil, err
@@ -3689,4 +3708,18 @@ func (s *billingService) applyCouponPreview(ctx context.Context, req *dto.Create
 		req.LineItems[i].InvoiceLevelDiscount = lo.ToPtr(lo.FromPtr(req.LineItems[i].InvoiceLevelDiscount).Add(share))
 	}
 	return nil
+}
+
+// listActiveLineItems returns published line items of subscriptionID not ended before from.
+func listActiveLineItems(
+	ctx context.Context,
+	repo subscription.LineItemRepository,
+	subscriptionID string,
+	from time.Time,
+) ([]*subscription.SubscriptionLineItem, error) {
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.SubscriptionIDs = []string{subscriptionID}
+	filter.ActiveFilter = true
+	filter.CurrentPeriodStart = &from
+	return repo.List(ctx, filter)
 }

@@ -734,6 +734,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 
 	// 2. Compute the request OUTSIDE the lock (expensive for subscription invoices).
 	var applyReq *dto.InvoiceComputeRequest
+	var periodLineItems []*subscription.SubscriptionLineItem
 
 	if inv.InvoiceType == types.InvoiceTypeSubscription && inv.SubscriptionID != nil {
 		// Subscription: compute line items from billing service
@@ -753,6 +754,10 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if req != nil && req.ProrationBehavior != nil {
 			sub.ProrationBehavior = *req.ProrationBehavior
 		}
+		periodLineItems, err = listActiveLineItems(ctx, s.SubscriptionLineItemRepo, sub.ID, *inv.PeriodStart)
+		if err != nil {
+			return nil, false, err
+		}
 		billingService := NewBillingService(s.ServiceParams)
 		params := &dto.PrepareSubscriptionInvoiceRequestParams{
 			Subscription:     sub,
@@ -760,6 +765,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			PeriodEnd:        *inv.PeriodEnd,
 			ReferencePoint:   refPoint,
 			ExcludeInvoiceID: inv.ID,
+			LineItems:        periodLineItems,
 		}
 
 		if req != nil {
@@ -918,7 +924,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 
 	// Period-end computation also runs for zero-value invoices and after rollover has advanced the subscription.
 	if computed {
-		if err := s.saveCompletedCycleUsageCheckpoints(ctx, inv); err != nil {
+		if err := s.saveCompletedCycleUsageCheckpoints(ctx, inv, periodLineItems); err != nil {
 			s.Logger.Error(ctx, "saving usage checkpoints failed; reads use the preceding checkpoint",
 				"subscription_id", *inv.SubscriptionID, "invoice_id", inv.ID, "error", err)
 		}
@@ -946,7 +952,8 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 	return inv, skipped, nil
 }
 
-func (s *invoiceService) saveCompletedCycleUsageCheckpoints(ctx context.Context, inv *invoice.Invoice) error {
+// periodItems, when set, are the active line items at inv.PeriodStart.
+func (s *invoiceService) saveCompletedCycleUsageCheckpoints(ctx context.Context, inv *invoice.Invoice, periodItems []*subscription.SubscriptionLineItem) error {
 	if s.MeterUsageCheckpointRepo == nil || inv == nil || inv.InvoiceType != types.InvoiceTypeSubscription ||
 		inv.SubscriptionID == nil || inv.PeriodStart == nil || inv.PeriodEnd == nil ||
 		inv.PeriodEnd.After(clock.Now()) || types.InvoiceBillingReason(inv.BillingReason) != types.InvoiceBillingReasonSubscriptionCycle {
@@ -956,11 +963,17 @@ func (s *invoiceService) saveCompletedCycleUsageCheckpoints(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	if !usesCheckpoints(sub) {
+		return nil
+	}
 	subscriptionForInvoicePeriod := *sub
 	subscriptionForInvoicePeriod.CurrentPeriodStart = *inv.PeriodStart
-	items, err := s.SubscriptionLineItemRepo.ListBySubscription(ctx, &subscriptionForInvoicePeriod)
-	if err != nil {
-		return err
+	items := periodItems
+	if len(items) == 0 {
+		items, err = listActiveLineItems(ctx, s.SubscriptionLineItemRepo, sub.ID, *inv.PeriodStart)
+		if err != nil {
+			return err
+		}
 	}
 	subscriptionForInvoicePeriod.LineItems = items
 	return NewMeterUsageService(s.ServiceParams).SaveUsageCheckpointsForSubscription(ctx, &subscriptionForInvoicePeriod, *inv.PeriodEnd, lo.ToPtr(inv.ID))

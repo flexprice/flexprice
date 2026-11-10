@@ -263,6 +263,9 @@ type GetSubscriptionMeterUsageRequest struct {
 	// (multi-counts the true-up amount across rows). Default (false) is what
 	// every user-facing caller uses.
 	ForceApplyCommitment bool
+
+	// LineItems are the active line items at StartTime; empty loads them.
+	LineItems []*subscription.SubscriptionLineItem
 }
 
 // usageQueryGroup batches usage queries with the same period and aggregation settings.
@@ -486,9 +489,12 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 	}
 
 	// 4. Get line items for this subscription
-	lineItems, err := s.ListUsageLineItems(ctx, sub, usageStartTime, req.LifetimeUsage)
-	if err != nil {
-		return nil, err
+	lineItems := req.LineItems
+	if len(lineItems) == 0 || req.LifetimeUsage {
+		lineItems, err = s.ListUsageLineItems(ctx, sub, usageStartTime, req.LifetimeUsage)
+		if err != nil {
+			return nil, err
+		}
 	}
 	sub.LineItems = lineItems
 
