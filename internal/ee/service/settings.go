@@ -410,6 +410,8 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.RevenueAnalyticsConfig](s, ctx, key)
 	case types.SettingKeyBillingEntityConfig:
 		return getSettingByKey[types.BillingEntityConfig](s, ctx, key)
+	case types.SettingKeyEmailNotificationConfig:
+		return getSettingByKey[types.EmailNotificationConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -481,6 +483,8 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return s.updateBillingEntityGuardedSetting(ctx, key, req, updateSettingByKey[types.TaxConfig])
 	case types.SettingKeyRevenueRecognitionConfig:
 		return updateSettingByKey[types.RevenueRecognitionConfig](s, ctx, key, req)
+	case types.SettingKeyEmailNotificationConfig:
+		return updateSettingByKey[types.EmailNotificationConfig](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).

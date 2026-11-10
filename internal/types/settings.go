@@ -42,6 +42,7 @@ const (
 	SettingKeyTaxConfig                   SettingKey = "tax_config"
 	SettingKeyRevenueRecognitionConfig    SettingKey = "revenue_recognition_config"
 	SettingKeyBillingEntityConfig         SettingKey = "billing_entity_config"
+	SettingKeyEmailNotificationConfig     SettingKey = "email_notification_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -70,6 +71,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyTaxConfig,
 		SettingKeyRevenueRecognitionConfig,
 		SettingKeyBillingEntityConfig,
+		SettingKeyEmailNotificationConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -984,6 +986,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: map[string]interface{}{"mode": string(BillingEntityModeOff)},
 			Description:  "Billing entities mode of the environment; set only by enabling billing entities",
 		},
+		SettingKeyEmailNotificationConfig: {
+			Key:          SettingKeyEmailNotificationConfig,
+			DefaultValue: map[string]interface{}{"attach_invoice_pdf": true},
+			Description:  "How Flexprice emails customers in this environment",
+		},
 	}, nil
 }
 
@@ -1170,6 +1177,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return cfg.Validate()
 
+	case SettingKeyEmailNotificationConfig:
+		cfg, err := utils.ToStruct[EmailNotificationConfig](value)
+		if err != nil {
+			return err
+		}
+		return cfg.Validate()
+
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -1326,4 +1340,14 @@ type BillingEntityConfig struct {
 
 func (c BillingEntityConfig) Validate() error {
 	return c.Mode.Normalize().Validate()
+}
+
+// EmailNotificationConfig is how Flexprice emails customers in an environment.
+type EmailNotificationConfig struct {
+	// AttachInvoicePDF attaches the invoice PDF to invoice emails.
+	AttachInvoicePDF bool `json:"attach_invoice_pdf"`
+}
+
+func (c EmailNotificationConfig) Validate() error {
+	return nil
 }
