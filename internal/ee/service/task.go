@@ -17,6 +17,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -1274,6 +1275,10 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 			Mark(ierr.ErrNotFound)
 	}
 
+	if scheduledTask.ManagedCopy {
+		return s.presignManagedCopy(ctx, t, scheduledTask, bucket, key)
+	}
+
 	if scheduledTask.ConnectionID == "" {
 		return "", ierr.NewError("scheduled task has no connection_id").
 			WithHint("Cannot generate download URL without connection").
@@ -1368,5 +1373,35 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 		"connection_id", scheduledTask.ConnectionID,
 		"is_flexprice_managed", isFlexpriceManaged)
 
+	return url, nil
+}
+
+// presignManagedCopy presigns a run file in the platform export bucket.
+func (s *taskService) presignManagedCopy(ctx context.Context, t *task.Task, st *scheduledtask.ScheduledTask, bucket, key string) (string, error) {
+	prefix := fmt.Sprintf("exports/%s/%s/", types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
+	if t.TaskType != types.TaskTypeExport ||
+		st.JobConfig == nil || bucket != st.JobConfig.Bucket ||
+		!strings.HasPrefix(key, prefix) || strings.Contains(key, "..") {
+		s.Logger.Info(ctx, "managed export file check failed", "task_id", t.ID, "bucket", bucket)
+		return "", ierr.NewError("file does not belong to this export").
+			WithHint("File URL does not match the Flexprice export bucket or tenant prefix").
+			Mark(ierr.ErrValidation)
+	}
+
+	store, err := s.StorageResolver.ForPlatform(ctx, storage.PurposeExport)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to get platform export storage", "error", err, "task_id", t.ID)
+		return "", ierr.WithError(err).
+			WithHint("Failed to initialize storage provider").
+			Mark(ierr.ErrInternal)
+	}
+
+	url, err := store.PresignGet(ctx, key, 30*time.Minute)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to generate presigned URL", "error", err, "task_id", t.ID)
+		return "", ierr.WithError(err).
+			WithHint("Failed to generate presigned URL").
+			Mark(ierr.ErrInternal)
+	}
 	return url, nil
 }
