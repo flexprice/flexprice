@@ -2127,6 +2127,10 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 		subscription.ProrationBehavior = *req.ProrationBehavior
 	}
 
+	if req.Settings != nil {
+		subscription.Settings = dto.NormalizeSettingsOverride(req.Settings)
+	}
+
 	if req.CancelAtPeriodEnd != nil {
 		subscription.CancelAtPeriodEnd = *req.CancelAtPeriodEnd
 		// Explicit false with no cancel_at clears a pending cancellation; gated on an existing

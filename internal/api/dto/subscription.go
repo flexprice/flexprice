@@ -647,6 +647,9 @@ type CreateSubscriptionRequest struct {
 	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
 	PaymentTerms       *types.PaymentTerms      `json:"payment_terms,omitempty"`
 
+	// Settings overrides the customer and environment settings for this subscription.
+	Settings *types.SettingsOverride `json:"settings,omitempty"`
+
 	// AutoInvoiceThreshold triggers a mid-period invoice when usage (in subscription currency) exceeds this amount.
 	// Standalone subscriptions only; all plan prices must be usage-based. Immutable after creation.
 	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
@@ -764,6 +767,9 @@ type UpdateSubscriptionRequest struct {
 
 	// ProrationBehavior updates the stored behavior. Omit to leave it unchanged.
 	ProrationBehavior *types.ProrationBehavior `json:"proration_behavior,omitempty"`
+
+	// Settings replaces the subscription's setting overrides when provided; send {} to inherit.
+	Settings *types.SettingsOverride `json:"settings,omitempty"`
 }
 
 // Validate checks UpdateSubscriptionRequest fields for basic structural validity.
@@ -1642,6 +1648,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
 		ParentSubscriptionID:   parentSubscriptionID,
 		PaymentTerms:           r.PaymentTerms,
+		Settings:               NormalizeSettingsOverride(r.Settings),
 		SubscriptionType:       subscriptionType,
 	}
 
