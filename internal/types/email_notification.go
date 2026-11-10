@@ -63,3 +63,86 @@ const (
 func (p EmailProvider) Validate() error {
 	return validateEnum("provider", p, []EmailProvider{EmailProviderResend, EmailProviderLocal})
 }
+
+// EmailLogFilter selects email logs, newest first by default.
+type EmailLogFilter struct {
+	*QueryFilter
+	*TimeRangeFilter
+
+	EntityType SystemEntityType `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
+	EntityIDs  []string         `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
+}
+
+func NewEmailLogFilter() *EmailLogFilter {
+	return &EmailLogFilter{QueryFilter: NewDefaultQueryFilter()}
+}
+
+func (f *EmailLogFilter) Validate() error {
+	if f.QueryFilter != nil {
+		if err := f.QueryFilter.Validate(); err != nil {
+			return err
+		}
+	}
+	if f.TimeRangeFilter != nil {
+		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetLimit implements BaseFilter interface
+func (f *EmailLogFilter) GetLimit() int {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetLimit()
+	}
+	return f.QueryFilter.GetLimit()
+}
+
+// GetOffset implements BaseFilter interface
+func (f *EmailLogFilter) GetOffset() int {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetOffset()
+	}
+	return f.QueryFilter.GetOffset()
+}
+
+// GetSort implements BaseFilter interface
+func (f *EmailLogFilter) GetSort() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetSort()
+	}
+	return f.QueryFilter.GetSort()
+}
+
+// GetOrder implements BaseFilter interface
+func (f *EmailLogFilter) GetOrder() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetOrder()
+	}
+	return f.QueryFilter.GetOrder()
+}
+
+// GetStatus implements BaseFilter interface
+func (f *EmailLogFilter) GetStatus() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetStatus()
+	}
+	return f.QueryFilter.GetStatus()
+}
+
+// GetExpand implements BaseFilter interface
+func (f *EmailLogFilter) GetExpand() Expand {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetExpand()
+	}
+	return f.QueryFilter.GetExpand()
+}
+
+// IsUnlimited implements BaseFilter interface
+func (f *EmailLogFilter) IsUnlimited() bool {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().IsUnlimited()
+	}
+	return f.QueryFilter.IsUnlimited()
+}
