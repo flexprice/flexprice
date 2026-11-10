@@ -338,12 +338,12 @@ func (s *InvoiceActivities) FinalizeDueDraftsActivity(
 	invoiceService := service.NewInvoiceService(s.serviceParams)
 	temporalSvc := temporalService.GetGlobalTemporalService()
 
-	offset := 0
+	afterID := ""
 	capReached := false
 	for !capReached {
-		drafts, err := invoiceService.ListAllTenantDraftInvoices(ctx, batchSize, offset)
+		drafts, err := invoiceService.ListFinalizationCandidates(ctx, afterID, batchSize)
 		if err != nil {
-			logger.Error("Failed to list draft invoices", "offset", offset, "error", err)
+			logger.Error("Failed to list draft invoices", "after_id", afterID, "error", err)
 			return result, err
 		}
 		if len(drafts) == 0 {
@@ -395,11 +395,11 @@ func (s *InvoiceActivities) FinalizeDueDraftsActivity(
 			result.FinalizedCount++
 		}
 
-		activity.RecordHeartbeat(ctx, offset+len(drafts))
+		activity.RecordHeartbeat(ctx, result.TotalProcessed)
 		if len(drafts) < batchSize {
 			break
 		}
-		offset += batchSize
+		afterID = drafts[len(drafts)-1].ID
 	}
 
 	logger.Info("Completed finalize due drafts",

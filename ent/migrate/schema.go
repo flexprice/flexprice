@@ -1762,6 +1762,14 @@ var (
 				},
 			},
 			{
+				Name:    "idx_invoices_computed_drafts_id",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(((status)::text = 'published'::text) AND ((invoice_status)::text = 'DRAFT'::text) AND (last_computed_at IS NOT NULL))",
+				},
+			},
+			{
 				Name:    "idx_invoices_tenant_env_billing_entity",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[27]},
