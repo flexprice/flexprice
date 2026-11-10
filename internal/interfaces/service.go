@@ -241,6 +241,9 @@ type SubscriptionService interface {
 	// CascadeCancelToInheritedSubscriptions mirrors the parent's cancellation fields onto INHERITED child subscriptions (no-op if not a parent). Used by Temporal update-billing-period cancellation and aligned with CancelSubscription / cron processing.
 	CascadeCancelToInheritedSubscriptions(ctx context.Context, parentSub *subscription.Subscription) error
 
+	// CascadeCancelToGroupedInvoicingSubscriptions cancels a cancelled parent's grouped_invoicing children and ends their resources; returns the cancelled children.
+	CascadeCancelToGroupedInvoicingSubscriptions(ctx context.Context, parentSub *subscription.Subscription) ([]*subscription.Subscription, error)
+
 	// TerminateSubscriptionResources terminates line items, addon associations, and credit
 	// grants for a subscription as of req.EffectiveDate. Called eagerly by CancelSubscription for
 	// immediate cancellations, and by both processSubscriptionPeriod's period-rollover loop and

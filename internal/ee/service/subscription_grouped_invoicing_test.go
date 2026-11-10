@@ -10,6 +10,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -73,6 +75,7 @@ func (s *SubscriptionGroupedInvoicingTestSuite) setupServices() {
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 		SettingsRepo:                 s.GetStores().SettingsRepo,
 		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
+		CommitmentRepo:               s.GetStores().CommitmentRepo,
 		EventPublisher:               s.GetPublisher(),
 		WebhookPublisher:             s.GetWebhookPublisher(),
 		ProrationCalculator:          s.GetCalculator(),
@@ -452,4 +455,95 @@ func (s *SubscriptionGroupedInvoicingTestSuite) TestExecuteGroupedInvoicingMembe
 	}
 	// child updated; parent may also be promoted from standalone → parent
 	require.GreaterOrEqual(s.T(), updatedCount, 1)
+}
+
+// -----------------------------------------------------------------------
+// cancelling the parent
+// -----------------------------------------------------------------------
+
+// makeGroupedChild creates an active grouped_invoicing child of parent with one open line item.
+func (s *SubscriptionGroupedInvoicingTestSuite) makeGroupedChild(parent *subscription.Subscription) (*subscription.Subscription, *subscription.SubscriptionLineItem) {
+	ctx := s.GetContext()
+	child := s.makeChildSub(s.createTestCustomer().ID, parent.BillingAnchor, parent.StartDate, func(sub *subscription.Subscription) {
+		sub.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
+		sub.ParentSubscriptionID = &parent.ID
+	})
+	lineItem := &subscription.SubscriptionLineItem{
+		ID:             s.GetUUID(),
+		SubscriptionID: child.ID,
+		CustomerID:     child.CustomerID,
+		PriceID:        s.GetUUID(),
+		PriceType:      types.PRICE_TYPE_FIXED,
+		Quantity:       decimal.NewFromInt(1),
+		Currency:       child.Currency,
+		BillingPeriod:  child.BillingPeriod,
+		InvoiceCadence: types.InvoiceCadenceAdvance,
+		StartDate:      child.StartDate,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(s.T(), s.GetStores().SubscriptionLineItemRepo.Create(ctx, lineItem))
+	return child, lineItem
+}
+
+func (s *SubscriptionGroupedInvoicingTestSuite) TestCancelParentImmediately_CancelsGroupedChildren() {
+	ctx := s.GetContext()
+	start := time.Now().UTC().Truncate(time.Second).AddDate(0, 0, -10)
+	parent := s.makeParentSub(s.createTestCustomer().ID, start, start)
+	child, lineItem := s.makeGroupedChild(parent)
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+
+	_, err := s.subscriptionService.CancelSubscription(ctx, parent.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeImmediate,
+		Reason:            types.CancellationReasonPaymentOverdue,
+		ProrationBehavior: types.ProrationBehaviorNone,
+	})
+	require.NoError(s.T(), err)
+
+	cancelledParent, err := s.GetStores().SubscriptionRepo.Get(ctx, parent.ID)
+	require.NoError(s.T(), err)
+	cancelledChild, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), types.SubscriptionStatusCancelled, cancelledChild.SubscriptionStatus)
+	require.Equal(s.T(), types.CancellationReasonPaymentOverdue, cancelledChild.Metadata["cancellation_reason"])
+	require.NotNil(s.T(), cancelledChild.EndDate)
+	require.True(s.T(), cancelledChild.EndDate.Equal(*cancelledParent.EndDate))
+
+	endedLine, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, lineItem.ID)
+	require.NoError(s.T(), err)
+	require.True(s.T(), endedLine.EndDate.Equal(*cancelledParent.EndDate), "child line item ends with the parent")
+
+	childCancelledWebhooks := lo.CountBy(s.GetPublishedWebhooks(), func(e *types.WebhookEvent) bool {
+		return e.EventName == types.WebhookEventSubscriptionCancelled && e.EntityID == child.ID
+	})
+	require.Equal(s.T(), 1, childCancelledWebhooks)
+}
+
+func (s *SubscriptionGroupedInvoicingTestSuite) TestCancelParentAtPeriodEnd_CancelsGroupedChildrenWhenItFires() {
+	ctx := s.GetContext()
+	start := time.Now().UTC().Truncate(time.Second).AddDate(0, 0, -10)
+	parent := s.makeParentSub(s.createTestCustomer().ID, start, start)
+	child, _ := s.makeGroupedChild(parent)
+
+	_, err := s.subscriptionService.CancelSubscription(ctx, parent.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeEndOfPeriod,
+		ProrationBehavior: types.ProrationBehaviorNone,
+	})
+	require.NoError(s.T(), err)
+
+	scheduledChild, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), types.SubscriptionStatusActive, scheduledChild.SubscriptionStatus, "child stays active until the parent's cancellation fires")
+
+	// The parent's period-end run marks it cancelled at cancel_at, without setting an end date.
+	scheduledParent, err := s.GetStores().SubscriptionRepo.Get(ctx, parent.ID)
+	require.NoError(s.T(), err)
+	scheduledParent.SubscriptionStatus = types.SubscriptionStatusCancelled
+	cancelled, err := s.subscriptionService.CascadeCancelToGroupedInvoicingSubscriptions(ctx, scheduledParent)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), cancelled, 1)
+
+	cancelledChild, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), types.SubscriptionStatusCancelled, cancelledChild.SubscriptionStatus)
+	require.True(s.T(), cancelledChild.EndDate.Equal(*scheduledParent.CancelAt))
 }
