@@ -62,6 +62,12 @@ func (b Bucket) MinuteOfDay() int {
 	return b.Hour*60 + b.Minute
 }
 
+// Add returns the time of day the given minutes later, wrapping around midnight; 24:00 wraps to 00:00.
+func (b Bucket) Add(minutes int) Bucket {
+	m := ((b.MinuteOfDay()+minutes)%minutesPerDay + minutesPerDay) % minutesPerDay
+	return Bucket{Hour: m / 60, Minute: m % 60}
+}
+
 // TimeOfDayBucket defines a [Start, End) half-open range within a UTC day with
 // its own commitment + base price. The bucket overrides the line item's
 // price/commitment for any window whose start falls inside [Start, End).

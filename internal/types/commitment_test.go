@@ -52,6 +52,25 @@ func TestBucket_MinuteOfDay(t *testing.T) {
 	}
 }
 
+func TestBucket_Add(t *testing.T) {
+	tests := []struct {
+		name    string
+		bucket  Bucket
+		minutes int
+		want    Bucket
+	}{
+		{"later the same day", Bucket{Hour: 9}, 90, Bucket{Hour: 10, Minute: 30}},
+		{"back across midnight", Bucket{Hour: 3}, -330, Bucket{Hour: 21, Minute: 30}},
+		{"on past midnight", Bucket{Hour: 19}, 300, Bucket{}},
+		{"end of day (24:00) wraps to midnight", Bucket{Hour: 24}, 0, Bucket{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.bucket.Add(tt.minutes))
+		})
+	}
+}
+
 func TestTimeOfDayBucket_ContainsTime(t *testing.T) {
 	// Helper: build a time at a specific UTC hour/minute.
 	at := func(hour, minute int) time.Time {

@@ -565,20 +565,20 @@ func TestRejectSplitBuckets(t *testing.T) {
 		timezone string
 		windows  types.ActiveWindows
 		end      *time.Time
-		wantEdge string // empty when the windows hold whole buckets
+		wantErr  bool
 	}{
 		{name: "no windows", size: types.WindowSizeHour},
 		{name: "whole hours", size: types.WindowSizeHour, windows: window(10, 0, 15, 0)},
-		{name: "an edge inside an hour", size: types.WindowSizeHour, windows: window(10, 0, 14, 45), wantEdge: "14:45"},
+		{name: "an edge inside an hour", size: types.WindowSizeHour, windows: window(10, 0, 14, 45), wantErr: true},
 		{name: "the same edge on a 15-minute grid", size: types.WindowSize15Min, windows: window(10, 0, 14, 45)},
 		{name: "any minute", size: types.WindowSizeMinute, windows: window(10, 7, 14, 53)},
-		{name: "whole hours in Kolkata split UTC hours", size: types.WindowSizeHour, timezone: "Asia/Kolkata", windows: window(9, 0, 21, 0), wantEdge: "09:00"},
+		{name: "whole hours in Kolkata split UTC hours", size: types.WindowSizeHour, timezone: "Asia/Kolkata", windows: window(9, 0, 21, 0), wantErr: true},
 		{name: "half past in Kolkata is on the hour in UTC", size: types.WindowSizeHour, timezone: "Asia/Kolkata", windows: window(9, 30, 21, 30)},
 		{name: "New York hours across daylight saving", size: types.WindowSizeHour, timezone: "America/New_York", windows: window(7, 0, 19, 0)},
-		{name: "New York 6 hours once daylight saving starts", size: types.WindowSize6Hour, timezone: "America/New_York", windows: window(7, 0, 19, 0), wantEdge: "07:00"},
+		{name: "New York 6 hours once daylight saving starts", size: types.WindowSize6Hour, timezone: "America/New_York", windows: window(7, 0, 19, 0), wantErr: true},
 		{name: "New York 6 hours in a winter term", size: types.WindowSize6Hour, timezone: "America/New_York", windows: window(7, 0, 19, 0), end: lo.ToPtr(jan.AddDate(0, 2, 0))},
 		{name: "the whole UTC day", size: types.WindowSizeDay, windows: window(0, 0, 24, 0)},
-		{name: "part of a day", size: types.WindowSizeDay, windows: window(8, 0, 20, 0), wantEdge: "08:00"},
+		{name: "part of a day", size: types.WindowSizeDay, windows: window(8, 0, 20, 0), wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -589,13 +589,13 @@ func TestRejectSplitBuckets(t *testing.T) {
 				ActiveWindows: tt.windows,
 			}
 			err := rejectSplitBuckets(c, tt.size)
-			if tt.wantEdge == "" {
+			if !tt.wantErr {
 				require.NoError(t, err)
 				return
 			}
 
 			require.True(t, ierr.IsValidation(err), "want a validation error, got %v", err)
-			require.Contains(t, err.Error(), tt.wantEdge)
+			require.Contains(t, err.Error(), string(tt.size))
 		})
 	}
 }

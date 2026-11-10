@@ -333,28 +333,26 @@ func rejectCalendarBuckets(size types.WindowSize) error {
 		Mark(ierr.ErrValidation)
 }
 
-// rejectSplitBuckets rejects active windows that split usage buckets. Buckets are cut in UTC, so every window edge must
-// fall on the bucket grid under each UTC offset the commitment's timezone takes in the first year of its term.
+// rejectSplitBuckets rejects active windows that split usage buckets, by v1's time-of-day bucket rule. Buckets are cut in
+// UTC, so the windows are moved to UTC under each offset the commitment's timezone takes in the first year of its term.
 func rejectSplitBuckets(c *commitment.Commitment, size types.WindowSize) error {
 	if len(c.ActiveWindows) == 0 {
 		return nil
 	}
 
-	minutes := size.ToMinutes()
 	until := c.Until(c.StartDate.AddDate(1, 0, 0))
 	for t := c.StartDate.In(c.Location()); t.Before(until); {
 		_, offset := t.Zone()
-		for _, w := range c.ActiveWindows {
-			for _, edge := range []types.Bucket{w.Start, w.End} {
-				if (edge.MinuteOfDay()-offset/60)%minutes == 0 {
-					continue
-				}
+		inUTC := lo.Map(c.ActiveWindows, func(w types.ActiveWindow, _ int) types.TimeOfDayBucket {
+			return types.TimeOfDayBucket{Start: w.Start.Add(-offset / 60), End: w.End.Add(-offset / 60)}
+		})
 
-				return ierr.NewErrorf("active window edge %02d:%02d %s splits %s usage buckets", edge.Hour, edge.Minute, c.Timezone, size).
-					WithHintf("Usage buckets are cut in UTC, so at UTC offset %s each window edge must fall on the %s bucket grid",
-						t.Format("-07:00"), size).
-					Mark(ierr.ErrValidation)
-			}
+		// v1's error speaks of UTC buckets, and the API shows its hint, so the windows get their own error.
+		if types.TimeOfDayBuckets(inUTC).ValidateWindowAlignment(size.ToMinutes()) != nil {
+			return ierr.NewErrorf("active_windows in %s split %s usage buckets", c.Timezone, size).
+				WithHintf("Usage buckets are cut in UTC, so at UTC offset %s each active window must start and end on the %s grid in UTC",
+					t.Format("-07:00"), size).
+				Mark(ierr.ErrValidation)
 		}
 
 		_, next := t.ZoneBounds()
