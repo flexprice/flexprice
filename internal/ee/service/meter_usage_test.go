@@ -7505,6 +7505,69 @@ func (s *MeterUsageServiceSuite) TestCommitments_FuturePeriodsBillNothing() {
 	s.True(resp.TotalCost.Equal(want), "%d months bill %s, want %s", elapsedMonths, resp.TotalCost, want)
 }
 
+// Usage dated after now sits in billing periods that bill nothing: with monthly points, the open month keeps its $150
+// floor and the next month's point carries no charge.
+func (s *MeterUsageServiceSuite) TestCommitments_FutureUsageTakesNoCharges() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	m := s.createMeterWithAggregation(ctx, "meter_future_usage", "api_call", types.AggregationSum)
+	p := s.createPriceForMeter(ctx, "price_future_usage", m.ID, dec("1"))
+	s.openLineItem("li_future_usage", m.ID, p.ID)
+	c := s.newCommitment("cmt_future_usage", types.CommitmentScopePrice, p.ID, "150")
+	c.EndDate = nil
+	s.storeCommitment(c)
+
+	now := clock.Now()
+	thisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	nextMonth := thisMonth.AddDate(0, 1, 0)
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", nextMonth.AddDate(0, 0, 9).Add(12*time.Hour), 40, nil)
+
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+		StartTime:  thisMonth,
+		EndTime:    nextMonth.AddDate(0, 1, 0),
+		WindowSize: types.WindowSizeMonth,
+		MeterIDs:   []string{m.ID},
+	})
+	s.Require().Len(resp.Items, 1)
+	s.True(resp.TotalCost.Equal(dec("150")), "total %s", resp.TotalCost)
+	costs := map[time.Time]decimal.Decimal{}
+	for _, point := range resp.Items[0].Points {
+		costs[point.Timestamp] = point.Cost
+	}
+	s.True(costs[thisMonth].Equal(dec("150")), "this month costs %s", costs[thisMonth])
+	s.True(costs[nextMonth].IsZero(), "next month costs %s", costs[nextMonth])
+}
+
+// failingUsageStore fails every read of which meters have usage.
+type failingUsageStore struct {
+	events.MeterUsageRepository
+}
+
+func (f *failingUsageStore) GetDistinctMeterIDs(context.Context, *events.MeterUsageQueryParams) ([]string, error) {
+	return nil, ierr.NewError("usage store unavailable").Mark(ierr.ErrDatabase)
+}
+
+// A failing usage read fails the request instead of reporting the customer's usage as zero.
+func (s *MeterUsageServiceSuite) TestAnalytics_UsageReadErrorsAreReturned() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "meter_failing_read", "api_call", types.AggregationSum)
+	p := s.createPriceForMeter(ctx, "price_failing_read", m.ID, dec("1"))
+	s.createLineItemForMeter(ctx, "li_failing_read", m.ID, p.ID)
+
+	failing := &failingUsageStore{MeterUsageRepository: s.GetStores().MeterUsageRepo}
+	svc := s.svc.(*meterUsageService)
+	svc.repo, svc.MeterUsageRepo = failing, failing
+	_, err := svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.Require().Error(err)
+	s.True(ierr.IsDatabase(err), "got %v", err)
+}
+
 // An instalment invoiced in the range is listed even when its commitment's line has no usage there: a fee invoiced on a
 // quiet day still shows on that day.
 func (s *MeterUsageServiceSuite) TestCommitments_InstalmentsListWithoutUsageInRange() {
