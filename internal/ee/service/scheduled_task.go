@@ -393,7 +393,10 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 			Mark(ierr.ErrValidation)
 	}
 
-	// Track if enabled status changed
+	if req.Enabled == nil {
+		return dto.ToScheduledTaskResponse(task), nil
+	}
+
 	wasEnabled := task.Enabled
 	newEnabled := *req.Enabled
 
