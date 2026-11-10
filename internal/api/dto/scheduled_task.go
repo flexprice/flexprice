@@ -13,16 +13,19 @@ import (
 
 // CreateScheduledTaskRequest represents a request to create a scheduled task
 type CreateScheduledTaskRequest struct {
-	ConnectionID string                        `json:"connection_id" binding:"required" validate:"required"`
+	ConnectionID string                        `json:"connection_id,omitempty"`
+	Name         string                        `json:"name,omitempty"`
 	EntityType   types.ScheduledTaskEntityType `json:"entity_type" binding:"required" validate:"required"`
-	Interval     types.ScheduledTaskInterval   `json:"interval" binding:"required" validate:"required" enums:"hourly,daily"` // Note: "custom" is excluded from API (internal testing only)
+	Interval     types.ScheduledTaskInterval   `json:"interval" binding:"required" validate:"required" enums:"hourly,daily,weekly,monthly,manual"` // Note: "custom" is excluded from API (internal testing only)
 	Enabled      bool                          `json:"enabled"`
-	JobConfig    *types.S3JobConfig            `json:"job_config" binding:"required" validate:"required"`
+	JobConfig    *types.S3JobConfig            `json:"job_config,omitempty"`
+	Schedule     *types.ExportSchedule         `json:"schedule,omitempty"`
 }
+
+const maxScheduledTaskNameLength = 120
 
 // Validate validates the create request
 func (r *CreateScheduledTaskRequest) Validate() error {
-	// run struct-tag validations first
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
@@ -34,33 +37,72 @@ func (r *CreateScheduledTaskRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate entity type
 	if err := r.EntityType.Validate(); err != nil {
 		return err
 	}
 
-	// Validate interval
 	if err := r.Interval.Validate(); err != nil {
 		return err
 	}
 
-	// Note: S3JobConfig validation is done in service layer after checking
-	// if connection is Flexprice-managed
+	if len(r.Name) > maxScheduledTaskNameLength {
+		return ierr.NewError("name is too long").
+			WithHint("Name must be at most 120 characters").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := types.ValidateExportSchedule(r.Interval, r.Schedule); err != nil {
+		return err
+	}
+
+	if r.ConnectionID != "" {
+		if r.JobConfig == nil {
+			return ierr.NewError("job_config is required").
+				WithHint("Provide job_config when connection_id is set").
+				Mark(ierr.ErrValidation)
+		}
+		return nil
+	}
+
+	switch r.Interval {
+	case types.ScheduledTaskIntervalEvery15Minutes, types.ScheduledTaskIntervalEvery30Minutes:
+		return ierr.NewError("interval is not available without a connection").
+			WithHint("Use hourly, daily, weekly, monthly or manual").
+			Mark(ierr.ErrValidation)
+	}
+
+	if jc := r.JobConfig; jc != nil {
+		if jc.Bucket != "" || jc.Region != "" || jc.KeyPrefix != "" || jc.EndpointURL != "" ||
+			jc.UsePathStyle || jc.Encryption != "" || jc.Provider != "" {
+			return ierr.NewError("job_config storage fields are set by Flexprice when no connection_id is given").
+				WithHint("Only export_metadata_fields and compression may be set").
+				Mark(ierr.ErrValidation)
+		}
+		if err := jc.Compression.Validate(); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
 // UpdateScheduledTaskRequest represents a request to update a scheduled task
-// Only enabled field is allowed to be updated
 type UpdateScheduledTaskRequest struct {
-	Enabled *bool `json:"enabled" validate:"required"`
+	Enabled  *bool                 `json:"enabled,omitempty"`
+	Name     *string               `json:"name,omitempty"`
+	Schedule *types.ExportSchedule `json:"schedule,omitempty"`
 }
 
 // Validate validates the update request
 func (r *UpdateScheduledTaskRequest) Validate() error {
-	if r.Enabled == nil {
-		return ierr.NewError("enabled field is required").
-			WithHint("Please provide enabled field (true or false)").
+	if r.Enabled == nil && r.Name == nil && r.Schedule == nil {
+		return ierr.NewError("no fields to update").
+			WithHint("Provide enabled, name or schedule").
+			Mark(ierr.ErrValidation)
+	}
+	if r.Name != nil && len(*r.Name) > maxScheduledTaskNameLength {
+		return ierr.NewError("name is too long").
+			WithHint("Name must be at most 120 characters").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -73,9 +115,12 @@ type ScheduledTaskResponse struct {
 	EnvironmentID string                        `json:"environment_id"`
 	ConnectionID  string                        `json:"connection_id"`
 	EntityType    types.ScheduledTaskEntityType `json:"entity_type"`
-	Interval      types.ScheduledTaskInterval   `json:"interval" enums:"hourly,daily"` // Note: "custom" is excluded from API docs
+	Interval      types.ScheduledTaskInterval   `json:"interval" enums:"hourly,daily,weekly,monthly,manual"` // Note: "custom" is excluded from API docs
 	Enabled       bool                          `json:"enabled"`
 	JobConfig     *types.S3JobConfig            `json:"job_config"`
+	Name          string                        `json:"name,omitempty"`
+	ManagedCopy   bool                          `json:"managed_copy,omitempty"`
+	Schedule      *types.ExportSchedule         `json:"schedule,omitempty"`
 	Status        string                        `json:"status"`
 	CreatedAt     time.Time                     `json:"created_at"`
 	UpdatedAt     time.Time                     `json:"updated_at"`
@@ -95,6 +140,9 @@ func ToScheduledTaskResponse(task *scheduledtask.ScheduledTask) *ScheduledTaskRe
 		Interval:      task.Interval,
 		Enabled:       task.Enabled,
 		JobConfig:     task.JobConfig,
+		Name:          task.Name,
+		ManagedCopy:   task.ManagedCopy,
+		Schedule:      task.Schedule,
 		Status:        string(task.Status),
 		CreatedAt:     task.CreatedAt,
 		UpdatedAt:     task.UpdatedAt,
