@@ -11,7 +11,7 @@ import (
 // IngestionBuffer delays runs for late events.
 const IngestionBuffer = 15 * time.Minute
 
-// Window returns UTC bounds for a run.
+// Window returns UTC run bounds.
 func Window(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule, scheduledStart time.Time) (time.Time, time.Time, error) {
 	loc := time.UTC
 	if interval != types.ScheduledTaskIntervalManual {
