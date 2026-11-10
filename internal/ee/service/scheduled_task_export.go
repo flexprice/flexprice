@@ -259,13 +259,10 @@ func (s *scheduledTaskService) replaceScheduleSpec(ctx context.Context, schedule
 
 // updateExportSettings applies name, schedule.
 func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *scheduledtask.ScheduledTask, req dto.UpdateScheduledTaskRequest) error {
-	if err := types.ValidateExportSchedule(task.Interval, req.Schedule); err != nil {
-		return err
-	}
-	if req.Schedule != nil && task.Interval == types.ScheduledTaskIntervalManual {
-		return ierr.NewError("schedule not allowed").
-			WithHint("Manual exports do not take a schedule").
-			Mark(ierr.ErrValidation)
+	if req.Schedule != nil {
+		if err := types.ValidateExportSchedule(task.Interval, req.Schedule); err != nil {
+			return err
+		}
 	}
 
 	previous := *task
