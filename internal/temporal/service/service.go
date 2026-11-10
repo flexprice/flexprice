@@ -483,6 +483,7 @@ var exclusiveWorkflowIDKeys = map[types.TemporalWorkflowType]string{
 	types.TemporalPriceSyncV2Workflow:         "price_sync_plan",
 	types.TemporalAddonPriceSyncWorkflow:      "price_sync_addon",
 	types.TemporalBillingEntityEnableWorkflow: "billing_entity_enable",
+	types.TemporalSendEmailWorkflow:           "send_email",
 
 	types.TemporalProcessSubscriptionBillingWorkflow: "process_subscription_billing",
 	types.TemporalProcessInvoiceWorkflow:             "process_invoice",
@@ -636,6 +637,10 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		if input, ok := params.(models.BillingEntityEnableWorkflowInput); ok {
 			return input.TenantID + "-" + input.EnvironmentID
 		}
+	case types.TemporalSendEmailWorkflow:
+		if input, ok := params.(models.SendEmailWorkflowInput); ok {
+			return input.EmailLogID
+		}
 	case types.TemporalPrepareProcessedEventsWorkflow:
 		// Extract event ID from PrepareProcessedEventsWorkflowInput
 		if input, ok := params.(*models.PrepareProcessedEventsWorkflowInput); ok {
@@ -767,6 +772,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildEnvironmentCloneInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalBillingEntityEnableWorkflow:
 		return s.buildBillingEntityEnableInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalSendEmailWorkflow:
+		return s.buildSendEmailInput(tenantID, environmentID, userID, params)
 	default:
 		return nil, errors.NewError("unsupported workflow type").
 			WithHintf("Workflow type %s is not supported", workflowType.String()).
@@ -1792,6 +1799,22 @@ func (s *temporalService) buildEnvironmentCloneInput(_ context.Context, tenantID
 			Mark(errors.ErrValidation)
 	}
 	input.TenantID = tenantID
+	input.UserID = userID
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+	return input, nil
+}
+
+func (s *temporalService) buildSendEmailInput(tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
+	input, ok := params.(models.SendEmailWorkflowInput)
+	if !ok {
+		return nil, errors.NewError("invalid input for send email workflow").
+			WithHint("Provide a SendEmailWorkflowInput struct").
+			Mark(errors.ErrValidation)
+	}
+	input.TenantID = tenantID
+	input.EnvironmentID = environmentID
 	input.UserID = userID
 	if err := input.Validate(); err != nil {
 		return nil, err
