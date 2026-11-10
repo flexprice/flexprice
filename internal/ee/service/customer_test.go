@@ -481,10 +481,18 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 			name: "settings_invalid_grace",
 			id:   "cust-1",
 			request: dto.UpdateCustomerRequest{
-				Settings: &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{GracePeriodDays: lo.ToPtr(0)}},
+				Settings: &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{GracePeriodDays: lo.ToPtr(-1)}},
 			},
 			expectedError: true,
 			errorCode:     ierr.ErrCodeValidation,
+		},
+		{
+			name: "settings_zero_grace",
+			id:   "cust-1",
+			request: dto.UpdateCustomerRequest{
+				Settings: &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{GracePeriodDays: lo.ToPtr(0)}},
+			},
+			wantGrace: lo.ToPtr(0),
 		},
 		{
 			name:          "settings_cleared",

@@ -40111,7 +40111,7 @@ const docTemplate = `{
                 },
                 "grace_period_days": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 0
                 }
             }
         },

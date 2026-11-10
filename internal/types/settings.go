@@ -105,7 +105,7 @@ type SettingsOverride struct {
 
 // SubscriptionConfigOverride is the overridable subset of SubscriptionConfig.
 type SubscriptionConfigOverride struct {
-	GracePeriodDays         *int  `json:"grace_period_days,omitempty" validate:"omitempty,min=1"`
+	GracePeriodDays         *int  `json:"grace_period_days,omitempty" validate:"omitempty,min=0"`
 	AutoCancellationEnabled *bool `json:"auto_cancellation_enabled,omitempty"`
 }
 

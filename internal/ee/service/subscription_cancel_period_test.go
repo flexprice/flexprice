@@ -298,7 +298,7 @@ func (s *SubscriptionServiceSuite) TestUpdateSubscription_Settings() {
 	s.Equal(10, *updated.Settings.SubscriptionConfig.GracePeriodDays)
 
 	_, err = s.service.UpdateSubscription(s.GetContext(), sub.ID, dto.UpdateSubscriptionRequest{
-		Settings: &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{GracePeriodDays: lo.ToPtr(0)}},
+		Settings: &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{GracePeriodDays: lo.ToPtr(-1)}},
 	})
 	s.Error(err)
 

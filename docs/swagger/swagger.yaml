@@ -16598,7 +16598,7 @@ definitions:
       auto_cancellation_enabled:
         type: boolean
       grace_period_days:
-        minimum: 1
+        minimum: 0
         type: integer
     type: object
   types.TenantInternalStatus:
