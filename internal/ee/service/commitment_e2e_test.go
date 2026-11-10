@@ -764,7 +764,7 @@ func (s *CommitmentE2ESuite) TestFinalize_ComputesANeverComputedDraft() {
 	s.Require().NoError(err)
 	s.Require().Nil(draft.LastComputedAt)
 	want := s.invoiceFor(sub.ID, s.jan, feb).AmountDue
-	s.Require().True(want.IsPositive(), "the period bills %s", want)
+	s.Require().True(want.Equal(dec("150")), "the period bills %s", want)
 
 	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
 	finalized, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
