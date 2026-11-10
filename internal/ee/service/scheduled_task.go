@@ -109,6 +109,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		TemporalScheduleID: temporalScheduleID,
 		Name:               req.Name,
 		Schedule:           req.Schedule,
+		SourceConfig:       req.SourceConfig,
 		Status:             types.StatusPublished,
 		CreatedAt:          now,
 		UpdatedAt:          now,
