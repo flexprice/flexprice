@@ -23,9 +23,8 @@ import (
 // errStaleDraft is the cause of refusing to finalize or charge a draft that bills instalments no longer scheduled.
 var errStaleDraft = errors.New("draft bills instalments that are no longer scheduled")
 
-// refreshStaleDraft recomputes a subscription draft that went stale since it was computed: it bills an instalment an
-// edit cancelled or another invoice claimed, misses one that fell due, like a triggered milestone, or predates a change
-// to one of the subscription's commitments.
+// refreshStaleDraft recomputes a subscription draft that is still the billing run's empty shell or went stale: it bills
+// an instalment an edit cancelled or another invoice claimed, misses one that fell due, or predates a commitment change.
 func (s *invoiceService) refreshStaleDraft(
 	ctx context.Context,
 	inv *invoice.Invoice,
@@ -35,6 +34,17 @@ func (s *invoiceService) refreshStaleDraft(
 	if inv.InvoiceStatus != types.InvoiceStatusDraft || inv.InvoiceType != types.InvoiceTypeSubscription ||
 		inv.SubscriptionID == nil || inv.IsManuallyEdited {
 		return nil
+	}
+
+	// A cycle draft has no lines until it is first computed, an hour after the billing run creates it.
+	emptyShell := false
+	if inv.LastComputedAt == nil && types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionCycle {
+		lines, err := s.InvoiceLineItemRepo.ListByInvoiceID(ctx, inv.ID)
+		if err != nil {
+			return err
+		}
+
+		emptyShell = len(lines) == 0
 	}
 
 	billed, err := s.billedInstalmentIDs(ctx, inv.ID)
@@ -71,13 +81,14 @@ func (s *invoiceService) refreshStaleDraft(
 		}
 	}
 
-	if len(stale) == 0 && len(missing) == 0 && !changed {
+	if !emptyShell && len(stale) == 0 && len(missing) == 0 && !changed {
 		return nil
 	}
 
 	s.Logger.Info(ctx, "invoice.stale_draft_recomputed",
 		"operation", "invoice.stale_draft_recomputed",
 		"invoice_id", inv.ID,
+		"empty_shell", emptyShell,
 		"stale_instalment_ids", stale,
 		"missing_instalment_ids", missing,
 		"commitment_changed", changed,
