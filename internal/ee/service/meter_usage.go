@@ -1254,10 +1254,12 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	}
 
 	cust, subscriptions, err := s.resolveCustomerAndSubscriptions(ctx, params.ExternalCustomerID)
-	if err != nil || len(subscriptions) == 0 {
-		// No subscription context means there is no price to bill against, so
-		// report zero instead of fanning the query out over every meter in the
-		// environment.
+	if err != nil && !ierr.IsNotFound(err) {
+		return nil, err
+	}
+	if len(subscriptions) == 0 {
+		// An unknown customer or one without subscriptions has no price to bill against, so report zero instead of
+		// fanning the query out over every meter in the environment.
 		return emptyAnalyticsResponse(params), nil
 	}
 
@@ -1359,11 +1361,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			ForceApplyCommitment: params.ForceApplyCommitment,
 		})
 		if err != nil {
-			s.logger.Info(ctx, "failed to get subscription meter usage, skipping",
-				"error", err,
-				"subscription_id", sub.ID,
-			)
-			continue
+			return nil, err
 		}
 
 		totals, billed, err := s.calculateLineItemTotals(ctx, usage, params, billingAnchor, subEndTime, now)
@@ -3260,6 +3258,14 @@ func (s *meterUsageService) calculateLineItemCommitments(
 	for i, period := range periods {
 		for lineID, breakdown := range breakdownsByPeriod[i] {
 			byLine[lineID] = append(byLine[lineID], billedPeriod{period: period, billed: breakdown})
+		}
+	}
+
+	// Periods starting after now bill nothing; an empty period for them keeps their points off the open period's charges.
+	if last := len(periods) - 1; last >= 0 && periods[last].End.Before(end) {
+		unbilled := billedPeriod{period: types.Period{Start: periods[last].End, End: end}, billed: &types.CommitmentInfo{}}
+		for lineID := range byLine {
+			byLine[lineID] = append(byLine[lineID], unbilled)
 		}
 	}
 
