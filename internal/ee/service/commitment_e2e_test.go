@@ -556,6 +556,67 @@ func (s *CommitmentE2ESuite) TestOneYearCommitmentFromMidPeriod_ProratesItsFirst
 	)
 }
 
+// A floor of 150 a month from 17 Apr holds exactly 70 for April's last 14 of 30 days, so the commitment's value and
+// April's invoice lines carry no noise from the proration, and a package-priced floor bills 7 packages, not 8.
+func (s *CommitmentE2ESuite) TestCommitmentFromMidPeriod_ProratesItsFloorExactly() {
+	apr, may := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	start, end := time.Date(2026, 4, 17, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name      string
+		committed *dto.CommitmentPriceInput // prices a quantity floor; nil for an amount floor
+		used      string
+		value     string
+		total     string
+		lines     []wantLine
+	}{
+		{
+			// $70 for April, then $150 for each of May, June and July; April's 80 tokens at $1 run $10 over its floor.
+			name:  "amount floor",
+			used:  "80",
+			value: "520",
+			total: "80",
+			lines: []wantLine{
+				{types.CommitmentLineUtilized, "Floor", "70", "70"},
+				{types.CommitmentLineOverage, "Tokens", "10", "10"},
+			},
+		},
+		{
+			// 7 packages of 10 tokens at $5 for April, then 15 a month; the 30 used fill 3 and the other 40 bill unused.
+			name: "package-priced quantity floor",
+			committed: &dto.CommitmentPriceInput{
+				BillingModel:      types.BILLING_MODEL_PACKAGE,
+				Amount:            lo.ToPtr(dec("5")),
+				TransformQuantity: &price.TransformQuantity{DivideBy: 10, Round: types.ROUND_UP},
+			},
+			used:  "30",
+			value: "260",
+			total: "35",
+			lines: []wantLine{
+				{types.CommitmentLineUtilized, "Floor", "30", "15"},
+				{types.CommitmentLineTrueUp, "Floor (unused)", "40", "20"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			tokens := s.planWith("prorated_floor", types.BILLING_PERIOD_MONTHLY, s.tokens, "1")
+			sub := s.subscribe(tokens, s.jan)
+			req := floorRequest("Floor", tokens.ID, "150", start, end)
+			if tt.committed != nil {
+				req.Type, req.CommittedPrice = types.COMMITMENT_TYPE_QUANTITY, tt.committed
+			}
+
+			created := s.commit(sub.ID, req)
+			s.Equal(tt.value, created.CommitmentValue.String())
+
+			s.record(s.tokens, time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC), tt.used)
+			s.requireInvoice(s.invoiceFor(sub.ID, apr, may), tt.total, tt.lines...)
+		})
+	}
+}
+
 // tokenSlabs bills the first 100 tokens at $0.50 and the rest at $0.25.
 var tokenSlabs = []price.PriceTier{
 	{UpTo: lo.ToPtr(uint64(100)), UnitAmount: dec("0.5")},

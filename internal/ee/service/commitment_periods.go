@@ -125,9 +125,10 @@ func clipCommitmentPeriod(
 	}
 
 	out.Clipped = true
-	out.ActiveBuckets, out.Capacity = periodCapacity(c, p, types.Period{Start: out.Start, End: out.End}, bucket, anchor)
-	_, before := periodCapacity(c, p, types.Period{Start: p.Start, End: out.Start}, bucket, anchor)
-	_, through := periodCapacity(c, p, types.Period{Start: p.Start, End: out.End}, bucket, anchor)
+	bucketsBefore, before := periodCapacity(c, p, types.Period{Start: p.Start, End: out.Start}, bucket, anchor)
+	bucketsThrough, through := periodCapacity(c, p, types.Period{Start: p.Start, End: out.End}, bucket, anchor)
+	// Buckets and capacity are steps between cumulative points of p, so the parts of a period add up to it.
+	out.ActiveBuckets, out.Capacity = bucketsThrough-bucketsBefore, through.Sub(before)
 	out.Amount = accruedAmount(amountOf, before, through, c.Currency)
 	return out
 }
@@ -157,9 +158,10 @@ func periodCapacity(
 	anchor time.Time,
 ) (int64, decimal.Decimal) {
 	if c.Measurement != types.CommitmentMeasurementWindow {
-		fraction := decimal.NewFromInt(int64(span.End.Sub(span.Start))).
-			Div(decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart))))
-		return 0, c.Value.Mul(fraction)
+		// Multiplying first keeps an exact share exact: 150 × 14/30 is 70, not 70.000000000000005.
+		elapsed := decimal.NewFromInt(int64(span.End.Sub(span.Start)))
+		full := decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart)))
+		return 0, c.Value.Mul(elapsed).Div(full)
 	}
 
 	// A bucket starting before the span belongs to the span that already counted it.
