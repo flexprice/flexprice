@@ -1405,9 +1405,53 @@ func (r *subscriptionRepository) ListEnvironmentsWithGatedActiveSubscriptions(ct
 	return envs, nil
 }
 
+// listEnvironmentsWithSubscriptionConfigOverridesQuery reads only the settings_override partial indexes.
+const listEnvironmentsWithSubscriptionConfigOverridesQuery = `
+	SELECT tenant_id, environment_id FROM subscriptions
+	WHERE settings IS NOT NULL AND status = 'published' AND settings -> 'subscription_config' IS NOT NULL
+	UNION
+	SELECT tenant_id, environment_id FROM customers
+	WHERE settings IS NOT NULL AND status = 'published' AND settings -> 'subscription_config' IS NOT NULL`
+
+func (r *subscriptionRepository) ListEnvironmentsWithSubscriptionConfigOverrides(ctx context.Context) ([]types.TenantEnvironment, error) {
+	span := StartRepositorySpan(ctx, "subscription", "list_environments_with_subscription_config_overrides", nil)
+	defer FinishSpan(span)
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, listEnvironmentsWithSubscriptionConfigOverridesQuery)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list environments with subscription config overrides").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var envs []types.TenantEnvironment
+	for rows.Next() {
+		var env types.TenantEnvironment
+		if err := rows.Scan(&env.TenantID, &env.EnvironmentID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to read environment with subscription config overrides").
+				Mark(ierr.ErrDatabase)
+		}
+		envs = append(envs, env)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to read environments with subscription config overrides").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return envs, nil
+}
+
 // markOverdueGatedIncompleteQuery is one UPDATE ... RETURNING, so the returned IDs are exactly the rows
 // changed. The subscription filter matches idx_subscriptions_gated_active; EXISTS re-checks the invoice at
-// write time, so an invoice paid mid-sweep never flips its subscription. $5 is due date minus grace.
+// write time, so an invoice paid mid-sweep never flips its subscription. $5 is the environment grace days,
+// overridden by the subscription's, then the customer's, settings.
 const markOverdueGatedIncompleteQuery = `
 	UPDATE subscriptions s
 	SET subscription_status = 'incomplete', updated_at = $3, updated_by = $4
@@ -1428,7 +1472,11 @@ const markOverdueGatedIncompleteQuery = `
 				AND i.payment_status IN ('PENDING', 'FAILED')
 				AND i.amount_remaining > 0
 				AND i.due_date <= $3
-				AND i.due_date > $5)
+				AND i.due_date > $3 - make_interval(days => COALESCE(
+					(s.settings->'subscription_config'->>'grace_period_days')::int,
+					(SELECT (c.settings->'subscription_config'->>'grace_period_days')::int FROM customers c
+						WHERE c.tenant_id = s.tenant_id AND c.environment_id = s.environment_id AND c.id = s.customer_id),
+					$5::int)))
 	RETURNING s.id`
 
 func (r *subscriptionRepository) MarkOverdueGatedSubscriptionsIncomplete(ctx context.Context, asOf time.Time, graceDays int) ([]string, error) {
@@ -1443,7 +1491,7 @@ func (r *subscriptionRepository) MarkOverdueGatedSubscriptionsIncomplete(ctx con
 		types.GetEnvironmentID(ctx),
 		asOf,
 		types.GetUserID(ctx),
-		asOf.AddDate(0, 0, -graceDays),
+		graceDays,
 	)
 	if err != nil {
 		SetSpanError(span, err)
