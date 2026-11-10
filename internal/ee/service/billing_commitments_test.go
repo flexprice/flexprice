@@ -2617,7 +2617,8 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_MidPeriodWindow() {
 
 	// The API path projects to the window's end on its own: a mid-period query reports full-window
 	// capacity and the matching floor, not capacity elapsed so far.
-	api, err := s.service.(*billingService).commitmentUsageBreakdown(ctx, sub, usage, periodStart, periodEnd)
+	aug10 := time.Date(2026, 8, 10, 18, 0, 0, 0, time.UTC)
+	api, err := s.service.(*billingService).commitmentUsageBreakdown(ctx, sub, usage, periodStart, periodEnd, aug10)
 	s.Require().NoError(err)
 	s.Require().Len(api, 1)
 	s.True(api[0].Committed.Quantity.Equal(dec("310")), "api capacity %s", api[0].Committed.Quantity)
@@ -2627,21 +2628,26 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_MidPeriodWindow() {
 
 	// A to-date query projects capacity to the period end but counts only usage inside its window:
 	// Aug 20's GPUs stay out of an Aug 11 cutoff even though the loader re-reads bucketed usage.
-	toDate, err := s.service.(*billingService).commitmentUsageBreakdown(
-		ctx, sub, usage, periodStart, time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC),
-	)
+	cutoff := time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC)
+	toDate, err := s.service.(*billingService).commitmentUsageBreakdown(ctx, sub, usage, periodStart, cutoff, aug10)
 	s.Require().NoError(err)
 	s.Require().Len(toDate, 1)
 	s.True(toDate[0].Committed.Quantity.Equal(dec("310")), "to-date capacity %s", toDate[0].Committed.Quantity)
 	s.True(toDate[0].Committed.Amount.Equal(dec("155")), "to-date floor %s", toDate[0].Committed.Amount)
 	s.True(toDate[0].Used.Quantity.Equal(dec("10")), "to-date used %s", toDate[0].Used.Quantity)
 
+	// Asked once the cutoff has passed, the same window is priced as its own: ten days of capacity and their floor.
+	past, err := s.service.(*billingService).commitmentUsageBreakdown(ctx, sub, usage, periodStart, cutoff, periodEnd)
+	s.Require().NoError(err)
+	s.Require().Len(past, 1)
+	s.True(past[0].Committed.Quantity.Equal(dec("100")), "past capacity %s", past[0].Committed.Quantity)
+	s.True(past[0].Committed.Amount.Equal(dec("50")), "past floor %s", past[0].Committed.Amount)
+	s.True(past[0].Used.Quantity.Equal(dec("10")), "past used %s", past[0].Used.Quantity)
+
 	// A window starting mid-period misses earlier usage, so it keeps clipped-preview semantics:
 	// six days of capacity, none of it used.
 	midStart, err := s.service.(*billingService).commitmentUsageBreakdown(
-		ctx, sub, usage,
-		time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC),
-		time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC),
+		ctx, sub, usage, time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC), cutoff, aug10,
 	)
 	s.Require().NoError(err)
 	s.Require().Len(midStart, 1)
@@ -2775,6 +2781,42 @@ func TestCommitmentLoader_CommitmentsCoveringAndLinesAffecting(t *testing.T) {
 			lineIDs := map[string]bool{tt.line: true}
 			require.Equal(t, tt.covering, l.CommitmentsCovering(lineIDs))
 			require.Equal(t, tt.affecting, l.LinesAffecting(lineIDs))
+		})
+	}
+}
+
+// A window is priced through the open period's end only when it covers that period from its start into today, on a
+// subscription still running; any other window is priced to its own end.
+func TestProjectedPeriodEnd(t *testing.T) {
+	periodStart := time.Date(2026, time.November, 1, 0, 0, 0, 0, time.UTC)
+	periodEnd := periodStart.AddDate(0, 1, 0)
+	now := time.Date(2026, time.November, 9, 15, 0, 0, 0, time.UTC)
+	running := &subscription.Subscription{
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+	}
+	cancelled := *running
+	cancelled.SubscriptionStatus = types.SubscriptionStatusCancelled
+	pastDay := time.Date(2026, time.November, 3, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name  string
+		sub   *subscription.Subscription
+		start time.Time
+		end   time.Time
+		want  time.Time
+	}{
+		{name: "month to date", sub: running, start: periodStart, end: now, want: periodEnd},
+		{name: "into today", sub: running, start: periodStart, end: now.Add(-14 * time.Hour), want: periodEnd},
+		{name: "a past slice of the period", sub: running, start: periodStart, end: pastDay, want: pastDay},
+		{name: "from inside the period", sub: running, start: pastDay, end: now, want: now},
+		{name: "a cancelled subscription", sub: &cancelled, start: periodStart, end: now, want: now},
+		{name: "past the period", sub: running, start: periodStart, end: periodEnd.AddDate(0, 0, 1), want: periodEnd.AddDate(0, 0, 1)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, projectedPeriodEnd(tt.sub, tt.start, tt.end, now))
 		})
 	}
 }

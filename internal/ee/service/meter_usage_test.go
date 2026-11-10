@@ -6528,6 +6528,193 @@ func (s *MeterUsageServiceSuite) TestAnalytics_FillPointsUseTheBucketGrain() {
 	s.True(points[0].Cost.Equal(dec("120")), "the month's point costs %s", points[0].Cost)
 }
 
+// Billing periods that start off UTC midnight keep their charges on their own month's point: with New York periods
+// starting at 04:00 UTC, August's charge goes to an August point, not to the September point its period edge falls in.
+func (s *MeterUsageServiceSuite) TestAnalytics_PeriodsOffMidnightKeepTheirMonth() {
+	july := time.Date(2026, time.July, 1, 4, 0, 0, 0, time.UTC)
+	august, september := july.AddDate(0, 1, 0), july.AddDate(0, 2, 0)
+	data := &AnalyticsData{
+		Analytics: []*events.DetailedUsageAnalytic{{
+			SubLineItemID:   "line",
+			AggregationType: types.AggregationSum,
+			TotalUsage:      dec("190"),
+			Points: []events.UsageAnalyticPoint{
+				{Timestamp: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC), Usage: dec("30")},
+				{Timestamp: time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC), Usage: dec("160")},
+			},
+		}},
+		LineTotals: map[string]decimal.Decimal{"line": dec("350")},
+		LineBilledPeriods: map[string][]billedPeriod{"line": {
+			{
+				period: types.Period{Start: july, End: august},
+				billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("30"), ComputedTrueUpAmount: dec("70")},
+			},
+			{
+				period: types.Period{Start: august, End: september},
+				billed: &types.CommitmentInfo{ComputedTrueUpAmount: dec("100")},
+			},
+			{
+				period: types.Period{Start: september, End: september.AddDate(0, 1, 0)},
+				billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("100"), ComputedOverageAmount: dec("50")},
+			},
+		}},
+		Params: &events.UsageAnalyticsParams{WindowSize: types.WindowSizeMonth, BillingAnchor: &july},
+	}
+
+	points := allocateLineItemCosts(data)[0].Points
+	s.Require().Len(points, 3)
+	for i, want := range []string{"100", "100", "150"} {
+		month := time.Date(2026, time.July+time.Month(i), 1, 0, 0, 0, 0, time.UTC)
+		s.True(points[i].Timestamp.Equal(month), "point %d starts %s", i, points[i].Timestamp)
+		s.True(points[i].Cost.Equal(dec(want)), "point at %s costs %s, want %s", points[i].Timestamp, points[i].Cost, want)
+	}
+}
+
+// A bucketed MAX line's daily points share a period's charges by the GPU-hours billed in them, not by their peak: 45
+// and 39 GPU-hours split $168 utilized and $28 overage 90/78 and 15/13, though the peaks were 5 and 3.
+func (s *MeterUsageServiceSuite) TestAnalytics_BucketedPointsShareByBilledUsage() {
+	september := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
+	data := &AnalyticsData{
+		Analytics: []*events.DetailedUsageAnalytic{{
+			SubLineItemID:   "line",
+			AggregationType: types.AggregationMax,
+			TotalUsage:      dec("84"),
+			Points: []events.UsageAnalyticPoint{
+				{Timestamp: september.AddDate(0, 0, 14), Usage: dec("5"), BilledUsage: dec("45")},
+				{Timestamp: september.AddDate(0, 0, 15), Usage: dec("3"), BilledUsage: dec("39")},
+			},
+		}},
+		LineTotals: map[string]decimal.Decimal{"line": dec("196")},
+		LineBilledPeriods: map[string][]billedPeriod{"line": {{
+			period: types.Period{Start: september, End: september.AddDate(0, 1, 0)},
+			billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("168"), ComputedOverageAmount: dec("28")},
+		}}},
+		Params: &events.UsageAnalyticsParams{WindowSize: types.WindowSizeDay},
+	}
+
+	points := allocateLineItemCosts(data)[0].Points
+	s.Require().Len(points, 2)
+	s.True(points[0].ComputedCommitmentUtilizedAmount.Equal(dec("90")), "utilized %s", points[0].ComputedCommitmentUtilizedAmount)
+	s.True(points[0].ComputedOverageAmount.Equal(dec("15")), "overage %s", points[0].ComputedOverageAmount)
+	s.True(points[1].ComputedCommitmentUtilizedAmount.Equal(dec("78")), "utilized %s", points[1].ComputedCommitmentUtilizedAmount)
+	s.True(points[1].ComputedOverageAmount.Equal(dec("13")), "overage %s", points[1].ComputedOverageAmount)
+}
+
+// A period with no point of its own reuses the point whose window covers it, even when that window starts on another
+// weekday than the engine's weeks: October's first days sit in the Sunday 27 September week point, and no Monday point
+// is added beside it.
+func (s *MeterUsageServiceSuite) TestAnalytics_FillReusesTheWindowCoveringThePeriod() {
+	september, october := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC)
+	data := &AnalyticsData{
+		Analytics: []*events.DetailedUsageAnalytic{{
+			SubLineItemID:   "line",
+			AggregationType: types.AggregationSum,
+			TotalUsage:      dec("50"),
+			Points: []events.UsageAnalyticPoint{
+				{Timestamp: time.Date(2026, time.September, 20, 0, 0, 0, 0, time.UTC), Usage: dec("20")},
+				{Timestamp: time.Date(2026, time.September, 27, 0, 0, 0, 0, time.UTC), Usage: dec("30")},
+			},
+		}},
+		LineTotals: map[string]decimal.Decimal{"line": dec("93.55")},
+		LineBilledPeriods: map[string][]billedPeriod{"line": {
+			{
+				period: types.Period{Start: september, End: october},
+				billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("50")},
+			},
+			{
+				period: types.Period{Start: october, End: october.AddDate(0, 0, 9)},
+				billed: &types.CommitmentInfo{ComputedTrueUpAmount: dec("43.55")},
+			},
+		}},
+		Params: &events.UsageAnalyticsParams{WindowSize: types.WindowSizeWeek},
+	}
+
+	points := allocateLineItemCosts(data)[0].Points
+	s.Require().Len(points, 2)
+	s.True(points[0].Cost.Equal(dec("20")), "20 Sep costs %s", points[0].Cost)
+	s.True(points[1].Cost.Equal(dec("73.55")), "27 Sep costs %s", points[1].Cost)
+}
+
+// Billing periods shorter than a window keep their charges on the window holding them: daily periods at the end of a
+// 31-day July stay on July's point instead of opening an August one.
+func (s *MeterUsageServiceSuite) TestAnalytics_ShortPeriodsStayOnTheirMonthsPoint() {
+	july := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
+	day := func(d int) types.Period {
+		start := july.AddDate(0, 0, d-1)
+		return types.Period{Start: start, End: start.AddDate(0, 0, 1)}
+	}
+	data := &AnalyticsData{
+		Analytics: []*events.DetailedUsageAnalytic{{
+			SubLineItemID:   "line",
+			AggregationType: types.AggregationSum,
+			TotalUsage:      dec("15"),
+			Points:          []events.UsageAnalyticPoint{{Timestamp: july, Usage: dec("15")}},
+		}},
+		LineTotals: map[string]decimal.Decimal{"line": dec("22")},
+		LineBilledPeriods: map[string][]billedPeriod{"line": {
+			{period: day(2), billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("10")}},
+			{period: day(30), billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("5")}},
+			{period: day(31), billed: &types.CommitmentInfo{ComputedTrueUpAmount: dec("7")}},
+		}},
+		Params: &events.UsageAnalyticsParams{WindowSize: types.WindowSizeMonth, BillingAnchor: &july},
+	}
+
+	points := allocateLineItemCosts(data)[0].Points
+	s.Require().Len(points, 1)
+	s.True(points[0].Timestamp.Equal(july), "point starts %s", points[0].Timestamp)
+	s.True(points[0].Cost.Equal(dec("22")), "July costs %s", points[0].Cost)
+}
+
+// Points are cut in UTC from the anchor's UTC day, also for a customer east of UTC: a Kolkata subscription billed on
+// the local 1st anchors on 31 July 18:30 UTC, so its months are windows starting on the 31st or the day after a short
+// month. Each period's charges land on the window holding most of it, and the idle August gets the 31 July window.
+func (s *MeterUsageServiceSuite) TestAnalytics_UTCWindowsKeepALocalPeriodsCharges() {
+	anchor := time.Date(2026, time.July, 31, 18, 30, 0, 0, time.UTC)
+	july, august, september := anchor.AddDate(0, -1, -1), anchor, time.Date(2026, time.August, 31, 18, 30, 0, 0, time.UTC)
+	utcDay := func(month time.Month, day int) time.Time { return time.Date(2026, month, day, 0, 0, 0, 0, time.UTC) }
+	data := &AnalyticsData{
+		Analytics: []*events.DetailedUsageAnalytic{{
+			SubLineItemID:   "line",
+			AggregationType: types.AggregationSum,
+			TotalUsage:      dec("190"),
+			Points: []events.UsageAnalyticPoint{
+				{Timestamp: utcDay(time.July, 1), Usage: dec("30")},
+				{Timestamp: utcDay(time.August, 31), Usage: dec("160")},
+			},
+		}},
+		LineTotals: map[string]decimal.Decimal{"line": dec("350")},
+		LineBilledPeriods: map[string][]billedPeriod{"line": {
+			{
+				period: types.Period{Start: july, End: august},
+				billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("30"), ComputedTrueUpAmount: dec("70")},
+			},
+			{
+				period: types.Period{Start: august, End: september},
+				billed: &types.CommitmentInfo{ComputedTrueUpAmount: dec("100")},
+			},
+			{
+				period: types.Period{Start: september, End: time.Date(2026, time.September, 30, 18, 30, 0, 0, time.UTC)},
+				billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("100"), ComputedOverageAmount: dec("50")},
+			},
+		}},
+		Params: &events.UsageAnalyticsParams{WindowSize: types.WindowSizeMonth, BillingAnchor: &anchor},
+	}
+
+	points := allocateLineItemCosts(data)[0].Points
+	s.Require().Len(points, 3)
+	for i, want := range []struct {
+		start time.Time
+		cost  string
+	}{
+		{utcDay(time.July, 1), "100"},
+		{utcDay(time.July, 31), "100"},
+		{utcDay(time.August, 31), "150"},
+	} {
+		s.True(points[i].Timestamp.Equal(want.start), "point %d starts %s, want %s", i, points[i].Timestamp, want.start)
+		s.True(points[i].Cost.Equal(dec(want.cost)), "point at %s costs %s, want %s", points[i].Timestamp, points[i].Cost, want.cost)
+	}
+}
+
 func (s *MeterUsageServiceSuite) TestAnalytics_NetZeroBucketedUsagePreservesCharges() {
 	ctx := s.GetContext()
 	m := &meter.Meter{
@@ -6705,12 +6892,12 @@ func (s *MeterUsageServiceSuite) TestAnalytics_ThousandLineAllocationsUseBatched
 			params := fullServiceParams(&s.BaseServiceTestSuite)
 			params.MeterUsageRepo = repo
 			svc := NewMeterUsageService(params).(*meterUsageService)
-			totals, commitments, _, err := svc.calculateLineItemTotals(ctx, usage, &events.MeterUsageDetailedAnalyticsParams{
+			totals, commitments, err := svc.calculateLineItemTotals(ctx, usage, &events.MeterUsageDetailedAnalyticsParams{
 				StartTime: s.periodStart,
 				EndTime:   s.periodEnd,
 				Sources:   []string{"selected"},
 				GroupBy:   []string{"source"},
-			}, &s.periodStart, s.periodEnd)
+			}, &s.periodStart, s.periodEnd, clock.Now())
 			s.Require().NoError(err)
 			s.Empty(commitments)
 			s.Require().Len(totals, 1000)
@@ -7158,8 +7345,8 @@ func (s *MeterUsageServiceSuite) billInstalment(invoicedAt time.Time) {
 	s.Require().NoError(err)
 }
 
-// The instalments of the commitments a request applies show in the range they were invoiced in, and the total with
-// instalments adds them. A range or filter that does not apply the commitment lists none, and neither does a request
+// The instalments of the commitments covering a queried meter show in the range they were invoiced in, and the total
+// with instalments adds them. A range or filter that leaves the commitment out lists none, and neither does a request
 // that does not expand instalments.
 func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInstalments() {
 	ctx := s.GetContext()
@@ -7316,6 +7503,53 @@ func (s *MeterUsageServiceSuite) TestCommitments_FuturePeriodsBillNothing() {
 	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{StartTime: s.periodStart, EndTime: thisMonth.AddDate(1, 0, 0)})
 	want := dec("150").Mul(decimal.NewFromInt(int64(elapsedMonths)))
 	s.True(resp.TotalCost.Equal(want), "%d months bill %s, want %s", elapsedMonths, resp.TotalCost, want)
+}
+
+// An instalment invoiced in the range is listed even when its commitment's line has no usage there: a fee invoiced on a
+// quiet day still shows on that day.
+func (s *MeterUsageServiceSuite) TestCommitments_InstalmentsListWithoutUsageInRange() {
+	s.prepayFloor()
+	s.billInstalment(januaryNoon(20))
+
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+		StartTime:  time.Date(2026, time.January, 20, 0, 0, 0, 0, time.UTC),
+		EndTime:    time.Date(2026, time.January, 21, 0, 0, 0, 0, time.UTC),
+		WindowSize: types.WindowSizeDay,
+		Expand:     []string{string(types.ExpandInstalments)},
+	})
+	s.Require().Len(resp.Instalments, 1)
+	s.Equal("binst_prepaid", resp.Instalments[0].ID)
+	s.Require().NotNil(resp.TotalCostWithInstalments)
+	s.True(resp.TotalCostWithInstalments.Equal(resp.TotalCost.Add(dec("1800"))), "with instalments %s, cost %s",
+		resp.TotalCostWithInstalments, resp.TotalCost)
+}
+
+// Instalments follow the meters their commitment covered during its term: a subscription-wide floor that ended on 15
+// January lists its instalment for its own meter, not for a meter whose line started after it ended.
+func (s *MeterUsageServiceSuite) TestCommitments_InstalmentsSkipMetersJoiningAfterTheTerm() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	early := s.createMeterWithAggregation(ctx, "meter_early", "api_call", types.AggregationSum)
+	late := s.createMeterWithAggregation(ctx, "meter_late", "api_call", types.AggregationSum)
+	s.createLineItemForMeter(ctx, "li_early", early.ID, s.createPriceForMeter(ctx, "price_early", early.ID, dec("1")).ID)
+	lateLine := s.createLineItemForMeter(ctx, "li_late", late.ID, s.createPriceForMeter(ctx, "price_late", late.ID, dec("1")).ID)
+	lateLine.StartDate = januaryNoon(20)
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, lateLine))
+
+	c := s.newCommitment("cmt_prepaid", types.CommitmentScopeSubscription, s.sub.ID, "150")
+	c.EndDate = lo.ToPtr(januaryNoon(15))
+	s.storeCommitment(c)
+	s.billInstalment(januaryNoon(10))
+
+	for meterID, want := range map[string]int{early.ID: 1, late.ID: 0} {
+		resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+			MeterIDs:  []string{meterID},
+			StartTime: s.periodStart,
+			EndTime:   s.periodEnd,
+			Expand:    []string{string(types.ExpandInstalments)},
+		})
+		s.Len(resp.Instalments, want, "meter %s", meterID)
+	}
 }
 
 // The period limit applies only to a range a commitment overlaps: two years of a daily subscription's history bill at the
