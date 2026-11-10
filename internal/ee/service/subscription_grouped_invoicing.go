@@ -286,7 +286,7 @@ func getGroupedInvoicingChildren(
 	}
 	return lo.Filter(children, func(child *subscription.Subscription, _ int) bool {
 		return child.SubscriptionStatus != types.SubscriptionStatusCancelled ||
-			(child.EndDate != nil && child.EndDate.Equal(*parentEnd))
+			(parentEnd != nil && child.EndDate != nil && child.EndDate.Equal(*parentEnd))
 	}), nil
 }
 
