@@ -108,7 +108,7 @@ Analytics and previews use `newProjectedCommitmentLoader`, which prices a window
 start into today as if through the period's end, as its coming invoice will, but reads usage only up to the window's
 end. A window ending before today, or on a cancelled subscription, is priced to its own end (`projectedPeriodEnd`).
 Callers: `attachCommitmentBreakdown` ([subscription.go:6710](../../internal/ee/service/subscription.go#L6710)) and
-`calculateLineItemCommitments` ([meter_usage.go:3189](../../internal/ee/service/meter_usage.go#L3189)).
+`calculateLineItemCommitments` ([meter_usage.go:3192](../../internal/ee/service/meter_usage.go#L3192)).
 
 Usage analytics prices a range one billing period at a time, as each period's invoice bills it; a period the range
 cuts gets its floor prorated to the part in range, apart from the projected open period. For each period it builds the

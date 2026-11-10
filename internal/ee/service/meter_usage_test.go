@@ -6893,7 +6893,7 @@ func (s *MeterUsageServiceSuite) TestAnalytics_ThousandLineAllocationsUseBatched
 				EndTime:   s.periodEnd,
 				Sources:   []string{"selected"},
 				GroupBy:   []string{"source"},
-			}, &s.periodStart, s.periodEnd)
+			}, &s.periodStart, s.periodEnd, clock.Now())
 			s.Require().NoError(err)
 			s.Empty(commitments)
 			s.Require().Len(totals, 1000)

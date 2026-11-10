@@ -1194,9 +1194,12 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
 	}
 
+	// One instant serves the whole request, so subscriptions priced across midnight are projected alike.
+	now := clock.Now()
+
 	// Set defaults
 	if params.EndTime.IsZero() {
-		params.EndTime = clock.Now()
+		params.EndTime = now
 	}
 	if params.StartTime.IsZero() {
 		params.StartTime = params.EndTime.Add(-6 * time.Hour)
@@ -1359,7 +1362,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			continue
 		}
 
-		totals, billed, err := s.calculateLineItemTotals(ctx, usage, params, billingAnchor, subEndTime)
+		totals, billed, err := s.calculateLineItemTotals(ctx, usage, params, billingAnchor, subEndTime, now)
 		if err != nil {
 			return nil, err
 		}
@@ -2954,14 +2957,14 @@ func allocateUsageCost(total decimal.Decimal, weights []decimal.Decimal, aggrega
 	return shares
 }
 
-// calculateLineItemTotals prices each line before its cost is allocated to groups and display points.
+// calculateLineItemTotals prices each line as of now before its cost is allocated to groups and display points.
 // Filtered queries receive a share of the unfiltered usage charge and exclude commitments.
 func (s *meterUsageService) calculateLineItemTotals(
 	ctx context.Context,
 	usage *SubscriptionMeterUsage,
 	params *events.MeterUsageDetailedAnalyticsParams,
 	billingAnchor *time.Time,
-	end time.Time,
+	end, now time.Time,
 ) (map[string]decimal.Decimal, map[string][]billedPeriod, error) {
 	hasUsageFilters := len(params.PropertyFilters) > 0 || len(params.Sources) > 0
 	selectedCharges, err := s.collectLineItemCharges(ctx, usage, params, billingAnchor, end)
@@ -2971,7 +2974,7 @@ func (s *meterUsageService) calculateLineItemTotals(
 
 	var billedByLine map[string][]billedPeriod
 	if !hasUsageFilters {
-		billedByLine, err = s.calculateLineItemCommitments(ctx, usage, selectedCharges, params, billingAnchor, end)
+		billedByLine, err = s.calculateLineItemCommitments(ctx, usage, selectedCharges, params, billingAnchor, end, now)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -3184,15 +3187,15 @@ type billedPeriod struct {
 	billed *types.CommitmentInfo
 }
 
-// calculateLineItemCommitments returns what each billing period of [params.StartTime, end) bills the queried lines v2
-// commitments cover, at the line's own price where none does.
+// calculateLineItemCommitments returns what each billing period of [params.StartTime, end) bills, as of now, the queried
+// lines v2 commitments cover, at the line's own price where none does.
 func (s *meterUsageService) calculateLineItemCommitments(
 	ctx context.Context,
 	usage *SubscriptionMeterUsage,
 	selectedCharges map[string]*dto.SubscriptionUsageByMetersResponse,
 	params *events.MeterUsageDetailedAnalyticsParams,
 	billingAnchor *time.Time,
-	end time.Time,
+	end, now time.Time,
 ) (map[string][]billedPeriod, error) {
 	// Only a range some v2 commitment overlaps is priced period by period, so a long range without one stays valid.
 	svc := newCommitmentService(s.ServiceParams)
@@ -3203,7 +3206,6 @@ func (s *meterUsageService) calculateLineItemCommitments(
 
 	// The open period's loader prices through the period end, so the lookup reaches it too.
 	sub := usage.Subscription
-	now := clock.Now()
 	lookupEnd := projectedPeriodEnd(sub, params.StartTime, end, now)
 	overlapping, err := svc.ListOverlapping(ctx, sub.ID, params.StartTime, lookupEnd)
 	if err != nil || len(overlapping) == 0 {
