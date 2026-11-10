@@ -48,7 +48,7 @@ func (s ScheduledTaskInterval) Validate() error {
 		Mark(ierr.ErrValidation)
 }
 
-// ExportSchedule is the wall-clock time an export runs, in an IANA timezone.
+// ExportSchedule is an export's run time.
 type ExportSchedule struct {
 	Hour       int    `json:"hour"`
 	Minute     int    `json:"minute"`
@@ -57,7 +57,7 @@ type ExportSchedule struct {
 	Timezone   string `json:"timezone"`
 }
 
-// Validate checks the schedule fields against the interval.
+// Validate checks fields for interval.
 func (s *ExportSchedule) Validate(interval ScheduledTaskInterval) error {
 	if s.Hour < 0 || s.Hour > 23 {
 		return ierr.NewError("invalid schedule hour").
@@ -99,7 +99,7 @@ func (s *ExportSchedule) Validate(interval ScheduledTaskInterval) error {
 	return nil
 }
 
-// Location resolves the schedule timezone.
+// Location resolves the timezone.
 func (s *ExportSchedule) Location() (*time.Location, error) {
 	if s.Timezone == "" {
 		return nil, ierr.NewError("timezone is required").
@@ -109,7 +109,7 @@ func (s *ExportSchedule) Location() (*time.Location, error) {
 	return time.LoadLocation(s.Timezone)
 }
 
-// ValidateExportSchedule checks that a schedule is present exactly where the interval needs one.
+// ValidateExportSchedule checks schedule presence.
 func ValidateExportSchedule(interval ScheduledTaskInterval, s *ExportSchedule) error {
 	switch interval {
 	case ScheduledTaskIntervalWeekly, ScheduledTaskIntervalMonthly:
