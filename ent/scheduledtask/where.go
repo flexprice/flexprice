@@ -127,6 +127,16 @@ func TemporalScheduleID(v string) predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldEQ(FieldTemporalScheduleID, v))
 }
 
+// Name applies equality check predicate on the "name" field. It's identical to NameEQ.
+func Name(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldEQ(FieldName, v))
+}
+
+// ManagedCopy applies equality check predicate on the "managed_copy" field. It's identical to ManagedCopyEQ.
+func ManagedCopy(v bool) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldEQ(FieldManagedCopy, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldEQ(FieldTenantID, v))
@@ -617,6 +627,16 @@ func ConnectionIDHasSuffix(v string) predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldHasSuffix(FieldConnectionID, v))
 }
 
+// ConnectionIDIsNil applies the IsNil predicate on the "connection_id" field.
+func ConnectionIDIsNil() predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldIsNull(FieldConnectionID))
+}
+
+// ConnectionIDNotNil applies the NotNil predicate on the "connection_id" field.
+func ConnectionIDNotNil() predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldNotNull(FieldConnectionID))
+}
+
 // ConnectionIDEqualFold applies the EqualFold predicate on the "connection_id" field.
 func ConnectionIDEqualFold(v string) predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldEqualFold(FieldConnectionID, v))
@@ -888,6 +908,101 @@ func TemporalScheduleIDEqualFold(v string) predicate.ScheduledTask {
 // TemporalScheduleIDContainsFold applies the ContainsFold predicate on the "temporal_schedule_id" field.
 func TemporalScheduleIDContainsFold(v string) predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldContainsFold(FieldTemporalScheduleID, v))
+}
+
+// NameEQ applies the EQ predicate on the "name" field.
+func NameEQ(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldEQ(FieldName, v))
+}
+
+// NameNEQ applies the NEQ predicate on the "name" field.
+func NameNEQ(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldNEQ(FieldName, v))
+}
+
+// NameIn applies the In predicate on the "name" field.
+func NameIn(vs ...string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldIn(FieldName, vs...))
+}
+
+// NameNotIn applies the NotIn predicate on the "name" field.
+func NameNotIn(vs ...string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldNotIn(FieldName, vs...))
+}
+
+// NameGT applies the GT predicate on the "name" field.
+func NameGT(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldGT(FieldName, v))
+}
+
+// NameGTE applies the GTE predicate on the "name" field.
+func NameGTE(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldGTE(FieldName, v))
+}
+
+// NameLT applies the LT predicate on the "name" field.
+func NameLT(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldLT(FieldName, v))
+}
+
+// NameLTE applies the LTE predicate on the "name" field.
+func NameLTE(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldLTE(FieldName, v))
+}
+
+// NameContains applies the Contains predicate on the "name" field.
+func NameContains(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldContains(FieldName, v))
+}
+
+// NameHasPrefix applies the HasPrefix predicate on the "name" field.
+func NameHasPrefix(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldHasPrefix(FieldName, v))
+}
+
+// NameHasSuffix applies the HasSuffix predicate on the "name" field.
+func NameHasSuffix(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldHasSuffix(FieldName, v))
+}
+
+// NameIsNil applies the IsNil predicate on the "name" field.
+func NameIsNil() predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldIsNull(FieldName))
+}
+
+// NameNotNil applies the NotNil predicate on the "name" field.
+func NameNotNil() predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldNotNull(FieldName))
+}
+
+// NameEqualFold applies the EqualFold predicate on the "name" field.
+func NameEqualFold(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldEqualFold(FieldName, v))
+}
+
+// NameContainsFold applies the ContainsFold predicate on the "name" field.
+func NameContainsFold(v string) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldContainsFold(FieldName, v))
+}
+
+// ManagedCopyEQ applies the EQ predicate on the "managed_copy" field.
+func ManagedCopyEQ(v bool) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldEQ(FieldManagedCopy, v))
+}
+
+// ManagedCopyNEQ applies the NEQ predicate on the "managed_copy" field.
+func ManagedCopyNEQ(v bool) predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldNEQ(FieldManagedCopy, v))
+}
+
+// ScheduleIsNil applies the IsNil predicate on the "schedule" field.
+func ScheduleIsNil() predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldIsNull(FieldSchedule))
+}
+
+// ScheduleNotNil applies the NotNil predicate on the "schedule" field.
+func ScheduleNotNil() predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldNotNull(FieldSchedule))
 }
 
 // And groups predicates with the AND operator between them.

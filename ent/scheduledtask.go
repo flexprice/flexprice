@@ -45,7 +45,13 @@ type ScheduledTask struct {
 	JobConfig *types.S3JobConfig `json:"job_config,omitempty"`
 	// Temporal schedule ID for the recurring workflow
 	TemporalScheduleID string `json:"temporal_schedule_id,omitempty"`
-	selectValues       sql.SelectValues
+	// Display name of the export
+	Name *string `json:"name,omitempty"`
+	// Export to Flexprice managed bucket instead of a connection
+	ManagedCopy bool `json:"managed_copy,omitempty"`
+	// Run time of the export
+	Schedule     *types.ExportSchedule `json:"schedule,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -53,11 +59,11 @@ func (*ScheduledTask) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case scheduledtask.FieldJobConfig:
+		case scheduledtask.FieldJobConfig, scheduledtask.FieldSchedule:
 			values[i] = new([]byte)
-		case scheduledtask.FieldEnabled:
+		case scheduledtask.FieldEnabled, scheduledtask.FieldManagedCopy:
 			values[i] = new(sql.NullBool)
-		case scheduledtask.FieldID, scheduledtask.FieldTenantID, scheduledtask.FieldStatus, scheduledtask.FieldCreatedBy, scheduledtask.FieldUpdatedBy, scheduledtask.FieldEnvironmentID, scheduledtask.FieldConnectionID, scheduledtask.FieldEntityType, scheduledtask.FieldInterval, scheduledtask.FieldTemporalScheduleID:
+		case scheduledtask.FieldID, scheduledtask.FieldTenantID, scheduledtask.FieldStatus, scheduledtask.FieldCreatedBy, scheduledtask.FieldUpdatedBy, scheduledtask.FieldEnvironmentID, scheduledtask.FieldConnectionID, scheduledtask.FieldEntityType, scheduledtask.FieldInterval, scheduledtask.FieldTemporalScheduleID, scheduledtask.FieldName:
 			values[i] = new(sql.NullString)
 		case scheduledtask.FieldCreatedAt, scheduledtask.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -162,6 +168,27 @@ func (_m *ScheduledTask) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.TemporalScheduleID = value.String
 			}
+		case scheduledtask.FieldName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field name", values[i])
+			} else if value.Valid {
+				_m.Name = new(string)
+				*_m.Name = value.String
+			}
+		case scheduledtask.FieldManagedCopy:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field managed_copy", values[i])
+			} else if value.Valid {
+				_m.ManagedCopy = value.Bool
+			}
+		case scheduledtask.FieldSchedule:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field schedule", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Schedule); err != nil {
+					return fmt.Errorf("unmarshal field schedule: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -236,6 +263,17 @@ func (_m *ScheduledTask) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("temporal_schedule_id=")
 	builder.WriteString(_m.TemporalScheduleID)
+	builder.WriteString(", ")
+	if v := _m.Name; v != nil {
+		builder.WriteString("name=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("managed_copy=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ManagedCopy))
+	builder.WriteString(", ")
+	builder.WriteString("schedule=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Schedule))
 	builder.WriteByte(')')
 	return builder.String()
 }
