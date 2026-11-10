@@ -1,0 +1,93 @@
+{{define "body"}}
+<tr><td style="background:#ffffff;border:1px solid #e8e8e8;border-radius:14px;padding:22px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td style="font-size:14px;color:#6b6b6b;">Invoice {{.Number}}</td>
+<td align="right"><span style="{{if eq .State "paid"}}background:#e8f7ef;color:#067647;border:1px solid #bfe8d1;{{else if eq .State "overdue"}}background:#fdecec;color:#b42318;border:1px solid #f6c9c5;{{else}}background:#fdf3d8;color:#7a4b00;border:1px solid #f3dfa6;{{end}}border-radius:999px;padding:2px 10px;font-size:13px;font-weight:500;white-space:nowrap;">{{.Badge}}</span></td>
+</tr>
+<tr><td colspan="2" style="padding-top:18px;font-size:14px;color:#6b6b6b;">{{.AmountLabel}}</td></tr>
+<tr><td colspan="2" style="font-size:34px;line-height:42px;font-weight:500;letter-spacing:-0.5px;">{{.Amount}}</td></tr>
+{{- if .When}}
+<tr><td colspan="2" style="font-size:14px;color:{{if eq .State "overdue"}}#b42318{{else}}#6b6b6b{{end}};">{{.When}}</td></tr>
+{{- end}}
+{{- if .ViewURL}}
+<tr><td colspan="2" style="padding-top:20px;">
+<a href="{{.ViewURL}}" style="display:block;background:#0f2a3d;color:#ffffff;text-decoration:none;text-align:center;font-size:15px;font-weight:500;padding:12px 16px;border-radius:8px;">View invoice</a>
+</td></tr>
+{{- else if .PDFAttached}}
+<tr><td colspan="2" style="padding-top:18px;font-size:14px;color:#6b6b6b;">The invoice PDF is attached.</td></tr>
+{{- else if .PDFURL}}
+<tr><td colspan="2" style="padding-top:18px;font-size:14px;color:#6b6b6b;">Invoice PDF: <a href="{{.PDFURL}}" style="color:#0f2a3d;">{{.PDFURL}}</a></td></tr>
+{{- end}}
+<tr><td colspan="2" style="padding-top:18px;"><div style="border-top:1px solid #e8e8e8;"></div></td></tr>
+{{- if .BilledTo}}
+<tr>
+<td style="padding-top:14px;font-size:14px;color:#6b6b6b;">Billed to</td>
+<td align="right" style="padding-top:14px;font-size:14px;font-weight:500;">{{.BilledTo}}</td>
+</tr>
+{{- end}}
+{{- if .InvoiceDate}}
+<tr>
+<td style="padding-top:10px;font-size:14px;color:#6b6b6b;">Invoice date</td>
+<td align="right" style="padding-top:10px;font-size:14px;font-weight:500;">{{.InvoiceDate}}</td>
+</tr>
+{{- end}}
+</table>
+</td></tr>
+<tr><td style="height:16px;line-height:16px;font-size:0;">&nbsp;</td></tr>
+<tr><td style="background:#ffffff;border:1px solid #e8e8e8;border-radius:14px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td style="padding:18px 22px;border-bottom:1px solid #e8e8e8;font-size:16px;font-weight:500;">What you’re paying for</td>
+<td align="right" style="padding:18px 22px;border-bottom:1px solid #e8e8e8;font-size:13px;color:#6b6b6b;white-space:nowrap;">{{.ChargeCount}} {{if eq .ChargeCount 1}}charge{{else}}charges{{end}}</td>
+</tr>
+{{- range .Groups}}
+<tr>
+<td style="padding:16px 0 4px 22px;font-size:12px;letter-spacing:0.8px;text-transform:uppercase;color:#6b6b6b;font-weight:500;">{{.Name}}</td>
+<td align="right" style="padding:16px 22px 4px 0;font-size:12px;color:#6b6b6b;font-weight:500;white-space:nowrap;">{{.Total}}</td>
+</tr>
+{{- range .Lines}}
+<tr>
+<td style="padding:10px 0 10px 22px;">
+<div style="font-size:15px;font-weight:500;">{{.Name}}</div>
+{{- if .Detail}}<div style="font-size:13px;color:#6b6b6b;padding-top:2px;">{{.Detail}}</div>{{end}}
+</td>
+<td align="right" valign="top" style="padding:10px 22px 10px 0;font-size:15px;font-weight:500;white-space:nowrap;">{{.Amount}}</td>
+</tr>
+{{- end}}
+{{- end}}
+{{- if .MoreCharges}}
+<tr><td colspan="2" style="padding:12px 22px;font-size:13px;color:#6b6b6b;border-top:1px solid #e8e8e8;">+ {{.MoreCharges}} more {{if eq .MoreCharges 1}}charge{{else}}charges{{end}} on the invoice</td></tr>
+{{- end}}
+<tr><td colspan="2" style="padding:0 22px;"><div style="border-top:1px solid #e8e8e8;"></div></td></tr>
+<tr>
+<td style="padding:16px 0 0 22px;font-size:14px;color:#6b6b6b;">Subtotal</td>
+<td align="right" style="padding:16px 22px 0 0;font-size:14px;">{{.Subtotal}}</td>
+</tr>
+{{- range .Adjustments}}
+<tr>
+<td style="padding:10px 0 0 22px;font-size:14px;color:#6b6b6b;">{{.Label}}</td>
+<td align="right" style="padding:10px 22px 0 0;font-size:14px;">{{.Amount}}</td>
+</tr>
+{{- end}}
+<tr><td colspan="2" style="padding:12px 22px 0;"><div style="border-top:1px solid #e8e8e8;"></div></td></tr>
+<tr>
+<td style="padding:12px 0 0 22px;font-size:14px;font-weight:600;">Total</td>
+<td align="right" style="padding:12px 22px 0 0;font-size:14px;font-weight:600;">{{.Total}}</td>
+</tr>
+{{- if .AmountPaid}}
+<tr>
+<td style="padding:10px 0 0 22px;font-size:14px;color:#6b6b6b;">Paid</td>
+<td align="right" style="padding:10px 22px 0 0;font-size:14px;">−{{.AmountPaid}}</td>
+</tr>
+{{- end}}
+{{- if .AmountDue}}
+<tr>
+<td style="padding:10px 0 0 22px;font-size:14px;font-weight:600;">Amount due</td>
+<td align="right" style="padding:10px 22px 0 0;font-size:14px;font-weight:600;">{{.AmountDue}}</td>
+</tr>
+{{- end}}
+<tr><td colspan="2" style="height:20px;line-height:20px;font-size:0;">&nbsp;</td></tr>
+</table>
+</td></tr>
+{{end}}
