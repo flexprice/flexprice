@@ -3730,13 +3730,13 @@ definitions:
       interval:
         allOf:
         - $ref: '#/definitions/types.ScheduledTaskInterval'
+        description: '"custom" is excluded from API.'
         enum:
         - hourly
         - daily
         - weekly
         - monthly
         - manual
-        x-speakeasy-unknown-values: allow
       job_config:
         $ref: '#/definitions/types.S3JobConfig'
       name:
@@ -8043,13 +8043,13 @@ definitions:
       interval:
         allOf:
         - $ref: '#/definitions/types.ScheduledTaskInterval'
+        description: '"custom" is excluded from API.'
         enum:
         - hourly
         - daily
         - weekly
         - monthly
         - manual
-        x-speakeasy-unknown-values: allow
       job_config:
         $ref: '#/definitions/types.S3JobConfig'
       managed_copy:
@@ -26504,7 +26504,7 @@ paths:
         Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.
         connection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression.
         interval is hourly, daily, weekly, monthly or manual; clients should tolerate new values. schedule ({hour, minute, day_of_week, day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual.
-        Each run exports the previous period ending 15 minutes before the scheduled start in the schedule timezone, so a run started between 00:00 and 00:14 local time covers the period before that.
+        Window = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.
       operationId: createScheduledTask
       parameters:
       - description: Scheduled Task

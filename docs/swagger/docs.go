@@ -13123,7 +13123,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression.\ninterval is hourly, daily, weekly, monthly or manual; clients should tolerate new values. schedule ({hour, minute, day_of_week, day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual.\nEach run exports the previous period ending 15 minutes before the scheduled start in the schedule timezone, so a run started between 00:00 and 00:14 local time covers the period before that.",
+                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression.\ninterval is hourly, daily, weekly, monthly or manual; clients should tolerate new values. schedule ({hour, minute, day_of_week, day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.",
                 "consumes": [
                     "application/json"
                 ],
@@ -22581,6 +22581,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.ScheduledTaskEntityType"
                 },
                 "interval": {
+                    "description": "\"custom\" is excluded from API.",
                     "enum": [
                         "hourly",
                         "daily",
@@ -22592,8 +22593,7 @@ const docTemplate = `{
                         {
                             "$ref": "#/definitions/types.ScheduledTaskInterval"
                         }
-                    ],
-                    "x-speakeasy-unknown-values": "allow"
+                    ]
                 },
                 "job_config": {
                     "$ref": "#/definitions/types.S3JobConfig"
@@ -28501,6 +28501,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "interval": {
+                    "description": "\"custom\" is excluded from API.",
                     "enum": [
                         "hourly",
                         "daily",
@@ -28512,8 +28513,7 @@ const docTemplate = `{
                         {
                             "$ref": "#/definitions/types.ScheduledTaskInterval"
                         }
-                    ],
-                    "x-speakeasy-unknown-values": "allow"
+                    ]
                 },
                 "job_config": {
                     "$ref": "#/definitions/types.S3JobConfig"

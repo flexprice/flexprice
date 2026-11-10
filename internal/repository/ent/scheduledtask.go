@@ -152,7 +152,7 @@ func (r *ScheduledTaskRepository) Update(ctx context.Context, task *domainst.Sch
 	return nil
 }
 
-// UpdateSettings updates name, enabled, schedule, temporal schedule ID and updated_by
+// UpdateSettings writes editable settings.
 func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask) error {
 	update := r.client.Writer(ctx).ScheduledTask.
 		UpdateOneID(task.ID).

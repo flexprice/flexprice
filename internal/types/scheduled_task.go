@@ -69,7 +69,7 @@ func (s *ExportSchedule) Validate(interval ScheduledTaskInterval) error {
 			WithHint("Minute must be between 0 and 59").
 			Mark(ierr.ErrValidation)
 	}
-	if _, err := s.Location(); err != nil {
+	if _, err := s.Location(); err != nil || s.Timezone == "Local" {
 		return ierr.NewError("invalid schedule timezone").
 			WithHint("Timezone must be a valid IANA name such as Asia/Kolkata").
 			Mark(ierr.ErrValidation)
@@ -106,7 +106,13 @@ func (s *ExportSchedule) Location() (*time.Location, error) {
 			WithHint("Schedule timezone must be specified").
 			Mark(ierr.ErrValidation)
 	}
-	return time.LoadLocation(s.Timezone)
+	loc, err := time.LoadLocation(s.Timezone)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Timezone must be a valid IANA name such as Asia/Kolkata").
+			Mark(ierr.ErrValidation)
+	}
+	return loc, nil
 }
 
 // ValidateExportSchedule checks schedule presence.
@@ -122,6 +128,12 @@ func ValidateExportSchedule(interval ScheduledTaskInterval, s *ExportSchedule) e
 		if s != nil {
 			return ierr.NewError("schedule not allowed").
 				WithHint("Manual exports do not take a schedule").
+				Mark(ierr.ErrValidation)
+		}
+	case ScheduledTaskIntervalEvery15Minutes, ScheduledTaskIntervalEvery30Minutes, ScheduledTaskIntervalCustom:
+		if s != nil {
+			return ierr.NewError("schedule not allowed").
+				WithHint("Only hourly, daily, weekly and monthly exports take a schedule").
 				Mark(ierr.ErrValidation)
 		}
 	}

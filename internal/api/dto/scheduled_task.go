@@ -16,10 +16,11 @@ type CreateScheduledTaskRequest struct {
 	ConnectionID string                        `json:"connection_id,omitempty"`
 	Name         string                        `json:"name,omitempty"`
 	EntityType   types.ScheduledTaskEntityType `json:"entity_type" binding:"required" validate:"required"`
-	Interval     types.ScheduledTaskInterval   `json:"interval" binding:"required" validate:"required" enums:"hourly,daily,weekly,monthly,manual"` // Note: "custom" is excluded from API (internal testing only)
-	Enabled      bool                          `json:"enabled"`
-	JobConfig    *types.S3JobConfig            `json:"job_config,omitempty"`
-	Schedule     *types.ExportSchedule         `json:"schedule,omitempty"`
+	// "custom" is excluded from API.
+	Interval  types.ScheduledTaskInterval `json:"interval" binding:"required" validate:"required" enums:"hourly,daily,weekly,monthly,manual"`
+	Enabled   bool                        `json:"enabled"`
+	JobConfig *types.S3JobConfig          `json:"job_config,omitempty"`
+	Schedule  *types.ExportSchedule       `json:"schedule,omitempty"`
 }
 
 const maxScheduledTaskNameLength = 120
@@ -115,15 +116,16 @@ type ScheduledTaskResponse struct {
 	EnvironmentID string                        `json:"environment_id"`
 	ConnectionID  string                        `json:"connection_id"`
 	EntityType    types.ScheduledTaskEntityType `json:"entity_type"`
-	Interval      types.ScheduledTaskInterval   `json:"interval" enums:"hourly,daily,weekly,monthly,manual"` // Note: "custom" is excluded from API docs
-	Enabled       bool                          `json:"enabled"`
-	JobConfig     *types.S3JobConfig            `json:"job_config"`
-	Name          string                        `json:"name,omitempty"`
-	ManagedCopy   bool                          `json:"managed_copy,omitempty"`
-	Schedule      *types.ExportSchedule         `json:"schedule,omitempty"`
-	Status        string                        `json:"status"`
-	CreatedAt     time.Time                     `json:"created_at"`
-	UpdatedAt     time.Time                     `json:"updated_at"`
+	// "custom" is excluded from API.
+	Interval    types.ScheduledTaskInterval `json:"interval" enums:"hourly,daily,weekly,monthly,manual"`
+	Enabled     bool                        `json:"enabled"`
+	JobConfig   *types.S3JobConfig          `json:"job_config"`
+	Name        string                      `json:"name,omitempty"`
+	ManagedCopy bool                        `json:"managed_copy,omitempty"`
+	Schedule    *types.ExportSchedule       `json:"schedule,omitempty"`
+	Status      string                      `json:"status"`
+	CreatedAt   time.Time                   `json:"created_at"`
+	UpdatedAt   time.Time                   `json:"updated_at"`
 }
 
 // ListScheduledTasksResponse represents a list of scheduled tasks
