@@ -222,6 +222,24 @@ func (s *InMemoryBillingInstalmentStore) Reschedule(ctx context.Context, invoice
 	)
 }
 
+func (s *InMemoryBillingInstalmentStore) CancelInvoiced(ctx context.Context, invoiceID string, ids []string) ([]*billingterm.Instalment, error) {
+	if len(ids) == 0 {
+		return []*billingterm.Instalment{}, nil
+	}
+
+	return s.transition(ctx,
+		func(in *billingterm.Instalment) bool {
+			return lo.Contains(ids, in.ID) && in.InvoiceID != nil && *in.InvoiceID == invoiceID &&
+				in.InstalmentStatus == types.InstalmentStatusInvoiced
+		},
+		func(in *billingterm.Instalment) {
+			in.InstalmentStatus = types.InstalmentStatusCancelled
+			in.InvoiceID = nil
+			in.InvoicedAt = nil
+		},
+	)
+}
+
 // transition applies change to every in-scope instalment that matches and returns the changed rows.
 func (s *InMemoryBillingInstalmentStore) transition(ctx context.Context, matches func(*billingterm.Instalment) bool, change func(*billingterm.Instalment)) ([]*billingterm.Instalment, error) {
 	s.writeMu.Lock()

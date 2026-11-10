@@ -152,6 +152,48 @@ func TestInstalmentReschedule_OnlyThatInvoice(t *testing.T) {
 	require.Equal(t, firstInvoice, lo.FromPtr(stillCancelled.InvoiceID))
 }
 
+func TestInstalmentCancelInvoiced_OnlyGivenRowsOnThatInvoice(t *testing.T) {
+	f := newBillingTermFixture(t)
+	owner := "cmt_" + f.runID
+	firstInvoice := "inv_" + f.runID + "_1"
+	secondInvoice := "inv_" + f.runID + "_2"
+	start := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	given := f.instalment(f.ctx, "a", owner, types.InstalmentStatusInvoiced, start)
+	given.InvoiceID, given.InvoicedAt = &firstInvoice, &start
+	kept := f.instalment(f.ctx, "b", owner, types.InstalmentStatusInvoiced, start.AddDate(0, 1, 0))
+	kept.InvoiceID, kept.InvoicedAt = &firstInvoice, &start
+	onSecond := f.instalment(f.ctx, "c", owner, types.InstalmentStatusInvoiced, start.AddDate(0, 2, 0))
+	onSecond.InvoiceID, onSecond.InvoicedAt = &secondInvoice, &start
+	scheduled := f.instalment(f.ctx, "d", owner, types.InstalmentStatusScheduled, start.AddDate(0, 3, 0))
+	_, err := f.instalments.CreateMany(f.ctx, []*billingterm.Instalment{given, kept, onSecond, scheduled})
+	require.NoError(t, err)
+
+	cancelled, err := f.instalments.CancelInvoiced(f.ctx, firstInvoice, []string{given.ID, onSecond.ID, scheduled.ID})
+	require.NoError(t, err)
+	require.Equal(t, []string{given.ID}, instalmentIDs(cancelled))
+	require.Equal(t, types.InstalmentStatusCancelled, cancelled[0].InstalmentStatus)
+	require.Nil(t, cancelled[0].InvoiceID)
+	require.Nil(t, cancelled[0].InvoicedAt)
+
+	stillInvoiced, err := f.instalments.Get(f.ctx, kept.ID)
+	require.NoError(t, err)
+	require.Equal(t, types.InstalmentStatusInvoiced, stillInvoiced.InstalmentStatus)
+	require.Equal(t, firstInvoice, lo.FromPtr(stillInvoiced.InvoiceID))
+
+	other, err := f.instalments.Get(f.ctx, onSecond.ID)
+	require.NoError(t, err)
+	require.Equal(t, secondInvoice, lo.FromPtr(other.InvoiceID))
+
+	untouched, err := f.instalments.Get(f.ctx, scheduled.ID)
+	require.NoError(t, err)
+	require.Equal(t, types.InstalmentStatusScheduled, untouched.InstalmentStatus)
+
+	none, err := f.instalments.CancelInvoiced(f.ctx, firstInvoice, nil)
+	require.NoError(t, err)
+	require.Empty(t, none)
+}
+
 func TestInstalmentListInvoiced_ByInvoicedDate(t *testing.T) {
 	f := newBillingTermFixture(t)
 	owner, otherOwner := "cmt_"+f.runID, "cmt_"+f.runID+"_2"

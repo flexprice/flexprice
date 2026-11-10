@@ -343,6 +343,41 @@ func (r *billingInstalmentRepository) Claim(ctx context.Context, invoiceID strin
 	return billingterm.InstalmentsFromEnt(rows), nil
 }
 
+func (r *billingInstalmentRepository) CancelInvoiced(ctx context.Context, invoiceID string, ids []string) ([]*billingterm.Instalment, error) {
+	if len(ids) == 0 {
+		return []*billingterm.Instalment{}, nil
+	}
+
+	span := StartRepositorySpan(ctx, "billing_instalment", "cancel_invoiced", map[string]interface{}{
+		"invoice_id": invoiceID,
+		"count":      len(ids),
+	})
+	defer FinishSpan(span)
+
+	rows, err := r.client.Writer(ctx).BillingInstalment.Update().
+		Where(r.scope(ctx)...).
+		Where(
+			entbillinginstalment.IDIn(ids...),
+			entbillinginstalment.InvoiceID(invoiceID),
+			entbillinginstalment.InstalmentStatusEQ(types.InstalmentStatusInvoiced),
+		).
+		SetInstalmentStatus(types.InstalmentStatusCancelled).
+		ClearInvoiceID().
+		ClearInvoicedAt().
+		SetUpdatedAt(clock.Now()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SaveReturning(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to cancel invoiced billing instalments").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return billingterm.InstalmentsFromEnt(rows), nil
+}
+
 func (r *billingInstalmentRepository) Reschedule(ctx context.Context, invoiceID string) ([]*billingterm.Instalment, error) {
 	span := StartRepositorySpan(ctx, "billing_instalment", "reschedule", map[string]interface{}{
 		"invoice_id": invoiceID,

@@ -124,7 +124,7 @@ func (s *invoiceService) commitmentChangedSince(ctx context.Context, subscriptio
 	return lo.SomeBy(listed, func(c *commitment.Commitment) bool { return c.UpdatedAt.After(computedAt) }), nil
 }
 
-// staleInstalments returns those of the billed instalments that are no longer scheduled.
+// staleInstalments returns those of the billed instalments that are no longer scheduled or that a termination cancelled.
 func (s *invoiceService) staleInstalments(ctx context.Context, billed []string) ([]string, error) {
 	if len(billed) == 0 {
 		return nil, nil
@@ -138,7 +138,19 @@ func (s *invoiceService) staleInstalments(ctx context.Context, billed []string) 
 		return nil, err
 	}
 
-	return lo.Without(billed, lo.Map(scheduled, func(inst *billingterm.Instalment, _ int) string { return inst.ID })...), nil
+	commitments, err := instalmentCommitments(ctx, s.CommitmentRepo, scheduled)
+	if err != nil {
+		return nil, err
+	}
+
+	var owed []string
+	for _, inst := range scheduled {
+		if !cancelledByTermination(commitments[inst.OwnerID], inst) {
+			owed = append(owed, inst.ID)
+		}
+	}
+
+	return lo.Without(billed, owed...), nil
 }
 
 // missingInstalments returns the scheduled instalments of the subscriptions due within a subscription draft that it
@@ -161,7 +173,7 @@ func (s *invoiceService) missingInstalments(
 		return nil, nil
 	}
 
-	due, err := dueInstalments(ctx, s.ServiceParams, subscriptionIDs, billAt)
+	due, _, err := dueInstalments(ctx, s.ServiceParams, subscriptionIDs, billAt)
 	if err != nil {
 		return nil, err
 	}
@@ -169,15 +181,21 @@ func (s *invoiceService) missingInstalments(
 	return lo.Without(lo.Map(due, func(inst *billingterm.Instalment, _ int) string { return inst.ID }), billed...), nil
 }
 
-// claimInstalments marks the scheduled instalments on a finalizing invoice as billed by it at its finalization, in the
-// caller's finalize transaction, and returns the ids of those it could not claim because they are no longer scheduled.
+// claimInstalments marks a finalizing invoice's owed instalments as billed by it at its finalization, in the caller's
+// finalize transaction, and returns the ids of the rest: no longer scheduled, or cancelled by a termination.
 func (s *invoiceService) claimInstalments(ctx context.Context, inv *invoice.Invoice) (unclaimed []string, err error) {
 	ids, err := s.billedInstalmentIDs(ctx, inv.ID)
 	if err != nil || len(ids) == 0 {
 		return nil, err
 	}
 
-	claimed, err := s.BillingInstalmentRepo.Claim(ctx, inv.ID, lo.FromPtrOr(inv.FinalizedAt, clock.Now()), ids)
+	stale, err := s.staleInstalments(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	owed := lo.Without(ids, stale...)
+	claimed, err := s.BillingInstalmentRepo.Claim(ctx, inv.ID, lo.FromPtrOr(inv.FinalizedAt, clock.Now()), owed)
 	if err != nil {
 		return nil, err
 	}
@@ -305,8 +323,8 @@ func (s *invoiceService) billedInstalmentIDs(ctx context.Context, invoiceID stri
 	}), nil
 }
 
-// rescheduleInstalments puts a voided invoice's instalments back on schedule in the void transaction, under their
-// commitments' locks so an edit sizing its plan by the invoiced instalments never runs halfway through it.
+// rescheduleInstalments puts a voided invoice's instalments back on schedule and cancels those a termination no longer
+// owes, in the void transaction and under their commitments' locks, so an edit never sees the void half done.
 func (s *invoiceService) rescheduleInstalments(ctx context.Context, invoiceID string) error {
 	ids, err := s.billedInstalmentIDs(ctx, invoiceID)
 	if err != nil || len(ids) == 0 {
@@ -327,11 +345,30 @@ func (s *invoiceService) rescheduleInstalments(ctx context.Context, invoiceID st
 		}
 	}
 
+	// Read under the locks, so a termination that committed while the void waited is seen.
+	byID, err := instalmentCommitments(ctx, s.CommitmentRepo, billed)
+	if err != nil {
+		return err
+	}
+
+	var cancelIDs []string
+	for _, inst := range billed {
+		if cancelledByTermination(byID[inst.OwnerID], inst) {
+			cancelIDs = append(cancelIDs, inst.ID)
+		}
+	}
+
+	cancelled, err := s.BillingInstalmentRepo.CancelInvoiced(ctx, invoiceID, cancelIDs)
+	if err != nil {
+		return err
+	}
+
 	rescheduled, err := s.BillingInstalmentRepo.Reschedule(ctx, invoiceID)
 	if err != nil {
 		return err
 	}
 
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentUpdated, rescheduled)
 	return nil
 }
