@@ -45,10 +45,13 @@ func (s *CommitmentE2ESuite) subscribeIn(p *price.Price, start time.Time, cycle 
 	return resp.ID
 }
 
-// reserveGPUs commits the subscription to two GPUs in every bucket from start, at $4 each and $5 above them.
-func (s *CommitmentE2ESuite) reserveGPUs(subscriptionID string, p *price.Price, start time.Time) *dto.CommitmentResponse {
-	req := floorRequest("Reserved GPUs", p.ID, "2", start, time.Time{})
-	req.EndDate = nil
+// reserveGPUs commits the subscription to two GPUs in every bucket from start until end, or open-ended when end is
+// zero, at $4 each and $5 above them.
+func (s *CommitmentE2ESuite) reserveGPUs(subscriptionID string, p *price.Price, start, end time.Time) *dto.CommitmentResponse {
+	req := floorRequest("Reserved GPUs", p.ID, "2", start, end)
+	if end.IsZero() {
+		req.EndDate = nil
+	}
 	req.Type, req.Measurement = types.COMMITMENT_TYPE_QUANTITY, types.CommitmentMeasurementWindow
 	req.CommittedPrice = &dto.CommitmentPriceInput{Amount: lo.ToPtr(dec("4"))}
 	req.OveragePrice = &dto.CommitmentPriceInput{Amount: lo.ToPtr(dec("5"))}
@@ -152,7 +155,7 @@ func (s *CommitmentE2ESuite) TestWindowBucketCutByPeriodEdge_IsBilledOnce() {
 
 			p := s.planWith("cut_bucket", types.BILLING_PERIOD_MONTHLY, gpus, "5")
 			sub := s.subscribeIn(p, tt.start, tt.cycle, tt.timezone)
-			s.reserveGPUs(sub, p, tt.start)
+			s.reserveGPUs(sub, p, tt.start, time.Time{})
 			for at, qty := range tt.usage {
 				s.record(gpus, at, qty)
 			}
@@ -172,6 +175,26 @@ func (s *CommitmentE2ESuite) TestWindowBucketCutByPeriodEdge_IsBilledOnce() {
 	}
 }
 
+// The later period bills the cut bucket's peak even when it falls before the edge: three GPUs at 18:10 and one at 18:45
+// bill two within the bucket's capacity and one above it, at $5.
+func (s *CommitmentE2ESuite) TestWindowBucketCutByPeriodEdge_BillsItsPeakBeforeTheEdge() {
+	gpus := s.hourlyGPUs()
+	p := s.planWith("cut_bucket_peak", types.BILLING_PERIOD_MONTHLY, gpus, "5")
+	start := time.Date(2026, 9, 30, 18, 30, 0, 0, time.UTC)
+	edge, end := time.Date(2026, 10, 31, 18, 30, 0, 0, time.UTC), time.Date(2026, 11, 30, 18, 30, 0, 0, time.UTC)
+	sub := s.subscribeIn(p, start, types.BillingCycleCalendar, "Asia/Kolkata")
+	s.reserveGPUs(sub, p, start, time.Time{})
+	s.record(gpus, edge.Add(-20*time.Minute), "3")
+	s.record(gpus, edge.Add(15*time.Minute), "1")
+
+	first, second := s.invoiceFor(sub, start, edge), s.invoiceFor(sub, edge, end)
+	units, due := billedUsage(first, second)
+	s.True(units.Equal(dec("3")), "GPUs billed: want 3, got %s", units)
+	s.True(due.Equal(dec("11717")), "amount due of both periods: want 11717, got %s", due)
+	firstUnits, _ := billedUsage(first)
+	s.True(firstUnits.IsZero(), "the earlier period bills %s GPUs of the bucket its end cuts", firstUnits)
+}
+
 // The subscription's first period starts at 10:15. The 10:00 bucket has no earlier period, so this period bills its
 // GPUs, once.
 func (s *CommitmentE2ESuite) TestWindowBucketCutByFirstPeriodStart_IsBilledOnce() {
@@ -179,7 +202,7 @@ func (s *CommitmentE2ESuite) TestWindowBucketCutByFirstPeriodStart_IsBilledOnce(
 	p := s.planWith("first_cut_bucket", types.BILLING_PERIOD_MONTHLY, gpus, "5")
 	start, edge := time.Date(2026, 5, 15, 10, 15, 0, 0, time.UTC), time.Date(2026, 6, 15, 10, 15, 0, 0, time.UTC)
 	sub := s.subscribeIn(p, start, types.BillingCycleAnniversary, "UTC")
-	s.reserveGPUs(sub, p, start)
+	s.reserveGPUs(sub, p, start, time.Time{})
 	s.record(gpus, time.Date(2026, 5, 15, 10, 30, 0, 0, time.UTC), "2")
 	s.record(gpus, time.Date(2026, 5, 15, 11, 30, 0, 0, time.UTC), "2")
 
@@ -187,13 +210,14 @@ func (s *CommitmentE2ESuite) TestWindowBucketCutByFirstPeriodStart_IsBilledOnce(
 	s.True(units.Equal(dec("4")), "GPUs billed: want 4, got %s", units)
 }
 
-// Terminated at 14:20 inside a period, the commitment still holds the 14:00 bucket, which this period bills once.
+// Terminated at 14:20 inside a period, the commitment no longer holds the 14:00 bucket, which ends after it: the period
+// bills the bucket's GPUs once, at the line's price, beside the capacity of the 124 hours before it.
 func (s *CommitmentE2ESuite) TestWindowBucketCutByTermination_IsBilledOnce() {
 	gpus := s.hourlyGPUs()
 	p := s.planWith("terminated_cut_bucket", types.BILLING_PERIOD_MONTHLY, gpus, "5")
 	start := time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)
 	sub := s.subscribeIn(p, start, types.BillingCycleAnniversary, "UTC")
-	created := s.reserveGPUs(sub, p, start)
+	created := s.reserveGPUs(sub, p, start, time.Time{})
 	_, err := s.commitments.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
 		EffectiveAt: lo.ToPtr(time.Date(2026, 5, 20, 14, 20, 0, 0, time.UTC)),
 	})
@@ -201,8 +225,42 @@ func (s *CommitmentE2ESuite) TestWindowBucketCutByTermination_IsBilledOnce() {
 	s.record(gpus, time.Date(2026, 5, 20, 14, 10, 0, 0, time.UTC), "2")
 	s.record(gpus, time.Date(2026, 5, 20, 14, 40, 0, 0, time.UTC), "2")
 
-	units, _ := billedUsage(s.invoiceFor(sub, start, start.AddDate(0, 1, 0)))
+	units, due := billedUsage(s.invoiceFor(sub, start, start.AddDate(0, 1, 0)))
 	s.True(units.Equal(dec("2")), "GPUs billed: want 2, got %s", units)
+	s.True(due.Equal(dec("1002")), "amount due: want 1002, got %s", due)
+}
+
+// A commitment that starts or ends at a period edge inside a bucket does not carry the bucket across the edge, so each
+// period bills its own part of it, as pricing without a commitment does: no GPU before or after the edge goes unbilled.
+func (s *CommitmentE2ESuite) TestWindowBucketCutWhereTheCommitmentStartsOrEnds_BillsBothParts() {
+	start := time.Date(2026, 5, 15, 10, 15, 0, 0, time.UTC)
+	edge, end := start.AddDate(0, 1, 0), start.AddDate(0, 2, 0)
+	tests := []struct {
+		name       string
+		from, till time.Time // the commitment's term; a zero till leaves it open-ended
+		due        string
+	}{
+		// May's 744 hours at two GPUs and $4, and $5 a GPU for the 10:00 bucket on each side of the edge.
+		{name: "ends at the edge", from: start, till: edge, due: "5972"},
+		// June's 720 hours, from the 10:00 bucket the edge cuts, and May's $5 a GPU before the edge.
+		{name: "starts at the edge", from: edge, due: "5770"},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			gpus := s.hourlyGPUs()
+			p := s.planWith("commitment_edge_cut_bucket", types.BILLING_PERIOD_MONTHLY, gpus, "5")
+			sub := s.subscribeIn(p, start, types.BillingCycleAnniversary, "UTC")
+			s.reserveGPUs(sub, p, tt.from, tt.till)
+			s.record(gpus, edge.Add(-10*time.Minute), "2")
+			s.record(gpus, edge.Add(15*time.Minute), "2")
+
+			units, due := billedUsage(s.invoiceFor(sub, start, edge), s.invoiceFor(sub, edge, end))
+			s.True(units.Equal(dec("4")), "GPUs billed: want 4, got %s", units)
+			s.True(due.Equal(dec(tt.due)), "amount due of both periods: want %s, got %s", tt.due, due)
+		})
+	}
 }
 
 // Usage analytics cut inside a billing period, off the bucket grid, adds up to the whole period and its invoice.
@@ -211,7 +269,7 @@ func (s *CommitmentE2ESuite) TestAnalytics_RangesCutInsideABucketAddUpToThePerio
 	p := s.planWith("analytics_cut_bucket", types.BILLING_PERIOD_MONTHLY, gpus, "5")
 	jun, jul := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	sub := s.subscribeIn(p, jun, types.BillingCycleAnniversary, "UTC")
-	s.reserveGPUs(sub, p, jun)
+	s.reserveGPUs(sub, p, jun, time.Time{})
 	s.record(gpus, time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC), "2")
 
 	cost := func(from, to time.Time) decimal.Decimal {

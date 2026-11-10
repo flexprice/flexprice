@@ -2690,11 +2690,11 @@ func TestActiveBuckets_CountsTheBucketsTheTermAndWindowsHold(t *testing.T) {
 		want       int64
 	}{
 		{
-			name:       "minutes from a start inside the span",
+			name:       "minutes from a start inside a minute, which the term holds",
 			commitment: commitment.Commitment{StartDate: jan.Add(90 * time.Second)},
 			span:       types.Period{Start: jan, End: jan.Add(time.Hour)},
 			bucket:     types.WindowSizeMinute,
-			want:       58,
+			want:       59,
 		},
 		{
 			name:       "hours up to a termination",
