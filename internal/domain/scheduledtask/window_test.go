@@ -30,7 +30,9 @@ func TestWindow(t *testing.T) {
 	}{
 		{"daily kolkata", types.ScheduledTaskIntervalDaily, &types.ExportSchedule{Minute: 30, Timezone: "Asia/Kolkata"}, "2026-11-09T19:00:00Z", "2026-11-08T18:30:00Z", "2026-11-09T18:30:00Z", false},
 		{"hourly minute 15", types.ScheduledTaskIntervalHourly, &types.ExportSchedule{Minute: 15, Timezone: "UTC"}, "2026-11-10T10:15:00Z", "2026-11-10T09:00:00Z", "2026-11-10T10:00:00Z", false},
-		{"hourly minute 0", types.ScheduledTaskIntervalHourly, &types.ExportSchedule{Timezone: "UTC"}, "2026-11-10T10:00:00Z", "2026-11-10T08:00:00Z", "2026-11-10T09:00:00Z", false},
+		{"hourly LA second 01:15 PST", types.ScheduledTaskIntervalHourly, &types.ExportSchedule{Minute: 15, Timezone: "America/Los_Angeles"}, "2026-11-01T09:15:00Z", "2026-11-01T08:00:00Z", "2026-11-01T09:00:00Z", false},
+		{"hourly LA first 01:15 PDT", types.ScheduledTaskIntervalHourly, &types.ExportSchedule{Minute: 15, Timezone: "America/Los_Angeles"}, "2026-11-01T08:15:00Z", "2026-11-01T07:00:00Z", "2026-11-01T08:00:00Z", false},
+		{"hourly minute 0",types.ScheduledTaskIntervalHourly, &types.ExportSchedule{Timezone: "UTC"}, "2026-11-10T10:00:00Z", "2026-11-10T08:00:00Z", "2026-11-10T09:00:00Z", false},
 		{"weekly wednesday", types.ScheduledTaskIntervalWeekly, &types.ExportSchedule{Hour: 9, DayOfWeek: ip(3), Timezone: "UTC"}, "2026-11-11T09:00:00Z", "2026-11-02T00:00:00Z", "2026-11-09T00:00:00Z", false},
 		{"monthly kolkata", types.ScheduledTaskIntervalMonthly, &types.ExportSchedule{Hour: 2, DayOfMonth: ip(1), Timezone: "Asia/Kolkata"}, "2026-11-30T20:30:00Z", "2026-10-31T18:30:00Z", "2026-11-30T18:30:00Z", false},
 		{"daily LA fall back", types.ScheduledTaskIntervalDaily, &types.ExportSchedule{Hour: 1, Timezone: "America/Los_Angeles"}, "2026-11-02T09:00:00Z", "2026-11-01T07:00:00Z", "2026-11-02T08:00:00Z", false},
