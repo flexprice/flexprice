@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -13,6 +14,13 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
+
+// connClient resolves the Chargebee connection; every other client call is unset.
+type connClient struct{ ChargebeeClient }
+
+func (connClient) GetConnection(_ context.Context) (*connection.Connection, error) {
+	return &connection.Connection{ID: "conn_test", ProviderType: types.SecretProviderChargebee}, nil
+}
 
 type fakeItemFamilyService struct{}
 
@@ -75,6 +83,7 @@ func TestSyncPlanToChargebee_SyncsThreePricesAndCreatesMappings(t *testing.T) {
 
 	svc := &PlanSyncService{
 		PlanSyncServiceParams: PlanSyncServiceParams{
+			Client:                       connClient{},
 			EntityIntegrationMappingRepo: mappingRepo,
 			MeterRepo:                    nil,
 			FeatureRepo:                  nil,
@@ -184,6 +193,7 @@ func TestSyncPlanToChargebee_ContinuesWhenOneItemPriceFails(t *testing.T) {
 
 	svc := &PlanSyncService{
 		PlanSyncServiceParams: PlanSyncServiceParams{
+			Client:                       connClient{},
 			EntityIntegrationMappingRepo: mappingRepo,
 			MeterRepo:                    nil,
 			FeatureRepo:                  nil,

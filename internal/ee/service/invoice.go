@@ -107,7 +107,7 @@ type InvoiceService interface {
 	PublishInvoiceSyncWebhook(ctx context.Context, invoiceID string, provider types.SecretProvider, syncErr string)
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
 	IsInvoiceFinalizationDue(ctx context.Context, inv *invoice.Invoice) (bool, error)
-	ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error)
+	ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*invoice.Invoice, error)
 
 	// ListSubscriptionsDueForDailyDraftCompute returns subscriptions due for daily processing.
 	ListSubscriptionsDueForDailyDraftCompute(ctx context.Context) ([]*subscription.Subscription, error)
@@ -734,6 +734,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 
 	// 2. Compute the request OUTSIDE the lock (expensive for subscription invoices).
 	var applyReq *dto.InvoiceComputeRequest
+	var periodLineItems []*subscription.SubscriptionLineItem
 
 	if inv.InvoiceType == types.InvoiceTypeSubscription && inv.SubscriptionID != nil {
 		// Subscription: compute line items from billing service
@@ -753,6 +754,10 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if req != nil && req.ProrationBehavior != nil {
 			sub.ProrationBehavior = *req.ProrationBehavior
 		}
+		periodLineItems, err = listActiveLineItems(ctx, s.SubscriptionLineItemRepo, sub.ID, *inv.PeriodStart)
+		if err != nil {
+			return nil, false, err
+		}
 		billingService := NewBillingService(s.ServiceParams)
 		params := &dto.PrepareSubscriptionInvoiceRequestParams{
 			Subscription:     sub,
@@ -760,6 +765,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			PeriodEnd:        *inv.PeriodEnd,
 			ReferencePoint:   refPoint,
 			ExcludeInvoiceID: inv.ID,
+			LineItems:        periodLineItems,
 		}
 
 		if req != nil {
@@ -918,7 +924,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 
 	// Period-end computation also runs for zero-value invoices and after rollover has advanced the subscription.
 	if computed {
-		if err := s.saveCompletedCycleUsageCheckpoints(ctx, inv); err != nil {
+		if err := s.saveCompletedCycleUsageCheckpoints(ctx, inv, periodLineItems); err != nil {
 			s.Logger.Error(ctx, "saving usage checkpoints failed; reads use the preceding checkpoint",
 				"subscription_id", *inv.SubscriptionID, "invoice_id", inv.ID, "error", err)
 		}
@@ -946,7 +952,8 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 	return inv, skipped, nil
 }
 
-func (s *invoiceService) saveCompletedCycleUsageCheckpoints(ctx context.Context, inv *invoice.Invoice) error {
+// periodItems, when set, are the active line items at inv.PeriodStart.
+func (s *invoiceService) saveCompletedCycleUsageCheckpoints(ctx context.Context, inv *invoice.Invoice, periodItems []*subscription.SubscriptionLineItem) error {
 	if s.MeterUsageCheckpointRepo == nil || inv == nil || inv.InvoiceType != types.InvoiceTypeSubscription ||
 		inv.SubscriptionID == nil || inv.PeriodStart == nil || inv.PeriodEnd == nil ||
 		inv.PeriodEnd.After(clock.Now()) || types.InvoiceBillingReason(inv.BillingReason) != types.InvoiceBillingReasonSubscriptionCycle {
@@ -956,11 +963,17 @@ func (s *invoiceService) saveCompletedCycleUsageCheckpoints(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	if !usesCheckpoints(sub) {
+		return nil
+	}
 	subscriptionForInvoicePeriod := *sub
 	subscriptionForInvoicePeriod.CurrentPeriodStart = *inv.PeriodStart
-	items, err := s.SubscriptionLineItemRepo.ListBySubscription(ctx, &subscriptionForInvoicePeriod)
-	if err != nil {
-		return err
+	items := periodItems
+	if len(items) == 0 {
+		items, err = listActiveLineItems(ctx, s.SubscriptionLineItemRepo, sub.ID, *inv.PeriodStart)
+		if err != nil {
+			return err
+		}
 	}
 	subscriptionForInvoicePeriod.LineItems = items
 	return NewMeterUsageService(s.ServiceParams).SaveUsageCheckpointsForSubscription(ctx, &subscriptionForInvoicePeriod, *inv.PeriodEnd, lo.ToPtr(inv.ID))
@@ -1724,18 +1737,9 @@ func (s *invoiceService) IsInvoiceFinalizationDue(ctx context.Context, inv *invo
 	return clock.Now().After(dueAt), nil
 }
 
-// ListAllTenantDraftInvoices returns draft invoices across all tenants with LastComputedAt set.
-// Used by the scheduled finalization job to find invoices ready for finalization.
-func (s *invoiceService) ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error) {
-	filter := &types.InvoiceFilter{
-		QueryFilter: &types.QueryFilter{
-			Limit:  lo.ToPtr(batchSize),
-			Offset: lo.ToPtr(offset),
-			Status: lo.ToPtr(types.StatusPublished),
-		},
-		InvoiceStatus: []types.InvoiceStatus{types.InvoiceStatusDraft},
-	}
-	return s.InvoiceRepo.ListAllTenant(ctx, filter)
+// ListFinalizationCandidates pages computed drafts across all tenants by id for the finalization cron.
+func (s *invoiceService) ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*invoice.Invoice, error) {
+	return s.InvoiceRepo.ListFinalizationCandidates(ctx, afterID, limit)
 }
 
 // ListSubscriptionsDueForDailyDraftCompute skips invalid tenant environments.
@@ -2057,6 +2061,11 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 		return err
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	// Stripe finalizes with auto-advance, so syncing a paid invoice would make Stripe collect it again.
 	if inv.PaymentStatus == types.PaymentStatusSucceeded ||
 		inv.PaymentStatus == types.PaymentStatusOverpaid {
@@ -2186,6 +2195,11 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 		return err
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	if inv.AmountRemaining.IsZero() {
 		s.Logger.Debug(ctx, "invoice amount remaining is zero, skipping Razorpay sync",
 			"invoice_id", inv.ID)
@@ -2271,6 +2285,11 @@ func (s *invoiceService) SyncInvoiceToChargebeeIfEnabled(ctx context.Context, in
 		return err
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	// Check if Chargebee connection exists
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderChargebee)
 	if err != nil || conn == nil {
@@ -2325,6 +2344,11 @@ func (s *invoiceService) SyncInvoiceToChargebeeIfEnabled(ctx context.Context, in
 // SyncInvoiceToQuickBooksIfEnabled syncs the invoice to QuickBooks if QuickBooks connection is enabled.
 func (s *invoiceService) SyncInvoiceToQuickBooksIfEnabled(ctx context.Context, invoiceID string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
@@ -2391,6 +2415,11 @@ func (s *invoiceService) SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, in
 		return err
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderZohoBooks)
 	if err != nil || conn == nil {
 		if err != nil && !ierr.IsNotFound(err) {
@@ -2432,6 +2461,11 @@ func (s *invoiceService) SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, in
 // saved payment method (token), the invoice is also charged automatically; otherwise
 // the invoice is synced as a Moyasar invoice link so the customer can pay manually.
 func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderMoyasar)
 	if err != nil {
 		if ierr.IsNotFound(err) {
@@ -3488,6 +3522,12 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 		return nil
 	}
 
+	// An entity without a gateway connection finds none below, so only wallets pay.
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	// If Stripe outbound invoice sync is enabled for this tenant/environment,
 	// skip automatic payment and let Stripe/record-payment flows be the source of truth.
 	conn, connErr := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
@@ -3680,6 +3720,11 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePD
 // this invoice, or "" when none applies. The first connection with outbound
 // invoice sync enabled wins.
 func (s *invoiceService) billingProviderPDFURL(ctx context.Context, invoiceID string) (string, error) {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, invoiceID)
+	if err != nil {
+		return "", err
+	}
+
 	providers, err := NewBillingProviderResolver(s.ServiceParams).ListProviders(ctx)
 	if err != nil || len(providers) == 0 {
 		return "", err
@@ -5846,6 +5891,10 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 	}
 	if inv.SubscriptionID == nil {
 		return nil // No subscription to sync for non-subscription invoices
+	}
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
 	}
 
 	payload, err := json.Marshal(map[string]string{"invoice_id": invoiceID})

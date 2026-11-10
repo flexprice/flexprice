@@ -37,6 +37,9 @@ const (
 	CtxHostedInvoiceTokenID ContextKey = "ctx_hosted_invoice_token_id"
 	CtxHostedInvoiceID      ContextKey = "ctx_hosted_invoice_id"
 
+	// Integration scope key: the billing entity whose connections apply
+	CtxBillingEntityID ContextKey = "ctx_billing_entity_id"
+
 	// Tenant internal state
 	CtxTenantInternalStatus ContextKey = "ctx_tenant_internal_status"
 
@@ -100,6 +103,19 @@ func GetRoles(ctx context.Context) []string {
 func GetCustomerID(ctx context.Context) string {
 	if customerID, ok := ctx.Value(CtxCustomerID).(string); ok {
 		return customerID
+	}
+	return ""
+}
+
+// SetBillingEntityID sets the billing entity whose connections apply in the context
+func SetBillingEntityID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, CtxBillingEntityID, id)
+}
+
+// GetBillingEntityID returns the billing entity ID from the context
+func GetBillingEntityID(ctx context.Context) string {
+	if id, ok := ctx.Value(CtxBillingEntityID).(string); ok {
+		return id
 	}
 	return ""
 }

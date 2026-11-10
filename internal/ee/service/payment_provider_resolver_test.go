@@ -24,10 +24,13 @@ func (s *PaymentProviderResolverSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.ClearStores()
 	s.svc = NewPaymentProviderResolver(ServiceParams{
-		Logger:         s.GetLogger(),
-		Config:         s.GetConfig(),
-		DB:             s.GetDB(),
-		ConnectionRepo: s.GetStores().ConnectionRepo,
+		Logger:          s.GetLogger(),
+		Config:          s.GetConfig(),
+		DB:              s.GetDB(),
+		ConnectionRepo:  s.GetStores().ConnectionRepo,
+		TenantRepo:      s.GetStores().TenantRepo,
+		EnvironmentRepo: s.GetStores().EnvironmentRepo,
+		SettingsRepo:    s.GetStores().SettingsRepo,
 	})
 }
 

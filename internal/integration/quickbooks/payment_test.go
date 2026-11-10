@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -22,6 +23,10 @@ import (
 type fakeQBClient struct {
 	QuickBooksClient
 	payment *PaymentResponse
+}
+
+func (c *fakeQBClient) GetConnection(_ context.Context) (*connection.Connection, error) {
+	return &connection.Connection{ID: "conn_qb"}, nil
 }
 
 func (c *fakeQBClient) GetPayment(_ context.Context, _ string) (*PaymentResponse, error) {

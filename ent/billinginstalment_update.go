@@ -152,6 +152,26 @@ func (_u *BillingInstalmentUpdate) ClearInvoiceID() *BillingInstalmentUpdate {
 	return _u
 }
 
+// SetInvoicedAt sets the "invoiced_at" field.
+func (_u *BillingInstalmentUpdate) SetInvoicedAt(v time.Time) *BillingInstalmentUpdate {
+	_u.mutation.SetInvoicedAt(v)
+	return _u
+}
+
+// SetNillableInvoicedAt sets the "invoiced_at" field if the given value is not nil.
+func (_u *BillingInstalmentUpdate) SetNillableInvoicedAt(v *time.Time) *BillingInstalmentUpdate {
+	if v != nil {
+		_u.SetInvoicedAt(*v)
+	}
+	return _u
+}
+
+// ClearInvoicedAt clears the value of the "invoiced_at" field.
+func (_u *BillingInstalmentUpdate) ClearInvoicedAt() *BillingInstalmentUpdate {
+	_u.mutation.ClearInvoicedAt()
+	return _u
+}
+
 // Mutation returns the BillingInstalmentMutation object of the builder.
 func (_u *BillingInstalmentUpdate) Mutation() *BillingInstalmentMutation {
 	return _u.mutation
@@ -259,6 +279,12 @@ func (_u *BillingInstalmentUpdate) sqlSave(ctx context.Context) (_node int, err 
 	}
 	if _u.mutation.InvoiceIDCleared() {
 		_spec.ClearField(billinginstalment.FieldInvoiceID, field.TypeString)
+	}
+	if value, ok := _u.mutation.InvoicedAt(); ok {
+		_spec.SetField(billinginstalment.FieldInvoicedAt, field.TypeTime, value)
+	}
+	if _u.mutation.InvoicedAtCleared() {
+		_spec.ClearField(billinginstalment.FieldInvoicedAt, field.TypeTime)
 	}
 	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(billinginstalment.FieldMetadata, field.TypeOther)
@@ -405,6 +431,26 @@ func (_u *BillingInstalmentUpdateOne) ClearInvoiceID() *BillingInstalmentUpdateO
 	return _u
 }
 
+// SetInvoicedAt sets the "invoiced_at" field.
+func (_u *BillingInstalmentUpdateOne) SetInvoicedAt(v time.Time) *BillingInstalmentUpdateOne {
+	_u.mutation.SetInvoicedAt(v)
+	return _u
+}
+
+// SetNillableInvoicedAt sets the "invoiced_at" field if the given value is not nil.
+func (_u *BillingInstalmentUpdateOne) SetNillableInvoicedAt(v *time.Time) *BillingInstalmentUpdateOne {
+	if v != nil {
+		_u.SetInvoicedAt(*v)
+	}
+	return _u
+}
+
+// ClearInvoicedAt clears the value of the "invoiced_at" field.
+func (_u *BillingInstalmentUpdateOne) ClearInvoicedAt() *BillingInstalmentUpdateOne {
+	_u.mutation.ClearInvoicedAt()
+	return _u
+}
+
 // Mutation returns the BillingInstalmentMutation object of the builder.
 func (_u *BillingInstalmentUpdateOne) Mutation() *BillingInstalmentMutation {
 	return _u.mutation
@@ -542,6 +588,12 @@ func (_u *BillingInstalmentUpdateOne) sqlSave(ctx context.Context) (_node *Billi
 	}
 	if _u.mutation.InvoiceIDCleared() {
 		_spec.ClearField(billinginstalment.FieldInvoiceID, field.TypeString)
+	}
+	if value, ok := _u.mutation.InvoicedAt(); ok {
+		_spec.SetField(billinginstalment.FieldInvoicedAt, field.TypeTime, value)
+	}
+	if _u.mutation.InvoicedAtCleared() {
+		_spec.ClearField(billinginstalment.FieldInvoicedAt, field.TypeTime)
 	}
 	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(billinginstalment.FieldMetadata, field.TypeOther)

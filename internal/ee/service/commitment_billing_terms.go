@@ -437,19 +437,21 @@ func (s *commitmentService) settle(
 
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
 
-	due := lo.Filter(cancelled, func(inst *billingterm.Instalment, _ int) bool { return !inst.BillOn.After(effectiveAt) })
-	if len(due) == 0 {
+	owed := lo.Filter(cancelled, func(inst *billingterm.Instalment, _ int) bool {
+		return owedAtTermination(inst, effectiveAt)
+	})
+	if len(owed) == 0 {
 		return nil, nil
 	}
 
-	first := lo.MinBy(due, func(a, b *billingterm.Instalment) bool { return a.ServicePeriodStart.Before(b.ServicePeriodStart) })
-	last := lo.MaxBy(due, func(a, b *billingterm.Instalment) bool { return a.ServicePeriodEnd.After(b.ServicePeriodEnd) })
+	first := lo.MinBy(owed, func(a, b *billingterm.Instalment) bool { return a.ServicePeriodStart.Before(b.ServicePeriodStart) })
+	last := lo.MaxBy(owed, func(a, b *billingterm.Instalment) bool { return a.ServicePeriodEnd.After(b.ServicePeriodEnd) })
 	settlement := billingterm.NewOwnerInstalment(ctx, c).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)).
 		WithKind(types.InstalmentKindSettlement).
 		WithDelivery(types.InstalmentDeliverySeparateInvoice).
 		WithBillOn(effectiveAt).
-		WithAmount(sumInstalments(due)).
+		WithAmount(sumInstalments(owed)).
 		WithInvoiceLabel(settlementLabel).
 		WithServicePeriod(types.Period{Start: first.ServicePeriodStart, End: last.ServicePeriodEnd}).
 		Build()
@@ -461,6 +463,19 @@ func (s *commitmentService) settle(
 
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, created)
 	return created[0], nil
+}
+
+// owedAtTermination reports whether a termination at terminatedAt still bills the instalment: its bill date is on or
+// before the termination.
+func owedAtTermination(inst *billingterm.Instalment, terminatedAt time.Time) bool {
+	return !inst.BillOn.After(terminatedAt)
+}
+
+// cancelledByTermination reports whether c, the instalment's commitment, was terminated before the instalment's bill
+// date, so the instalment is never billed.
+func cancelledByTermination(c *commitment.Commitment, inst *billingterm.Instalment) bool {
+	return c != nil && c.CommitmentStatus == types.CommitmentStatusTerminated && c.TerminatedAt != nil &&
+		!owedAtTermination(inst, *c.TerminatedAt)
 }
 
 // settleEnded bills the instalments still scheduled on a billing-terms commitment that ended before its subscription
@@ -564,9 +579,8 @@ func (s *commitmentService) billEnvironmentInstalments(ctx context.Context) erro
 }
 
 // billInstalment issues the instalment's one-off invoice under its commitment's lock; finalizing it claims the
-// instalment. It returns nil when the instalment was claimed or cancelled since it was listed, when its subscription
-// or commitment no longer exists, or when it is not a settlement and its subscription is not active (draft,
-// incomplete, trialing, paused), so it waits for a later run.
+// instalment. It returns nil for an instalment claimed or cancelled since it was listed, orphaned, or cancelled by a
+// termination, and for a non-settlement whose subscription is not active, which waits for a later run.
 func (s *commitmentService) billInstalment(ctx context.Context, listed *billingterm.Instalment) (*dto.InvoiceResponse, error) {
 	var inv *dto.InvoiceResponse
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
@@ -613,6 +627,17 @@ func (s *commitmentService) billInstalment(ctx context.Context, listed *billingt
 		}
 		if err != nil {
 			return err
+		}
+
+		if cancelledByTermination(c, instalment) {
+			s.Logger.Info(ctx, "commitment.instalment_skipped",
+				"operation", "commitment.instalment_skipped",
+				"reason", "commitment terminated before the instalment's bill date",
+				"instalment_id", instalment.ID,
+				"commitment_id", c.ID,
+				"terminated_at", lo.FromPtr(c.TerminatedAt),
+			)
+			return nil
 		}
 
 		billingPeriod := string(sub.BillingPeriod)

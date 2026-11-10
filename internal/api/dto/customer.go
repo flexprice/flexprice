@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 )
 
 // IntegrationEntityMapping represents a provider integration mapping
@@ -162,6 +163,15 @@ func EmptyCustomerResponse() *CustomerResponse {
 // ListCustomersResponse represents the response for listing customers
 // @Description Response object for listing customers with pagination
 type ListCustomersResponse = types.ListResponse[*CustomerResponse] // @name ListCustomersResponse
+
+// FindCustomerInBillingEntity returns the first listed customer the entity bills, or nil; an empty entity matches any customer.
+func FindCustomerInBillingEntity(list *ListCustomersResponse, entityID string) *CustomerResponse {
+	if list == nil {
+		return nil
+	}
+	match, _ := lo.Find(list.Items, func(c *CustomerResponse) bool { return c.InBillingEntity(entityID) })
+	return match
+}
 
 func (r *CreateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {

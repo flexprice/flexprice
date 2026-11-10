@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // InvoiceSyncService handles synchronisation of Flexprice invoices with Whop
@@ -278,10 +279,16 @@ func (s *InvoiceSyncService) resolveCustomer(
 }
 
 func (s *InvoiceSyncService) getExistingWhopMapping(ctx context.Context, invoiceID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityIDs:     []string{invoiceID},
 		EntityType:    types.IntegrationEntityTypeInvoice,
 		ProviderTypes: []string{string(types.SecretProviderWhop)},
+		ConnectionID:  conn.ID,
 	}
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
@@ -296,10 +303,16 @@ func (s *InvoiceSyncService) getExistingWhopMapping(ctx context.Context, invoice
 // resolvePaymentMethod looks up the customer→whop member mapping and fetches their first payment method.
 // Returns (paymentMethodID, nil) if found, ("", nil) if no mapping exists, or ("", err) on API failure.
 func (s *InvoiceSyncService) resolvePaymentMethod(ctx context.Context, customerID string) (string, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityIDs:     []string{customerID},
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{string(types.SecretProviderWhop)},
+		ConnectionID:  conn.ID,
 	}
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
@@ -331,6 +344,11 @@ func (s *InvoiceSyncService) resolvePaymentMethod(ctx context.Context, customerI
 // Called from the webhook handler when a payment.succeeded event is received.
 // Treats ErrAlreadyExists as success — concurrent webhook deliveries of the same event are safe.
 func (s *InvoiceSyncService) CreateCustomerMapping(ctx context.Context, customerID, memberID string) error {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         customerID,
@@ -342,6 +360,7 @@ func (s *InvoiceSyncService) CreateCustomerMapping(ctx context.Context, customer
 		Metadata: map[string]interface{}{
 			"synced_via": "whop_payment_succeeded_webhook",
 		},
+		ConnectionID: lo.ToPtr(conn.ID),
 	}
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
 		if ierr.IsAlreadyExists(err) {
@@ -355,6 +374,11 @@ func (s *InvoiceSyncService) CreateCustomerMapping(ctx context.Context, customer
 }
 
 func (s *InvoiceSyncService) createInvoiceMapping(ctx context.Context, flexpriceInvoiceID, whopInvoiceID string) error {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         flexpriceInvoiceID,
@@ -366,6 +390,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(ctx context.Context, flexprice
 		Metadata: map[string]interface{}{
 			"synced_via": "whop_invoice_sync",
 		},
+		ConnectionID: lo.ToPtr(conn.ID),
 	}
 	return s.entityIntegrationMappingRepo.Create(ctx, mapping)
 }

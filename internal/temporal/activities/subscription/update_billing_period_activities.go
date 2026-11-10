@@ -423,6 +423,7 @@ func (s *BillingActivities) CheckCancellationActivity(
 		sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 		sub.CancelledAt = cancelledAt
 		subscriptionService := service.NewSubscriptionService(s.serviceParams)
+		var cancelledGroupedChildren []*subscription.Subscription
 
 		err := s.serviceParams.DB.WithTx(ctx, func(ctx context.Context) error {
 			// Update subscription
@@ -469,6 +470,11 @@ func (s *BillingActivities) CheckCancellationActivity(
 			if err := subscriptionService.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
 				return err
 			}
+			children, err := subscriptionService.CascadeCancelToGroupedInvoicingSubscriptions(ctx, sub)
+			if err != nil {
+				return err
+			}
+			cancelledGroupedChildren = children
 
 			return nil
 		})
@@ -481,6 +487,10 @@ func (s *BillingActivities) CheckCancellationActivity(
 
 		subscriptionService.PublishCancellationEvents(ctx, sub)
 		service.NotifySubscriptionChanged(ctx, s.serviceParams, sub.ID)
+		for _, child := range cancelledGroupedChildren {
+			subscriptionService.PublishCancellationEvents(ctx, child)
+			service.NotifySubscriptionChanged(ctx, s.serviceParams, child.ID)
+		}
 
 		s.logger.Info(ctx, "subscription cancelled successfully",
 			"subscription_id", sub.ID,

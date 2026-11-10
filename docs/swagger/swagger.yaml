@@ -441,6 +441,9 @@ definitions:
         type: string
       invoice_label:
         type: string
+      invoiced_at:
+        description: InvoicedAt is when the invoice billing the instalment was finalized.
+        type: string
       kind:
         $ref: '#/definitions/types.InstalmentKind'
       metadata:
@@ -5366,7 +5369,7 @@ definitions:
       end_time:
         type: string
       expand:
-        description: 'allowed values: "price", "meter", "feature", "subscription_line_item","plan","addon"'
+        description: 'allowed values: "price", "meter", "feature", "subscription_line_item","plan","addon","source","instalments"'
         items:
           type: string
         type: array
@@ -5414,6 +5417,13 @@ definitions:
         items:
           $ref: '#/definitions/CustomAnalyticItem'
         type: array
+      instalments:
+        description: |-
+          Instalments lists, with expand "instalments", the instalments invoiced in the range for the v2 commitments covering
+          a queried meter; it is empty with property or source filters, or when no usage line runs in the range.
+        items:
+          $ref: '#/definitions/UsageAnalyticInstalment'
+        type: array
       items:
         items:
           $ref: '#/definitions/UsageAnalyticItem'
@@ -5422,6 +5432,10 @@ definitions:
         type: string
       total_cost:
         description: TotalCost is the final cost after discount (Subtotal - TotalDiscount)
+        type: string
+      total_cost_with_instalments:
+        description: TotalCostWithInstalments is TotalCost plus the amounts of Instalments,
+          set when expand includes "instalments".
         type: string
       total_discount:
         type: string
@@ -6872,6 +6886,10 @@ definitions:
         items:
           $ref: '#/definitions/PaymentAttemptResponse'
         type: array
+      connection_id:
+        description: connection_id is the connection that took this payment; null
+          when no gateway connection was used
+        type: string
       created_at:
         type: string
       created_by:
@@ -10771,6 +10789,30 @@ definitions:
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
+        type: string
+    type: object
+  UsageAnalyticInstalment:
+    properties:
+      amount:
+        type: string
+      commitment_id:
+        type: string
+      currency:
+        type: string
+      id:
+        type: string
+      invoice_id:
+        type: string
+      invoice_label:
+        type: string
+      invoiced_at:
+        description: when the invoice billing it was finalized
+        type: string
+      service_period_end:
+        type: string
+      service_period_start:
+        type: string
+      subscription_id:
         type: string
     type: object
   UsageAnalyticItem:
@@ -17016,6 +17058,8 @@ definitions:
   webhookDto.Payment:
     properties:
       amount:
+        type: string
+      connection_id:
         type: string
       currency:
         type: string

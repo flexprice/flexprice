@@ -200,7 +200,7 @@ func TestCommitmentPeriods_ProratesAgainstTheFullBillingPeriod(t *testing.T) {
 	}
 }
 
-func TestCommitmentPeriods_SkipsBucketsBeforeStart(t *testing.T) {
+func TestCommitmentPeriods_HoldsTheBucketItsStartCuts(t *testing.T) {
 	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	c := &commitment.Commitment{
 		Type:        types.COMMITMENT_TYPE_QUANTITY,
@@ -220,12 +220,12 @@ func TestCommitmentPeriods_SkipsBucketsBeforeStart(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Len(t, periods, 1)
-	require.Equal(t, int64(11), periods[0].ActiveBuckets) // 13:00 to 23:00; the 12:00 bucket starts before the term
+	require.Equal(t, int64(12), periods[0].ActiveBuckets) // 12:00 to 23:00; the 12:00 bucket ends inside the term
 }
 
 func TestCommitmentPeriods_BucketStraddlingAPeriodBoundaryCountsOnce(t *testing.T) {
 	// Weekly (Monday) buckets on a monthly subscription: the bucket starting Mon 26 Jan 2026
-	// runs into February. It belongs to January; February's period must not count it again.
+	// runs into February. It belongs to February, where it ends; January's period must not count it too.
 	jan := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	c := &commitment.Commitment{
 		Type:        types.COMMITMENT_TYPE_QUANTITY,
@@ -239,13 +239,13 @@ func TestCommitmentPeriods_BucketStraddlingAPeriodBoundaryCountsOnce(t *testing.
 	periods, err := commitmentPeriods(c, monthlySub(jan), mulFn(decimal.NewFromInt(1)), types.WindowSizeWeek, types.Period{Start: c.StartDate, End: *c.EndDate})
 	require.NoError(t, err)
 	require.Len(t, periods, 2)
-	require.Equal(t, int64(4), periods[0].ActiveBuckets) // Mondays 5, 12, 19, 26 Jan; 29 Dec starts before the term
-	require.Equal(t, int64(4), periods[1].ActiveBuckets) // Mondays 2, 9, 16, 23 Feb; 26 Jan already counted in January
+	require.Equal(t, int64(4), periods[0].ActiveBuckets) // Mondays 29 Dec, 5, 12, 19 Jan; 29 Dec ends inside the term
+	require.Equal(t, int64(4), periods[1].ActiveBuckets) // Mondays 26 Jan, 2, 9, 16 Feb; 23 Feb ends after the term
 	require.True(t, commitmentValue(periods).Equal(decimal.NewFromInt(8)))
 }
 
 func TestCommitmentPeriods_CountsPartialEdgeBuckets(t *testing.T) {
-	// A term starting mid-minute skips the straddling bucket; one ending mid-minute keeps its last.
+	// A term holds the buckets ending within it: the minute its start cuts, not the minute its end cuts.
 	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	c := &commitment.Commitment{
 		Type:        types.COMMITMENT_TYPE_QUANTITY,
@@ -259,7 +259,7 @@ func TestCommitmentPeriods_CountsPartialEdgeBuckets(t *testing.T) {
 	periods, err := commitmentPeriods(c, monthlySub(jan), mulFn(decimal.NewFromInt(1)), types.WindowSizeMinute, types.Period{Start: c.StartDate, End: *c.EndDate})
 	require.NoError(t, err)
 	require.Len(t, periods, 1)
-	// 10:01 through 12:00 inclusive: the 10:00 bucket starts before the term, 12:00 starts before its end.
+	// 10:00 through 11:59 inclusive: the 10:00 bucket ends inside the term, 12:00 ends after it.
 	require.Equal(t, int64(120), periods[0].ActiveBuckets)
 }
 
@@ -345,6 +345,142 @@ func TestClipCommitmentPeriod_PartialFloorsSumToTheRoundedWhole(t *testing.T) {
 			}
 
 			require.True(t, sum.Equal(types.RoundToCurrencyPrecision(periods[0].Amount, "usd")), "sum %s", sum)
+		})
+	}
+}
+
+// A prorated capacity multiplies before it divides, so an exact share stays exact and an inexact one keeps the
+// division's full precision; the term's value carries no noise either.
+func TestCommitmentPeriods_ProratedCapacityHasNoNoise(t *testing.T) {
+	day := func(month time.Month, d int) time.Time { return time.Date(2027, month, d, 0, 0, 0, 0, time.UTC) }
+	tests := []struct {
+		name         string
+		value        string
+		rate         string // values one unit of capacity
+		start        time.Time
+		end          time.Time
+		wantCapacity string // of the first period
+		wantValue    string // of the whole term
+	}{
+		{
+			name:  "150 from 17 Apr holds 14 of April's 30 days",
+			value: "150", rate: "1", start: day(time.April, 17), end: day(time.August, 1),
+			wantCapacity: "70", wantValue: "520",
+		},
+		{
+			name:  "150 units at 0.048 from 17 Apr",
+			value: "150", rate: "0.048", start: day(time.April, 17), end: day(time.August, 1),
+			wantCapacity: "70", wantValue: "24.96",
+		},
+		{
+			name:  "100 from 6 Aug holds 26 of August's 31 days",
+			value: "100", rate: "1", start: day(time.August, 6), end: day(time.September, 1),
+			wantCapacity: "83.8709677419354839", wantValue: "83.8709677419354839",
+		},
+		{
+			name:  "a third of 100",
+			value: "100", rate: "1", start: day(time.April, 21), end: day(time.May, 1),
+			wantCapacity: "33.3333333333333333", wantValue: "33.3333333333333333",
+		},
+		{
+			name:  "two thirds of 100",
+			value: "100", rate: "1", start: day(time.April, 11), end: day(time.May, 1),
+			wantCapacity: "66.6666666666666667", wantValue: "66.6666666666666667",
+		},
+		{
+			name:  "a whole period keeps the value",
+			value: "150", rate: "1", start: day(time.April, 1), end: day(time.June, 1),
+			wantCapacity: "150", wantValue: "300",
+		},
+		{
+			name:  "a tiny capacity at a high rate keeps its prorated value",
+			value: "0.00000001", rate: "100000000", start: day(time.April, 17), end: day(time.May, 1),
+			wantCapacity: "0.0000000046666667", wantValue: "0.46666667",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &commitment.Commitment{
+				Type:        types.COMMITMENT_TYPE_QUANTITY,
+				Value:       decimal.RequireFromString(tc.value),
+				Currency:    "usd",
+				Measurement: types.CommitmentMeasurementBillingPeriod,
+				Timezone:    "UTC",
+				StartDate:   tc.start,
+				EndDate:     lo.ToPtr(tc.end),
+			}
+			sub := monthlySub(day(time.January, 1))
+			amountOf := mulFn(decimal.RequireFromString(tc.rate))
+
+			periods, err := commitmentPeriods(c, sub, amountOf, "", c.CollectionPeriod())
+			require.NoError(t, err)
+			require.Equal(t, tc.wantCapacity, periods[0].Capacity.String())
+
+			value, err := termValue(c, sub, amountOf, "")
+			require.NoError(t, err)
+			require.Equal(t, tc.wantValue, value.String())
+		})
+	}
+}
+
+// The parts of a period cut by invoice windows are steps between its cumulative capacities, so they add up to it.
+func TestClipCommitmentPeriod_PartialCapacitiesSumToTheWhole(t *testing.T) {
+	apr := time.Date(2027, 4, 1, 0, 0, 0, 0, time.UTC)
+	day := func(d int) time.Time { return apr.AddDate(0, 0, d-1) }
+	tests := []struct {
+		name        string
+		value       string
+		bucket      types.WindowSize // measures by window when set
+		bounds      []time.Time      // invoice edges inside April
+		want        []string
+		wantBuckets []int64
+	}{
+		{
+			name:  "150 split after 14 days",
+			value: "150", bounds: []time.Time{day(15)},
+			want: []string{"70", "80"}, wantBuckets: []int64{0, 0},
+		},
+		{
+			name:  "thirds of 100",
+			value: "100", bounds: []time.Time{day(11), day(21)},
+			want: []string{"33.3333333333333333", "33.3333333333333334", "33.3333333333333333"}, wantBuckets: []int64{0, 0, 0},
+		},
+		{
+			name:  "thirds of 2 a day",
+			value: "2", bucket: types.WindowSizeDay, bounds: []time.Time{day(11), day(21)},
+			want: []string{"20", "20", "20"}, wantBuckets: []int64{10, 10, 10},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			end := apr.AddDate(0, 1, 0)
+			c := &commitment.Commitment{
+				Type:        types.COMMITMENT_TYPE_QUANTITY,
+				Value:       decimal.RequireFromString(tc.value),
+				Currency:    "usd",
+				Measurement: types.CommitmentMeasurementBillingPeriod,
+				Timezone:    "UTC",
+				StartDate:   apr,
+				EndDate:     lo.ToPtr(end),
+			}
+			if tc.bucket != "" {
+				c.Measurement = types.CommitmentMeasurementWindow
+			}
+
+			periods, err := commitmentPeriods(c, monthlySub(apr), identityAmount, tc.bucket, c.CollectionPeriod())
+			require.NoError(t, err)
+			require.Len(t, periods, 1)
+
+			edges := append(append([]time.Time{apr}, tc.bounds...), end)
+			sum := decimal.Zero
+			for i, want := range tc.want {
+				part := clipCommitmentPeriod(c, periods[0], types.Period{Start: edges[i], End: edges[i+1]}, identityAmount, tc.bucket, apr)
+				require.Equal(t, want, part.Capacity.String(), "part %d capacity", i)
+				require.Equal(t, tc.wantBuckets[i], part.ActiveBuckets, "part %d buckets", i)
+				sum = sum.Add(part.Capacity)
+			}
+
+			require.True(t, sum.Equal(periods[0].Capacity), "parts add up to %s, want %s", sum, periods[0].Capacity)
 		})
 	}
 }

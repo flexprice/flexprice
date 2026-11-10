@@ -5,7 +5,9 @@ import (
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
@@ -14,16 +16,19 @@ import (
 // DealSyncActivities contains all HubSpot deal sync activities
 type DealSyncActivities struct {
 	integrationFactory *integration.Factory
+	entityScope        interfaces.BillingEntityScope
 	logger             *logger.Logger
 }
 
 // NewDealSyncActivities creates a new instance of DealSyncActivities
 func NewDealSyncActivities(
 	integrationFactory *integration.Factory,
+	entityScope interfaces.BillingEntityScope,
 	logger *logger.Logger,
 ) *DealSyncActivities {
 	return &DealSyncActivities{
 		integrationFactory: integrationFactory,
+		entityScope:        entityScope,
 		logger:             logger,
 	}
 }
@@ -43,6 +48,11 @@ func (a *DealSyncActivities) CreateLineItems(
 	// Set context for operations
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, "", input.SubscriptionID)
+	if err != nil {
+		return err
+	}
 
 	// Get HubSpot integration with proper context
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
@@ -93,6 +103,11 @@ func (a *DealSyncActivities) UpdateDealAmount(
 	// Set context for operations
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, "", input.SubscriptionID)
+	if err != nil {
+		return err
+	}
 
 	// Get HubSpot integration with proper context
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)

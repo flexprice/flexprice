@@ -125,9 +125,10 @@ func clipCommitmentPeriod(
 	}
 
 	out.Clipped = true
-	out.ActiveBuckets, out.Capacity = periodCapacity(c, p, types.Period{Start: out.Start, End: out.End}, bucket, anchor)
-	_, before := periodCapacity(c, p, types.Period{Start: p.Start, End: out.Start}, bucket, anchor)
-	_, through := periodCapacity(c, p, types.Period{Start: p.Start, End: out.End}, bucket, anchor)
+	bucketsBefore, before := periodCapacity(c, p, types.Period{Start: p.Start, End: out.Start}, bucket, anchor)
+	bucketsThrough, through := periodCapacity(c, p, types.Period{Start: p.Start, End: out.End}, bucket, anchor)
+	// Buckets and capacity are steps between cumulative points of p, so the parts of a period add up to it.
+	out.ActiveBuckets, out.Capacity = bucketsThrough-bucketsBefore, through.Sub(before)
 	out.Amount = accruedAmount(amountOf, before, through, c.Currency)
 	return out
 }
@@ -157,26 +158,25 @@ func periodCapacity(
 	anchor time.Time,
 ) (int64, decimal.Decimal) {
 	if c.Measurement != types.CommitmentMeasurementWindow {
-		fraction := decimal.NewFromInt(int64(span.End.Sub(span.Start))).
-			Div(decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart))))
-		return 0, c.Value.Mul(fraction)
+		// Multiplying first keeps an exact share exact: 150 × 14/30 is 70, not 70.000000000000005.
+		elapsed := decimal.NewFromInt(int64(span.End.Sub(span.Start)))
+		full := decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart)))
+		return 0, c.Value.Mul(elapsed).Div(full)
 	}
 
-	// A bucket starting before the span belongs to the span that already counted it.
-	first := truncateToBucketStart(span.Start, bucket, &anchor)
-	if first.Before(span.Start) {
-		first = nextBucketStart(first, bucket, &anchor)
-	}
+	// A bucket belongs to the span holding its end: the bucket span's start cuts counts, the one its end cuts does not.
+	first := truncateToBucketStart(span.Start.UTC(), bucket, &anchor)
+	cutByEnd := truncateToBucketStart(span.End.UTC(), bucket, &anchor)
 
 	var buckets int64
 	if dur, fixed := bucketDuration(bucket); fixed && len(c.ActiveWindows) == 0 {
 		// Count clock-aligned buckets arithmetically; walking a long term minute by minute is too slow.
-		if first.Before(span.End) {
-			buckets = int64(span.End.Sub(first)-1)/int64(dur) + 1
+		if first.Before(cutByEnd) {
+			buckets = int64(cutByEnd.Sub(first) / dur)
 		}
 	} else {
 		loc := c.Location()
-		for b := first; b.Before(span.End); b = nextBucketStart(b, bucket, &anchor) {
+		for b := first; b.Before(cutByEnd); b = nextBucketStart(b, bucket, &anchor) {
 			if c.ActiveWindows.Contains(b, loc) {
 				buckets++
 			}

@@ -52,7 +52,12 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 
 	billingEntityService := NewBillingEntityService(s.ServiceParams)
 	if err := billingEntityService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
-		billingEntityID, err := billingEntityService.ResolveBillingEntityID(txCtx, mode, req.BillingEntityID)
+		requested := req.BillingEntityID
+		// Inbound provider events carry their connection's entity in ctx.
+		if requested == nil && mode == types.BillingEntityModeEnabled && types.GetBillingEntityID(txCtx) != "" {
+			requested = lo.ToPtr(types.GetBillingEntityID(txCtx))
+		}
+		billingEntityID, err := billingEntityService.ResolveBillingEntityID(txCtx, mode, requested)
 		if err != nil {
 			return err
 		}
@@ -320,8 +325,16 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventCustomerUpdated, cust.ID)
-	s.syncCustomerUpdateToZoho(ctx, cust)
-	s.syncCustomerUpdateToStripe(ctx, &before, cust)
+
+	syncCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, cust.ID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to resolve billing entity, customer update not pushed to integrations",
+			"error", err,
+			"customer_id", cust.ID)
+		return &dto.CustomerResponse{Customer: cust}, nil
+	}
+	s.syncCustomerUpdateToZoho(syncCtx, cust)
+	s.syncCustomerUpdateToStripe(syncCtx, &before, cust)
 
 	return &dto.CustomerResponse{Customer: cust}, nil
 }
