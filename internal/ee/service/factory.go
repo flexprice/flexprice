@@ -62,6 +62,7 @@ import (
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
+	"github.com/flexprice/flexprice/internal/email"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -86,6 +87,7 @@ type ServiceParams struct {
 	Config        *config.Configuration
 	DB            postgres.IClient
 	PDFGenerator  pdf.Generator
+	EmailProvider email.Provider
 	TracingSvc    *tracing.Service
 	InMemoryCache cache.InMemoryCache
 	RedisCache    cache.RedisCache
@@ -207,6 +209,7 @@ func NewServiceParams(
 	config *config.Configuration,
 	db postgres.IClient,
 	pdfGenerator pdf.Generator,
+	emailProvider email.Provider,
 	tracingSvc *tracing.Service,
 	inMemoryCache cache.InMemoryCache,
 	redisCache cache.RedisCache,
@@ -299,6 +302,7 @@ func NewServiceParams(
 		Config:                       config,
 		DB:                           db,
 		PDFGenerator:                 pdfGenerator,
+		EmailProvider:                emailProvider,
 		TracingSvc:                   tracingSvc,
 		InMemoryCache:                inMemoryCache,
 		RedisCache:                   redisCache,

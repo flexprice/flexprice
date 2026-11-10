@@ -16,6 +16,14 @@ type TenantBillingDetails struct {
 	Address   TenantAddress `json:"address,omitempty"`
 }
 
+// ReplyToEmail is where customer replies go: the help email, else the billing email.
+func (d TenantBillingDetails) ReplyToEmail() string {
+	if d.HelpEmail != "" {
+		return d.HelpEmail
+	}
+	return d.Email
+}
+
 // TenantAddress represents a physical address in the tenant billing details
 type TenantAddress struct {
 	Line1      string `json:"address_line1,omitempty"`
