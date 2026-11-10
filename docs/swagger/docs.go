@@ -13942,7 +13942,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when listing or managing scheduled tasks in an admin UI. Returns a list; supports filtering by status, type, and pagination.",
+                "description": "Use when listing or managing scheduled tasks in an admin UI. Returns all exports, including those without a connection; supports filtering and pagination.",
                 "consumes": [
                     "application/json"
                 ],
@@ -14019,7 +14019,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.",
+                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression.\ninterval is hourly, daily, weekly, monthly or manual; clients should tolerate new values. schedule ({hour, minute, day_of_week, day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual.\nEach run exports the previous period ending 15 minutes before the scheduled start in the schedule timezone, so a run started between 00:00 and 00:14 local time covers the period before that.",
                 "consumes": [
                     "application/json"
                 ],
@@ -14125,7 +14125,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when pausing or resuming a scheduled task. Only the enabled field can be changed.",
+                "description": "Use when pausing, resuming, renaming or rescheduling a scheduled task. Send at least one of enabled, name or schedule.",
                 "consumes": [
                     "application/json"
                 ],
@@ -14146,7 +14146,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Update request (enabled: true/false to pause/resume)",
+                        "description": "Update request (enabled, name, schedule)",
                         "name": "scheduled_task",
                         "in": "body",
                         "required": true,
@@ -14241,7 +14241,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.",
+                "description": "Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.\nWithout a time range, scheduled and manual exports run for the previous period and the response start and end times are zero.",
                 "consumes": [
                     "application/json"
                 ],
@@ -23781,10 +23781,8 @@ const docTemplate = `{
         "CreateScheduledTaskRequest": {
             "type": "object",
             "required": [
-                "connection_id",
                 "entity_type",
-                "interval",
-                "job_config"
+                "interval"
             ],
             "properties": {
                 "connection_id": {
@@ -23800,7 +23798,10 @@ const docTemplate = `{
                     "description": "Note: \"custom\" is excluded from API (internal testing only)",
                     "enum": [
                         "hourly",
-                        "daily"
+                        "daily",
+                        "weekly",
+                        "monthly",
+                        "manual"
                     ],
                     "allOf": [
                         {
@@ -23810,6 +23811,12 @@ const docTemplate = `{
                 },
                 "job_config": {
                     "$ref": "#/definitions/types.S3JobConfig"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "schedule": {
+                    "$ref": "#/definitions/types.ExportSchedule"
                 }
             }
         },
@@ -30155,7 +30162,10 @@ const docTemplate = `{
                     "description": "Note: \"custom\" is excluded from API docs",
                     "enum": [
                         "hourly",
-                        "daily"
+                        "daily",
+                        "weekly",
+                        "monthly",
+                        "manual"
                     ],
                     "allOf": [
                         {
@@ -30165,6 +30175,15 @@ const docTemplate = `{
                 },
                 "job_config": {
                     "$ref": "#/definitions/types.S3JobConfig"
+                },
+                "managed_copy": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "schedule": {
+                    "$ref": "#/definitions/types.ExportSchedule"
                 },
                 "status": {
                     "type": "string"
@@ -33743,12 +33762,15 @@ const docTemplate = `{
         },
         "UpdateScheduledTaskRequest": {
             "type": "object",
-            "required": [
-                "enabled"
-            ],
             "properties": {
                 "enabled": {
                     "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "schedule": {
+                    "$ref": "#/definitions/types.ExportSchedule"
                 }
             }
         },
@@ -38290,7 +38312,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "skip_line_items": {
-                    "description": "SkipLineItems if true, will not include line items in the response",
+                    "description": "SkipLineItems if true, will not include line items in the response.\nPages that include line items are limited to MaxInvoiceListLimitWithLineItems invoices.",
                     "type": "boolean"
                 },
                 "sort": {
@@ -39580,7 +39602,10 @@ const docTemplate = `{
                 "30MIN",
                 "custom",
                 "hourly",
-                "daily"
+                "daily",
+                "weekly",
+                "monthly",
+                "manual"
             ],
             "x-enum-comments": {
                 "ScheduledTaskIntervalCustom": "10 minutes for testing"
@@ -39590,7 +39615,10 @@ const docTemplate = `{
                 "ScheduledTaskIntervalEvery30Minutes",
                 "ScheduledTaskIntervalCustom",
                 "ScheduledTaskIntervalHourly",
-                "ScheduledTaskIntervalDaily"
+                "ScheduledTaskIntervalDaily",
+                "ScheduledTaskIntervalWeekly",
+                "ScheduledTaskIntervalMonthly",
+                "ScheduledTaskIntervalManual"
             ]
         },
         "types.SecretProvider": {
@@ -42414,6 +42442,26 @@ const docTemplate = `{
                 "EmailTypeInvoice",
                 "EmailTypeInvoicePaymentReminder"
             ]
+        },
+        "types.ExportSchedule": {
+            "type": "object",
+            "properties": {
+                "day_of_month": {
+                    "type": "integer"
+                },
+                "day_of_week": {
+                    "type": "integer"
+                },
+                "hour": {
+                    "type": "integer"
+                },
+                "minute": {
+                    "type": "integer"
+                },
+                "timezone": {
+                    "type": "string"
+                }
+            }
         },
         "types.InstrumentDetails": {
             "type": "object",

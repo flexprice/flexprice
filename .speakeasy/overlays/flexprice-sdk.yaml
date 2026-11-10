@@ -12,3 +12,6 @@ actions:
   - target: '$.components.schemas["errors.ErrorResponse"].properties["error"]'
     update:
       x-speakeasy-name-override: "detail"
+  - target: '$.components.schemas["types.ScheduledTaskInterval"]'
+    update:
+      x-speakeasy-unknown-values: allow
