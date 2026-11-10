@@ -1,6 +1,6 @@
 # Exports: more sources, more destinations — backend design
 
-Status: **Proposed** (design only; no code in this PR)
+Status: **Phase 1 built; later phases proposed**
 Date: 2026-11-05
 Related: FLE-2285 (P4), parent FLE-1579 Financial Reporting, FLE-1612 (P5 export scope)
 Scope: backend only. Portal work is paused until the API is live on staging.
@@ -11,21 +11,23 @@ An "export" in Flexprice is already a row in `scheduled_tasks` (the portal lists
 
 This change evolves that model, not a parallel one:
 
-- new **sources**: predefined reports (`report`) and saved custom views (`analytics_view`), alongside the existing entity types;
-- a **one-off export from the customer tab**, scoped to one customer and listed later in the Exports tab;
-- new **destinations**: a console copy of every run, plus email, alongside the existing S3 connection;
+- new **sources** (later phase): predefined reports (`report`) and saved custom views (`analytics_view`), alongside the existing entity types;
+- a **one-off export from the customer tab** (later phase), scoped to one customer and listed later in the Exports tab;
+- new **destinations** (email is a later phase; the console copy is built only for exports without a connection): a console copy of every run, plus email, alongside the existing S3 connection;
 - weekly, monthly and on-demand-only exports at a chosen time and timezone.
 
 Existing exports keep working unchanged.
 
+Built in Phase 1: weekly, monthly and manual intervals with schedule and timezone, optional connection, and a Flexprice-bucket copy for exports without a connection. Reports, saved views, email, the customer-tab one-off and a console copy of every run are later phases.
+
 ## Goals
 
-1. Export an existing entity type, a predefined report (`report`) or a saved view (`analytics_view`) to CSV, on demand or on a schedule.
-7. One-off, customer-scoped export started from the customer tab; it shows up as a run in the Exports tab.
-2. Every run of a new-style export keeps a **managed copy** that the console downloads.
-3. Optional destinations: **S3 connection** (existing) and **email** (new). Email is a notification only: a deeplink to the run in the console, never a file, data or download link.
+1. Export an existing entity type (built), a predefined report (`report`) or a saved view (`analytics_view`) (later phases) to CSV, on demand or on a schedule.
+7. (Later phase.) One-off, customer-scoped export started from the customer tab; it shows up as a run in the Exports tab.
+2. (Phase 1: exports without a connection only; every run of every export is a later phase.) Every run of a new-style export keeps a **managed copy** that the console downloads.
+3. (Later phase.) Optional destinations: **S3 connection** (existing) and **email** (new). Email is a notification only: a deeplink to the run in the console, never a file, data or download link.
 4. Weekly, monthly and manual (on-demand only) exports with time and timezone.
-5. Per-destination delivery results on every run; a failed destination never hides the file.
+5. (Later phase.) Per-destination delivery results on every run; a failed destination never hides the file.
 6. Zero behaviour change for existing exports and for clients that do not opt in.
 
 ## Non-goals (v1)
@@ -107,7 +109,7 @@ Destinations are derived: console copy = `managed_copy`; S3 = `connection_id != 
 
 **New-style** means the create request included `destinations`.
 
-- Legacy flat request (`connection_id` + `job_config`, no `destinations`): exactly today's behaviour, `managed_copy=false`. `weekly`, `monthly`, `manual`, `analytics_view` and email are rejected on this path.
+- Legacy flat request (`connection_id` + `job_config`, no `destinations`): exactly today's behaviour, `managed_copy=false`. `weekly`, `monthly`, `manual`, `analytics_view` and email are rejected on this path. Superseded in Phase 1: weekly, monthly and manual are accepted with or without a connection; `analytics_view` and email remain later phases.
 - New-style `destinations`: at most one `s3` (`connection_id` + `job_config`) and one `email` (`recipients`); console copy implicit; S3 optional.
   - `s3` goes through the same connection checks as today's create, extracted into one shared helper. A **Flexprice-managed connection is rejected** as an `s3` destination (the managed copy already covers it and would duplicate the object in the same bucket).
 - `analytics_view`: new-style only; requires `source_config.view_id` (exists, published, in tenant and environment); the view must resolve with no supplied variables (`ResolveVariables(def, nil)` succeeds, else rejected); `period.range` is allowed only for `manual` exports, as an absolute `YYYY-MM-DD..YYYY-MM-DD` range or empty (the view's own range); scheduled exports always use the previous UTC period of their frequency (section 2); `interval` in `daily|weekly|monthly|manual`; guarded by `requireReports()` and an explicit service-layer check of `EntityAnalytics` read on create, update and run.
@@ -215,16 +217,19 @@ Reuse `/tasks/scheduled`; extend its DTOs.
 
 ## Testing
 
-- **Regression first**: existing scheduled-task create, validate, schedule and export tests stay green and unchanged; a legacy-shape create yields `managed_copy=false` and the old workflow path; legacy list default hides new-style rows.
-- Table-driven unit tests: new-shape validation matrix, schedule to cron and timezone including a DST zone and an IST monthly case, window math (daily, weekly, monthly, catch-up from a scheduled start in the past), the 00:15 rule, preset to absolute range, recipient validation, sanitized key and deeplink escaping, download key-prefix check (a `metadata.storage` outside the caller's tenant and environment is rejected).
-- Workflow tests (Temporal test env): managed-copy happy path with S3 and email; email fails while S3 succeeds and vice versa; retry does not double-write or overwrite another run's object; `manual` export via `/run`; disabled export refused; deleted export refused; `RecordDeliveries` writes once; in-flight legacy replay with `GetVersion`.
-- Repository tests against a real DB for the new columns, optional `connection_id`, clearing fields, `DetachConnection`. No mocked Ent client. In-memory test stores get the new fields.
-- Windows complete at fire time: IST and America/Los_Angeles schedules for `analytics_view` assert the UTC period has closed; existing-source windows match local boundaries including a DST change.
-- Temporal test env: catch-up after an outage with the chosen overlap and catch-up settings.
-- Download denied without `EntityAnalytics` read for `analytics_view` runs.
-- Generated Go SDK decodes `GET /tasks/scheduled/:id` for a new-style row.
-- Captured logs never contain a recipient address; activities that call `GetByEmail` refuse to run with an empty tenant id.
-- Staging check: create an export from a saved view with email and an S3 test bucket; a schedule a few minutes ahead; the email arrives with only a deeplink and it is well formed for the configured base URL; console download works; break email and confirm the managed copy still downloads; confirm an untouched legacy export still runs as before.
+**Phase 1 checks (built):**
+- Existing scheduled-task create, validate, schedule and export tests stay green; a request with `connection_id` and `job_config` behaves as before.
+- Table-driven unit tests: request validation (optional connection, storage fields rejected without one, schedule required for weekly and monthly, forbidden for manual), schedule to cron and timezone including a DST zone and an IST monthly case, window math from a scheduled start (daily, weekly, monthly, catch-up, 15-minute offset), key prefix and download bucket and tenant/env prefix checks.
+- Repository tests against a real DB for the new columns and optional `connection_id`; no mocked Ent client.
+- Update validates `name` and `schedule`; archived and deleted rows are rejected; `/run` without a window returns zero times.
+- Staging check (after workers run the new code): create a daily export without a connection, trigger `/run`, download the CSV from the console, and confirm an untouched connection export still runs.
+
+**Later-phase checks (not built):**
+- Legacy list `style` default hiding new rows, and generated-SDK decode of new-style rows: dropped; Phase 1 lists all exports.
+- Workflow tests for managed copy with S3 and email, partial delivery failure, `RecordDeliveries`, `GetVersion` replay.
+- Windows complete at fire time for `analytics_view` in IST and America/Los_Angeles; download denied without `EntityAnalytics` read.
+- Captured logs never contain a recipient address; `GetByEmail` activities refuse an empty tenant id.
+- Staging check with a saved view, email and an S3 test bucket: email carries only a well-formed deeplink; broken email leaves the copy downloadable.
 
 ## Rollout
 
@@ -257,21 +262,21 @@ Custom SQL is parked. If revived: first an operator-authored `template` source (
 
 ## Calls made by me (please check)
 
-1. Evolve `scheduled_tasks`; new-style marked by `managed_copy=true`; legacy rows frozen except `enabled`.
-2. Destinations are derived from columns; at most one S3 and one email; a Flexprice-managed connection cannot be an S3 destination.
-3. Managed copy is plain CSV; S3 compression applies at upload; new-style S3 keys include the task id.
-4. A new-style run is `COMPLETED` once the managed copy exists; delivery results in masked metadata; no new status or task type; no definition snapshot.
+1. Evolve `scheduled_tasks`. Phase 1: `managed_copy=true` means Flexprice bucket only, not a "new-style" marker; connection exports are unchanged and `PUT` accepts `enabled`, `name`, `schedule`.
+2. (Later phase; no `destinations` object in Phase 1.) Destinations are derived from columns; at most one S3 and one email; a Flexprice-managed connection cannot be an S3 destination.
+3. (Later phase.) Managed copy is plain CSV; S3 compression applies at upload; new-style S3 keys include the task id.
+4. (Later phase.) A new-style run is `COMPLETED` once the managed copy exists; delivery results in masked metadata; no new status or task type; no definition snapshot.
 5. Extend `ExecuteExportWorkflow` behind `workflow.GetVersion` and a creation flag; no separate redeliver workflow in v1.
 6. Email carries only a console deeplink, plain text, at-least-once, per-tenant hourly cap, no email on hourly exports; recipients must be tenant users and are stored as emails.
 7. Existing-source windows use the schedule's timezone; scheduled report windows are the previous UTC period (the UI says UTC); both computed 15 minutes before the fire instant.
 8. Report exports invent no presets: scheduled ones use the previous UTC period of their frequency, `manual` ones an absolute range or the view's own range.
 9. `/run` with an empty body means the period the schedule would export now; only a user-supplied window is passed as a custom window; disabled and deleted exports are refused.
-10. `GET /tasks/scheduled` hides new-style rows unless `style=managed|all`; default `legacy`.
+10. ~~`style` filter~~ Removed: `GET /tasks/scheduled` returns all exports, no flag.
 11. Views are not version-pinned; a deleted view fails the run; views needing variables are rejected; runs record the view's `updated_at`.
 12. Reuse `EntityTask` plus an explicit analytics check on create, update, run and download; scheduled runs cannot re-check permissions.
-13. Connection deletion detaches the S3 destination of new-style exports instead of deleting them.
-14. Monthly day 1-28; at most one S3 and one email destination.
-15. All eight existing sources work in new-style via `PrepareData` (no streaming yet); usage and billing report row cap 500,000 (matches events).
+13. (Later phase.) Connection deletion detaches the S3 destination of new-style exports instead of deleting them.
+14. Monthly day 1-28 (built); at most one S3 and one email destination (later phase).
+15. (Later phase for the report cap.) Existing sources run through the existing export path; usage and billing report row cap 500,000 (matches events).
 16. Redeliver is deferred.
 17. Predefined reports are a separate `report` source (built-in reports have no saved-view row); they share the analytics windows and checks.
 18. A customer-tab one-off creates a visible, auto-named manual export (`origin=customer_tab`) plus one run; no separate ad-hoc run record.
