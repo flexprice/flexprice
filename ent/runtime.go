@@ -2662,8 +2662,8 @@ func init() {
 	scheduledtask.DefaultEnvironmentID = scheduledtaskDescEnvironmentID.Default.(string)
 	// scheduledtaskDescConnectionID is the schema descriptor for connection_id field.
 	scheduledtaskDescConnectionID := scheduledtaskFields[1].Descriptor()
-	// scheduledtask.ConnectionIDValidator is a validator for the "connection_id" field. It is called by the builders before save.
-	scheduledtask.ConnectionIDValidator = scheduledtaskDescConnectionID.Validators[0].(func(string) error)
+	// scheduledtask.DefaultConnectionID holds the default value on creation for the connection_id field.
+	scheduledtask.DefaultConnectionID = scheduledtaskDescConnectionID.Default.(string)
 	// scheduledtaskDescEntityType is the schema descriptor for entity_type field.
 	scheduledtaskDescEntityType := scheduledtaskFields[2].Descriptor()
 	// scheduledtask.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
@@ -2676,6 +2676,10 @@ func init() {
 	scheduledtaskDescEnabled := scheduledtaskFields[4].Descriptor()
 	// scheduledtask.DefaultEnabled holds the default value on creation for the enabled field.
 	scheduledtask.DefaultEnabled = scheduledtaskDescEnabled.Default.(bool)
+	// scheduledtaskDescManagedCopy is the schema descriptor for managed_copy field.
+	scheduledtaskDescManagedCopy := scheduledtaskFields[8].Descriptor()
+	// scheduledtask.DefaultManagedCopy holds the default value on creation for the managed_copy field.
+	scheduledtask.DefaultManagedCopy = scheduledtaskDescManagedCopy.Default.(bool)
 	secretMixin := schema.Secret{}.Mixin()
 	secretMixinFields0 := secretMixin[0].Fields()
 	_ = secretMixinFields0
