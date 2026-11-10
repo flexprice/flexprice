@@ -95,6 +95,21 @@ func NewTenantConfigResponse(tenantID string, cfg types.TenantConfig) *TenantCon
 	}
 }
 
+// UpdateSettingRequest is a setting's whole value. UpdatedAt is the updated_at last read, empty when nothing was stored.
+type UpdateSettingRequest struct {
+	Value     map[string]interface{} `json:"value"`
+	UpdatedAt string                 `json:"updated_at"`
+}
+
+func (r *UpdateSettingRequest) Validate() error {
+	if r == nil || len(r.Value) == 0 {
+		return ierr.NewError("value is required").
+			WithHint("Provide the setting's value").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // SettingResponse is one setting: its stored value merged over the default, and whether anything is stored.
 type SettingResponse struct {
 	Key       types.SettingKey       `json:"key"`

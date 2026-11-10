@@ -4,7 +4,6 @@ import (
 	"context"
 	stderrors "errors"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -15,10 +14,8 @@ import (
 	"go.temporal.io/api/serviceerror"
 )
 
-// RevenueRecognitionService turns revenue recognition on for an environment and rebuilds it from history.
+// RevenueRecognitionService rebuilds an environment's revenue recognition from history.
 type RevenueRecognitionService interface {
-	// UpdateConfig saves the environment's setting and, when asked while enabling, starts a backfill.
-	UpdateConfig(ctx context.Context, req admindto.UpdateRevenueRecognitionConfigRequest) (*admindto.RevenueRecognitionConfigResponse, error)
 	// StartBackfill starts the environment's backfill; one runs at a time, and only while revenue recognition is on.
 	StartBackfill(ctx context.Context, req admindto.StartRevenueRecognitionBackfillRequest) (*admindto.RevenueRecognitionBackfillRun, error)
 	// GetBackfill reports a backfill's state.
@@ -39,36 +36,6 @@ type revenueRecognitionService struct {
 
 func NewRevenueRecognitionService(params service.ServiceParams, settings service.SettingsService, client temporalclient.TemporalClient) RevenueRecognitionService {
 	return &revenueRecognitionService{ServiceParams: params, settings: settings, runs: &temporalBackfillRuns{temporalReplayRuns{client: client}}}
-}
-
-func (s *revenueRecognitionService) UpdateConfig(ctx context.Context, req admindto.UpdateRevenueRecognitionConfigRequest) (*admindto.RevenueRecognitionConfigResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-	ctx, err := environmentContext(ctx, s.ServiceParams, req.TenantID, req.EnvironmentID)
-	if err != nil {
-		return nil, err
-	}
-
-	setting, err := s.settings.UpdateSettingByKey(ctx, types.SettingKeyRevenueRecognitionConfig, &dto.UpdateSettingRequest{
-		Value: map[string]interface{}{"enabled": req.Enabled},
-	})
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := utils.ToStruct[types.RevenueRecognitionConfig](setting.Value)
-	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Failed to read the revenue recognition setting").Mark(ierr.ErrInternal)
-	}
-	s.Logger.Info(ctx, "updated revenue recognition config", "tenant_id", req.TenantID, "environment_id", req.EnvironmentID, "enabled", cfg.Enabled)
-
-	resp := &admindto.RevenueRecognitionConfigResponse{TenantID: req.TenantID, EnvironmentID: req.EnvironmentID, Enabled: cfg.Enabled}
-	if req.Backfill {
-		if resp.Backfill, err = s.startBackfill(ctx, req.TenantID, req.EnvironmentID); err != nil {
-			return nil, err
-		}
-	}
-	return resp, nil
 }
 
 func (s *revenueRecognitionService) StartBackfill(ctx context.Context, req admindto.StartRevenueRecognitionBackfillRequest) (*admindto.RevenueRecognitionBackfillRun, error) {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	v1 "github.com/flexprice/flexprice/internal/api/admin/v1"
@@ -578,6 +579,7 @@ type fakeSettingsService struct {
 	getTenantID      string
 	getEnvironmentID string
 	getKey           types.SettingKey
+	updateReq        admindto.UpdateSettingRequest
 }
 
 func (f *fakeSettingsService) UpdateTenantConfig(_ context.Context, req admindto.UpdateTenantConfigRequest) (*admindto.TenantConfigResponse, error) {
@@ -593,6 +595,11 @@ func (f *fakeSettingsService) ListTenantSettings(_ context.Context, tenantID, _ 
 
 func (f *fakeSettingsService) GetTenantSetting(_ context.Context, tenantID, environmentID string, key types.SettingKey) (*admindto.SettingResponse, error) {
 	f.getTenantID, f.getEnvironmentID, f.getKey = tenantID, environmentID, key
+	return &admindto.SettingResponse{Key: key}, nil
+}
+
+func (f *fakeSettingsService) UpdateTenantSetting(_ context.Context, tenantID, environmentID string, key types.SettingKey, req admindto.UpdateSettingRequest) (*admindto.SettingResponse, error) {
+	f.getTenantID, f.getEnvironmentID, f.getKey, f.updateReq = tenantID, environmentID, key, req
 	return &admindto.SettingResponse{Key: key}, nil
 }
 
@@ -800,6 +807,23 @@ func TestGetTenantSettingRoute(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/tenants/tenant_1/settings/invoice_config?environment_id=env_1", nil)
 	req.Header.Set(secretHeader, "test-secret")
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "tenant_1", fake.getTenantID)
+	assert.Equal(t, "env_1", fake.getEnvironmentID)
+	assert.Equal(t, types.SettingKeyInvoiceConfig, fake.getKey)
+}
+
+func TestUpdateTenantSettingRoute(t *testing.T) {
+	fake := &fakeSettingsService{}
+	server := newSettingsTestServer(fake)
+
+	req := httptest.NewRequest(http.MethodPut, "/v1/tenants/tenant_1/settings/invoice_config?environment_id=env_1",
+		strings.NewReader(`{"value": {"prefix": "ACME"}}`))
+	req.Header.Set(secretHeader, "test-secret")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, req)
 

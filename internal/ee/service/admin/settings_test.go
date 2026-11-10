@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	_ "github.com/flexprice/flexprice/internal/ee/auth/saml" // registers the saml_config validator
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -428,6 +429,92 @@ func TestGetTenantSetting(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.key, resp.Key)
 			assert.True(t, resp.IsDefault)
+		})
+	}
+}
+
+func TestUpdateTenantSetting(t *testing.T) {
+	changed := time.Date(2026, 10, 9, 8, 15, 0, 0, time.UTC)
+
+	t.Run("a never-stored setting is created with its whole nested value", func(t *testing.T) {
+		d := newSettingsTestDeps(t)
+		d.withEnvironment(t, settingsTenantID, revrecEnvironmentID)
+		svc := newTestSettingsService(d.params)
+		value := map[string]interface{}{"sections": []interface{}{map[string]interface{}{
+			"id": "usage", "enabled": true, "tabs": []interface{}{map[string]interface{}{"id": "graph", "type": "usage_graph", "enabled": true}},
+		}}}
+
+		resp, err := svc.UpdateTenantSetting(context.Background(), settingsTenantID, revrecEnvironmentID, types.SettingKeyCustomerPortalConfig,
+			admindto.UpdateSettingRequest{Value: value})
+
+		require.NoError(t, err)
+		assert.False(t, resp.IsDefault)
+		got, err := svc.GetTenantSetting(context.Background(), settingsTenantID, revrecEnvironmentID, types.SettingKeyCustomerPortalConfig)
+		require.NoError(t, err)
+		body, err := json.Marshal(got.Value["sections"])
+		require.NoError(t, err)
+		assert.JSONEq(t, `[{"id": "usage", "enabled": true, "tabs": [{"id": "graph", "type": "usage_graph", "enabled": true}]}]`, string(body))
+	})
+
+	t.Run("updated_at must match what is stored", func(t *testing.T) {
+		d := newSettingsTestDeps(t)
+		d.storeSetting(t, settingsTenantID, types.SettingKeyTenantConfig, map[string]interface{}{"max_users": 15}, changed)
+		svc := newTestSettingsService(d.params)
+
+		_, err := svc.UpdateTenantSetting(context.Background(), settingsTenantID, "", types.SettingKeyTenantConfig,
+			admindto.UpdateSettingRequest{Value: map[string]interface{}{"max_users": 20}})
+		assert.True(t, ierr.IsVersionConflict(err), "an empty updated_at means nothing was stored")
+
+		resp, err := svc.UpdateTenantSetting(context.Background(), settingsTenantID, "", types.SettingKeyTenantConfig,
+			admindto.UpdateSettingRequest{Value: map[string]interface{}{"max_users": 20}, UpdatedAt: "2026-10-09T08:15:00Z"})
+		require.NoError(t, err)
+		assert.EqualValues(t, 20, resp.Value["max_users"])
+	})
+
+	t.Run("an operator turns revenue recognition on", func(t *testing.T) {
+		d := newSettingsTestDeps(t)
+		d.withEnvironment(t, settingsTenantID, revrecEnvironmentID)
+
+		resp, err := newTestSettingsService(d.params).UpdateTenantSetting(context.Background(), settingsTenantID, revrecEnvironmentID,
+			types.SettingKeyRevenueRecognitionConfig, admindto.UpdateSettingRequest{Value: map[string]interface{}{"enabled": true}})
+
+		require.NoError(t, err)
+		assert.Equal(t, true, resp.Value["enabled"])
+	})
+
+	t.Run("an operator approves SAML, which tenants cannot", func(t *testing.T) {
+		d := newSettingsTestDeps(t)
+		d.withSAML()
+
+		resp, err := newTestSettingsService(d.params).UpdateTenantSetting(context.Background(), settingsTenantID, "",
+			types.SettingKeySAMLConfig, admindto.UpdateSettingRequest{Value: map[string]interface{}{"active": true}})
+
+		require.NoError(t, err)
+		assert.Equal(t, true, resp.Value["active"])
+	})
+
+	refused := []struct {
+		name    string
+		key     types.SettingKey
+		req     admindto.UpdateSettingRequest
+		wantErr func(error) bool
+	}{
+		{name: "billing_entity_config", key: types.SettingKeyBillingEntityConfig,
+			req: admindto.UpdateSettingRequest{Value: map[string]interface{}{"mode": "enabled"}}, wantErr: ierr.IsValidation},
+		{name: "an empty value", key: types.SettingKeyTenantConfig, wantErr: ierr.IsValidation},
+		{name: "an unknown key", key: "no_such_key",
+			req: admindto.UpdateSettingRequest{Value: map[string]interface{}{"x": 1}}, wantErr: ierr.IsValidation},
+	}
+	for _, tt := range refused {
+		t.Run("refuses "+tt.name, func(t *testing.T) {
+			d := newSettingsTestDeps(t)
+			d.withEnvironment(t, settingsTenantID, revrecEnvironmentID)
+
+			resp, err := newTestSettingsService(d.params).UpdateTenantSetting(context.Background(), settingsTenantID, revrecEnvironmentID, tt.key, tt.req)
+
+			require.Error(t, err)
+			assert.True(t, tt.wantErr(err))
+			assert.Nil(t, resp)
 		})
 	}
 }

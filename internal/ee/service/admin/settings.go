@@ -13,7 +13,7 @@ import (
 	"github.com/samber/lo"
 )
 
-// SettingsService reads and changes a tenant's settings for the admin portal. Only tenant_config can be changed.
+// SettingsService reads and changes a tenant's settings for the admin portal.
 type SettingsService interface {
 	UpdateTenantConfig(ctx context.Context, req admindto.UpdateTenantConfigRequest) (*admindto.TenantConfigResponse, error)
 	// ListTenantSettings returns tenant_config, saml_config when this deployment offers SAML,
@@ -21,6 +21,8 @@ type SettingsService interface {
 	ListTenantSettings(ctx context.Context, tenantID, environmentID string) (*admindto.ListSettingsResponse, error)
 	// GetTenantSetting returns one setting; environmentID is required for keys set per environment.
 	GetTenantSetting(ctx context.Context, tenantID, environmentID string, key types.SettingKey) (*admindto.SettingResponse, error)
+	// UpdateTenantSetting replaces a setting's value, refusing it when the setting changed since req.UpdatedAt.
+	UpdateTenantSetting(ctx context.Context, tenantID, environmentID string, key types.SettingKey, req admindto.UpdateSettingRequest) (*admindto.SettingResponse, error)
 }
 
 type settingsService struct {
@@ -118,5 +120,41 @@ func (s *settingsService) GetTenantSetting(ctx context.Context, tenantID, enviro
 	if err != nil {
 		return nil, err
 	}
+	return admindto.NewSettingResponse(setting), nil
+}
+
+func (s *settingsService) UpdateTenantSetting(ctx context.Context, tenantID, environmentID string, key types.SettingKey, req admindto.UpdateSettingRequest) (*admindto.SettingResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	if err := key.Validate(); err != nil {
+		return nil, err
+	}
+	if key == types.SettingKeyBillingEntityConfig {
+		return nil, ierr.NewError("billing_entity_config cannot be changed from the admin portal").
+			WithHint("The billing entities mode changes only by enabling billing entities").
+			Mark(ierr.ErrValidation)
+	}
+
+	ctx, err := settingContext(ctx, s.ServiceParams, tenantID, environmentID, key)
+	if err != nil {
+		return nil, err
+	}
+	current, err := s.settings.GetSettingByKeyUnchecked(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	if admindto.NewSettingResponse(current).UpdatedAt != req.UpdatedAt {
+		return nil, ierr.NewErrorf("%s changed since it was read", key).
+			WithHint("Reload the setting and apply the change again").
+			Mark(ierr.ErrVersionConflict)
+	}
+
+	setting, err := s.settings.UpdateSettingByKeyUnchecked(ctx, key, &dto.UpdateSettingRequest{Value: req.Value})
+	if err != nil {
+		return nil, err
+	}
+
+	s.Logger.Info(ctx, "updated tenant setting", "tenant_id", tenantID, "environment_id", environmentID, "key", key)
 	return admindto.NewSettingResponse(setting), nil
 }
