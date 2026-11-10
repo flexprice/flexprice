@@ -1,7 +1,10 @@
 package export
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +23,8 @@ type recordingStore struct {
 	provider storage.Provider
 	bucket   string
 	keys     []string
+	bodies   [][]byte
+	gzipped  []bool
 }
 
 func (s *recordingStore) Provider() storage.Provider { return s.provider }
@@ -32,9 +37,15 @@ func (s *recordingStore) FileURL(key string) string {
 	return scheme + "://" + s.bucket + "/" + key
 }
 
-func (s *recordingStore) Upload(_ context.Context, req *storage.UploadRequest) (*storage.UploadResponse, error) {
+func (s *recordingStore) UploadStream(_ context.Context, req *storage.StreamUploadRequest) (*storage.UploadResponse, error) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
 	s.keys = append(s.keys, req.Key)
-	return &storage.UploadResponse{FileURL: s.FileURL(req.Key), FileSizeBytes: int64(len(req.Data)), UploadedAt: time.Now()}, nil
+	s.bodies = append(s.bodies, body)
+	s.gzipped = append(s.gzipped, req.Gzipped)
+	return &storage.UploadResponse{FileURL: s.FileURL(req.Key), FileSizeBytes: req.UncompressedSize, UploadedAt: time.Now()}, nil
 }
 
 type managedResolver struct {
@@ -106,6 +117,48 @@ func TestExport_ManagedCopyWritesPlatformBucket(t *testing.T) {
 	require.Len(t, platform.keys, 1)
 	require.True(t, strings.HasPrefix(platform.keys[0], "exports/t1/e1/st_1/"), platform.keys[0])
 	require.True(t, strings.HasPrefix(resp.FileURL, "s3://platform-bucket/exports/t1/e1/st_1/"), resp.FileURL)
+}
+
+func TestExport_GzipConfigUploadsGzippedBody(t *testing.T) {
+	tests := []struct {
+		name    string
+		managed bool
+		cfg     *types.S3JobConfig
+	}{
+		{"platform bucket", true, &types.S3JobConfig{Bucket: "platform-bucket", Provider: types.SecretProviderS3, KeyPrefix: "exports/t1/e1/st_1", Compression: types.S3CompressionTypeGzip}},
+		{"customer bucket", false, &types.S3JobConfig{Bucket: "customer-bucket", KeyPrefix: "mine", Compression: types.S3CompressionTypeGzip}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &recordingStore{provider: storage.ProviderS3, bucket: tt.cfg.Bucket}
+			svc := managedService(store, store, &panicConnRepo{})
+
+			resp, err := svc.executeExport(context.Background(), managedRequest(tt.managed, tt.cfg), csvExporter{})
+
+			require.NoError(t, err)
+			require.Len(t, store.keys, 1)
+			require.True(t, strings.HasSuffix(store.keys[0], ".csv.gz"), store.keys[0])
+			require.True(t, store.gzipped[0])
+			gz, err := gzip.NewReader(bytes.NewReader(store.bodies[0]))
+			require.NoError(t, err)
+			csv, err := io.ReadAll(gz)
+			require.NoError(t, err)
+			require.Equal(t, "a,b\n1,2\n", string(csv))
+			require.Equal(t, int64(len(csv)), resp.FileSizeBytes)
+		})
+	}
+}
+
+func TestExport_NoCompressionUploadsPlainBody(t *testing.T) {
+	store := &recordingStore{provider: storage.ProviderS3, bucket: "platform-bucket"}
+	svc := managedService(store, nil, &panicConnRepo{})
+
+	_, err := svc.executeExport(context.Background(), managedRequest(true, platformCfg("exports/t1/e1/st_1")), csvExporter{})
+
+	require.NoError(t, err)
+	require.True(t, strings.HasSuffix(store.keys[0], ".csv"), store.keys[0])
+	require.False(t, store.gzipped[0])
+	require.Equal(t, "a,b\n1,2\n", string(store.bodies[0]))
 }
 
 func TestExport_ManagedCopyRejectsForeignPrefix(t *testing.T) {
