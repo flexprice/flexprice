@@ -1376,7 +1376,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	return url, nil
 }
 
-// presignManagedCopy presigns a run file in the platform export bucket.
+// Presigns a Flexprice-bucket run file.
 func (s *taskService) presignManagedCopy(ctx context.Context, t *task.Task, st *scheduledtask.ScheduledTask, bucket, key string) (string, error) {
 	tenantID, envID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
 	prefix := fmt.Sprintf("exports/%s/%s/", tenantID, envID)
