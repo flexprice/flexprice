@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/validator"
 )
@@ -14,6 +16,9 @@ const (
 	ScheduledTaskIntervalCustom         ScheduledTaskInterval = "custom" // 10 minutes for testing
 	ScheduledTaskIntervalHourly         ScheduledTaskInterval = "hourly"
 	ScheduledTaskIntervalDaily          ScheduledTaskInterval = "daily"
+	ScheduledTaskIntervalWeekly         ScheduledTaskInterval = "weekly"
+	ScheduledTaskIntervalMonthly        ScheduledTaskInterval = "monthly"
+	ScheduledTaskIntervalManual         ScheduledTaskInterval = "manual"
 )
 
 // Validate validates the scheduled task interval
@@ -24,6 +29,9 @@ func (s ScheduledTaskInterval) Validate() error {
 		ScheduledTaskIntervalCustom,
 		ScheduledTaskIntervalHourly,
 		ScheduledTaskIntervalDaily,
+		ScheduledTaskIntervalWeekly,
+		ScheduledTaskIntervalMonthly,
+		ScheduledTaskIntervalManual,
 	}
 	if s == "" {
 		return ierr.NewError("interval is required").
@@ -36,8 +44,91 @@ func (s ScheduledTaskInterval) Validate() error {
 		}
 	}
 	return ierr.NewError("invalid scheduled task interval").
-		WithHint("Interval must be one of: 15MIN, 30MIN, custom, hourly, daily").
+		WithHint("Interval must be one of: 15MIN, 30MIN, custom, hourly, daily, weekly, monthly, manual").
 		Mark(ierr.ErrValidation)
+}
+
+// ExportSchedule is the wall-clock time an export runs, in an IANA timezone.
+type ExportSchedule struct {
+	Hour       int    `json:"hour"`
+	Minute     int    `json:"minute"`
+	DayOfWeek  *int   `json:"day_of_week,omitempty"`
+	DayOfMonth *int   `json:"day_of_month,omitempty"`
+	Timezone   string `json:"timezone"`
+}
+
+// Validate checks the schedule fields against the interval.
+func (s *ExportSchedule) Validate(interval ScheduledTaskInterval) error {
+	if s.Hour < 0 || s.Hour > 23 {
+		return ierr.NewError("invalid schedule hour").
+			WithHint("Hour must be between 0 and 23").
+			Mark(ierr.ErrValidation)
+	}
+	if s.Minute < 0 || s.Minute > 59 {
+		return ierr.NewError("invalid schedule minute").
+			WithHint("Minute must be between 0 and 59").
+			Mark(ierr.ErrValidation)
+	}
+	if _, err := s.Location(); err != nil {
+		return ierr.NewError("invalid schedule timezone").
+			WithHint("Timezone must be a valid IANA name such as Asia/Kolkata").
+			Mark(ierr.ErrValidation)
+	}
+	if interval == ScheduledTaskIntervalWeekly {
+		if s.DayOfWeek == nil || *s.DayOfWeek < 0 || *s.DayOfWeek > 6 {
+			return ierr.NewError("invalid schedule day_of_week").
+				WithHint("Weekly schedules require day_of_week between 0 (Sunday) and 6").
+				Mark(ierr.ErrValidation)
+		}
+	} else if s.DayOfWeek != nil {
+		return ierr.NewError("unexpected schedule day_of_week").
+			WithHint("day_of_week is only allowed for weekly schedules").
+			Mark(ierr.ErrValidation)
+	}
+	if interval == ScheduledTaskIntervalMonthly {
+		if s.DayOfMonth == nil || *s.DayOfMonth < 1 || *s.DayOfMonth > 28 {
+			return ierr.NewError("invalid schedule day_of_month").
+				WithHint("Monthly schedules require day_of_month between 1 and 28").
+				Mark(ierr.ErrValidation)
+		}
+	} else if s.DayOfMonth != nil {
+		return ierr.NewError("unexpected schedule day_of_month").
+			WithHint("day_of_month is only allowed for monthly schedules").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// Location resolves the schedule timezone.
+func (s *ExportSchedule) Location() (*time.Location, error) {
+	if s.Timezone == "" {
+		return nil, ierr.NewError("timezone is required").
+			WithHint("Schedule timezone must be specified").
+			Mark(ierr.ErrValidation)
+	}
+	return time.LoadLocation(s.Timezone)
+}
+
+// ValidateExportSchedule checks that a schedule is present exactly where the interval needs one.
+func ValidateExportSchedule(interval ScheduledTaskInterval, s *ExportSchedule) error {
+	switch interval {
+	case ScheduledTaskIntervalWeekly, ScheduledTaskIntervalMonthly:
+		if s == nil {
+			return ierr.NewError("schedule is required").
+				WithHint("Weekly and monthly exports require a schedule").
+				Mark(ierr.ErrValidation)
+		}
+	case ScheduledTaskIntervalManual:
+		if s != nil {
+			return ierr.NewError("schedule not allowed").
+				WithHint("Manual exports do not take a schedule").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if s == nil {
+		return nil
+	}
+	return s.Validate(interval)
 }
 
 // ScheduledTaskEntityType represents the entity type for scheduled tasks
