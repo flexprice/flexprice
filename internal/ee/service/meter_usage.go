@@ -323,8 +323,6 @@ type AnalyticsData struct {
 	LineTotals map[string]decimal.Decimal
 	// LineBilledPeriods is what each billing period bills the lines v2 commitments cover: utilized, overage and true-up.
 	LineBilledPeriods map[string][]billedPeriod
-	// Location is the customer's timezone, which the usage windows are cut in.
-	Location *time.Location
 }
 
 // windowAnchor returns the anchor the subscription's usage windows were cut with: the request's, else its billing anchor.
@@ -1514,11 +1512,6 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 			BillingAnchor:        params.BillingAnchor,
 			ForceApplyCommitment: params.ForceApplyCommitment,
 		},
-	}
-
-	data.Location = time.UTC
-	if location, err := time.LoadLocation(params.Timezone); err == nil {
-		data.Location = location
 	}
 
 	// Set currency from first subscription
@@ -2722,7 +2715,7 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 	if grain != "" {
 		grain = grain.Max(bucket)
 	}
-	windows := newPointWindows(grain, data.windowAnchor(groups[0].SubscriptionID), data.Location)
+	windows := newPointWindows(grain, data.windowAnchor(groups[0].SubscriptionID))
 
 	// Bucket points belong to v1 commitment time buckets, which no v2 commitment covers, so only points are reset.
 	rangeUsage := make([]decimal.Decimal, len(groups))
@@ -2815,47 +2808,37 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 	}
 }
 
-// pointWindows cuts time into the windows analytics points cover: the grain, months starting on the anchor's day, in
-// the customer's timezone, as meter_usage cuts them.
+// pointWindows cuts time into the windows analytics points cover, in UTC from the anchor's UTC day as the usage
+// queries and bucket roll-ups cut them.
 type pointWindows struct {
-	grain    types.WindowSize
-	anchor   *time.Time
-	location *time.Location
+	grain  types.WindowSize
+	anchor *time.Time
 }
 
-// newPointWindows returns the windows of grain from the anchor's day in location, UTC when location is nil.
-func newPointWindows(grain types.WindowSize, anchor *time.Time, location *time.Location) pointWindows {
-	if location == nil {
-		location = time.UTC
-	}
-
-	return pointWindows{grain: grain, anchor: anchor, location: location}
+// newPointWindows returns the windows of grain, months starting on the anchor's day.
+func newPointWindows(grain types.WindowSize, anchor *time.Time) pointWindows {
+	return pointWindows{grain: grain, anchor: anchor}
 }
 
 // startOf returns the start of the window holding t.
 func (w pointWindows) startOf(t time.Time) time.Time {
-	return truncateToBucketStart(t.In(w.location), w.grain, w.anchor).UTC()
+	return truncateToBucketStart(t.UTC(), w.grain, w.anchor)
 }
 
 // endOf returns the end of the window starting at start; months run to the next anchor day, not a fixed 30 days.
 func (w pointWindows) endOf(start time.Time) time.Time {
-	local := start.In(w.location)
-	switch w.grain {
-	case types.WindowSizeMonth:
-		shift := 0
-		if w.anchor != nil {
-			shift = w.anchor.Day() - 1
-		}
-
-		month := local.AddDate(0, 0, -shift)
-		return time.Date(month.Year(), month.Month()+1, 1, 0, 0, 0, 0, w.location).AddDate(0, 0, shift).UTC()
-	case types.WindowSizeWeek:
-		return local.AddDate(0, 0, 7).UTC()
-	case types.WindowSizeDay:
-		return local.AddDate(0, 0, 1).UTC()
+	start = start.UTC()
+	if w.grain != types.WindowSizeMonth {
+		return start.Add(time.Duration(w.grain.ToMinutes()) * time.Minute)
 	}
 
-	return start.Add(time.Duration(w.grain.ToMinutes()) * time.Minute)
+	shift := 0
+	if w.anchor != nil {
+		shift = w.anchor.Day() - 1
+	}
+
+	month := start.AddDate(0, 0, -shift)
+	return time.Date(month.Year(), month.Month()+1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, shift)
 }
 
 // middleOf returns the middle of the window starting at start.

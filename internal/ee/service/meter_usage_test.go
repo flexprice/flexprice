@@ -6665,22 +6665,21 @@ func (s *MeterUsageServiceSuite) TestAnalytics_ShortPeriodsStayOnTheirMonthsPoin
 	s.True(points[0].Cost.Equal(dec("22")), "July costs %s", points[0].Cost)
 }
 
-// Points cut in the customer's timezone keep each period's charges, and an idle month's point starts where the
-// customer's month does: August's floor in Kolkata goes on a point at 1 August local time.
-func (s *MeterUsageServiceSuite) TestAnalytics_IdleMonthPointFollowsTheCustomersTimezone() {
-	kolkata, err := time.LoadLocation("Asia/Kolkata")
-	s.Require().NoError(err)
-	localMonth := func(month time.Month) time.Time { return time.Date(2026, month, 1, 0, 0, 0, 0, kolkata).UTC() }
-	july := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
-	august, september := july.AddDate(0, 1, 0), july.AddDate(0, 2, 0)
+// Points are cut in UTC from the anchor's UTC day, also for a customer east of UTC: a Kolkata subscription billed on
+// the local 1st anchors on 31 July 18:30 UTC, so its months are windows starting on the 31st or the day after a short
+// month. Each period's charges land on the window holding most of it, and the idle August gets the 31 July window.
+func (s *MeterUsageServiceSuite) TestAnalytics_UTCWindowsKeepALocalPeriodsCharges() {
+	anchor := time.Date(2026, time.July, 31, 18, 30, 0, 0, time.UTC)
+	july, august, september := anchor.AddDate(0, -1, -1), anchor, time.Date(2026, time.August, 31, 18, 30, 0, 0, time.UTC)
+	utcDay := func(month time.Month, day int) time.Time { return time.Date(2026, month, day, 0, 0, 0, 0, time.UTC) }
 	data := &AnalyticsData{
 		Analytics: []*events.DetailedUsageAnalytic{{
 			SubLineItemID:   "line",
 			AggregationType: types.AggregationSum,
 			TotalUsage:      dec("190"),
 			Points: []events.UsageAnalyticPoint{
-				{Timestamp: localMonth(time.July), Usage: dec("30")},
-				{Timestamp: localMonth(time.September), Usage: dec("160")},
+				{Timestamp: utcDay(time.July, 1), Usage: dec("30")},
+				{Timestamp: utcDay(time.August, 31), Usage: dec("160")},
 			},
 		}},
 		LineTotals: map[string]decimal.Decimal{"line": dec("350")},
@@ -6694,20 +6693,25 @@ func (s *MeterUsageServiceSuite) TestAnalytics_IdleMonthPointFollowsTheCustomers
 				billed: &types.CommitmentInfo{ComputedTrueUpAmount: dec("100")},
 			},
 			{
-				period: types.Period{Start: september, End: september.AddDate(0, 1, 0)},
+				period: types.Period{Start: september, End: time.Date(2026, time.September, 30, 18, 30, 0, 0, time.UTC)},
 				billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("100"), ComputedOverageAmount: dec("50")},
 			},
 		}},
-		Params:   &events.UsageAnalyticsParams{WindowSize: types.WindowSizeMonth, BillingAnchor: &july},
-		Location: kolkata,
+		Params: &events.UsageAnalyticsParams{WindowSize: types.WindowSizeMonth, BillingAnchor: &anchor},
 	}
 
 	points := allocateLineItemCosts(data)[0].Points
 	s.Require().Len(points, 3)
-	for i, want := range []string{"100", "100", "150"} {
-		month := localMonth(time.July + time.Month(i))
-		s.True(points[i].Timestamp.Equal(month), "point %d starts %s, want %s", i, points[i].Timestamp, month)
-		s.True(points[i].Cost.Equal(dec(want)), "point at %s costs %s, want %s", points[i].Timestamp, points[i].Cost, want)
+	for i, want := range []struct {
+		start time.Time
+		cost  string
+	}{
+		{utcDay(time.July, 1), "100"},
+		{utcDay(time.July, 31), "100"},
+		{utcDay(time.August, 31), "150"},
+	} {
+		s.True(points[i].Timestamp.Equal(want.start), "point %d starts %s, want %s", i, points[i].Timestamp, want.start)
+		s.True(points[i].Cost.Equal(dec(want.cost)), "point at %s costs %s, want %s", points[i].Timestamp, points[i].Cost, want.cost)
 	}
 }
 
