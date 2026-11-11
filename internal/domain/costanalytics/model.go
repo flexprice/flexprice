@@ -64,6 +64,17 @@ func ParseKey(s string) (Key, error) {
 		Mark(ierr.ErrValidation)
 }
 
+// valid reports whether the key is one ParseKey can produce, so the SQL builder can rely on it.
+func (k Key) valid() bool {
+	switch k.Kind {
+	case KeyProperty:
+		return propertyNamePattern.MatchString(k.Property)
+	case KeySource, KeyMeterID, KeyFeatureID, KeySubLineItemID, KeyMonth:
+		return k.Property == ""
+	}
+	return false
+}
+
 // String returns the API spelling of the key.
 func (k Key) String() string {
 	if k.Kind == KeyProperty {
@@ -151,6 +162,21 @@ func (q *Query) Validate() error {
 	}
 	if n := len(q.GroupBy); n == 0 || n > MaxGroupByKeys {
 		return validationErr("group_by needs 1 to %d keys", MaxGroupByKeys)
+	}
+	keys := append([]Key{}, q.GroupBy...)
+	if q.Columns != nil {
+		keys = append(keys, *q.Columns)
+	}
+	for _, f := range q.Filters {
+		keys = append(keys, f.Key)
+	}
+	for _, m := range q.Metrics {
+		keys = append(keys, m.Key)
+	}
+	for _, k := range keys {
+		if !k.valid() {
+			return validationErr("invalid key %q", k)
+		}
 	}
 	seen := map[Key]bool{}
 	for _, k := range q.GroupBy {

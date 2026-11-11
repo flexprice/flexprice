@@ -153,6 +153,19 @@ func TestBuildCostBreakdownSQL_Golden(t *testing.T) {
 	}
 }
 
+func TestLinesCTEPricesEachCustomerOnce(t *testing.T) {
+	l := goldenLine("li_1", "m_tokens", oct1, nov1, "0.002")
+	l.ExternalCustomerIDs = []string{"cust_a", "cust_a"}
+	built := buildCostBreakdownSQL(&costanalytics.QueryParams{TenantID: "t", EnvironmentID: "e", Query: goldenQuery(nil), Lines: []costanalytics.LineWindow{l}})
+	for _, a := range built.args {
+		if nv := a.(driver.NamedValue); nv.Name == "line_customer_ids" {
+			require.Equal(t, []string{"cust_a"}, nv.Value)
+			return
+		}
+	}
+	t.Fatal("line_customer_ids not bound")
+}
+
 // renderGolden prints the query followed by its named arguments.
 func renderGolden(built *costSQL) string {
 	var sb strings.Builder

@@ -100,3 +100,26 @@ func TestBillingPeriodSegmentCoversWholePeriod(t *testing.T) {
 	partial.Start = oct1.AddDate(0, 0, 7)
 	require.False(t, partial.CoversWholePeriod())
 }
+
+func TestValidateRejectsKeysParseKeyCannotProduce(t *testing.T) {
+	base := func() *Query {
+		return &Query{
+			Start: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), End: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC),
+			Timezone: time.UTC, GroupBy: []Key{{Kind: KeySource}}, Sort: Sort{Field: SortTotal}, Limit: 10,
+		}
+	}
+	unknown := Key{Kind: "unknown"}
+	unsafe := Key{Kind: KeyProperty, Property: "x') OR 1=1 --"}
+	for name, mutate := range map[string]func(q *Query){
+		"unknown kind in group_by":  func(q *Query) { q.GroupBy = []Key{unknown} },
+		"unknown kind in columns":   func(q *Query) { q.Columns = &unknown },
+		"unsafe property in filter": func(q *Query) { q.Filters = []Filter{{Key: unsafe, Op: FilterIn, Values: []string{"a"}}} },
+		"unsafe property in metric": func(q *Query) { q.Metrics = []Metric{{Type: MetricDistinct, Key: unsafe}} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			q := base()
+			mutate(q)
+			require.True(t, ierr.IsValidation(q.Validate()))
+		})
+	}
+}

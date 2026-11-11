@@ -49,7 +49,7 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 			continue
 		}
 		group := lo.Map(q.GroupBy, func(k costanalytics.Key, _ int) string { return ev.keys[k] })
-		id := strings.Join(group, "\x00")
+		id := groupID(group)
 		g, ok := groups[id]
 		if !ok {
 			g = &costGroup{
@@ -111,6 +111,12 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 		result.Items = rows[q.Offset:min(q.Offset+q.Limit, len(rows))]
 	}
 	return result, nil
+}
+
+// groupID encodes group values without separator collisions.
+func groupID(group []string) string {
+	b, _ := json.Marshal(group)
+	return string(b)
 }
 
 // pricedEvents costs each event once per line window it falls in.

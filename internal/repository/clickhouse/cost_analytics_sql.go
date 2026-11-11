@@ -115,7 +115,7 @@ func (b *costSQLBuilder) linesCTE() string {
 	var lineIDs, meterIDs, featureIDs, customerIDs, prices []string
 	var starts, ends []int64
 	for _, l := range b.params.Lines {
-		for _, c := range l.ExternalCustomerIDs {
+		for _, c := range lo.Uniq(l.ExternalCustomerIDs) {
 			lineIDs = append(lineIDs, l.LineItemID)
 			meterIDs = append(meterIDs, l.MeterID)
 			featureIDs = append(featureIDs, l.FeatureID)
