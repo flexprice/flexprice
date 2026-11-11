@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -976,6 +977,17 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	// check if payment is already succeeded
 	if payment.PaymentStatus == types.PaymentStatusSucceeded {
 		h.logger.Info(ctx, "payment already succeeded, skipping event", "event_id", event.ID)
+		return nil
+	}
+
+	if payments.RefundIfInvoiceVoided(ctx, payments.RefundIfInvoiceVoidedParams{
+		PaymentService:     services.PaymentService,
+		InvoiceService:     services.InvoiceService,
+		Refunder:           h.paymentSvc,
+		FlexpricePaymentID: flexpricePaymentID,
+		GatewayPaymentID:   piID,
+		Logger:             h.logger,
+	}) {
 		return nil
 	}
 

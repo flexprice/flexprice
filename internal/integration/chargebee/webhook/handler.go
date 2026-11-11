@@ -323,6 +323,17 @@ func (h *Handler) settleLinkedPayment(
 		return false, nil
 	}
 
+	if payments.RefundIfInvoiceVoided(ctx, payments.RefundIfInvoiceVoidedParams{
+		PaymentService:     services.PaymentService,
+		InvoiceService:     services.InvoiceService,
+		Refunder:           h.paymentSvc,
+		FlexpricePaymentID: flexpricePaymentID,
+		GatewayPaymentID:   chargebeeTransactionID,
+		Logger:             h.logger,
+	}) {
+		return true, nil
+	}
+
 	// Settlement books the payment's own amount and does not check it against
 	// transaction.Amount: the hosted page charges exactly what the link was created
 	// for, so the two agree. A capture short of the payment amount — if Chargebee

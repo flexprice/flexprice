@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -413,6 +414,10 @@ func (s *ChargebeeWebhookCheckoutSuite) TestHostedPageWebhook_UnmappedInvoiceCom
 type fakeInvoiceService struct {
 	interfaces.InvoiceService
 	reconciled []string
+}
+
+func (s *fakeInvoiceService) GetInvoice(context.Context, string) (*dto.InvoiceResponse, error) {
+	return &dto.InvoiceResponse{Invoice: invoice.Invoice{InvoiceStatus: types.InvoiceStatusFinalized}}, nil
 }
 
 func (s *fakeInvoiceService) ReconcilePaymentStatus(_ context.Context, id string, _ types.PaymentStatus, _ *decimal.Decimal) error {

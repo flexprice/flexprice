@@ -184,6 +184,17 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
+	if payments.RefundIfInvoiceVoided(ctx, payments.RefundIfInvoiceVoidedParams{
+		PaymentService:     services.PaymentService,
+		InvoiceService:     services.InvoiceService,
+		Refunder:           h.paymentSvc,
+		FlexpricePaymentID: flexpricePaymentID,
+		GatewayPaymentID:   payment.ID,
+		Logger:             h.logger,
+	}) {
+		return nil
+	}
+
 	// Standalone payment (no checkout session) — update status and reconcile directly.
 	paymentStatus := string(types.PaymentStatusSucceeded)
 	now := clock.Now()
