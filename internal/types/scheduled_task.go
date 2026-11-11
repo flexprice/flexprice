@@ -634,3 +634,24 @@ func (s *S3JobConfig) GetExportMetadataFields() ExportMetadataFields {
 	}
 	return s.ExportMetadataFields
 }
+
+// Export delivery types and statuses.
+const (
+	ExportDeliveryTypeFlexprice = "flexprice"
+	ExportDeliveryTypeS3        = "s3"
+	ExportDeliveryTypeEmail     = "email"
+
+	ExportDeliveryStatusDelivered   = "delivered"
+	ExportDeliveryStatusFailed      = "failed"
+	ExportDeliveryStatusSkipped     = "skipped"
+	ExportDeliveryStatusRateLimited = "rate_limited"
+)
+
+// ExportDelivery is one destination's result for a run.
+type ExportDelivery struct {
+	Type   string    `json:"type"`
+	Target string    `json:"target"`
+	Status string    `json:"status"`
+	Detail string    `json:"detail,omitempty"`
+	At     time.Time `json:"at"`
+}
