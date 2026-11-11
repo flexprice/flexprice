@@ -8,15 +8,26 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
+	"go.temporal.io/sdk/temporal"
 )
 
 type memTaskRepo struct {
 	task.Repository
 	row     *task.Task
 	updated *task.Task
+	// Status in the writer; row may be a stale replica read.
+	writerStatus types.TaskStatus
 }
 
 func (r *memTaskRepo) Get(context.Context, string) (*task.Task, error) { return r.row, nil }
+
+func (r *memTaskRepo) UpdateUnlessCompleted(_ context.Context, t *task.Task) (bool, error) {
+	if r.writerStatus == types.TaskStatusCompleted {
+		return false, nil
+	}
+	r.updated = t
+	return true, nil
+}
 
 func (r *memTaskRepo) Update(_ context.Context, t *task.Task) error {
 	r.updated = t
@@ -37,14 +48,24 @@ func TestCompleteTask_MergesRunMetadata(t *testing.T) {
 	require.Equal(t, "2026-11-01T10:00:00Z", repo.updated.Metadata["view_updated_at"])
 }
 
-func TestUpdateTaskStatus_FailedSkipsCompletedRow(t *testing.T) {
-	repo := &memTaskRepo{row: &task.Task{TaskStatus: types.TaskStatusCompleted}}
-	a := NewTaskActivity(repo, logger.NewNoopLogger())
+func TestUpdateTaskStatus_FailedRefusedByCompletedRow(t *testing.T) {
+	for name, readStatus := range map[string]types.TaskStatus{
+		"fresh read":         types.TaskStatusCompleted,
+		"stale replica read": types.TaskStatusProcessing,
+	} {
+		t.Run(name, func(t *testing.T) {
+			repo := &memTaskRepo{row: &task.Task{TaskStatus: readStatus}, writerStatus: types.TaskStatusCompleted}
+			a := NewTaskActivity(repo, logger.NewNoopLogger())
 
-	err := a.UpdateTaskStatus(context.Background(), UpdateTaskStatusInput{TaskID: "t1", Status: types.TaskStatusFailed, Error: "x"})
+			err := a.UpdateTaskStatus(context.Background(), UpdateTaskStatusInput{TaskID: "t1", Status: types.TaskStatusFailed, Error: "x"})
 
-	require.NoError(t, err)
-	require.Nil(t, repo.updated)
+			var appErr *temporal.ApplicationError
+			require.ErrorAs(t, err, &appErr)
+			require.Equal(t, TaskAlreadyCompletedErrType, appErr.Type())
+			require.True(t, appErr.NonRetryable())
+			require.Nil(t, repo.updated)
+		})
+	}
 }
 
 func TestUpdateTaskStatus_FailedUpdatesProcessingRow(t *testing.T) {
