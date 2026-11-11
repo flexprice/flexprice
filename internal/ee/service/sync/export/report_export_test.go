@@ -120,3 +120,13 @@ func TestExport_ReportWithoutRunnerUnsupported(t *testing.T) {
 	_, err := svc.Export(context.Background(), reportRequest(types.ScheduledTaskEntityTypeReport))
 	require.Error(t, err)
 }
+
+func TestReportExporter_NilResultIsError(t *testing.T) {
+	for _, entity := range []types.ScheduledTaskEntityType{types.ScheduledTaskEntityTypeReport, types.ScheduledTaskEntityTypeAnalyticsView} {
+		exp := NewReportExporter(&fakeRunner{}, entity)
+
+		_, _, err := exp.PrepareData(context.Background(), reportRequest(entity))
+
+		require.Error(t, err)
+	}
+}
