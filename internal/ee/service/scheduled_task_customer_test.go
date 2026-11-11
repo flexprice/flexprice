@@ -109,16 +109,43 @@ func TestCreate_CustomerFilterSanitizedAndDryRun(t *testing.T) {
 	s := customerExportService(repo, cust)
 	req := customersReq()
 	req.SourceConfig.CustomerFilter = types.NewCustomerFilter()
-	req.SourceConfig.CustomerFilter.CustomerIDs = []string{"c1"}
 	req.SourceConfig.CustomerFilter.Email = "a@b.co"
 
 	_, err := s.CreateScheduledTask(exportCtx(), req)
 	require.NoError(t, err)
 	stored := repo.created.SourceConfig.CustomerFilter
-	require.Empty(t, stored.CustomerIDs)
 	require.Equal(t, "a@b.co", stored.Email)
 	require.Nil(t, stored.QueryFilter)
 	require.Same(t, stored, cust.got)
+}
+
+func TestCreate_CustomerFilterIDListsRejected(t *testing.T) {
+	for name, mutate := range map[string]func(*types.CustomerFilter){
+		"customer_ids": func(f *types.CustomerFilter) { f.CustomerIDs = []string{"c1"} },
+		"external_ids": func(f *types.CustomerFilter) { f.ExternalIDs = []string{"e1"} },
+		"external_id":  func(f *types.CustomerFilter) { f.ExternalID = "e1" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			repo := &originRepoFake{}
+			s := customerExportService(repo, &customerCountFake{})
+			req := customersReq()
+			mutate(req.SourceConfig.CustomerFilter)
+			_, err := s.CreateScheduledTask(exportCtx(), req)
+			require.True(t, ierr.IsValidation(err), "got %v", err)
+			require.Contains(t, errText(err), "Filter by fields instead of customer ids.")
+			require.Nil(t, repo.created)
+		})
+	}
+}
+
+func TestCreate_EmptyFiltersKeepStatusSemantics(t *testing.T) {
+	repo := &originRepoFake{}
+	s := customerExportService(repo, &customerCountFake{})
+	req := customersReq()
+	req.SourceConfig.CustomerFilter = &types.CustomerFilter{Filters: []*types.FilterCondition{}}
+	_, err := s.CreateScheduledTask(exportCtx(), req)
+	require.NoError(t, err)
+	require.Equal(t, "", repo.created.SourceConfig.CustomerFilter.GetStatus())
 }
 
 func TestCreate_CustomerFilterBadFieldIs400(t *testing.T) {
@@ -222,6 +249,17 @@ func TestCreate_RunNow(t *testing.T) {
 		_, err := s.CreateScheduledTask(exportCtx(), req)
 		require.True(t, ierr.IsValidation(err), "got %v", err)
 	})
+	t.Run("rejected when disabled", func(t *testing.T) {
+		repo := &originRepoFake{}
+		s := customerExportService(repo, &customerCountFake{})
+		req := customersReq()
+		req.RunNow = true
+		req.Enabled = false
+		_, err := s.CreateScheduledTask(exportCtx(), req)
+		require.True(t, ierr.IsValidation(err), "got %v", err)
+		require.Contains(t, errText(err), "Turn the export on to run it now.")
+		require.Nil(t, repo.created)
+	})
 	t.Run("manual returns the run", func(t *testing.T) {
 		repo := &originRepoFake{}
 		s := customerExportService(repo, &customerCountFake{})
@@ -298,7 +336,6 @@ func TestCreate_PagingInFilterNeverRejects(t *testing.T) {
 	req := customersReq()
 	req.SourceConfig.CustomerFilter = &types.CustomerFilter{
 		QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(5000), Offset: lo.ToPtr(-1)},
-		ExternalID:  "x",
 	}
 	_, err := s.CreateScheduledTask(exportCtx(), req)
 	require.NoError(t, err)
