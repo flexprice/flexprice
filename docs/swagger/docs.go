@@ -14019,7 +14019,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.\ninterval is hourly, daily, weekly, monthly or manual; exports run hourly at most, so 15MIN and 30MIN are rejected. Existing exports may still report 15MIN or 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule. Weekly schedules require day_of_week and monthly schedules require day_of_month; each is rejected for other intervals. A schedule time that daylight saving skips in its timezone (for example 02:30 America/Los_Angeles) is rejected for daily, weekly and monthly exports.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = the previous full ISO week (Monday 00:00 to the following Monday 00:00) whatever day_of_week is, so a Sunday run covers the week that ended six days earlier; monthly = previous calendar month; manual = previous UTC day unless a window is given.",
+                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.\ninterval is hourly, daily, weekly, monthly or manual; exports run hourly at most, so 15MIN and 30MIN are rejected. Existing exports may still report 15MIN or 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule. Weekly schedules require day_of_week and monthly schedules require day_of_month; each is rejected for other intervals. A schedule time that daylight saving skips in its timezone (for example 02:30 America/Los_Angeles) is rejected for daily, weekly and monthly exports.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = the previous full ISO week (Monday 00:00 to the following Monday 00:00) whatever day_of_week is, so a Sunday run covers the week that ended six days earlier; monthly = previous calendar month; manual = previous UTC day unless a window is given.\nentity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config is rejected for other entity types and cannot be changed later. Clients should tolerate new entity_type values.\nReport sources allow interval daily, weekly, monthly or manual; schedule is required unless manual. Windows are the previous UTC period, and a custom run window must be whole UTC days. export_metadata_fields is not allowed. These exports also need analytics read access.",
                 "consumes": [
                     "application/json"
                 ],
@@ -23817,6 +23817,14 @@ const docTemplate = `{
                 },
                 "schedule": {
                     "$ref": "#/definitions/types.ExportSchedule"
+                },
+                "source_config": {
+                    "description": "Required for report and analytics_view exports.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ExportSourceConfig"
+                        }
+                    ]
                 }
             }
         },
@@ -30184,6 +30192,9 @@ const docTemplate = `{
                 },
                 "schedule": {
                     "$ref": "#/definitions/types.ExportSchedule"
+                },
+                "source_config": {
+                    "$ref": "#/definitions/types.ExportSourceConfig"
                 },
                 "status": {
                     "type": "string"
@@ -37072,8 +37083,8 @@ const docTemplate = `{
         "types.Duration": {
             "type": "object",
             "enum": [
-                3600000000000,
-                604800000000000
+                604800000000000,
+                3600000000000
             ],
             "properties": {
                 "unit": {
@@ -37084,8 +37095,8 @@ const docTemplate = `{
                 }
             },
             "x-enum-varnames": [
-                "EntitlementGrantMinDuration",
-                "CollectionsPaidWindow"
+                "CollectionsPaidWindow",
+                "EntitlementGrantMinDuration"
             ]
         },
         "types.DurationUnit": {
@@ -39583,7 +39594,9 @@ const docTemplate = `{
                 "wallet_ledger",
                 "credit_usage",
                 "usage_analytics",
-                "revenue_facts"
+                "revenue_facts",
+                "report",
+                "analytics_view"
             ],
             "x-enum-varnames": [
                 "ScheduledTaskEntityTypeEvents",
@@ -39593,7 +39606,9 @@ const docTemplate = `{
                 "ScheduledTaskEntityTypeWalletLedger",
                 "ScheduledTaskEntityTypeCreditUsage",
                 "ScheduledTaskEntityTypeUsageAnalytics",
-                "ScheduledTaskEntityTypeRevenueFacts"
+                "ScheduledTaskEntityTypeRevenueFacts",
+                "ScheduledTaskEntityTypeReport",
+                "ScheduledTaskEntityTypeAnalyticsView"
             ]
         },
         "types.ScheduledTaskInterval": {
@@ -42477,6 +42492,20 @@ const docTemplate = `{
                 }
             }
         },
+        "types.ExportSourceConfig": {
+            "type": "object",
+            "properties": {
+                "report_key": {
+                    "type": "string"
+                },
+                "report_params": {
+                    "$ref": "#/definitions/types.ReportParams"
+                },
+                "view_id": {
+                    "type": "string"
+                }
+            }
+        },
         "types.InstrumentDetails": {
             "type": "object",
             "properties": {
@@ -42597,6 +42626,49 @@ const docTemplate = `{
                 "ReminderToneFirm",
                 "ReminderToneFinal"
             ]
+        },
+        "types.ReportParamFilter": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "op": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "types.ReportParams": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "dimensions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.ReportParamFilter"
+                    }
+                },
+                "grain": {
+                    "type": "string"
+                },
+                "shape": {
+                    "type": "string"
+                }
+            }
         },
         "types.UPIDetails": {
             "type": "object",
