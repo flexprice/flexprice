@@ -255,6 +255,29 @@ func (e ScheduledTaskEntityType) Validate() error {
 // MaxExportEmailRecipients caps recipients per export.
 const MaxExportEmailRecipients = 10
 
+// ExportEmailConfig lists export email recipients.
+type ExportEmailConfig struct {
+	Recipients []string `json:"recipients"`
+}
+
+// NormalizeRecipients trims, lowercases and dedupes, keeping order.
+func NormalizeRecipients(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, raw := range in {
+		addr := NormalizeEmail(raw)
+		if addr == "" {
+			continue
+		}
+		if _, dup := seen[addr]; dup {
+			continue
+		}
+		seen[addr] = struct{}{}
+		out = append(out, addr)
+	}
+	return out
+}
+
 // S3CompressionType represents the compression type for S3 uploads
 type S3CompressionType string
 

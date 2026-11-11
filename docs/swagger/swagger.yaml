@@ -3719,6 +3719,10 @@ definitions:
     properties:
       connection_id:
         type: string
+      email_config:
+        allOf:
+        - $ref: '#/definitions/types.ExportEmailConfig'
+        description: Users in this account who receive each run by email.
       enabled:
         type: boolean
       entity_type:
@@ -8046,6 +8050,8 @@ definitions:
         type: string
       created_at:
         type: string
+      email_config:
+        $ref: '#/definitions/types.ExportEmailConfig'
       enabled:
         type: boolean
       entity_type:
@@ -10560,6 +10566,10 @@ definitions:
     type: object
   UpdateScheduledTaskRequest:
     properties:
+      email_config:
+        allOf:
+        - $ref: '#/definitions/types.ExportEmailConfig'
+        description: Absent keeps recipients; empty recipients clears them.
       enabled:
         type: boolean
       name:
@@ -16393,6 +16403,13 @@ definitions:
     - EntitlementGrantScopeFeature
     - EntitlementGrantScopeSubscription
     - EntitlementGrantScopeGroup
+  types.ExportEmailConfig:
+    properties:
+      recipients:
+        items:
+          type: string
+        type: array
+    type: object
   types.ExportSchedule:
     properties:
       day_of_month:

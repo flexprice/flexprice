@@ -2645,6 +2645,7 @@ var (
 		{Name: "managed_copy", Type: field.TypeBool, Default: false},
 		{Name: "schedule", Type: field.TypeJSON, Nullable: true},
 		{Name: "source_config", Type: field.TypeJSON, Nullable: true},
+		{Name: "email_config", Type: field.TypeJSON, Nullable: true},
 	}
 	// ScheduledTasksTable holds the schema information for the "scheduled_tasks" table.
 	ScheduledTasksTable = &schema.Table{
