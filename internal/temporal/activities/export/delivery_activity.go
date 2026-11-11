@@ -39,7 +39,7 @@ type emailCounter interface {
 	Incr(ctx context.Context, key string, ttl time.Duration) (int64, error)
 }
 
-// DeliveryActivity sends run emails and records delivery results.
+// DeliveryActivity sends emails, records deliveries.
 type DeliveryActivity struct {
 	sender   emailSender
 	users    userLookup
@@ -68,7 +68,8 @@ type SendExportEmailsInput struct {
 	TenantID        string
 	EnvID           string
 	ExportName      string
-	Interval        types.ScheduledTaskInterval
+	EntityType      types.ScheduledTaskEntityType
+	Interval       types.ScheduledTaskInterval
 	Recipients      []string
 	RunStatus       types.TaskStatus
 	WindowStart     time.Time
@@ -81,9 +82,12 @@ type SendExportEmailsOutput struct {
 	Deliveries []types.ExportDelivery
 }
 
-// SendExportEmails notifies recipients; per-recipient failures are results, not errors.
+// SendExportEmails reports per-recipient failures as results.
 func (a *DeliveryActivity) SendExportEmails(ctx context.Context, in SendExportEmailsInput) (*SendExportEmailsOutput, error) {
 	out := &SendExportEmailsOutput{}
+	if in.Interval == types.ScheduledTaskIntervalHourly {
+		return out, nil
+	}
 	record := func(addr, status, detail string) {
 		out.Deliveries = append(out.Deliveries, types.ExportDelivery{
 			Type:   types.ExportDeliveryTypeEmail,
@@ -137,12 +141,14 @@ func (a *DeliveryActivity) SendExportEmails(ctx context.Context, in SendExportEm
 			}
 		}
 
-		resp, err := a.sender.SendEmail(ctx, email.SendEmailRequest{
+		sendCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		resp, err := a.sender.SendEmail(sendCtx, email.SendEmailRequest{
 			ToAddress:      addr,
 			Subject:        subject,
 			Text:           body,
 			IdempotencyKey: idempotencyKey(in.TaskID, addr),
 		})
+		cancel()
 		if err != nil || resp == nil || !resp.Success {
 			a.logger.Error(ctx, "export email send failed", "error", sendErrorText(err, resp), "task_id", in.TaskID, "recipient", email.MaskAddress(addr))
 			record(addr, types.ExportDeliveryStatusFailed, "send failed")
@@ -164,7 +170,7 @@ func (a *DeliveryActivity) compose(in SendExportEmailsInput) (subject, body stri
 
 	const layout = "2006-01-02 15:04"
 	lines := []string{
-		"Export: " + sanitizeName(in.ExportName),
+		"Export: " + exportLabel(in),
 		fmt.Sprintf("Data: %s to %s (UTC)", in.WindowStart.UTC().Format(layout), in.WindowEnd.UTC().Format(layout)),
 	}
 	if completed {
@@ -172,6 +178,13 @@ func (a *DeliveryActivity) compose(in SendExportEmailsInput) (subject, body stri
 	}
 	lines = append(lines, "Status: "+status, "", "View the run: "+link)
 	return subject, strings.Join(lines, "\n")
+}
+
+func exportLabel(in SendExportEmailsInput) string {
+	if name := sanitizeName(in.ExportName); name != "" {
+		return name
+	}
+	return sanitizeName(string(in.EntityType))
 }
 
 func sanitizeName(name string) string {
@@ -192,7 +205,7 @@ func idempotencyKey(taskID, recipient string) string {
 	return "exports-" + taskID + "-" + hex.EncodeToString(sum[:])[:16]
 }
 
-// sendErrorText avoids logging provider text that may echo an address.
+// Avoids logging provider text.
 func sendErrorText(err error, resp *email.SendEmailResponse) string {
 	if err != nil {
 		return "send error"
@@ -211,7 +224,7 @@ type RecordDeliveriesInput struct {
 	Deliveries []types.ExportDelivery
 }
 
-// RecordDeliveries is the only writer of the task's deliveries metadata.
+// RecordDeliveries writes deliveries metadata.
 func (a *DeliveryActivity) RecordDeliveries(ctx context.Context, in RecordDeliveriesInput) error {
 	ctx = types.SetTenantID(ctx, in.TenantID)
 	ctx = types.SetEnvironmentID(ctx, in.EnvID)

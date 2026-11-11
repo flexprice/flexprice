@@ -148,6 +148,18 @@ func TestExecuteExportWorkflow_SuccessEmailsAndRecordsOnce(t *testing.T) {
 	require.Equal(t, types.ExportDeliveryStatusDelivered, ds[0].Status)
 }
 
+func TestExecuteExportWorkflow_GCSConnectionDeliveryType(t *testing.T) {
+	r := newDeliveryRun(export.ScheduledTaskDetails{
+		Interval: types.ScheduledTaskIntervalDaily, ConnectionID: "conn_1",
+		JobConfig: &types.S3JobConfig{Bucket: "b", Provider: types.SecretProviderGCS},
+	}, nil, nil)
+	r.run()
+
+	require.NoError(t, r.env.GetWorkflowError())
+	require.Len(t, r.recorded, 1)
+	require.Equal(t, types.ExportDeliveryTypeGCS, r.recorded[0].Deliveries[0].Type)
+}
+
 func TestExecuteExportWorkflow_FailedRunEmailsFailure(t *testing.T) {
 	r := newDeliveryRun(export.ScheduledTaskDetails{
 		Interval: types.ScheduledTaskIntervalDaily, EmailRecipients: []string{"a@x.com"},

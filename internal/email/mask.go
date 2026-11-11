@@ -5,7 +5,7 @@ import (
 	"unicode/utf8"
 )
 
-// MaskAddress hides an email's local part for logging.
+// MaskAddress hides the local part.
 func MaskAddress(addr string) string {
 	at := strings.LastIndex(addr, "@")
 	if at < 1 || at == len(addr)-1 {
