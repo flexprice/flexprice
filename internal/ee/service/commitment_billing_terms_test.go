@@ -1250,6 +1250,233 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_FeeBoundsLeaveTheSet
 	}
 }
 
+// termsAroundNowRequest commits 100 a month for a year from the start of the month three months back, billed as twelve
+// arrears of 100: three are due and nine lie ahead. It also returns the start of the current month.
+func (s *CommitmentServiceSuite) termsAroundNowRequest() (dto.CreateCommitmentRequest, time.Time) {
+	now := clock.Now()
+	month := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	req := s.billingTermsRequest()
+	req.StartDate = month.AddDate(0, -3, 0)
+	req.EndDate = lo.ToPtr(req.StartDate.AddDate(1, 0, 0))
+	req.BillingTerms = []dto.BillingTermInput{monthlyArrearsTerm()}
+	return req, month
+}
+
+// instalmentsByStatus groups the commitment's instalments by status.
+func (s *CommitmentServiceSuite) instalmentsByStatus(commitmentID string) map[types.InstalmentStatus][]*billingterm.Instalment {
+	owned := lo.Filter(s.storedInstalments(), func(inst *billingterm.Instalment, _ int) bool { return inst.OwnerID == commitmentID })
+	return lo.GroupBy(owned, func(inst *billingterm.Instalment) types.InstalmentStatus { return inst.InstalmentStatus })
+}
+
+// A future termination cancels only the instalments it does not owe; those due by effective_at stay scheduled to bill
+// on their own dates, with no settlement. A fee is billed at once on its own. Terminated now, it settles as before.
+func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_FutureKeepsOwedInstalments() {
+	_, month := s.termsAroundNowRequest()
+	tests := []struct {
+		name           string
+		at             *time.Time
+		fee            *dto.CancellationFeeInput
+		wantScheduled  int
+		wantCancelled  int
+		wantSettlement string
+		wantInvoice    string // the termination invoice's amount; empty when none is billed
+	}{
+		{name: "ahead, without a fee", at: lo.ToPtr(month.AddDate(0, 2, 0)), wantScheduled: 5, wantCancelled: 7},
+		{
+			name:          "ahead, with a fee",
+			at:            lo.ToPtr(month.AddDate(0, 2, 0)),
+			fee:           fixedFee("250"),
+			wantScheduled: 5,
+			wantCancelled: 7,
+			wantInvoice:   "250",
+		},
+		{name: "now", wantCancelled: 12, wantSettlement: "300", wantInvoice: "300"},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			req, _ := s.termsAroundNowRequest()
+			created, err := s.svc.Create(ctx, req)
+			s.Require().NoError(err)
+
+			publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+			publisher.Reset()
+			resp, err := s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: tt.at, CancellationFee: tt.fee})
+			s.Require().NoError(err)
+			s.Equal(types.CommitmentStatusTerminated, resp.CommitmentStatus)
+
+			byStatus := s.instalmentsByStatus(created.ID)
+			scheduled := byStatus[types.InstalmentStatusScheduled]
+			s.Len(scheduled, tt.wantScheduled)
+			s.Len(byStatus[types.InstalmentStatusCancelled], tt.wantCancelled)
+			for _, inst := range scheduled {
+				s.True(owedAtTermination(inst, *resp.TerminatedAt), "kept instalment on %s is owed", inst.BillOn)
+			}
+			s.ElementsMatch(instalmentIDs(byStatus[types.InstalmentStatusCancelled]),
+				s.instalmentEventIDs(publisher.Events(), types.WebhookEventBillingInstalmentCancelled))
+
+			due, _, err := dueInstalments(ctx, fullServiceParams(&s.BaseServiceTestSuite), []string{s.fx.sub.ID}, *created.EndDate)
+			s.Require().NoError(err)
+			s.ElementsMatch(instalmentIDs(scheduled), instalmentIDs(due), "subscription invoices bill the kept instalments")
+
+			settlements := s.settlementsOf(created.ID)
+			if tt.wantSettlement == "" {
+				s.Empty(settlements)
+			} else {
+				s.Require().Len(settlements, 1)
+				s.True(settlements[0].Amount.Equal(dec(tt.wantSettlement)), "settlement %s", settlements[0].Amount)
+			}
+
+			if tt.wantInvoice == "" {
+				s.Nil(resp.TerminationInvoiceID)
+				return
+			}
+
+			s.Require().NotNil(resp.TerminationInvoiceID)
+			inv, err := s.GetStores().InvoiceRepo.Get(ctx, *resp.TerminationInvoiceID)
+			s.Require().NoError(err)
+			s.True(inv.AmountDue.Equal(dec(tt.wantInvoice)), "amount due %s", inv.AmountDue)
+			s.Len(s.invoiceLines(inv.ID), 1)
+		})
+	}
+}
+
+// A finalize claiming an owed instalment while a termination settles leaves it on that invoice and out of the
+// settlement.
+func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_AClaimRacingTheSettlementIsBilledOnce() {
+	ctx := s.GetContext()
+	req, _ := s.termsAroundNowRequest()
+	created, err := s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+
+	first := s.storedInstalments()[0]
+	racing := s.racingCommitmentService(func(ctx context.Context) {
+		_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_racing", time.Now(), []string{first.ID})
+		s.Require().NoError(err)
+	})
+	_, err = racing.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{})
+	s.Require().NoError(err)
+
+	s.Equal(types.InstalmentStatusInvoiced, s.instalmentByID(first.ID).InstalmentStatus)
+	settlements := s.settlementsOf(created.ID)
+	s.Require().Len(settlements, 1)
+	s.True(settlements[0].Amount.Equal(dec("200")), "the two other due instalments, got %s", settlements[0].Amount)
+}
+
+// The instalments a pending termination keeps bill on their own dates: a run bills those already due on separate
+// invoices, leaves the later ones scheduled, and never bills those the termination cancelled.
+func (s *CommitmentServiceSuite) TestBillDueInstalments_BillsWhatAPendingTerminationKeeps() {
+	ctx := s.GetContext()
+	req, month := s.termsAroundNowRequest()
+	req.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
+	created, err := s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+
+	at := month.AddDate(0, 2, 0)
+	_, err = s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+	s.Require().NoError(err)
+	s.Require().NoError(s.svc.BillDueInstalments(ctx))
+
+	byStatus := s.instalmentsByStatus(created.ID)
+	invoiced := byStatus[types.InstalmentStatusInvoiced]
+	s.Len(invoiced, 3, "the instalments due by now")
+	for _, inst := range invoiced {
+		s.False(inst.BillOn.After(month), "billed on %s", inst.BillOn)
+		inv, err := s.GetStores().InvoiceRepo.Get(ctx, lo.FromPtr(inst.InvoiceID))
+		s.Require().NoError(err)
+		s.Equal(string(types.InvoiceBillingReasonBillingTerms), inv.BillingReason)
+		s.True(inv.AmountDue.Equal(dec("100")), "amount due %s", inv.AmountDue)
+	}
+	s.Len(byStatus[types.InstalmentStatusScheduled], 2, "due after now but by the termination")
+	s.Len(byStatus[types.InstalmentStatusCancelled], 7)
+}
+
+// A subscription ending before a pending termination pulls it back to the subscription end: the kept instalments still
+// owed then are settled on their own invoice, beside the fee billed when it was recorded, and the rest are cancelled. A
+// termination that already took effect keeps its date and settles what it still has scheduled.
+func (s *CommitmentServiceSuite) TestTerminateForSubscription_SettlesWhatAPendingTerminationKept() {
+	_, month := s.termsAroundNowRequest()
+	tests := []struct {
+		name             string
+		tookEffectAt     *time.Time // moves terminated_at here before the subscription ends, as if it had passed
+		subEnd           time.Time
+		wantTerminatedAt time.Time
+		wantSettlement   string
+	}{
+		{
+			name:             "pending",
+			subEnd:           month,
+			wantTerminatedAt: month,
+			wantSettlement:   "300",
+		},
+		{
+			name:             "already in effect",
+			tookEffectAt:     lo.ToPtr(month.AddDate(0, -1, 0)),
+			subEnd:           month,
+			wantTerminatedAt: month.AddDate(0, -1, 0),
+			wantSettlement:   "200",
+		},
+		{
+			name:             "already in effect, after a backdated subscription end",
+			tookEffectAt:     lo.ToPtr(month.AddDate(0, -1, 0)),
+			subEnd:           month.AddDate(0, -2, 0),
+			wantTerminatedAt: month.AddDate(0, -1, 0),
+			wantSettlement:   "200",
+		},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			req, _ := s.termsAroundNowRequest()
+			created, err := s.svc.Create(ctx, req)
+			s.Require().NoError(err)
+
+			at := month.AddDate(0, 2, 0)
+			resp, err := s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{
+				EffectiveAt:     &at,
+				CancellationFee: fixedFee("250"),
+			})
+			s.Require().NoError(err)
+			feeInvoiceID := lo.FromPtr(resp.TerminationInvoiceID)
+
+			if tt.tookEffectAt != nil {
+				stored, err := s.GetStores().CommitmentRepo.Get(ctx, created.ID)
+				s.Require().NoError(err)
+				_, err = s.GetStores().CommitmentRepo.Update(ctx, commitment.NewCommitmentBuilder(stored).WithTerminatedAt(*tt.tookEffectAt).Build())
+				s.Require().NoError(err)
+			}
+
+			s.Require().NoError(s.svc.TerminateForSubscription(ctx, s.fx.sub.ID, tt.subEnd))
+
+			got, err := s.svc.Get(ctx, created.ID)
+			s.Require().NoError(err)
+			s.True(got.TerminatedAt.Equal(tt.wantTerminatedAt), "got %s", got.TerminatedAt)
+
+			byStatus := s.instalmentsByStatus(created.ID)
+			s.Empty(byStatus[types.InstalmentStatusScheduled], "nothing waits for a later subscription invoice")
+			s.Len(byStatus[types.InstalmentStatusCancelled], 12)
+
+			settlements := s.settlementsOf(created.ID)
+			s.Require().Len(settlements, 1)
+			s.True(settlements[0].Amount.Equal(dec(tt.wantSettlement)), "settlement %s", settlements[0].Amount)
+
+			settlementInvoice, err := s.GetStores().InvoiceRepo.Get(ctx, lo.FromPtr(settlements[0].InvoiceID))
+			s.Require().NoError(err)
+			s.NotEqual(feeInvoiceID, settlementInvoice.ID)
+			s.Equal("commitment_settlement_"+created.ID, lo.FromPtr(settlementInvoice.IdempotencyKey))
+			s.Equal(types.InvoiceStatusFinalized, settlementInvoice.InvoiceStatus)
+			s.True(settlementInvoice.AmountDue.Equal(dec(tt.wantSettlement)), "amount due %s", settlementInvoice.AmountDue)
+
+			feeInvoice, err := s.GetStores().InvoiceRepo.Get(ctx, feeInvoiceID)
+			s.Require().NoError(err)
+			s.Equal(types.InvoiceStatusFinalized, feeInvoice.InvoiceStatus)
+			s.True(feeInvoice.AmountDue.Equal(dec("250")), "the fee is billed once, got %s", feeInvoice.AmountDue)
+		})
+	}
+}
+
 // separateInvoiceCommitment commits 100 a month for two years to a new subscription and bills half of its 2,400
 // upfront and half on a milestone nobody has triggered, each on its own invoice.
 func (s *CommitmentE2ESuite) separateInvoiceCommitment(name string) (*dto.SubscriptionResponse, *dto.CommitmentResponse) {

@@ -34,7 +34,14 @@ func (s *commitmentService) TriggerInstalment(
 			return err
 		}
 
-		if err := requireActiveBillingTerms(c); err != nil {
+		// A pending termination keeps the instalments it owes, so a triggered milestone among them can move earlier.
+		if c.CommitmentStatus != types.CommitmentStatusActive && !c.TerminationPending(clock.Now()) {
+			return ierr.NewErrorf("commitment %s is %s", c.ID, c.CommitmentStatus).
+				WithHint("Only active commitments and pending terminations can have instalments triggered").
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		if err := requireBillingTerms(c); err != nil {
 			return err
 		}
 

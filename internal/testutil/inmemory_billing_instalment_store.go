@@ -192,6 +192,21 @@ func (s *InMemoryBillingInstalmentStore) Cancel(ctx context.Context, ownerType t
 	)
 }
 
+func (s *InMemoryBillingInstalmentStore) CancelScheduled(ctx context.Context, ids []string) ([]*billingterm.Instalment, error) {
+	if len(ids) == 0 {
+		return []*billingterm.Instalment{}, nil
+	}
+
+	return s.transition(ctx,
+		func(in *billingterm.Instalment) bool {
+			return lo.Contains(ids, in.ID) && in.InstalmentStatus == types.InstalmentStatusScheduled
+		},
+		func(in *billingterm.Instalment) {
+			in.InstalmentStatus = types.InstalmentStatusCancelled
+		},
+	)
+}
+
 func (s *InMemoryBillingInstalmentStore) Claim(ctx context.Context, invoiceID string, invoicedAt time.Time, ids []string) ([]*billingterm.Instalment, error) {
 	if len(ids) == 0 {
 		return []*billingterm.Instalment{}, nil

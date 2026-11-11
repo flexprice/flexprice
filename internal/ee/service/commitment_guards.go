@@ -411,9 +411,10 @@ func createPriceSyncLine(
 	return true, nil
 }
 
-// checkLineDetach rejects ending a usage line item at endDate when an active binding commitment
-// scopes it and the other lines in its scope do not cover the rest of its term without a gap, which would
-// silently stop billing its minimum. Call it inside the write's transaction, after any replacement line exists.
+// checkLineDetach rejects ending a usage line item at endDate when a binding commitment still running then, a pending
+// termination included, scopes it and the other lines in its scope do not cover the rest of its term without a gap,
+// which would silently stop billing its minimum. Call it inside the write's transaction, after any replacement line
+// exists.
 func checkLineDetach(
 	ctx context.Context,
 	params ServiceParams,
@@ -436,8 +437,12 @@ func checkLineDetach(
 		return err
 	}
 
-	active, err := params.CommitmentRepo.List(ctx, commitment.NewSubscriptionFilter(sub.ID, types.CommitmentStatusActive))
-	if err != nil || len(active) == 0 {
+	listed, err := params.CommitmentRepo.List(ctx, commitment.NewSubscriptionFilter(
+		sub.ID,
+		types.CommitmentStatusActive,
+		types.CommitmentStatusTerminated,
+	))
+	if err != nil || len(listed) == 0 {
 		return err
 	}
 
@@ -453,7 +458,7 @@ func checkLineDetach(
 		}
 	}
 
-	for _, c := range active {
+	for _, c := range listed {
 		end := termEnd(sub, c)
 		from := maxTime(endDate, c.StartDate)
 		if !c.Binding || endReached(end, from) || endReached(end, li.StartDate) || !commitmentCoversLine(c, li, p) {

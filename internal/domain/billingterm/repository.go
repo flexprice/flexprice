@@ -42,6 +42,9 @@ type InstalmentRepository interface {
 	// Cancel cancels the owner's instalments in the given statuses, which must be non-empty, and keeps invoice_id.
 	Cancel(ctx context.Context, ownerType types.BillingTermOwnerType, ownerID string, statuses []types.InstalmentStatus) ([]*Instalment, error)
 
+	// CancelScheduled cancels the given instalments that are still scheduled and returns only the rows it changed.
+	CancelScheduled(ctx context.Context, ids []string) ([]*Instalment, error)
+
 	// Claim moves the given scheduled instalments to invoiced on the invoice, finalized at invoicedAt, and returns only
 	// the rows it changed.
 	Claim(ctx context.Context, invoiceID string, invoicedAt time.Time, ids []string) ([]*Instalment, error)

@@ -844,41 +844,110 @@ func (s *CommitmentServiceSuite) TestTerminate_PercentageFeeNotSupported() {
 	s.Empty(invoices)
 }
 
-func (s *CommitmentServiceSuite) TestTerminate_RejectsFutureEffectiveAt() {
-	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
-	req.EndDate = nil
-	created, err := s.svc.Create(s.GetContext(), req)
-	s.Require().NoError(err)
-
+// A future effective_at records the termination at once: the status turns terminated with terminated_at ahead,
+// commitment.terminated fires now, and a fee is billed now for the rest of the billing period holding effective_at.
+func (s *CommitmentServiceSuite) TestTerminate_FutureEffectiveAt() {
 	now := clock.Now().Truncate(time.Second)
+	monthAhead := now.AddDate(0, 1, 0)
 	tests := []struct {
-		name string
-		at   time.Time
-		fee  *dto.CancellationFeeInput
+		name          string
+		at            time.Time
+		withFee       bool
+		wantPeriodEnd time.Time
 	}{
-		{name: "an hour ahead", at: now.Add(time.Hour)},
-		{name: "a year ahead", at: now.AddDate(1, 0, 0)},
-		{name: "a year ahead with a fee", at: now.AddDate(1, 0, 0), fee: fixedFee("50")},
+		{name: "an hour ahead without a fee", at: now.Add(time.Hour)},
+		{name: "a year ahead without a fee", at: now.AddDate(1, 0, 0)},
+		{
+			name:          "a month ahead with a fee",
+			at:            monthAhead,
+			withFee:       true,
+			wantPeriodEnd: time.Date(monthAhead.Year(), monthAhead.Month()+1, 1, 0, 0, 0, 0, time.UTC),
+		},
 	}
-
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			_, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+			s.SetupTest()
+			req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			req.EndDate = nil
+			created, err := s.svc.Create(s.GetContext(), req)
+			s.Require().NoError(err)
+
+			publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+			publisher.Reset()
+			if tt.withFee {
+				s.requireFeeCovers(created.ID, tt.at, tt.wantPeriodEnd, false)
+			} else {
+				resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &tt.at})
+				s.Require().NoError(err)
+				s.Nil(resp.TerminationInvoiceID)
+			}
+
+			got, err := s.svc.Get(s.GetContext(), created.ID)
+			s.Require().NoError(err)
+			s.Equal(types.CommitmentStatusTerminated, got.CommitmentStatus)
+			s.True(got.TerminatedAt.Equal(tt.at), "got %s", got.TerminatedAt)
+			s.True(got.TerminationPending(clock.Now()))
+
+			events := lo.Filter(publisher.Events(), func(e *types.WebhookEvent, _ int) bool { return e.EntityID == created.ID })
+			s.Require().Len(events, 1)
+			s.Equal(types.WebhookEventCommitmentTerminated, events[0].EventName)
+		})
+	}
+}
+
+// Until PR 2 adds rescheduling, a second terminate only moves a pending termination earlier, without a fee, and
+// publishes commitment.updated; a termination that has taken effect is final.
+func (s *CommitmentServiceSuite) TestTerminate_PendingTerminationMovesOnlyEarlier() {
+	now := clock.Now().Truncate(time.Second)
+	pendingAt := now.AddDate(0, 2, 0)
+	tests := []struct {
+		name      string
+		firstAt   time.Time
+		at        time.Time
+		fee       *dto.CancellationFeeInput
+		wantMoved bool
+		wantErr   func(error) bool
+	}{
+		{name: "earlier, still ahead", firstAt: pendingAt, at: now.AddDate(0, 1, 0), wantMoved: true},
+		{name: "earlier, into the past", firstAt: pendingAt, at: now.AddDate(0, -1, 0), wantMoved: true},
+		{name: "later", firstAt: pendingAt, at: pendingAt.AddDate(0, 1, 0), wantErr: ierr.IsValidation},
+		{name: "earlier with a fee", firstAt: pendingAt, at: now.AddDate(0, 1, 0), fee: fixedFee("50"), wantErr: ierr.IsInvalidOperation},
+		{name: "after it took effect", firstAt: now.AddDate(0, -1, 0), at: now.AddDate(0, -2, 0), wantErr: ierr.IsInvalidOperation},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			req.EndDate = nil
+			created, err := s.svc.Create(s.GetContext(), req)
+			s.Require().NoError(err)
+			_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &tt.firstAt})
+			s.Require().NoError(err)
+
+			publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+			publisher.Reset()
+			_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
 				EffectiveAt:     &tt.at,
 				CancellationFee: tt.fee,
 			})
-			s.requireValidation(err, "future-dated termination is not supported yet")
+
+			got, getErr := s.svc.Get(s.GetContext(), created.ID)
+			s.Require().NoError(getErr)
+			s.Equal(types.CommitmentStatusTerminated, got.CommitmentStatus)
+			if !tt.wantMoved {
+				s.True(tt.wantErr(err), "got %v", err)
+				s.True(got.TerminatedAt.Equal(tt.firstAt), "kept %s, got %s", tt.firstAt, got.TerminatedAt)
+				s.Empty(publisher.Events())
+				return
+			}
+
+			s.Require().NoError(err)
+			s.True(got.TerminatedAt.Equal(tt.at), "got %s", got.TerminatedAt)
+			events := publisher.Events()
+			s.Require().Len(events, 1)
+			s.Equal(types.WebhookEventCommitmentUpdated, events[0].EventName)
 		})
 	}
-
-	got, err := s.svc.Get(s.GetContext(), created.ID)
-	s.Require().NoError(err)
-	s.Equal(types.CommitmentStatusActive, got.CommitmentStatus)
-	s.Nil(got.TerminatedAt)
-
-	invoices, err := s.GetStores().InvoiceRepo.List(s.GetContext(), types.NewNoLimitInvoiceFilter())
-	s.Require().NoError(err)
-	s.Empty(invoices)
 }
 
 func (s *CommitmentServiceSuite) TestTerminate_DefaultsEffectiveAtToNow() {
@@ -1085,6 +1154,54 @@ func (s *CommitmentServiceSuite) TestTerminateForSubscription_TerminatesActiveOn
 	s.Require().Len(events, 1)
 	s.Equal(types.WebhookEventCommitmentTerminated, events[0].EventName)
 	s.Equal(active.ID, events[0].EntityID)
+}
+
+// A subscription ending before a pending termination ends the commitment with it: terminated_at is pulled back to
+// the subscription end with no extra fee, and commitment.updated fires. A fee billed when it was recorded stays.
+func (s *CommitmentServiceSuite) TestTerminateForSubscription_PullsBackAPendingTermination() {
+	now := clock.Now().Truncate(time.Second)
+	tests := []struct {
+		name         string
+		fee          *dto.CancellationFeeInput
+		wantInvoices int
+	}{
+		{name: "recorded without a fee"},
+		{name: "recorded with a fee", fee: fixedFee("50"), wantInvoices: 1},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			req.EndDate = nil
+			created, err := s.svc.Create(s.GetContext(), req)
+			s.Require().NoError(err)
+
+			pendingAt := now.AddDate(0, 2, 0)
+			_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+				EffectiveAt:     &pendingAt,
+				CancellationFee: tt.fee,
+			})
+			s.Require().NoError(err)
+
+			publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+			publisher.Reset()
+			subEnd := now.AddDate(0, 0, -1)
+			s.Require().NoError(s.svc.TerminateForSubscription(s.GetContext(), s.fx.sub.ID, subEnd))
+
+			got, err := s.svc.Get(s.GetContext(), created.ID)
+			s.Require().NoError(err)
+			s.Equal(types.CommitmentStatusTerminated, got.CommitmentStatus)
+			s.True(got.TerminatedAt.Equal(subEnd), "got %s", got.TerminatedAt)
+
+			events := publisher.Events()
+			s.Require().Len(events, 1)
+			s.Equal(types.WebhookEventCommitmentUpdated, events[0].EventName)
+
+			invoices, err := s.GetStores().InvoiceRepo.List(s.GetContext(), types.NewNoLimitInvoiceFilter())
+			s.Require().NoError(err)
+			s.Len(invoices, tt.wantInvoices, "no fee is billed for the subscription end")
+		})
+	}
 }
 
 func (s *CommitmentServiceSuite) TestListOverlapping_IncludesTerminated() {

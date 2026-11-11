@@ -83,6 +83,11 @@ func (c *Commitment) EndedBy(t time.Time) bool {
 	return end != nil && (!end.After(t) || !end.After(c.StartDate))
 }
 
+// TerminationPending reports whether the commitment is terminated with a terminated_at still after now.
+func (c *Commitment) TerminationPending(now time.Time) bool {
+	return c.CommitmentStatus == types.CommitmentStatusTerminated && c.TerminatedAt != nil && c.TerminatedAt.After(now)
+}
+
 func FromEnt(e *ent.Commitment) *Commitment {
 	if e == nil {
 		return nil

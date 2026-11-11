@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -1230,4 +1231,116 @@ func (s *CommitmentE2ESuite) TestE2E_PerPeriodUnchanged() {
 	instalments, err := s.GetStores().BillingInstalmentRepo.List(s.GetContext(), &billingterm.InstalmentFilter{SubscriptionIDs: []string{sub.ID}})
 	s.Require().NoError(err)
 	s.Empty(instalments)
+}
+
+// A termination recorded ahead of its date bills the fee at once and keeps the instalments owed by then. The
+// subscription is then cancelled first, so the commitment ends with it: the $300 upfront owed by the cancellation is
+// settled on its own invoice beside the $250 fee, and the arrears due later are cancelled unbilled.
+func (s *CommitmentE2ESuite) TestFutureTermination_EndsWithAnEarlierSubscriptionCancel() {
+	ctx := s.GetContext()
+	start := clock.Now().Truncate(24*time.Hour).AddDate(0, 0, -1)
+	tokens := s.planWith("future_termination", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, start)
+	committed := s.commit(sub.ID, termsRequest("Platform", tokens.ID, "100", start, start.AddDate(1, 0, 0),
+		dto.BillingTermInput{Kind: types.BillingTermKindOnce, ValueType: types.BillingTermValueFixed, Value: lo.ToPtr(dec("300"))},
+		dto.BillingTermInput{
+			Kind:           types.BillingTermKindRecurring,
+			ValueType:      types.BillingTermValueFixed,
+			Value:          lo.ToPtr(dec("75")),
+			InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear),
+		},
+	))
+	s.Require().Len(committed.Instalments, 13)
+	upfront, arrears := committed.Instalments[0], committed.Instalments[1:]
+
+	// Terminate when the third arrear falls due, three months on.
+	at := arrears[2].BillOn
+	terminated, err := s.commitments.Terminate(ctx, committed.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt:     &at,
+		CancellationFee: fixedFee("250"),
+	})
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusTerminated, terminated.CommitmentStatus)
+	s.True(terminated.TerminatedAt.Equal(at), "terminated at %s", terminated.TerminatedAt)
+
+	fee, err := s.GetStores().InvoiceRepo.Get(ctx, lo.FromPtr(terminated.TerminationInvoiceID))
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, fee.InvoiceStatus)
+	s.requireBilled(fee, "250", wantLine{types.CommitmentLineCancellationFee, "Platform (cancellation fee)", "1", "250"})
+
+	for i, inst := range committed.Instalments {
+		want := types.InstalmentStatusScheduled
+		if i > 3 {
+			want = types.InstalmentStatusCancelled
+		}
+		s.Equal(want, s.instalmentStatus(inst.ID).InstalmentStatus, "instalment %d due %s", i, inst.BillOn)
+	}
+
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	publisher.Reset()
+	cancelAt := clock.Now().Truncate(time.Second)
+	_, err = s.subscriptions.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType: types.CancellationTypeImmediate,
+		CancelAt:         &cancelAt,
+	})
+	s.Require().NoError(err)
+
+	ended, err := s.commitments.Get(ctx, committed.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusTerminated, ended.CommitmentStatus)
+	s.True(ended.TerminatedAt.Equal(cancelAt), "pulled back to the cancellation, got %s", ended.TerminatedAt)
+	s.Contains(lo.FilterMap(publisher.Events(), func(e *types.WebhookEvent, _ int) (types.WebhookEventName, bool) {
+		return e.EventName, e.EntityID == committed.ID
+	}), types.WebhookEventCommitmentUpdated)
+
+	settlement := s.settlementOf(committed.ID)
+	s.True(settlement.Amount.Equal(upfront.Amount), "the upfront owed by the cancellation, got %s", settlement.Amount)
+	s.Equal(types.InstalmentStatusInvoiced, settlement.InstalmentStatus)
+	settled, err := s.GetStores().InvoiceRepo.Get(ctx, lo.FromPtr(settlement.InvoiceID))
+	s.Require().NoError(err)
+	s.requireBilled(settled, "300", wantLine{types.CommitmentLineSettlement, "Platform - Settlement", "1", "300"})
+
+	s.Equal(types.InstalmentStatusCancelled, s.instalmentStatus(upfront.ID).InstalmentStatus)
+	for _, inst := range arrears {
+		s.Equal(types.InstalmentStatusCancelled, s.instalmentStatus(inst.ID).InstalmentStatus, "arrear due %s", inst.BillOn)
+	}
+
+	billed := s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonCommitmentTermination)
+	s.Require().Len(billed, 2)
+	s.ElementsMatch([]string{fee.ID, settled.ID}, lo.Map(billed, func(inv *invoice.Invoice, _ int) string { return inv.ID }))
+	s.True(fee.AmountDue.Add(settled.AmountDue).Equal(dec("550")), "the fee once and the upfront")
+}
+
+// A plan change cancels the old subscription at once, so a termination recorded for later ends with it, at the
+// change, with no extra fee.
+func (s *CommitmentE2ESuite) TestFutureTermination_EndsWithAnEarlierPlanChange() {
+	ctx := s.GetContext()
+	start := clock.Now().Truncate(24*time.Hour).AddDate(0, 0, -1)
+	tokens := s.planWith("change_from", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	target := s.planWith("change_to", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.20")
+	sub := s.subscribe(tokens, start)
+	committed := s.commit(sub.ID, floorRequest("Platform floor", tokens.ID, "100", start, start.AddDate(1, 0, 0)))
+
+	at := start.AddDate(0, 3, 0)
+	_, err := s.commitments.Terminate(ctx, committed.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+	s.Require().NoError(err)
+
+	before := clock.Now()
+	changed, err := NewSubscriptionChangeService(fullServiceParams(&s.BaseServiceTestSuite)).ExecuteSubscriptionChange(ctx, sub.ID,
+		dto.SubscriptionChangeRequest{
+			TargetPlanID:      target.EntityID,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			BillingCadence:    types.BILLING_CADENCE_RECURRING,
+			BillingPeriod:     types.BILLING_PERIOD_MONTHLY,
+			BillingCycle:      types.BillingCycleAnniversary,
+		})
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusCancelled, changed.OldSubscription.Status)
+
+	ended, err := s.commitments.Get(ctx, committed.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusTerminated, ended.CommitmentStatus)
+	s.False(ended.TerminatedAt.Before(before), "pulled back to the change, got %s", ended.TerminatedAt)
+	s.False(ended.TerminatedAt.After(clock.Now()), "got %s", ended.TerminatedAt)
+	s.Empty(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonCommitmentTermination), "no fee for the change")
 }

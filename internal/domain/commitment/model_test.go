@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 )
@@ -129,6 +130,28 @@ func TestCommitment_EndedBy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.want, tt.c.EndedBy(tt.at))
+		})
+	}
+}
+
+func TestCommitment_TerminationPending(t *testing.T) {
+	now := time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)
+	later, earlier := now.Add(time.Microsecond), now.Add(-time.Microsecond)
+
+	tests := []struct {
+		name string
+		c    *Commitment
+		want bool
+	}{
+		{"terminated later", &Commitment{CommitmentStatus: types.CommitmentStatusTerminated, TerminatedAt: &later}, true},
+		{"terminated at now", &Commitment{CommitmentStatus: types.CommitmentStatusTerminated, TerminatedAt: &now}, false},
+		{"terminated earlier", &Commitment{CommitmentStatus: types.CommitmentStatusTerminated, TerminatedAt: &earlier}, false},
+		{"active", &Commitment{CommitmentStatus: types.CommitmentStatusActive}, false},
+		{"terminated without a date", &Commitment{CommitmentStatus: types.CommitmentStatusTerminated}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, tt.c.TerminationPending(now))
 		})
 	}
 }

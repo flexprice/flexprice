@@ -541,9 +541,10 @@ func (s *commitmentService) Update(
 	return s.response(ctx, updated)
 }
 
-// Terminate ends an active commitment at effective_at, which defaults to now and may not be in the future. A
-// cancellation fee and, under billing terms, a settlement are billed on one immediate one-off invoice, created in the
-// same transaction as the status change.
+// Terminate ends an active commitment at effective_at, which defaults to now; a later call may move a pending
+// termination earlier. The status turns terminated at once, even for a future effective_at, and usage bills until
+// terminated_at. A cancellation fee and, under billing terms, a settlement of the instalments owed once the
+// termination takes effect are billed on one immediate one-off invoice, created in the same transaction.
 func (s *commitmentService) Terminate(
 	ctx context.Context,
 	id string,
@@ -557,12 +558,7 @@ func (s *commitmentService) Terminate(
 		return nil, err
 	}
 
-	now := clock.Now()
-	effectiveAt := lo.FromPtrOr(req.EffectiveAt, now)
-	if effectiveAt.After(now) {
-		return nil, ierr.Validation("future-dated termination is not supported yet")
-	}
-
+	effectiveAt := lo.FromPtrOr(req.EffectiveAt, clock.Now())
 	fee := decimal.Zero
 	if req.CancellationFee != nil {
 		fee = req.CancellationFee.Value
@@ -579,14 +575,6 @@ func (s *commitmentService) Terminate(
 		return nil, err
 	}
 
-	s.Logger.Info(ctx, "commitment.terminated",
-		"operation", "commitment.terminated",
-		"commitment_id", out.ID,
-		"subscription_id", out.SubscriptionID,
-		"effective_at", effectiveAt,
-		"termination_invoice_id", lo.FromPtr(invoiceID),
-	)
-	s.publishSystemEvent(ctx, types.WebhookEventCommitmentTerminated, out)
 	s.recomputeDrafts(ctx, out.SubscriptionID, effectiveAt)
 
 	resp, err := s.response(ctx, out)
@@ -598,7 +586,9 @@ func (s *commitmentService) Terminate(
 	return resp, nil
 }
 
-// TerminateForSubscription terminates every active commitment on the subscription whose term runs past effectiveAt.
+// TerminateForSubscription ends the subscription's commitments with it at effectiveAt: an active one running past it
+// is terminated, a pending termination after it is pulled back to it with no fee, and any other settles the
+// instalments it still has scheduled.
 func (s *commitmentService) TerminateForSubscription(
 	ctx context.Context,
 	subscriptionID string,
@@ -609,31 +599,28 @@ func (s *commitmentService) TerminateForSubscription(
 			return err
 		}
 
-		listed, err := s.CommitmentRepo.List(txCtx, commitment.NewSubscriptionFilter(subscriptionID, types.CommitmentStatusActive))
+		listed, err := s.CommitmentRepo.List(txCtx, commitment.NewSubscriptionFilter(
+			subscriptionID,
+			types.CommitmentStatusActive,
+			types.CommitmentStatusTerminated,
+		))
 		if err != nil {
 			return err
 		}
 
+		now := clock.Now()
 		for _, c := range listed {
-			if c.EndedBy(effectiveAt) {
+			// A termination that has taken effect is final, even one after effectiveAt.
+			if c.EndedBy(effectiveAt) || (c.CommitmentStatus != types.CommitmentStatusActive && !c.TerminationPending(now)) {
 				if err := s.settleEnded(txCtx, c); err != nil {
 					return err
 				}
 				continue
 			}
 
-			out, _, err := s.terminate(txCtx, c.ID, effectiveAt, decimal.Zero)
-			if err != nil {
+			if _, _, err := s.terminate(txCtx, c.ID, effectiveAt, decimal.Zero); err != nil {
 				return err
 			}
-
-			s.publishSystemEvent(txCtx, types.WebhookEventCommitmentTerminated, out)
-			s.Logger.Info(ctx, "commitment.terminated",
-				"operation", "commitment.terminated",
-				"commitment_id", c.ID,
-				"subscription_id", subscriptionID,
-				"effective_at", effectiveAt,
-			)
 		}
 
 		return nil
@@ -738,9 +725,10 @@ func (s *commitmentService) lockSubscriptionCommitments(ctx context.Context, sub
 	return nil
 }
 
-// terminate re-reads the commitment under its lock and must run inside a transaction. Under billing terms it settles
-// the instalments first. The termination invoice is created before the status change so a billing failure leaves
-// the commitment active.
+// terminate re-reads the commitment under its lock and must run inside a transaction. It ends an active commitment at
+// effectiveAt or moves a pending termination earlier to it, and publishes commitment.terminated or .updated after
+// commit. Under billing terms it settles the instalments first. The termination invoice is created before the status
+// change so a billing failure leaves the commitment as it was.
 func (s *commitmentService) terminate(
 	ctx context.Context,
 	id string,
@@ -756,9 +744,10 @@ func (s *commitmentService) terminate(
 		return nil, nil, err
 	}
 
-	if c.CommitmentStatus != types.CommitmentStatusActive {
+	pending := c.TerminationPending(clock.Now())
+	if c.CommitmentStatus != types.CommitmentStatusActive && !pending {
 		return nil, nil, ierr.NewErrorf("commitment %s is %s", c.ID, c.CommitmentStatus).
-			WithHint("Only active commitments can be terminated").
+			WithHint("Only active commitments and pending terminations can be terminated").
 			Mark(ierr.ErrInvalidOperation)
 	}
 
@@ -773,6 +762,12 @@ func (s *commitmentService) terminate(
 
 	if c.EndedBy(effectiveAt) {
 		return nil, nil, ierr.Validationf("effective_at must be before the commitment end %s", c.EffectiveEnd().Format(time.RFC3339))
+	}
+
+	if pending && fee.IsPositive() {
+		return nil, nil, ierr.NewErrorf("commitment %s is already terminated at %s", c.ID, c.TerminatedAt.Format(time.RFC3339)).
+			WithHint("A pending termination can only be moved earlier, without a cancellation fee").
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	if fee.IsPositive() && !c.Binding {
@@ -801,6 +796,20 @@ func (s *commitmentService) terminate(
 		return nil, nil, err
 	}
 
+	event, operation := types.WebhookEventCommitmentTerminated, "commitment.terminated"
+	if pending {
+		event, operation = types.WebhookEventCommitmentUpdated, "commitment.termination_rescheduled"
+	}
+
+	s.publishSystemEvent(ctx, event, out)
+	s.Logger.Info(ctx, operation,
+		"operation", operation,
+		"commitment_id", out.ID,
+		"subscription_id", out.SubscriptionID,
+		"effective_at", effectiveAt,
+		"previous_terminated_at", c.TerminatedAt,
+		"termination_invoice_id", lo.FromPtr(invoiceID),
+	)
 	return out, invoiceID, nil
 }
 
@@ -839,6 +848,13 @@ func (s *commitmentService) billTermination(
 	first := lo.MinBy(lines, func(a, b dto.CreateInvoiceLineItemRequest) bool { return a.PeriodStart.Before(*b.PeriodStart) })
 	last := lo.MaxBy(lines, func(a, b dto.CreateInvoiceLineItemRequest) bool { return a.PeriodEnd.After(*b.PeriodEnd) })
 
+	// A settlement billed without a fee, once a pending termination takes effect, must not collide with the fee invoice
+	// billed when it was recorded.
+	key := "commitment_settlement_" + c.ID
+	if fee.IsPositive() {
+		key = "commitment_termination_" + c.ID
+	}
+
 	billingPeriod := string(sub.BillingPeriod)
 	inv, err := NewInvoiceService(s.ServiceParams).CreateInvoice(ctx, dto.CreateInvoiceRequest{
 		CustomerID:     sub.GetInvoicingCustomerID(),
@@ -852,7 +868,7 @@ func (s *commitmentService) billTermination(
 		PeriodStart:    lo.ToPtr(*first.PeriodStart),
 		PeriodEnd:      lo.ToPtr(*last.PeriodEnd),
 		BillingPeriod:  &billingPeriod,
-		IdempotencyKey: lo.ToPtr("commitment_termination_" + c.ID),
+		IdempotencyKey: &key,
 		LineItems:      lines,
 	})
 	if err != nil {
