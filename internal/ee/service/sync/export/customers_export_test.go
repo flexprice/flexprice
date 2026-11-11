@@ -2,6 +2,7 @@ package export
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -123,4 +124,20 @@ func TestListRefsByFilter_Cap(t *testing.T) {
 	refs, err := store.ListRefsByFilter(ctx, &types.CustomerFilter{}, 3)
 	require.NoError(t, err)
 	require.Len(t, refs, 3)
+}
+
+func TestCustomersExporter_PagesAcrossBatches(t *testing.T) {
+	e, store, ctx := newCustomersEnv(t)
+	total := customersPageSize*2 + 5
+	for i := 0; i < total; i++ {
+		addCust(t, store, ctx, fmt.Sprintf("c%05d", i), "t1", "e1", types.StatusPublished, map[string]string{fmt.Sprintf("k%d", i%3): "v"})
+	}
+	out, n, err := e.PrepareData(ctx, exportReq(nil))
+	require.NoError(t, err)
+	require.Equal(t, total, n)
+	h, rows := parseCSVOutput(t, out)
+	require.Len(t, rows, total)
+	require.Equal(t, []string{"metadata_k0", "metadata_k1", "metadata_k2"}, h[16:])
+	require.Equal(t, "c00000", rows[0][0])
+	require.Equal(t, fmt.Sprintf("c%05d", total-1), rows[total-1][0])
 }
