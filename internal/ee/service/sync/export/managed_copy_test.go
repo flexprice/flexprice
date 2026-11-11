@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -64,12 +65,17 @@ func (r managedResolver) ForConnectionExport(context.Context, string, *types.S3J
 
 type panicConnRepo struct {
 	connection.Repository
-	calls int
+	calls   int
+	managed bool
 }
 
 func (r *panicConnRepo) Get(context.Context, string) (*connection.Connection, error) {
 	r.calls++
-	return &connection.Connection{ProviderType: types.SecretProviderS3}, nil
+	conn := &connection.Connection{ProviderType: types.SecretProviderS3}
+	if r.managed {
+		conn.SyncConfig = &types.SyncConfig{Storage: &types.StorageExportConfig{IsFlexpriceManaged: true}}
+	}
+	return conn, nil
 }
 
 type csvExporter struct{}
@@ -214,4 +220,35 @@ func TestExportObjectKey_TaskIDMakesKeysDistinct(t *testing.T) {
 	require.NotContains(t, k1, ":")
 	require.Equal(t, exportObjectKey(managedRequest(true, cfg), csvExporter{}), exportObjectKey(managedRequest(true, cfg), csvExporter{}))
 	require.NotContains(t, exportObjectKey(managedRequest(true, cfg), csvExporter{}), "aaaa")
+}
+
+func TestExport_ManagedConnectionRechecksDestination(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     *types.S3JobConfig
+		wantErr bool
+	}{
+		{"platform scope", &types.S3JobConfig{Bucket: "platform-bucket", KeyPrefix: "t1/e1"}, false},
+		{"exports scope", platformCfg("exports/t1/e1/st_1"), false},
+		{"foreign bucket", &types.S3JobConfig{Bucket: "customer-bucket", KeyPrefix: "t1/e1"}, true},
+		{"other tenant", &types.S3JobConfig{Bucket: "platform-bucket", KeyPrefix: "t2/e1"}, true},
+		{"traversal", &types.S3JobConfig{Bucket: "platform-bucket", KeyPrefix: "t1/e1/../e2"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &recordingStore{provider: storage.ProviderS3, bucket: tt.cfg.Bucket}
+			svc := managedService(store, store, &panicConnRepo{managed: true})
+			svc.config = &config.Configuration{FlexpriceS3Exports: config.FlexpriceS3ExportsConfig{Bucket: "platform-bucket"}}
+
+			_, err := svc.executeExport(context.Background(), managedRequest(false, tt.cfg), csvExporter{})
+
+			if tt.wantErr {
+				require.Error(t, err)
+				require.True(t, ierr.IsValidation(err))
+				require.Empty(t, store.keys)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
 }
