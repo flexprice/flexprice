@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -17,4 +18,7 @@ type Repository interface {
 	Delete(ctx context.Context, id string) error
 	// SetTaskMetadataKey writes one metadata key on the writer.
 	SetTaskMetadataKey(ctx context.Context, id, key string, value any) error
+	// FailStaleExportTasks fails unfinished export runs created before olderThan, across all
+	// tenants. It returns the number updated, at most limit.
+	FailStaleExportTasks(ctx context.Context, olderThan time.Time, reason string, limit int) (int, error)
 }

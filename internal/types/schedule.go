@@ -43,6 +43,8 @@ const (
 	ScheduleIDEmailDispatch ScheduleID = "email-dispatch"
 	// ScheduleIDMeterUsageOptimize drives MeterUsageOptimizeWorkflow; a no-op unless clickhouse.meter_usage_optimize.enabled.
 	ScheduleIDMeterUsageOptimize ScheduleID = "meter-usage-optimize"
+	// ScheduleIDStaleExportSweep drives StaleExportSweepWorkflow.
+	ScheduleIDStaleExportSweep ScheduleID = "stale-export-sweep"
 )
 
 // String returns the raw schedule id.
@@ -75,6 +77,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDBillingInstalmentsDue,
 		ScheduleIDEmailDispatch,
 		ScheduleIDMeterUsageOptimize,
+		ScheduleIDStaleExportSweep,
 	}
 }
 
