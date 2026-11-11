@@ -980,14 +980,15 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
-	if payments.RefundIfInvoiceVoided(ctx, payments.RefundIfInvoiceVoidedParams{
+	refundParams := payments.RefundIfInvoiceVoidedParams{
 		PaymentService:     services.PaymentService,
 		InvoiceService:     services.InvoiceService,
 		Refunder:           h.paymentSvc,
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   piID,
 		Logger:             h.logger,
-	}) {
+	}
+	if payments.RefundIfInvoiceVoided(ctx, refundParams) {
 		return nil
 	}
 
@@ -1011,6 +1012,8 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"event_id", event.ID)
+		// The invoice may have been voided after the check above.
+		payments.RefundIfInvoiceVoided(ctx, refundParams)
 		return nil
 	}
 

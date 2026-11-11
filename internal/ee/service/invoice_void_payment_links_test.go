@@ -203,25 +203,32 @@ func (s *VoidPaymentLinksSuite) TestVoid_NotImplementedProviderStillVoidsPayment
 	s.Equal(types.PaymentStatusVoided, s.payment("pay_1").PaymentStatus)
 }
 
-func (s *VoidPaymentLinksSuite) TestVoid_TerminatesForeignCheckoutSession() {
+func (s *VoidPaymentLinksSuite) TestVoid_InTransactionClosesLinksAfterCommit() {
+	s.seedInvoice()
+	s.seedPayment("pay_1", types.PaymentStatusPending, types.PaymentMethodTypePaymentLink, "cs_1")
+	txCtx := types.WithPostCommitHooks(s.GetContext())
+
+	_, err := s.svc.VoidInvoice(txCtx, "inv_vpl", dto.InvoiceVoidRequest{})
+	s.Require().NoError(err)
+
+	s.Equal(types.PaymentStatusPending, s.payment("pay_1").PaymentStatus)
+	s.Empty(s.provider.expired)
+
+	types.RunPostCommitHooks(txCtx)
+
+	s.Equal(types.PaymentStatusVoided, s.payment("pay_1").PaymentStatus)
+	s.Equal([]string{"cs_1"}, s.provider.expired)
+}
+
+func (s *VoidPaymentLinksSuite) TestVoid_SkipsCheckoutSessionLink() {
 	s.seedInvoice()
 	s.seedPayment("pay_1", types.PaymentStatusPending, types.PaymentMethodTypePaymentLink, "cs_1")
 	session := s.seedSession("pay_1")
 
 	s.void(dto.InvoiceVoidRequest{})
 
-	got, err := s.GetStores().CheckoutSessionRepo.Get(s.GetContext(), session.ID)
-	s.Require().NoError(err)
-	s.Equal(types.CheckoutStatusFailed, got.CheckoutStatus)
-}
-
-func (s *VoidPaymentLinksSuite) TestVoid_SkipsOwningCheckoutSession() {
-	s.seedInvoice()
-	s.seedPayment("pay_1", types.PaymentStatusPending, types.PaymentMethodTypePaymentLink, "cs_1")
-	session := s.seedSession("pay_1")
-
-	s.void(dto.InvoiceVoidRequest{InvoiceStateChangeSource: dto.NewCheckoutSessionSource(session.ID)})
-
+	s.Equal(types.PaymentStatusPending, s.payment("pay_1").PaymentStatus)
+	s.Empty(s.provider.expired)
 	got, err := s.GetStores().CheckoutSessionRepo.Get(s.GetContext(), session.ID)
 	s.Require().NoError(err)
 	s.Equal(types.CheckoutStatusPending, got.CheckoutStatus)

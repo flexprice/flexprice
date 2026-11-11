@@ -184,14 +184,15 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
-	if payments.RefundIfInvoiceVoided(ctx, payments.RefundIfInvoiceVoidedParams{
+	refundParams := payments.RefundIfInvoiceVoidedParams{
 		PaymentService:     services.PaymentService,
 		InvoiceService:     services.InvoiceService,
 		Refunder:           h.paymentSvc,
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   payment.ID,
 		Logger:             h.logger,
-	}) {
+	}
+	if payments.RefundIfInvoiceVoided(ctx, refundParams) {
 		return nil
 	}
 
@@ -239,6 +240,8 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
+		// The invoice may have been voided after the check above.
+		payments.RefundIfInvoiceVoided(ctx, refundParams)
 		return nil // Don't return error - webhook should always succeed
 	}
 

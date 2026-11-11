@@ -1342,8 +1342,8 @@ func errInvoiceVoided(invoiceID string) error {
 }
 
 // VoidOpenPaymentLinks closes every unpaid payment link on a voided invoice.
-// ownerSessionID is the checkout session performing the void, if any; it is skipped.
-func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID, ownerSessionID string) error {
+// Links owned by a checkout session are left to that session.
+func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID string) error {
 	var open []*dto.PaymentResponse
 	for _, status := range []types.PaymentStatus{types.PaymentStatusInitiated, types.PaymentStatusPending} {
 		filter := types.NewNoLimitPaymentFilter()
@@ -1368,24 +1368,16 @@ func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID, ow
 				"error", err, "invoice_id", invoiceID, "payment_id", p.ID)
 			continue
 		}
-		switch {
-		case session != nil && session.ID == ownerSessionID:
+		if session != nil {
 			continue
-		case session != nil:
-			if err := checkoutSvc.CleanupCheckoutSession(ctx, session.ID, errInvoiceVoided(invoiceID)); err != nil {
-				s.Logger.Error(ctx, "failed to terminate checkout session on invoice void",
-					"error", err, "invoice_id", invoiceID, "session_id", session.ID)
-				continue
-			}
-		default:
-			if _, err := s.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{
-				PaymentStatus: lo.ToPtr(string(types.PaymentStatusVoided)),
-				VoidedAt:      lo.ToPtr(clock.Now()),
-			}); err != nil {
-				s.Logger.Error(ctx, "failed to void payment link on invoice void",
-					"error", err, "invoice_id", invoiceID, "payment_id", p.ID)
-				continue
-			}
+		}
+		if _, err := s.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{
+			PaymentStatus: lo.ToPtr(string(types.PaymentStatusVoided)),
+			VoidedAt:      lo.ToPtr(clock.Now()),
+		}); err != nil {
+			s.Logger.Error(ctx, "failed to void payment link on invoice void",
+				"error", err, "invoice_id", invoiceID, "payment_id", p.ID)
+			continue
 		}
 		s.expireProviderLink(ctx, invoiceID, p)
 	}
