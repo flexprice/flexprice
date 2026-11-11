@@ -217,6 +217,20 @@ func (_c *ScheduledTaskCreate) SetEmailConfig(v *types.ExportEmailConfig) *Sched
 	return _c
 }
 
+// SetOrigin sets the "origin" field.
+func (_c *ScheduledTaskCreate) SetOrigin(v types.ExportOrigin) *ScheduledTaskCreate {
+	_c.mutation.SetOrigin(v)
+	return _c
+}
+
+// SetNillableOrigin sets the "origin" field if the given value is not nil.
+func (_c *ScheduledTaskCreate) SetNillableOrigin(v *types.ExportOrigin) *ScheduledTaskCreate {
+	if v != nil {
+		_c.SetOrigin(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ScheduledTaskCreate) SetID(v string) *ScheduledTaskCreate {
 	_c.mutation.SetID(v)
@@ -286,6 +300,10 @@ func (_c *ScheduledTaskCreate) defaults() {
 		v := scheduledtask.DefaultManagedCopy
 		_c.mutation.SetManagedCopy(v)
 	}
+	if _, ok := _c.mutation.Origin(); !ok {
+		v := scheduledtask.DefaultOrigin
+		_c.mutation.SetOrigin(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -333,6 +351,14 @@ func (_c *ScheduledTaskCreate) check() error {
 	}
 	if _, ok := _c.mutation.ManagedCopy(); !ok {
 		return &ValidationError{Name: "managed_copy", err: errors.New(`ent: missing required field "ScheduledTask.managed_copy"`)}
+	}
+	if _, ok := _c.mutation.Origin(); !ok {
+		return &ValidationError{Name: "origin", err: errors.New(`ent: missing required field "ScheduledTask.origin"`)}
+	}
+	if v, ok := _c.mutation.Origin(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "origin", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.origin": %w`, err)}
+		}
 	}
 	return nil
 }
@@ -440,6 +466,10 @@ func (_c *ScheduledTaskCreate) createSpec() (*ScheduledTask, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.EmailConfig(); ok {
 		_spec.SetField(scheduledtask.FieldEmailConfig, field.TypeJSON, value)
 		_node.EmailConfig = value
+	}
+	if value, ok := _c.mutation.Origin(); ok {
+		_spec.SetField(scheduledtask.FieldOrigin, field.TypeString, value)
+		_node.Origin = value
 	}
 	return _node, _spec
 }

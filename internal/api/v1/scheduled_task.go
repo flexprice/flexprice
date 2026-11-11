@@ -33,6 +33,8 @@ func NewScheduledTaskHandler(
 // @Description interval is hourly, daily, weekly, monthly or manual; clients should tolerate new values. schedule ({hour, minute, day_of_week, day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual.
 // @Description Window = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.
 // @Description entity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config is rejected for other entity types and cannot be changed later. Clients should tolerate new entity_type values.
+// @Description origin is console (default) or customers_page. customer_filter inside source_config limits the export to matching customers, needs origin customers_page, and is allowed for customers, wallet_ledger, invoice, credit_topups, credit_usage and usage_analytics exports and for reports with a customer dimension; entity_type customers requires it (empty means all customers).
+// @Description run_now (manual exports only) starts a run right after creation, optionally over run_window; the response then carries run.workflow_id. If the run cannot start the export is still created and run is absent.
 // @Description Report sources allow interval daily, weekly, monthly or manual; schedule is required unless manual. Windows are the previous UTC period, and a custom run window must be whole UTC days. export_metadata_fields is not allowed. These exports also need analytics read access.
 // @Tags Scheduled Tasks
 // @Accept json
@@ -102,6 +104,8 @@ func (h *ScheduledTaskHandler) GetScheduledTask(c *gin.Context) {
 // @Param entity_type query string false "Filter by entity type"
 // @Param interval query string false "Filter by interval"
 // @Param enabled query bool false "Filter by enabled status"
+// @Param origin query string false "Only exports created from this origin" Enums(console, customers_page)
+// @Param exclude_origin query string false "Hide exports created from this origin" Enums(console, customers_page)
 // @Success 200 {object} dto.ListScheduledTasksResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
@@ -132,7 +136,16 @@ func (h *ScheduledTaskHandler) ListScheduledTasks(c *gin.Context) {
 		interval = types.ScheduledTaskInterval(intervalStr)
 	}
 
-	resp, err := h.service.ListScheduledTasks(c.Request.Context(), &filter, connectionID, entityType, interval, enabledStr)
+	origin := types.ExportOrigin(c.Query("origin"))
+	excludeOrigin := types.ExportOrigin(c.Query("exclude_origin"))
+	for _, o := range []types.ExportOrigin{origin, excludeOrigin} {
+		if err := o.Validate(); err != nil {
+			c.Error(err)
+			return
+		}
+	}
+
+	resp, err := h.service.ListScheduledTasks(c.Request.Context(), &filter, connectionID, entityType, interval, enabledStr, origin, excludeOrigin)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "failed to list scheduled tasks", "error", err)
 		c.Error(err)
