@@ -210,6 +210,9 @@ func SanitizeExportCustomerFilter(f *CustomerFilter) *CustomerFilter {
 		Email:           f.Email,
 		BillingEntityID: f.BillingEntityID,
 	}
+	if len(out.Filters) == 0 {
+		out.Filters = nil
+	}
 	if f.QueryFilter != nil && f.QueryFilter.Status != nil {
 		out.QueryFilter = &QueryFilter{Status: f.QueryFilter.Status}
 	}

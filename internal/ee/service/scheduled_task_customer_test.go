@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	cockroachErrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
@@ -305,7 +306,7 @@ func TestCreate_PagingInFilterNeverRejects(t *testing.T) {
 }
 
 func TestCreate_BadCustomerFilterIsHTTP400(t *testing.T) {
-	repoErr := ierr.WithError(ierr.NewError("unknown field").WithHint("Unknown filter field").Mark(ierr.ErrValidation)).
+	repoErr := ierr.WithError(ierr.NewError("unknown field").WithHint("Unknown filter field 'bogus'").Mark(ierr.ErrValidation)).
 		WithHint("Failed to apply query options").
 		Mark(ierr.ErrDatabase)
 	s := customerExportService(&originRepoFake{}, &customerCountFake{err: repoErr})
@@ -317,4 +318,5 @@ func TestCreate_BadCustomerFilterIsHTTP400(t *testing.T) {
 		status, _ := ierr.ResolveError(err)
 		require.Equal(t, http.StatusBadRequest, status)
 	}
+	require.Contains(t, cockroachErrors.FlattenHints(err), "bogus")
 }

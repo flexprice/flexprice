@@ -40,6 +40,9 @@ func TestSanitizeExportCustomerFilter(t *testing.T) {
 	empty := SanitizeExportCustomerFilter(&CustomerFilter{})
 	require.NotNil(t, empty)
 	require.Nil(t, empty.QueryFilter)
+
+	emptyFilters := SanitizeExportCustomerFilter(&CustomerFilter{Filters: []*FilterCondition{}})
+	require.Nil(t, emptyFilters.Filters)
 }
 
 func TestExportSourceConfig_ValidateCustomerFilter(t *testing.T) {

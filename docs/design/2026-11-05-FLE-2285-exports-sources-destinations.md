@@ -289,10 +289,10 @@ Four phases. Each merges and ships on its own, and each has an exit check.
 - `origin` column (`console` default, `customers_page`; migration `20261111140000`). `GET /tasks/scheduled?origin=` and `?exclude_origin=`. `customer_filter` is accepted only with `origin=customers_page`.
 - `run_now=true` (manual only) creates the export and starts one run; the response carries `run.workflow_id`, which is the run's task id. `run_window` is validated before the export is created. The customer list ignores the window (snapshot) and never runs hourly.
 - Limits: a run resolves the filter once (keyset by id). Above 10,000 customers (1,000 for reports) the run fails with "Filter matches more than N customers; narrow it" and nothing is uploaded. No matches gives a header-only file; a report's empty header comes from the same column builder as a real run.
-- The customer list export streams in two passes (metadata keys, then rows).
+- The customer list export streams in two passes (metadata keys, then rows). Customers created between the passes may carry metadata keys not in the header; those values are left out (snapshot).
 - Known gap: `usage_analytics` still lists published customers only, so archived customers matched by a filter are left out there.
 
-Phase 1 has no feature flag. Release workers before the API, so a row created by the new API is never picked up by old workers. Later phases may add a flag if they introduce rows old workers cannot run. Connection exports default `managed_copy=false`, so nothing changes for them.
+Phase 1 has no feature flag. Release workers before the API, so a row created by the new API is never picked up by old workers (an old worker ignores `customer_filter` and exports all customers). Later phases may add a flag if they introduce rows old workers cannot run. Connection exports default `managed_copy=false`, so nothing changes for them.
 
 ## Not covered
 
