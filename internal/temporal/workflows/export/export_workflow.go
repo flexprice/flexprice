@@ -268,9 +268,14 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 					Status:   types.TaskStatusFailed,
 					Error:    completeFailedMessage,
 				}
-				_ = workflow.ExecuteActivity(ctx, taskActivity.UpdateTaskStatus, failInput).Get(ctx, nil)
-				deliverRun(ctx, &taskDetails, taskID, types.TaskStatusFailed, 0, runErr)
-				return &ExecuteExportWorkflowOutput{TaskID: taskID}, runErr
+				statusErr := workflow.ExecuteActivity(ctx, taskActivity.UpdateTaskStatus, failInput).Get(ctx, nil)
+				var appErr *temporal.ApplicationError
+				alreadyCompleted := errors.As(statusErr, &appErr) && appErr.Type() == export.TaskAlreadyCompletedErrType
+				if !alreadyCompleted {
+					deliverRun(ctx, &taskDetails, taskID, types.TaskStatusFailed, 0, runErr)
+					return &ExecuteExportWorkflowOutput{TaskID: taskID}, runErr
+				}
+				logger.Info("Task already completed; delivering as completed", "task_id", taskID)
 			}
 		}
 
