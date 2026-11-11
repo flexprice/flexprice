@@ -43,6 +43,9 @@ const maxScheduledTaskNameLength = 120
 
 // Validate validates the create request
 func (r *CreateScheduledTaskRequest) Validate() error {
+	if err := types.ValidateExportCustomerFilter(r.SourceConfig.GetCustomerFilter()); err != nil {
+		return err
+	}
 	if cf := r.SourceConfig.GetCustomerFilter(); cf != nil {
 		sourceConfig := *r.SourceConfig
 		sourceConfig.CustomerFilter = types.SanitizeExportCustomerFilter(cf)
@@ -145,6 +148,11 @@ func (r *CreateScheduledTaskRequest) validateOriginAndRun() error {
 	if r.RunNow && r.Interval != types.ScheduledTaskIntervalManual {
 		return ierr.NewError("run_now requires a manual export").
 			WithHint("run_now is only for manual exports").
+			Mark(ierr.ErrValidation)
+	}
+	if r.RunNow && !r.Enabled {
+		return ierr.NewError("run_now requires an enabled export").
+			WithHint("Turn the export on to run it now.").
 			Mark(ierr.ErrValidation)
 	}
 	if r.RunWindow != nil {

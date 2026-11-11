@@ -201,6 +201,16 @@ func (o ExportOrigin) Validate() error {
 		Mark(ierr.ErrValidation)
 }
 
+// ValidateExportCustomerFilter rejects id lists a saved export cannot keep.
+func ValidateExportCustomerFilter(f *CustomerFilter) error {
+	if f != nil && (len(f.CustomerIDs) > 0 || len(f.ExternalIDs) > 0 || f.ExternalID != "") {
+		return ierr.NewError("customer ids not supported").
+			WithHint("Filter by fields instead of customer ids.").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // SanitizeExportCustomerFilter keeps only the list filters.
 func SanitizeExportCustomerFilter(f *CustomerFilter) *CustomerFilter {
 	if f == nil {
@@ -211,9 +221,6 @@ func SanitizeExportCustomerFilter(f *CustomerFilter) *CustomerFilter {
 		MetadataFilter:  f.MetadataFilter,
 		Email:           f.Email,
 		BillingEntityID: f.BillingEntityID,
-	}
-	if len(out.Filters) == 0 {
-		out.Filters = nil
 	}
 	if f.QueryFilter != nil && f.QueryFilter.Status != nil {
 		out.QueryFilter = &QueryFilter{Status: f.QueryFilter.Status}
