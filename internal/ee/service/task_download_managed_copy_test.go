@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -17,7 +18,13 @@ import (
 
 type downloadStore struct {
 	fakeImportStorage
-	bucket string
+	bucket    string
+	missing   bool
+	existsErr error
+}
+
+func (d *downloadStore) Exists(context.Context, string) (bool, error) {
+	return !d.missing && d.existsErr == nil, d.existsErr
 }
 
 func (d *downloadStore) FileURL(key string) string { return "s3://" + d.bucket + "/" + key }
@@ -220,4 +227,38 @@ func (s *TaskServiceSuite) TestDownload_ReportAllowedWithAnalyticsRead() {
 func (s *TaskServiceSuite) TestDownload_EventsExportUnaffectedByAnalyticsRead() {
 	_, err, _ := s.downloadAs(types.ScheduledTaskEntityTypeEvents, roleWithoutAnalytics)
 	s.Require().NoError(err)
+}
+
+func (s *TaskServiceSuite) requireExpired(f *downloadFixture) {
+	_, err := f.svc.GenerateDownloadURL(f.ctx, "t1")
+	s.Require().Error(err)
+	s.Require().True(ierr.IsNotFound(err), "got %v", err)
+	s.Require().Contains(err.Error(), "expired or was removed")
+}
+
+func (s *TaskServiceSuite) TestDownload_ManagedCopyMissingObjectExpired() {
+	f := s.newDownloadFixture(managedScheduledTask("platform-bkt"), exportTask("t1", ""))
+	s.setFileURL(f, "t1", "s3://platform-bkt/"+f.prefix+"sched_1/run.csv")
+	f.resolver.platform.(*downloadStore).missing = true
+	s.requireExpired(f)
+}
+
+func (s *TaskServiceSuite) TestDownload_ConnectionMissingObjectExpired() {
+	st := &scheduledtask.ScheduledTask{
+		ID:           "sched_1",
+		ConnectionID: "conn_1",
+		JobConfig:    &types.S3JobConfig{Bucket: "cust-bkt", Region: "us-east-1"},
+	}
+	f := s.newDownloadFixture(st, exportTask("t1", "s3://cust-bkt/some/run.csv"))
+	f.resolver.conn.(*downloadStore).missing = true
+	s.requireExpired(f)
+}
+
+func (s *TaskServiceSuite) TestDownload_ExistsErrorPropagates() {
+	f := s.newDownloadFixture(managedScheduledTask("platform-bkt"), exportTask("t1", ""))
+	s.setFileURL(f, "t1", "s3://platform-bkt/"+f.prefix+"sched_1/run.csv")
+	f.resolver.platform.(*downloadStore).existsErr = errors.New("boom")
+	_, err := f.svc.GenerateDownloadURL(f.ctx, "t1")
+	s.Require().Error(err)
+	s.Require().False(ierr.IsNotFound(err))
 }
