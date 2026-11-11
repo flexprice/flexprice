@@ -1628,6 +1628,27 @@ func (s *CommitmentServiceSuite) TestValidation_RejectsCalendarWindowBuckets() {
 	}
 }
 
+// A windowed commitment's active windows must hold whole usage buckets of its scope's prices.
+func (s *CommitmentServiceSuite) TestValidation_RejectsWindowsThatSplitBuckets() {
+	ctx := s.GetContext()
+	hourly := *s.fx.priceAPI
+	hourly.ID, hourly.BucketSize = "price_api_hourly", types.WindowSizeHour
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, &hourly))
+	line := *s.fx.lineAPI
+	line.ID, line.PriceID = "subs_line_api_hourly", hourly.ID
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, &line))
+
+	req := validReq(s.fx.sub.ID, hourly.ID)
+	req.Measurement = types.CommitmentMeasurementWindow
+	req.ActiveWindows = types.ActiveWindows{{Start: types.Bucket{Hour: 10}, End: types.Bucket{Hour: 14, Minute: 45}}}
+	_, err := s.svc.Create(ctx, req)
+	s.requireValidation(err, "multiple of the bucket size")
+
+	req.ActiveWindows[0].End = types.Bucket{Hour: 15}
+	_, err = s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+}
+
 func (s *CommitmentServiceSuite) TestValidation_RejectsGroupedBucketedPriceInScope() {
 	ctx := s.GetContext()
 	p := s.groupedBucketedPrice()

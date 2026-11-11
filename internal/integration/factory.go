@@ -1641,27 +1641,45 @@ func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.Pa
 	}
 }
 
+// SupportsGatewayRefund reports whether the gateway can issue refunds, without any connection lookup.
+func (f *Factory) SupportsGatewayRefund(gateway types.PaymentGatewayType) bool {
+	return f.refundProviderFor(gateway) != nil
+}
+
 // GetRefundProvider returns ErrNotImplemented for gateways without a v1 refund
 // adapter — Moyasar's API refunds only in full, so it cannot back this ledger.
 func (f *Factory) GetRefundProvider(ctx context.Context, gateway types.PaymentGatewayType) (interfaces.RefundProvider, error) {
-	switch gateway {
-	case types.PaymentGatewayTypeRazorpay:
-		i, err := f.GetRazorpayIntegration(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &razorpay.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
-	case types.PaymentGatewayTypeChargebee:
-		i, err := f.GetChargebeeIntegration(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &chargebee.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
-	default:
+	build := f.refundProviderFor(gateway)
+	if build == nil {
 		return nil, ierr.NewError("gateway refunds are not supported for this provider").
 			WithHintf("%s cannot issue gateway refunds", gateway).
 			WithReportableDetails(map[string]interface{}{"gateway": gateway}).
 			Mark(ierr.ErrNotImplemented)
+	}
+	return build(ctx)
+}
+
+// refundProviderFor returns the gateway's refund adapter constructor, or nil when it has none.
+func (f *Factory) refundProviderFor(gateway types.PaymentGatewayType) func(context.Context) (interfaces.RefundProvider, error) {
+	switch gateway {
+	case types.PaymentGatewayTypeRazorpay:
+		return func(ctx context.Context) (interfaces.RefundProvider, error) {
+			i, err := f.GetRazorpayIntegration(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &razorpay.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
+		}
+	case types.PaymentGatewayTypeChargebee:
+		return func(ctx context.Context) (interfaces.RefundProvider, error) {
+			i, err := f.GetChargebeeIntegration(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &chargebee.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
+		}
+	default:
+		return nil
 	}
 }
 

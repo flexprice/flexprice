@@ -163,7 +163,11 @@ func (s *hostedInvoiceTokenService) getOrCreate(ctx context.Context, inv *invoic
 }
 
 // shouldIssue is the single place for integration rules on whether Flexprice hosts the invoice.
-func (s *hostedInvoiceTokenService) shouldIssue(ctx context.Context, _ *invoice.Invoice) (bool, error) {
+func (s *hostedInvoiceTokenService) shouldIssue(ctx context.Context, inv *invoice.Invoice) (bool, error) {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return false, err
+	}
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
 	if ierr.IsNotFound(err) {
 		return true, nil

@@ -368,6 +368,11 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		metadata["razorpay_payment_url"] = razorpayShortURL
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityType:       types.IntegrationEntityTypeInvoice,
@@ -377,6 +382,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		Metadata:         metadata,
 		EnvironmentID:    environmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
@@ -400,10 +406,16 @@ func (s *InvoiceSyncService) GetExistingRazorpayMapping(
 	ctx context.Context,
 	flexInvoiceID string,
 ) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityType:    types.IntegrationEntityTypeInvoice,
 		EntityID:      flexInvoiceID,
 		ProviderTypes: []string{string(types.SecretProviderRazorpay)},
+		ConnectionID:  conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -432,11 +444,17 @@ func (s *InvoiceSyncService) GetFlexPriceInvoiceID(ctx context.Context, razorpay
 	s.logger.Debug(ctx, "looking up FlexPrice invoice ID from Razorpay invoice ID",
 		"razorpay_invoice_id", razorpayInvoiceID)
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		ProviderEntityIDs: []string{razorpayInvoiceID},
 		EntityType:        types.IntegrationEntityTypeInvoice,
 		ProviderTypes:     []string{string(types.SecretProviderRazorpay)},
 		QueryFilter:       types.NewDefaultQueryFilter(),
+		ConnectionID:      conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)

@@ -44,7 +44,7 @@ func TestEnsureBulkProductsSynced_AllAlreadyMapped(t *testing.T) {
 			{EntityID: "price_2", ProviderEntityID: "prod_2"},
 		},
 	}
-	svc := NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger())
+	svc := NewStripePriceSyncService(testClient(), mappingRepo, nil, logger.NewNoopLogger())
 
 	result, err := svc.EnsureBulkProductsSynced(testContext(), []priceSyncItem{
 		{PriceID: "price_1", DisplayName: "Seat fee"},
@@ -58,7 +58,7 @@ func TestEnsureBulkProductsSynced_AllAlreadyMapped(t *testing.T) {
 
 func TestEnsureBulkProductsSynced_EmptyInput(t *testing.T) {
 	mappingRepo := &syncTestMappingRepo{}
-	svc := NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger())
+	svc := NewStripePriceSyncService(testClient(), mappingRepo, nil, logger.NewNoopLogger())
 
 	result, err := svc.EnsureBulkProductsSynced(testContext(), nil)
 
@@ -79,7 +79,7 @@ func TestEnsureBulkProductsSynced_OverrideReusesParentProduct(t *testing.T) {
 			{ID: "price_plan"},
 		},
 	}
-	svc := NewStripePriceSyncService(nil, mappingRepo, priceRepo, logger.NewNoopLogger())
+	svc := NewStripePriceSyncService(testClient(), mappingRepo, priceRepo, logger.NewNoopLogger())
 
 	result, err := svc.EnsureBulkProductsSynced(testContext(), []priceSyncItem{
 		{PriceID: "price_override", DisplayName: "Attestra Academy Annual"},
@@ -102,7 +102,7 @@ func TestEnsureBulkProductsSynced_TwoOverridesShareParentProduct(t *testing.T) {
 			{ID: "price_plan"},
 		},
 	}
-	svc := NewStripePriceSyncService(nil, mappingRepo, priceRepo, logger.NewNoopLogger())
+	svc := NewStripePriceSyncService(testClient(), mappingRepo, priceRepo, logger.NewNoopLogger())
 
 	result, err := svc.EnsureBulkProductsSynced(testContext(), []priceSyncItem{
 		{PriceID: "price_override_a", DisplayName: "Attestra Academy Annual"},
@@ -129,7 +129,7 @@ func TestEnsureBulkProductsSynced_PrefersParentOverLegacyOverrideMapping(t *test
 			{ID: "price_plan"},
 		},
 	}
-	svc := NewStripePriceSyncService(nil, mappingRepo, priceRepo, logger.NewNoopLogger())
+	svc := NewStripePriceSyncService(testClient(), mappingRepo, priceRepo, logger.NewNoopLogger())
 
 	result, err := svc.EnsureBulkProductsSynced(testContext(), []priceSyncItem{
 		{PriceID: "price_override", DisplayName: "Attestra Academy Annual"},
@@ -150,7 +150,7 @@ func TestEnsureBulkProductsSynced_MissingParentFallsBackToOwnMapping(t *testing.
 			{ID: "price_override", ParentPriceID: "price_gone"},
 		},
 	}
-	svc := NewStripePriceSyncService(nil, mappingRepo, priceRepo, logger.NewNoopLogger())
+	svc := NewStripePriceSyncService(testClient(), mappingRepo, priceRepo, logger.NewNoopLogger())
 
 	result, err := svc.EnsureBulkProductsSynced(testContext(), []priceSyncItem{
 		{PriceID: "price_override", DisplayName: "Attestra Academy Annual"},

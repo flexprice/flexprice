@@ -8412,6 +8412,7 @@ type BillingInstalmentMutation struct {
 	delivery             *types.InstalmentDelivery
 	instalment_status    *types.InstalmentStatus
 	invoice_id           *string
+	invoiced_at          *time.Time
 	metadata             *types.Metadata
 	clearedFields        map[string]struct{}
 	done                 bool
@@ -9478,6 +9479,55 @@ func (m *BillingInstalmentMutation) ResetInvoiceID() {
 	delete(m.clearedFields, billinginstalment.FieldInvoiceID)
 }
 
+// SetInvoicedAt sets the "invoiced_at" field.
+func (m *BillingInstalmentMutation) SetInvoicedAt(t time.Time) {
+	m.invoiced_at = &t
+}
+
+// InvoicedAt returns the value of the "invoiced_at" field in the mutation.
+func (m *BillingInstalmentMutation) InvoicedAt() (r time.Time, exists bool) {
+	v := m.invoiced_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoicedAt returns the old "invoiced_at" field's value of the BillingInstalment entity.
+// If the BillingInstalment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingInstalmentMutation) OldInvoicedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoicedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoicedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoicedAt: %w", err)
+	}
+	return oldValue.InvoicedAt, nil
+}
+
+// ClearInvoicedAt clears the value of the "invoiced_at" field.
+func (m *BillingInstalmentMutation) ClearInvoicedAt() {
+	m.invoiced_at = nil
+	m.clearedFields[billinginstalment.FieldInvoicedAt] = struct{}{}
+}
+
+// InvoicedAtCleared returns if the "invoiced_at" field was cleared in this mutation.
+func (m *BillingInstalmentMutation) InvoicedAtCleared() bool {
+	_, ok := m.clearedFields[billinginstalment.FieldInvoicedAt]
+	return ok
+}
+
+// ResetInvoicedAt resets all changes to the "invoiced_at" field.
+func (m *BillingInstalmentMutation) ResetInvoicedAt() {
+	m.invoiced_at = nil
+	delete(m.clearedFields, billinginstalment.FieldInvoicedAt)
+}
+
 // SetMetadata sets the "metadata" field.
 func (m *BillingInstalmentMutation) SetMetadata(t types.Metadata) {
 	m.metadata = &t
@@ -9561,7 +9611,7 @@ func (m *BillingInstalmentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BillingInstalmentMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, billinginstalment.FieldTenantID)
 	}
@@ -9634,6 +9684,9 @@ func (m *BillingInstalmentMutation) Fields() []string {
 	if m.invoice_id != nil {
 		fields = append(fields, billinginstalment.FieldInvoiceID)
 	}
+	if m.invoiced_at != nil {
+		fields = append(fields, billinginstalment.FieldInvoicedAt)
+	}
 	if m.metadata != nil {
 		fields = append(fields, billinginstalment.FieldMetadata)
 	}
@@ -9693,6 +9746,8 @@ func (m *BillingInstalmentMutation) Field(name string) (ent.Value, bool) {
 		return m.InstalmentStatus()
 	case billinginstalment.FieldInvoiceID:
 		return m.InvoiceID()
+	case billinginstalment.FieldInvoicedAt:
+		return m.InvoicedAt()
 	case billinginstalment.FieldMetadata:
 		return m.Metadata()
 	}
@@ -9752,6 +9807,8 @@ func (m *BillingInstalmentMutation) OldField(ctx context.Context, name string) (
 		return m.OldInstalmentStatus(ctx)
 	case billinginstalment.FieldInvoiceID:
 		return m.OldInvoiceID(ctx)
+	case billinginstalment.FieldInvoicedAt:
+		return m.OldInvoicedAt(ctx)
 	case billinginstalment.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -9931,6 +9988,13 @@ func (m *BillingInstalmentMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetInvoiceID(v)
 		return nil
+	case billinginstalment.FieldInvoicedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoicedAt(v)
+		return nil
 	case billinginstalment.FieldMetadata:
 		v, ok := value.(types.Metadata)
 		if !ok {
@@ -9989,6 +10053,9 @@ func (m *BillingInstalmentMutation) ClearedFields() []string {
 	if m.FieldCleared(billinginstalment.FieldInvoiceID) {
 		fields = append(fields, billinginstalment.FieldInvoiceID)
 	}
+	if m.FieldCleared(billinginstalment.FieldInvoicedAt) {
+		fields = append(fields, billinginstalment.FieldInvoicedAt)
+	}
 	if m.FieldCleared(billinginstalment.FieldMetadata) {
 		fields = append(fields, billinginstalment.FieldMetadata)
 	}
@@ -10026,6 +10093,9 @@ func (m *BillingInstalmentMutation) ClearField(name string) error {
 		return nil
 	case billinginstalment.FieldInvoiceID:
 		m.ClearInvoiceID()
+		return nil
+	case billinginstalment.FieldInvoicedAt:
+		m.ClearInvoicedAt()
 		return nil
 	case billinginstalment.FieldMetadata:
 		m.ClearMetadata()
@@ -10109,6 +10179,9 @@ func (m *BillingInstalmentMutation) ResetField(name string) error {
 		return nil
 	case billinginstalment.FieldInvoiceID:
 		m.ResetInvoiceID()
+		return nil
+	case billinginstalment.FieldInvoicedAt:
+		m.ResetInvoicedAt()
 		return nil
 	case billinginstalment.FieldMetadata:
 		m.ResetMetadata()
@@ -16996,6 +17069,7 @@ type ConnectionMutation struct {
 	encrypted_secret_data *map[string]interface{}
 	metadata              *map[string]interface{}
 	sync_config           **types.SyncConfig
+	billing_entity_id     *string
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*Connection, error)
@@ -17616,6 +17690,55 @@ func (m *ConnectionMutation) ResetSyncConfig() {
 	delete(m.clearedFields, connection.FieldSyncConfig)
 }
 
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (m *ConnectionMutation) SetBillingEntityID(s string) {
+	m.billing_entity_id = &s
+}
+
+// BillingEntityID returns the value of the "billing_entity_id" field in the mutation.
+func (m *ConnectionMutation) BillingEntityID() (r string, exists bool) {
+	v := m.billing_entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingEntityID returns the old "billing_entity_id" field's value of the Connection entity.
+// If the Connection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ConnectionMutation) OldBillingEntityID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingEntityID: %w", err)
+	}
+	return oldValue.BillingEntityID, nil
+}
+
+// ClearBillingEntityID clears the value of the "billing_entity_id" field.
+func (m *ConnectionMutation) ClearBillingEntityID() {
+	m.billing_entity_id = nil
+	m.clearedFields[connection.FieldBillingEntityID] = struct{}{}
+}
+
+// BillingEntityIDCleared returns if the "billing_entity_id" field was cleared in this mutation.
+func (m *ConnectionMutation) BillingEntityIDCleared() bool {
+	_, ok := m.clearedFields[connection.FieldBillingEntityID]
+	return ok
+}
+
+// ResetBillingEntityID resets all changes to the "billing_entity_id" field.
+func (m *ConnectionMutation) ResetBillingEntityID() {
+	m.billing_entity_id = nil
+	delete(m.clearedFields, connection.FieldBillingEntityID)
+}
+
 // Where appends a list predicates to the ConnectionMutation builder.
 func (m *ConnectionMutation) Where(ps ...predicate.Connection) {
 	m.predicates = append(m.predicates, ps...)
@@ -17650,7 +17773,7 @@ func (m *ConnectionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ConnectionMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.tenant_id != nil {
 		fields = append(fields, connection.FieldTenantID)
 	}
@@ -17687,6 +17810,9 @@ func (m *ConnectionMutation) Fields() []string {
 	if m.sync_config != nil {
 		fields = append(fields, connection.FieldSyncConfig)
 	}
+	if m.billing_entity_id != nil {
+		fields = append(fields, connection.FieldBillingEntityID)
+	}
 	return fields
 }
 
@@ -17719,6 +17845,8 @@ func (m *ConnectionMutation) Field(name string) (ent.Value, bool) {
 		return m.Metadata()
 	case connection.FieldSyncConfig:
 		return m.SyncConfig()
+	case connection.FieldBillingEntityID:
+		return m.BillingEntityID()
 	}
 	return nil, false
 }
@@ -17752,6 +17880,8 @@ func (m *ConnectionMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldMetadata(ctx)
 	case connection.FieldSyncConfig:
 		return m.OldSyncConfig(ctx)
+	case connection.FieldBillingEntityID:
+		return m.OldBillingEntityID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Connection field %s", name)
 }
@@ -17845,6 +17975,13 @@ func (m *ConnectionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSyncConfig(v)
 		return nil
+	case connection.FieldBillingEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingEntityID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Connection field %s", name)
 }
@@ -17893,6 +18030,9 @@ func (m *ConnectionMutation) ClearedFields() []string {
 	if m.FieldCleared(connection.FieldSyncConfig) {
 		fields = append(fields, connection.FieldSyncConfig)
 	}
+	if m.FieldCleared(connection.FieldBillingEntityID) {
+		fields = append(fields, connection.FieldBillingEntityID)
+	}
 	return fields
 }
 
@@ -17924,6 +18064,9 @@ func (m *ConnectionMutation) ClearField(name string) error {
 		return nil
 	case connection.FieldSyncConfig:
 		m.ClearSyncConfig()
+		return nil
+	case connection.FieldBillingEntityID:
+		m.ClearBillingEntityID()
 		return nil
 	}
 	return fmt.Errorf("unknown Connection nullable field %s", name)
@@ -17968,6 +18111,9 @@ func (m *ConnectionMutation) ResetField(name string) error {
 		return nil
 	case connection.FieldSyncConfig:
 		m.ResetSyncConfig()
+		return nil
+	case connection.FieldBillingEntityID:
+		m.ResetBillingEntityID()
 		return nil
 	}
 	return fmt.Errorf("unknown Connection field %s", name)
@@ -38601,6 +38747,7 @@ type EntityIntegrationMappingMutation struct {
 	entity_type        *string
 	provider_type      *string
 	provider_entity_id *string
+	connection_id      *string
 	metadata           *map[string]interface{}
 	clearedFields      map[string]struct{}
 	done               bool
@@ -39147,6 +39294,55 @@ func (m *EntityIntegrationMappingMutation) ResetProviderEntityID() {
 	m.provider_entity_id = nil
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (m *EntityIntegrationMappingMutation) SetConnectionID(s string) {
+	m.connection_id = &s
+}
+
+// ConnectionID returns the value of the "connection_id" field in the mutation.
+func (m *EntityIntegrationMappingMutation) ConnectionID() (r string, exists bool) {
+	v := m.connection_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConnectionID returns the old "connection_id" field's value of the EntityIntegrationMapping entity.
+// If the EntityIntegrationMapping object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityIntegrationMappingMutation) OldConnectionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConnectionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConnectionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConnectionID: %w", err)
+	}
+	return oldValue.ConnectionID, nil
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (m *EntityIntegrationMappingMutation) ClearConnectionID() {
+	m.connection_id = nil
+	m.clearedFields[entityintegrationmapping.FieldConnectionID] = struct{}{}
+}
+
+// ConnectionIDCleared returns if the "connection_id" field was cleared in this mutation.
+func (m *EntityIntegrationMappingMutation) ConnectionIDCleared() bool {
+	_, ok := m.clearedFields[entityintegrationmapping.FieldConnectionID]
+	return ok
+}
+
+// ResetConnectionID resets all changes to the "connection_id" field.
+func (m *EntityIntegrationMappingMutation) ResetConnectionID() {
+	m.connection_id = nil
+	delete(m.clearedFields, entityintegrationmapping.FieldConnectionID)
+}
+
 // SetMetadata sets the "metadata" field.
 func (m *EntityIntegrationMappingMutation) SetMetadata(value map[string]interface{}) {
 	m.metadata = &value
@@ -39230,7 +39426,7 @@ func (m *EntityIntegrationMappingMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntityIntegrationMappingMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.tenant_id != nil {
 		fields = append(fields, entityintegrationmapping.FieldTenantID)
 	}
@@ -39263,6 +39459,9 @@ func (m *EntityIntegrationMappingMutation) Fields() []string {
 	}
 	if m.provider_entity_id != nil {
 		fields = append(fields, entityintegrationmapping.FieldProviderEntityID)
+	}
+	if m.connection_id != nil {
+		fields = append(fields, entityintegrationmapping.FieldConnectionID)
 	}
 	if m.metadata != nil {
 		fields = append(fields, entityintegrationmapping.FieldMetadata)
@@ -39297,6 +39496,8 @@ func (m *EntityIntegrationMappingMutation) Field(name string) (ent.Value, bool) 
 		return m.ProviderType()
 	case entityintegrationmapping.FieldProviderEntityID:
 		return m.ProviderEntityID()
+	case entityintegrationmapping.FieldConnectionID:
+		return m.ConnectionID()
 	case entityintegrationmapping.FieldMetadata:
 		return m.Metadata()
 	}
@@ -39330,6 +39531,8 @@ func (m *EntityIntegrationMappingMutation) OldField(ctx context.Context, name st
 		return m.OldProviderType(ctx)
 	case entityintegrationmapping.FieldProviderEntityID:
 		return m.OldProviderEntityID(ctx)
+	case entityintegrationmapping.FieldConnectionID:
+		return m.OldConnectionID(ctx)
 	case entityintegrationmapping.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -39418,6 +39621,13 @@ func (m *EntityIntegrationMappingMutation) SetField(name string, value ent.Value
 		}
 		m.SetProviderEntityID(v)
 		return nil
+	case entityintegrationmapping.FieldConnectionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConnectionID(v)
+		return nil
 	case entityintegrationmapping.FieldMetadata:
 		v, ok := value.(map[string]interface{})
 		if !ok {
@@ -39464,6 +39674,9 @@ func (m *EntityIntegrationMappingMutation) ClearedFields() []string {
 	if m.FieldCleared(entityintegrationmapping.FieldEnvironmentID) {
 		fields = append(fields, entityintegrationmapping.FieldEnvironmentID)
 	}
+	if m.FieldCleared(entityintegrationmapping.FieldConnectionID) {
+		fields = append(fields, entityintegrationmapping.FieldConnectionID)
+	}
 	if m.FieldCleared(entityintegrationmapping.FieldMetadata) {
 		fields = append(fields, entityintegrationmapping.FieldMetadata)
 	}
@@ -39489,6 +39702,9 @@ func (m *EntityIntegrationMappingMutation) ClearField(name string) error {
 		return nil
 	case entityintegrationmapping.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case entityintegrationmapping.FieldConnectionID:
+		m.ClearConnectionID()
 		return nil
 	case entityintegrationmapping.FieldMetadata:
 		m.ClearMetadata()
@@ -39533,6 +39749,9 @@ func (m *EntityIntegrationMappingMutation) ResetField(name string) error {
 		return nil
 	case entityintegrationmapping.FieldProviderEntityID:
 		m.ResetProviderEntityID()
+		return nil
+	case entityintegrationmapping.FieldConnectionID:
+		m.ResetConnectionID()
 		return nil
 	case entityintegrationmapping.FieldMetadata:
 		m.ResetMetadata()
@@ -59484,6 +59703,7 @@ type PaymentMutation struct {
 	voided_at           *time.Time
 	recorded_at         *time.Time
 	error_message       *string
+	connection_id       *string
 	clearedFields       map[string]struct{}
 	attempts            map[string]struct{}
 	removedattempts     map[string]struct{}
@@ -60764,6 +60984,55 @@ func (m *PaymentMutation) ResetErrorMessage() {
 	delete(m.clearedFields, payment.FieldErrorMessage)
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (m *PaymentMutation) SetConnectionID(s string) {
+	m.connection_id = &s
+}
+
+// ConnectionID returns the value of the "connection_id" field in the mutation.
+func (m *PaymentMutation) ConnectionID() (r string, exists bool) {
+	v := m.connection_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConnectionID returns the old "connection_id" field's value of the Payment entity.
+// If the Payment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentMutation) OldConnectionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConnectionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConnectionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConnectionID: %w", err)
+	}
+	return oldValue.ConnectionID, nil
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (m *PaymentMutation) ClearConnectionID() {
+	m.connection_id = nil
+	m.clearedFields[payment.FieldConnectionID] = struct{}{}
+}
+
+// ConnectionIDCleared returns if the "connection_id" field was cleared in this mutation.
+func (m *PaymentMutation) ConnectionIDCleared() bool {
+	_, ok := m.clearedFields[payment.FieldConnectionID]
+	return ok
+}
+
+// ResetConnectionID resets all changes to the "connection_id" field.
+func (m *PaymentMutation) ResetConnectionID() {
+	m.connection_id = nil
+	delete(m.clearedFields, payment.FieldConnectionID)
+}
+
 // AddAttemptIDs adds the "attempts" edge to the PaymentAttempt entity by ids.
 func (m *PaymentMutation) AddAttemptIDs(ids ...string) {
 	if m.attempts == nil {
@@ -60852,7 +61121,7 @@ func (m *PaymentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PaymentMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 28)
 	if m.tenant_id != nil {
 		fields = append(fields, payment.FieldTenantID)
 	}
@@ -60934,6 +61203,9 @@ func (m *PaymentMutation) Fields() []string {
 	if m.error_message != nil {
 		fields = append(fields, payment.FieldErrorMessage)
 	}
+	if m.connection_id != nil {
+		fields = append(fields, payment.FieldConnectionID)
+	}
 	return fields
 }
 
@@ -60996,6 +61268,8 @@ func (m *PaymentMutation) Field(name string) (ent.Value, bool) {
 		return m.RecordedAt()
 	case payment.FieldErrorMessage:
 		return m.ErrorMessage()
+	case payment.FieldConnectionID:
+		return m.ConnectionID()
 	}
 	return nil, false
 }
@@ -61059,6 +61333,8 @@ func (m *PaymentMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldRecordedAt(ctx)
 	case payment.FieldErrorMessage:
 		return m.OldErrorMessage(ctx)
+	case payment.FieldConnectionID:
+		return m.OldConnectionID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Payment field %s", name)
 }
@@ -61257,6 +61533,13 @@ func (m *PaymentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetErrorMessage(v)
 		return nil
+	case payment.FieldConnectionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConnectionID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Payment field %s", name)
 }
@@ -61332,6 +61615,9 @@ func (m *PaymentMutation) ClearedFields() []string {
 	if m.FieldCleared(payment.FieldErrorMessage) {
 		fields = append(fields, payment.FieldErrorMessage)
 	}
+	if m.FieldCleared(payment.FieldConnectionID) {
+		fields = append(fields, payment.FieldConnectionID)
+	}
 	return fields
 }
 
@@ -61390,6 +61676,9 @@ func (m *PaymentMutation) ClearField(name string) error {
 		return nil
 	case payment.FieldErrorMessage:
 		m.ClearErrorMessage()
+		return nil
+	case payment.FieldConnectionID:
+		m.ClearConnectionID()
 		return nil
 	}
 	return fmt.Errorf("unknown Payment nullable field %s", name)
@@ -61479,6 +61768,9 @@ func (m *PaymentMutation) ResetField(name string) error {
 		return nil
 	case payment.FieldErrorMessage:
 		m.ResetErrorMessage()
+		return nil
+	case payment.FieldConnectionID:
+		m.ResetConnectionID()
 		return nil
 	}
 	return fmt.Errorf("unknown Payment field %s", name)

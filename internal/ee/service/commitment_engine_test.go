@@ -1,6 +1,7 @@
 package service
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -981,7 +982,6 @@ func partialHalves(t *testing.T, binding bool, used ...string) [][]dto.CreateInv
 		Value:       intDec(100),
 		Currency:    "usd",
 		Measurement: types.CommitmentMeasurementBillingPeriod,
-		Timezone:    "UTC",
 		StartDate:   apr,
 		EndDate:     lo.ToPtr(may),
 	}
@@ -1297,4 +1297,60 @@ func TestCommitmentInvoiceLinesSplitsTheRoundedRemainder(t *testing.T) {
 		{types.CommitmentLineOverage, "Usage a", "1", "0.01"},
 		{types.CommitmentLinePlain, "Usage a", "1", "0"},
 	}, lines)
+}
+
+// minuteWindowStack is a month of minute windows: three lines under two stacked reservations of 5 and 3 units a
+// minute, with usage cycling from 0 to 6 units a line.
+func minuteWindowStack() *commitmentStack {
+	const windows = 30 * 24 * 60
+	start := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	starts := make([]time.Time, windows)
+	poolOf := make([]int, windows)
+	for w := range starts {
+		starts[w] = start.Add(time.Duration(w) * time.Minute)
+		poolOf[w] = w
+	}
+
+	lines := make([]*usageLine, 3)
+	for li := range lines {
+		usage := make([]decimal.Decimal, windows)
+		total := decimal.Zero
+		for w := range usage {
+			usage[w] = intDec(int64(w * (li + 3) % 7))
+			total = total.Add(usage[w])
+		}
+		lines[li] = &usageLine{Usage: usage, Quantity: total}
+	}
+
+	reservation := func(id string, priority int, size int64) *stackedCommitment {
+		pools := make([]decimal.Decimal, windows)
+		for w := range pools {
+			pools[w] = intDec(size)
+		}
+		return &stackedCommitment{
+			Commitment: &commitment.Commitment{ID: id, Priority: priority},
+			Lines:      lines,
+			Pools:      pools,
+			PoolOf:     slices.Clone(poolOf),
+		}
+	}
+
+	return &commitmentStack{
+		Type:        types.COMMITMENT_TYPE_QUANTITY,
+		Measurement: types.CommitmentMeasurementWindow,
+		Windows:     starts,
+		Lines:       lines,
+		Commitments: []*stackedCommitment{reservation("cmt_first", 1, 5), reservation("cmt_second", 2, 3)},
+	}
+}
+
+func BenchmarkAllocate_MonthOfMinuteWindows(b *testing.B) {
+	stack := minuteWindowStack()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := allocate(stack); err != nil {
+			b.Fatal(err)
+		}
+	}
 }

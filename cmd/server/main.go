@@ -331,6 +331,7 @@ func main() {
 			service.NewTaxService,
 			service.NewFXRateService,
 			service.NewBillingEntityService,
+			provideBillingEntityScope,
 			service.NewHostedInvoiceTokenService,
 			service.NewHostedInvoiceService,
 			service.NewCouponService,
@@ -513,7 +514,7 @@ func provideHandlers(
 		UsageRecord:              v1.NewUsageRecordHandler(usageRecordService, logger),
 		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, connectionService, logger),
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
-		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, refundService, db, webhookService),
+		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, refundService, db, webhookService, billingEntityService),
 		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, temporalService, logger),
 		Product:                  v1.NewProductHandler(productService, logger),
@@ -524,7 +525,7 @@ func provideHandlers(
 		RevenueReport:            v1.NewRevenueReportHandler(revenueReportService, logger),
 		Commitment:               v1.NewCommitmentHandler(commitmentService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
-		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, cfg, logger),
+		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, billingEntityService, cfg, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),
 		ScheduledTask:            v1.NewScheduledTaskHandler(scheduledTaskService, logger),
 		AlertLogsHandler:         v1.NewAlertLogsHandler(alertLogsService, customerService, walletService, featureService, logger),
@@ -925,4 +926,8 @@ func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.Rev
 	base.RevenueFacts = revenueFacts
 	base.SelfBilling = selfBilling
 	return base
+}
+
+func provideBillingEntityScope(s service.BillingEntityService) interfaces.BillingEntityScope {
+	return s
 }

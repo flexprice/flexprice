@@ -37,7 +37,7 @@ func (s *CommitmentServiceSuite) fiveOfTwelveInvoiced() (*dto.CommitmentResponse
 	s.Require().Len(before, 12)
 
 	ids := lo.Map(before[:5], func(inst *billingterm.Instalment, _ int) string { return inst.ID })
-	claimed, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), "inv_x", ids)
+	claimed, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), "inv_x", time.Now(), ids)
 	s.Require().NoError(err)
 	s.Require().Len(claimed, 5)
 
@@ -238,7 +238,7 @@ func (s *CommitmentServiceSuite) TestTriggerInstalment_Rejections() {
 	invoicedReq := s.milestoneRequest()
 	invoicedReq.Priority = 3
 	invoicedCommitment, invoicedMilestone := s.milestoneOf(invoicedReq)
-	claimed, err := repo.Claim(ctx, "inv_x", []string{invoicedMilestone.ID})
+	claimed, err := repo.Claim(ctx, "inv_x", time.Now(), []string{invoicedMilestone.ID})
 	s.Require().NoError(err)
 	s.Require().Len(claimed, 1)
 

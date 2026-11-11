@@ -191,6 +191,11 @@ func InvoiceID(v string) predicate.BillingInstalment {
 	return predicate.BillingInstalment(sql.FieldEQ(FieldInvoiceID, v))
 }
 
+// InvoicedAt applies equality check predicate on the "invoiced_at" field. It's identical to InvoicedAtEQ.
+func InvoicedAt(v time.Time) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldEQ(FieldInvoicedAt, v))
+}
+
 // Metadata applies equality check predicate on the "metadata" field. It's identical to MetadataEQ.
 func Metadata(v types.Metadata) predicate.BillingInstalment {
 	return predicate.BillingInstalment(sql.FieldEQ(FieldMetadata, v))
@@ -1744,6 +1749,56 @@ func InvoiceIDEqualFold(v string) predicate.BillingInstalment {
 // InvoiceIDContainsFold applies the ContainsFold predicate on the "invoice_id" field.
 func InvoiceIDContainsFold(v string) predicate.BillingInstalment {
 	return predicate.BillingInstalment(sql.FieldContainsFold(FieldInvoiceID, v))
+}
+
+// InvoicedAtEQ applies the EQ predicate on the "invoiced_at" field.
+func InvoicedAtEQ(v time.Time) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldEQ(FieldInvoicedAt, v))
+}
+
+// InvoicedAtNEQ applies the NEQ predicate on the "invoiced_at" field.
+func InvoicedAtNEQ(v time.Time) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldNEQ(FieldInvoicedAt, v))
+}
+
+// InvoicedAtIn applies the In predicate on the "invoiced_at" field.
+func InvoicedAtIn(vs ...time.Time) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldIn(FieldInvoicedAt, vs...))
+}
+
+// InvoicedAtNotIn applies the NotIn predicate on the "invoiced_at" field.
+func InvoicedAtNotIn(vs ...time.Time) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldNotIn(FieldInvoicedAt, vs...))
+}
+
+// InvoicedAtGT applies the GT predicate on the "invoiced_at" field.
+func InvoicedAtGT(v time.Time) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldGT(FieldInvoicedAt, v))
+}
+
+// InvoicedAtGTE applies the GTE predicate on the "invoiced_at" field.
+func InvoicedAtGTE(v time.Time) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldGTE(FieldInvoicedAt, v))
+}
+
+// InvoicedAtLT applies the LT predicate on the "invoiced_at" field.
+func InvoicedAtLT(v time.Time) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldLT(FieldInvoicedAt, v))
+}
+
+// InvoicedAtLTE applies the LTE predicate on the "invoiced_at" field.
+func InvoicedAtLTE(v time.Time) predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldLTE(FieldInvoicedAt, v))
+}
+
+// InvoicedAtIsNil applies the IsNil predicate on the "invoiced_at" field.
+func InvoicedAtIsNil() predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldIsNull(FieldInvoicedAt))
+}
+
+// InvoicedAtNotNil applies the NotNil predicate on the "invoiced_at" field.
+func InvoicedAtNotNil() predicate.BillingInstalment {
+	return predicate.BillingInstalment(sql.FieldNotNull(FieldInvoicedAt))
 }
 
 // MetadataEQ applies the EQ predicate on the "metadata" field.

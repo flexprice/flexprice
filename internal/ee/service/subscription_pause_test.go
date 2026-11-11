@@ -149,10 +149,19 @@ func (s *SubscriptionPauseSuite) TearDownTest() {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-// openPeriod is a monthly period that started 10 days ago, anchored at its start.
-func openPeriod() (time.Time, time.Time) {
+// openPeriod is a monthly period that started 10 days ago, anchored at its start and ending where billing ends it: a
+// start on the 29th to 31st ends on the next month's last day, where AddDate would roll into the month after.
+func (s *SubscriptionPauseSuite) openPeriod() (time.Time, time.Time) {
 	start := time.Now().UTC().Truncate(time.Second).AddDate(0, 0, -10)
-	return start, start.AddDate(0, 1, 0)
+	end, err := types.NextBillingDate(&types.NextBillingDateParams{
+		CurrentPeriodStart: start,
+		BillingAnchor:      start,
+		Unit:               1,
+		Period:             types.BILLING_PERIOD_MONTHLY,
+		Timezone:           "UTC",
+	})
+	s.Require().NoError(err)
+	return start, end
 }
 
 // The charges a test subscription can carry.
@@ -445,7 +454,7 @@ func (s *SubscriptionPauseSuite) pause(subID string, behavior types.ProrationBeh
 // With none, the closing invoice bills usage and the full arrear fee, no advance fee, and no
 // credit is given. The subscription is paused from the pause time to the original period end.
 func (s *SubscriptionPauseSuite) TestPause_NoneBillsFullArrearAndGivesNoCredit() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_pause_none", periodStart, periodEnd)
 	s.usage(sub, time.Now().UTC().Add(-24*time.Hour), 5)
 
@@ -493,7 +502,7 @@ func (s *SubscriptionPauseSuite) TestPause_NoneBillsFullArrearAndGivesNoCredit()
 // With create_prorations, the closing invoice bills only the used part of the arrear fee and the
 // unused part of the advance fee is credited to the wallet. The subscription's own setting is untouched.
 func (s *SubscriptionPauseSuite) TestPause_CreateProrationsProratesArrearAndCreditsAdvance() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_pause_prorate", periodStart, periodEnd)
 
 	resp := s.pause(sub.ID, types.ProrationBehaviorCreateProrations)
@@ -516,7 +525,7 @@ func (s *SubscriptionPauseSuite) TestPause_CreateProrationsProratesArrearAndCred
 // The current period's open draft becomes the closing invoice instead of being billed again at
 // the original period end.
 func (s *SubscriptionPauseSuite) TestPause_OpenDraftBecomesTheClosingInvoice() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_pause_draft", periodStart, periodEnd)
 	s.usage(sub, time.Now().UTC().Add(-24*time.Hour), 7)
 
@@ -539,7 +548,7 @@ func (s *SubscriptionPauseSuite) TestPause_OpenDraftBecomesTheClosingInvoice() {
 
 // A parent's pause is mirrored on its inherited children.
 func (s *SubscriptionPauseSuite) TestPause_ParentCascadesToInheritedChildren() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	parent := s.billedSubscription("subs_pause_parent", periodStart, periodEnd)
 	parent.SubscriptionType = types.SubscriptionTypeParent
 	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), parent))
@@ -579,7 +588,7 @@ func (s *SubscriptionPauseSuite) inheritedChild(id string, parent *subscription.
 // Every refused pause returns a validation error and leaves the subscription and its invoices untouched.
 func (s *SubscriptionPauseSuite) TestPause_Refused() {
 	now := time.Now().UTC().Truncate(time.Second)
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 
 	tests := []struct {
 		name    string
@@ -775,7 +784,7 @@ func (s *SubscriptionPauseSuite) TestPausedPeriod_BillingDraftRefused() {
 // With none, resume closes the paused stretch, keeps the anchor and bills the full advance fee
 // for the period that runs from the resume to the next anchor date.
 func (s *SubscriptionPauseSuite) TestResume_KeepsAnchorAndBillsAdvanceForTheRestOfThePeriod() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_resume_none", periodStart, periodEnd)
 	paused := s.pause(sub.ID, types.ProrationBehaviorNone)
 
@@ -878,7 +887,7 @@ func (r *cachedSubscriptionRepo) Get(ctx context.Context, id string) (*subscript
 // A paused subscription read before the resume stays cached while the resume runs; the payment
 // step must not write that copy back over the resumed fields.
 func (s *SubscriptionPauseSuite) TestResume_StaleCachedSubscriptionDoesNotUndoTheResume() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_resume_cached", periodStart, periodEnd)
 	paused := s.pause(sub.ID, types.ProrationBehaviorNone)
 
@@ -906,7 +915,7 @@ func (s *SubscriptionPauseSuite) TestResume_StaleCachedSubscriptionDoesNotUndoTh
 
 // Without proration_behavior, resume keeps the subscription's own value.
 func (s *SubscriptionPauseSuite) TestResume_OmittedProrationKeepsTheSubscriptionValue() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_resume_keep", periodStart, periodEnd)
 	sub.ProrationBehavior = types.ProrationBehaviorCreateProrations
 	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
@@ -961,7 +970,7 @@ func (s *SubscriptionPauseSuite) TestResume_RecordsPausedPeriodsTheBillingRunMis
 
 // A parent's resume reaches its paused inherited children with the new period.
 func (s *SubscriptionPauseSuite) TestResume_ParentCascadesToPausedInheritedChildren() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	parent := s.billedSubscription("subs_resume_parent", periodStart, periodEnd)
 	parent.SubscriptionType = types.SubscriptionTypeParent
 	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), parent))
@@ -981,7 +990,7 @@ func (s *SubscriptionPauseSuite) TestResume_ParentCascadesToPausedInheritedChild
 }
 
 func (s *SubscriptionPauseSuite) TestResume_Refused() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 
 	s.Run("not paused", func() {
 		sub := s.billedSubscription("subs_resume_active", periodStart, periodEnd)
@@ -1029,7 +1038,7 @@ func (s *SubscriptionPauseSuite) TestResume_Refused() {
 // Paused and resumed inside one period with create_prorations on both: the unused advance fee is
 // credited at the pause and the advance fee for what is left is charged at the resume.
 func (s *SubscriptionPauseSuite) TestPauseAndResumeInOnePeriod_CreateProrationsCreditsThenCharges() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_pause_resume_prorate", periodStart, periodEnd)
 
 	paused := s.pause(sub.ID, types.ProrationBehaviorCreateProrations)
@@ -1053,7 +1062,7 @@ func (s *SubscriptionPauseSuite) TestPauseAndResumeInOnePeriod_CreateProrationsC
 
 // A pause with nothing to bill up to it still pauses: the closing invoice is SKIPPED, not finalized.
 func (s *SubscriptionPauseSuite) TestPause_NothingToBillStillPauses() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.subscriptionWithCharges("subs_pause_nothing", periodStart, periodEnd, chargeAdvance)
 
 	s.pause(sub.ID, types.ProrationBehaviorNone)
@@ -1066,7 +1075,7 @@ func (s *SubscriptionPauseSuite) TestPause_NothingToBillStillPauses() {
 
 // A resume with no advance charges still resumes: the resume invoice is SKIPPED, not finalized.
 func (s *SubscriptionPauseSuite) TestResume_NothingToBillStillResumes() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.subscriptionWithCharges("subs_resume_nothing", periodStart, periodEnd, chargeArrear, chargeUsage)
 	s.pause(sub.ID, types.ProrationBehaviorNone)
 
@@ -1083,7 +1092,7 @@ func (s *SubscriptionPauseSuite) TestResume_NothingToBillStillResumes() {
 
 // A subscription can be paused again after a resume, and each pause is its own record.
 func (s *SubscriptionPauseSuite) TestPause_AgainAfterResume() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_pause_twice", periodStart, periodEnd)
 	first := s.pause(sub.ID, types.ProrationBehaviorNone)
 	_, err := s.service.ResumeSubscription(s.GetContext(), sub.ID, &dto.ResumeSubscriptionRequest{})
@@ -1101,7 +1110,7 @@ func (s *SubscriptionPauseSuite) TestPause_AgainAfterResume() {
 
 // Pause and resume each publish subscription.updated and their own event once.
 func (s *SubscriptionPauseSuite) TestPauseAndResume_PublishWebhooks() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_pause_webhooks", periodStart, periodEnd)
 	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
 
@@ -1118,7 +1127,7 @@ func (s *SubscriptionPauseSuite) TestPauseAndResume_PublishWebhooks() {
 
 // A refused pause or resume publishes nothing.
 func (s *SubscriptionPauseSuite) TestRefused_PublishesNoWebhooks() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_refused_webhooks", periodStart, periodEnd)
 	sub.CancelAtPeriodEnd = true
 	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
@@ -1228,7 +1237,7 @@ func (s *SubscriptionPauseSuite) TestCalendar_ResumeAfterPausedMonths() {
 // An immediate cancel of a paused subscription bills and credits nothing, whatever the request
 // asks for, and completes the pause.
 func (s *SubscriptionPauseSuite) TestCancelWhilePaused_ImmediateBillsNothing() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_cancel_paused", periodStart, periodEnd)
 	paused := s.pause(sub.ID, types.ProrationBehaviorCreateProrations)
 	s.Require().Len(s.prorationCredits(), 1)
@@ -1252,7 +1261,7 @@ func (s *SubscriptionPauseSuite) TestCancelWhilePaused_ImmediateBillsNothing() {
 
 // Scheduled cancellations are refused while paused.
 func (s *SubscriptionPauseSuite) TestCancelWhilePaused_ScheduledRefused() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_cancel_paused_scheduled", periodStart, periodEnd)
 	s.pause(sub.ID, types.ProrationBehaviorNone)
 
@@ -1272,7 +1281,7 @@ func (s *SubscriptionPauseSuite) TestCancelWhilePaused_ScheduledRefused() {
 
 // Cancelling a paused parent cancels its paused inherited children.
 func (s *SubscriptionPauseSuite) TestCancelWhilePaused_ParentCancelsPausedChildren() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	parent := s.billedSubscription("subs_cancel_paused_parent", periodStart, periodEnd)
 	parent.SubscriptionType = types.SubscriptionTypeParent
 	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), parent))
@@ -1292,7 +1301,7 @@ func (s *SubscriptionPauseSuite) TestCancelWhilePaused_ParentCancelsPausedChildr
 
 // The update API cannot move a subscription out of a pause; resume or cancel must be used.
 func (s *SubscriptionPauseSuite) TestUpdateWhilePaused_StatusChangeRefused() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_update_paused", periodStart, periodEnd)
 	s.pause(sub.ID, types.ProrationBehaviorNone)
 
@@ -1311,7 +1320,7 @@ func (s *SubscriptionPauseSuite) TestUpdateWhilePaused_StatusChangeRefused() {
 // A subscription paused outside Flexprice, such as by Stripe's sync, has no pause record and its
 // status still follows the update API.
 func (s *SubscriptionPauseSuite) TestUpdateWhilePaused_ExternalPauseFollowsUpdates() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_update_external_pause", periodStart, periodEnd)
 	sub.SubscriptionStatus = types.SubscriptionStatusPaused
 	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
@@ -1324,7 +1333,7 @@ func (s *SubscriptionPauseSuite) TestUpdateWhilePaused_ExternalPauseFollowsUpdat
 }
 
 func (s *SubscriptionPauseSuite) TestDeleteLineItemWhilePaused_Refused() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_delete_line_paused", periodStart, periodEnd)
 	s.pause(sub.ID, types.ProrationBehaviorNone)
 	lineItemID := "subs_line_advance_" + sub.ID
@@ -1340,7 +1349,7 @@ func (s *SubscriptionPauseSuite) TestDeleteLineItemWhilePaused_Refused() {
 }
 
 func (s *SubscriptionPauseSuite) TestAddonChangeWhilePaused_Refused() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_addon_paused", periodStart, periodEnd)
 	s.pause(sub.ID, types.ProrationBehaviorNone)
 
@@ -1353,7 +1362,7 @@ func (s *SubscriptionPauseSuite) TestAddonChangeWhilePaused_Refused() {
 
 // A paused subscription's upcoming credit grants can still be listed.
 func (s *SubscriptionPauseSuite) TestUpcomingGrantsWhilePaused_NotFound() {
-	periodStart, periodEnd := openPeriod()
+	periodStart, periodEnd := s.openPeriod()
 	sub := s.billedSubscription("subs_grants_paused", periodStart, periodEnd)
 	s.pause(sub.ID, types.ProrationBehaviorNone)
 

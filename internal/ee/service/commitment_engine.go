@@ -161,7 +161,6 @@ func allocate(stack *commitmentStack) (*allocation, error) {
 		}
 
 		out.Commitments[ci] = commitmentAllocation{
-			Used:       decimal.Zero,
 			UsedByLine: make([]decimal.Decimal, len(sc.Lines)),
 			Capacity:   decimal.Sum(decimal.Zero, sc.Pools...),
 		}
@@ -181,21 +180,29 @@ func allocate(stack *commitmentStack) (*allocation, error) {
 				}
 
 				usageLeft := &overage[lineIndex[ci][li]][w]
-				take := decimal.Min(*pool, *usageLeft)
-				if !take.IsPositive() {
+				if !usageLeft.IsPositive() {
 					continue
 				}
 
-				*pool = pool.Sub(take)
-				*usageLeft = usageLeft.Sub(take)
+				// Whichever of the pool and the usage is smaller runs out, so it is set to zero instead of subtracted.
+				take := *usageLeft
+				if pool.LessThan(take) {
+					take = *pool
+					*usageLeft = usageLeft.Sub(take)
+					*pool = decimal.Zero
+				} else {
+					*pool = pool.Sub(take)
+					*usageLeft = decimal.Zero
+				}
+
 				got.UsedByLine[li] = got.UsedByLine[li].Add(take)
-				got.Used = got.Used.Add(take)
 			}
 		}
 	}
 
 	for ci := range out.Commitments {
 		got := &out.Commitments[ci]
+		got.Used = decimal.Sum(decimal.Zero, got.UsedByLine...)
 		got.Unused = got.Capacity.Sub(got.Used)
 	}
 

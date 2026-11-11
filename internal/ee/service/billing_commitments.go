@@ -116,23 +116,17 @@ func (s *billingService) newCommitmentLoader(
 	return l, nil
 }
 
-// newProjectedCommitmentLoader loads commitments for [start, end) priced through the end of the billing period
-// holding end, reading usage only up to end.
+// newProjectedCommitmentLoader loads commitments for [start, end) priced through projectedPeriodEnd as of now, reading
+// usage only up to end.
 func (s *billingService) newProjectedCommitmentLoader(
 	ctx context.Context,
 	sub *subscription.Subscription,
-	start, end time.Time,
+	start, end, now time.Time,
 	charges map[string][]*dto.SubscriptionUsageByMetersResponse,
 	meters map[string]*meter.Meter,
 	source types.UsageSource,
 ) (*commitmentLoader, error) {
-	// An end inside the open billing period projects to its end, unless the window starts after that period does
-	// and so misses its earlier usage.
-	periodEnd := end
-	if !start.After(sub.CurrentPeriodStart) && end.After(sub.CurrentPeriodStart) && end.Before(sub.CurrentPeriodEnd) {
-		periodEnd = sub.CurrentPeriodEnd
-	}
-
+	periodEnd := projectedPeriodEnd(sub, start, end, now)
 	l, err := s.newCommitmentLoader(ctx, sub, start, periodEnd, periodEnd, charges, meters, source)
 	if err != nil {
 		return nil, err
@@ -140,6 +134,21 @@ func (s *billingService) newProjectedCommitmentLoader(
 
 	l.usageEnd = end
 	return l, nil
+}
+
+// projectedPeriodEnd returns the open period's end when [start, end) covers that period from its start into today, as
+// its coming invoice bills it, else end; a cancelled subscription bills no further.
+func projectedPeriodEnd(sub *subscription.Subscription, start, end, now time.Time) time.Time {
+	today := now.UTC().Truncate(24 * time.Hour)
+	if sub.SubscriptionStatus == types.SubscriptionStatusCancelled || !end.After(today) {
+		return end
+	}
+
+	if !start.After(sub.CurrentPeriodStart) && end.After(sub.CurrentPeriodStart) && end.Before(sub.CurrentPeriodEnd) {
+		return sub.CurrentPeriodEnd
+	}
+
+	return end
 }
 
 // load adds c with the billed lines it scopes, its prices and its period clipped to the window; it skips a
@@ -287,6 +296,55 @@ func (l *commitmentLoader) HandledLineIDs() map[string]bool {
 	return l.handledLineIDs
 }
 
+// CommitmentsCovering returns the IDs of the commitments whose scope holds one of the given lines.
+func (l *commitmentLoader) CommitmentsCovering(lineIDs map[string]bool) []string {
+	var ids []string
+	for _, sc := range l.commitments {
+		for _, item := range l.scopeByCommitment[sc.ID].lineItems {
+			if lineIDs[item.ID] {
+				ids = append(ids, sc.ID)
+				break
+			}
+		}
+	}
+
+	return ids
+}
+
+// LinesAffecting returns the lines whose usage can change what the commitments bill the given lines: the scopes of the
+// commitments covering one, widened by every commitment sharing a line with those, which draws on it too.
+func (l *commitmentLoader) LinesAffecting(lineIDs map[string]bool) map[string]bool {
+	affecting := map[string]bool{}
+	reached := map[string]bool{}
+	for grew := true; grew; {
+		grew = false
+		for _, sc := range l.commitments {
+			if reached[sc.ID] {
+				continue
+			}
+
+			scope := l.scopeByCommitment[sc.ID].lineItems
+			touches := false
+			for _, item := range scope {
+				if lineIDs[item.ID] || affecting[item.ID] {
+					touches = true
+					break
+				}
+			}
+			if !touches {
+				continue
+			}
+
+			reached[sc.ID], grew = true, true
+			for _, item := range scope {
+				affecting[item.ID] = true
+			}
+		}
+	}
+
+	return affecting
+}
+
 // Stacks builds one stack per type, measurement and bucket size from the loaded commitments and allocates each.
 func (l *commitmentLoader) Stacks(ctx context.Context) ([]*commitmentStack, []*allocation, error) {
 	var keys []stackKey
@@ -333,8 +391,8 @@ func (l *commitmentLoader) Stacks(ctx context.Context) ([]*commitmentStack, []*a
 	return stacks, allocs, nil
 }
 
-// usageLines returns the commitment lines at usage value, with true-ups, before any billing terms cover them. Usage
-// analytics reads these; invoices bill BillingLines.
+// usageLines returns the commitment lines at usage value, with true-ups, before any billing terms cover them. Invoices
+// and usage analytics read BillingLines instead.
 func (l *commitmentLoader) usageLines(ctx context.Context) ([]dto.CreateInvoiceLineItemRequest, error) {
 	stacks, allocs, err := l.Stacks(ctx)
 	if err != nil {
@@ -475,15 +533,15 @@ func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.Commitmen
 	return out, nil
 }
 
-// commitmentUsageBreakdown reports each commitment's usage for [start, end) as the period invoice would value it;
-// nil when none applies.
+// commitmentUsageBreakdown reports each commitment's usage for [start, end) as the period invoice would value it as of
+// now; nil when none applies.
 func (s *billingService) commitmentUsageBreakdown(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	usage *dto.GetUsageBySubscriptionResponse,
-	start, end time.Time,
+	start, end, now time.Time,
 ) ([]*dto.CommitmentUsageBreakdown, error) {
-	loader, err := s.newProjectedCommitmentLoader(ctx, sub, start, end, rawChargesByLine(sub, usage), nil, "")
+	loader, err := s.newProjectedCommitmentLoader(ctx, sub, start, end, now, rawChargesByLine(sub, usage), nil, "")
 	if err != nil || len(loader.commitments) == 0 {
 		return nil, err
 	}
@@ -555,7 +613,7 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 	}
 
 	for i, line := range stack.Lines {
-		usage, err := l.bucketUsage(ctx, line, lineMeters[i], bucket)
+		usage, err := l.bucketUsage(ctx, line, lineMeters[i], bucket, l.bucketSpan(stack, line, bucket))
 		if err != nil {
 			return err
 		}
@@ -564,11 +622,12 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 	}
 
 	// The floor counts the buckets the pools hold over the whole window, accruing from the commitment period's start.
+	cutByEnd := truncateToBucketStart(l.periodEnd.UTC(), bucket, &l.sub.BillingAnchor)
 	for _, sc := range stack.Commitments {
 		sc.PoolOf = make([]int, len(stack.Windows))
 		for w, t := range stack.Windows {
-			// A bucket starting before the period belongs to the period before it, which counted its capacity.
-			if t.Before(l.periodStart) || !l.appliesAt(sc.Commitment, t) {
+			// A bucket the period's end cuts ends in the next period, which holds its capacity.
+			if !t.Before(cutByEnd) || !l.coversBucket(sc.Commitment, t, bucket) {
 				sc.PoolOf[w] = noPool
 				continue
 			}
@@ -594,16 +653,68 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 	return nil
 }
 
-// activeBuckets counts the buckets of the usage grid starting within span that the commitment's capacity applies to.
+// activeBuckets counts the buckets of the usage grid ending within span that the commitment's capacity applies to.
 func (l *commitmentLoader) activeBuckets(c *commitment.Commitment, span types.Period, bucket types.WindowSize) int64 {
-	starts := generateBucketStarts(span.Start.UTC(), span.End.UTC(), bucket, &l.sub.BillingAnchor)
-	return int64(lo.CountBy(starts, func(t time.Time) bool { return !t.Before(span.Start) && l.appliesAt(c, t) }))
+	anchor := &l.sub.BillingAnchor
+	cutByEnd := truncateToBucketStart(span.End.UTC(), bucket, anchor)
+	var count int64
+	for start := truncateToBucketStart(span.Start.UTC(), bucket, anchor); start.Before(cutByEnd); {
+		if l.coversBucket(c, start, bucket) {
+			count++
+		}
+
+		start = nextBucketStart(start, bucket, anchor)
+	}
+
+	return count
+}
+
+// holdsBucket reports whether c's term holds the end of the bucket starting at start. Like a billing period, a term
+// owns the buckets that end within it, so a term edge inside a bucket gives the bucket to the later side.
+func (l *commitmentLoader) holdsBucket(c *commitment.Commitment, start time.Time, bucket types.WindowSize) bool {
+	bucketEnd := nextBucketStart(start, bucket, &l.sub.BillingAnchor)
+	end := termEnd(l.sub, c)
+	return c.StartDate.Before(bucketEnd) && (end == nil || !end.Before(bucketEnd))
+}
+
+// coversBucket reports whether c's capacity applies to the bucket starting at start: its term holds the bucket and its
+// active windows hold the start.
+func (l *commitmentLoader) coversBucket(c *commitment.Commitment, start time.Time, bucket types.WindowSize) bool {
+	return l.holdsBucket(c, start, bucket) && c.ActiveWindows.Contains(start)
+}
+
+// bucketSpan returns the part of the period whose buckets it bills for line. While a commitment carries the line across
+// an edge that cuts a bucket, the later period, holding the bucket's end, bills it from the bucket's start.
+func (l *commitmentLoader) bucketSpan(stack *commitmentStack, line *usageLine, bucket types.WindowSize) types.Period {
+	anchor := &l.sub.BillingAnchor
+	cutByStart := truncateToBucketStart(l.periodStart.UTC(), bucket, anchor)
+	cutByEnd := truncateToBucketStart(l.periodEnd.UTC(), bucket, anchor)
+	span := types.Period{Start: l.periodStart, End: minTime(l.periodEnd, l.asOf)}
+	for _, sc := range stack.Commitments {
+		if !slices.Contains(sc.Lines, line) {
+			continue
+		}
+
+		// The previous period billed the line under sc too, and left this bucket to this period.
+		if cutByStart.Before(l.periodStart) && sc.StartDate.Before(l.periodStart) &&
+			line.Item.StartDate.Before(l.periodStart) && l.holdsBucket(sc.Commitment, cutByStart, bucket) {
+			span.Start = cutByStart
+		}
+
+		// The next period bills the line under sc too, so it bills this bucket.
+		if cutByEnd.Before(l.periodEnd) && (line.Item.EndDate.IsZero() || line.Item.EndDate.After(l.periodEnd)) &&
+			l.holdsBucket(sc.Commitment, cutByEnd, bucket) {
+			span.End = minTime(span.End, cutByEnd)
+		}
+	}
+
+	return span
 }
 
 // appliesAt reports whether the commitment's capacity applies at t: within its term, which ends with the subscription
 // when it is open-ended, and inside its active windows.
 func (l *commitmentLoader) appliesAt(c *commitment.Commitment, t time.Time) bool {
-	return !t.Before(c.StartDate) && !endReached(termEnd(l.sub, c), t) && c.ActiveWindows.Contains(t, c.Location())
+	return !t.Before(c.StartDate) && !endReached(termEnd(l.sub, c), t) && c.ActiveWindows.Contains(t)
 }
 
 // windowOf returns the index of the window holding max(t, line start), or of the first window for an earlier one.
@@ -668,6 +779,7 @@ func (l *commitmentLoader) buildPeriodStack(ctx context.Context, stack *commitme
 
 	// Windows start at the buckets' own keys, which can sit off a generated grid; a bucket before the period joins
 	// the first window.
+	elapsed := types.Period{Start: l.periodStart, End: minTime(l.periodEnd, l.asOf)}
 	bucketedUsage := make([]map[time.Time]decimal.Decimal, len(stack.Lines))
 	for i, line := range stack.Lines {
 		m := lineMeters[i]
@@ -675,7 +787,7 @@ func (l *commitmentLoader) buildPeriodStack(ctx context.Context, stack *commitme
 			continue
 		}
 
-		if bucketedUsage[i], err = l.bucketUsage(ctx, line, m, price.ResolveBucketSize(line.Price, m)); err != nil {
+		if bucketedUsage[i], err = l.bucketUsage(ctx, line, m, price.ResolveBucketSize(line.Price, m), elapsed); err != nil {
 			return err
 		}
 
@@ -806,12 +918,13 @@ func (l *commitmentLoader) quantitiesPerSpan(
 	return out, nil
 }
 
-// bucketUsage returns the line's usage per bucket in the elapsed period, keyed at each bucket's start.
+// bucketUsage returns the line's usage per bucket in span, keyed at each bucket's start.
 func (l *commitmentLoader) bucketUsage(
 	ctx context.Context,
 	line *usageLine,
 	m *meter.Meter,
 	bucket types.WindowSize,
+	span types.Period,
 ) (map[time.Time]decimal.Decimal, error) {
 	out := map[time.Time]decimal.Decimal{}
 	charges := l.activeCharges(line.Item)
@@ -825,17 +938,17 @@ func (l *commitmentLoader) bucketUsage(
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	end := minTime(l.periodEnd, l.asOf)
+	// The invoice's own read starts at the period start, so a span reaching back into the bucket it cuts reads anew.
 	result := charges[0].BucketedUsageResult
-	if result == nil {
+	if result == nil || span.Start.Before(l.periodStart) {
 		var err error
-		if result, err = l.lineUsage(ctx, line, m, l.periodStart, end); err != nil {
+		if result, err = l.lineUsage(ctx, line, m, span.Start, span.End); err != nil {
 			return nil, err
 		}
 	}
 
 	for t, v := range aggregateUsageResultsByWindow(result.Results, m.Aggregation.Type) {
-		if t.Before(end) {
+		if t.Before(span.End) {
 			out[t] = v
 		}
 	}

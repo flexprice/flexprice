@@ -107,7 +107,7 @@ type MeterUsageDetailedAnalyticsParams struct {
 	// Empty falls back to UTC bucketing.
 	Timezone string
 	// Expand mirrors dto.GetUsageAnalyticsRequest.Expand. Allowed values:
-	// "price", "meter", "feature", "subscription_line_item", "plan", "addon", "source".
+	// "price", "meter", "feature", "subscription_line_item", "plan", "addon", "source", "instalments".
 	Expand []string
 	// IncludeChildren mirrors dto.GetUsageAnalyticsRequest.IncludeChildren.
 	IncludeChildren bool
