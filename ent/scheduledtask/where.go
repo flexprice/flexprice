@@ -137,6 +137,12 @@ func ManagedCopy(v bool) predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldEQ(FieldManagedCopy, v))
 }
 
+// Origin applies equality check predicate on the "origin" field. It's identical to OriginEQ.
+func Origin(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldEQ(FieldOrigin, vc))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldEQ(FieldTenantID, v))
@@ -1023,6 +1029,90 @@ func EmailConfigIsNil() predicate.ScheduledTask {
 // EmailConfigNotNil applies the NotNil predicate on the "email_config" field.
 func EmailConfigNotNil() predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldNotNull(FieldEmailConfig))
+}
+
+// OriginEQ applies the EQ predicate on the "origin" field.
+func OriginEQ(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldEQ(FieldOrigin, vc))
+}
+
+// OriginNEQ applies the NEQ predicate on the "origin" field.
+func OriginNEQ(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldNEQ(FieldOrigin, vc))
+}
+
+// OriginIn applies the In predicate on the "origin" field.
+func OriginIn(vs ...types.ExportOrigin) predicate.ScheduledTask {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.ScheduledTask(sql.FieldIn(FieldOrigin, v...))
+}
+
+// OriginNotIn applies the NotIn predicate on the "origin" field.
+func OriginNotIn(vs ...types.ExportOrigin) predicate.ScheduledTask {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.ScheduledTask(sql.FieldNotIn(FieldOrigin, v...))
+}
+
+// OriginGT applies the GT predicate on the "origin" field.
+func OriginGT(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldGT(FieldOrigin, vc))
+}
+
+// OriginGTE applies the GTE predicate on the "origin" field.
+func OriginGTE(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldGTE(FieldOrigin, vc))
+}
+
+// OriginLT applies the LT predicate on the "origin" field.
+func OriginLT(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldLT(FieldOrigin, vc))
+}
+
+// OriginLTE applies the LTE predicate on the "origin" field.
+func OriginLTE(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldLTE(FieldOrigin, vc))
+}
+
+// OriginContains applies the Contains predicate on the "origin" field.
+func OriginContains(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldContains(FieldOrigin, vc))
+}
+
+// OriginHasPrefix applies the HasPrefix predicate on the "origin" field.
+func OriginHasPrefix(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldHasPrefix(FieldOrigin, vc))
+}
+
+// OriginHasSuffix applies the HasSuffix predicate on the "origin" field.
+func OriginHasSuffix(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldHasSuffix(FieldOrigin, vc))
+}
+
+// OriginEqualFold applies the EqualFold predicate on the "origin" field.
+func OriginEqualFold(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldEqualFold(FieldOrigin, vc))
+}
+
+// OriginContainsFold applies the ContainsFold predicate on the "origin" field.
+func OriginContainsFold(v types.ExportOrigin) predicate.ScheduledTask {
+	vc := string(v)
+	return predicate.ScheduledTask(sql.FieldContainsFold(FieldOrigin, vc))
 }
 
 // And groups predicates with the AND operator between them.

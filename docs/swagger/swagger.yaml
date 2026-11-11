@@ -3743,6 +3743,20 @@ definitions:
         $ref: '#/definitions/types.S3JobConfig'
       name:
         type: string
+      origin:
+        allOf:
+        - $ref: '#/definitions/types.ExportOrigin'
+        description: Defaults to console.
+        enum:
+        - console
+        - customers_page
+      run_now:
+        description: Manual exports only; starts a run right after creation.
+        type: boolean
+      run_window:
+        allOf:
+        - $ref: '#/definitions/ExportRunWindow'
+        description: Window for the run_now run.
       schedule:
         $ref: '#/definitions/types.ExportSchedule'
       source_config:
@@ -4994,6 +5008,13 @@ definitions:
         type: boolean
       max_recipients:
         type: integer
+    type: object
+  ExportRunWindow:
+    properties:
+      end_time:
+        type: string
+      start_time:
+        type: string
     type: object
   FXRateResponse:
     properties:
@@ -8076,6 +8097,16 @@ definitions:
         type: boolean
       name:
         type: string
+      origin:
+        allOf:
+        - $ref: '#/definitions/types.ExportOrigin'
+        enum:
+        - console
+        - customers_page
+      run:
+        allOf:
+        - $ref: '#/definitions/TriggerForceRunResponse'
+        description: Set on create when run_now started a run.
       schedule:
         $ref: '#/definitions/types.ExportSchedule'
       source_config:
@@ -14273,6 +14304,7 @@ definitions:
     - revenue_facts
     - report
     - analytics_view
+    - customers
     type: string
     x-enum-varnames:
     - ScheduledTaskEntityTypeEvents
@@ -14285,6 +14317,7 @@ definitions:
     - ScheduledTaskEntityTypeRevenueFacts
     - ScheduledTaskEntityTypeReport
     - ScheduledTaskEntityTypeAnalyticsView
+    - ScheduledTaskEntityTypeCustomers
   types.ScheduledTaskInterval:
     enum:
     - 15MIN
@@ -16410,6 +16443,14 @@ definitions:
           type: string
         type: array
     type: object
+  types.ExportOrigin:
+    enum:
+    - console
+    - customers_page
+    type: string
+    x-enum-varnames:
+    - ExportOriginConsole
+    - ExportOriginCustomersPage
   types.ExportSchedule:
     properties:
       day_of_month:
@@ -16435,6 +16476,10 @@ definitions:
     type: object
   types.ExportSourceConfig:
     properties:
+      customer_filter:
+        allOf:
+        - $ref: '#/definitions/types.CustomerFilter'
+        description: Limits the export to matching customers.
       report_key:
         type: string
       report_params:
@@ -26575,6 +26620,20 @@ paths:
         in: query
         name: enabled
         type: boolean
+      - description: Only exports created from this origin
+        enum:
+        - console
+        - customers_page
+        in: query
+        name: origin
+        type: string
+      - description: Hide exports created from this origin
+        enum:
+        - console
+        - customers_page
+        in: query
+        name: exclude_origin
+        type: string
       produces:
       - application/json
       responses:
@@ -26604,6 +26663,8 @@ paths:
         interval is hourly, daily, weekly, monthly or manual; exports with a connection also accept 15MIN and 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule.
         Window = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.
         entity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config is rejected for other entity types and cannot be changed later. Clients should tolerate new entity_type values.
+        origin is console (default) or customers_page. customer_filter inside source_config limits the export to matching customers, needs origin customers_page, and is allowed for customers, wallet_ledger, invoice, credit_topups, credit_usage and usage_analytics exports and for reports with a customer dimension; entity_type customers requires it (empty means all customers).
+        run_now (manual exports only) starts a run right after creation, optionally over run_window; the response then carries run.workflow_id. If the run cannot start the export is still created and run is absent.
         Report sources allow interval daily, weekly, monthly or manual; schedule is required unless manual. Windows are the previous UTC period, and a custom run window must be whole UTC days. export_metadata_fields is not allowed. These exports also need analytics read access.
       operationId: createScheduledTask
       parameters:

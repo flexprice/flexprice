@@ -2680,6 +2680,10 @@ func init() {
 	scheduledtaskDescManagedCopy := scheduledtaskFields[8].Descriptor()
 	// scheduledtask.DefaultManagedCopy holds the default value on creation for the managed_copy field.
 	scheduledtask.DefaultManagedCopy = scheduledtaskDescManagedCopy.Default.(bool)
+	// scheduledtaskDescOrigin is the schema descriptor for origin field.
+	scheduledtaskDescOrigin := scheduledtaskFields[12].Descriptor()
+	// scheduledtask.DefaultOrigin holds the default value on creation for the origin field.
+	scheduledtask.DefaultOrigin = types.ExportOrigin(scheduledtaskDescOrigin.Default.(string))
 	secretMixin := schema.Secret{}.Mixin()
 	secretMixinFields0 := secretMixin[0].Fields()
 	_ = secretMixinFields0
