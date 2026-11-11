@@ -98,6 +98,10 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 				return err
 			}
 
+			if inv.InvoiceStatus == types.InvoiceStatusVoided {
+				return errInvoiceVoided(inv.ID)
+			}
+
 			if err := invoices.requireFreshDraft(txCtx, inv); err != nil {
 				return err
 			}

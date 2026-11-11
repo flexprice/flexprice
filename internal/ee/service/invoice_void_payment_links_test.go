@@ -20,6 +20,7 @@ import (
 type VoidPaymentLinksSuite struct {
 	testutil.BaseServiceTestSuite
 	svc      InvoiceService
+	params   ServiceParams
 	provider *fakeCheckoutProvider
 }
 
@@ -34,7 +35,7 @@ func (s *VoidPaymentLinksSuite) SetupTest() {
 	s.GetIntegrationFactory().SetCheckoutProvider(s.provider)
 
 	stores := s.GetStores()
-	s.svc = NewInvoiceService(ServiceParams{
+	s.params = ServiceParams{
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),
@@ -66,7 +67,8 @@ func (s *VoidPaymentLinksSuite) SetupTest() {
 		TenantRepo:                 stores.TenantRepo,
 		UserRepo:                   stores.UserRepo,
 		AuthRepo:                   stores.AuthRepo,
-	})
+	}
+	s.svc = NewInvoiceService(s.params)
 }
 
 func (s *VoidPaymentLinksSuite) TearDownTest() {
@@ -223,4 +225,44 @@ func (s *VoidPaymentLinksSuite) TestVoid_SkipsOwningCheckoutSession() {
 	got, err := s.GetStores().CheckoutSessionRepo.Get(s.GetContext(), session.ID)
 	s.Require().NoError(err)
 	s.Equal(types.CheckoutStatusPending, got.CheckoutStatus)
+}
+
+func (s *VoidPaymentLinksSuite) voidInvoiceDirectly() {
+	ctx := s.GetContext()
+	inv, err := s.GetStores().InvoiceRepo.Get(ctx, "inv_vpl")
+	s.Require().NoError(err)
+	inv.InvoiceStatus = types.InvoiceStatusVoided
+	s.Require().NoError(s.GetStores().InvoiceRepo.Update(ctx, inv))
+}
+
+func (s *VoidPaymentLinksSuite) TestProcessPayment_RejectsVoidedInvoice() {
+	s.seedInvoice()
+	s.seedPayment("pay_1", types.PaymentStatusInitiated, types.PaymentMethodTypePaymentLink, "cs_1")
+	s.voidInvoiceDirectly()
+
+	_, err := NewPaymentProcessorService(s.params).ProcessPayment(s.GetContext(), "pay_1")
+
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err))
+	s.Empty(s.provider.linkRequests)
+	s.Equal(types.PaymentStatusInitiated, s.payment("pay_1").PaymentStatus)
+}
+
+func (s *VoidPaymentLinksSuite) TestGetOrCreatePaymentLink_RejectsVoidedInvoice() {
+	s.seedInvoice()
+	p := s.seedPayment("pay_1", types.PaymentStatusPending, types.PaymentMethodTypePaymentLink, "cs_1")
+	p.GatewayMetadata = types.Metadata{"payment_url": "https://pay.test/cs_1"}
+	s.Require().NoError(s.GetStores().PaymentRepo.Update(s.GetContext(), p))
+	s.voidInvoiceDirectly()
+
+	_, err := NewPaymentService(s.params).(*paymentService).GetOrCreateInvoicePaymentLink(s.GetContext(), &dto.CreatePaymentRequest{
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     "inv_vpl",
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeStripe),
+	})
+
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err))
+	s.Empty(s.provider.linkRequests)
 }

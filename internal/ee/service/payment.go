@@ -1313,6 +1313,14 @@ func hasLiveMandate(m interfaces.ProviderPaymentMethod, gw types.PaymentGatewayT
 }
 
 func (s *paymentService) GetOrCreateInvoicePaymentLink(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error) {
+	inv, err := s.InvoiceRepo.Get(ctx, req.DestinationID)
+	if err != nil {
+		return nil, err
+	}
+	if inv.InvoiceStatus == types.InvoiceStatusVoided {
+		return nil, errInvoiceVoided(inv.ID)
+	}
+
 	// A live link for this invoice is reusable: without this a second tap creates a
 	// second full-amount link, and two links can both be paid.
 	if existing, err := s.livePaymentLink(ctx, req.DestinationID, lo.FromPtr(req.PaymentGateway)); err != nil {
