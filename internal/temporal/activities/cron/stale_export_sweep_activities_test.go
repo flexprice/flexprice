@@ -30,13 +30,20 @@ func TestSweepStaleExportRuns(t *testing.T) {
 	seedTask(t, store, "old_import", types.TaskTypeImport, types.TaskStatusProcessing, 3*time.Hour)
 	seedTask(t, store, "recent_processing", types.TaskTypeExport, types.TaskStatusProcessing, time.Hour)
 
+	other := &task.Task{ID: "other_tenant", TaskType: types.TaskTypeExport, TaskStatus: types.TaskStatusPending, EnvironmentID: "e2"}
+	other.TenantID = "t2"
+	other.Status = types.StatusPublished
+	other.CreatedAt = clock.Now().Add(-3 * time.Hour)
+	require.NoError(t, store.Create(context.Background(), other))
+
 	a := NewStaleExportSweepActivities(store, logger.NewNoopLogger())
 	a.batchSize = 1
 	n, err := a.SweepStaleExportRunsActivity(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, 2, n)
+	require.Equal(t, 3, n)
 
 	want := map[string]types.TaskStatus{
+		"other_tenant":      types.TaskStatusFailed,
 		"old_processing":    types.TaskStatusFailed,
 		"old_pending":       types.TaskStatusFailed,
 		"old_completed":     types.TaskStatusCompleted,

@@ -7,10 +7,11 @@ import (
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
-	staleExportAge       = 2 * time.Hour
+	staleExportAge       = types.ExportWorkflowTimeout + 30*time.Minute
 	staleExportReason    = "Run did not finish."
 	staleExportBatchSize = 500
 	staleExportMaxPasses = 20
@@ -32,13 +33,27 @@ func (a *StaleExportSweepActivities) SweepStaleExportRunsActivity(ctx context.Co
 	cutoff := clock.Now().Add(-staleExportAge)
 	total := 0
 	for pass := 0; pass < staleExportMaxPasses; pass++ {
-		n, err := a.taskRepo.FailStaleExportTasks(ctx, cutoff, staleExportReason, a.batchSize)
-		total += n
+		refs, err := a.taskRepo.ListStaleExportTasks(ctx, cutoff, a.batchSize)
 		if err != nil {
 			a.logger.Error(ctx, "stale export sweep failed", "error", err, "failed_so_far", total)
 			return total, err
 		}
-		if n < a.batchSize {
+
+		passFailed := 0
+		for _, ref := range refs {
+			rowCtx := types.SetEnvironmentID(types.SetTenantID(ctx, ref.TenantID), ref.EnvironmentID)
+			changed, err := a.taskRepo.FailStaleExportTask(rowCtx, ref.ID, staleExportReason)
+			if err != nil {
+				a.logger.Error(ctx, "failed to fail stale export run", "error", err, "task_id", ref.ID)
+				continue
+			}
+			if changed {
+				passFailed++
+			}
+		}
+		total += passFailed
+
+		if len(refs) < a.batchSize || passFailed == 0 {
 			break
 		}
 	}

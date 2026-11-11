@@ -12,9 +12,6 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-// ExportWorkflowTimeout bounds one export run; callers start it with this.
-const ExportWorkflowTimeout = 90 * time.Minute
-
 const completeFailedMessage = "The file was written but the run could not be completed."
 
 var temporalScheduledStartTimeKey = temporal.NewSearchAttributeKeyTime("TemporalScheduledStartTime")
@@ -61,25 +58,25 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		},
 	}
 
-	// 3 x 15m + 90s backoff = 46.5m, inside ExportWorkflowTimeout.
+	// 2 x 30m + 30s backoff = 60.5m.
 	heavyActivityOptions := workflow.ActivityOptions{
-		StartToCloseTimeout: 15 * time.Minute,
+		StartToCloseTimeout: 30 * time.Minute,
+		HeartbeatTimeout:    2 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    30 * time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumInterval:    5 * time.Minute,
-			MaximumAttempts:    3,
+			BackoffCoefficient: 1.0,
+			MaximumAttempts:    2,
 		},
 	}
 
-	// 10 x 1m + 151s backoff = 12.5m per terminal write.
+	// 5 x 1m + 15s backoff = 5.25m per terminal write.
 	terminalActivityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 1 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    1 * time.Second,
 			BackoffCoefficient: 2.0,
 			MaximumInterval:    30 * time.Second,
-			MaximumAttempts:    10,
+			MaximumAttempts:    5,
 		},
 	}
 

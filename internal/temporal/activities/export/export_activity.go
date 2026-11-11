@@ -135,6 +135,9 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 
 	// Use the ExportService which handles routing to the correct exporter
 	exportService := syncExport.NewExportServiceWithWallet(a.meterUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.storageResolver, a.config, a.logger, a.usageAnalyticsGetter, a.eventRepo, a.subscriptionLineItemRepo, a.revenueFactRepo, a.reportRunner)
+	stopHeartbeat := startHeartbeat(ctx, heartbeatInterval)
+	defer stopHeartbeat()
+
 	response, err := exportService.Export(ctx, request)
 	if err != nil {
 		a.logger.Error(ctx, "export failed", "error", err, "entity_type", input.EntityType)
