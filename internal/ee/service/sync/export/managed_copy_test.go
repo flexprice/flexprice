@@ -209,6 +209,32 @@ func TestExport_ConnectionPathUnchanged(t *testing.T) {
 	require.True(t, strings.HasPrefix(resp.FileURL, "s3://customer-bucket/mine/"), resp.FileURL)
 }
 
+func TestExportObjectKey_ConnectionKeyHasNoRunSuffix(t *testing.T) {
+	cfg := &types.S3JobConfig{Bucket: "customer-bucket", KeyPrefix: "mine"}
+	first, second := managedRequest(false, cfg), managedRequest(false, cfg)
+	first.TaskID, second.TaskID = "export-wf/run:aaaa1111", "export-wf/run:bbbb2222"
+
+	require.Equal(t, exportObjectKey(first, csvExporter{}), exportObjectKey(second, csvExporter{}))
+	require.NotContains(t, exportObjectKey(first, csvExporter{}), "aaaa1111")
+}
+
+func TestResolvePlatformStore_RejectsUncleanPrefix(t *testing.T) {
+	platform := &recordingStore{provider: storage.ProviderS3, bucket: "platform-bucket"}
+	svc := managedService(platform, nil, &panicConnRepo{})
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "t1"), "e1")
+	_, err := svc.resolvePlatformExportStore(ctx, managedRequest(true, platformCfg("exports/t1/e1/st_1")))
+	require.NoError(t, err)
+	for _, prefix := range []string{
+		"exports/t1/e1/./x",
+		"exports/t1/e1/../e2/x",
+		"exports/t1/e1//x",
+		"exports/t1/e1/a/../../e1/x",
+	} {
+		_, err := svc.resolvePlatformExportStore(ctx, managedRequest(true, platformCfg(prefix)))
+		require.Error(t, err, prefix)
+	}
+}
+
 func TestExportObjectKey_TaskIDMakesKeysDistinct(t *testing.T) {
 	cfg := platformCfg("exports/t1/e1/st_1")
 	first, second := managedRequest(true, cfg), managedRequest(true, cfg)

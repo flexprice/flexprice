@@ -1382,7 +1382,7 @@ func (s *taskService) presignManagedCopy(ctx context.Context, t *task.Task, st *
 	prefix := fmt.Sprintf("exports/%s/%s/", tenantID, envID)
 	if tenantID == "" || envID == "" || t.TaskType != types.TaskTypeExport ||
 		st.JobConfig == nil || bucket != st.JobConfig.Bucket ||
-		!strings.HasPrefix(key, prefix) || strings.Contains(key, "..") {
+		!storage.IsCleanKey(key) || !strings.HasPrefix(key, prefix) {
 		s.Logger.Info(ctx, "managed export file check failed", "task_id", t.ID, "bucket", bucket)
 		return "", ierr.NewError("file does not belong to this export").
 			WithHint("File URL does not match the Flexprice export bucket or tenant prefix").

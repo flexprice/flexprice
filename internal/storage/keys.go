@@ -2,8 +2,23 @@ package storage
 
 import (
 	"fmt"
+	"path"
 	"strings"
 )
+
+// IsCleanKey reports whether key has no empty, "." or ".." segments and no leading slash.
+func IsCleanKey(key string) bool {
+	trimmed := strings.TrimSuffix(key, "/")
+	if strings.HasPrefix(trimmed, "/") || path.Clean(trimmed) != trimmed {
+		return false
+	}
+	for _, seg := range strings.Split(trimmed, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
+}
 
 // ObjectKey builds a backend-agnostic object key of the form
 // {prefix}/{entityType}/{filename}.{format}[.gz]. Empty prefix segments
