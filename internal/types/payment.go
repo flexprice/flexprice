@@ -165,10 +165,16 @@ const (
 	PaymentMethodTypeCredits     PaymentMethodType = "CREDITS"
 	PaymentMethodTypePaymentLink PaymentMethodType = "PAYMENT_LINK"
 	PaymentMethodTypeUPI         PaymentMethodType = "UPI"
+	PaymentMethodTypeENACH       PaymentMethodType = "ENACH"
 )
 
 func (s PaymentMethodType) String() string {
 	return string(s)
+}
+
+// IsSavedMethod reports whether a charge of this type debits the customer's saved card or mandate.
+func (s PaymentMethodType) IsSavedMethod() bool {
+	return s == PaymentMethodTypeCard || s == PaymentMethodTypeUPI || s == PaymentMethodTypeENACH
 }
 
 func (s PaymentMethodType) Validate() error {
@@ -179,6 +185,7 @@ func (s PaymentMethodType) Validate() error {
 		PaymentMethodTypeCredits,
 		PaymentMethodTypePaymentLink,
 		PaymentMethodTypeUPI,
+		PaymentMethodTypeENACH,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment method type").

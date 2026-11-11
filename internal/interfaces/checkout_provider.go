@@ -136,6 +136,7 @@ type ProviderPaymentMethod struct {
 	// Card is set only for card methods; nil for UPI, ACH and the rest.
 	Card                *ProviderCardDetails
 	UPI                 *ProviderUPIDetails
+	BankAccount         *ProviderBankAccountDetails
 	Recurring           *ProviderRecurringPaymentDetails
 	InstantlyChargeable bool
 	// IsDefault is the gateway's own default/primary flag, which is what decides
@@ -163,6 +164,14 @@ type ProviderCardDetails struct {
 
 type ProviderUPIDetails struct {
 	VPA string
+}
+
+// ProviderBankAccountDetails is the displayable part of a bank-account mandate.
+type ProviderBankAccountDetails struct {
+	IFSC        string
+	Last4       string
+	AccountType string
+	AuthType    string
 }
 
 type ProviderRecurringPaymentDetails struct {

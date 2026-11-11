@@ -136,7 +136,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		} else {
 			processErr = p.handlePaymentLinkCreation(ctx, paymentObj)
 		}
-	case types.PaymentMethodTypeCard, types.PaymentMethodTypeUPI:
+	case types.PaymentMethodTypeCard, types.PaymentMethodTypeUPI, types.PaymentMethodTypeENACH:
 		if paymentObj.DestinationType == types.PaymentDestinationTypeInvoice {
 			lock, lockErr := payments.LockInvoiceCharge(ctx, p.Locker, p.PaymentRepo, paymentObj.EnvironmentID, paymentObj.DestinationID, paymentObj.ID)
 			if lockErr != nil {
@@ -149,14 +149,16 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 				}
 			}()
 		}
-		if lo.FromPtr(paymentObj.PaymentGateway) == string(types.PaymentGatewayTypeRazorpay) {
+		gateway := types.PaymentGatewayType(lo.FromPtr(paymentObj.PaymentGateway))
+		switch {
+		case !lo.Contains(dto.AllowedMethodsPerGateway(gateway), paymentObj.PaymentMethodType):
+			processErr = ierr.NewErrorf("%s payments are not supported on this payment gateway", paymentObj.PaymentMethodType).
+				WithHint("CARD supports stripe (default) and razorpay; UPI and ENACH support razorpay only").
+				Mark(ierr.ErrValidation)
+		case gateway == types.PaymentGatewayTypeRazorpay:
 			processErr = p.handleRazorpayTokenCharge(ctx, paymentObj)
 			settledByWebhook = true
-		} else if paymentObj.PaymentMethodType == types.PaymentMethodTypeUPI {
-			processErr = ierr.NewError("UPI payments require the razorpay gateway").
-				WithHint("Set payment_gateway to razorpay for UPI payments").
-				Mark(ierr.ErrValidation)
-		} else {
+		default:
 			processErr = p.handleCardPayment(ctx, paymentObj)
 		}
 	case types.PaymentMethodTypeACH:

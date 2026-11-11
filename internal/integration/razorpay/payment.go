@@ -47,7 +47,7 @@ type ChargeSavedTokenRequest struct {
 	Amount             decimal.Decimal
 	Currency           string
 	FlexPricePaymentID string
-	PreferredMethod    types.PaymentMethodType // empty = Card then UPI
+	PreferredMethod    types.PaymentMethodType // empty = Card, UPI, then ENACH
 }
 
 // PaymentLinkStatus captures the fields the FlexPrice sync path needs from a
@@ -804,7 +804,7 @@ func extractPaymentMethodID(payment map[string]interface{}, method string) strin
 }
 
 // selectAutoChargeToken finds the first usable token. When preferred is set only
-// that method is tried; otherwise Card then UPI.
+// that method is tried; otherwise Card, UPI, then ENACH (slowest to settle).
 func selectAutoChargeToken(
 	tokens []*interfaces.ProviderPaymentMethod,
 	preferred types.PaymentMethodType,
@@ -813,6 +813,7 @@ func selectAutoChargeToken(
 	priority := []types.PaymentMethodType{
 		types.PaymentMethodTypeCard,
 		types.PaymentMethodTypeUPI,
+		types.PaymentMethodTypeENACH,
 	}
 	if preferred != "" {
 		priority = []types.PaymentMethodType{preferred}
@@ -1014,7 +1015,7 @@ func (s *PaymentService) submitRecurringPayment(ctx context.Context, req AutoCha
 		return nil, err
 	}
 
-	razorpayPaymentID, _ := payment["id"].(string)
+	razorpayPaymentID, _ := payment["razorpay_payment_id"].(string)
 	s.logger.Info(ctx, "recurring payment submitted to Razorpay",
 		"invoice_id", req.InvoiceID,
 		"order_id", orderID,

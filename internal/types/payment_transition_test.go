@@ -88,3 +88,25 @@ func TestPaymentStatusIsDeletable(t *testing.T) {
 		})
 	}
 }
+
+func TestPaymentMethodTypeIsSavedMethod(t *testing.T) {
+	tests := []struct {
+		method PaymentMethodType
+		want   bool
+	}{
+		{PaymentMethodTypeCard, true},
+		{PaymentMethodTypeUPI, true},
+		{PaymentMethodTypeENACH, true},
+		{PaymentMethodTypeACH, false},
+		{PaymentMethodTypeOffline, false},
+		{PaymentMethodTypeCredits, false},
+		{PaymentMethodTypePaymentLink, false},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.method), func(t *testing.T) {
+			if got := tt.method.IsSavedMethod(); got != tt.want {
+				t.Errorf("IsSavedMethod() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

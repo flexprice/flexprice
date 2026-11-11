@@ -146,6 +146,8 @@ type Token struct {
 	RecurringDetails *TokenRecurringDetails `json:"recurring_details"`
 	Card             *TokenCard             `json:"card"`
 	VPA              *TokenVPA              `json:"vpa"`
+	BankDetails      *TokenBankDetails      `json:"bank_details"`
+	AuthType         string                 `json:"auth_type"`
 	MaxAmount        float64                `json:"max_amount"`
 	ExpiredAt        int64                  `json:"expired_at"`
 	CreatedAt        int64                  `json:"created_at"`
@@ -165,6 +167,13 @@ type TokenCard struct {
 
 type TokenCardFlows struct {
 	Recurring *bool `json:"recurring"`
+}
+
+type TokenBankDetails struct {
+	BeneficiaryName string `json:"beneficiary_name"`
+	AccountNumber   string `json:"account_number"`
+	IFSC            string `json:"ifsc"`
+	AccountType     string `json:"account_type"`
 }
 
 type TokenVPA struct {

@@ -327,8 +327,31 @@ func TestNormalizeRazorpayToken(t *testing.T) {
 			wantRecurring: types.RecurringPaymentStatusPaused,
 		},
 		{
-			name:    "emandate is skipped",
-			raw:     map[string]interface{}{"id": "tok_em", "method": "emandate", "recurring": true, "recurring_details": confirmed},
+			name: "confirmed emandate is an active bank mandate",
+			raw: map[string]interface{}{
+				"id": "tok_em", "method": "emandate", "recurring": true, "recurring_details": confirmed,
+				"auth_type":    "netbanking",
+				"bank_details": map[string]interface{}{"account_number": "XXXXXXXX1234", "ifsc": "HDFC0000001", "account_type": "savings"},
+			},
+			wantActive:    true,
+			wantRecurring: types.RecurringPaymentStatusActive,
+			check: func(t *testing.T, pm *interfaces.ProviderPaymentMethod) {
+				assert.Equal(t, types.PaymentMethodTypeENACH, pm.Method)
+				assert.Equal(t, &interfaces.ProviderBankAccountDetails{IFSC: "HDFC0000001", Last4: "1234", AccountType: "savings", AuthType: "netbanking"}, pm.BankAccount)
+			},
+		},
+		{
+			name: "rejected emandate keeps its status",
+			raw: map[string]interface{}{
+				"id": "tok_em_rej", "method": "emandate", "recurring": false,
+				"recurring_details": map[string]interface{}{"status": "rejected", "failure_reason": "Rejected by bank"},
+			},
+			wantActive:    true,
+			wantRecurring: types.RecurringPaymentStatusRejected,
+		},
+		{
+			name:    "unknown method is skipped",
+			raw:     map[string]interface{}{"id": "tok_nb", "method": "netbanking", "recurring": true, "recurring_details": confirmed},
 			wantNil: true,
 		},
 	}

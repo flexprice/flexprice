@@ -52,6 +52,9 @@ func NormalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPay
 	case "card":
 		pm.Method = types.PaymentMethodTypeCard
 		pm.Card = token.cardDetails()
+	case "emandate":
+		pm.Method = types.PaymentMethodTypeENACH
+		pm.BankAccount = token.bankAccountDetails()
 	default:
 		return nil, nil
 	}
@@ -59,7 +62,8 @@ func NormalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPay
 	if token.CreatedAt > 0 {
 		pm.CreatedAt = time.Unix(token.CreatedAt, 0).UTC()
 	}
-	if token.Recurring {
+	// Rejected and cancelled mandates have recurring=false but still carry their status.
+	if token.Recurring || token.RecurringDetails != nil && lo.Contains([]string{"rejected", "cancelled"}, token.RecurringDetails.Status) {
 		pm.Recurring = token.recurringDetails()
 	}
 
@@ -102,6 +106,20 @@ func (t Token) cardDetails() *interfaces.ProviderCardDetails {
 		Last4:    t.Card.Last4,
 		ExpMonth: int(t.Card.ExpiryMonth),
 		ExpYear:  int(t.Card.ExpiryYear),
+	}
+}
+
+func (t Token) bankAccountDetails() *interfaces.ProviderBankAccountDetails {
+	if t.BankDetails == nil {
+		return nil
+	}
+
+	accountNumber := t.BankDetails.AccountNumber
+	return &interfaces.ProviderBankAccountDetails{
+		IFSC:        t.BankDetails.IFSC,
+		Last4:       accountNumber[max(0, len(accountNumber)-4):],
+		AccountType: t.BankDetails.AccountType,
+		AuthType:    t.AuthType,
 	}
 }
 

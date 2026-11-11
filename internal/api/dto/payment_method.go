@@ -377,11 +377,19 @@ type SavedPaymentMethod struct {
 	CanAutoCharge       bool                          `json:"can_auto_charge"`
 	InstantlyChargeable bool                          `json:"instantly_chargeable"`
 	UPI                 *SavedUPIDetails              `json:"upi,omitempty"`
+	BankAccount         *SavedBankAccountDetails      `json:"bank_account,omitempty"`
 	Recurring           *SavedRecurringPaymentDetails `json:"recurring,omitempty"`
 }
 
 type SavedUPIDetails struct {
 	VPA string `json:"vpa,omitempty"`
+}
+
+type SavedBankAccountDetails struct {
+	IFSC        string `json:"ifsc,omitempty"`
+	Last4       string `json:"last4,omitempty"`
+	AccountType string `json:"account_type,omitempty"`
+	AuthType    string `json:"auth_type,omitempty"`
 }
 
 type SavedRecurringPaymentDetails struct {

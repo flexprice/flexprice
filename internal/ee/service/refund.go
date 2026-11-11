@@ -56,6 +56,7 @@ var gatewayRefundableMethods = []types.PaymentMethodType{
 	types.PaymentMethodTypeCard,
 	types.PaymentMethodTypePaymentLink,
 	types.PaymentMethodTypeUPI,
+	types.PaymentMethodTypeENACH,
 }
 
 func (s *refundService) PrepareRefundsForCreditNote(ctx context.Context, cn *creditnote.CreditNote, inv *invoice.Invoice, target *types.RefundTarget) ([]*refund.Refund, error) {

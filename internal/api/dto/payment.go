@@ -349,7 +349,7 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 				}).
 				Mark(ierr.ErrValidation)
 		}
-	} else if r.PaymentMethodType == types.PaymentMethodTypeCard || r.PaymentMethodType == types.PaymentMethodTypeUPI {
+	} else if r.PaymentMethodType.IsSavedMethod() {
 		if r.ProcessPayment {
 			if err := r.validateSavedMethodCharge(); err != nil {
 				return nil, err
@@ -372,8 +372,19 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 	return p, nil
 }
 
-// validateSavedMethodCharge checks the gateway for a CARD or UPI charge. CARD
-// supports Stripe (default) and Razorpay; UPI supports Razorpay only.
+// AllowedMethodsPerGateway lists the saved methods each gateway can charge; an empty gateway means Stripe.
+func AllowedMethodsPerGateway(gateway types.PaymentGatewayType) []types.PaymentMethodType {
+	switch gateway {
+	case "", types.PaymentGatewayTypeStripe:
+		return []types.PaymentMethodType{types.PaymentMethodTypeCard}
+	case types.PaymentGatewayTypeRazorpay:
+		return []types.PaymentMethodType{types.PaymentMethodTypeCard, types.PaymentMethodTypeUPI, types.PaymentMethodTypeENACH}
+	default:
+		return nil
+	}
+}
+
+// validateSavedMethodCharge checks the gateway for a saved-method charge.
 func (r *CreatePaymentRequest) validateSavedMethodCharge() error {
 	gateway := lo.FromPtr(r.PaymentGateway)
 	details := map[string]interface{}{
@@ -382,14 +393,9 @@ func (r *CreatePaymentRequest) validateSavedMethodCharge() error {
 	}
 
 	switch {
-	case r.PaymentMethodType == types.PaymentMethodTypeUPI && gateway != types.PaymentGatewayTypeRazorpay:
-		return ierr.NewError("UPI payments require the razorpay gateway").
-			WithHint("Set payment_gateway to razorpay for UPI payments").
-			WithReportableDetails(details).
-			Mark(ierr.ErrValidation)
-	case gateway != "" && gateway != types.PaymentGatewayTypeStripe && gateway != types.PaymentGatewayTypeRazorpay:
-		return ierr.NewError("unsupported payment gateway for card payments").
-			WithHint("CARD payments support the stripe and razorpay gateways").
+	case !lo.Contains(AllowedMethodsPerGateway(gateway), r.PaymentMethodType):
+		return ierr.NewErrorf("%s payments are not supported on this payment gateway", r.PaymentMethodType).
+			WithHint("CARD supports stripe (default) and razorpay; UPI and ENACH support razorpay only").
 			WithReportableDetails(details).
 			Mark(ierr.ErrValidation)
 	case gateway == types.PaymentGatewayTypeRazorpay && r.PaymentMethodID != "":
