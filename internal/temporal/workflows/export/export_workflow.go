@@ -1,6 +1,7 @@
 package export
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,11 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
+
+// ExportWorkflowTimeout bounds one export run; callers start it with this.
+const ExportWorkflowTimeout = 90 * time.Minute
+
+const completeFailedMessage = "The file was written but the run could not be completed."
 
 var temporalScheduledStartTimeKey = temporal.NewSearchAttributeKeyTime("TemporalScheduledStartTime")
 
@@ -55,11 +61,25 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		},
 	}
 
-	// Activity options for heavy operations (data export)
+	// 3 x 15m + 90s backoff = 46.5m, inside ExportWorkflowTimeout.
 	heavyActivityOptions := workflow.ActivityOptions{
-		StartToCloseTimeout: 6 * time.Hour,
+		StartToCloseTimeout: 15 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 3,
+			InitialInterval:    30 * time.Second,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    5 * time.Minute,
+			MaximumAttempts:    3,
+		},
+	}
+
+	// 10 x 1m + 151s backoff = 12.5m per terminal write.
+	terminalActivityOptions := workflow.ActivityOptions{
+		StartToCloseTimeout: 1 * time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    1 * time.Second,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    30 * time.Second,
+			MaximumAttempts:    10,
 		},
 	}
 
@@ -202,8 +222,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 	if err != nil {
 		logger.Error("Export failed", "error", err)
 
-		// Mark task as failed
-		ctx = workflow.WithActivityOptions(ctx, lightweightActivityOptions)
+		ctx = workflow.WithActivityOptions(ctx, terminalActivityOptions)
 		failInput := export.UpdateTaskStatusInput{
 			TaskID:   taskID,
 			TenantID: taskDetails.TenantID,
@@ -226,7 +245,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		// STEP 6: Complete Task
 		// ================================================================================
 		logger.Info("Step 6: Completing task")
-		ctx = workflow.WithActivityOptions(ctx, lightweightActivityOptions)
+		ctx = workflow.WithActivityOptions(ctx, terminalActivityOptions)
 
 		completeInput := export.CompleteTaskInput{
 			TaskID:      taskID,
@@ -242,7 +261,20 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		err = workflow.ExecuteActivity(ctx, taskActivity.CompleteTask, completeInput).Get(ctx, nil)
 		if err != nil {
 			logger.Error("Failed to complete task", "error", err)
-			// Continue anyway - export succeeded
+			if workflow.GetVersion(ctx, "export-terminal-status", workflow.DefaultVersion, 1) == 1 {
+				runErr := errors.New(completeFailedMessage)
+				failInput := export.UpdateTaskStatusInput{
+					TaskID:   taskID,
+					TenantID: taskDetails.TenantID,
+					EnvID:    taskDetails.EnvID,
+					UserID:   input.UserID,
+					Status:   types.TaskStatusFailed,
+					Error:    completeFailedMessage,
+				}
+				_ = workflow.ExecuteActivity(ctx, taskActivity.UpdateTaskStatus, failInput).Get(ctx, nil)
+				deliverRun(ctx, &taskDetails, taskID, types.TaskStatusFailed, 0, runErr)
+				return &ExecuteExportWorkflowOutput{TaskID: taskID}, runErr
+			}
 		}
 
 		success = true
