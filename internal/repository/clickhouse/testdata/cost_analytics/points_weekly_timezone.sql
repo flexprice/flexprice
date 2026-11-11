@@ -44,7 +44,7 @@ UNION ALL
 SELECT 1 AS is_total, '' AS k0, '' AS k1, toString(w), toString(sum(cost)), toString(sum(qty))
 FROM filtered
 GROUP BY w
-SETTINGS do_not_merge_across_partitions_select_final = 1
+SETTINGS max_memory_usage = 96636764160, do_not_merge_across_partitions_select_final = 1
 
 -- arguments
 -- @line_ids = [li_1]

@@ -186,7 +186,7 @@ func (r *costAnalyticsRepository) run(ctx context.Context, params *costanalytics
 }
 
 // addPoints reads cost per window for the page rows and the totals.
-func (r *CostAnalyticsRepository) addPoints(ctx context.Context, params *costanalytics.QueryParams, result *costanalytics.Result) error {
+func (r *costAnalyticsRepository) addPoints(ctx context.Context, params *costanalytics.QueryParams, result *costanalytics.Result) error {
 	q := params.Query
 	groupID := func(group []string) string { return strings.Join(group, "\x00") }
 	rowByGroup := make(map[string]*costanalytics.Row, len(result.Items))

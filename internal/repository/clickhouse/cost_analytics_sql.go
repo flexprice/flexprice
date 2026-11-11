@@ -81,9 +81,7 @@ GROUP BY %[1]s, w`, strings.Join(groupCols, ", "), b.bind("page_groups", pageGro
 FROM filtered
 GROUP BY w`, blanks))
 	sb.WriteString(strings.Join(parts, "\nUNION ALL\n"))
-	if b.query.Deduplicate {
-		sb.WriteString("\nSETTINGS do_not_merge_across_partitions_select_final = 1")
-	}
+	sb.WriteString(b.settings())
 	return b.result(sb.String())
 }
 
