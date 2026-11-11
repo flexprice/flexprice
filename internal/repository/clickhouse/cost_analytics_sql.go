@@ -7,6 +7,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/flexprice/flexprice/internal/domain/costanalytics"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
 
@@ -32,6 +33,7 @@ type costSQLBuilder struct {
 	query  *costanalytics.Query
 	args   []any
 	keys   []costanalytics.Key // distinct keys in first-use order; alias k<i>
+	window bool                // priced rows carry their time window as w
 }
 
 func buildCostBreakdownSQL(params *costanalytics.QueryParams) *costSQL {
@@ -49,11 +51,60 @@ func buildCostBreakdownSQL(params *costanalytics.QueryParams) *costSQL {
 	sb.WriteString(b.outerSelect())
 	sb.WriteString(b.settings())
 
+	return b.result(sb.String())
+}
+
+// buildCostPointsSQL returns cost per window for each page row (pageGroups, in GroupBy order) and,
+// marked is_total, per window over every row that passes the filters.
+func buildCostPointsSQL(params *costanalytics.QueryParams, pageGroups [][]string) *costSQL {
+	b := &costSQLBuilder{params: params, query: params.Query, window: true}
+	b.collectKeys()
+	groupCols := b.groupAliases()
+
+	var sb strings.Builder
+	sb.WriteString("WITH\n")
+	sb.WriteString(b.linesCTE())
+	sb.WriteString(",\n")
+	sb.WriteString(b.pricedCTE())
+	sb.WriteString(",\n")
+	sb.WriteString(fmt.Sprintf("filtered AS (\n    SELECT *\n    FROM priced%s\n)\n", b.filterWhere(groupCols)))
+
+	var parts []string
+	if len(pageGroups) > 0 {
+		parts = append(parts, fmt.Sprintf(`SELECT 0 AS is_total, %[1]s, toString(w), toString(sum(cost)), toString(sum(qty))
+FROM filtered
+WHERE has(%[2]s, [%[1]s])
+GROUP BY %[1]s, w`, strings.Join(groupCols, ", "), b.bind("page_groups", pageGroups)))
+	}
+	blanks := strings.Join(lo.Map(groupCols, func(a string, _ int) string { return "'' AS " + a }), ", ")
+	parts = append(parts, fmt.Sprintf(`SELECT 1 AS is_total, %s, toString(w), toString(sum(cost)), toString(sum(qty))
+FROM filtered
+GROUP BY w`, blanks))
+	sb.WriteString(strings.Join(parts, "\nUNION ALL\n"))
+	if b.query.Deduplicate {
+		sb.WriteString("\nSETTINGS do_not_merge_across_partitions_select_final = 1")
+	}
+	return b.result(sb.String())
+}
+
+func (b *costSQLBuilder) result(query string) *costSQL {
 	aliases := make(map[costanalytics.Key]string, len(b.keys))
 	for i, k := range b.keys {
 		aliases[k] = keyAlias(i)
 	}
-	return &costSQL{query: sb.String(), args: b.args, keyAliases: aliases}
+	return &costSQL{query: query, args: b.args, keyAliases: aliases}
+}
+
+// windowExpr is the local date that starts the event's window, in the query timezone.
+func (b *costSQLBuilder) windowExpr() string {
+	day := fmt.Sprintf("toDate(mu.timestamp, %s)", sqlStringLiteral(b.query.Timezone.String()))
+	switch b.query.WindowSize {
+	case types.WindowSizeWeek:
+		return fmt.Sprintf("toStartOfWeek(%s, 0)", day) // Sunday, as in usage analytics
+	case types.WindowSizeMonth:
+		return fmt.Sprintf("toStartOfMonth(%s)", day)
+	}
+	return day
 }
 
 // settings caps memory like every meter_usage query and, with dedupe, keeps FINAL within partitions.
@@ -162,6 +213,9 @@ func (b *costSQLBuilder) pricedCTE() string {
 	for i, k := range b.keys {
 		cols = append(cols, fmt.Sprintf("%s AS %s", b.keyExpr(k), keyAlias(i)))
 	}
+	if b.window {
+		cols = append(cols, b.windowExpr()+" AS w")
+	}
 
 	final := ""
 	if b.query.Deduplicate {
@@ -204,6 +258,16 @@ func (b *costSQLBuilder) groupedCTE() string {
 			fmt.Sprintf("groupUniqArrayIf(%[3]d)(%[1]s, %[1]s != '') AS m%[2]d_values", a, i, costanalytics.MaxDistinctValues+1))
 	}
 
+	return fmt.Sprintf(`grouped AS (
+    SELECT
+        %s
+    FROM priced%s
+    GROUP BY %s
+)`, strings.Join(cols, ",\n        "), b.filterWhere(groupCols), strings.Join(groupCols, ", "))
+}
+
+// filterWhere is the WHERE clause applying the filters and search to priced rows, or "".
+func (b *costSQLBuilder) filterWhere(groupCols []string) string {
 	var conds []string
 	for i, f := range b.query.Filters {
 		cond := fmt.Sprintf("has(%s, %s)", b.bind(fmt.Sprintf("filter_%d", i), f.Values), b.alias(f.Key))
@@ -219,17 +283,10 @@ func (b *costSQLBuilder) groupedCTE() string {
 		})
 		conds = append(conds, "("+strings.Join(matches, " OR ")+")")
 	}
-	where := ""
-	if len(conds) > 0 {
-		where = "\n    WHERE " + strings.Join(conds, "\n      AND ")
+	if len(conds) == 0 {
+		return ""
 	}
-
-	return fmt.Sprintf(`grouped AS (
-    SELECT
-        %s
-    FROM priced%s
-    GROUP BY %s
-)`, strings.Join(cols, ",\n        "), where, strings.Join(groupCols, ", "))
+	return "\n    WHERE " + strings.Join(conds, "\n      AND ")
 }
 
 func (b *costSQLBuilder) groupAliases() []string {

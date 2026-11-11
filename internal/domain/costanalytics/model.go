@@ -9,6 +9,7 @@ import (
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -20,6 +21,7 @@ const (
 	MaxFilterValues = 100
 	MaxMetrics      = 5
 	MaxSearchLength = 200
+	MaxWindows      = 400
 )
 
 // KeyKind is what a group-by, column, filter or metric key reads from.
@@ -152,6 +154,8 @@ type Query struct {
 	Sort                Sort
 	Metrics             []Metric
 	Deduplicate         bool
+	// WindowSize (DAY, WEEK or MONTH) adds cost per time window to each row and to the totals.
+	WindowSize types.WindowSize
 	// WithLineItemIDs adds the line items behind each row, for expanding rows to prices and plans.
 	WithLineItemIDs bool
 	Limit, Offset   int
@@ -233,7 +237,50 @@ func (q *Query) Validate() error {
 	if q.Timezone == nil {
 		return validationErr("timezone is required")
 	}
+	if q.WindowSize != "" {
+		switch q.WindowSize {
+		case types.WindowSizeDay, types.WindowSizeWeek, types.WindowSizeMonth:
+		default:
+			return validationErr("window_size must be DAY, WEEK or MONTH")
+		}
+		if len(q.Windows()) > MaxWindows {
+			return validationErr("the range spans more than %d windows; use a larger window_size", MaxWindows)
+		}
+	}
 	return nil
+}
+
+// Windows returns the start of each window from the one containing Start up to End, stopping
+// after MaxWindows+1.
+func (q *Query) Windows() []time.Time {
+	var out []time.Time
+	for w := WindowStart(q.Start, q.WindowSize, q.Timezone); w.Before(q.End) && len(out) <= MaxWindows; w = nextWindow(w, q.WindowSize) {
+		out = append(out, w)
+	}
+	return out
+}
+
+// WindowStart is local midnight in tz of the day, week or month containing t. Weeks start on
+// Sunday, as in usage analytics.
+func WindowStart(t time.Time, size types.WindowSize, tz *time.Location) time.Time {
+	l := t.In(tz)
+	switch size {
+	case types.WindowSizeMonth:
+		return time.Date(l.Year(), l.Month(), 1, 0, 0, 0, 0, tz)
+	case types.WindowSizeWeek:
+		return time.Date(l.Year(), l.Month(), l.Day()-int(l.Weekday()), 0, 0, 0, 0, tz)
+	}
+	return time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, tz)
+}
+
+func nextWindow(w time.Time, size types.WindowSize) time.Time {
+	switch size {
+	case types.WindowSizeMonth:
+		return w.AddDate(0, 1, 0)
+	case types.WindowSizeWeek:
+		return w.AddDate(0, 0, 7)
+	}
+	return w.AddDate(0, 0, 1)
 }
 
 func validationErr(format string, args ...any) error {
@@ -271,6 +318,14 @@ type Row struct {
 	Columns     map[string]decimal.Decimal // cost per column value, when columns are requested
 	Metrics     map[string]MetricValue     // keyed by Metric.Name()
 	LineItemIDs []string                   // with Query.WithLineItemIDs
+	Points      []Point                    // with Query.WindowSize: windows with events, oldest first
+}
+
+// Point is a row's or the totals' cost in one time window.
+type Point struct {
+	WindowStart time.Time
+	Cost        decimal.Decimal // unrounded
+	Quantity    decimal.Decimal
 }
 
 // MetricValue is one metric of a row.

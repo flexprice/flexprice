@@ -176,6 +176,12 @@ func randomCostQuery(rng *rand.Rand, dedupe bool) *costanalytics.Query {
 	if rng.Intn(4) == 0 {
 		q.Search = []string{"AL", "o", "12", "zzz"}[rng.Intn(4)]
 	}
+	if rng.Intn(2) == 0 {
+		q.WindowSize = []types.WindowSize{types.WindowSizeDay, types.WindowSizeWeek, types.WindowSizeMonth}[rng.Intn(3)]
+		// Los Angeles leaves daylight saving on Nov 1, inside the range.
+		tz, _ := time.LoadLocation([]string{"UTC", "Asia/Kolkata", "America/Los_Angeles"}[rng.Intn(3)])
+		q.Timezone = tz
+	}
 	return q
 }
 
@@ -226,6 +232,29 @@ func TestCostBreakdown_MatchesReference_Integration(t *testing.T) {
 		require.Zero(t, got.TotalCount)
 	})
 
+	t.Run("weekly points start on Sunday and add up to the totals", func(t *testing.T) {
+		la, err := time.LoadLocation("America/Los_Angeles")
+		require.NoError(t, err)
+		q := &costanalytics.Query{
+			Start: oct1, End: nov1, Timezone: la, WindowSize: types.WindowSizeWeek,
+			GroupBy: []costanalytics.Key{keyApp}, Sort: costanalytics.Sort{Field: costanalytics.SortTotal, Desc: true}, Limit: 10,
+		}
+		got, err := costRepo.GetCostBreakdown(context.Background(), &costanalytics.QueryParams{
+			TenantID: clean.tenantID, EnvironmentID: clean.envID, Query: q, Lines: clean.lines,
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, got.Totals.Points)
+		for _, row := range append(got.Items, got.Totals) {
+			sum := decimal.Zero
+			for _, p := range row.Points {
+				require.Equal(t, time.Sunday, p.WindowStart.Weekday(), "window %s", p.WindowStart)
+				require.Zero(t, p.WindowStart.Hour(), "window %s must be local midnight", p.WindowStart)
+				sum = sum.Add(p.Cost)
+			}
+			require.True(t, sum.Equal(row.Cost), "points must add up to the row: %s vs %s", sum, row.Cost)
+		}
+	})
+
 	t.Run("worked example: price change and numeric property", func(t *testing.T) {
 		q := &costanalytics.Query{
 			Start: oct1, End: nov1, Timezone: time.UTC,
@@ -273,5 +302,12 @@ func requireSameCostRow(t *testing.T, label string, want, got costanalytics.Row)
 		g := got.Metrics[name]
 		require.Equal(t, w.Count, g.Count, "%s metric %s count", label, name)
 		require.ElementsMatch(t, w.Values, g.Values, "%s metric %s values", label, name)
+	}
+	require.Len(t, got.Points, len(want.Points), "%s points: want %v got %v", label, want.Points, got.Points)
+	for i, w := range want.Points {
+		g := got.Points[i]
+		require.True(t, w.WindowStart.Equal(g.WindowStart), "%s point %d window: want %s got %s", label, i, w.WindowStart, g.WindowStart)
+		require.True(t, w.Cost.Equal(g.Cost), "%s point %d cost: want %s got %s", label, i, w.Cost, g.Cost)
+		require.True(t, w.Quantity.Equal(g.Quantity), "%s point %d quantity: want %s got %s", label, i, w.Quantity, g.Quantity)
 	}
 }

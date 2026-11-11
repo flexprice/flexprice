@@ -486,6 +486,12 @@ func toCostAnalyticsResponse(
 	}
 	sort.Slice(resp.ExcludedMeters, func(i, j int) bool { return resp.ExcludedMeters[i].MeterID < resp.ExcludedMeters[j].MeterID })
 
+	var windows []time.Time
+	if q.WindowSize != "" {
+		windows = q.Windows()
+		resp.Totals.Points = costPoints(result.Totals.Points, windows, money)
+	}
+
 	var shown map[string]bool
 	if q.Columns != nil {
 		resp.ColumnValues, shown = topColumnValues(result.Totals.Columns)
@@ -511,10 +517,25 @@ func toCostAnalyticsResponse(
 				item.Metrics[name] = dto.CostAnalyticsValue{Count: v.Count, Values: v.Values}
 			}
 		}
+		if q.WindowSize != "" {
+			item.Points = costPoints(row.Points, windows, money)
+		}
 		costItemIDs(&item, row.LineItemIDs, lineByID)
 		resp.Items = append(resp.Items, item)
 	}
 	return resp
+}
+
+// costPoints lists every window in the range, at zero where the row had no events.
+func costPoints(points []costanalytics.Point, windows []time.Time, money func(decimal.Decimal) string) []dto.CostWindowPoint {
+	byStart := lo.KeyBy(points, func(p costanalytics.Point) int64 { return p.WindowStart.Unix() })
+	return lo.Map(windows, func(w time.Time, _ int) dto.CostWindowPoint {
+		p, ok := byStart[w.Unix()]
+		if !ok {
+			return dto.CostWindowPoint{WindowStart: w, Cost: money(decimal.Zero), Quantity: "0"}
+		}
+		return dto.CostWindowPoint{WindowStart: w, Cost: money(p.Cost), Quantity: p.Quantity.String()}
+	})
 }
 
 // topColumnValues returns the MaxCostColumns values with the highest total cost, in that order.

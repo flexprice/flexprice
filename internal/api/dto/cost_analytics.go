@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/costanalytics"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
 
@@ -48,6 +49,7 @@ type CostAnalyticsRequest struct {
 	Metrics            []CostAnalyticsMetric `json:"metrics,omitempty"`
 	Expand             []CostExpand          `json:"expand,omitempty"`
 	Deduplicate        bool                  `json:"deduplicate,omitempty"`
+	WindowSize         types.WindowSize      `json:"window_size,omitempty"`
 	// ApplyDiscounts prices each line after its percentage coupons (forever or repeated), as the invoice does.
 	ApplyDiscounts bool `json:"apply_discounts,omitempty"`
 	Limit          int  `json:"limit,omitempty"`
@@ -82,6 +84,7 @@ func (r *CostAnalyticsRequest) ToQuery(now time.Time) (*costanalytics.Query, err
 		FeatureIDs:          lo.Uniq(r.FeatureIDs),
 		Search:              r.Search,
 		Deduplicate:         r.Deduplicate,
+		WindowSize:          r.WindowSize,
 		WithLineItemIDs:     true,
 		Limit:               lo.Ternary(r.Limit == 0, costanalytics.DefaultLimit, r.Limit),
 		Offset:              r.Offset,
@@ -196,6 +199,7 @@ type CostAnalyticsTotals struct {
 	Quantity   string                `json:"quantity"`
 	EventCount uint64                `json:"event_count"`
 	Columns    map[string]CostColumn `json:"columns,omitempty"`
+	Points     []CostWindowPoint     `json:"points,omitempty"`
 }
 
 // CostAnalyticsItem is one row.
@@ -210,6 +214,14 @@ type CostAnalyticsItem struct {
 	PlanIDs         []string                      `json:"plan_ids,omitempty"`
 	AddonIDs        []string                      `json:"addon_ids,omitempty"`
 	SubscriptionIDs []string                      `json:"subscription_ids,omitempty"`
+	Points          []CostWindowPoint             `json:"points,omitempty"`
+}
+
+// CostWindowPoint is the cost in one time window; every window in the range is listed, empty ones at zero.
+type CostWindowPoint struct {
+	WindowStart time.Time `json:"window_start"`
+	Cost        string    `json:"cost"`
+	Quantity    string    `json:"quantity"`
 }
 
 // CostColumn is a row's or total's cost in one column value.

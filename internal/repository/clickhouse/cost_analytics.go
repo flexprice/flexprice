@@ -3,6 +3,8 @@ package clickhouse
 import (
 	"context"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/costanalytics"
@@ -57,6 +59,13 @@ func (r *costAnalyticsRepository) GetCostBreakdown(ctx context.Context, params *
 			return nil, err
 		}
 		result.Totals, result.TotalCount = first.Totals, first.TotalCount
+	}
+
+	if params.Query.WindowSize != "" && result.TotalCount > 0 {
+		if err := r.addPoints(ctx, params, result); err != nil {
+			SetSpanError(span, err)
+			return nil, err
+		}
 	}
 
 	SetSpanSuccess(span)
@@ -174,6 +183,81 @@ func (r *costAnalyticsRepository) run(ctx context.Context, params *costanalytics
 			Mark(ierr.ErrDatabase)
 	}
 	return result, nil
+}
+
+// addPoints reads cost per window for the page rows and the totals.
+func (r *CostAnalyticsRepository) addPoints(ctx context.Context, params *costanalytics.QueryParams, result *costanalytics.Result) error {
+	q := params.Query
+	groupID := func(group []string) string { return strings.Join(group, "\x00") }
+	rowByGroup := make(map[string]*costanalytics.Row, len(result.Items))
+	pageGroups := make([][]string, 0, len(result.Items))
+	for i := range result.Items {
+		rowByGroup[groupID(result.Items[i].Group)] = &result.Items[i]
+		pageGroups = append(pageGroups, result.Items[i].Group)
+	}
+
+	built := buildCostPointsSQL(params, pageGroups)
+	rows, err := r.store.GetConn().Query(ctx, built.query, built.args...)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to query cost over time").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			isTotal           uint8
+			group             = make([]string, len(q.GroupBy))
+			window, cost, qty string
+		)
+		targets := []any{&isTotal}
+		for i := range group {
+			targets = append(targets, &group[i])
+		}
+		targets = append(targets, &window, &cost, &qty)
+		if err := rows.Scan(targets...); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to scan cost over time").
+				Mark(ierr.ErrDatabase)
+		}
+
+		start, err := time.ParseInLocation(time.DateOnly, window, q.Timezone)
+		if err != nil {
+			return ierr.WithError(err).WithHint("Failed to parse cost window").Mark(ierr.ErrDatabase)
+		}
+		c, err := decimal.NewFromString(cost)
+		if err != nil {
+			return ierr.WithError(err).WithHint("Failed to parse cost over time").Mark(ierr.ErrDatabase)
+		}
+		n, err := decimal.NewFromString(qty)
+		if err != nil {
+			return ierr.WithError(err).WithHint("Failed to parse usage over time").Mark(ierr.ErrDatabase)
+		}
+
+		target := &result.Totals
+		if isTotal == 0 {
+			if target = rowByGroup[groupID(group)]; target == nil {
+				continue
+			}
+		}
+		target.Points = append(target.Points, costanalytics.Point{WindowStart: start, Cost: c, Quantity: n})
+	}
+	if err := rows.Err(); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to read cost over time").
+			Mark(ierr.ErrDatabase)
+	}
+
+	sortPoints(result.Totals.Points)
+	for i := range result.Items {
+		sortPoints(result.Items[i].Points)
+	}
+	return nil
+}
+
+func sortPoints(points []costanalytics.Point) {
+	sort.Slice(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
 }
 
 func emptyCostRow() costanalytics.Row {

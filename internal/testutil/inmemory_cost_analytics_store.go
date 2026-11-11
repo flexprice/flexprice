@@ -25,6 +25,7 @@ func NewInMemoryCostAnalyticsStore(usage *InMemoryMeterUsageStore) *InMemoryCost
 
 type pricedEvent struct {
 	lineID    string
+	ts        time.Time
 	qty, cost decimal.Decimal
 	keys      map[costanalytics.Key]string
 }
@@ -33,6 +34,28 @@ type costGroup struct {
 	row     costanalytics.Row
 	metrics []map[string]bool
 	lines   map[string]bool
+	points  map[int64]*costanalytics.Point
+}
+
+// addPoint adds an event's cost to its window.
+func addPoint(points map[int64]*costanalytics.Point, q *costanalytics.Query, ev pricedEvent) {
+	start := costanalytics.WindowStart(ev.ts, q.WindowSize, q.Timezone)
+	p, ok := points[start.Unix()]
+	if !ok {
+		p = &costanalytics.Point{WindowStart: start, Cost: decimal.Zero, Quantity: decimal.Zero}
+		points[start.Unix()] = p
+	}
+	p.Cost = p.Cost.Add(ev.cost)
+	p.Quantity = p.Quantity.Add(ev.qty)
+}
+
+func sortedPoints(points map[int64]*costanalytics.Point) []costanalytics.Point {
+	if len(points) == 0 {
+		return nil
+	}
+	out := lo.Map(lo.Values(points), func(p *costanalytics.Point, _ int) costanalytics.Point { return *p })
+	sort.Slice(out, func(i, j int) bool { return out[i].WindowStart.Before(out[j].WindowStart) })
+	return out
 }
 
 func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params *costanalytics.QueryParams) (*costanalytics.Result, error) {
@@ -46,6 +69,7 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 	}
 
 	groups := map[string]*costGroup{}
+	totalPoints := map[int64]*costanalytics.Point{}
 	for _, ev := range s.pricedEvents(params) {
 		if !matchesCostFilters(q, ev) {
 			continue
@@ -58,6 +82,7 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 				row:     costanalytics.Row{Group: group, Cost: decimal.Zero, Quantity: decimal.Zero, Metrics: map[string]costanalytics.MetricValue{}},
 				metrics: make([]map[string]bool, len(q.Metrics)),
 				lines:   map[string]bool{},
+				points:  map[int64]*costanalytics.Point{},
 			}
 			for i := range g.metrics {
 				g.metrics[i] = map[string]bool{}
@@ -71,6 +96,10 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 		g.row.Quantity = g.row.Quantity.Add(ev.qty)
 		g.row.EventCount++
 		g.lines[ev.lineID] = true
+		if q.WindowSize != "" {
+			addPoint(g.points, q, ev)
+			addPoint(totalPoints, q, ev)
+		}
 		if q.Columns != nil {
 			c := ev.keys[*q.Columns]
 			g.row.Columns[c] = g.row.Columns[c].Add(ev.cost)
@@ -103,6 +132,7 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 			g.row.LineItemIDs = lo.Keys(g.lines)
 			sort.Strings(g.row.LineItemIDs)
 		}
+		g.row.Points = sortedPoints(g.points)
 		totals.Cost = totals.Cost.Add(g.row.Cost)
 		totals.Quantity = totals.Quantity.Add(g.row.Quantity)
 		totals.EventCount += g.row.EventCount
@@ -114,6 +144,7 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 	sortCostRows(rows, q.Sort)
 
 	result.TotalCount = uint64(len(rows))
+	totals.Points = sortedPoints(totalPoints)
 	result.Totals = totals
 	if q.Offset < len(rows) {
 		result.Items = rows[q.Offset:min(q.Offset+q.Limit, len(rows))]
@@ -150,6 +181,7 @@ func (s *InMemoryCostAnalyticsStore) pricedEvents(params *costanalytics.QueryPar
 			qty := r.QtyTotal.Truncate(15)
 			out = append(out, pricedEvent{
 				lineID: l.LineItemID,
+				ts:     ts,
 				qty:    qty,
 				cost:   qty.Mul(l.UnitPrice),
 				keys:   costKeyValues(q, r, l, ts),

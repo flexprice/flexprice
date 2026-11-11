@@ -446,6 +446,24 @@ func (s *CostAnalyticsSuite) TestColumnsMetricsAndPaging() {
 	s.Equal(dto.CostAnalyticsValue{Count: 1, Values: []string{"alice"}}, row.Metrics["distinct:properties.user"])
 }
 
+func (s *CostAnalyticsSuite) TestWeeklyPointsListEveryWindow() {
+	resp, err := s.query(func(r *dto.CostAnalyticsRequest) {
+		r.MeterIDs = []string{"m_tokens"}
+		r.WindowSize = types.WindowSizeWeek
+	})
+	s.NoError(err)
+
+	type point struct{ start, cost string }
+	points := func(ps []dto.CostWindowPoint) []point {
+		return lo.Map(ps, func(p dto.CostWindowPoint, _ int) point { return point{p.WindowStart.Format(time.DateOnly), p.Cost} })
+	}
+	// Weeks start on Sunday; Oct 1 2026 is a Thursday, so the first window starts Sep 27.
+	byUser := lo.SliceToMap(resp.Items, func(i dto.CostAnalyticsItem) (string, []point) { return i.Group["properties.user"], points(i.Points) })
+	s.Equal([]point{{"2026-09-27", "0.00"}, {"2026-10-04", "2000.00"}, {"2026-10-11", "0.00"}, {"2026-10-18", "5000.00"}, {"2026-10-25", "0.00"}}, byUser["alice"])
+	s.Equal([]point{{"2026-09-27", "0.00"}, {"2026-10-04", "0.00"}, {"2026-10-11", "6000.00"}, {"2026-10-18", "0.00"}, {"2026-10-25", "0.00"}}, byUser["bob"])
+	s.Equal([]point{{"2026-09-27", "0.00"}, {"2026-10-04", "2000.00"}, {"2026-10-11", "6000.00"}, {"2026-10-18", "5000.00"}, {"2026-10-25", "0.00"}}, points(resp.Totals.Points))
+}
+
 func (s *CostAnalyticsSuite) TestRejectedRequests() {
 	tests := []struct {
 		name   string
@@ -460,6 +478,11 @@ func (s *CostAnalyticsSuite) TestRejectedRequests() {
 		{"unknown timezone", func(r *dto.CostAnalyticsRequest) { r.Timezone = "Mars/Base" }},
 		{"unknown expand", func(r *dto.CostAnalyticsRequest) { r.Expand = []dto.CostExpand{"wallet"} }},
 		{"line item columns", func(r *dto.CostAnalyticsRequest) { r.Columns = "sub_line_item_id" }},
+		{"hourly windows", func(r *dto.CostAnalyticsRequest) { r.WindowSize = types.WindowSizeHour }},
+		{"more than 400 daily windows", func(r *dto.CostAnalyticsRequest) {
+			r.WindowSize = types.WindowSizeDay
+			r.StartTime = lo.ToPtr(costOct1.AddDate(-2, 0, 0))
+		}},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/flexprice/flexprice/internal/domain/costanalytics"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
@@ -165,6 +166,33 @@ func TestLinesCTEPricesEachCustomerOnce(t *testing.T) {
 		}
 	}
 	t.Fatal("line_customer_ids not bound")
+}
+
+func TestBuildCostPointsSQL_Golden(t *testing.T) {
+	ist, err := time.LoadLocation("Asia/Kolkata")
+	require.NoError(t, err)
+	q := goldenQuery(func(q *costanalytics.Query) {
+		q.GroupBy = []costanalytics.Key{keyUser, keySource}
+		q.Filters = []costanalytics.Filter{{Key: keyApp, Op: costanalytics.FilterIn, Values: []string{"build"}}}
+		q.Search = "ali"
+		q.Deduplicate = true
+		q.Timezone = ist
+		q.WindowSize = types.WindowSizeWeek
+	})
+	require.NoError(t, q.Validate())
+	built := buildCostPointsSQL(&costanalytics.QueryParams{
+		TenantID: "tenant_1", EnvironmentID: "env_1", Query: q,
+		Lines: []costanalytics.LineWindow{goldenLine("li_1", "m_tokens", oct1, nov1, "0.002")},
+	}, [][]string{{"alice", "api"}, {"", "sdk"}})
+	got := renderGolden(built)
+
+	path := filepath.Join("testdata", "cost_analytics", "points_weekly_timezone.sql")
+	if *updateGolden {
+		require.NoError(t, os.WriteFile(path, []byte(got), 0o644))
+	}
+	want, err := os.ReadFile(path)
+	require.NoError(t, err, "missing golden file; run with -update")
+	require.Equal(t, string(want), got)
 }
 
 // renderGolden prints the query followed by its named arguments.
