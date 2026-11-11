@@ -44,7 +44,7 @@ func (f *sourceValidatorFake) ValidateReportSource(_ context.Context, key string
 	return f.reportErr
 }
 
-func (f *sourceValidatorFake) ValidateViewSource(_ context.Context, id string) error {
+func (f *sourceValidatorFake) ValidateViewSource(_ context.Context, id string, _ int) error {
 	f.calls++
 	f.viewID = id
 	return f.viewErr
