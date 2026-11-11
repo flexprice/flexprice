@@ -17,8 +17,8 @@ type Repository interface {
 	// Update updates an existing scheduled task
 	Update(ctx context.Context, task *ScheduledTask) error
 
-	// UpdateSettings compare-and-sets settings; email when writeEmail.
-	UpdateSettings(ctx context.Context, task *ScheduledTask, writeEmail bool) error
+	// UpdateSettings compare-and-sets only the selected fields.
+	UpdateSettings(ctx context.Context, task *ScheduledTask, fields SettingsFields) error
 
 	// Delete deletes a scheduled task
 	Delete(ctx context.Context, id string) error
@@ -28,6 +28,13 @@ type Repository interface {
 
 	// GetByConnection retrieves all scheduled tasks for a specific connection
 	GetByConnection(ctx context.Context, connectionID string) ([]*ScheduledTask, error)
+}
+
+// SettingsFields selects the columns UpdateSettings writes.
+type SettingsFields struct {
+	Name     bool
+	Schedule bool
+	Email    bool
 }
 
 // ListFilters defines filters for listing scheduled tasks

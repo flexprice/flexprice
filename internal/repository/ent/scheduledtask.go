@@ -158,8 +158,8 @@ func (r *ScheduledTaskRepository) Update(ctx context.Context, task *domainst.Sch
 	return nil
 }
 
-// UpdateSettings compare-and-sets settings; email when writeEmail.
-func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask, writeEmail bool) error {
+// UpdateSettings compare-and-sets only the selected fields.
+func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask, fields domainst.SettingsFields) error {
 	scope := []predicate.ScheduledTask{
 		scheduledtask.TenantID(types.GetTenantID(ctx)),
 		scheduledtask.EnvironmentID(types.GetEnvironmentID(ctx)),
@@ -170,17 +170,21 @@ func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *doma
 		Where(scheduledtask.UpdatedAt(task.UpdatedAt)).
 		SetUpdatedBy(task.UpdatedBy)
 
-	if task.Name != "" {
-		update = update.SetName(task.Name)
-	} else {
-		update = update.ClearName()
+	if fields.Name {
+		if task.Name != "" {
+			update = update.SetName(task.Name)
+		} else {
+			update = update.ClearName()
+		}
 	}
-	if task.Schedule != nil {
-		update = update.SetSchedule(task.Schedule)
-	} else {
-		update = update.ClearSchedule()
+	if fields.Schedule {
+		if task.Schedule != nil {
+			update = update.SetSchedule(task.Schedule)
+		} else {
+			update = update.ClearSchedule()
+		}
 	}
-	if writeEmail {
+	if fields.Email {
 		if task.EmailConfig != nil {
 			update = update.SetEmailConfig(task.EmailConfig)
 		} else {
