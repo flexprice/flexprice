@@ -221,9 +221,8 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		"description": linkDescription(c.Name, lo.Map(req.LineItems, func(li interfaces.CheckoutLineItem, _ int) string {
 			return li.Description
 		})),
-		"receipt":      req.InvoiceID,
-		"email_notify": true,
-		"sms_notify":   true,
+		"email_notify": req.NotifyCustomer,
+		"sms_notify":   req.NotifyCustomer,
 		"notes": map[string]interface{}{
 			"flexprice_customer_id": req.CustomerID,
 			"flexprice_payment_id":  req.PaymentID,

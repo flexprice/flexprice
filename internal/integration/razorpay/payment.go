@@ -284,10 +284,10 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		"description": descriptionWithLineItems,
 		"customer":    customerInfo,
 		"notify": map[string]interface{}{
-			"sms":   true,
-			"email": true,
+			"sms":   req.NotifyCustomer,
+			"email": req.NotifyCustomer,
 		},
-		"reminder_enable": true,
+		"reminder_enable": req.NotifyCustomer,
 		"notes":           notes,
 	}
 

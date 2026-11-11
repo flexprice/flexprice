@@ -75,7 +75,8 @@ type CheckoutProviderRequest struct {
 	LineItems  []CheckoutLineItem
 	// ExpiresAt is when the hosted object should stop accepting payments. Providers
 	// that cannot express this ignore it.
-	ExpiresAt *time.Time
+	ExpiresAt      *time.Time
+	NotifyCustomer bool
 }
 
 // CheckoutLineItem itemises what is being charged. Providers that can only carry a
@@ -105,17 +106,18 @@ type AuthorizationLinkRequest struct {
 	// that cannot express CIT/MIT ignore it.
 	CustomerPresent bool
 	InvoiceID       string
-	CustomerID          string
-	PaymentID           string
-	Amount              decimal.Decimal
-	Currency            string
-	MaxAmount           *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
-	ExpiresAt           *time.Time
-	PreferredMethod     types.PaymentMethodType
-	SuccessURL          string
-	CancelURL           string
-	Metadata            map[string]string
-	LineItems           []CheckoutLineItem
+	CustomerID      string
+	PaymentID       string
+	Amount          decimal.Decimal
+	Currency        string
+	MaxAmount       *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
+	ExpiresAt       *time.Time
+	PreferredMethod types.PaymentMethodType
+	SuccessURL      string
+	CancelURL       string
+	Metadata        map[string]string
+	LineItems       []CheckoutLineItem
+	NotifyCustomer  bool
 }
 
 // HasAutoChargeableMethodRequest is the input for checking if a customer has

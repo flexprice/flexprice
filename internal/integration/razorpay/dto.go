@@ -83,7 +83,8 @@ type CreatePaymentLinkRequest struct {
 	PaymentID  string
 	// ExpiresAt, when set, is sent as expire_by so the link stops accepting new
 	// payments at a known time. Razorpay's minimum is 15 minutes from now.
-	ExpiresAt *time.Time
+	ExpiresAt      *time.Time
+	NotifyCustomer bool
 }
 
 // RazorpayPaymentLinkResponse represents the response after creating a payment link

@@ -36,7 +36,8 @@ type CreatePaymentRequest struct {
 // support for a new gateway's options means adding its struct here plus a
 // Validate method on it — no other call site needs to change.
 type PaymentGatewayOptions struct {
-	Stripe *StripePaymentGatewayOptions `json:"stripe,omitempty"`
+	Stripe   *StripePaymentGatewayOptions   `json:"stripe,omitempty"`
+	Razorpay *RazorpayPaymentGatewayOptions `json:"razorpay,omitempty"`
 }
 
 // Validate checks that any set gateway options are compatible with the
@@ -46,7 +47,10 @@ func (o *PaymentGatewayOptions) Validate(paymentMethodType types.PaymentMethodTy
 		return nil
 	}
 	if o.Stripe != nil {
-		return o.Stripe.Validate(paymentMethodType, paymentGateway)
+		return validateGatewayOptions(types.PaymentGatewayTypeStripe, paymentMethodType, paymentGateway)
+	}
+	if o.Razorpay != nil {
+		return validateGatewayOptions(types.PaymentGatewayTypeRazorpay, paymentMethodType, paymentGateway)
 	}
 	return nil
 }
@@ -57,21 +61,24 @@ type StripePaymentGatewayOptions struct {
 	TaxIDCollectionEnabled *bool `json:"tax_id_collection_enabled,omitempty"`
 }
 
-// Validate ensures Stripe options are only used with Stripe payment-link payments.
-func (o *StripePaymentGatewayOptions) Validate(paymentMethodType types.PaymentMethodType, paymentGateway *types.PaymentGatewayType) error {
-	switch {
-	case paymentMethodType != types.PaymentMethodTypePaymentLink,
-		paymentGateway == nil,
-		paymentGateway != nil && *paymentGateway != types.PaymentGatewayTypeStripe:
-		return ierr.NewError("gateway_options.stripe only applies to Stripe payment-link payments").
-			WithHint("Remove gateway_options.stripe, or set payment_method_type to PAYMENT_LINK and payment_gateway to stripe").
-			WithReportableDetails(map[string]interface{}{
-				"payment_method_type": paymentMethodType,
-				"payment_gateway":     paymentGateway,
-			}).
-			Mark(ierr.ErrValidation)
+// RazorpayPaymentGatewayOptions carries Razorpay-specific payment options.
+type RazorpayPaymentGatewayOptions struct {
+	// NotifyCustomer lets Razorpay SMS/email the payment link to the customer.
+	NotifyCustomer bool `json:"notify_customer,omitempty"`
+}
+
+// validateGatewayOptions ensures gateway options are only used with that gateway's payment-link payments.
+func validateGatewayOptions(gateway types.PaymentGatewayType, paymentMethodType types.PaymentMethodType, paymentGateway *types.PaymentGatewayType) error {
+	if paymentMethodType == types.PaymentMethodTypePaymentLink && lo.FromPtr(paymentGateway) == gateway {
+		return nil
 	}
-	return nil
+	return ierr.NewErrorf("gateway_options.%s only applies to %s payment-link payments", gateway, gateway).
+		WithHintf("Remove gateway_options.%s, or set payment_method_type to PAYMENT_LINK and payment_gateway to %s", gateway, gateway).
+		WithReportableDetails(map[string]interface{}{
+			"payment_method_type": paymentMethodType,
+			"payment_gateway":     paymentGateway,
+		}).
+		Mark(ierr.ErrValidation)
 }
 
 // UpdatePaymentRequest represents a request to update a payment
@@ -291,6 +298,9 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 	}
 	if r.GatewayOptions != nil && r.GatewayOptions.Stripe != nil && lo.FromPtr(r.GatewayOptions.Stripe.TaxIDCollectionEnabled) {
 		gatewayMetadata["tax_id_collection_enabled"] = "true"
+	}
+	if r.GatewayOptions != nil && r.GatewayOptions.Razorpay != nil && r.GatewayOptions.Razorpay.NotifyCustomer {
+		gatewayMetadata["notify_customer"] = "true"
 	}
 
 	p := &payment.Payment{

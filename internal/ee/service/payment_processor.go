@@ -483,14 +483,15 @@ func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context
 
 	// Convert to Razorpay payment link request
 	paymentLinkReq := &razorpay.CreatePaymentLinkRequest{
-		InvoiceID:  paymentObj.DestinationID,
-		CustomerID: invoice.CustomerID,
-		Amount:     paymentObj.Amount,
-		Currency:   paymentObj.Currency,
-		SuccessURL: gatewayURL(paymentObj, "success_url"),
-		CancelURL:  gatewayURL(paymentObj, "cancel_url"),
-		Metadata:   linkMetadata,
-		PaymentID:  paymentObj.ID,
+		InvoiceID:      paymentObj.DestinationID,
+		CustomerID:     invoice.CustomerID,
+		Amount:         paymentObj.Amount,
+		Currency:       paymentObj.Currency,
+		SuccessURL:     gatewayURL(paymentObj, "success_url"),
+		CancelURL:      gatewayURL(paymentObj, "cancel_url"),
+		Metadata:       linkMetadata,
+		PaymentID:      paymentObj.ID,
+		NotifyCustomer: paymentObj.GatewayMetadata["notify_customer"] == "true",
 	}
 
 	// Get Razorpay integration for creating payment link
