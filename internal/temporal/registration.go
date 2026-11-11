@@ -150,6 +150,7 @@ func RegisterWorkflowsAndActivities(
 		params.EventRepo,
 		params.SubscriptionLineItemRepo,
 		params.RevenueFactRepo,
+		service.NewAnalyticsService(params),
 	)
 
 	entityScope := service.NewBillingEntityService(params)

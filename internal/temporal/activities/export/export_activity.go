@@ -40,6 +40,7 @@ type ExportActivity struct {
 	eventRepo                events.Repository
 	subscriptionLineItemRepo subscription.LineItemRepository
 	revenueFactRepo          revenuefact.Repository
+	reportRunner             syncExport.ReportRunner
 }
 
 // NewExportActivity creates a new export activity
@@ -59,6 +60,7 @@ func NewExportActivity(
 	eventRepo events.Repository,
 	subscriptionLineItemRepo subscription.LineItemRepository,
 	revenueFactRepo revenuefact.Repository,
+	reportRunner syncExport.ReportRunner,
 ) *ExportActivity {
 	return &ExportActivity{
 		meterUsageRepo:           meterUsageRepo,
@@ -76,6 +78,7 @@ func NewExportActivity(
 		eventRepo:                eventRepo,
 		subscriptionLineItemRepo: subscriptionLineItemRepo,
 		revenueFactRepo:          revenueFactRepo,
+		reportRunner:             reportRunner,
 	}
 }
 
@@ -99,6 +102,7 @@ type ExportDataOutput struct {
 	FileURL       string
 	RecordCount   int
 	FileSizeBytes int64
+	Metadata      map[string]string
 }
 
 // ExportData performs the complete export: prepare data, generate CSV, upload to provider
@@ -130,7 +134,7 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 	}
 
 	// Use the ExportService which handles routing to the correct exporter
-	exportService := syncExport.NewExportServiceWithWallet(a.meterUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.storageResolver, a.config, a.logger, a.usageAnalyticsGetter, a.eventRepo, a.subscriptionLineItemRepo, a.revenueFactRepo)
+	exportService := syncExport.NewExportServiceWithWallet(a.meterUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.storageResolver, a.config, a.logger, a.usageAnalyticsGetter, a.eventRepo, a.subscriptionLineItemRepo, a.revenueFactRepo, a.reportRunner)
 	response, err := exportService.Export(ctx, request)
 	if err != nil {
 		a.logger.Error(ctx, "export failed", "error", err, "entity_type", input.EntityType)
@@ -150,5 +154,6 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 		FileURL:       response.FileURL,
 		RecordCount:   response.RecordCount,
 		FileSizeBytes: response.FileSizeBytes,
+		Metadata:      response.Metadata,
 	}, nil
 }

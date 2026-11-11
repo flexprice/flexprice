@@ -63,6 +63,7 @@ type ExportService struct {
 	eventRepo                events.Repository
 	subscriptionLineItemRepo subscription.LineItemRepository
 	revenueFactRepo          revenuefact.Repository
+	reportRunner             ReportRunner
 }
 
 // NewExportService creates a new export service
@@ -108,6 +109,7 @@ func NewExportServiceWithWallet(
 	eventRepo events.Repository,
 	subscriptionLineItemRepo subscription.LineItemRepository,
 	revenueFactRepo revenuefact.Repository,
+	reportRunner ReportRunner,
 ) *ExportService {
 	return &ExportService{
 		meterUsageRepo:           meterUsageRepo,
@@ -125,6 +127,7 @@ func NewExportServiceWithWallet(
 		eventRepo:                eventRepo,
 		subscriptionLineItemRepo: subscriptionLineItemRepo,
 		revenueFactRepo:          revenueFactRepo,
+		reportRunner:             reportRunner,
 	}
 }
 
@@ -247,7 +250,7 @@ func (s *ExportService) streamToStorage(ctx context.Context, request *dto.Export
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	return s.exportResponse(ctx, request, recordCount, uploadResponse), nil
+	return s.exportResponse(ctx, request, exporter, recordCount, uploadResponse), nil
 }
 
 // writeExportCSV writes the export to w, gzipped when asked, and returns the record count and CSV size.
@@ -312,18 +315,22 @@ func runKeySuffix(taskID string) string {
 	}, taskID)
 }
 
-func (s *ExportService) exportResponse(ctx context.Context, request *dto.ExportRequest, recordCount int, uploadResponse *storage.UploadResponse) *dto.ExportResponse {
+func (s *ExportService) exportResponse(ctx context.Context, request *dto.ExportRequest, exporter Exporter, recordCount int, uploadResponse *storage.UploadResponse) *dto.ExportResponse {
 	s.logger.Info(ctx, "successfully uploaded export",
 		"file_url", uploadResponse.FileURL,
 		"file_size_bytes", uploadResponse.FileSizeBytes)
 
-	return &dto.ExportResponse{
+	response := &dto.ExportResponse{
 		EntityType:    request.EntityType,
 		RecordCount:   recordCount,
 		FileURL:       uploadResponse.FileURL,
 		FileSizeBytes: uploadResponse.FileSizeBytes,
 		ExportedAt:    uploadResponse.UploadedAt,
 	}
+	if withMetadata, ok := exporter.(RunMetadataExporter); ok {
+		response.Metadata = withMetadata.RunMetadata()
+	}
+	return response
 }
 
 func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.ExportRequest, conn *connection.Connection) (storage.Storage, error) {
@@ -429,7 +436,7 @@ func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.Export
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	return s.exportResponse(ctx, request, recordCount, uploadResponse), nil
+	return s.exportResponse(ctx, request, exporter, recordCount, uploadResponse), nil
 }
 
 // getExporter returns the appropriate exporter for the given entity type
@@ -480,6 +487,12 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 			return nil
 		}
 		return NewUsageAnalyticsExporter(s.customerRepo, s.eventRepo, s.subscriptionLineItemRepo, s.usageAnalyticsGetter, s.logger)
+	case types.ScheduledTaskEntityTypeReport, types.ScheduledTaskEntityTypeAnalyticsView:
+		if s.reportRunner == nil {
+			s.logger.Info(context.Background(), "report runner not configured for report export")
+			return nil
+		}
+		return NewReportExporter(s.reportRunner, entityType)
 	default:
 		return nil
 	}
