@@ -426,6 +426,34 @@ func (s *CostAnalyticsSuite) TestRowsAlwaysCarryIDsAndExpandAddsObjectMaps() {
 	s.Equal([]string{"f_tokens"}, lo.Keys(resp.Features))
 }
 
+func (s *CostAnalyticsSuite) TestCancelledChildKeepsTheCostOfPeriodsItsParentInvoiced() {
+	cancel := func(at time.Time) {
+		child := *s.child
+		child.SubscriptionStatus = types.SubscriptionStatusCancelled
+		child.CancelledAt = lo.ToPtr(at)
+		s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), &child))
+	}
+	tokens := func(customer string) map[string]string {
+		resp, err := s.query(func(r *dto.CostAnalyticsRequest) {
+			r.ExternalCustomerID = customer
+			r.MeterIDs = []string{"m_tokens"}
+		})
+		s.NoError(err)
+		return costByGroup(resp, "properties.user")
+	}
+
+	// Cancelled after October: the October invoice, computed on Nov 1, still charged bob.
+	cancel(costNov1.AddDate(0, 0, 4))
+	s.Equal(map[string]string{"bob": "6000.00"}, tokens("acme_child"))
+	s.Equal(map[string]string{"alice": "7000.00", "bob": "6000.00"}, tokens("acme"))
+
+	// Cancelled during October: the October invoice left the child out.
+	cancel(costOct15.AddDate(0, 0, 5))
+	s.Empty(tokens("acme_child"))
+	s.Equal(map[string]string{"alice": "7000.00"}, tokens("acme"))
+	s.Positive(s.assertLinesEqualInvoice(), "billing's own October invoice agrees")
+}
+
 func (s *CostAnalyticsSuite) TestColumnsMetricsAndPaging() {
 	resp, err := s.query(func(r *dto.CostAnalyticsRequest) {
 		r.GroupBy = []string{"meter_id"}

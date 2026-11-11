@@ -205,13 +205,17 @@ func (s *costAnalyticsService) subscriptionsInRange(ctx context.Context, cust *c
 			if parent == nil {
 				continue // the parent is not billed, so neither is the child
 			}
-			// The parent's invoice covers only the children billing lists (not paused or cancelled ones).
-			covered, err := subService.ExternalCustomerIDsForSubscription(ctx, parent)
+			until, covered, err := childCoverageEnd(parent, sub)
 			if err != nil {
 				return nil, err
 			}
-			if !lo.Contains(covered, cust.ExternalID) {
+			if !covered {
 				continue
+			}
+			if !until.IsZero() {
+				if cs.end = minTime(cs.end, until); !cs.start.Before(cs.end) {
+					continue
+				}
 			}
 			cs.owner = parent
 			cs.customerIDs = []string{cust.ExternalID}
@@ -221,9 +225,71 @@ func (s *costAnalyticsService) subscriptionsInRange(ctx context.Context, cust *c
 			if err != nil {
 				return nil, err
 			}
+			if sub.SubscriptionType == types.SubscriptionTypeParent {
+				cancelled, err := s.cancelledChildren(ctx, cs)
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, cancelled...)
+			}
 		}
 		if len(cs.customerIDs) > 0 {
 			out = append(out, cs)
+		}
+	}
+	return out, nil
+}
+
+// childCoverageEnd reports whether the parent's invoices cover an inherited child and until when (zero:
+// no end). An invoice counts the children not paused or cancelled when it is computed, at period end,
+// so a cancelled child is covered for every period that ends at or before its cancellation. Paused
+// children are judged by their current status; pause history is not read.
+func childCoverageEnd(parent, child *subscription.Subscription) (time.Time, bool, error) {
+	switch child.SubscriptionStatus {
+	case types.SubscriptionStatusActive, types.SubscriptionStatusTrialing:
+		return time.Time{}, true, nil
+	case types.SubscriptionStatusCancelled:
+		if child.CancelledAt == nil {
+			return time.Time{}, false, nil
+		}
+		until, err := subPeriodStartAt(parent, *child.CancelledAt)
+		return until, err == nil, err
+	}
+	return time.Time{}, false, nil
+}
+
+// cancelledChildren prices a parent's cancelled inherited children for the periods its invoices still
+// covered them; ExternalCustomerIDsForSubscription lists only the children covered today.
+func (s *costAnalyticsService) cancelledChildren(ctx context.Context, cs costSubscription) ([]costSubscription, error) {
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{cs.sub.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	filter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusCancelled}
+	children, err := s.SubRepo.List(ctx, filter)
+	if err != nil || len(children) == 0 {
+		return nil, err
+	}
+
+	custFilter := types.NewNoLimitCustomerFilter()
+	custFilter.CustomerIDs = lo.Uniq(lo.Map(children, func(c *subscription.Subscription, _ int) string { return c.CustomerID }))
+	customers, err := s.CustomerRepo.List(ctx, custFilter)
+	if err != nil {
+		return nil, err
+	}
+	externalID := lo.SliceToMap(customers, func(c *customer.Customer) (string, string) { return c.ID, c.ExternalID })
+
+	var out []costSubscription
+	for _, child := range children {
+		ext := externalID[child.CustomerID]
+		if ext == "" || lo.Contains(cs.customerIDs, ext) {
+			continue
+		}
+		until, covered, err := childCoverageEnd(cs.sub, child)
+		if err != nil {
+			return nil, err
+		}
+		if end := minTime(cs.end, until); covered && cs.start.Before(end) {
+			out = append(out, costSubscription{sub: cs.sub, owner: cs.sub, customerIDs: []string{ext}, start: cs.start, end: end})
 		}
 	}
 	return out, nil
