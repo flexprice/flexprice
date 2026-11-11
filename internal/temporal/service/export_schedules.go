@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/api/serviceerror"
 	sdkclient "go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/temporal"
 )
 
 const (
@@ -127,7 +128,7 @@ func reconcileExportSchedule(ctx context.Context, tc scheduleHandleGetter, sched
 	err = handle.Update(ctx, sdkclient.ScheduleUpdateOptions{
 		DoUpdate: func(in sdkclient.ScheduleUpdateInput) (*sdkclient.ScheduleUpdate, error) {
 			if !needsTimeoutUpdate(in.Description.Schedule.Action) {
-				return nil, nil
+				return nil, temporal.ErrSkipScheduleUpdate
 			}
 			action := in.Description.Schedule.Action.(*sdkclient.ScheduleWorkflowAction)
 			action.WorkflowExecutionTimeout = types.ExportWorkflowTimeout
