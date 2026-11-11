@@ -51,3 +51,18 @@ func TestObjectKey(t *testing.T) {
 		})
 	}
 }
+
+func TestIsCleanKey(t *testing.T) {
+	for key, want := range map[string]bool{
+		"exports/t1/e1/":        true,
+		"exports/t1/e1/f.csv":   true,
+		"exports/t1/./e1":       false,
+		"exports/t1/../t2/x":    false,
+		"exports//t1":           false,
+		"/exports/t1":           false,
+		"exports/t1/e1/../../x": false,
+		"exports/t1/e1/.":       false,
+	} {
+		assert.Equal(t, want, storage.IsCleanKey(key), key)
+	}
+}

@@ -294,8 +294,10 @@ func exportObjectKey(request *dto.ExportRequest, exporter Exporter) string {
 	if len(request.CustomerExternalIDs) > 0 {
 		filename += "-customers-" + customerFilterDigest(request.CustomerExternalIDs)
 	}
-	if suffix := runKeySuffix(request.TaskID); suffix != "" {
-		filename += "-" + suffix
+	if request.ManagedCopy {
+		if suffix := runKeySuffix(request.TaskID); suffix != "" {
+			filename += "-" + suffix
+		}
 	}
 	return storage.ObjectKey(request.JobConfig.KeyPrefix, filenamePrefix, filename, "csv", request.JobConfig.Compression == types.S3CompressionTypeGzip)
 }
@@ -357,7 +359,7 @@ func (s *ExportService) checkManagedDestination(ctx context.Context, conn *conne
 	}
 	scope := fmt.Sprintf("%s/%s", types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
 	inScope := strings.HasPrefix(cfg.KeyPrefix, "exports/"+scope+"/") || cfg.KeyPrefix == scope || strings.HasPrefix(cfg.KeyPrefix, scope+"/")
-	if bucket == "" || cfg.Bucket != bucket || !inScope || strings.Contains(cfg.KeyPrefix, "..") {
+	if bucket == "" || cfg.Bucket != bucket || !inScope || !storage.IsCleanKey(cfg.KeyPrefix) {
 		return ierr.NewError("managed export destination mismatch").
 			WithHint("job config does not match the Flexprice export bucket or tenant prefix").
 			Mark(ierr.ErrValidation)
@@ -383,7 +385,7 @@ func (s *ExportService) resolvePlatformExportStore(ctx context.Context, request 
 		cfgProvider = types.SecretProviderS3
 	}
 	prefix := fmt.Sprintf("exports/%s/%s/", types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
-	if cfg.Bucket != bucket || string(cfgProvider) != string(store.Provider()) || !strings.HasPrefix(cfg.KeyPrefix, prefix) || strings.Contains(cfg.KeyPrefix, "..") {
+	if cfg.Bucket != bucket || string(cfgProvider) != string(store.Provider()) || !storage.IsCleanKey(cfg.KeyPrefix) || !strings.HasPrefix(cfg.KeyPrefix, prefix) {
 		return nil, ierr.NewError("managed export destination mismatch").
 			WithHint("job config does not match the Flexprice export bucket or tenant prefix").
 			Mark(ierr.ErrValidation)
