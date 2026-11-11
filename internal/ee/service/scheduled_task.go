@@ -696,8 +696,8 @@ func (s *scheduledTaskService) startScheduledTask(ctx context.Context, task *sch
 			},
 		},
 		TaskQueue:                string(types.TemporalTaskQueueExport),
-		WorkflowExecutionTimeout: exportWorkflows.ExportWorkflowTimeout,
-		WorkflowRunTimeout:       exportWorkflows.ExportWorkflowTimeout,
+		WorkflowExecutionTimeout: types.ExportWorkflowTimeout,
+		WorkflowRunTimeout:       types.ExportWorkflowTimeout,
 		WorkflowTaskTimeout:      60 * time.Minute,
 	}
 
@@ -910,8 +910,8 @@ func (s *scheduledTaskService) startForceRun(ctx context.Context, task *schedule
 	workflowOptions := models.StartWorkflowOptions{
 		ID:                       workflowID,
 		TaskQueue:                string(types.TemporalTaskQueueExport),
-		WorkflowExecutionTimeout: exportWorkflows.ExportWorkflowTimeout,
-		WorkflowRunTimeout:       exportWorkflows.ExportWorkflowTimeout,
+		WorkflowExecutionTimeout: types.ExportWorkflowTimeout,
+		WorkflowRunTimeout:       types.ExportWorkflowTimeout,
 		WorkflowTaskTimeout:      60 * time.Minute,
 	}
 

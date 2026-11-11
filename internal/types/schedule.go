@@ -9,6 +9,9 @@ import (
 	"github.com/samber/lo"
 )
 
+// ExportWorkflowTimeout bounds one export run, queue wait included.
+const ExportWorkflowTimeout = 90 * time.Minute
+
 // ScheduleID is the Temporal server schedule ID for a recurring workflow.
 type ScheduleID string
 

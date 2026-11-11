@@ -16,7 +16,17 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.TaskFilter) (int, error)
 	Update(ctx context.Context, task *Task) error
 	Delete(ctx context.Context, id string) error
-	// FailStaleExportTasks fails unfinished export runs created before olderThan, across all
-	// tenants. It returns the number updated, at most limit.
-	FailStaleExportTasks(ctx context.Context, olderThan time.Time, reason string, limit int) (int, error)
+	// ListStaleExportTasks lists unfinished export runs created before olderThan, across all
+	// tenants, oldest first.
+	ListStaleExportTasks(ctx context.Context, olderThan time.Time, limit int) ([]StaleRef, error)
+	// FailStaleExportTask fails one unfinished run within the tenant and environment in ctx.
+	// It reports whether a row changed.
+	FailStaleExportTask(ctx context.Context, id string, reason string) (bool, error)
+}
+
+// StaleRef identifies a stale run and its scope.
+type StaleRef struct {
+	ID            string
+	TenantID      string
+	EnvironmentID string
 }

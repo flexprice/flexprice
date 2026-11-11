@@ -256,37 +256,48 @@ func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
 	return nil
 }
 
-// System job: deliberately not scoped to the tenant or environment in ctx.
-func (r *taskRepository) FailStaleExportTasks(ctx context.Context, olderThan time.Time, reason string, limit int) (int, error) {
-	span := StartRepositorySpan(ctx, "task", "fail_stale_export", nil)
+// Cross-tenant read; writes stay scoped per row.
+func (r *taskRepository) ListStaleExportTasks(ctx context.Context, olderThan time.Time, limit int) ([]domainTask.StaleRef, error) {
+	span := StartRepositorySpan(ctx, "task", "list_stale_export", nil)
 	defer FinishSpan(span)
 
-	client := r.client.Writer(ctx)
-
-	ids, err := client.Task.Query().
+	rows, err := r.client.Reader(ctx).Task.Query().
 		Where(
 			task.TaskType(string(types.TaskTypeExport)),
 			task.TaskStatusIn(string(types.TaskStatusProcessing), string(types.TaskStatusPending)),
 			task.Status(string(types.StatusPublished)),
 			task.CreatedAtLT(olderThan),
 		).
+		Order(ent.Asc(task.FieldCreatedAt)).
 		Limit(limit).
-		IDs(ctx)
+		Select(task.FieldID, task.FieldTenantID, task.FieldEnvironmentID).
+		All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		return 0, ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithHint("Failed to list stale export tasks").
 			Mark(ierr.ErrDatabase)
 	}
-	if len(ids) == 0 {
-		SetSpanSuccess(span)
-		return 0, nil
+
+	refs := make([]domainTask.StaleRef, len(rows))
+	for i, row := range rows {
+		refs[i] = domainTask.StaleRef{ID: row.ID, TenantID: row.TenantID, EnvironmentID: row.EnvironmentID}
 	}
+	SetSpanSuccess(span)
+	return refs, nil
+}
+
+func (r *taskRepository) FailStaleExportTask(ctx context.Context, id string, reason string) (bool, error) {
+	span := StartRepositorySpan(ctx, "task", "fail_stale_export", map[string]interface{}{"task_id": id})
+	defer FinishSpan(span)
 
 	now := clock.Now()
-	n, err := client.Task.Update().
+	n, err := r.client.Writer(ctx).Task.Update().
 		Where(
-			task.IDIn(ids...),
+			task.ID(id),
+			task.TenantID(types.GetTenantID(ctx)),
+			task.EnvironmentID(types.GetEnvironmentID(ctx)),
+			task.Status(string(types.StatusPublished)),
 			task.TaskStatusIn(string(types.TaskStatusProcessing), string(types.TaskStatusPending)),
 		).
 		SetTaskStatus(string(types.TaskStatusFailed)).
@@ -296,13 +307,14 @@ func (r *taskRepository) FailStaleExportTasks(ctx context.Context, olderThan tim
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		return 0, ierr.WithError(err).
-			WithHint("Failed to fail stale export tasks").
+		return false, ierr.WithError(err).
+			WithHint("Failed to fail stale export task").
+			WithReportableDetails(map[string]interface{}{"task_id": id}).
 			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
-	return n, nil
+	return n > 0, nil
 }
 
 func (r *taskRepository) Delete(ctx context.Context, id string) error {

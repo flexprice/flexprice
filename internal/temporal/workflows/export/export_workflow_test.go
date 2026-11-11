@@ -245,6 +245,19 @@ func TestExecuteExportWorkflow_CompleteTaskFailureMarksRunFailed(t *testing.T) {
 	require.Equal(t, types.TaskStatusProcessing, r.statuses[0].Status)
 	require.Equal(t, types.TaskStatusFailed, r.statuses[1].Status)
 	require.Equal(t, "The file was written but the run could not be completed.", r.statuses[1].Error)
+	require.Len(t, r.recorded, 1)
+	require.Equal(t, types.ExportDeliveryStatusFailed, r.recorded[0].Deliveries[0].Status)
+}
+
+func TestExecuteExportWorkflow_OldVersionSkipsCompleteFallback(t *testing.T) {
+	r := newDeliveryRun(export.ScheduledTaskDetails{Interval: types.ScheduledTaskIntervalDaily}, nil, nil)
+	r.env.OnGetVersion("export-terminal-status", workflow.DefaultVersion, 1).Return(workflow.DefaultVersion)
+	r.completeErr = errors.New("db down")
+	r.run()
+
+	require.NoError(t, r.env.GetWorkflowError())
+	require.Len(t, r.statuses, 1)
+	require.Equal(t, types.TaskStatusProcessing, r.statuses[0].Status)
 }
 
 func TestExecuteExportWorkflow_FailedStatusWriteIsRetried(t *testing.T) {
