@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
@@ -77,6 +78,22 @@ func (s *stubAnalyticsService) CreateView(_ context.Context, _ *analytics.View) 
 
 func (s *stubAnalyticsService) QueryView(_ context.Context, _ string, _ map[string][]string) (*dto.AnalyticsQueryResult, error) {
 	return s.result, s.err
+}
+
+func (s *stubAnalyticsService) ValidateReportSource(_ context.Context, _ string, _ *types.ReportParams) error {
+	return s.err
+}
+
+func (s *stubAnalyticsService) ValidateViewSource(_ context.Context, _ string) error {
+	return s.err
+}
+
+func (s *stubAnalyticsService) RunReportForExport(_ context.Context, _ string, _ *types.ReportParams, _ string) (*dto.AnalyticsQueryResult, error) {
+	return s.result, s.err
+}
+
+func (s *stubAnalyticsService) RunViewForExport(_ context.Context, _, _ string) (*dto.AnalyticsQueryResult, time.Time, error) {
+	return s.result, time.Time{}, s.err
 }
 
 // canned AnalyticsQueryResult mirroring what shapeBreakdown produces for a
