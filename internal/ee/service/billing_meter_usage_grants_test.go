@@ -909,8 +909,8 @@ var (
 	splitT2     = time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
 )
 
-func splitLines(qtyA, qtyB int64) meterLines {
-	return meterLines{
+func splitLines(qtyA, qtyB int64) lineUsages {
+	return lineUsages{
 		{start: splitT0, end: splitChange, quantity: decimal.NewFromInt(qtyA), amount: decimal.NewFromInt(qtyA)},
 		{start: splitChange, end: splitT2, quantity: decimal.NewFromInt(qtyB), amount: decimal.NewFromInt(qtyB)},
 	}
@@ -923,7 +923,7 @@ func windowedGrant(quota, usage int64, from, to time.Time, measure types.Entitle
 }
 
 // billSplit runs the grant fold once per line and returns each line's overage.
-func billSplit(t *testing.T, bs *billingService, m *meter.Meter, grants []*entitlementgrant.EntitlementGrant, lines meterLines) []decimal.Decimal {
+func billSplit(t *testing.T, bs *billingService, m *meter.Meter, grants []*entitlementgrant.EntitlementGrant, lines lineUsages) []decimal.Decimal {
 	t.Helper()
 	out := make([]decimal.Decimal, 0, len(lines))
 	for _, l := range lines {
@@ -1040,7 +1040,7 @@ func TestAdjustMeterUsageGrants_ZeroLengthLineBillsNothing(t *testing.T) {
 	require.True(t, res.Overage.IsZero(), "overage %s, want 0", res.Overage)
 }
 
-func TestMeterLinesByMeterID(t *testing.T) {
+func TestLineUsageByMeter(t *testing.T) {
 	asOf := splitT2
 	items := []*subscription.SubscriptionLineItem{
 		{ID: "b", MeterID: "meter_x", PriceType: types.PRICE_TYPE_USAGE, StartDate: splitChange},
@@ -1051,7 +1051,7 @@ func TestMeterLinesByMeterID(t *testing.T) {
 		"a": {{Quantity: 600, Amount: 6}, {Quantity: 100, Amount: 2, IsOverage: true}},
 		"b": {{Quantity: 500, Amount: 5}},
 	}
-	got := meterLinesByMeterID(items, charges, splitT0, splitT2, asOf)["meter_x"]
+	got := lineUsageByMeter(items, charges, splitT0, splitT2, asOf)["meter_x"]
 	require.Len(t, got, 2)
 	require.Equal(t, splitT0, got[0].start, "lines ordered by start")
 	require.True(t, got[0].quantity.Equal(decimal.NewFromInt(700)), "a line's usage sums all its charges")

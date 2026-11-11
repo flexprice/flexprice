@@ -207,7 +207,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 		return nil, decimal.Zero, err
 	}
 
-	linesByMeterID := meterLinesByMeterID(sub.LineItems, chargesByLineItemID, periodStart, periodEnd, asOf)
+	usageByMeter := lineUsageByMeter(sub.LineItems, chargesByLineItemID, periodStart, periodEnd, asOf)
 
 	// --- Per-line-item processing ---
 
@@ -293,7 +293,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 			if !matchingCharge.IsOverage {
 				if grantsForMeter := grantsByMeterID[item.MeterID]; len(grantsForMeter) > 0 {
 					grantResult, grantsApplied, err = s.adjustMeterUsageGrants(ctx, item, matchingCharge, grantsForMeter, priceService, m, sub, extCustomerIDs,
-						linesByMeterID[item.MeterID], TimeInterval{Start: itemStart, End: itemEnd})
+						usageByMeter[item.MeterID], TimeInterval{Start: itemStart, End: itemEnd})
 					if err != nil {
 						return nil, decimal.Zero, err
 					}

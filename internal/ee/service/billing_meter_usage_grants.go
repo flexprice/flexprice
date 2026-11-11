@@ -115,7 +115,7 @@ func (s *billingService) adjustMeterUsageGrants(
 	m *meter.Meter,
 	sub *subscription.Subscription,
 	extCustomerIDs []string,
-	lines meterLines,
+	lines lineUsages,
 	window TimeInterval,
 ) (adjustMeterUsageGrantsResult, bool, error) {
 	if len(grants) == 0 {
@@ -280,7 +280,7 @@ func (s *billingService) grantOverageInWindow(
 	ctx context.Context,
 	g *entitlementgrant.EntitlementGrant,
 	window TimeInterval,
-	lines meterLines,
+	lines lineUsages,
 	measure types.EntitlementGrantMeasure,
 	m *meter.Meter,
 	sub *subscription.Subscription,
@@ -313,7 +313,7 @@ func (s *billingService) grantUsageUntil(
 	ctx context.Context,
 	g *entitlementgrant.EntitlementGrant,
 	t time.Time,
-	lines meterLines,
+	lines lineUsages,
 	measure types.EntitlementGrantMeasure,
 	m *meter.Meter,
 	sub *subscription.Subscription,
@@ -350,31 +350,31 @@ func (s *billingService) grantUsageUntil(
 	})
 }
 
-// meterLine is a usage line's elapsed window with the usage already fetched for it.
-type meterLine struct {
+// lineUsage is a usage line's elapsed window with the usage already fetched for it.
+type lineUsage struct {
 	start, end time.Time
 	quantity   decimal.Decimal
 	amount     decimal.Decimal
 }
 
-func (l meterLine) usage(measure types.EntitlementGrantMeasure) decimal.Decimal {
+func (l lineUsage) usage(measure types.EntitlementGrantMeasure) decimal.Decimal {
 	if measure == types.EntitlementGrantMeasureAmount {
 		return l.amount
 	}
 	return l.quantity
 }
 
-// meterLines are a meter's usage lines in the period, ordered by start.
-type meterLines []meterLine
+// lineUsages are a meter's usage lines in the period, ordered by start.
+type lineUsages []lineUsage
 
-// meterLinesByMeterID collects each meter's elapsed usage lines. A line's usage is the sum of its
+// lineUsageByMeter collects each meter's elapsed usage lines. A line's usage is the sum of its
 // charges, since commitment pricing splits it into base and overage.
-func meterLinesByMeterID(
+func lineUsageByMeter(
 	items []*subscription.SubscriptionLineItem,
 	chargesByLineItemID map[string][]*dto.SubscriptionUsageByMetersResponse,
 	periodStart, periodEnd, asOf time.Time,
-) map[string]meterLines {
-	out := make(map[string]meterLines)
+) map[string]lineUsages {
+	out := make(map[string]lineUsages)
 	for _, item := range items {
 		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
 			continue
@@ -383,7 +383,7 @@ func meterLinesByMeterID(
 		if !active || !end.After(start) {
 			continue
 		}
-		line := meterLine{start: start, end: end}
+		line := lineUsage{start: start, end: end}
 		for _, c := range chargesByLineItemID[item.ID] {
 			line.quantity = line.quantity.Add(c.QuantityDecimal())
 			line.amount = line.amount.Add(c.AmountDecimal())
