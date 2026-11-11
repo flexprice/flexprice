@@ -25,6 +25,7 @@ var ErrViewDeleted = errors.New(ViewDeletedMessage)
 type ReportRunner interface {
 	RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error)
 	RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error)
+	ReportColumnsForExport(ctx context.Context, key string, params *types.ReportParams, rng string) ([]string, error)
 }
 
 type RunMetadataExporter interface {
@@ -52,18 +53,6 @@ func withCustomerFilter(params *types.ReportParams, customerIDs []string) *types
 	scoped.Filters = append(append([]types.ReportParamFilter{}, scoped.Filters...),
 		types.ReportParamFilter{Field: "customer_id", Op: "in", Value: customerIDs})
 	return scoped
-}
-
-// Header when no customers match.
-func emptyReportHeader(key string, params *types.ReportParams) []string {
-	var header []string
-	if params != nil && params.Shape == string(types.ShapeTimeseries) {
-		header = append(header, "bucket")
-	}
-	if params != nil {
-		header = append(header, params.Dimensions...)
-	}
-	return append(header, key)
 }
 
 func (e *ReportExporter) GetFilenamePrefix() string {
@@ -97,7 +86,11 @@ func (e *ReportExporter) PrepareData(ctx context.Context, request *dto.ExportReq
 	}
 	if scoped {
 		if len(refs) == 0 {
-			return writeReportCSV(emptyReportHeader(request.SourceConfig.ReportKey, reportParams), nil, nil)
+			header, err := e.runner.ReportColumnsForExport(ctx, request.SourceConfig.ReportKey, reportParams, rng)
+			if err != nil {
+				return nil, 0, err
+			}
+			return writeReportCSV(header, nil, nil)
 		}
 		reportParams = withCustomerFilter(reportParams, refIDs(refs))
 	}
