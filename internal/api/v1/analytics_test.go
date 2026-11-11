@@ -92,6 +92,10 @@ func (s *stubAnalyticsService) RunReportForExport(_ context.Context, _ string, _
 	return s.result, s.err
 }
 
+func (s *stubAnalyticsService) ReportColumnsForExport(_ context.Context, _ string, _ *types.ReportParams, _ string) ([]string, error) {
+	return nil, s.err
+}
+
 func (s *stubAnalyticsService) RunViewForExport(_ context.Context, _, _ string) (*dto.AnalyticsQueryResult, time.Time, error) {
 	return s.result, time.Time{}, s.err
 }

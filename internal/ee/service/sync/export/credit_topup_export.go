@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
@@ -19,6 +20,7 @@ type CreditTopupExporter struct {
 	walletRepo         wallet.Repository
 	integrationFactory *integration.Factory
 	logger             *logger.Logger
+	scope              customerScope
 }
 
 // CreditTopupCSV represents the CSV structure for credit topup export
@@ -44,6 +46,7 @@ type CreditTopupCSV struct {
 // NewCreditTopupExporter creates a new credit topup exporter
 func NewCreditTopupExporter(
 	walletRepo wallet.Repository,
+	customerRepo customer.Repository,
 	integrationFactory *integration.Factory,
 	logger *logger.Logger,
 ) *CreditTopupExporter {
@@ -51,6 +54,7 @@ func NewCreditTopupExporter(
 		walletRepo:         walletRepo,
 		integrationFactory: integrationFactory,
 		logger:             logger,
+		scope:              newCustomerScope(customerRepo, maxScopedCustomers),
 	}
 }
 
@@ -65,13 +69,23 @@ func (e *CreditTopupExporter) PrepareData(ctx context.Context, request *dto.Expo
 		"end_time", request.EndTime,
 		"batch_size", batchSize)
 
+	refs, scoped, err := e.scope.resolve(ctx, request)
+	if err != nil {
+		return nil, 0, err
+	}
+	var customerIDs []string
+	if scoped {
+		customerIDs = refIDs(refs)
+	}
+
 	// Collect all CSV records
 	var csvRecords []*CreditTopupCSV
 	totalRecords := 0
 	offset := 0
 
 	// Fetch and process data in batches
-	for {
+	matchesNone := scoped && len(refs) == 0
+	for !matchesNone {
 		e.logger.Debug(ctx, "fetching batch",
 			"offset", offset,
 			"batch_size", batchSize)
@@ -84,6 +98,7 @@ func (e *CreditTopupExporter) PrepareData(ctx context.Context, request *dto.Expo
 			request.EndTime,
 			batchSize,
 			offset,
+			customerIDs,
 		)
 		if err != nil {
 			return nil, 0, ierr.WithError(err).

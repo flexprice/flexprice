@@ -50,6 +50,9 @@ func (r *ScheduledTaskRepository) Create(ctx context.Context, task *domainst.Sch
 	if task.Name != "" {
 		create = create.SetName(task.Name)
 	}
+	if task.Origin != "" {
+		create = create.SetOrigin(task.Origin)
+	}
 	if task.Schedule != nil {
 		create = create.SetSchedule(task.Schedule)
 	}
@@ -266,6 +269,12 @@ func (r *ScheduledTaskRepository) List(ctx context.Context, filters *domainst.Li
 	if filters.Enabled != nil {
 		query = query.Where(scheduledtask.Enabled(*filters.Enabled))
 	}
+	if filters.Origin != "" {
+		query = query.Where(scheduledtask.Origin(filters.Origin))
+	}
+	if filters.ExcludeOrigin != "" {
+		query = query.Where(scheduledtask.OriginNEQ(filters.ExcludeOrigin))
+	}
 
 	// Apply pagination
 	if filters.Limit > 0 {
@@ -329,6 +338,7 @@ func (r *ScheduledTaskRepository) entToModel(entTask *ent.ScheduledTask) *domain
 		Schedule:           entTask.Schedule,
 		SourceConfig:       entTask.SourceConfig,
 		EmailConfig:        entTask.EmailConfig,
+		Origin:             entTask.Origin,
 		Status:             types.Status(entTask.Status),
 		CreatedAt:          entTask.CreatedAt,
 		UpdatedAt:          entTask.UpdatedAt,

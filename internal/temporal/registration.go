@@ -123,6 +123,7 @@ func RegisterWorkflowsAndActivities(
 		params.RBAC,
 		nil,
 		nil,
+		nil,
 	)
 
 	scheduledTaskActivity := exportActivities.NewScheduledTaskActivity(

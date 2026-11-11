@@ -80,6 +80,13 @@ func (ScheduledTask) Fields() []ent.Field {
 		field.JSON("email_config", &types.ExportEmailConfig{}).
 			Optional().
 			Comment("Export email recipients"),
+		field.String("origin").
+			SchemaType(map[string]string{
+				"postgres": "text",
+			}).
+			GoType(types.ExportOrigin("")).
+			Default(string(types.ExportOriginConsole)).
+			Comment("Where the export was created"),
 	}
 }
 

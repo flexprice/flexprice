@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -20,6 +21,7 @@ import (
 type WalletLedgerExporter struct {
 	walletRepo wallet.Repository
 	logger     *logger.Logger
+	scope      customerScope
 }
 
 // WalletLedgerCSV is one row of the wallet ledger export.
@@ -49,14 +51,15 @@ type WalletLedgerCSV struct {
 }
 
 // NewWalletLedgerExporter creates a new wallet ledger exporter
-func NewWalletLedgerExporter(walletRepo wallet.Repository, logger *logger.Logger) *WalletLedgerExporter {
+func NewWalletLedgerExporter(walletRepo wallet.Repository, customerRepo customer.Repository, logger *logger.Logger) *WalletLedgerExporter {
 	return &WalletLedgerExporter{
 		walletRepo: walletRepo,
 		logger:     logger,
+		scope:      newCustomerScope(customerRepo, maxScopedCustomers),
 	}
 }
 
-// PrepareData returns the whole ledger CSV in memory; the export service streams it via WriteData.
+// PrepareData buffers WriteData output.
 func (e *WalletLedgerExporter) PrepareData(ctx context.Context, request *dto.ExportRequest) ([]byte, int, error) {
 	var buf bytes.Buffer
 	count, err := e.WriteData(ctx, request, &buf)
@@ -66,11 +69,26 @@ func (e *WalletLedgerExporter) PrepareData(ctx context.Context, request *dto.Exp
 	return buf.Bytes(), count, nil
 }
 
-// WriteData writes the ledger a batch of wallets at a time, reading each wallet's history once.
+// WriteData streams ledger by wallet batch.
 func (e *WalletLedgerExporter) WriteData(ctx context.Context, request *dto.ExportRequest, w io.Writer) (int, error) {
 	const walletsPerBatch = 50
 
-	walletIDs, err := e.walletRepo.ListWalletIDsForLedgerExport(ctx, request.TenantID, request.EnvID, request.StartTime, request.EndTime, request.CustomerExternalIDs)
+	refs, scoped, err := e.scope.resolve(ctx, request)
+	if err != nil {
+		return 0, err
+	}
+
+	var walletIDs []string
+	if scoped {
+		if legacy := request.CustomerExternalIDs; len(legacy) > 0 {
+			refs = lo.Filter(refs, func(r customer.Ref, _ int) bool { return lo.Contains(legacy, r.ExternalID) })
+		}
+		if len(refs) > 0 {
+			walletIDs, err = e.walletRepo.ListWalletIDsByCustomerIDs(ctx, request.TenantID, request.EnvID, refIDs(refs))
+		}
+	} else {
+		walletIDs, err = e.walletRepo.ListWalletIDsForLedgerExport(ctx, request.TenantID, request.EnvID, request.StartTime, request.EndTime, request.CustomerExternalIDs)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -107,7 +125,7 @@ func (e *WalletLedgerExporter) WriteData(ctx context.Context, request *dto.Expor
 	e.logger.Info(ctx, "completed wallet ledger export data fetch",
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID,
-		"customer_filter_count", len(request.CustomerExternalIDs),
+		"customer_filter_count", len(refs)+len(request.CustomerExternalIDs),
 		"wallet_count", len(walletIDs),
 		"total_records", totalRecords)
 

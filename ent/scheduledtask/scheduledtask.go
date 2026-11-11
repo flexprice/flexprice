@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
@@ -49,6 +50,8 @@ const (
 	FieldSourceConfig = "source_config"
 	// FieldEmailConfig holds the string denoting the email_config field in the database.
 	FieldEmailConfig = "email_config"
+	// FieldOrigin holds the string denoting the origin field in the database.
+	FieldOrigin = "origin"
 	// Table holds the table name of the scheduledtask in the database.
 	Table = "scheduled_tasks"
 )
@@ -74,6 +77,7 @@ var Columns = []string{
 	FieldSchedule,
 	FieldSourceConfig,
 	FieldEmailConfig,
+	FieldOrigin,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -109,6 +113,8 @@ var (
 	DefaultEnabled bool
 	// DefaultManagedCopy holds the default value on creation for the "managed_copy" field.
 	DefaultManagedCopy bool
+	// DefaultOrigin holds the default value on creation for the "origin" field.
+	DefaultOrigin types.ExportOrigin
 )
 
 // OrderOption defines the ordering options for the ScheduledTask queries.
@@ -187,4 +193,9 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByManagedCopy orders the results by the managed_copy field.
 func ByManagedCopy(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldManagedCopy, opts...).ToFunc()
+}
+
+// ByOrigin orders the results by the origin field.
+func ByOrigin(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOrigin, opts...).ToFunc()
 }

@@ -281,7 +281,18 @@ Four phases. Each merges and ships on its own, and each has an exit check.
 - `origin`, `run_now`, customer scope validation per source, and the customer filter for any entity exporter that lacks one (otherwise it stays unsupported).
 - Exit: from the customer tab, a one-off export for one customer appears in the Exports tab and downloads.
 
-Phase 1 has no feature flag. Release workers before the API, so a row created by the new API is never picked up by old workers. Later phases may add a flag if they introduce rows old workers cannot run. Connection exports default `managed_copy=false`, so nothing changes for them.
+**Phase 4 as built (replaces the customer-tab one-off).**
+- Decision: the export starts from the console `/customers` list, not from inside a customer. The list's current filter is saved with the export and re-applied on every run, so customers who match later are included.
+- Two kinds: the filtered customer list itself (new `entity_type=customers`: id, external id, name, email, status, billing currency and entity, address, timezone, created/updated, one `metadata_<key>` column per key), or a chosen data type limited to those customers.
+- Data types that can be limited: `wallet_ledger`, `invoice`, `credit_topups`, `credit_usage`, `usage_analytics`, and `report` sources whose report has a `customer_id` dimension (`invoice_total`, `invoice_total_issued`, `receivables_aging`, `days_to_pay`, `credit_consumption`, `credit_topups`). Others, and saved views, return 400 "This data can't be limited to customers yet."
+- Storage: `source_config.customer_filter` holds the customers search body without paging, sort or expand (`filters`, `metadata`, `email`, `billing_entity_id`, `status`). Status follows the list: filters without a status match published and archived customers.
+- `origin` column (`console` default, `customers_page`; migration `20261111140000`). `GET /tasks/scheduled?origin=` and `?exclude_origin=`. `customer_filter` is accepted only with `origin=customers_page`.
+- `run_now=true` (manual only) creates the export and starts one run; the response carries `run.workflow_id`, which is the run's task id. `run_window` is validated before the export is created. The customer list ignores the window (snapshot) and never runs hourly.
+- Limits: a run resolves the filter once (keyset by id). Above 10,000 customers (1,000 for reports) the run fails with "Filter matches more than N customers; narrow it" and nothing is uploaded. No matches gives a header-only file; a report's empty header comes from the same column builder as a real run.
+- The customer list export streams in two passes (metadata keys, then rows). Customers created between the passes may carry metadata keys not in the header; those values are left out (snapshot).
+- Known gap: `usage_analytics` still lists published customers only, so archived customers matched by a filter are left out there.
+
+Phase 1 has no feature flag. Release workers before the API, so a row created by the new API is never picked up by old workers (an old worker ignores `customer_filter` and exports all customers). Later phases may add a flag if they introduce rows old workers cannot run. Connection exports default `managed_copy=false`, so nothing changes for them.
 
 ## Not covered
 

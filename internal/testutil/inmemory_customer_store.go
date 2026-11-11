@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -115,13 +116,55 @@ func (s *InMemoryCustomerStore) List(ctx context.Context, filter *types.Customer
 	}), nil
 }
 
+func (s *InMemoryCustomerStore) ListByFilterPage(ctx context.Context, filter *types.CustomerFilter, afterID string, limit int) ([]*customer.Customer, error) {
+	if filter == nil {
+		filter = types.NewNoLimitCustomerFilter()
+	}
+	items, err := s.ListAll(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	items = lo.Filter(items, func(c *customer.Customer, _ int) bool { return c.ID > afterID })
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func (s *InMemoryCustomerStore) ListMetadataPageByFilter(ctx context.Context, filter *types.CustomerFilter, afterID string, limit int) ([]*customer.Customer, error) {
+	return s.ListByFilterPage(ctx, filter, afterID, limit)
+}
+
+func (s *InMemoryCustomerStore) ListRefsByFilter(ctx context.Context, filter *types.CustomerFilter, max int) ([]customer.Ref, error) {
+	if filter == nil {
+		filter = types.NewNoLimitCustomerFilter()
+	}
+	items, err := s.ListAll(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if max > 0 && len(items) > max {
+		return nil, ierr.NewErrorf("Filter matches more than %d customers; narrow it", max).
+			WithHintf("Filter matches more than %d customers; narrow it", max).
+			Mark(ierr.ErrValidation)
+	}
+	return lo.Map(items, func(c *customer.Customer, _ int) customer.Ref {
+		return customer.Ref{ID: c.ID, ExternalID: c.ExternalID}
+	}), nil
+}
+
 func (s *InMemoryCustomerStore) Count(ctx context.Context, filter *types.CustomerFilter) (int, error) {
 	return s.InMemoryStore.Count(ctx, filter, customerFilterFn)
 }
 
 func (s *InMemoryCustomerStore) ListAll(ctx context.Context, filter *types.CustomerFilter) ([]*customer.Customer, error) {
 	f := *filter
-	f.QueryFilter = types.NewNoLimitQueryFilter()
+	qf := types.NewNoLimitQueryFilter()
+	if filter.QueryFilter != nil {
+		qf.Status = filter.QueryFilter.Status
+	}
+	f.QueryFilter = qf
 	return s.List(ctx, &f)
 }
 

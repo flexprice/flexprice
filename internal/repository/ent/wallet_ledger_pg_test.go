@@ -209,6 +209,29 @@ func TestWalletLedgerExport(t *testing.T) {
 		require.Equal(t, []string{purchase.ID}, ids(rows), "a late payment brings its wallet in")
 	})
 
+	t.Run("internal ids skip an archived customer sharing an external id", func(t *testing.T) {
+		archived, err := client.Writer(ctx).Customer.Create().
+			SetID("cust_arch" + runID).
+			SetTenantID(tenantID).
+			SetEnvironmentID(envID).
+			SetExternalID("ext_a" + runID).
+			SetName("Ledger archived").
+			SetStatus(string(types.StatusArchived)).
+			SetCreatedBy(base.CreatedBy).
+			SetUpdatedBy(base.UpdatedBy).
+			Save(ctx)
+		require.NoError(t, err)
+		archivedWallet := newWallet(archived.ID, "arch")
+
+		byInternal, err := repo.ListWalletIDsByCustomerIDs(ctx, tenantID, envID, []string{custA})
+		require.NoError(t, err)
+		require.Equal(t, []string{walletA.ID}, byInternal)
+
+		byExternal, err := repo.ListWalletIDsForLedgerExport(ctx, tenantID, envID, start, end, onlyA)
+		require.NoError(t, err)
+		require.Contains(t, byExternal, archivedWallet.ID, "legacy external id path is unchanged")
+	})
+
 	t.Run("a batch holds only its wallets", func(t *testing.T) {
 		rows, err := repo.GetWalletLedgerForExport(ctx, tenantID, envID, []string{walletB.ID}, start, end)
 		require.NoError(t, err)

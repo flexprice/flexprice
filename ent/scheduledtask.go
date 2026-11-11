@@ -54,7 +54,9 @@ type ScheduledTask struct {
 	// Report export source
 	SourceConfig *types.ExportSourceConfig `json:"source_config,omitempty"`
 	// Export email recipients
-	EmailConfig  *types.ExportEmailConfig `json:"email_config,omitempty"`
+	EmailConfig *types.ExportEmailConfig `json:"email_config,omitempty"`
+	// Where the export was created
+	Origin       types.ExportOrigin `json:"origin,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -67,7 +69,7 @@ func (*ScheduledTask) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case scheduledtask.FieldEnabled, scheduledtask.FieldManagedCopy:
 			values[i] = new(sql.NullBool)
-		case scheduledtask.FieldID, scheduledtask.FieldTenantID, scheduledtask.FieldStatus, scheduledtask.FieldCreatedBy, scheduledtask.FieldUpdatedBy, scheduledtask.FieldEnvironmentID, scheduledtask.FieldConnectionID, scheduledtask.FieldEntityType, scheduledtask.FieldInterval, scheduledtask.FieldTemporalScheduleID, scheduledtask.FieldName:
+		case scheduledtask.FieldID, scheduledtask.FieldTenantID, scheduledtask.FieldStatus, scheduledtask.FieldCreatedBy, scheduledtask.FieldUpdatedBy, scheduledtask.FieldEnvironmentID, scheduledtask.FieldConnectionID, scheduledtask.FieldEntityType, scheduledtask.FieldInterval, scheduledtask.FieldTemporalScheduleID, scheduledtask.FieldName, scheduledtask.FieldOrigin:
 			values[i] = new(sql.NullString)
 		case scheduledtask.FieldCreatedAt, scheduledtask.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -209,6 +211,12 @@ func (_m *ScheduledTask) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field email_config: %w", err)
 				}
 			}
+		case scheduledtask.FieldOrigin:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field origin", values[i])
+			} else if value.Valid {
+				_m.Origin = types.ExportOrigin(value.String)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -300,6 +308,9 @@ func (_m *ScheduledTask) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("email_config=")
 	builder.WriteString(fmt.Sprintf("%v", _m.EmailConfig))
+	builder.WriteString(", ")
+	builder.WriteString("origin=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Origin))
 	builder.WriteByte(')')
 	return builder.String()
 }

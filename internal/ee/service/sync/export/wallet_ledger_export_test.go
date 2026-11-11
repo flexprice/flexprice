@@ -84,7 +84,13 @@ type ledgerRepo struct {
 	wallet.Repository
 	walletIDs   []string
 	customerIDs []string
+	scopedIDs   []string
 	batches     [][]string
+}
+
+func (r *ledgerRepo) ListWalletIDsByCustomerIDs(_ context.Context, _, _ string, customerIDs []string) ([]string, error) {
+	r.scopedIDs = customerIDs
+	return r.walletIDs, nil
 }
 
 func (r *ledgerRepo) ListWalletIDsForLedgerExport(_ context.Context, _, _ string, _, _ time.Time, customerExternalIDs []string) ([]string, error) {
@@ -101,7 +107,7 @@ func (r *ledgerRepo) GetWalletLedgerForExport(_ context.Context, _, _ string, wa
 
 func TestWalletLedgerWriteDataBatchesWallets(t *testing.T) {
 	repo := &ledgerRepo{walletIDs: lo.Times(51, func(i int) string { return fmt.Sprintf("wallet_%02d", i) })}
-	exporter := NewWalletLedgerExporter(repo, logger.NewNoopLogger())
+	exporter := NewWalletLedgerExporter(repo, nil, logger.NewNoopLogger())
 
 	var buf bytes.Buffer
 	count, err := exporter.WriteData(context.Background(), &dto.ExportRequest{CustomerExternalIDs: []string{"acme"}}, &buf)
@@ -120,7 +126,7 @@ func TestWalletLedgerWriteDataBatchesWallets(t *testing.T) {
 }
 
 func TestWalletLedgerWriteDataNoWallets(t *testing.T) {
-	exporter := NewWalletLedgerExporter(&ledgerRepo{}, logger.NewNoopLogger())
+	exporter := NewWalletLedgerExporter(&ledgerRepo{}, nil, logger.NewNoopLogger())
 
 	var buf bytes.Buffer
 	count, err := exporter.WriteData(context.Background(), &dto.ExportRequest{}, &buf)

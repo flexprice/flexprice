@@ -512,7 +512,7 @@ func (s *InMemoryInvoiceStore) GetNextBillingSequence(ctx context.Context, subsc
 	return maxSeq + 1, nil
 }
 
-func (s *InMemoryInvoiceStore) GetInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*invoice.Invoice, error) {
+func (s *InMemoryInvoiceStore) GetInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int, customerIDs []string) ([]*invoice.Invoice, error) {
 	filter := types.NewNoLimitInvoiceFilter()
 	invoices, err := s.List(ctx, filter)
 	if err != nil {
@@ -524,6 +524,7 @@ func (s *InMemoryInvoiceStore) GetInvoicesForExport(ctx context.Context, tenantI
 	for _, inv := range invoices {
 		if inv.TenantID == tenantID && inv.EnvironmentID == envID &&
 			inv.Status == types.StatusPublished &&
+			(customerIDs == nil || lo.Contains(customerIDs, inv.CustomerID)) &&
 			!inv.CreatedAt.Before(startTime) && !inv.CreatedAt.After(endTime) {
 			result = append(result, copyInvoice(inv))
 		}
