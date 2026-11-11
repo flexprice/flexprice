@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"go.temporal.io/api/enums/v1"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
@@ -81,6 +82,7 @@ func (r exportResolverFake) ForConnectionExport(context.Context, string, *types.
 type exportHandleFake struct {
 	models.ScheduleHandle
 	spec      client.ScheduleSpec
+	policy    *client.SchedulePolicies
 	paused    bool
 	updates   []client.ScheduleSpec
 	pauses    int
@@ -100,14 +102,16 @@ func (h *exportHandleFake) Update(_ context.Context, opts client.ScheduleUpdateO
 	spec := h.spec
 	out, err := opts.DoUpdate(client.ScheduleUpdateInput{
 		Description: client.ScheduleDescription{Schedule: client.Schedule{
-			Spec:  &spec,
-			State: &client.ScheduleState{Paused: h.paused},
+			Spec:   &spec,
+			State:  &client.ScheduleState{Paused: h.paused},
+			Policy: h.policy,
 		}},
 	})
 	if err != nil {
 		return err
 	}
 	h.spec = *out.Schedule.Spec
+	h.policy = out.Schedule.Policy
 	h.updates = append(h.updates, h.spec)
 	return nil
 }
@@ -300,6 +304,10 @@ func TestUpdate_ScheduleUpdatesTemporalThenDB(t *testing.T) {
 	require.Len(t, handle.updates, 1)
 	require.Equal(t, []string{"30 9 * * *"}, handle.updates[0].CronExpressions)
 	require.Equal(t, "Asia/Kolkata", handle.updates[0].TimeZoneName)
+	require.True(t, handle.paused)
+	require.NotNil(t, handle.policy)
+	require.Equal(t, enums.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL, handle.policy.Overlap)
+	require.Equal(t, exportCatchupWindow, handle.policy.CatchupWindow)
 	require.NotNil(t, repo.settings)
 	require.Equal(t, "nightly", repo.settings.Name)
 	require.Equal(t, kolkata(), repo.settings.Schedule)

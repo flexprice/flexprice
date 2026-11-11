@@ -233,11 +233,20 @@ func (s *scheduledTaskService) scheduleSpec(task *scheduledtask.ScheduledTask) (
 }
 
 // replaceScheduleSpec keeps pause state.
-func (s *scheduledTaskService) replaceScheduleSpec(ctx context.Context, scheduleID string, spec client.ScheduleSpec) (bool, error) {
+func (s *scheduledTaskService) replaceScheduleSpec(ctx context.Context, scheduleID string, spec client.ScheduleSpec, timezoneSet bool) (bool, error) {
 	handle := s.temporalClient.GetScheduleHandle(ctx, scheduleID)
 	err := handle.Update(ctx, client.ScheduleUpdateOptions{
 		DoUpdate: func(in client.ScheduleUpdateInput) (*client.ScheduleUpdate, error) {
 			in.Description.Schedule.Spec = &spec
+			if timezoneSet {
+				policy := client.SchedulePolicies{}
+				if in.Description.Schedule.Policy != nil {
+					policy = *in.Description.Schedule.Policy
+				}
+				policy.Overlap = enums.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL
+				policy.CatchupWindow = exportCatchupWindow
+				in.Description.Schedule.Policy = &policy
+			}
 			return &client.ScheduleUpdate{Schedule: &in.Description.Schedule}, nil
 		},
 	})
@@ -278,7 +287,7 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 		if err != nil {
 			return err
 		}
-		if synced, err = s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec); err != nil {
+		if synced, err = s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec, task.Schedule != nil); err != nil {
 			return err
 		}
 	}
@@ -287,7 +296,7 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 		s.logger.Error(ctx, "failed to update scheduled task settings", "id", task.ID, "error", err)
 		if synced {
 			if spec, specErr := s.scheduleSpec(&previous); specErr == nil {
-				if _, revertErr := s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec); revertErr != nil {
+				if _, revertErr := s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec, previous.Schedule != nil); revertErr != nil {
 					s.logger.Error(ctx, "failed to revert temporal schedule spec", "id", task.ID, "error", revertErr)
 				}
 			}
