@@ -254,6 +254,19 @@ func (s *TaskServiceSuite) TestDownload_ConnectionMissingObjectExpired() {
 	s.requireExpired(f)
 }
 
+func (s *TaskServiceSuite) TestDownload_ConnectionExistsErrorPresigns() {
+	st := &scheduledtask.ScheduledTask{
+		ID:           "sched_1",
+		ConnectionID: "conn_1",
+		JobConfig:    &types.S3JobConfig{Bucket: "cust-bkt", Region: "us-east-1"},
+	}
+	f := s.newDownloadFixture(st, exportTask("t1", "s3://cust-bkt/some/run.csv"))
+	f.resolver.conn.(*downloadStore).existsErr = errors.New("403")
+	url, err := f.svc.GenerateDownloadURL(f.ctx, "t1")
+	s.Require().NoError(err)
+	s.Require().Equal("https://fake/some/run.csv", url)
+}
+
 func (s *TaskServiceSuite) TestDownload_ExistsErrorPropagates() {
 	f := s.newDownloadFixture(managedScheduledTask("platform-bkt"), exportTask("t1", ""))
 	s.setFileURL(f, "t1", "s3://platform-bkt/"+f.prefix+"sched_1/run.csv")
