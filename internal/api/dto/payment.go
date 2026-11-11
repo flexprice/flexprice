@@ -28,8 +28,8 @@ type CreatePaymentRequest struct {
 	ProcessPayment         bool                         `json:"process_payment" default:"true"`
 	SaveCardAndMakeDefault bool                         `json:"save_card_and_make_default" default:"false"`
 	GatewayOptions         *PaymentGatewayOptions       `json:"gateway_options,omitempty"`
-	// PaymentSource marks a payment Flexprice created itself; only internal callers can set it.
-	PaymentSource string `json:"-"`
+	// PaymentTrigger marks a payment Flexprice created itself; only internal callers can set it.
+	PaymentTrigger string `json:"-"`
 }
 
 // PaymentGatewayOptions holds typed, per-gateway payment options. Adding
@@ -302,11 +302,11 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 		EnvironmentID:     types.GetEnvironmentID(ctx),
 		BaseModel:         types.GetDefaultBaseModel(ctx),
 	}
-	if p.Metadata[types.MetadataKeyPaymentSource] == types.PaymentSourceInvoiceAutoCharge {
+	if p.Metadata[types.MetadataKeyPaymentSource] == types.PaymentTriggerInvoiceAutoCharge {
 		delete(p.Metadata, types.MetadataKeyPaymentSource)
 	}
-	if r.PaymentSource != "" {
-		p.Metadata = lo.Assign(p.Metadata, types.Metadata{types.MetadataKeyPaymentSource: r.PaymentSource})
+	if r.PaymentTrigger != "" {
+		p.Metadata = lo.Assign(p.Metadata, types.Metadata{types.MetadataKeyPaymentSource: r.PaymentTrigger})
 	}
 
 	// Set initial payment status. When ProcessPayment is false the payment is being

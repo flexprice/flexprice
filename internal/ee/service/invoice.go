@@ -2320,7 +2320,7 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeRazorpay),
 		Amount:            freshInv.AmountRemaining,
 		Currency:          freshInv.Currency,
-		PaymentSource:     types.PaymentSourceInvoiceAutoCharge,
+		PaymentTrigger:    types.PaymentTriggerInvoiceAutoCharge,
 	})
 	if err != nil {
 		return false, err
