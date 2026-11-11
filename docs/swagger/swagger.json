@@ -23547,6 +23547,10 @@
                 "connection_id": {
                     "type": "string"
                 },
+                "email_config": {
+                    "description": "Users in this account who receive each run by email.",
+                    "$ref": "#/definitions/types.ExportEmailConfig"
+                },
                 "enabled": {
                     "type": "boolean"
                 },
@@ -29612,6 +29616,9 @@
                 "created_at": {
                     "type": "string"
                 },
+                "email_config": {
+                    "$ref": "#/definitions/types.ExportEmailConfig"
+                },
                 "enabled": {
                     "type": "boolean"
                 },
@@ -32949,6 +32956,10 @@
         "UpdateScheduledTaskRequest": {
             "type": "object",
             "properties": {
+                "email_config": {
+                    "description": "Absent keeps recipients; empty recipients clears them.",
+                    "$ref": "#/definitions/types.ExportEmailConfig"
+                },
                 "enabled": {
                     "type": "boolean"
                 },
@@ -36133,8 +36144,8 @@
         "types.Duration": {
             "type": "object",
             "enum": [
-                604800000000000,
-                3600000000000
+                3600000000000,
+                604800000000000
             ],
             "properties": {
                 "unit": {
@@ -36145,8 +36156,8 @@
                 }
             },
             "x-enum-varnames": [
-                "CollectionsPaidWindow",
-                "EntitlementGrantMinDuration"
+                "EntitlementGrantMinDuration",
+                "CollectionsPaidWindow"
             ]
         },
         "types.DurationUnit": {
@@ -41372,6 +41383,17 @@
                 "EmailTypeInvoice",
                 "EmailTypeInvoicePaymentReminder"
             ]
+        },
+        "types.ExportEmailConfig": {
+            "type": "object",
+            "properties": {
+                "recipients": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
         },
         "types.ExportSchedule": {
             "type": "object",

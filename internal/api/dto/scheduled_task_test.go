@@ -38,3 +38,13 @@ func TestCreateScheduledTaskRequest_ReportSources(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateScheduledTaskRequest_EmailConfigOnly(t *testing.T) {
+	var req UpdateScheduledTaskRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"email_config":{"recipients":[]}}`), &req))
+	require.NoError(t, req.Validate())
+	require.NotNil(t, req.EmailConfig)
+
+	var empty UpdateScheduledTaskRequest
+	require.Error(t, empty.Validate())
+}

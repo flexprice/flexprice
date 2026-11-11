@@ -25214,6 +25214,9 @@
           "connection_id": {
             "type": "string"
           },
+          "email_config": {
+            "$ref": "#/components/schemas/types.ExportEmailConfig"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -31323,6 +31326,9 @@
             "type": "string",
             "format": "date-time"
           },
+          "email_config": {
+            "$ref": "#/components/schemas/types.ExportEmailConfig"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -34695,6 +34701,9 @@
       "UpdateScheduledTaskRequest": {
         "type": "object",
         "properties": {
+          "email_config": {
+            "$ref": "#/components/schemas/types.ExportEmailConfig"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -38008,12 +38017,12 @@
           }
         },
         "enum": [
-          "604800000000000",
-          "3600000000000"
+          "3600000000000",
+          "604800000000000"
         ],
         "x-enum-varnames": [
-          "CollectionsPaidWindow",
-          "EntitlementGrantMinDuration"
+          "EntitlementGrantMinDuration",
+          "CollectionsPaidWindow"
         ],
         "x-speakeasy-name-override": "Duration"
       },
@@ -43507,6 +43516,18 @@
           "EmailTypeInvoicePaymentReminder"
         ],
         "x-speakeasy-name-override": "EmailType"
+      },
+      "types.ExportEmailConfig": {
+        "type": "object",
+        "properties": {
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "x-speakeasy-name-override": "ExportEmailConfig"
       },
       "types.ExportSchedule": {
         "required": [

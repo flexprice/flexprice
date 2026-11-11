@@ -23827,6 +23827,14 @@ const docTemplate = `{
                 "connection_id": {
                     "type": "string"
                 },
+                "email_config": {
+                    "description": "Users in this account who receive each run by email.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ExportEmailConfig"
+                        }
+                    ]
+                },
                 "enabled": {
                     "type": "boolean"
                 },
@@ -30212,6 +30220,9 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "email_config": {
+                    "$ref": "#/definitions/types.ExportEmailConfig"
+                },
                 "enabled": {
                     "type": "boolean"
                 },
@@ -33833,6 +33844,14 @@ const docTemplate = `{
         "UpdateScheduledTaskRequest": {
             "type": "object",
             "properties": {
+                "email_config": {
+                    "description": "Absent keeps recipients; empty recipients clears them.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ExportEmailConfig"
+                        }
+                    ]
+                },
                 "enabled": {
                     "type": "boolean"
                 },
@@ -37141,8 +37160,8 @@ const docTemplate = `{
         "types.Duration": {
             "type": "object",
             "enum": [
-                604800000000000,
-                3600000000000
+                3600000000000,
+                604800000000000
             ],
             "properties": {
                 "unit": {
@@ -37153,8 +37172,8 @@ const docTemplate = `{
                 }
             },
             "x-enum-varnames": [
-                "CollectionsPaidWindow",
-                "EntitlementGrantMinDuration"
+                "EntitlementGrantMinDuration",
+                "CollectionsPaidWindow"
             ]
         },
         "types.DurationUnit": {
@@ -42516,6 +42535,17 @@ const docTemplate = `{
                 "EmailTypeInvoice",
                 "EmailTypeInvoicePaymentReminder"
             ]
+        },
+        "types.ExportEmailConfig": {
+            "type": "object",
+            "properties": {
+                "recipients": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
         },
         "types.ExportSchedule": {
             "type": "object",
