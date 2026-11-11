@@ -23,7 +23,7 @@ type Repository interface {
 	ListStaleExportTasks(ctx context.Context, olderThan time.Time, limit int) ([]StaleRef, error)
 	// FailStaleExportTask fails one unfinished run within the tenant and environment in ctx.
 	// It reports whether a row changed.
-	FailStaleExportTask(ctx context.Context, id string, reason string) (bool, error)
+	FailStaleExportTask(ctx context.Context, id string, olderThan time.Time, reason string) (bool, error)
 }
 
 // StaleRef identifies a stale run and its scope.
