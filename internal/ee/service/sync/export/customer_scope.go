@@ -57,7 +57,3 @@ func idListFilter(stored *types.CustomerFilter, ids []string) *types.CustomerFil
 func refIDs(refs []customer.Ref) []string {
 	return lo.Map(refs, func(r customer.Ref, _ int) string { return r.ID })
 }
-
-func refExternalIDs(refs []customer.Ref) []string {
-	return lo.Map(refs, func(r customer.Ref, _ int) string { return r.ExternalID })
-}

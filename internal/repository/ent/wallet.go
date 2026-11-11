@@ -1526,6 +1526,51 @@ func effectiveAtSQL(tx, inv string) string {
 		types.TransactionReasonPurchasedCreditBonus)
 }
 
+func (r *walletRepository) ListWalletIDsByCustomerIDs(ctx context.Context, tenantID, envID string, customerIDs []string) ([]string, error) {
+	span := StartRepositorySpan(ctx, "wallet", "list_wallet_ids_by_customer_ids", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"env_id":         envID,
+		"customer_count": len(customerIDs),
+	})
+	defer FinishSpan(span)
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, `
+		SELECT id
+		FROM wallets
+		WHERE tenant_id = $1
+			AND environment_id = $2
+			AND customer_id = ANY($3::text[])
+		ORDER BY id
+	`, tenantID, envID, pq.Array(customerIDs))
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list wallets for the ledger export").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	walletIDs := make([]string, 0)
+	for rows.Next() {
+		var walletID string
+		if err := rows.Scan(&walletID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to read wallet id").
+				Mark(ierr.ErrDatabase)
+		}
+		walletIDs = append(walletIDs, walletID)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to iterate wallet ids").
+			Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+	return walletIDs, nil
+}
+
 func (r *walletRepository) ListWalletIDsForLedgerExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, customerExternalIDs []string) ([]string, error) {
 	span := StartRepositorySpan(ctx, "wallet", "list_wallet_ids_for_ledger_export", map[string]interface{}{
 		"tenant_id":          tenantID,
@@ -1536,9 +1581,7 @@ func (r *walletRepository) ListWalletIDsForLedgerExport(ctx context.Context, ten
 	})
 	defer FinishSpan(span)
 
-	// A filter names at most 100 customers, so their wallets come straight from the customer index.
-	// Without one, the wallets are those with a transaction in the window, from the created_at
-	// index, plus those whose customer paid a one-off invoice in it, for a purchase paid late.
+	// Unfiltered: wallets active in window.
 	query := `
 		SELECT wallet.id
 		FROM
