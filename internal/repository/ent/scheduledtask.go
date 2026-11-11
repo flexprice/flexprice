@@ -158,33 +158,31 @@ func (r *ScheduledTaskRepository) Update(ctx context.Context, task *domainst.Sch
 	return nil
 }
 
-// UpdateSettings writes editable settings; email_config only when writeEmail.
-func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask, writeEmail bool) error {
+// UpdateSettings writes only the selected fields.
+func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask, fields domainst.SettingsFields) error {
 	update := r.client.Writer(ctx).ScheduledTask.
 		UpdateOneID(task.ID).
 		Where(
 			scheduledtask.TenantID(types.GetTenantID(ctx)),
 			scheduledtask.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetEnabled(task.Enabled).
 		SetUpdatedBy(task.UpdatedBy)
 
-	if task.Name != "" {
-		update = update.SetName(task.Name)
-	} else {
-		update = update.ClearName()
+	if fields.Name {
+		if task.Name != "" {
+			update = update.SetName(task.Name)
+		} else {
+			update = update.ClearName()
+		}
 	}
-	if task.Schedule != nil {
-		update = update.SetSchedule(task.Schedule)
-	} else {
-		update = update.ClearSchedule()
+	if fields.Schedule {
+		if task.Schedule != nil {
+			update = update.SetSchedule(task.Schedule)
+		} else {
+			update = update.ClearSchedule()
+		}
 	}
-	if task.TemporalScheduleID != "" {
-		update = update.SetTemporalScheduleID(task.TemporalScheduleID)
-	} else {
-		update = update.ClearTemporalScheduleID()
-	}
-	if writeEmail {
+	if fields.Email {
 		if task.EmailConfig != nil {
 			update = update.SetEmailConfig(task.EmailConfig)
 		} else {

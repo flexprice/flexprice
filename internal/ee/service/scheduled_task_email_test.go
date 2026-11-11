@@ -190,6 +190,7 @@ func TestUpdate_EmailConfig(t *testing.T) {
 		require.Equal(t, []string{"a@x.com"}, repo.settings.EmailConfig.Recipients)
 		require.Equal(t, []string{"a@x.com"}, resp.EmailConfig.Recipients)
 		require.False(t, repo.wroteEmail)
+		require.Equal(t, scheduledtask.SettingsFields{Name: true}, repo.fields)
 	})
 
 	t.Run("hourly stored interval rejects", func(t *testing.T) {

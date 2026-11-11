@@ -34,6 +34,7 @@ type exportRepoFake struct {
 	settings    *scheduledtask.ScheduledTask
 	settingsErr error
 	wroteEmail  bool
+	fields      scheduledtask.SettingsFields
 }
 
 func (r *exportRepoFake) Create(_ context.Context, t *scheduledtask.ScheduledTask) error {
@@ -49,8 +50,9 @@ func (r *exportRepoFake) Get(context.Context, string) (*scheduledtask.ScheduledT
 
 var settingsStamp = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
-func (r *exportRepoFake) UpdateSettings(_ context.Context, t *scheduledtask.ScheduledTask, writeEmail bool) error {
-	r.wroteEmail = writeEmail
+func (r *exportRepoFake) UpdateSettings(_ context.Context, t *scheduledtask.ScheduledTask, fields scheduledtask.SettingsFields) error {
+	r.fields = fields
+	r.wroteEmail = fields.Email
 	t.UpdatedAt = settingsStamp
 	cp := *t
 	r.settings = &cp

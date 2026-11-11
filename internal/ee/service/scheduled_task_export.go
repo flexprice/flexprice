@@ -301,7 +301,12 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 		}
 	}
 
-	if err := s.repo.UpdateSettings(ctx, task, req.EmailConfig != nil); err != nil {
+	fields := scheduledtask.SettingsFields{
+		Name:     req.Name != nil,
+		Schedule: scheduleChanged,
+		Email:    req.EmailConfig != nil,
+	}
+	if err := s.repo.UpdateSettings(ctx, task, fields); err != nil {
 		s.logger.Error(ctx, "failed to update scheduled task settings", "id", task.ID, "error", err)
 		if synced {
 			if spec, specErr := s.scheduleSpec(&previous); specErr == nil {

@@ -124,20 +124,20 @@ func TestScheduledTaskRepository_NewColumns(t *testing.T) {
 	got.Schedule = nil
 	got.TemporalScheduleID = ""
 	got.UpdatedBy = "user_other"
-	require.NoError(t, repo.UpdateSettings(ctx, got, false))
+	require.NoError(t, repo.UpdateSettings(ctx, got, scheduledtask.SettingsFields{Name: true, Schedule: true}))
 
 	updated, err := repo.Get(ctx, newRow.ID)
 	require.NoError(t, err)
 	require.Equal(t, "Renamed", updated.Name)
-	require.False(t, updated.Enabled)
+	require.True(t, updated.Enabled)
 	require.Nil(t, updated.Schedule)
-	require.Equal(t, "", updated.TemporalScheduleID)
+	require.Equal(t, "sched_"+runID, updated.TemporalScheduleID)
 	require.Equal(t, "user_other", updated.UpdatedBy)
 	require.True(t, updated.UpdatedAt.Equal(got.UpdatedAt))
 	require.True(t, updated.ManagedCopy)
 
 	otherEnvRow.Name = "hijack"
-	err = repo.UpdateSettings(ctx, otherEnvRow, false)
+	err = repo.UpdateSettings(ctx, otherEnvRow, scheduledtask.SettingsFields{Name: true})
 	require.True(t, ierr.IsNotFound(err))
 	untouched, err := repo.Get(otherCtx, otherEnvRow.ID)
 	require.NoError(t, err)
