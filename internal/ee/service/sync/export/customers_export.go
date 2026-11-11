@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"io"
 	"sort"
 	"time"
 
@@ -21,7 +22,10 @@ var customersCSVHeaders = []string{
 	"timezone", "created_at", "updated_at",
 }
 
-const customersMetadataPrefix = "metadata_"
+const (
+	customersMetadataPrefix = "metadata_"
+	customersPageSize       = 1000
+)
 
 // CustomersExporter exports the saved customer filter as a snapshot.
 type CustomersExporter struct {
@@ -36,34 +40,37 @@ func (e *CustomersExporter) GetFilenamePrefix() string {
 	return string(types.ScheduledTaskEntityTypeCustomers)
 }
 
-// PrepareData ignores the time window; it is a snapshot.
 func (e *CustomersExporter) PrepareData(ctx context.Context, request *dto.ExportRequest) ([]byte, int, error) {
+	var buf bytes.Buffer
+	count, err := e.WriteData(ctx, request, &buf)
+	if err != nil {
+		return nil, 0, err
+	}
+	return buf.Bytes(), count, nil
+}
+
+// WriteData ignores the time window; it is a snapshot.
+func (e *CustomersExporter) WriteData(ctx context.Context, request *dto.ExportRequest, w io.Writer) (int, error) {
 	ctx = types.SetTenantID(ctx, request.TenantID)
 	ctx = types.SetEnvironmentID(ctx, request.EnvID)
-
-	filter := types.NewNoLimitCustomerFilter()
-	if stored := request.SourceConfig.GetCustomerFilter(); stored != nil {
-		copied := *stored
-		qf := types.NewNoLimitQueryFilter()
-		if stored.QueryFilter != nil {
-			qf.Status = stored.QueryFilter.Status
-		}
-		copied.QueryFilter = qf
-		filter = &copied
-	}
-
-	customers, err := e.customerRepo.ListAll(ctx, filter)
-	if err != nil {
-		return nil, 0, ierr.WithError(err).
-			WithHint("Failed to list customers").
-			Mark(ierr.ErrDatabase)
-	}
+	filter := request.SourceConfig.GetCustomerFilter()
 
 	keys := map[string]struct{}{}
-	for _, c := range customers {
-		for k := range c.Metadata {
-			keys[k] = struct{}{}
+	afterID := ""
+	for {
+		page, err := e.customerRepo.ListMetadataPageByFilter(ctx, filter, afterID, customersPageSize)
+		if err != nil {
+			return 0, err
 		}
+		for _, c := range page {
+			for k := range c.Metadata {
+				keys[k] = struct{}{}
+			}
+		}
+		if len(page) < customersPageSize {
+			break
+		}
+		afterID = page[len(page)-1].ID
 	}
 	metaKeys := lo.Keys(keys)
 	sort.Strings(metaKeys)
@@ -72,29 +79,41 @@ func (e *CustomersExporter) PrepareData(ctx context.Context, request *dto.Export
 	for _, k := range metaKeys {
 		header = append(header, customersMetadataPrefix+k)
 	}
+	cw := csv.NewWriter(w)
+	if err := cw.Write(header); err != nil {
+		return 0, ierr.WithError(err).WithHint("Failed to write CSV header").Mark(ierr.ErrInternal)
+	}
 
-	var buf bytes.Buffer
-	w := csv.NewWriter(&buf)
-	if err := w.Write(header); err != nil {
-		return nil, 0, ierr.WithError(err).WithHint("Failed to write CSV header").Mark(ierr.ErrInternal)
-	}
-	for _, c := range customers {
-		row := []string{
-			c.ID, c.ExternalID, c.Name, c.Email, string(c.Status),
-			lo.FromPtr(c.BillingCurrency), lo.FromPtr(c.BillingEntityID),
-			c.AddressLine1, c.AddressLine2, c.AddressCity, c.AddressState, c.AddressPostalCode, c.AddressCountry,
-			c.Timezone, c.CreatedAt.UTC().Format(time.RFC3339), c.UpdatedAt.UTC().Format(time.RFC3339),
+	total := 0
+	afterID = ""
+	for {
+		page, err := e.customerRepo.ListByFilterPage(ctx, filter, afterID, customersPageSize)
+		if err != nil {
+			return 0, err
 		}
-		for _, k := range metaKeys {
-			row = append(row, c.Metadata[k])
+		for _, c := range page {
+			row := []string{
+				c.ID, c.ExternalID, c.Name, c.Email, string(c.Status),
+				lo.FromPtr(c.BillingCurrency), lo.FromPtr(c.BillingEntityID),
+				c.AddressLine1, c.AddressLine2, c.AddressCity, c.AddressState, c.AddressPostalCode, c.AddressCountry,
+				c.Timezone, c.CreatedAt.UTC().Format(time.RFC3339), c.UpdatedAt.UTC().Format(time.RFC3339),
+			}
+			for _, k := range metaKeys {
+				row = append(row, c.Metadata[k])
+			}
+			if err := cw.Write(row); err != nil {
+				return 0, ierr.WithError(err).WithHint("Failed to write CSV row").Mark(ierr.ErrInternal)
+			}
 		}
-		if err := w.Write(row); err != nil {
-			return nil, 0, ierr.WithError(err).WithHint("Failed to write CSV row").Mark(ierr.ErrInternal)
+		total += len(page)
+		if len(page) < customersPageSize {
+			break
 		}
+		afterID = page[len(page)-1].ID
 	}
-	w.Flush()
-	if err := w.Error(); err != nil {
-		return nil, 0, ierr.WithError(err).WithHint("Failed to flush CSV writer").Mark(ierr.ErrInternal)
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		return 0, ierr.WithError(err).WithHint("Failed to flush CSV writer").Mark(ierr.ErrInternal)
 	}
-	return buf.Bytes(), len(customers), nil
+	return total, nil
 }
