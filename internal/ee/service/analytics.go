@@ -26,7 +26,13 @@ type AnalyticsService interface {
 	GetView(ctx context.Context, id string) (*analytics.View, error)
 	UpdateView(ctx context.Context, v *analytics.View) error
 	DeleteView(ctx context.Context, id string) error
+	ValidateReportSource(ctx context.Context, key string, params *types.ReportParams) error
+	ValidateViewSource(ctx context.Context, viewID string) error
+	RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error)
+	RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error)
 }
+
+const maxExportRows = 1_000_000
 
 type analyticsService struct {
 	ServiceParams
@@ -591,4 +597,87 @@ func addChangePct(res *dto.AnalyticsQueryResult, key string) {
 		}
 		res.Rows[i] = append(row, pct)
 	}
+}
+
+func reportRequestFromParams(params *types.ReportParams, rng string) *dto.ReportQueryRequest {
+	req := &dto.ReportQueryRequest{Range: rng}
+	if params == nil {
+		return req
+	}
+	req.Shape, req.Dimensions, req.Grain, req.Currency = params.Shape, params.Dimensions, params.Grain, params.Currency
+	for _, f := range params.Filters {
+		req.Filters = append(req.Filters, dto.ReportFilter{Field: f.Field, Op: f.Op, Value: f.Value})
+	}
+	return req
+}
+
+func (s *analyticsService) ValidateReportSource(_ context.Context, key string, params *types.ReportParams) error {
+	if err := s.requireReports(); err != nil {
+		return err
+	}
+	_, err := reportRequestFromParams(params, "last_30_days").ValidateForReport(key, s.ReportsRepo.MaxRows())
+	return err
+}
+
+func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string) error {
+	v, err := s.views.Get(ctx, viewID)
+	if err != nil {
+		return err
+	}
+	if v.Definition != nil && v.Definition.Family == types.FamilyReport {
+		return s.requireReports()
+	}
+	_, err = analytics.ResolveVariables(v.Definition, nil)
+	return err
+}
+
+func (s *analyticsService) RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error) {
+	return s.RunReport(ctx, key, reportRequestFromParams(params, rng))
+}
+
+func (s *analyticsService) RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error) {
+	v, err := s.views.Get(ctx, viewID)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	if v.Definition == nil {
+		return nil, time.Time{}, ierr.NewError("view has no definition").Mark(ierr.ErrValidation)
+	}
+	def := *v.Definition
+	def.Time.Range = rng
+
+	if def.Family == types.FamilyReport {
+		res, err := s.runReportView(ctx, &def)
+		return res, v.UpdatedAt, err
+	}
+	res, err := s.ExecuteView(ctx, &def, nil)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	if len(res.Rows) > maxExportRows {
+		return nil, time.Time{}, ierr.NewErrorf("export exceeds %d rows", maxExportRows).
+			WithHint("Narrow the view or shorten the export window").
+			Mark(ierr.ErrValidation)
+	}
+	return res, v.UpdatedAt, nil
+}
+
+func (s *analyticsService) runReportView(ctx context.Context, def *analytics.ViewDefinition) (*dto.AnalyticsQueryResult, error) {
+	if len(def.Metrics) == 0 {
+		return nil, ierr.NewError("report view has no report key").Mark(ierr.ErrValidation)
+	}
+	req := &dto.ReportQueryRequest{
+		Shape: string(def.Shape), Dimensions: def.Dimensions, Range: def.Time.Range,
+		Grain: string(def.Time.Grain), Currency: def.Currency, Compare: def.Compare, Limit: def.Limit,
+	}
+	for _, f := range def.Filters {
+		if f.Op != types.EQUAL && f.Op != types.IN {
+			return nil, ierr.NewErrorf("unsupported filter op %q", f.Op).Mark(ierr.ErrValidation)
+		}
+		req.Filters = append(req.Filters, dto.ReportFilter{Field: f.Field, Op: string(f.Op), Value: f.Value})
+	}
+	for _, so := range def.Sort {
+		req.Sort = append(req.Sort, dto.ReportSort{Field: so.Field, Dir: string(so.Dir)})
+	}
+	return s.RunReport(ctx, string(def.Metrics[0]), req)
 }
