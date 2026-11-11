@@ -47,15 +47,21 @@ func buildCostBreakdownSQL(params *costanalytics.QueryParams) *costSQL {
 	sb.WriteString(b.groupedCTE())
 	sb.WriteString("\n")
 	sb.WriteString(b.outerSelect())
-	if b.query.Deduplicate {
-		sb.WriteString("\nSETTINGS do_not_merge_across_partitions_select_final = 1")
-	}
+	sb.WriteString(b.settings())
 
 	aliases := make(map[costanalytics.Key]string, len(b.keys))
 	for i, k := range b.keys {
 		aliases[k] = keyAlias(i)
 	}
 	return &costSQL{query: sb.String(), args: b.args, keyAliases: aliases}
+}
+
+// settings caps memory like every meter_usage query and, with dedupe, keeps FINAL within partitions.
+func (b *costSQLBuilder) settings() string {
+	if b.query.Deduplicate {
+		return "\nSETTINGS " + maxMemoryUsageSetting + ", do_not_merge_across_partitions_select_final = 1"
+	}
+	return "\nSETTINGS " + maxMemoryUsageSetting
 }
 
 func (b *costSQLBuilder) bind(name string, value any) string {

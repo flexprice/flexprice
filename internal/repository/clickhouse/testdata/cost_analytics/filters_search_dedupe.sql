@@ -54,7 +54,7 @@ SELECT
 FROM grouped
 ORDER BY k0 ASC, k1 ASC
 LIMIT @limit OFFSET @offset
-SETTINGS do_not_merge_across_partitions_select_final = 1
+SETTINGS max_memory_usage = 96636764160, do_not_merge_across_partitions_select_final = 1
 
 -- arguments
 -- @line_ids = [li_1]

@@ -11,17 +11,17 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// CostAnalyticsRepository implements costanalytics.Repository on meter_usage.
-type CostAnalyticsRepository struct {
+// costAnalyticsRepository implements costanalytics.Repository on meter_usage.
+type costAnalyticsRepository struct {
 	store  *clickhouse.ClickHouseStore
 	logger *logger.Logger
 }
 
 func NewCostAnalyticsRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger) costanalytics.Repository {
-	return &CostAnalyticsRepository{store: store, logger: logger}
+	return &costAnalyticsRepository{store: store, logger: logger}
 }
 
-func (r *CostAnalyticsRepository) GetCostBreakdown(ctx context.Context, params *costanalytics.QueryParams) (*costanalytics.Result, error) {
+func (r *costAnalyticsRepository) GetCostBreakdown(ctx context.Context, params *costanalytics.QueryParams) (*costanalytics.Result, error) {
 	if params == nil || params.Query == nil {
 		return nil, ierr.NewError("params and query are required").Mark(ierr.ErrValidation)
 	}
@@ -63,7 +63,7 @@ func (r *CostAnalyticsRepository) GetCostBreakdown(ctx context.Context, params *
 	return result, nil
 }
 
-func (r *CostAnalyticsRepository) run(ctx context.Context, params *costanalytics.QueryParams) (*costanalytics.Result, error) {
+func (r *costAnalyticsRepository) run(ctx context.Context, params *costanalytics.QueryParams) (*costanalytics.Result, error) {
 	q := params.Query
 	built := buildCostBreakdownSQL(params)
 

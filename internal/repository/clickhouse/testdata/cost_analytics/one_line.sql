@@ -47,6 +47,7 @@ SELECT
 FROM grouped
 ORDER BY g_cost DESC, k0 ASC
 LIMIT @limit OFFSET @offset
+SETTINGS max_memory_usage = 96636764160
 
 -- arguments
 -- @line_ids = [li_1]
