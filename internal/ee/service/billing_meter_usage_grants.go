@@ -115,7 +115,7 @@ func (s *billingService) adjustMeterUsageGrants(
 	m *meter.Meter,
 	sub *subscription.Subscription,
 	extCustomerIDs []string,
-	lines lineUsages,
+	lines []lineUsage,
 	window TimeInterval,
 ) (adjustMeterUsageGrantsResult, bool, error) {
 	if len(grants) == 0 {
@@ -280,7 +280,7 @@ func (s *billingService) grantOverageInWindow(
 	ctx context.Context,
 	g *entitlementgrant.EntitlementGrant,
 	window TimeInterval,
-	lines lineUsages,
+	lines []lineUsage,
 	measure types.EntitlementGrantMeasure,
 	m *meter.Meter,
 	sub *subscription.Subscription,
@@ -313,7 +313,7 @@ func (s *billingService) grantUsageUntil(
 	ctx context.Context,
 	g *entitlementgrant.EntitlementGrant,
 	t time.Time,
-	lines lineUsages,
+	lines []lineUsage,
 	measure types.EntitlementGrantMeasure,
 	m *meter.Meter,
 	sub *subscription.Subscription,
@@ -322,8 +322,13 @@ func (s *billingService) grantUsageUntil(
 	if len(lines) > 0 && lines[0].start.Equal(g.ValidFrom) {
 		total := decimal.Zero
 		for _, l := range lines {
-			if !l.end.After(t) {
-				total = total.Add(l.usage(measure))
+			if l.end.After(t) {
+				continue
+			}
+			if measure == types.EntitlementGrantMeasureAmount {
+				total = total.Add(l.amount)
+			} else {
+				total = total.Add(l.quantity)
 			}
 		}
 		return total, nil
@@ -357,24 +362,14 @@ type lineUsage struct {
 	amount     decimal.Decimal
 }
 
-func (l lineUsage) usage(measure types.EntitlementGrantMeasure) decimal.Decimal {
-	if measure == types.EntitlementGrantMeasureAmount {
-		return l.amount
-	}
-	return l.quantity
-}
-
-// lineUsages are a meter's usage lines in the period, ordered by start.
-type lineUsages []lineUsage
-
 // lineUsageByMeter collects each meter's elapsed usage lines. A line's usage is the sum of its
 // charges, since commitment pricing splits it into base and overage.
 func lineUsageByMeter(
 	items []*subscription.SubscriptionLineItem,
 	chargesByLineItemID map[string][]*dto.SubscriptionUsageByMetersResponse,
 	periodStart, periodEnd, asOf time.Time,
-) map[string]lineUsages {
-	out := make(map[string]lineUsages)
+) map[string][]lineUsage {
+	out := make(map[string][]lineUsage)
 	for _, item := range items {
 		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
 			continue

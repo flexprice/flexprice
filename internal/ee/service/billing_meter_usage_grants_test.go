@@ -909,8 +909,8 @@ var (
 	splitT2     = time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
 )
 
-func splitLines(qtyA, qtyB int64) lineUsages {
-	return lineUsages{
+func splitLines(qtyA, qtyB int64) []lineUsage {
+	return []lineUsage{
 		{start: splitT0, end: splitChange, quantity: decimal.NewFromInt(qtyA), amount: decimal.NewFromInt(qtyA)},
 		{start: splitChange, end: splitT2, quantity: decimal.NewFromInt(qtyB), amount: decimal.NewFromInt(qtyB)},
 	}
@@ -923,7 +923,7 @@ func windowedGrant(quota, usage int64, from, to time.Time, measure types.Entitle
 }
 
 // billSplit runs the grant fold once per line and returns each line's overage.
-func billSplit(t *testing.T, bs *billingService, m *meter.Meter, grants []*entitlementgrant.EntitlementGrant, lines lineUsages) []decimal.Decimal {
+func billSplit(t *testing.T, bs *billingService, m *meter.Meter, grants []*entitlementgrant.EntitlementGrant, lines []lineUsage) []decimal.Decimal {
 	t.Helper()
 	out := make([]decimal.Decimal, 0, len(lines))
 	for _, l := range lines {
