@@ -162,8 +162,8 @@ func (c *redisCacheImpl) Incr(ctx context.Context, key string, ttl time.Duration
 	}
 	redisKey := c.GetRedisKey(key)
 	pipe := c.client.TxPipeline()
+	pipe.SetNX(ctx, redisKey, 0, ttl)
 	incr := pipe.Incr(ctx, redisKey)
-	pipe.ExpireNX(ctx, redisKey, ttl)
 	if _, err := pipe.Exec(ctx); err != nil {
 		return 0, err
 	}
