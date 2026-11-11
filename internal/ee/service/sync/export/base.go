@@ -495,6 +495,12 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 			return nil
 		}
 		return NewReportExporter(s.reportRunner, entityType)
+	case types.ScheduledTaskEntityTypeCustomers:
+		if s.customerRepo == nil {
+			s.logger.Info(context.Background(), "customer repository not configured for customers export")
+			return nil
+		}
+		return NewCustomersExporter(s.customerRepo)
 	default:
 		return nil
 	}
