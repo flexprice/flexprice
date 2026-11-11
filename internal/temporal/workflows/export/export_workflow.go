@@ -269,7 +269,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 
 const maxDeliveryDetailLen = 200
 
-// deliverRun records file delivery and emails; it never fails the run.
+// Never fails the run.
 func deliverRun(ctx workflow.Context, details *export.ScheduledTaskDetails, taskID string, status types.TaskStatus, recordCount int, runErr error) {
 	if workflow.GetVersion(ctx, "export-deliveries", workflow.DefaultVersion, 1) != 1 {
 		return
@@ -285,19 +285,24 @@ func deliverRun(ctx workflow.Context, details *export.ScheduledTaskDetails, task
 
 	if len(details.EmailRecipients) > 0 && details.Interval != types.ScheduledTaskIntervalHourly {
 		var out export.SendExportEmailsOutput
-		err := workflow.ExecuteActivity(ctx, delivery.SendExportEmails, export.SendExportEmailsInput{
+		emailCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+			StartToCloseTimeout: 5 * time.Minute,
+			RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
+		})
+		err := workflow.ExecuteActivity(emailCtx, delivery.SendExportEmails, export.SendExportEmailsInput{
 			TaskID:          taskID,
 			ScheduledTaskID: details.ScheduledTaskID,
 			TenantID:        details.TenantID,
 			EnvID:           details.EnvID,
 			ExportName:      details.Name,
+			EntityType:      details.EntityType,
 			Interval:        details.Interval,
 			Recipients:      details.EmailRecipients,
 			RunStatus:       status,
 			WindowStart:     details.StartTime,
 			WindowEnd:       details.EndTime,
 			RecordCount:     recordCount,
-		}).Get(ctx, &out)
+		}).Get(emailCtx, &out)
 		if err != nil {
 			logger.Error("Failed to send export emails", "error", err, "task_id", taskID)
 		} else {
@@ -328,6 +333,9 @@ func fileDelivery(ctx workflow.Context, details *export.ScheduledTaskDetails, ru
 		d.Target = "s3"
 		if cfg := details.JobConfig; cfg != nil {
 			d.Target = cfg.Bucket + "/" + cfg.KeyPrefix
+			if cfg.Provider == types.SecretProviderGCS {
+				d.Type = types.ExportDeliveryTypeGCS
+			}
 		}
 	}
 	if runErr != nil {

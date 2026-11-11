@@ -58,7 +58,7 @@ type RedisCache interface {
 	// every key missing.
 	GetBulk(ctx context.Context, keys []string) (found map[string]interface{}, missing []string)
 
-	// Incr increments a counter, setting ttl when it is created.
+	// Incr increments counter, sets ttl.
 	Incr(ctx context.Context, key string, ttl time.Duration) (int64, error)
 }
 

@@ -168,9 +168,9 @@ type ExportsConfig struct {
 	MaxEmailsPerHour int    `mapstructure:"max_emails_per_hour" validate:"omitempty"`
 }
 
-// ExportEmailAvailable reports whether export emails can be delivered.
+// ExportEmailAvailable reports email delivery readiness.
 func (c *Configuration) ExportEmailAvailable() bool {
-	return c.Email.Enabled && c.Email.Resend.APIKey != "" && c.Exports.ConsoleBaseURL != ""
+	return c.Email.Enabled && c.Email.Resend.APIKey != "" && c.Email.FromAddress != "" && c.Exports.ConsoleBaseURL != ""
 }
 
 // Credential sources for FlexpriceS3ExportsConfig. Exactly one is active per

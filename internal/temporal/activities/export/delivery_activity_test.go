@@ -66,6 +66,7 @@ func newDeliveryActivity(sender *fakeSender, users *fakeUsers, c *fakeCounter, a
 	if available {
 		cfg.Email.Enabled = true
 		cfg.Email.ResendAPIKey = "k"
+		cfg.Email.FromAddress = "noreply@x.com"
 	}
 	cfg.Exports.ConsoleBaseURL = "https://console.example.com/"
 	cfg.Exports.MaxEmailsPerHour = max
@@ -155,6 +156,48 @@ func TestSendExportEmails_ContentAndKey(t *testing.T) {
 	require.Contains(t, c.keys[0], "exports:email:t1:")
 	require.Len(t, c.keys[0], len("exports:email:t1:")+10)
 	require.Equal(t, []string{"t1", "t1"}, users.tenantCtx)
+}
+
+func TestSendExportEmails_MixedRecipients(t *testing.T) {
+	sender := &fakeSender{}
+	users := &fakeUsers{known: map[string]bool{"a@x.com": true, "c@x.com": true}}
+	c := &fakeCounter{enabled: true, n: map[string]int64{}}
+	a := newDeliveryActivity(sender, users, c, true, 5)
+
+	out, err := a.SendExportEmails(context.Background(), baseInput("a@x.com", "gone@x.com", "c@x.com"))
+	require.NoError(t, err)
+	var got []string
+	for _, d := range out.Deliveries {
+		got = append(got, d.Status)
+	}
+	require.Equal(t, []string{"delivered", "skipped", "delivered"}, got)
+	require.Len(t, sender.sent, 2)
+}
+
+func TestSendExportEmails_HourlySendsNothing(t *testing.T) {
+	sender := &fakeSender{}
+	users := &fakeUsers{known: map[string]bool{"a@x.com": true}}
+	a := newDeliveryActivity(sender, users, &fakeCounter{n: map[string]int64{}}, true, 5)
+	in := baseInput("a@x.com")
+	in.Interval = types.ScheduledTaskIntervalHourly
+
+	out, err := a.SendExportEmails(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, out.Deliveries)
+	require.Empty(t, sender.sent)
+}
+
+func TestSendExportEmails_EmptyNameUsesEntityType(t *testing.T) {
+	sender := &fakeSender{}
+	users := &fakeUsers{known: map[string]bool{"a@x.com": true}}
+	a := newDeliveryActivity(sender, users, &fakeCounter{n: map[string]int64{}}, true, 5)
+	in := baseInput("a@x.com")
+	in.ExportName = ""
+	in.EntityType = types.ScheduledTaskEntityTypeEvents
+
+	_, err := a.SendExportEmails(context.Background(), in)
+	require.NoError(t, err)
+	require.True(t, strings.HasPrefix(sender.sent[0].Text, "Export: "+string(types.ScheduledTaskEntityTypeEvents)+"\n"))
 }
 
 func TestSendExportEmails_FailedRun(t *testing.T) {
