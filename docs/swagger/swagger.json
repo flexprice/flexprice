@@ -34135,6 +34135,7 @@
         "types.Duration": {
             "type": "object",
             "enum": [
+                5400000000000,
                 3600000000000
             ],
             "properties": {
@@ -34146,6 +34147,7 @@
                 }
             },
             "x-enum-varnames": [
+                "ExportWorkflowTimeout",
                 "EntitlementGrantMinDuration"
             ]
         },

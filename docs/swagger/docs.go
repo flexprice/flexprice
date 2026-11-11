@@ -35059,6 +35059,7 @@ const docTemplate = `{
         "types.Duration": {
             "type": "object",
             "enum": [
+                5400000000000,
                 3600000000000
             ],
             "properties": {
@@ -35070,6 +35071,7 @@ const docTemplate = `{
                 }
             },
             "x-enum-varnames": [
+                "ExportWorkflowTimeout",
                 "EntitlementGrantMinDuration"
             ]
         },

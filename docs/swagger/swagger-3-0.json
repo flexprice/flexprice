@@ -37435,9 +37435,11 @@
           }
         },
         "enum": [
+          "5400000000000",
           "3600000000000"
         ],
         "x-enum-varnames": [
+          "ExportWorkflowTimeout",
           "EntitlementGrantMinDuration"
         ],
         "x-speakeasy-name-override": "Duration"
