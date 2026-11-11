@@ -35,6 +35,12 @@ func TestPaymentStatusValidateTransitionTo(t *testing.T) {
 		{"succeeded to refunded", PaymentStatusSucceeded, PaymentStatusRefunded, false},
 		{"succeeded to partially refunded", PaymentStatusSucceeded, PaymentStatusPartiallyRefunded, false},
 		{"succeeded to voided", PaymentStatusSucceeded, PaymentStatusVoided, false},
+
+		// Unpaid payments can be voided; a charge in flight or failed cannot.
+		{"initiated to voided", PaymentStatusInitiated, PaymentStatusVoided, false},
+		{"pending to voided", PaymentStatusPending, PaymentStatusVoided, false},
+		{"processing cannot be voided", PaymentStatusProcessing, PaymentStatusVoided, true},
+		{"failed cannot be voided", PaymentStatusFailed, PaymentStatusVoided, true},
 		{"partially refunded to refunded", PaymentStatusPartiallyRefunded, PaymentStatusRefunded, false},
 
 		// Self-transitions are no-ops, not errors.
