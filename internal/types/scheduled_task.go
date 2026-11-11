@@ -50,9 +50,11 @@ func (s ScheduledTaskInterval) Validate() error {
 
 // ExportSchedule is an export's run time.
 type ExportSchedule struct {
-	Hour       int    `json:"hour" minimum:"0" maximum:"23"`
-	Minute     int    `json:"minute" minimum:"0" maximum:"59"`
-	DayOfWeek  *int   `json:"day_of_week,omitempty" minimum:"0" maximum:"6"`
+	Hour   int `json:"hour" minimum:"0" maximum:"23"`
+	Minute int `json:"minute" minimum:"0" maximum:"59"`
+	// Required for weekly; 0 is Sunday.
+	DayOfWeek *int `json:"day_of_week,omitempty" minimum:"0" maximum:"6"`
+	// Required for monthly.
 	DayOfMonth *int   `json:"day_of_month,omitempty" minimum:"1" maximum:"28"`
 	Timezone   string `json:"timezone" binding:"required"`
 }
