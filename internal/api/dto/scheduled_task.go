@@ -23,6 +23,8 @@ type CreateScheduledTaskRequest struct {
 	Schedule  *types.ExportSchedule       `json:"schedule,omitempty"`
 	// Required for report and analytics_view exports.
 	SourceConfig *types.ExportSourceConfig `json:"source_config,omitempty"`
+	// Users in this account who receive each run by email.
+	EmailConfig *types.ExportEmailConfig `json:"email_config,omitempty"`
 }
 
 const maxScheduledTaskNameLength = 120
@@ -126,13 +128,15 @@ type UpdateScheduledTaskRequest struct {
 	Enabled  *bool                 `json:"enabled,omitempty"`
 	Name     *string               `json:"name,omitempty"`
 	Schedule *types.ExportSchedule `json:"schedule,omitempty"`
+	// Absent keeps recipients; empty recipients clears them.
+	EmailConfig *types.ExportEmailConfig `json:"email_config,omitempty"`
 }
 
 // Validate validates the update request
 func (r *UpdateScheduledTaskRequest) Validate() error {
-	if r.Enabled == nil && r.Name == nil && r.Schedule == nil {
+	if r.Enabled == nil && r.Name == nil && r.Schedule == nil && r.EmailConfig == nil {
 		return ierr.NewError("no fields to update").
-			WithHint("Provide enabled, name or schedule").
+			WithHint("Provide enabled, name, schedule or email_config").
 			Mark(ierr.ErrValidation)
 	}
 	if r.Name != nil && len(*r.Name) > maxScheduledTaskNameLength {
@@ -169,6 +173,7 @@ type ScheduledTaskResponse struct {
 	ManagedCopy  bool                        `json:"managed_copy,omitempty"`
 	Schedule     *types.ExportSchedule       `json:"schedule,omitempty"`
 	SourceConfig *types.ExportSourceConfig   `json:"source_config,omitempty"`
+	EmailConfig  *types.ExportEmailConfig    `json:"email_config,omitempty"`
 	Status       string                      `json:"status"`
 	CreatedAt    time.Time                   `json:"created_at"`
 	UpdatedAt    time.Time                   `json:"updated_at"`
@@ -192,6 +197,7 @@ func ToScheduledTaskResponse(task *scheduledtask.ScheduledTask) *ScheduledTaskRe
 		ManagedCopy:   task.ManagedCopy,
 		Schedule:      task.Schedule,
 		SourceConfig:  task.SourceConfig,
+		EmailConfig:   task.EmailConfig,
 		Status:        string(task.Status),
 		CreatedAt:     task.CreatedAt,
 		UpdatedAt:     task.UpdatedAt,

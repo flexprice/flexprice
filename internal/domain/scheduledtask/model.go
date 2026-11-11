@@ -21,6 +21,7 @@ type ScheduledTask struct {
 	ManagedCopy        bool
 	Schedule           *types.ExportSchedule
 	SourceConfig       *types.ExportSourceConfig
+	EmailConfig        *types.ExportEmailConfig
 	Status             types.Status
 	CreatedAt          time.Time
 	UpdatedAt          time.Time

@@ -221,6 +221,18 @@ func (_u *ScheduledTaskUpdate) ClearSourceConfig() *ScheduledTaskUpdate {
 	return _u
 }
 
+// SetEmailConfig sets the "email_config" field.
+func (_u *ScheduledTaskUpdate) SetEmailConfig(v *types.ExportEmailConfig) *ScheduledTaskUpdate {
+	_u.mutation.SetEmailConfig(v)
+	return _u
+}
+
+// ClearEmailConfig clears the value of the "email_config" field.
+func (_u *ScheduledTaskUpdate) ClearEmailConfig() *ScheduledTaskUpdate {
+	_u.mutation.ClearEmailConfig()
+	return _u
+}
+
 // Mutation returns the ScheduledTaskMutation object of the builder.
 func (_u *ScheduledTaskUpdate) Mutation() *ScheduledTaskMutation {
 	return _u.mutation
@@ -359,6 +371,12 @@ func (_u *ScheduledTaskUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if _u.mutation.SourceConfigCleared() {
 		_spec.ClearField(scheduledtask.FieldSourceConfig, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.EmailConfig(); ok {
+		_spec.SetField(scheduledtask.FieldEmailConfig, field.TypeJSON, value)
+	}
+	if _u.mutation.EmailConfigCleared() {
+		_spec.ClearField(scheduledtask.FieldEmailConfig, field.TypeJSON)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -572,6 +590,18 @@ func (_u *ScheduledTaskUpdateOne) ClearSourceConfig() *ScheduledTaskUpdateOne {
 	return _u
 }
 
+// SetEmailConfig sets the "email_config" field.
+func (_u *ScheduledTaskUpdateOne) SetEmailConfig(v *types.ExportEmailConfig) *ScheduledTaskUpdateOne {
+	_u.mutation.SetEmailConfig(v)
+	return _u
+}
+
+// ClearEmailConfig clears the value of the "email_config" field.
+func (_u *ScheduledTaskUpdateOne) ClearEmailConfig() *ScheduledTaskUpdateOne {
+	_u.mutation.ClearEmailConfig()
+	return _u
+}
+
 // Mutation returns the ScheduledTaskMutation object of the builder.
 func (_u *ScheduledTaskUpdateOne) Mutation() *ScheduledTaskMutation {
 	return _u.mutation
@@ -740,6 +770,12 @@ func (_u *ScheduledTaskUpdateOne) sqlSave(ctx context.Context) (_node *Scheduled
 	}
 	if _u.mutation.SourceConfigCleared() {
 		_spec.ClearField(scheduledtask.FieldSourceConfig, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.EmailConfig(); ok {
+		_spec.SetField(scheduledtask.FieldEmailConfig, field.TypeJSON, value)
+	}
+	if _u.mutation.EmailConfigCleared() {
+		_spec.ClearField(scheduledtask.FieldEmailConfig, field.TypeJSON)
 	}
 	_node = &ScheduledTask{config: _u.config}
 	_spec.Assign = _node.assignValues

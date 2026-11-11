@@ -53,6 +53,8 @@ type ScheduledTask struct {
 	Schedule *types.ExportSchedule `json:"schedule,omitempty"`
 	// Report export source
 	SourceConfig *types.ExportSourceConfig `json:"source_config,omitempty"`
+	// Export email recipients
+	EmailConfig  *types.ExportEmailConfig `json:"email_config,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -61,7 +63,7 @@ func (*ScheduledTask) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case scheduledtask.FieldJobConfig, scheduledtask.FieldSchedule, scheduledtask.FieldSourceConfig:
+		case scheduledtask.FieldJobConfig, scheduledtask.FieldSchedule, scheduledtask.FieldSourceConfig, scheduledtask.FieldEmailConfig:
 			values[i] = new([]byte)
 		case scheduledtask.FieldEnabled, scheduledtask.FieldManagedCopy:
 			values[i] = new(sql.NullBool)
@@ -199,6 +201,14 @@ func (_m *ScheduledTask) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field source_config: %w", err)
 				}
 			}
+		case scheduledtask.FieldEmailConfig:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field email_config", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.EmailConfig); err != nil {
+					return fmt.Errorf("unmarshal field email_config: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -287,6 +297,9 @@ func (_m *ScheduledTask) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("source_config=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SourceConfig))
+	builder.WriteString(", ")
+	builder.WriteString("email_config=")
+	builder.WriteString(fmt.Sprintf("%v", _m.EmailConfig))
 	builder.WriteByte(')')
 	return builder.String()
 }
