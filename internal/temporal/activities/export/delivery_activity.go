@@ -243,25 +243,13 @@ func (a *DeliveryActivity) RecordDeliveries(ctx context.Context, in RecordDelive
 	ctx = types.SetTenantID(ctx, in.TenantID)
 	ctx = types.SetEnvironmentID(ctx, in.EnvID)
 
-	existing, err := a.taskRepo.Get(ctx, in.TaskID)
-	if err != nil {
-		a.logger.Error(ctx, "failed to get task for deliveries", "error", err, "task_id", in.TaskID)
-		return ierr.WithError(err).WithHint("Failed to get task").Mark(ierr.ErrDatabase)
-	}
-	if existing.Metadata == nil {
-		existing.Metadata = make(map[string]interface{})
-	}
-	existing.Metadata["deliveries"] = in.Deliveries
-
 	userID := types.GetUserID(ctx)
 	if userID == "" {
 		userID = types.DefaultUserID
 	}
 	ctx = types.SetUserID(ctx, userID)
-	existing.UpdatedAt = clock.Now()
-	existing.UpdatedBy = userID
 
-	if err := a.taskRepo.Update(ctx, existing); err != nil {
+	if err := a.taskRepo.SetTaskMetadataKey(ctx, in.TaskID, "deliveries", in.Deliveries); err != nil {
 		a.logger.Error(ctx, "failed to record deliveries", "error", err, "task_id", in.TaskID)
 		return ierr.WithError(err).WithHint("Failed to record deliveries").Mark(ierr.ErrDatabase)
 	}
