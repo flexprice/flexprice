@@ -307,11 +307,11 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 		EnvironmentID:     types.GetEnvironmentID(ctx),
 		BaseModel:         types.GetDefaultBaseModel(ctx),
 	}
-	if p.Metadata[types.MetadataKeyPaymentSource] == types.PaymentTriggerInvoiceAutoCharge {
-		delete(p.Metadata, types.MetadataKeyPaymentSource)
+	if p.Metadata[types.MetadataKeyPaymentTrigger] == types.PaymentTriggerInvoiceAutoCharge {
+		delete(p.Metadata, types.MetadataKeyPaymentTrigger)
 	}
 	if r.PaymentTrigger != "" {
-		p.Metadata = lo.Assign(p.Metadata, types.Metadata{types.MetadataKeyPaymentSource: r.PaymentTrigger})
+		p.Metadata = lo.Assign(p.Metadata, types.Metadata{types.MetadataKeyPaymentTrigger: r.PaymentTrigger})
 	}
 
 	// Set initial payment status. When ProcessPayment is false the payment is being

@@ -60,7 +60,7 @@ const (
 
 // Payment metadata marking which flow created the payment.
 const (
-	MetadataKeyPaymentSource        = "payment_source"
+	MetadataKeyPaymentTrigger       = "payment_trigger"
 	PaymentTriggerInvoiceAutoCharge = "invoice_auto_charge"
 )
 

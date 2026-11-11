@@ -324,7 +324,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 
 	// A redelivered decline finds the payment already FAILED and was reported the first time.
 	reportAutoChargeDecline := paymentRecord.PaymentStatus != types.PaymentStatusFailed &&
-		paymentRecord.Metadata[types.MetadataKeyPaymentSource] == types.PaymentTriggerInvoiceAutoCharge
+		paymentRecord.Metadata[types.MetadataKeyPaymentTrigger] == types.PaymentTriggerInvoiceAutoCharge
 
 	// Build error message
 	errorMsg := "Payment failed"

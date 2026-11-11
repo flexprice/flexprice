@@ -574,7 +574,7 @@ func TestHandleWebhookEvent_UnhandledTypeCountedAsOther(t *testing.T) {
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_AutoChargeDeclinePublishesInvoicePaymentFailed() {
-	autoCharge := types.Metadata{types.MetadataKeyPaymentSource: types.PaymentTriggerInvoiceAutoCharge}
+	autoCharge := types.Metadata{types.MetadataKeyPaymentTrigger: types.PaymentTriggerInvoiceAutoCharge}
 	tests := []struct {
 		name          string
 		metadata      types.Metadata
