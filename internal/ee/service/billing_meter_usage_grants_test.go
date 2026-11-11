@@ -911,8 +911,8 @@ var (
 
 func splitLines(qtyA, qtyB int64) meterLines {
 	return meterLines{
-		{window: TimeInterval{Start: splitT0, End: splitChange}, quantity: decimal.NewFromInt(qtyA), amount: decimal.NewFromInt(qtyA)},
-		{window: TimeInterval{Start: splitChange, End: splitT2}, quantity: decimal.NewFromInt(qtyB), amount: decimal.NewFromInt(qtyB)},
+		{start: splitT0, end: splitChange, quantity: decimal.NewFromInt(qtyA), amount: decimal.NewFromInt(qtyA)},
+		{start: splitChange, end: splitT2, quantity: decimal.NewFromInt(qtyB), amount: decimal.NewFromInt(qtyB)},
 	}
 }
 
@@ -928,7 +928,7 @@ func billSplit(t *testing.T, bs *billingService, m *meter.Meter, grants []*entit
 	out := make([]decimal.Decimal, 0, len(lines))
 	for _, l := range lines {
 		res, applied, err := bs.adjustMeterUsageGrants(context.Background(), linItem(false, false), charge(flatPrice(1)), grants,
-			newTestPriceService(), m, nil, []string{"cust_ext"}, lines, l.window)
+			newTestPriceService(), m, nil, []string{"cust_ext"}, lines, TimeInterval{Start: l.start, End: l.end})
 		require.NoError(t, err)
 		require.True(t, applied)
 		out = append(out, res.Overage)
@@ -957,12 +957,6 @@ func TestAdjustMeterUsageGrants_SplitLines_FromLineUsage(t *testing.T) {
 			want: []int64{100, 100},
 		},
 		{
-			name:  "grant starting mid-period reads the cut as saved usage less the later line",
-			grant: windowedGrant(1000, 1200, splitT0.Add(5*24*time.Hour), splitT2, types.EntitlementGrantMeasureQuantity),
-			qtyA:  900, qtyB: 500,
-			want: []int64{0, 200},
-		},
-		{
 			name:  "amount measure splits the same way in currency",
 			grant: windowedGrant(10, 12, splitT0, splitT2, types.EntitlementGrantMeasureAmount),
 			qtyA:  7, qtyB: 5,
@@ -977,6 +971,23 @@ func TestAdjustMeterUsageGrants_SplitLines_FromLineUsage(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAdjustMeterUsageGrants_SplitLines_GrantStartingMidPeriodQueriesTheCut(t *testing.T) {
+	// The grant starts after the meter's first line, so usage up to the price change is read from ClickHouse.
+	from := splitT0.Add(5 * 24 * time.Hour)
+	bs, m := newMergedWindowBillingService(t, []struct {
+		at  time.Time
+		qty int64
+	}{
+		{splitT0.Add(24 * time.Hour), 400}, // before the grant, never counted
+		{from.Add(24 * time.Hour), 700},
+		{splitChange.Add(24 * time.Hour), 500},
+	})
+	grant := windowedGrant(1000, 1200, from, splitT2, types.EntitlementGrantMeasureQuantity)
+	got := billSplit(t, bs, m, []*entitlementgrant.EntitlementGrant{grant}, splitLines(1100, 500))
+	require.True(t, got[0].IsZero(), "line A: %s, want 0", got[0])
+	require.True(t, got[1].Equal(decimal.NewFromInt(200)), "line B: %s, want 200", got[1])
 }
 
 func TestAdjustMeterUsageGrants_SplitLines_StraddlingDailyGrantQueriesTheCut(t *testing.T) {
@@ -1042,8 +1053,9 @@ func TestMeterLinesByMeterID(t *testing.T) {
 	}
 	got := meterLinesByMeterID(items, charges, splitT0, splitT2, asOf)["meter_x"]
 	require.Len(t, got, 2)
-	require.Equal(t, splitT0, got[0].window.Start, "lines ordered by start")
+	require.Equal(t, splitT0, got[0].start, "lines ordered by start")
 	require.True(t, got[0].quantity.Equal(decimal.NewFromInt(700)), "a line's usage sums all its charges")
 	require.True(t, got[0].amount.Equal(decimal.NewFromInt(8)))
-	require.Equal(t, TimeInterval{Start: splitChange, End: splitT2}, got[1].window)
+	require.Equal(t, splitChange, got[1].start)
+	require.Equal(t, splitT2, got[1].end)
 }
