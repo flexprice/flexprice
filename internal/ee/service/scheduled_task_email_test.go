@@ -39,7 +39,7 @@ func (r *emailUserRepoFake) GetByEmail(ctx context.Context, email string) (*user
 func emailService(repo *exportRepoFake, available bool) (*scheduledTaskService, *emailUserRepoFake) {
 	s := newExportService(repo, &exportTemporalFake{})
 	if available {
-		s.config.Email = config.EmailConfig{Enabled: true, ResendAPIKey: "k"}
+		s.config.Email = config.EmailConfig{Enabled: true, ResendAPIKey: "k", FromAddress: "noreply@x.com"}
 		s.config.Exports.ConsoleBaseURL = "https://app"
 	}
 	users := &emailUserRepoFake{known: map[string]bool{"a@x.com": true, "b@x.com": true}}

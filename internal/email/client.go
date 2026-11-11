@@ -67,7 +67,7 @@ func (c *EmailClient) SendEmail(ctx context.Context, from, to, subject, htmlCont
 	return c.SendEmailIdempotent(ctx, from, to, subject, htmlContent, textContent, "")
 }
 
-// SendEmailIdempotent sends an email deduplicated by idempotencyKey when set
+// SendEmailIdempotent dedupes by key when set
 func (c *EmailClient) SendEmailIdempotent(ctx context.Context, from, to, subject, htmlContent, textContent, idempotencyKey string) (string, error) {
 	if !c.enabled {
 		return "", fmt.Errorf("email client is disabled")
