@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
@@ -103,6 +104,7 @@ func TestServiceParamsProviders(t *testing.T) {
 			var params service.ServiceParams
 			app := fxtest.New(t,
 				fx.Supply(fx.Annotated{Name: "base", Target: base}),
+				fx.Supply(&rbac.RBACService{}),
 				serviceParamsProviders(),
 				fx.Populate(&params),
 			)
