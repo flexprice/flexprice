@@ -91,6 +91,7 @@ type ExportDataInput struct {
 	CustomerExternalIDs []string
 	ManagedCopy         bool
 	TaskID              string
+	SourceConfig        *types.ExportSourceConfig
 }
 
 // ExportDataOutput represents output from export
@@ -125,6 +126,7 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 		CustomerExternalIDs: input.CustomerExternalIDs,
 		ManagedCopy:         input.ManagedCopy,
 		TaskID:              input.TaskID,
+		SourceConfig:        input.SourceConfig,
 	}
 
 	// Use the ExportService which handles routing to the correct exporter

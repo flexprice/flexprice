@@ -189,6 +189,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		CustomerExternalIDs: input.CustomerExternalIDs,
 		ManagedCopy:         taskDetails.ManagedCopy,
 		TaskID:              taskID,
+		SourceConfig:        taskDetails.SourceConfig,
 	}
 
 	var exportOutput export.ExportDataOutput

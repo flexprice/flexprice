@@ -297,7 +297,8 @@ type ExportRequest struct {
 	// Writes to the Flexprice bucket.
 	ManagedCopy bool `json:"managed_copy,omitempty"`
 	// Run identifier; makes each run write a distinct object.
-	TaskID string `json:"task_id,omitempty"`
+	TaskID       string                    `json:"task_id,omitempty"`
+	SourceConfig *types.ExportSourceConfig `json:"source_config,omitempty"`
 }
 
 // ExportResponse represents the result of an export operation
