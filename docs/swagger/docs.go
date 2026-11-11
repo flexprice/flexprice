@@ -13123,7 +13123,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression.\ninterval is hourly, daily, weekly, monthly or manual; clients should tolerate new values. schedule ({hour, minute, day_of_week, day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.",
+                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.\ninterval is hourly, daily, weekly, monthly or manual; exports with a connection also accept 15MIN and 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.",
                 "consumes": [
                     "application/json"
                 ],
@@ -22577,6 +22577,8 @@ const docTemplate = `{
                 "interval": {
                     "description": "\"custom\" is excluded from API.",
                     "enum": [
+                        "15MIN",
+                        "30MIN",
                         "hourly",
                         "daily",
                         "weekly",
@@ -31375,6 +31377,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "start_time": {
+                    "description": "Omitted when the run computes its own window.",
                     "type": "string"
                 },
                 "workflow_id": {
@@ -39800,18 +39803,29 @@ const docTemplate = `{
         },
         "types.ExportSchedule": {
             "type": "object",
+            "required": [
+                "timezone"
+            ],
             "properties": {
                 "day_of_month": {
-                    "type": "integer"
+                    "type": "integer",
+                    "maximum": 28,
+                    "minimum": 1
                 },
                 "day_of_week": {
-                    "type": "integer"
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 0
                 },
                 "hour": {
-                    "type": "integer"
+                    "type": "integer",
+                    "maximum": 23,
+                    "minimum": 0
                 },
                 "minute": {
-                    "type": "integer"
+                    "type": "integer",
+                    "maximum": 59,
+                    "minimum": 0
                 },
                 "timezone": {
                     "type": "string"

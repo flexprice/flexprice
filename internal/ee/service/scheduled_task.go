@@ -237,10 +237,9 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 			Mark(ierr.ErrNotFound)
 	}
 
-	// Check if task is archived
-	if task.Status == types.StatusArchived {
-		return nil, ierr.NewError("cannot update archived scheduled task").
-			WithHint("This scheduled task has been archived and cannot be modified").
+	if task.Status == types.StatusArchived || task.Status == types.StatusDeleted {
+		return nil, ierr.NewError("cannot update archived or deleted scheduled task").
+			WithHint("This scheduled task has been archived or deleted and cannot be modified").
 			WithReportableDetails(map[string]interface{}{
 				"task_id": id,
 				"status":  task.Status,
@@ -404,13 +403,15 @@ func (s *scheduledTaskService) TriggerForceRun(ctx context.Context, id string, r
 		"end_time", endTime,
 		"mode", mode)
 
-	return &dto.TriggerForceRunResponse{
+	resp := &dto.TriggerForceRunResponse{
 		WorkflowID: workflowID,
 		Message:    "Force run triggered successfully",
-		StartTime:  startTime,
-		EndTime:    endTime,
 		Mode:       mode,
-	}, nil
+	}
+	if !startTime.IsZero() && !endTime.IsZero() {
+		resp.StartTime, resp.EndTime = &startTime, &endTime
+	}
+	return resp, nil
 }
 
 // ===== PRIVATE HELPER METHODS =====

@@ -17,7 +17,7 @@ type CreateScheduledTaskRequest struct {
 	Name         string                        `json:"name,omitempty"`
 	EntityType   types.ScheduledTaskEntityType `json:"entity_type" binding:"required" validate:"required"`
 	// "custom" is excluded from API.
-	Interval  types.ScheduledTaskInterval `json:"interval" binding:"required" validate:"required" enums:"hourly,daily,weekly,monthly,manual"`
+	Interval  types.ScheduledTaskInterval `json:"interval" binding:"required" validate:"required" enums:"15MIN,30MIN,hourly,daily,weekly,monthly,manual"`
 	Enabled   bool                        `json:"enabled"`
 	JobConfig *types.S3JobConfig          `json:"job_config,omitempty"`
 	Schedule  *types.ExportSchedule       `json:"schedule,omitempty"`
@@ -240,11 +240,12 @@ func (r *TriggerForceRunRequest) Validate() error {
 
 // TriggerForceRunResponse represents the response from force run trigger
 type TriggerForceRunResponse struct {
-	WorkflowID string    `json:"workflow_id"`
-	Message    string    `json:"message"`
-	StartTime  time.Time `json:"start_time"`
-	EndTime    time.Time `json:"end_time"`
-	Mode       string    `json:"mode"` // "custom" or "automatic"
+	WorkflowID string `json:"workflow_id"`
+	Message    string `json:"message"`
+	// Omitted when the run computes its own window.
+	StartTime *time.Time `json:"start_time,omitempty"`
+	EndTime   *time.Time `json:"end_time,omitempty"`
+	Mode      string     `json:"mode"` // "custom" or "automatic"
 }
 
 // ExportRequest represents an export request

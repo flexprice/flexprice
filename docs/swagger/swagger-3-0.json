@@ -15872,7 +15872,7 @@
           "Scheduled Tasks"
         ],
         "summary": "Create scheduled task",
-        "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression.\ninterval is hourly, daily, weekly, monthly or manual; clients should tolerate new values. schedule ({hour, minute, day_of_week, day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.",
+        "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.\ninterval is hourly, daily, weekly, monthly or manual; exports with a connection also accept 15MIN and 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.",
         "operationId": "createScheduledTask",
         "requestBody": {
           "description": "Scheduled Task",
@@ -33796,6 +33796,7 @@
           },
           "start_time": {
             "type": "string",
+            "description": "Omitted when the run computes its own window.",
             "format": "date-time"
           },
           "workflow_id": {
@@ -42274,18 +42275,29 @@
         "x-speakeasy-name-override": "EntitlementGrantScopeEntityType"
       },
       "types.ExportSchedule": {
+        "required": [
+          "timezone"
+        ],
         "type": "object",
         "properties": {
           "day_of_month": {
+            "maximum": 28,
+            "minimum": 1,
             "type": "integer"
           },
           "day_of_week": {
+            "maximum": 6,
+            "minimum": 0,
             "type": "integer"
           },
           "hour": {
+            "maximum": 23,
+            "minimum": 0,
             "type": "integer"
           },
           "minute": {
+            "maximum": 59,
+            "minimum": 0,
             "type": "integer"
           },
           "timezone": {
