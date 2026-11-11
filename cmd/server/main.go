@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"net/http"
 	"strings"
 	"time"
@@ -106,6 +107,11 @@ func main() {
 
 			// Logger
 			logger.NewLogger,
+			func(l *logger.Logger) *zap.Logger { return l.Desugar() },
+			func(cfg *config.Configuration) *email.EmailClient {
+				return email.NewEmailClient(email.Config{Enabled: cfg.Email.Enabled, APIKey: cfg.Email.Resend.APIKey, FromAddress: cfg.Email.FromAddress, ReplyTo: cfg.Email.ReplyTo})
+			},
+			email.NewEmail,
 
 			// Security
 			security.NewEncryptionService,

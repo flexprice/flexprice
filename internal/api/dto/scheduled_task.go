@@ -143,6 +143,17 @@ func (r *UpdateScheduledTaskRequest) Validate() error {
 	return nil
 }
 
+// ExportEmailCapability describes email delivery support.
+type ExportEmailCapability struct {
+	Available     bool `json:"available"`
+	MaxRecipients int  `json:"max_recipients"`
+}
+
+// ScheduledTaskCapabilitiesResponse lists export delivery capabilities.
+type ScheduledTaskCapabilitiesResponse struct {
+	Email ExportEmailCapability `json:"email"`
+}
+
 // ScheduledTaskResponse represents a scheduled task response
 type ScheduledTaskResponse struct {
 	ID            string                        `json:"id"`

@@ -28,6 +28,7 @@ type ScheduledTaskService interface {
 	UpdateScheduledTask(ctx context.Context, id string, req dto.UpdateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error)
 	DeleteScheduledTask(ctx context.Context, id string) error
 	TriggerForceRun(ctx context.Context, id string, req dto.TriggerForceRunRequest) (*dto.TriggerForceRunResponse, error)
+	GetCapabilities(ctx context.Context) *dto.ScheduledTaskCapabilitiesResponse
 }
 
 type scheduledTaskService struct {
@@ -664,4 +665,13 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 		"mode", mode)
 
 	return startedID, startTime, endTime, mode, nil
+}
+
+func (s *scheduledTaskService) GetCapabilities(_ context.Context) *dto.ScheduledTaskCapabilitiesResponse {
+	return &dto.ScheduledTaskCapabilitiesResponse{
+		Email: dto.ExportEmailCapability{
+			Available:     s.config.ExportEmailAvailable(),
+			MaxRecipients: types.MaxExportEmailRecipients,
+		},
+	}
 }

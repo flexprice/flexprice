@@ -5233,6 +5233,13 @@ definitions:
       plan_change:
         $ref: '#/definitions/PlanChangeScheduleResult'
     type: object
+  ExportEmailCapability:
+    properties:
+      available:
+        type: boolean
+      max_recipients:
+        type: integer
+    type: object
   FXRateResponse:
     properties:
       created_at:
@@ -8485,6 +8492,11 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/types.RecurringPaymentStatus'
+    type: object
+  ScheduledTaskCapabilitiesResponse:
+    properties:
+      email:
+        $ref: '#/definitions/ExportEmailCapability'
     type: object
   ScheduledTaskResponse:
     properties:
@@ -28542,6 +28554,28 @@ paths:
       summary: Trigger force run
       tags:
       - Scheduled Tasks
+  /tasks/scheduled/capabilities:
+    get:
+      description: Use when building the export form to learn whether email delivery
+        is available and the recipient limit.
+      operationId: getScheduledTaskCapabilities
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ScheduledTaskCapabilitiesResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get scheduled task capabilities
+      tags:
+      - Scheduled Tasks
+      x-scope: read
   /taxes/associations:
     get:
       consumes:

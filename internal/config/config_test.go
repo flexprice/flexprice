@@ -301,3 +301,29 @@ func TestValidateEmail(t *testing.T) {
 	off.Email.Enabled = true
 	assert.NoError(t, off.validateEmail())
 }
+
+func TestExportEmailAvailable(t *testing.T) {
+	tests := []struct {
+		name    string
+		enabled bool
+		key     string
+		baseURL string
+		want    bool
+	}{
+		{"all set", true, "k", "https://app", true},
+		{"disabled", false, "k", "https://app", false},
+		{"no key", true, "", "https://app", false},
+		{"no base url", true, "k", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Configuration{
+				Email:   EmailConfig{Enabled: tt.enabled, Resend: ResendEmailConfig{APIKey: tt.key}},
+				Exports: ExportsConfig{ConsoleBaseURL: tt.baseURL},
+			}
+			if got := c.ExportEmailAvailable(); got != tt.want {
+				t.Errorf("got %v want %v", got, tt.want)
+			}
+		})
+	}
+}
