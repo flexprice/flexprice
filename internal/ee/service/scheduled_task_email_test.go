@@ -2,10 +2,11 @@ package service
 
 import (
 	"context"
-	cerrors "github.com/cockroachdb/errors"
+	"fmt"
 	"strings"
 	"testing"
 
+	cerrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
@@ -18,12 +19,16 @@ import (
 type emailUserRepoFake struct {
 	user.Repository
 	known       map[string]bool
+	failWith    error
 	sawEmptyCtx bool
 }
 
 func (r *emailUserRepoFake) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	if types.GetTenantID(ctx) == "" {
 		r.sawEmptyCtx = true
+	}
+	if r.failWith != nil {
+		return nil, r.failWith
 	}
 	if r.known[email] {
 		return &user.User{Email: email}, nil
@@ -189,4 +194,20 @@ func TestUpdate_EmailConfig(t *testing.T) {
 
 func errText(err error) string {
 	return err.Error() + " " + cerrors.FlattenHints(err)
+}
+
+func TestValidateRecipients_RepoErrorHidesAddress(t *testing.T) {
+	s, users := emailService(&exportRepoFake{}, true)
+	users.failWith = ierr.NewError("lookup failed for zed@x.com").
+		WithHint("zed@x.com broke").
+		WithReportableDetails(map[string]interface{}{"email": "zed@x.com"}).
+		Mark(ierr.ErrDatabase)
+
+	err := s.validateRecipients(exportCtx(), types.ScheduledTaskIntervalDaily,
+		&types.ExportEmailConfig{Recipients: []string{"zed@x.com"}})
+	require.Error(t, err)
+	require.False(t, ierr.IsNotFound(err))
+	require.NotContains(t, errText(err), "zed@")
+	require.NotContains(t, strings.Join(cerrors.GetAllDetails(err), " "), "zed@")
+	require.NotContains(t, fmt.Sprintf("%+v", err), "zed@")
 }

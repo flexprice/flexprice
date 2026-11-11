@@ -9,6 +9,7 @@ import (
 	entUser "github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainUser "github.com/flexprice/flexprice/internal/domain/user"
+	emailutil "github.com/flexprice/flexprice/internal/email"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -311,7 +312,7 @@ func (r *userRepository) GetByID(ctx context.Context, id string) (*domainUser.Us
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domainUser.User, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "user", "get_by_email", map[string]interface{}{
-		"email": email,
+		"email": emailutil.MaskAddress(email),
 	})
 	defer FinishSpan(span)
 

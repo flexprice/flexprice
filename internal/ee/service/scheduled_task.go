@@ -131,7 +131,9 @@ func (s *scheduledTaskService) validateRecipients(ctx context.Context, interval 
 		}
 		if _, err := s.userRepo.GetByEmail(ctx, addr); err != nil {
 			if !ierr.IsNotFound(err) {
-				return err
+				return ierr.NewError("failed to verify recipient").
+					WithHint("Could not verify email recipients").
+					Mark(ierr.ErrDatabase)
 			}
 			return ierr.NewError("recipient is not a user").
 				WithHintf("%s is not a user in this account", masked).
