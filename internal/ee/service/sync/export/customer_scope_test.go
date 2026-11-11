@@ -183,6 +183,11 @@ func (r *ledgerScopeRepo) ListWalletIDsForLedgerExport(ctx context.Context, tena
 	return r.ledgerRepo.ListWalletIDsForLedgerExport(ctx, tenant, env, start, end, ids)
 }
 
+func (r *ledgerScopeRepo) ListWalletIDsByCustomerIDs(ctx context.Context, tenant, env string, ids []string) ([]string, error) {
+	r.listCalls++
+	return r.ledgerRepo.ListWalletIDsByCustomerIDs(ctx, tenant, env, ids)
+}
+
 func TestWalletLedgerExporter_CustomerScope(t *testing.T) {
 	run := func(t *testing.T, mutate func(*WalletLedgerExporter), req *dto.ExportRequest) (*ledgerScopeRepo, int, error) {
 		customers, ctx := twoCustomers(t)
@@ -196,18 +201,20 @@ func TestWalletLedgerExporter_CustomerScope(t *testing.T) {
 		return repo, n, err
 	}
 
-	t.Run("filter becomes external ids", func(t *testing.T) {
+	t.Run("filter becomes internal ids", func(t *testing.T) {
 		repo, n, err := run(t, nil, scopedRequest(types.ScheduledTaskEntityTypeWalletLedger, "a"))
 		require.NoError(t, err)
 		require.Equal(t, 1, n)
-		require.Equal(t, []string{"ext-a"}, repo.customerIDs)
+		require.Equal(t, []string{"a"}, repo.scopedIDs)
+		require.Nil(t, repo.customerIDs)
 	})
 	t.Run("legacy external ids intersect", func(t *testing.T) {
 		req := scopedRequest(types.ScheduledTaskEntityTypeWalletLedger, "a", "b")
 		req.CustomerExternalIDs = []string{"ext-b", "ext-z"}
 		repo, _, err := run(t, nil, req)
 		require.NoError(t, err)
-		require.Equal(t, []string{"ext-b"}, repo.customerIDs)
+		require.Equal(t, []string{"b"}, repo.scopedIDs)
+		require.Nil(t, repo.customerIDs)
 	})
 	t.Run("empty intersection is header only without a query", func(t *testing.T) {
 		req := scopedRequest(types.ScheduledTaskEntityTypeWalletLedger, "a")
