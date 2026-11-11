@@ -24,6 +24,7 @@ const (
 	defaultMaxEmailsPerHour = 200
 	maxExportNameLen        = 120
 	emailCounterTTL         = 2 * time.Hour
+	emailSentTTL            = 25 * time.Hour
 )
 
 type emailSender interface {
@@ -37,6 +38,7 @@ type userLookup interface {
 type emailCounter interface {
 	IsEnabled() bool
 	Incr(ctx context.Context, key string, ttl time.Duration) (int64, error)
+	TrySetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error)
 }
 
 // DeliveryActivity sends emails, records deliveries.
@@ -49,7 +51,6 @@ type DeliveryActivity struct {
 	logger   *logger.Logger
 }
 
-// NewDeliveryActivity creates a delivery activity.
 func NewDeliveryActivity(
 	sender emailSender,
 	users userLookup,
@@ -61,7 +62,6 @@ func NewDeliveryActivity(
 	return &DeliveryActivity{sender: sender, users: users, counter: counter, taskRepo: taskRepo, cfg: cfg, logger: logger}
 }
 
-// SendExportEmailsInput describes a run notification.
 type SendExportEmailsInput struct {
 	TaskID          string
 	ScheduledTaskID string
@@ -69,7 +69,7 @@ type SendExportEmailsInput struct {
 	EnvID           string
 	ExportName      string
 	EntityType      types.ScheduledTaskEntityType
-	Interval       types.ScheduledTaskInterval
+	Interval        types.ScheduledTaskInterval
 	Recipients      []string
 	RunStatus       types.TaskStatus
 	WindowStart     time.Time
@@ -128,16 +128,24 @@ func (a *DeliveryActivity) SendExportEmails(ctx context.Context, in SendExportEm
 			continue
 		}
 		if a.counter != nil && a.counter.IsEnabled() {
-			key := fmt.Sprintf("exports:email:%s:%s", in.TenantID, clock.Now().UTC().Format("2006010215"))
-			n, err := a.counter.Incr(ctx, key, emailCounterTTL)
+			firstAttempt, err := a.counter.TrySetNX(ctx, sentMarkerKey(in.TaskID, addr), 1, emailSentTTL)
 			if err != nil {
 				a.logger.Error(ctx, "export email rate limit check failed", "error", err, "task_id", in.TaskID)
 				record(addr, types.ExportDeliveryStatusFailed, "rate limit check failed")
 				continue
 			}
-			if n > limit {
-				record(addr, types.ExportDeliveryStatusRateLimited, "")
-				continue
+			if firstAttempt {
+				key := fmt.Sprintf("exports:email:%s:%s", in.TenantID, clock.Now().UTC().Format("2006010215"))
+				n, err := a.counter.Incr(ctx, key, emailCounterTTL)
+				if err != nil {
+					a.logger.Error(ctx, "export email rate limit check failed", "error", err, "task_id", in.TaskID)
+					record(addr, types.ExportDeliveryStatusFailed, "rate limit check failed")
+					continue
+				}
+				if n > limit {
+					record(addr, types.ExportDeliveryStatusRateLimited, "")
+					continue
+				}
 			}
 		}
 
@@ -200,9 +208,17 @@ func sanitizeName(name string) string {
 	return clean
 }
 
-func idempotencyKey(taskID, recipient string) string {
+func recipientDigest(recipient string) string {
 	sum := sha256.Sum256([]byte(recipient))
-	return "exports-" + taskID + "-" + hex.EncodeToString(sum[:])[:16]
+	return hex.EncodeToString(sum[:])[:16]
+}
+
+func idempotencyKey(taskID, recipient string) string {
+	return "exports-" + taskID + "-" + recipientDigest(recipient)
+}
+
+func sentMarkerKey(taskID, recipient string) string {
+	return "exports:email:sent:" + taskID + ":" + recipientDigest(recipient)
 }
 
 // Avoids logging provider text.
@@ -216,7 +232,6 @@ func sendErrorText(err error, resp *email.SendEmailResponse) string {
 	return "provider rejected"
 }
 
-// RecordDeliveriesInput carries delivery results for a run.
 type RecordDeliveriesInput struct {
 	TaskID     string
 	TenantID   string
@@ -224,7 +239,6 @@ type RecordDeliveriesInput struct {
 	Deliveries []types.ExportDelivery
 }
 
-// RecordDeliveries writes deliveries metadata.
 func (a *DeliveryActivity) RecordDeliveries(ctx context.Context, in RecordDeliveriesInput) error {
 	ctx = types.SetTenantID(ctx, in.TenantID)
 	ctx = types.SetEnvironmentID(ctx, in.EnvID)
