@@ -735,7 +735,7 @@ func (s *InMemoryWalletStore) GetWalletsByFilter(ctx context.Context, filter *ty
 }
 
 // GetCreditTopupsForExport retrieves credit topup data for export
-func (s *InMemoryWalletStore) GetCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*wallet.CreditTopupsExportData, error) {
+func (s *InMemoryWalletStore) GetCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int, customerIDs []string) ([]*wallet.CreditTopupsExportData, error) {
 	// Get all transactions without any filters
 	allTransactions, err := s.transactions.List(ctx, nil, nil, nil)
 	if err != nil {
@@ -765,6 +765,9 @@ func (s *InMemoryWalletStore) GetCreditTopupsForExport(ctx context.Context, tena
 		// Get the associated wallet
 		w, err := s.wallets.Get(ctx, tx.WalletID)
 		if err != nil {
+			continue
+		}
+		if customerIDs != nil && !lo.Contains(customerIDs, w.CustomerID) {
 			continue
 		}
 

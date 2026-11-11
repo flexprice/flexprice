@@ -147,7 +147,7 @@ func TestWalletCreditReports(t *testing.T) {
 	end := time.Now().UTC().Add(time.Minute)
 
 	t.Run("top-ups carry the invoice and what was paid", func(t *testing.T) {
-		rows, err := repo.GetCreditTopupsForExport(ctx, tenantID, envID, start, end, 100, 0)
+		rows, err := repo.GetCreditTopupsForExport(ctx, tenantID, envID, start, end, 100, 0, nil)
 		require.NoError(t, err)
 		byID := map[string]*walletdomain.CreditTopupsExportData{}
 		for _, r := range rows {
@@ -167,6 +167,16 @@ func TestWalletCreditReports(t *testing.T) {
 
 		require.Empty(t, byID[adjustment.ID].InvoiceID)
 		require.Nil(t, byID[adjustment.ID].AmountPaid)
+	})
+
+	t.Run("top-ups limited to the given customers", func(t *testing.T) {
+		mine, err := repo.GetCreditTopupsForExport(ctx, tenantID, envID, start, end, 100, 0, []string{cust.ID})
+		require.NoError(t, err)
+		require.Len(t, mine, 3)
+
+		none, err := repo.GetCreditTopupsForExport(ctx, tenantID, envID, start, end, 100, 0, []string{"cust_other"})
+		require.NoError(t, err)
+		require.Empty(t, none)
 	})
 
 	t.Run("debits split by the batches they drew from", func(t *testing.T) {
