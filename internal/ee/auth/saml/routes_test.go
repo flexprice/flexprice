@@ -241,6 +241,9 @@ func (f *fakeRedis) ForceCacheGetWithTTL(context.Context, string) (interface{}, 
 	return nil, 0, false
 }
 func (f *fakeRedis) Incr(context.Context, string, time.Duration) (int64, error) { return 0, nil }
+func (f *fakeRedis) TrySetNX(context.Context, string, interface{}, time.Duration) (bool, error) {
+	return false, nil
+}
 func (f *fakeRedis) ForceCacheDelete(ctx context.Context, key string)           { f.Delete(ctx, key) }
 func (f *fakeRedis) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
 	return f.Get(ctx, key)

@@ -49,9 +49,25 @@ type fakeCounter struct {
 	n       map[string]int64
 	err     error
 	keys    []string
+
+	marked   map[string]bool
+	setNXErr error
 }
 
 func (f *fakeCounter) IsEnabled() bool { return f.enabled }
+func (f *fakeCounter) TrySetNX(_ context.Context, key string, _ interface{}, _ time.Duration) (bool, error) {
+	if f.setNXErr != nil {
+		return false, f.setNXErr
+	}
+	if f.marked == nil {
+		f.marked = map[string]bool{}
+	}
+	if f.marked[key] {
+		return false, nil
+	}
+	f.marked[key] = true
+	return true, nil
+}
 func (f *fakeCounter) Incr(_ context.Context, key string, _ time.Duration) (int64, error) {
 	f.keys = append(f.keys, key)
 	if f.err != nil {
@@ -156,6 +172,26 @@ func TestSendExportEmails_ContentAndKey(t *testing.T) {
 	require.Contains(t, c.keys[0], "exports:email:t1:")
 	require.Len(t, c.keys[0], len("exports:email:t1:")+10)
 	require.Equal(t, []string{"t1", "t1"}, users.tenantCtx)
+}
+
+func TestSendExportEmails_RetryDoesNotRecountCap(t *testing.T) {
+	sender := &fakeSender{}
+	users := &fakeUsers{known: map[string]bool{"a@x.com": true, "b@x.com": true}}
+	c := &fakeCounter{enabled: true, n: map[string]int64{}}
+	a := newDeliveryActivity(sender, users, c, true, 2)
+
+	in := baseInput("a@x.com", "b@x.com")
+	for i := 0; i < 3; i++ {
+		out, err := a.SendExportEmails(context.Background(), in)
+		require.NoError(t, err)
+		for _, d := range out.Deliveries {
+			require.Equal(t, "delivered", d.Status)
+		}
+	}
+
+	require.Len(t, c.keys, 2)
+	require.Len(t, sender.sent, 6)
+	require.Equal(t, sender.sent[0].IdempotencyKey, sender.sent[2].IdempotencyKey)
 }
 
 func TestSendExportEmails_MixedRecipients(t *testing.T) {
