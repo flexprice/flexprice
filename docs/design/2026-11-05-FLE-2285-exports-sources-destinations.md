@@ -1,6 +1,6 @@
 # Exports: more sources, more destinations — backend design
 
-Status: **Phase 1 built; later phases proposed**
+Status: **Phases 1 and 2 built; later phases proposed**
 Date: 2026-11-05
 Related: FLE-2285 (P4), parent FLE-1579 Financial Reporting, FLE-1612 (P5 export scope)
 Scope: backend only. Portal work is paused until the API is live on staging.
@@ -93,6 +93,13 @@ Removed from Phase 1 (later phases may still add them, but not in this shape): `
 - Runs stay `Task` rows (`task_type=EXPORT`, `scheduled_task_id` set). `tasks.file_url` stays `s3://` or `gs://`; no new task fields.
 - Ops note: renaming or migrating the platform export bucket breaks existing Flexprice-bucket rows (non-retryable) until they are migrated.
 
+**Phase 2 as built.**
+- P2-R1: `source_config` is a nullable jsonb `{report_key?, report_params?{shape, dimensions, grain, currency, filters[{field, op, value[]}]}, view_id?}`. There is no `period` column; report windows come from the schedule and `/run`.
+- `entity_type` gains `report` and `analytics_view`. A `report` export needs `report_key`; an `analytics_view` export needs only `view_id`.
+- P2-R3: a report source may write to the Flexprice bucket or to an S3 connection.
+- P2-R4: `export_metadata_fields` is rejected for report sources. `source_config` is rejected for every other entity type.
+- P2-R5: the source cannot be edited. `PUT` still accepts only `enabled`, `name` and `schedule`.
+
 **Later phases (original design, not built).** The remaining notes in this section describe `source_config`, `period`, `email_config`, `origin` and `destinations`; read them as a design sketch that Phase 2 onward must reconcile with the as-built shape above.
 
 Column changes planned for later phases:
@@ -130,6 +137,8 @@ Task status: no new values. A new-style run is `COMPLETED` once the managed copy
 
 **Phase 1 as built.** Window = previous period (day, Monday-to-Monday week, calendar month; hourly = previous hour) ending at the latest period boundary at or before the scheduled start, in the schedule's timezone, converted to UTC instants. `manual` exports use the previous UTC day unless `/run` gives a window. Exports without a schedule keep today's windows. The report and view rules below are later phases.
 
+**Phase 2 as built.** P2-R2: report sources allow only `daily`, `weekly`, `monthly` and `manual`, and `schedule` is required unless `manual`. The window is the previous UTC period, counted back from the scheduled start. A `/run` with a custom start and end must use whole UTC days.
+
 The window is computed in the `details` step from the **scheduled start time** (no ingestion buffer; the fire time is the user's choice), never from wall clock, so catch-up runs after downtime get the correct historical window. It is stored on the `Task` on the first attempt; retries reuse it.
 
 - **Existing sources**: the previous period at the export's frequency in the **schedule's timezone** (previous local day, previous local Monday-to-Monday week, previous local calendar month; hourly = previous hour), converted to exact UTC instants. Weekly and monthly windows do not depend on the weekday or day chosen. `manual` exports use the previous UTC day unless `/run` supplies a window.
@@ -140,6 +149,8 @@ The window is computed in the `details` step from the **scheduled start time** (
 ### 3. Run flow
 
 **Phase 1 as built.** Runs use the same ExportData, upload, CompleteTask path for every export. A Flexprice-bucket run resolves the platform store instead of a connection. There is no `GenerateExport`, `DeliverS3`, `SendEmail` or `RecordDeliveries` yet; the steps below are the later-phase design.
+
+**Phase 2 as built.** P2-R6: a `report` export runs through `RunReport`. The row cap is the reports repository `MaxRows`, 10,000 by default. A saved view runs through `ExecuteView` for usage and billing, and fails above 1,000,000 rows. A report-family view runs through `RunReport`. A run never truncates silently; it fails when over the cap. P2-R7: the view's `updated_at` travels from the export response metadata into the completed task's metadata as `view_updated_at`.
 
 `ExecuteExportWorkflow` is extended, not replaced, and the new branch uses `workflow.GetVersion` so in-flight legacy runs replay identically. Keep the input field names `TenantID`, `EnvID`, `UserID`, `ScheduledTaskID` exactly (the tracking interceptor reads them). New activities are registered with the export activities in `internal/temporal/registration.go`.
 
@@ -171,6 +182,8 @@ Limits: query timeout 5 minutes, activity retries 3, validation errors non-retry
 
 **Phase 1 as built.** No email. `GET /tasks/:id/download` presigns on request for Flexprice-bucket runs after checking the bucket equals the platform export bucket and the key starts with `exports/{tenant}/{env}/`; `file_url` is not rewritten. The `Task.metadata.storage` variant below is superseded.
 
+**Phase 2 as built.** Downloading a report-source run also requires analytics read, so task read alone cannot fetch report data.
+
 - Email: export name, window, row count, status, and one deeplink. Plain text in v1. No data, no file, no download link.
 - Deeplink: `{exports.console_base_url}/exports/{scheduled_task_id}/runs/{url_escaped_task_id}`. The recipient signs in; the console applies its normal access checks and downloads through `GET /tasks/:id/download`. The path is a contract with the UI work. New config `exports.console_base_url`; creating or updating an email destination fails fast if it is empty or `email.enabled=false`.
 - `GenerateDownloadURL` branch: if `Task.metadata.storage` is present, require `task_type=EXPORT`, require the recorded key to start with `exports/{ctx tenant}/{ctx env}/`, and the recorded bucket to equal the current platform export bucket, then resolve `ForPlatform(PurposeExport)` and presign for 30 minutes. As defense in depth, the stored location is validated against the caller's tenant and environment before use. For `analytics_view` runs the service also requires `EntityAnalytics` read, so task read alone cannot download report data. Tasks without `storage` take the existing path unchanged.
@@ -186,6 +199,10 @@ Limits: query timeout 5 minutes, activity retries 3, validation errors non-retry
 - `POST /tasks/scheduled/:id/run`: optional window; with no window on a scheduled or manual export the response carries zero start and end times.
 - `DELETE`: unchanged.
 - Release order: workers before API.
+
+**Phase 2 as built.**
+- `POST /tasks/scheduled` accepts `source_config` and the new entity types, and responses return `source_config`. The entity type enum is open in the OpenAPI overlay.
+- P2-R8: report sources need analytics read on create, update, run and download. The check fails closed. Delete, get and list are not gated.
 
 The shapes below (`destinations`, `source_config`, `style`, `run_now`) are removed from Phase 1 and kept as the later-phase sketch.
 
@@ -242,7 +259,7 @@ Four phases. Each merges and ships on its own, and each has an exit check.
 - Update and delete endpoints; swagger and SDK regeneration.
 - Exit: an export of an existing entity type with no connection, daily and manual, produces a console-downloadable CSV with correct local-timezone windows; connection exports are untouched.
 
-**Phase 2: report sources.**
+**Phase 2: report sources (built).**
 - `report` and `analytics_view` adapters, UTC windows, row caps, `requireReports()` gating, `EntityAnalytics` checks on create, update, run and download, `view_updated_at` recording.
 - Exit: a predefined report and a saved view each export on a schedule and manually; a user without analytics read cannot create or download them.
 
