@@ -36,6 +36,19 @@ type CheckoutProvider interface {
 	// what kind of object each is, so interpreting them is the adapter's job.
 	// Providers without a read API return ierr.ErrNotImplemented.
 	FetchPaymentState(ctx context.Context, req PaymentStateRequest) (*PaymentState, error)
+
+	// ExpirePaymentLink stops a hosted link from accepting payment. A link that is
+	// already closed (expired, cancelled or paid) is not an error. Providers that
+	// cannot close links return ierr.ErrNotImplemented.
+	ExpirePaymentLink(ctx context.Context, req ExpirePaymentLinkRequest) error
+}
+
+// ExpirePaymentLinkRequest identifies the hosted link to close.
+type ExpirePaymentLinkRequest struct {
+	// GatewayTrackingID is the handle the adapter returned as ProviderSessionID, stored
+	// on payment.gateway_tracking_id.
+	GatewayTrackingID string
+	InvoiceID         string
 }
 
 // PaymentStateRequest carries the provider handles recorded on the payment at
@@ -105,17 +118,17 @@ type AuthorizationLinkRequest struct {
 	// that cannot express CIT/MIT ignore it.
 	CustomerPresent bool
 	InvoiceID       string
-	CustomerID          string
-	PaymentID           string
-	Amount              decimal.Decimal
-	Currency            string
-	MaxAmount           *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
-	ExpiresAt           *time.Time
-	PreferredMethod     types.PaymentMethodType
-	SuccessURL          string
-	CancelURL           string
-	Metadata            map[string]string
-	LineItems           []CheckoutLineItem
+	CustomerID      string
+	PaymentID       string
+	Amount          decimal.Decimal
+	Currency        string
+	MaxAmount       *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
+	ExpiresAt       *time.Time
+	PreferredMethod types.PaymentMethodType
+	SuccessURL      string
+	CancelURL       string
+	Metadata        map[string]string
+	LineItems       []CheckoutLineItem
 }
 
 // HasAutoChargeableMethodRequest is the input for checking if a customer has

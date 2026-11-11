@@ -412,3 +412,12 @@ func (a *CheckoutAdapter) FetchPaymentState(
 		WithHint("Chargebee checkout sessions are reconciled by webhook only").
 		Mark(ierr.ErrNotImplemented)
 }
+
+func (a *CheckoutAdapter) ExpirePaymentLink(
+	ctx context.Context,
+	req interfaces.ExpirePaymentLinkRequest,
+) error {
+	return ierr.NewError("chargebee hosted pages cannot be expired").
+		WithHint("Chargebee has no API to cancel or expire a hosted page").
+		Mark(ierr.ErrNotImplemented)
+}

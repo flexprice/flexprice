@@ -239,3 +239,31 @@ func (a *CheckoutAdapter) checkoutSessionPaymentState(ctx context.Context, strip
 		GatewayPaymentID: piID,
 	}, nil
 }
+
+func (a *CheckoutAdapter) ExpirePaymentLink(ctx context.Context, req interfaces.ExpirePaymentLinkRequest) error {
+	if a == nil || a.Client == nil {
+		return ierr.NewError("stripe checkout adapter is not configured").
+			Mark(ierr.ErrNotImplemented)
+	}
+	if req.GatewayTrackingID == "" {
+		return ierr.NewError("gateway tracking id is required to expire a stripe checkout session").
+			Mark(ierr.ErrValidation)
+	}
+
+	stripeClient, _, err := a.Client.GetStripeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, expireErr := stripeClient.V1CheckoutSessions.Expire(ctx, req.GatewayTrackingID, nil)
+	if expireErr == nil {
+		return nil
+	}
+
+	session, err := stripeClient.V1CheckoutSessions.Retrieve(ctx, req.GatewayTrackingID, nil)
+	if err == nil && (session.Status == stripeapi.CheckoutSessionStatusExpired ||
+		session.Status == stripeapi.CheckoutSessionStatusComplete) {
+		return nil
+	}
+	return expireErr
+}

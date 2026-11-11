@@ -64,6 +64,17 @@ type fakeCheckoutProvider struct {
 	onCharge func(req interfaces.AuthorizationLinkRequest)
 	// chargeErr fails the charge call after onCharge, as a timeout after the gateway charged would.
 	chargeErr error
+
+	// expired records the tracking ids passed to ExpirePaymentLink; expireErr fails the call.
+	expired   []string
+	expireErr error
+}
+
+func (f *fakeCheckoutProvider) ExpirePaymentLink(_ context.Context, req interfaces.ExpirePaymentLinkRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.expired = append(f.expired, req.GatewayTrackingID)
+	return f.expireErr
 }
 
 func (f *fakeCheckoutProvider) FetchPaymentState(

@@ -125,3 +125,11 @@ func (a *CheckoutAdapter) FetchPaymentState(
 			Mark(ierr.ErrValidation)
 	}
 }
+
+func (a *CheckoutAdapter) ExpirePaymentLink(
+	ctx context.Context,
+	req interfaces.ExpirePaymentLinkRequest,
+) error {
+	return ierr.NewError("razorpay payment link expiry is not implemented").
+		Mark(ierr.ErrNotImplemented)
+}
