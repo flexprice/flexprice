@@ -188,7 +188,7 @@ func (s *scheduledTaskService) validateCustomerFilter(ctx context.Context, req d
 		if ierr.IsValidation(err) {
 			hint := "The customer filter is invalid"
 			if hints := cockroachErrors.GetAllHints(err); len(hints) > 0 {
-				hint = hints[len(hints)-1]
+				hint = hints[0]
 			}
 			return ierr.NewError("invalid customer filter").
 				WithHint(hint).

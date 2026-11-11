@@ -248,9 +248,18 @@ func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFil
 	return domainCustomer.FromEntList(customers), nil
 }
 
+func filterCount(filter *types.CustomerFilter) int {
+	if filter == nil {
+		return 0
+	}
+	return len(filter.Filters)
+}
+
 func (r *customerRepository) ListRefsByFilter(ctx context.Context, filter *types.CustomerFilter, max int) ([]domainCustomer.Ref, error) {
 	span := StartRepositorySpan(ctx, "customer", "list_refs", map[string]interface{}{
-		"filter": filter,
+		"has_email":    filter != nil && filter.Email != "",
+		"filter_count": filterCount(filter),
+		"max":          max,
 	})
 	defer FinishSpan(span)
 
@@ -626,6 +635,7 @@ func (o CustomerQueryOptions) GetFieldResolver(field string) (string, error) {
 	fieldName := o.GetFieldName(field)
 	if fieldName == "" {
 		return "", ierr.NewErrorf("unknown field name '%s' in customer query", field).
+			WithHintf("Unknown filter field '%s'", field).
 			Mark(ierr.ErrValidation)
 	}
 	return fieldName, nil
