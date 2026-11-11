@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/samber/lo"
@@ -42,7 +43,42 @@ func TestSanitizeExportCustomerFilter(t *testing.T) {
 	require.Nil(t, empty.QueryFilter)
 
 	emptyFilters := SanitizeExportCustomerFilter(&CustomerFilter{Filters: []*FilterCondition{}})
-	require.Nil(t, emptyFilters.Filters)
+	require.NotNil(t, emptyFilters.Filters)
+	require.Empty(t, emptyFilters.Filters)
+}
+
+func TestCustomerFilter_EmptyFiltersSurviveJSON(t *testing.T) {
+	stored := func(in *CustomerFilter) *CustomerFilter {
+		raw, err := json.Marshal(SanitizeExportCustomerFilter(in))
+		require.NoError(t, err)
+		var out CustomerFilter
+		require.NoError(t, json.Unmarshal(raw, &out))
+		return &out
+	}
+
+	explicit := stored(&CustomerFilter{Filters: []*FilterCondition{}})
+	require.NotNil(t, explicit.Filters)
+	require.Equal(t, "", explicit.GetStatus())
+
+	absent := stored(&CustomerFilter{})
+	require.Nil(t, absent.Filters)
+	require.Equal(t, string(StatusPublished), absent.GetStatus())
+
+	var fromNull CustomerFilter
+	require.NoError(t, json.Unmarshal([]byte(`{"filters":null}`), &fromNull))
+	require.Nil(t, fromNull.Filters)
+}
+
+func TestValidateExportCustomerFilter(t *testing.T) {
+	require.NoError(t, ValidateExportCustomerFilter(nil))
+	require.NoError(t, ValidateExportCustomerFilter(&CustomerFilter{Email: "a@b.co"}))
+	for _, f := range []*CustomerFilter{
+		{CustomerIDs: []string{"c1"}},
+		{ExternalIDs: []string{"e1"}},
+		{ExternalID: "e1"},
+	} {
+		require.Error(t, ValidateExportCustomerFilter(f))
+	}
 }
 
 func TestExportSourceConfig_ValidateCustomerFilter(t *testing.T) {
