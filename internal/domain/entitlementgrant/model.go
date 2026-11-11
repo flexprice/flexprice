@@ -73,16 +73,20 @@ func (g *EntitlementGrant) IsExhausted(usage decimal.Decimal) bool {
 	return usage.GreaterThanOrEqual(g.Quota)
 }
 
-// Overage is the non-negative excess of usage over quota.
+// Overage is the non-negative excess of the saved usage over quota.
 func (g *EntitlementGrant) Overage() decimal.Decimal {
+	if g == nil {
+		return decimal.Zero
+	}
+	return g.OverageOf(g.Usage)
+}
+
+// OverageOf is the non-negative excess of usage over quota; zero when unlimited.
+func (g *EntitlementGrant) OverageOf(usage decimal.Decimal) decimal.Decimal {
 	if g == nil || g.Unlimited {
 		return decimal.Zero
 	}
-	over := g.Usage.Sub(g.Quota)
-	if over.IsNegative() {
-		return decimal.Zero
-	}
-	return over
+	return decimal.Max(usage.Sub(g.Quota), decimal.Zero)
 }
 
 // Covered is how much of usage the grant covers: all of it when unlimited, otherwise up to the quota.
