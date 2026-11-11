@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -248,41 +249,24 @@ func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFil
 }
 
 func (r *customerRepository) ListRefsByFilter(ctx context.Context, filter *types.CustomerFilter, max int) ([]domainCustomer.Ref, error) {
-	client := r.client.Reader(ctx)
-
 	span := StartRepositorySpan(ctx, "customer", "list_refs", map[string]interface{}{
 		"filter": filter,
 	})
 	defer FinishSpan(span)
 
-	f := types.NewNoLimitCustomerFilter()
-	if filter != nil {
-		copied := *filter
-		f = &copied
-		qf := types.NewNoLimitQueryFilter()
-		if filter.QueryFilter != nil {
-			*qf = *filter.QueryFilter
-		}
-		f.QueryFilter = qf
-	}
-
 	const batchSize = 1000
-	limit := batchSize
-	offset := 0
-	f.QueryFilter.Limit = &limit
-	f.QueryFilter.Offset = &offset
-
 	var refs []domainCustomer.Ref
+	afterID := ""
 	for {
-		query := client.Customer.Query()
-		query, err := r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+		limit := batchSize
+		if max > 0 {
+			limit = min(batchSize, max+1-len(refs))
+		}
+		query, err := r.keysetQuery(ctx, filter, afterID, limit)
 		if err != nil {
 			SetSpanError(span, err)
-			return nil, ierr.WithError(err).
-				WithHint("Failed to list customers").
-				Mark(ierr.ErrDatabase)
+			return nil, err
 		}
-		query = ApplyQueryOptions(ctx, query, f, r.queryOpts)
 
 		var rows []struct {
 			ID         string `json:"id"`
@@ -302,15 +286,84 @@ func (r *customerRepository) ListRefsByFilter(ctx context.Context, filter *types
 				WithHintf("Filter matches more than %d customers; narrow it", max).
 				Mark(ierr.ErrValidation)
 		}
-		if len(rows) < batchSize {
+		if len(rows) < limit {
 			break
 		}
-		offset += batchSize
-		f.QueryFilter.Offset = &offset
+		afterID = rows[len(rows)-1].ID
 	}
 
 	SetSpanSuccess(span)
 	return refs, nil
+}
+
+// keysetQuery applies tenant, env and filter options, ordered by id after afterID.
+func (r *customerRepository) keysetQuery(ctx context.Context, filter *types.CustomerFilter, afterID string, limit int) (CustomerQuery, error) {
+	f := types.NewNoLimitCustomerFilter()
+	if filter != nil {
+		copied := *filter
+		f = &copied
+		f.Sort = nil
+		qf := types.NewNoLimitQueryFilter()
+		if filter.QueryFilter != nil {
+			qf.Status = filter.QueryFilter.Status
+		}
+		f.QueryFilter = qf
+	}
+
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, f, r.client.Reader(ctx).Customer.Query())
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list customers").
+			Mark(ierr.ErrDatabase)
+	}
+	query = ApplyBaseFilters(ctx, query, f, r.queryOpts)
+	if afterID != "" {
+		query = query.Where(customer.IDGT(afterID))
+	}
+	return query.Order(ent.Asc(customer.FieldID)).Limit(limit), nil
+}
+
+func (r *customerRepository) ListByFilterPage(ctx context.Context, filter *types.CustomerFilter, afterID string, limit int) ([]*domainCustomer.Customer, error) {
+	query, err := r.keysetQuery(ctx, filter, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	customers, err := query.All(ctx)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list customers").
+			Mark(ierr.ErrDatabase)
+	}
+	return domainCustomer.FromEntList(customers), nil
+}
+
+func (r *customerRepository) ListMetadataPageByFilter(ctx context.Context, filter *types.CustomerFilter, afterID string, limit int) ([]*domainCustomer.Customer, error) {
+	query, err := r.keysetQuery(ctx, filter, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ID       string `json:"id"`
+		Metadata []byte `json:"metadata"`
+	}
+	if err := query.Select(customer.FieldID, customer.FieldMetadata).Scan(ctx, &rows); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list customers").
+			Mark(ierr.ErrDatabase)
+	}
+	out := make([]*domainCustomer.Customer, 0, len(rows))
+	for _, row := range rows {
+		c := &domainCustomer.Customer{ID: row.ID}
+		if len(row.Metadata) > 0 {
+			if err := json.Unmarshal(row.Metadata, &c.Metadata); err != nil {
+				return nil, ierr.WithError(err).
+					WithHint("Failed to read customer metadata").
+					Mark(ierr.ErrDatabase)
+			}
+		}
+		out = append(out, c)
+	}
+	return out, nil
 }
 
 func (r *customerRepository) Count(ctx context.Context, filter *types.CustomerFilter) (int, error) {
