@@ -33,8 +33,8 @@ func NewScheduledTaskHandler(
 // @Description interval is hourly, daily, weekly, monthly or manual; exports with a connection also accept 15MIN and 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule.
 // @Description Window = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.
 // @Description entity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config is rejected for other entity types and cannot be changed later. Clients should tolerate new entity_type values.
-// @Description origin is console (default) or customers_page. customer_filter inside source_config limits the export to matching customers, needs origin customers_page, and is allowed for customers, wallet_ledger, invoice, credit_topups, credit_usage and usage_analytics exports and for reports with a customer dimension; entity_type customers requires it (empty means all customers).
-// @Description run_now (manual exports only) starts a run right after creation, optionally over run_window; the response then carries run.workflow_id. If the run cannot start the export is still created and run is absent.
+// @Description origin is console (default) or customers_page. customer_filter inside source_config limits the export to matching customers, needs origin customers_page, and is allowed for customers, wallet_ledger, invoice, credit_topups, credit_usage and usage_analytics exports and for reports with a customer dimension; entity_type customers requires it (empty means all customers). customer_filter limit, offset and sort are ignored, and customer_ids, external_ids and external_id are rejected. The customers entity never runs hourly.
+// @Description run_now (manual exports only, and the export must be enabled) starts a run right after creation, optionally over run_window; the response then carries run.workflow_id. If the run cannot start the export is still created and run is absent. The customers entity ignores run_window because it exports a snapshot.
 // @Description Report sources allow interval daily, weekly, monthly or manual; schedule is required unless manual. Windows are the previous UTC period, and a custom run window must be whole UTC days. export_metadata_fields is not allowed. These exports also need analytics read access.
 // @Tags Scheduled Tasks
 // @Accept json
@@ -157,7 +157,7 @@ func (h *ScheduledTaskHandler) ListScheduledTasks(c *gin.Context) {
 
 // @Summary Update a scheduled task
 // @ID updateScheduledTask
-// @Description Use when pausing, resuming, renaming or rescheduling a scheduled task. Send at least one of enabled, name or schedule.
+// @Description Use when pausing, resuming, renaming or rescheduling a scheduled task. Send at least one of enabled, name, schedule or email_config. Clear recipients with {"email_config":{"recipients":[]}}.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
@@ -224,7 +224,7 @@ func (h *ScheduledTaskHandler) DeleteScheduledTask(c *gin.Context) {
 // @Summary Trigger force run
 // @ID triggerScheduledTaskRun
 // @Description Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.
-// @Description Without a time range, scheduled and manual exports run for the previous period and the response start and end times are zero.
+// @Description Without a time range, scheduled and manual exports run for the previous period and the response omits start_time and end_time.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
