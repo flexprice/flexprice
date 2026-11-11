@@ -43627,7 +43627,11 @@
             "type": "string"
           },
           "op": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "eq",
+              "in"
+            ]
           },
           "value": {
             "type": "array",
@@ -43639,6 +43643,9 @@
         "x-speakeasy-name-override": "ReportParamFilter"
       },
       "types.ReportParams": {
+        "required": [
+          "shape"
+        ],
         "type": "object",
         "properties": {
           "currency": {
@@ -43657,10 +43664,20 @@
             }
           },
           "grain": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ]
           },
           "shape": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "timeseries",
+              "breakdown",
+              "scalar"
+            ]
           }
         },
         "x-speakeasy-name-override": "ReportParams"
