@@ -194,3 +194,30 @@ func (s *TaskServiceSuite) TestDownload_ConnectionPathUnchanged() {
 	require.Equal(t, 1, f.resolver.connCall)
 	require.Equal(t, 0, f.resolver.platformCall)
 }
+
+func (s *TaskServiceSuite) downloadAs(entity types.ScheduledTaskEntityType, roles ...string) (string, error, *downloadFixture) {
+	st := managedScheduledTask("platform-bkt")
+	st.EntityType = entity
+	f := s.newDownloadFixture(st, exportTask("t1", ""))
+	s.setFileURL(f, "t1", "s3://platform-bkt/"+f.prefix+"sched_1/run.csv")
+	f.svc.(*taskService).RBAC = testRBAC(s.T())
+	url, err := f.svc.GenerateDownloadURL(withRoles(f.ctx, roles...), "t1")
+	return url, err, f
+}
+
+func (s *TaskServiceSuite) TestDownload_ReportNeedsAnalyticsRead() {
+	_, err, f := s.downloadAs(types.ScheduledTaskEntityTypeReport, roleWithoutAnalytics)
+	s.Require().Error(err)
+	s.Require().True(ierr.IsPermissionDenied(err), "got %v", err)
+	s.Require().Equal(0, f.resolver.platformCall)
+}
+
+func (s *TaskServiceSuite) TestDownload_ReportAllowedWithAnalyticsRead() {
+	_, err, _ := s.downloadAs(types.ScheduledTaskEntityTypeReport, roleWithAnalytics)
+	s.Require().NoError(err)
+}
+
+func (s *TaskServiceSuite) TestDownload_EventsExportUnaffectedByAnalyticsRead() {
+	_, err, _ := s.downloadAs(types.ScheduledTaskEntityTypeEvents, roleWithoutAnalytics)
+	s.Require().NoError(err)
+}

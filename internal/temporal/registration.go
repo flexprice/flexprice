@@ -119,6 +119,8 @@ func RegisterWorkflowsAndActivities(
 		params.Logger,
 		params.Config,
 		params.StorageResolver,
+		params.RBAC,
+		nil,
 	)
 
 	scheduledTaskActivity := exportActivities.NewScheduledTaskActivity(

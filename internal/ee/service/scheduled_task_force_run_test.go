@@ -105,15 +105,16 @@ func TestTriggerForceRun_ReportWindowMustBeWholeUTCDays(t *testing.T) {
 	}
 
 	starter := &workflowStarter{}
-	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, temporalClient: starter, logger: logger.NewNoopLogger()}
-	_, _, _, _, err := s.triggerForceRun(context.Background(), task.ID, dto.TriggerForceRunRequest{
+	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, temporalClient: starter, logger: logger.NewNoopLogger(), rbac: testRBAC(t)}
+	ctx := withRoles(context.Background(), roleWithAnalytics)
+	_, _, _, _, err := s.triggerForceRun(ctx, task.ID, dto.TriggerForceRunRequest{
 		StartTime: at("2026-11-09T05:00:00Z"), EndTime: at("2026-11-10T00:00:00Z"),
 	})
 	require.Error(t, err)
 	require.True(t, ierr.IsValidation(err), "got %v", err)
 	require.Nil(t, starter.args)
 
-	_, _, _, _, err = s.triggerForceRun(context.Background(), task.ID, dto.TriggerForceRunRequest{
+	_, _, _, _, err = s.triggerForceRun(ctx, task.ID, dto.TriggerForceRunRequest{
 		StartTime: at("2026-11-09T00:00:00Z"), EndTime: at("2026-11-10T00:00:00Z"),
 	})
 	require.NoError(t, err)
