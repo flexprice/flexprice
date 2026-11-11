@@ -155,6 +155,7 @@ func (s *InMemoryTaskStore) FailStaleExportTask(ctx context.Context, id string, 
 	t.ErrorSummary = &reason
 	t.FailedAt = &now
 	t.UpdatedAt = now
+	t.UpdatedBy = types.GetUserID(ctx)
 	return true, nil
 }
 

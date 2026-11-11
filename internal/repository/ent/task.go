@@ -306,7 +306,7 @@ func (r *taskRepository) ListStaleExportTasks(ctx context.Context, olderThan tim
 	span := StartRepositorySpan(ctx, "task", "list_stale_export", nil)
 	defer FinishSpan(span)
 
-	rows, err := r.client.Reader(ctx).Task.Query().
+	rows, err := r.client.Writer(ctx).Task.Query().
 		Where(
 			task.TaskType(string(types.TaskTypeExport)),
 			task.TaskStatusIn(string(types.TaskStatusProcessing), string(types.TaskStatusPending)),
@@ -351,6 +351,7 @@ func (r *taskRepository) FailStaleExportTask(ctx context.Context, id string, old
 		SetErrorSummary(reason).
 		SetFailedAt(now).
 		SetUpdatedAt(now).
+		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)

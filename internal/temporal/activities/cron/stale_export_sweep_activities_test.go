@@ -2,6 +2,7 @@ package cron
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -59,4 +60,32 @@ func TestSweepStaleExportRuns(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Run did not finish.", *failed.ErrorSummary)
 	require.NotNil(t, failed.FailedAt)
+	require.Equal(t, types.DefaultUserID, failed.UpdatedBy)
+}
+
+type flakyFailStore struct {
+	*testutil.InMemoryTaskStore
+	badID string
+}
+
+func (s flakyFailStore) FailStaleExportTask(ctx context.Context, id string, olderThan time.Time, reason string) (bool, error) {
+	if id == s.badID {
+		return false, errors.New("boom")
+	}
+	return s.InMemoryTaskStore.FailStaleExportTask(ctx, id, olderThan, reason)
+}
+
+func TestSweepStaleExportRuns_ReturnsErrorAfterAttemptingAllRows(t *testing.T) {
+	store := testutil.NewInMemoryTaskStore()
+	seedTask(t, store, "a_bad", types.TaskTypeExport, types.TaskStatusProcessing, 4*time.Hour)
+	seedTask(t, store, "b_ok", types.TaskTypeExport, types.TaskStatusProcessing, 3*time.Hour)
+
+	a := NewStaleExportSweepActivities(flakyFailStore{store, "a_bad"}, logger.NewNoopLogger())
+	n, err := a.SweepStaleExportRunsActivity(context.Background())
+	require.Error(t, err)
+	require.Equal(t, 1, n)
+
+	good, err := store.Get(context.Background(), "b_ok")
+	require.NoError(t, err)
+	require.Equal(t, types.TaskStatusFailed, good.TaskStatus)
 }
