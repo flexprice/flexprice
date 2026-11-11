@@ -21,12 +21,17 @@ type fakeRunner struct {
 	gotViewID string
 	gotParams *types.ReportParams
 	calls     int
+	columns   []string
 }
 
 func (f *fakeRunner) RunReportForExport(_ context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error) {
 	f.gotKey, f.gotRange, f.gotParams = key, rng, params
 	f.calls++
 	return f.result, f.err
+}
+
+func (f *fakeRunner) ReportColumnsForExport(_ context.Context, _ string, _ *types.ReportParams, _ string) ([]string, error) {
+	return f.columns, f.err
 }
 
 func (f *fakeRunner) RunViewForExport(_ context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error) {
