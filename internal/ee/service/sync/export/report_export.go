@@ -12,13 +12,11 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// Runs reports and views.
 type ReportRunner interface {
 	RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error)
 	RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error)
 }
 
-// Exposes run metadata.
 type RunMetadataExporter interface {
 	RunMetadata() map[string]string
 }
@@ -30,7 +28,6 @@ type ReportExporter struct {
 	metadata map[string]string
 }
 
-// Creates a report exporter.
 func NewReportExporter(runner ReportRunner, entity types.ScheduledTaskEntityType) *ReportExporter {
 	return &ReportExporter{runner: runner, entity: entity}
 }
@@ -65,6 +62,9 @@ func (e *ReportExporter) PrepareData(ctx context.Context, request *dto.ExportReq
 	}
 	if err != nil {
 		return nil, 0, err
+	}
+	if result == nil {
+		return nil, 0, ierr.NewError("report returned no result").Mark(ierr.ErrSystem)
 	}
 
 	header := make([]string, 0, len(result.Columns))
