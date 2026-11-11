@@ -337,14 +337,14 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domainU
 			return nil, ierr.WithError(err).
 				WithHint("User not found with the provided email").
 				WithReportableDetails(map[string]interface{}{
-					"email": email,
+					"email": emailutil.MaskAddress(email),
 				}).
 				Mark(ierr.ErrNotFound)
 		}
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve user by email").
 			WithReportableDetails(map[string]interface{}{
-				"email": email,
+				"email": emailutil.MaskAddress(email),
 			}).
 			Mark(ierr.ErrDatabase)
 	}
