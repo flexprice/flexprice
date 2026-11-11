@@ -85,7 +85,10 @@ type deliveryRun struct {
 	env      *testsuite.TestWorkflowEnvironment
 	emailIn  []export.SendExportEmailsInput
 	recorded []export.RecordDeliveriesInput
-	statusIn []export.UpdateTaskStatusInput
+	statuses []export.UpdateTaskStatusInput
+	// Returns the error for each UpdateTaskStatus call, given the 1-based count of calls with that status.
+	statusErr   func(in export.UpdateTaskStatusInput, nth int) error
+	completeErr error
 }
 
 func newDeliveryRun(details export.ScheduledTaskDetails, exportErr error, emailErr error) *deliveryRun {
@@ -108,10 +111,20 @@ func newDeliveryRun(details export.ScheduledTaskDetails, exportErr error, emailE
 	r.env.OnActivity("CreateTask", mock.Anything, mock.Anything).Return(&export.CreateTaskOutput{TaskID: "task_1"}, nil)
 	r.env.OnActivity("UpdateTaskStatus", mock.Anything, mock.Anything).Return(
 		func(_ context.Context, in export.UpdateTaskStatusInput) error {
-			r.statusIn = append(r.statusIn, in)
-			return nil
+			r.statuses = append(r.statuses, in)
+			if r.statusErr == nil {
+				return nil
+			}
+			nth := 0
+			for _, s := range r.statuses {
+				if s.Status == in.Status {
+					nth++
+				}
+			}
+			return r.statusErr(in, nth)
 		})
-	r.env.OnActivity("CompleteTask", mock.Anything, mock.Anything).Return(nil)
+	r.env.OnActivity("CompleteTask", mock.Anything, mock.Anything).Return(
+		func(context.Context, export.CompleteTaskInput) error { return r.completeErr })
 	r.env.OnActivity("ExportData", mock.Anything, mock.Anything).Return(&export.ExportDataOutput{FileURL: "f", RecordCount: 3}, exportErr)
 	r.env.OnActivity("SendExportEmails", mock.Anything, mock.Anything).Return(
 		func(_ context.Context, in export.SendExportEmailsInput) (*export.SendExportEmailsOutput, error) {
@@ -200,7 +213,7 @@ func TestExecuteExportWorkflow_FailureMessageHidesError(t *testing.T) {
 			r.run()
 
 			require.Error(t, r.env.GetWorkflowError())
-			last := r.statusIn[len(r.statusIn)-1]
+			last := r.statuses[len(r.statuses)-1]
 			require.Equal(t, types.TaskStatusFailed, last.Status)
 			require.Equal(t, tt.want, last.Error)
 			require.Len(t, r.recorded, 1)
@@ -285,4 +298,36 @@ func TestExecuteExportWorkflow_DefaultVersionSkipsDeliveries(t *testing.T) {
 	require.NoError(t, r.env.GetWorkflowError())
 	require.Empty(t, r.emailIn)
 	require.Empty(t, r.recorded)
+}
+
+func TestExecuteExportWorkflow_CompleteTaskFailureMarksRunFailed(t *testing.T) {
+	r := newDeliveryRun(export.ScheduledTaskDetails{Interval: types.ScheduledTaskIntervalDaily}, nil, nil)
+	r.completeErr = errors.New("db down")
+	r.run()
+
+	require.Error(t, r.env.GetWorkflowError())
+	require.Len(t, r.statuses, 2)
+	require.Equal(t, types.TaskStatusProcessing, r.statuses[0].Status)
+	require.Equal(t, types.TaskStatusFailed, r.statuses[1].Status)
+	require.Equal(t, "The file was written but the run could not be completed.", r.statuses[1].Error)
+}
+
+func TestExecuteExportWorkflow_FailedStatusWriteIsRetried(t *testing.T) {
+	r := newDeliveryRun(export.ScheduledTaskDetails{Interval: types.ScheduledTaskIntervalDaily}, errors.New("boom"), nil)
+	r.statusErr = func(in export.UpdateTaskStatusInput, nth int) error {
+		if in.Status == types.TaskStatusFailed && nth == 1 {
+			return errors.New("db blip")
+		}
+		return nil
+	}
+	r.run()
+
+	require.Error(t, r.env.GetWorkflowError())
+	failedWrites := 0
+	for _, s := range r.statuses {
+		if s.Status == types.TaskStatusFailed {
+			failedWrites++
+		}
+	}
+	require.Equal(t, 2, failedWrites)
 }
