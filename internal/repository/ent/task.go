@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/task"
 	domainTask "github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -193,24 +194,57 @@ func (r *taskRepository) Count(ctx context.Context, filter *types.TaskFilter) (i
 }
 
 func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
-	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "task", "update", map[string]interface{}{
 		"task_id": t.ID,
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Writer(ctx)
+	n, err := r.writeTask(ctx, t)
+	if err != nil {
+		SetSpanError(span, err)
+		return err
+	}
+	if n == 0 {
+		err := ierr.NewError("task not found").
+			WithHint("The task may not exist or may have been deleted").
+			WithReportableDetails(map[string]interface{}{
+				"task_id": t.ID,
+			}).
+			Mark(ierr.ErrNotFound)
+		SetSpanError(span, err)
+		return err
+	}
 
-	// Use predicate-based update for optimistic locking
-	query := client.Task.Update().
+	SetSpanSuccess(span)
+	return nil
+}
+
+func (r *taskRepository) UpdateUnlessCompleted(ctx context.Context, t *domainTask.Task) (bool, error) {
+	span := StartRepositorySpan(ctx, "task", "update_unless_completed", map[string]interface{}{
+		"task_id": t.ID,
+	})
+	defer FinishSpan(span)
+
+	n, err := r.writeTask(ctx, t, task.TaskStatusNEQ(string(types.TaskStatusCompleted)))
+	if err != nil {
+		SetSpanError(span, err)
+		return false, err
+	}
+
+	SetSpanSuccess(span)
+	return n > 0, nil
+}
+
+func (r *taskRepository) writeTask(ctx context.Context, t *domainTask.Task, extra ...predicate.Task) (int, error) {
+	query := r.client.Writer(ctx).Task.Update().
 		Where(
 			task.ID(t.ID),
 			task.TenantID(types.GetTenantID(ctx)),
 			task.EnvironmentID(types.GetEnvironmentID(ctx)),
 			task.Status(string(types.StatusPublished)),
-		)
+		).
+		Where(extra...)
 
-	// Set all fields
 	query.
 		SetTaskType(string(t.TaskType)).
 		SetEntityType(string(t.EntityType)).
@@ -231,30 +265,16 @@ func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
-	// Execute update
 	n, err := query.Save(ctx)
 	if err != nil {
-		SetSpanError(span, err)
-		return ierr.WithError(err).
+		return 0, ierr.WithError(err).
 			WithHint("Failed to update task").
 			WithReportableDetails(map[string]interface{}{
 				"task_id": t.ID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	if n == 0 {
-		err := ierr.NewError("task not found").
-			WithHint("The task may not exist or may have been deleted").
-			WithReportableDetails(map[string]interface{}{
-				"task_id": t.ID,
-			}).
-			Mark(ierr.ErrNotFound)
-		SetSpanError(span, err)
-		return err
-	}
-
-	SetSpanSuccess(span)
-	return nil
+	return n, nil
 }
 
 func (r *taskRepository) SetTaskMetadataKey(ctx context.Context, id, key string, value any) error {

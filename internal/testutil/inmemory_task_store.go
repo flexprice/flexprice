@@ -88,6 +88,18 @@ func (s *InMemoryTaskStore) Update(ctx context.Context, t *task.Task) error {
 	return s.InMemoryStore.Update(ctx, t.ID, copyTask(t))
 }
 
+func (s *InMemoryTaskStore) UpdateUnlessCompleted(ctx context.Context, t *task.Task) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	stored, ok := s.items[t.ID]
+	if !ok || stored.TaskStatus == types.TaskStatusCompleted {
+		return false, nil
+	}
+	s.items[t.ID] = copyTask(t)
+	return true, nil
+}
+
 func (s *InMemoryTaskStore) Delete(ctx context.Context, id string) error {
 	return s.InMemoryStore.Delete(ctx, id)
 }

@@ -10,7 +10,11 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"go.temporal.io/sdk/temporal"
 )
+
+// TaskAlreadyCompletedErrType marks a failure write refused by a COMPLETED run.
+const TaskAlreadyCompletedErrType = "TaskAlreadyCompleted"
 
 // TaskActivity handles task-related operations
 type TaskActivity struct {
@@ -150,11 +154,6 @@ func (a *TaskActivity) UpdateTaskStatus(ctx context.Context, input UpdateTaskSta
 			Mark(ierr.ErrDatabase)
 	}
 
-	if input.Status == types.TaskStatusFailed && existingTask.TaskStatus == types.TaskStatusCompleted {
-		a.logger.Info(ctx, "task already completed, skipping failure", "task_id", input.TaskID)
-		return nil
-	}
-
 	existingTask.TaskStatus = input.Status
 
 	// Update record counts if provided
@@ -193,6 +192,22 @@ func (a *TaskActivity) UpdateTaskStatus(ctx context.Context, input UpdateTaskSta
 		if input.Error != "" {
 			existingTask.ErrorSummary = &input.Error
 		}
+	}
+
+	if input.Status == types.TaskStatusFailed {
+		changed, err := a.taskRepo.UpdateUnlessCompleted(ctx, existingTask)
+		if err != nil {
+			a.logger.Error(ctx, "failed to update task status", "error", err)
+			return ierr.WithError(err).
+				WithHint("Failed to update task status").
+				Mark(ierr.ErrDatabase)
+		}
+		if !changed {
+			a.logger.Info(ctx, "task already completed, skipping failure", "task_id", input.TaskID)
+			return temporal.NewNonRetryableApplicationError("task already completed", TaskAlreadyCompletedErrType, nil)
+		}
+		a.logger.Info(ctx, "task status updated", "task_id", input.TaskID, "status", input.Status)
+		return nil
 	}
 
 	err = a.taskRepo.Update(ctx, existingTask)
