@@ -149,3 +149,8 @@ type SelfBillingHourlyWorkflowInput struct{}
 
 // BillingInstalmentsDueWorkflowInput is the input for BillingInstalmentsDueWorkflow.
 type BillingInstalmentsDueWorkflowInput struct{}
+
+// ===================== Stale Export Sweep =====================
+
+// StaleExportSweepWorkflowInput is the input for StaleExportSweepWorkflow.
+type StaleExportSweepWorkflowInput struct{}

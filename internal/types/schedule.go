@@ -9,6 +9,9 @@ import (
 	"github.com/samber/lo"
 )
 
+// ExportWorkflowTimeout bounds one export run, queue wait included.
+const ExportWorkflowTimeout = 90 * time.Minute
+
 // ScheduleID is the Temporal server schedule ID for a recurring workflow.
 type ScheduleID string
 
@@ -38,6 +41,8 @@ const (
 	ScheduleIDSelfBillingHourly ScheduleID = "self-billing-hourly"
 	// ScheduleIDBillingInstalmentsDue drives BillingInstalmentsDueWorkflow; a no-op unless an environment enables commitments_v2.
 	ScheduleIDBillingInstalmentsDue ScheduleID = "billing-instalments-due"
+	// ScheduleIDStaleExportSweep drives StaleExportSweepWorkflow.
+	ScheduleIDStaleExportSweep ScheduleID = "stale-export-sweep"
 )
 
 // String returns the raw schedule id.
@@ -67,6 +72,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDRevenueRecognition,
 		ScheduleIDSelfBillingHourly,
 		ScheduleIDBillingInstalmentsDue,
+		ScheduleIDStaleExportSweep,
 	}
 }
 

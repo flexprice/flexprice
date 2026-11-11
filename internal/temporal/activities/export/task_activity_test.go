@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/task"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,6 +35,26 @@ func TestCompleteTask_MergesRunMetadata(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "s", repo.updated.Metadata["start_time"])
 	require.Equal(t, "2026-11-01T10:00:00Z", repo.updated.Metadata["view_updated_at"])
+}
+
+func TestUpdateTaskStatus_FailedSkipsCompletedRow(t *testing.T) {
+	repo := &memTaskRepo{row: &task.Task{TaskStatus: types.TaskStatusCompleted}}
+	a := NewTaskActivity(repo, logger.NewNoopLogger())
+
+	err := a.UpdateTaskStatus(context.Background(), UpdateTaskStatusInput{TaskID: "t1", Status: types.TaskStatusFailed, Error: "x"})
+
+	require.NoError(t, err)
+	require.Nil(t, repo.updated)
+}
+
+func TestUpdateTaskStatus_FailedUpdatesProcessingRow(t *testing.T) {
+	repo := &memTaskRepo{row: &task.Task{TaskStatus: types.TaskStatusProcessing}}
+	a := NewTaskActivity(repo, logger.NewNoopLogger())
+
+	err := a.UpdateTaskStatus(context.Background(), UpdateTaskStatusInput{TaskID: "t1", Status: types.TaskStatusFailed, Error: "x"})
+
+	require.NoError(t, err)
+	require.Equal(t, types.TaskStatusFailed, repo.updated.TaskStatus)
 }
 
 func TestCompleteTask_NilMetadataMap(t *testing.T) {

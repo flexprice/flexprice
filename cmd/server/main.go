@@ -760,6 +760,13 @@ func startTemporalWorker(
 				return fmt.Errorf("ensure temporal server schedules: %w", err)
 			}
 
+			// Background: must not block startup.
+			go func() {
+				bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				defer cancel()
+				temporalservice.ReconcileExportScheduleTimeouts(bgCtx, temporalClient, params.TenantRepo, params.EnvironmentRepo, params.ScheduledTaskRepo, log)
+			}()
+
 			// Register workflows and activities first (this creates the workers)
 			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params, webhookService); err != nil {
 				return fmt.Errorf("failed to register workflows and activities: %w", err)

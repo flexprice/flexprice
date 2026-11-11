@@ -150,7 +150,11 @@ func (a *TaskActivity) UpdateTaskStatus(ctx context.Context, input UpdateTaskSta
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Update status
+	if input.Status == types.TaskStatusFailed && existingTask.TaskStatus == types.TaskStatusCompleted {
+		a.logger.Info(ctx, "task already completed, skipping failure", "task_id", input.TaskID)
+		return nil
+	}
+
 	existingTask.TaskStatus = input.Status
 
 	// Update record counts if provided
