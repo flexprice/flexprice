@@ -104,6 +104,7 @@ func TestScheduledTaskRepository_NewColumns(t *testing.T) {
 	require.Nil(t, updated.Schedule)
 	require.Equal(t, "", updated.TemporalScheduleID)
 	require.Equal(t, "user_other", updated.UpdatedBy)
+	require.True(t, updated.UpdatedAt.Equal(got.UpdatedAt))
 	require.True(t, updated.ManagedCopy)
 
 	otherEnvRow.Name = "hijack"

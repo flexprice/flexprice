@@ -44,7 +44,10 @@ func (r *exportRepoFake) Get(context.Context, string) (*scheduledtask.ScheduledT
 	return r.task, nil
 }
 
+var settingsStamp = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
 func (r *exportRepoFake) UpdateSettings(_ context.Context, t *scheduledtask.ScheduledTask) error {
+	t.UpdatedAt = settingsStamp
 	cp := *t
 	r.settings = &cp
 	return r.settingsErr
@@ -299,8 +302,9 @@ func TestUpdate_ScheduleUpdatesTemporalThenDB(t *testing.T) {
 	s := newExportService(repo, tc)
 
 	name := "nightly"
-	_, err := s.UpdateScheduledTask(exportCtx(), "st_1", dto.UpdateScheduledTaskRequest{Name: &name, Schedule: kolkata()})
+	resp, err := s.UpdateScheduledTask(exportCtx(), "st_1", dto.UpdateScheduledTaskRequest{Name: &name, Schedule: kolkata()})
 	require.NoError(t, err)
+	require.True(t, resp.UpdatedAt.Equal(settingsStamp))
 	require.Len(t, handle.updates, 1)
 	require.Equal(t, []string{"30 9 * * *"}, handle.updates[0].CronExpressions)
 	require.Equal(t, "Asia/Kolkata", handle.updates[0].TimeZoneName)
