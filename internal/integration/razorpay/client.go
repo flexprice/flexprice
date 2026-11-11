@@ -326,6 +326,12 @@ func (c *Client) CreatePaymentLink(ctx context.Context, paymentLinkData map[stri
 	return razorpayPaymentLink, nil
 }
 
+func webhookSignature(payload []byte, secret string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(payload)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 // VerifyWebhookSignature verifies the Razorpay webhook signature
 func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error {
 	config, err := c.GetRazorpayConfig(ctx)
@@ -346,11 +352,9 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 
 	// Verify signature using HMAC SHA256
 	// Razorpay uses HMAC SHA256 to sign the webhook body
-	mac := hmac.New(sha256.New, []byte(secretForVerification))
-	mac.Write(payload)
-	expectedSignature := hex.EncodeToString(mac.Sum(nil))
+	expectedSignature := webhookSignature(payload, secretForVerification)
 
-	if expectedSignature != signature {
+	if !hmac.Equal([]byte(expectedSignature), []byte(signature)) {
 		c.logger.Info(ctx, "webhook signature mismatch",
 			"expected_signature_length", len(expectedSignature),
 			"received_signature_length", len(signature),

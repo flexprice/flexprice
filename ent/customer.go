@@ -64,7 +64,9 @@ type Customer struct {
 	TaxTreatment types.TaxTreatment `json:"tax_treatment,omitempty"`
 	// ContactPersons holds the value of the "contact_persons" field.
 	ContactPersons []*schema.ContactPerson `json:"contact_persons,omitempty"`
-	selectValues   sql.SelectValues
+	// BillingEntityID holds the value of the "billing_entity_id" field.
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
+	selectValues    sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -74,7 +76,7 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case customer.FieldMetadata, customer.FieldContactPersons:
 			values[i] = new([]byte)
-		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldContact, customer.FieldBillingCurrency, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone, customer.FieldTaxTreatment:
+		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldContact, customer.FieldBillingCurrency, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone, customer.FieldTaxTreatment, customer.FieldBillingEntityID:
 			values[i] = new(sql.NullString)
 		case customer.FieldCreatedAt, customer.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -237,6 +239,13 @@ func (_m *Customer) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field contact_persons: %w", err)
 				}
 			}
+		case customer.FieldBillingEntityID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_entity_id", values[i])
+			} else if value.Valid {
+				_m.BillingEntityID = new(string)
+				*_m.BillingEntityID = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -342,6 +351,11 @@ func (_m *Customer) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("contact_persons=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ContactPersons))
+	builder.WriteString(", ")
+	if v := _m.BillingEntityID; v != nil {
+		builder.WriteString("billing_entity_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

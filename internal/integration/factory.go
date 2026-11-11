@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
@@ -53,7 +56,6 @@ import (
 	"github.com/flexprice/flexprice/internal/storage/s3backend"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // Factory manages different payment integration providers and storage providers
@@ -310,9 +312,7 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		f.invoiceRepo,
 		f.paymentRepo,
 		f.entityIntegrationMappingRepo,
-		f.locker,
 		f.logger,
-		paymentSvc,
 	)
 
 	webhookHandler := razorpaywebhook.NewHandler(
@@ -962,7 +962,7 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 		if lifecycleErr := m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
-			VoidedAt:           time.Now().UTC(),
+			VoidedAt:           clock.Now(),
 		}); lifecycleErr != nil {
 			return false, false, lifecycleErr
 		}
@@ -983,7 +983,7 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 	if lifecycleErr := m.Lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   gatewayPaymentID,
-		RefundedAt:         time.Now().UTC(),
+		RefundedAt:         clock.Now(),
 	}); lifecycleErr != nil {
 		return false, false, lifecycleErr
 	}
@@ -1064,7 +1064,7 @@ func (m *MoyasarIntegration) ChargeInvoiceWithToken(ctx context.Context, invoice
 		if failErr := m.Lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   "",
-			FailedAt:           time.Now().UTC(),
+			FailedAt:           clock.Now(),
 			ErrorMessage:       err.Error(),
 		}); failErr != nil {
 			m.Logger.Error(ctx, "failed to record payment failure after charge error",
@@ -1641,27 +1641,45 @@ func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.Pa
 	}
 }
 
+// SupportsGatewayRefund reports whether the gateway can issue refunds, without any connection lookup.
+func (f *Factory) SupportsGatewayRefund(gateway types.PaymentGatewayType) bool {
+	return f.refundProviderFor(gateway) != nil
+}
+
 // GetRefundProvider returns ErrNotImplemented for gateways without a v1 refund
 // adapter — Moyasar's API refunds only in full, so it cannot back this ledger.
 func (f *Factory) GetRefundProvider(ctx context.Context, gateway types.PaymentGatewayType) (interfaces.RefundProvider, error) {
-	switch gateway {
-	case types.PaymentGatewayTypeRazorpay:
-		i, err := f.GetRazorpayIntegration(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &razorpay.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
-	case types.PaymentGatewayTypeChargebee:
-		i, err := f.GetChargebeeIntegration(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &chargebee.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
-	default:
+	build := f.refundProviderFor(gateway)
+	if build == nil {
 		return nil, ierr.NewError("gateway refunds are not supported for this provider").
 			WithHintf("%s cannot issue gateway refunds", gateway).
 			WithReportableDetails(map[string]interface{}{"gateway": gateway}).
 			Mark(ierr.ErrNotImplemented)
+	}
+	return build(ctx)
+}
+
+// refundProviderFor returns the gateway's refund adapter constructor, or nil when it has none.
+func (f *Factory) refundProviderFor(gateway types.PaymentGatewayType) func(context.Context) (interfaces.RefundProvider, error) {
+	switch gateway {
+	case types.PaymentGatewayTypeRazorpay:
+		return func(ctx context.Context) (interfaces.RefundProvider, error) {
+			i, err := f.GetRazorpayIntegration(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &razorpay.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
+		}
+	case types.PaymentGatewayTypeChargebee:
+		return func(ctx context.Context) (interfaces.RefundProvider, error) {
+			i, err := f.GetChargebeeIntegration(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &chargebee.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
+		}
+	default:
+		return nil
 	}
 }
 

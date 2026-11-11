@@ -8,12 +8,15 @@ import (
 	"math"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // max active prices per entity is 3000
@@ -136,6 +139,8 @@ type Price struct {
 	// GroupID references the group this price belongs to
 	GroupID string `db:"group_id" json:"group_id,omitempty"`
 
+	ProductID string `db:"product_id" json:"product_id,omitempty"`
+
 	// StartDate is the start date of the price
 	StartDate *time.Time `db:"start_date" json:"start_date,omitempty"`
 
@@ -211,6 +216,16 @@ func (p *Price) CopyWith(ctx context.Context, overrides *PriceCloneOverrides) *P
 	}
 
 	return lo.ToPtr(out)
+}
+
+// LineItemStart returns the start of a line item of this price opening at the period edge from: the price's start when
+// it falls in a later second, else from.
+func (p *Price) LineItemStart(from time.Time) time.Time {
+	if p == nil || p.StartDate == nil || !p.StartDate.Truncate(time.Second).After(from) {
+		return from
+	}
+
+	return *p.StartDate
 }
 
 // IsUsage returns true if the price is a usage based price
@@ -549,6 +564,7 @@ func FromEnt(e *ent.Price) *Price {
 		EntityID:               e.EntityID,
 		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
 		GroupID:                lo.FromPtr(e.GroupID),
+		ProductID:              lo.FromPtr(e.ProductID),
 		StartDate:              e.StartDate,
 		EndDate:                e.EndDate,
 		Sequence:               e.Sequence,
@@ -759,7 +775,7 @@ func (p *Price) GetRootPriceID() string {
 // IsActive checks if the price is currently active based on status and dates
 func (p *Price) IsActive(currentTime *time.Time) bool {
 	if currentTime == nil {
-		currentTime = lo.ToPtr(time.Now().UTC())
+		currentTime = lo.ToPtr(clock.Now())
 	}
 
 	// Check if price is published

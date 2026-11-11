@@ -4,13 +4,16 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+	"go.temporal.io/sdk/activity"
+
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
-	"go.temporal.io/sdk/activity"
 )
 
 // maxCreditsPerExpiryRun caps the credits one run settles; the 15-minute schedule picks up the rest.
@@ -43,7 +46,7 @@ func NewWalletCreditExpiryActivities(
 func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context) (*cronModels.WalletCreditExpiryWorkflowResult, error) {
 	log := activity.GetLogger(ctx)
 	log.Info("Starting wallet credit expiry activity")
-	a.logger.Info(ctx, "starting credit expiry cron job", "time", time.Now().UTC().Format(time.RFC3339))
+	a.logger.Info(ctx, "starting credit expiry cron job", "time", clock.Now().Format(time.RFC3339))
 
 	tenants, err := a.tenantService.GetAllTenants(ctx)
 	if err != nil {

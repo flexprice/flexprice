@@ -75,6 +75,11 @@ func (s *InMemorySettingsStore) GetByKey(ctx context.Context, key types.SettingK
 		Mark(ierr.ErrNotFound)
 }
 
+// GetByKeyUncached retrieves a setting by key for the given environment
+func (s *InMemorySettingsStore) GetByKeyUncached(ctx context.Context, environmentID string, key types.SettingKey) (*domainSettings.Setting, error) {
+	return s.GetByKey(types.SetEnvironmentID(ctx, environmentID), key)
+}
+
 // GetTenantLevelSettingByKey retrieves a tenant-level setting by key (without environment_id)
 // This is for settings that apply tenant-wide across all environments
 func (s *InMemorySettingsStore) GetTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {

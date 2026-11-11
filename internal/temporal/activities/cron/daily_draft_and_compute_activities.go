@@ -69,7 +69,8 @@ func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 
 		_, err := a.subscriptionService.TriggerSubscriptionDraftAndComputeWorkflowWithOptions(
 			subCtx, sub.ID, interfaces.DraftAndComputeOptions{
-				SkipIfAlreadyInvoiced: true,
+				SkipIfAlreadyInvoiced:     true,
+				RecomputePastPeriodDrafts: true,
 			},
 		)
 		if err != nil {

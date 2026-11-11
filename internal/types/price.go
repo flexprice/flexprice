@@ -498,6 +498,7 @@ type PriceFilter struct {
 	SubscriptionID     *string          `json:"subscription_id,omitempty" form:"subscription_id"`
 	ParentPriceID      *string          `json:"parent_price_id,omitempty" form:"parent_price_id"`
 	MeterIDs           []string         `json:"meter_ids,omitempty" form:"meter_ids"`
+	ProductIDs         []string         `json:"product_ids,omitempty" form:"product_ids"`
 	AllowExpiredPrices bool             `json:"allow_expired_prices,omitempty" form:"allow_expired_prices" default:"false"`
 
 	StartDateLT *time.Time `json:"start_date_lt,omitempty" form:"start_date_lt"`

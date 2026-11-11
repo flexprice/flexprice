@@ -20,9 +20,77 @@
     {
       "url": "https://api.cloud.flexprice.io/v1",
       "description": "India Region"
+    },
+    {
+      "url": "https://canada.api.flexprice.io/v1",
+      "description": "Canada Region"
+    },
+    {
+      "url": "https://eu.api.flexprice.io/v1",
+      "description": "EU Region"
     }
   ],
   "paths": {
+    "/accounting_periods/search": {
+      "post": {
+        "tags": [
+          "Accounting Periods"
+        ],
+        "summary": "Query accounting periods",
+        "description": "Use when listing the monthly accounting periods revenue recognition posts to, by period status or a period start range. Returns a paginated list.",
+        "operationId": "queryAccountingPeriod",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/accountingperiod.Filter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAccountingPeriodsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
     "/activity": {
       "post": {
         "tags": [
@@ -1761,6 +1829,465 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/billing-entities": {
+      "get": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "List billing entities",
+        "description": "List the billing entities of this environment.",
+        "operationId": "listBillingEntities",
+        "parameters": [
+          {
+            "name": "billing_entity_ids",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "is_default",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "published",
+                "deleted",
+                "archived"
+              ],
+              "x-enum-varnames": [
+                "StatusPublished",
+                "StatusDeleted",
+                "StatusArchived"
+              ]
+            },
+            "x-enum-varnames": [
+              "StatusPublished",
+              "StatusDeleted",
+              "StatusArchived"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBillingEntitiesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Billing entities not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Create a billing entity",
+        "description": "Create a legal entity that bills customers in this environment. Requires billing entities to be enabled.",
+        "operationId": "createBillingEntity",
+        "requestBody": {
+          "description": "Billing entity to create",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBillingEntityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or billing entities not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Invoice prefix already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "billing_entity"
+      }
+    },
+    "/billing-entities/enable": {
+      "post": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Enable billing entities",
+        "description": "Start enabling billing entities in the environment. The environment gets a default entity and its existing customers are assigned to it. Irreversible.",
+        "operationId": "enableBillingEntities",
+        "responses": {
+          "200": {
+            "description": "Already enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityModeResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Enabling started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityModeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The environment uses an external tax engine",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a super admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/billing-entities/status": {
+      "get": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Get billing entities status",
+        "description": "Whether billing entities are off, enabling or enabled in the environment.",
+        "operationId": "getBillingEntitiesStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityModeResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/billing-entities/{id}": {
+      "get": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Get a billing entity",
+        "description": "Load a single billing entity by ID.",
+        "operationId": "getBillingEntity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Billing entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Billing entities not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Update a billing entity",
+        "description": "Edit a billing entity. Drafts and future invoices use the new details; finalized invoices keep theirs.",
+        "operationId": "updateBillingEntity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Billing entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Fields to change",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBillingEntityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or billing entities not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Invoice prefix already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "billing_entity"
+      }
+    },
     "/checkout/sessions": {
       "post": {
         "tags": [
@@ -2338,13 +2865,412 @@
         "x-codegen-request-body-name": "commitment"
       }
     },
+    "/commitments/{id}/billing-terms": {
+      "get": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Get billing terms",
+        "description": "Returns the commitment's current billing terms with its scheduled and invoiced instalments in billing order. Invoiced instalments may come from terms an edit replaced. Cancelled instalments are listed by the instalments endpoint.",
+        "operationId": "getCommitmentBillingTerms",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingTermsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      },
+      "put": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Edit billing terms",
+        "description": "Replaces the whole set of billing terms of an active commitment. Its scheduled instalments are cancelled and the new terms generate instalments for what the invoiced ones leave of the commitment total; invoiced instalments and their invoices are kept. A term without bill_on or start_date starts at the billing period holding now, or at the commitment start once its term has ended. Returns the new terms with the scheduled and invoiced instalments in billing order.",
+        "operationId": "replaceCommitmentBillingTerms",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Billing terms",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceBillingTermsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingTermsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "billing_terms"
+      }
+    },
+    "/commitments/{id}/billing-terms/preview": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Preview billing terms edit",
+        "description": "Returns what editing the billing terms would produce, without saving anything: the new terms with the invoiced and new instalments in billing order.",
+        "operationId": "previewCommitmentBillingTerms",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Billing terms",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceBillingTermsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingTermsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "billing_terms"
+      }
+    },
+    "/commitments/{id}/instalments": {
+      "get": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "List instalments",
+        "description": "Lists the instalments of the commitment in billing order. Without a status filter every instalment is listed, cancelled ones included.",
+        "operationId": "listCommitmentInstalments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only instalments in these statuses (scheduled, invoiced, cancelled)",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListInstalmentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
+    "/commitments/{id}/instalments/{instalment_id}/trigger": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Trigger instalment",
+        "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when its instalment_invoicing, the term's or else the commitment's, is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; edit the billing terms to bill it later.",
+        "operationId": "triggerCommitmentInstalment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "instalment_id",
+            "in": "path",
+            "description": "Instalment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Trigger request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerInstalmentRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/billingterm.Instalment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "trigger"
+      }
+    },
     "/commitments/{id}/terminate": {
       "post": {
         "tags": [
           "Commitments"
         ],
         "summary": "Terminate commitment",
-        "description": "Ends a commitment early, effective at the given time or now.",
+        "description": "Ends a commitment immediately. effective_at defaults to now and cannot be in the future. Under billing terms, its scheduled instalments are cancelled, and those already due by effective_at are billed together as one settlement; later instalments are not billed and nothing is refunded. The settlement and a fixed cancellation fee, when given, are billed together on one one-off invoice.",
         "operationId": "terminateCommitment",
         "parameters": [
           {
@@ -2417,6 +3343,135 @@
         ],
         "x-scope": "delete",
         "x-codegen-request-body-name": "request"
+      }
+    },
+    "/contracts/search": {
+      "post": {
+        "tags": [
+          "Contracts"
+        ],
+        "summary": "Query contracts",
+        "description": "Use when searching revenue recognition contracts by customer, subscription or contract status. Returns a paginated list.",
+        "operationId": "queryContract",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/contract.Filter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListContractsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
+    "/contracts/{id}": {
+      "get": {
+        "tags": [
+          "Contracts"
+        ],
+        "summary": "Get contract",
+        "description": "Use when you need to load a single revenue recognition contract with the subscriptions it covers. Contracts are derived from subscriptions and are read-only.",
+        "operationId": "getContract",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Contract ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
       }
     },
     "/costs": {
@@ -5765,7 +6820,7 @@
           "Events"
         ],
         "summary": "Get usage analytics",
-        "description": "Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.",
+        "description": "Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.\nGroups and regular-meter time-series points contain usage-proportional cost allocations, not independently priced charges.\nSource/property filters return the unfiltered usage charge for the same time range multiplied by filtered quantity / full quantity; groups split that filtered share. Filtered costs exclude commitments and true-up.\nWhen full quantity is zero, no proportional rate is defined; costs retain direct per-group/per-bucket pricing.\nAnalytics are eventually consistent: concurrent ingestion or late events can make filtered allocations approximate across separate reads. These allocations are not an invoice preview.\nFor non-additive meters such as MAX, quantities use the meter's aggregation, so individual group shares can change when filtering or grouping changes.",
         "operationId": "getUsageAnalytics",
         "requestBody": {
           "description": "Request body",
@@ -5878,6 +6933,94 @@
           }
         ],
         "x-codegen-request-body-name": "event"
+      }
+    },
+    "/events/delete": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Delete events",
+        "description": "Hard-deletes ingested events and the meter usage they produced for the named customers and period, optionally narrowed by feature or by exact event id. Refused when anything in scope has already been invoiced. Irreversible.",
+        "operationId": "deleteEvents",
+        "requestBody": {
+          "description": "Deletion scope",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteEventsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Identifies this deletion in deleted_events_logs",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteEventsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, or a guard refused the deletion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller lacks the capability, or is a service account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A deletion is already in progress for a customer in this request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "delete",
+        "x-codegen-request-body-name": "request"
       }
     },
     "/events/lookup": {
@@ -8281,6 +9424,135 @@
         ]
       }
     },
+    "/journal_entries/search": {
+      "post": {
+        "tags": [
+          "Journal Entries"
+        ],
+        "summary": "Query journal entries",
+        "description": "Use when listing journal entries by period, event type, account, customer, contract, performance obligation or source. Returns a paginated list with lines.",
+        "operationId": "queryJournalEntry",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/journal.Filter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListJournalEntriesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
+    "/journal_entries/{id}": {
+      "get": {
+        "tags": [
+          "Journal Entries"
+        ],
+        "summary": "Get journal entry",
+        "description": "Use when you need one revenue recognition journal entry with its debit and credit lines. The journal is derived from billing and recognition and is read-only.",
+        "operationId": "getJournalEntry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Journal entry ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalEntryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/marketplace/agreements": {
       "post": {
         "tags": [
@@ -8469,6 +9741,14 @@
               "StatusDeleted",
               "StatusArchived"
             ]
+          },
+          {
+            "name": "updated_at_gte",
+            "in": "query",
+            "description": "UpdatedAtGTE bounds updated_at, which every lifecycle change bumps.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -8835,6 +10115,135 @@
             "ApiKeyAuth": []
           }
         ]
+      }
+    },
+    "/performance_obligations/search": {
+      "post": {
+        "tags": [
+          "Performance Obligations"
+        ],
+        "summary": "Query performance obligations",
+        "description": "Use when searching performance obligations by contract, customer, status or recognition method. Returns a paginated list.",
+        "operationId": "queryPerformanceObligation",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/pob.Filter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPerformanceObligationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
+    "/performance_obligations/{id}": {
+      "get": {
+        "tags": [
+          "Performance Obligations"
+        ],
+        "summary": "Get performance obligation",
+        "description": "Use when you need to load a single performance obligation with the subscription line items it covers. Performance obligations are derived from subscriptions and are read-only.",
+        "operationId": "getPerformanceObligation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Performance obligation ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerformanceObligationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
       }
     },
     "/plans": {
@@ -9756,7 +11165,7 @@
           "SelfBilling"
         ],
         "summary": "Get self-billing summary",
-        "description": "Returns the caller tenant's billing status, subscription, recent invoices and usage.",
+        "description": "Returns billing status, recent invoices, usage and a plan with charges. Charges use expanded subscription line-item prices, including overrides; without a current subscription they use the configured self-serve plan. Pricing terms are not an invoice total.",
         "operationId": "getSelfBillingSummary",
         "responses": {
           "200": {
@@ -10701,6 +12110,548 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/prices/{id}/history": {
+      "get": {
+        "tags": [
+          "Prices"
+        ],
+        "summary": "Get price history",
+        "description": "Use when you need every version of a plan price, oldest first. Pass the ID of any version; the same timeline is returned.",
+        "operationId": "getPriceHistory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Price ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPricesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Price not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
+    "/products": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "List products",
+        "description": "Use when listing products. Returns a paginated list.",
+        "operationId": "listProducts",
+        "parameters": [
+          {
+            "name": "end_time",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "lookup_keys",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "product_ids",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "published",
+                "deleted",
+                "archived"
+              ],
+              "x-enum-varnames": [
+                "StatusPublished",
+                "StatusDeleted",
+                "StatusArchived"
+              ]
+            },
+            "x-enum-varnames": [
+              "StatusPublished",
+              "StatusDeleted",
+              "StatusArchived"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListProductsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Create product",
+        "description": "Use when defining a reusable commercial identity for what you sell. Prices can reference it through product_id.",
+        "operationId": "createProduct",
+        "requestBody": {
+          "description": "Product Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "product"
+      }
+    },
+    "/products/search": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Query products",
+        "description": "Use when searching products by ids, lookup keys, filters and sorts. Returns a paginated list.",
+        "operationId": "queryProduct",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/product.Filter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListProductsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get product",
+        "description": "Use when you need to load a single product.",
+        "operationId": "getProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Update product",
+        "description": "Use when changing a product's name or description. The lookup key never changes.",
+        "operationId": "updateProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Update Product Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "product"
+      },
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Delete product",
+        "description": "Use when retiring a product. Fails while any published price references it.",
+        "operationId": "deleteProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
     "/rbac/roles": {
       "get": {
         "tags": [
@@ -11118,6 +13069,126 @@
           }
         ],
         "x-scope": "write"
+      }
+    },
+    "/revenue_reports/rollforward": {
+      "post": {
+        "tags": [
+          "Revenue Reports"
+        ],
+        "summary": "Get revenue rollforward",
+        "description": "Use when explaining how deferred revenue, unbilled receivable or another ledger account moved in ended months: opening balance, movements by category (invoiced, earned, adjustments, payments, refunds) and closing balance, optionally per customer, contract or performance obligation.",
+        "operationId": "getRevenueRollforward",
+        "requestBody": {
+          "description": "Rollforward request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollforwardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollforwardResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "request"
+      }
+    },
+    "/revenue_reports/waterfall": {
+      "post": {
+        "tags": [
+          "Revenue Reports"
+        ],
+        "summary": "Get revenue waterfall",
+        "description": "Use when showing revenue per customer, contract or performance obligation and month: actual (posted), pending (earned, not yet posted) and scheduled (invoiced, not yet earned), with optional month-end deferred and unbilled balances. Covers at most 36 months.",
+        "operationId": "getRevenueWaterfall",
+        "requestBody": {
+          "description": "Waterfall request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaterfallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaterfallResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "request"
       }
     },
     "/secrets/api/keys": {
@@ -11675,6 +13746,75 @@
           }
         ],
         "x-codegen-request-body-name": "request"
+      }
+    },
+    "/subscriptions/lineitems/{id}/history": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get subscription line item history",
+        "description": "Use when you need every version of a subscription line item, oldest first. Pass the ID of any version; the same timeline is returned. Versions cancelled before they started are left out unless requested directly.",
+        "operationId": "getSubscriptionLineItemHistory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Line item ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSubscriptionLineItemsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Line item not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
       }
     },
     "/subscriptions/schedules": {
@@ -12286,6 +14426,16 @@
           },
           "400": {
             "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An invoice already exists for the cancellation period",
             "content": {
               "application/json": {
                 "schema": {
@@ -13240,7 +15390,7 @@
           {
             "name": "expand",
             "in": "query",
-            "description": "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan')",
+            "description": "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan,commitments')",
             "schema": {
               "type": "string"
             }
@@ -16684,6 +18834,132 @@
         ]
       }
     },
+    "/webhook-events/billing_instalment.cancelled": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_instalment.cancelled",
+        "description": "Fired when a billing instalment is cancelled. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingInstalmentWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/billing_instalment.created": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_instalment.created",
+        "description": "Fired when a billing instalment is scheduled for an entity (like a commitment). Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingInstalmentWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/billing_instalment.invoiced": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_instalment.invoiced",
+        "description": "Fired when the invoice carrying a billing instalment is finalized. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingInstalmentWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/billing_instalment.updated": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_instalment.updated",
+        "description": "Fired when a trigger moves a billing instalment's bill date, or a voided invoice puts it back on schedule. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingInstalmentWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/billing_terms.created": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_terms.created",
+        "description": "Fired when billing terms are saved against an entity (like a commitment). Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingTermsWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/billing_terms.updated": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "billing_terms.updated",
+        "description": "Fired when an entity's (like a commitment's) billing terms are replaced. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.BillingTermsWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook-events/checkout.session.completed": {
       "post": {
         "tags": [
@@ -17146,6 +19422,27 @@
         }
       }
     },
+    "/webhook-events/invoice.payment.failed": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "invoice.payment.failed",
+        "description": "Fired when a payment of an invoice does not succeed. `reason` is `payment_method_unavailable`, `provider_error` or `declined`; `is_auto_charge_attempt` is true when Flexprice charged the saved payment method. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.InvoicePaymentFailedWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook-events/invoice.payment.overdue": {
       "post": {
         "tags": [
@@ -17286,6 +19583,27 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/webhookDto.InvoiceWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/payment.attempt.failed": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "payment.attempt.failed",
+        "description": "Fired when one charge attempt is declined and the payment stays open for retry. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.PaymentAttemptWebhookPayload"
                 }
               }
             }
@@ -18111,6 +20429,20 @@
   },
   "components": {
     "schemas": {
+      "ListAccountingPeriodsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountingPeriodResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListAddonAssociationsResponse": {
         "type": "object",
         "properties": {
@@ -18160,6 +20492,20 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CommitmentResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListContractsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractResponse"
             }
           },
           "pagination": {
@@ -18280,6 +20626,34 @@
           }
         }
       },
+      "ListJournalEntriesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JournalEntryResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListPerformanceObligationsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PerformanceObligationResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListPlansResponse": {
         "type": "object",
         "properties": {
@@ -18315,6 +20689,20 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PriceResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListProductsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductResponse"
             }
           },
           "pagination": {
@@ -18431,6 +20819,65 @@
           },
           "pagination": {
             "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "accountingperiod.Filter": {
+        "type": "object",
+        "properties": {
+          "accounting_period_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "period_statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.AccountingPeriodStatus"
+            }
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
           }
         }
       },
@@ -18568,6 +21015,180 @@
           }
         }
       },
+      "billingterm.Instalment": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "bill_on": {
+            "type": "string"
+          },
+          "bill_trigger": {
+            "$ref": "#/components/schemas/types.InstalmentBillTrigger"
+          },
+          "billing_term_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/types.InstalmentDelivery"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "instalment_status": {
+            "$ref": "#/components/schemas/types.InstalmentStatus"
+          },
+          "invoice_id": {
+            "type": "string"
+          },
+          "invoice_label": {
+            "type": "string"
+          },
+          "invoiced_at": {
+            "type": "string",
+            "description": "InvoicedAt is when the invoice billing the instalment was finalized.",
+            "format": "date-time"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/types.InstalmentKind"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "owner_type": {
+            "$ref": "#/components/schemas/types.BillingTermOwnerType"
+          },
+          "service_period_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "service_period_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_id": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "triggered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "billingterm.Term": {
+        "type": "object",
+        "properties": {
+          "bill_on": {
+            "type": "string"
+          },
+          "bill_trigger": {
+            "$ref": "#/components/schemas/types.InstalmentBillTrigger"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "instalment_invoicing": {
+            "$ref": "#/components/schemas/types.InstalmentDelivery"
+          },
+          "invoice_cadence": {
+            "$ref": "#/components/schemas/types.InvoiceCadence"
+          },
+          "invoice_label": {
+            "type": "string",
+            "description": "InvoiceLabel names its instalments on the invoice, after the owner's label. It may use {n} and {of}, which number\nthe owner's instalments whose labels use them."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/types.BillingTermKind"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "owner_type": {
+            "$ref": "#/components/schemas/types.BillingTermOwnerType"
+          },
+          "period_count": {
+            "type": "integer"
+          },
+          "split": {
+            "$ref": "#/components/schemas/types.BillingTermSplit"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "Recurring terms.",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "description": "Value is the amount of a fixed term, per instalment on a recurring one; it is nil for a remainder term."
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/types.BillingTermValueType"
+          }
+        }
+      },
       "commitment.Filter": {
         "type": "object",
         "properties": {
@@ -18646,6 +21267,81 @@
             "items": {
               "$ref": "#/components/schemas/types.CommitmentStatus"
             }
+          },
+          "subscription_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "contract.Filter": {
+        "type": "object",
+        "properties": {
+          "contract_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "contract_statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.ContractStatus"
+            }
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ended_at_gte": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
           },
           "subscription_ids": {
             "type": "array",
@@ -18966,6 +21662,36 @@
           "product_code": {
             "type": "string",
             "description": "-> BatchMeterUsage's ProductCode (omitted when ConcurrentAgreements)"
+          }
+        }
+      },
+      "AccountingPeriodResponse": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "period_status": {
+            "$ref": "#/components/schemas/types.AccountingPeriodStatus"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -19820,6 +22546,63 @@
           }
         }
       },
+      "BillingEntityModeResponse": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/types.BillingEntityMode"
+          }
+        }
+      },
+      "BillingEntityResponse": {
+        "type": "object",
+        "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoice_number_prefix": {
+            "type": "string"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
       "BillingPeriodConfig": {
         "type": "object",
         "properties": {
@@ -19852,6 +22635,77 @@
           "start_time": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "BillingTermInput": {
+        "required": [
+          "kind",
+          "value_type"
+        ],
+        "type": "object",
+        "properties": {
+          "bill_on": {
+            "type": "string",
+            "description": "BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now (the\ncommitment start once its term has ended). A manual term omits it and waits at the commitment end."
+          },
+          "bill_trigger": {
+            "$ref": "#/components/schemas/types.InstalmentBillTrigger"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "instalment_invoicing": {
+            "$ref": "#/components/schemas/types.InstalmentDelivery"
+          },
+          "invoice_cadence": {
+            "$ref": "#/components/schemas/types.InvoiceCadence"
+          },
+          "invoice_label": {
+            "maxLength": 255,
+            "type": "string",
+            "description": "InvoiceLabel names the term's instalments, \"Instalment {n} of {of}\" by default. {n} and {of} count only the\ncommitment's instalments whose labels use them."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/types.BillingTermKind"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "period_count": {
+            "type": "integer"
+          },
+          "split": {
+            "$ref": "#/components/schemas/types.BillingTermSplit"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "StartDate and EndDate are edges of the periods the term steps on: billing periods, or anniversary ones when it is\ninvoiced separately; by default, the period holding the commitment start (now, on an edit) to the commitment end.",
+            "format": "date-time"
+          },
+          "value": {
+            "type": "string"
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/types.BillingTermValueType"
+          }
+        }
+      },
+      "BillingTermsResponse": {
+        "type": "object",
+        "properties": {
+          "billing_terms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Term"
+            }
+          },
+          "instalments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Instalment"
+            }
           }
         }
       },
@@ -20008,6 +22862,21 @@
             "description": "Basic cancellation info"
           },
           "total_credit_amount": {
+            "type": "string"
+          }
+        }
+      },
+      "CancellationFeeInput": {
+        "required": [
+          "type",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/types.CancellationFeeType"
+          },
+          "value": {
             "type": "string"
           }
         }
@@ -20455,6 +23324,13 @@
               "$ref": "#/components/schemas/types.ActiveWindow"
             }
           },
+          "billing_terms": {
+            "type": "array",
+            "description": "BillingTerms and Instalments are set by create and preview.",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Term"
+            }
+          },
           "binding": {
             "type": "boolean"
           },
@@ -20485,6 +23361,7 @@
           },
           "end_date": {
             "type": "string",
+            "description": "EndDate is exclusive; nil for an open-ended commitment, which runs until terminated.",
             "format": "date-time"
           },
           "environment_id": {
@@ -20497,7 +23374,13 @@
             "type": "string"
           },
           "instalment_invoicing": {
-            "type": "string"
+            "$ref": "#/components/schemas/types.InstalmentDelivery"
+          },
+          "instalments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Instalment"
+            }
           },
           "invoice_description": {
             "type": "string"
@@ -20549,9 +23432,6 @@
           "termination_invoice_id": {
             "type": "string"
           },
-          "timezone": {
-            "type": "string"
-          },
           "total_amount": {
             "type": "string"
           },
@@ -20588,31 +23468,55 @@
       "CommitmentUsageBreakdown": {
         "type": "object",
         "properties": {
-          "billed_amount": {
-            "type": "string"
+          "applies_from": {
+            "type": "string",
+            "description": "AppliesFrom/To is the stretch of the queried window the commitment covers; usage outside it\nbills as overage and is not counted here.",
+            "format": "date-time"
           },
-          "capacity": {
-            "type": "string"
+          "applies_to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "billed_amount": {
+            "type": "string",
+            "description": "BilledAmount is what the stretch bills for this commitment: used plus, when binding, the true-up."
+          },
+          "binding": {
+            "type": "boolean"
           },
           "commitment_id": {
+            "type": "string"
+          },
+          "committed": {
+            "$ref": "#/components/schemas/CommitmentUsageValue"
+          },
+          "currency": {
             "type": "string"
           },
           "invoice_label": {
             "type": "string"
           },
-          "period_amount": {
-            "type": "string"
+          "measurement": {
+            "$ref": "#/components/schemas/types.CommitmentMeasurement"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.CommitmentType"
           },
           "unused": {
-            "type": "string"
+            "$ref": "#/components/schemas/CommitmentUsageValue"
           },
           "used": {
+            "$ref": "#/components/schemas/CommitmentUsageValue"
+          }
+        }
+      },
+      "CommitmentUsageValue": {
+        "type": "object",
+        "properties": {
+          "amount": {
             "type": "string"
           },
-          "value_unused": {
-            "type": "string"
-          },
-          "value_within": {
+          "quantity": {
             "type": "string"
           }
         }
@@ -20622,6 +23526,70 @@
         "properties": {
           "plan_change": {
             "$ref": "#/components/schemas/PlanChangeScheduleDetails"
+          }
+        }
+      },
+      "ContractAssociationResponse": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.RevRecEntityType"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "ContractResponse": {
+        "type": "object",
+        "properties": {
+          "associations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractAssociationResponse"
+            }
+          },
+          "contract_status": {
+            "$ref": "#/components/schemas/types.ContractStatus"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "ended_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "term_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "term_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -21124,6 +24092,34 @@
           }
         }
       },
+      "CreateBillingEntityRequest": {
+        "required": [
+          "invoice_number_prefix",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
+          "invoice_number_prefix": {
+            "maxLength": 20,
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      },
       "CreateBulkEntitlementRequest": {
         "required": [
           "items"
@@ -21226,7 +24222,6 @@
       },
       "CreateCommitmentRequest": {
         "required": [
-          "end_date",
           "measurement",
           "name",
           "scope",
@@ -21241,6 +24236,15 @@
               "$ref": "#/components/schemas/types.ActiveWindow"
             }
           },
+          "billing_terms": {
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array",
+            "description": "BillingTerms apply only to collection_method billing_terms, which requires at least one.",
+            "items": {
+              "$ref": "#/components/schemas/BillingTermInput"
+            }
+          },
           "binding": {
             "type": "boolean",
             "description": "default false"
@@ -21253,11 +24257,15 @@
           },
           "end_date": {
             "type": "string",
+            "description": "EndDate is exclusive; omit it for an open-ended commitment, which bills every period until terminated.",
             "format": "date-time"
           },
           "idempotency_key": {
             "maxLength": 128,
             "type": "string"
+          },
+          "instalment_invoicing": {
+            "$ref": "#/components/schemas/types.InstalmentDelivery"
           },
           "invoice_description": {
             "maxLength": 500,
@@ -21288,14 +24296,12 @@
           },
           "start_date": {
             "type": "string",
+            "description": "StartDate and EndDate within a second after a billing period edge are taken as that edge.",
             "format": "date-time"
           },
           "subscription_id": {
             "type": "string",
             "description": "SubscriptionID is required on POST /commitments and set server-side on inline commitments."
-          },
-          "timezone": {
-            "type": "string"
           },
           "type": {
             "$ref": "#/components/schemas/types.CommitmentType"
@@ -21576,6 +24582,10 @@
             "type": "string",
             "description": "billing_currency is the fiat currency invoices are issued in; empty means the charge currency is used as-is"
           },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "billing_entity_id is the billing entity that bills this customer; defaults to the environment's\ndefault entity. Accepted only once billing entities are enabled, and never changes afterwards."
+          },
           "contact": {
             "maxLength": 20,
             "type": "string",
@@ -21642,10 +24652,6 @@
         "description": "Request object for creating a new customer in the system"
       },
       "CreateEntitlementRequest": {
-        "required": [
-          "feature_id",
-          "feature_type"
-        ],
         "type": "object",
         "properties": {
           "aggregation_mode": {
@@ -21666,7 +24672,8 @@
             "$ref": "#/components/schemas/types.EntitlementEntityType"
           },
           "feature_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Required, except on a subscription entitlement grant (entity_type SUBSCRIPTION with grant config), which has no feature."
           },
           "feature_type": {
             "$ref": "#/components/schemas/types.FeatureType"
@@ -21709,7 +24716,8 @@
             "type": "string"
           },
           "usage_limit": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Deprecated: use grant_quota; a metered usage_limit is converted to a grant on create."
           },
           "usage_reset_period": {
             "$ref": "#/components/schemas/types.EntitlementUsageResetPeriod"
@@ -22297,6 +25305,9 @@
           "price_unit_type": {
             "$ref": "#/components/schemas/types.PriceUnitType"
           },
+          "product_id": {
+            "type": "string"
+          },
           "start_date": {
             "type": "string",
             "format": "date-time"
@@ -22425,6 +25436,24 @@
           }
         }
       },
+      "CreateProductRequest": {
+        "required": [
+          "lookup_key",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "lookup_key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "CreateScheduledTaskRequest": {
         "required": [
           "connection_id",
@@ -22448,6 +25477,39 @@
           },
           "job_config": {
             "$ref": "#/components/schemas/types.S3JobConfig"
+          }
+        }
+      },
+      "CreateSubscriptionEntitlementGrantRequest": {
+        "required": [
+          "grant_duration_unit",
+          "grant_quota"
+        ],
+        "type": "object",
+        "properties": {
+          "aggregation_mode": {
+            "$ref": "#/components/schemas/types.EntitlementAggregationMode"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "grant_allocation_behavior": {
+            "$ref": "#/components/schemas/types.EntitlementGrantAllocationBehavior"
+          },
+          "grant_duration_unit": {
+            "$ref": "#/components/schemas/types.EntitlementGrantDurationUnit"
+          },
+          "grant_duration_value": {
+            "type": "integer"
+          },
+          "grant_quota": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "StartDate defaults to the subscription's start; EndDate leaves the grant open.",
+            "format": "date-time"
           }
         }
       },
@@ -22697,6 +25759,13 @@
             "description": "SubscriptionCoupons is the preferred way to attach coupons at creation.\nAccepts coupon_code; optionally targets a line item via price_id.",
             "items": {
               "$ref": "#/components/schemas/SubscriptionCouponInput"
+            }
+          },
+          "subscription_entitlement_grants": {
+            "type": "array",
+            "description": "SubscriptionEntitlementGrants are dollar entitlement grants shared by every usage line, created with the subscription.",
+            "items": {
+              "$ref": "#/components/schemas/CreateSubscriptionEntitlementGrantRequest"
             }
           },
           "subscription_status": {
@@ -23402,6 +26471,10 @@
             "type": "string",
             "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is."
           },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "BillingEntityID is the entity that bills the customer; nil while the environment has no billing entities. Never changes once set."
+          },
           "contact": {
             "type": "string",
             "description": "Contact is an optional contact number for the customer (e.g. phone)"
@@ -23539,6 +26612,65 @@
           }
         }
       },
+      "DeleteEventsRequest": {
+        "required": [
+          "external_customer_ids",
+          "period_end",
+          "period_start"
+        ],
+        "type": "object",
+        "properties": {
+          "event_ids": {
+            "maxItems": 1000,
+            "type": "array",
+            "description": "EventIDs narrows the deletion to exact event ids. Requires exactly one\ncustomer and no feature_ids.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "external_customer_ids": {
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "feature_ids": {
+            "maxItems": 100,
+            "type": "array",
+            "description": "FeatureIDs narrows the deletion to the meters these features resolve to.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "period_end": {
+            "type": "string",
+            "example": "2026-03-28T00:00:00Z",
+            "format": "date-time"
+          },
+          "period_start": {
+            "type": "string",
+            "example": "2026-03-01T00:00:00Z",
+            "format": "date-time"
+          },
+          "skip_payload": {
+            "type": "boolean",
+            "description": "SkipPayload stores the audit row's properties as '' so the deletion leaves\nno payload copy. Defaults to true: a deletion is usually an erasure, and\nkeeping the payload would defeat it. Send false to retain it."
+          }
+        }
+      },
+      "DeleteEventsResponse": {
+        "type": "object",
+        "properties": {
+          "deleted_events": {
+            "type": "integer"
+          },
+          "deleted_meter_usage_rows": {
+            "type": "integer"
+          }
+        }
+      },
       "DeletePriceRequest": {
         "type": "object",
         "properties": {
@@ -23637,6 +26769,9 @@
           },
           "grant_quota": {
             "type": "string"
+          },
+          "grant_scope": {
+            "$ref": "#/components/schemas/types.EntitlementGrantScopeEntityType"
           },
           "id": {
             "type": "string"
@@ -24484,7 +27619,7 @@
           },
           "expand": {
             "type": "array",
-            "description": "allowed values: \"price\", \"meter\", \"feature\", \"subscription_line_item\",\"plan\",\"addon\"",
+            "description": "allowed values: \"price\", \"meter\", \"feature\", \"subscription_line_item\",\"plan\",\"addon\",\"source\",\"instalments\"",
             "items": {
               "type": "string"
             }
@@ -24547,6 +27682,13 @@
               "$ref": "#/components/schemas/CustomAnalyticItem"
             }
           },
+          "instalments": {
+            "type": "array",
+            "description": "Instalments lists, with expand \"instalments\", the instalments invoiced in the range for the v2 commitments covering\na queried meter; it is empty with property or source filters, or when no usage line runs in the range.",
+            "items": {
+              "$ref": "#/components/schemas/UsageAnalyticInstalment"
+            }
+          },
           "items": {
             "type": "array",
             "items": {
@@ -24559,6 +27701,10 @@
           "total_cost": {
             "type": "string",
             "description": "TotalCost is the final cost after discount (Subtotal - TotalDiscount)"
+          },
+          "total_cost_with_instalments": {
+            "type": "string",
+            "description": "TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes \"instalments\"."
           },
           "total_discount": {
             "type": "string"
@@ -25003,11 +28149,21 @@
           "plan_id": {
             "type": "string"
           },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
           "subscription_coupons": {
             "type": "array",
             "description": "SubscriptionCoupons is the preferred way to attach coupons at creation.\nAccepts coupon_code; optionally targets a line item via price_id.",
             "items": {
               "$ref": "#/components/schemas/SubscriptionCouponInput"
+            }
+          },
+          "subscription_entitlement_grants": {
+            "type": "array",
+            "description": "SubscriptionEntitlementGrants are dollar entitlement grants shared by every usage line, created with the subscription.",
+            "items": {
+              "$ref": "#/components/schemas/CreateSubscriptionEntitlementGrantRequest"
             }
           },
           "tax_rate_overrides": {
@@ -25199,6 +28355,10 @@
           },
           "amount": {
             "type": "string"
+          },
+          "billing_instalment_id": {
+            "type": "string",
+            "description": "billing_instalment_id links this line item to the billing instalment it bills."
           },
           "commitment_id": {
             "type": "string",
@@ -25450,6 +28610,13 @@
             "type": "string",
             "description": "amount_remaining is the outstanding amount still owed on this invoice (calculated as amount_due minus amount_paid)"
           },
+          "billing_entity": {
+            "$ref": "#/components/schemas/types.InvoiceBillingEntity"
+          },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "BillingEntityID is the entity that bills the invoice; nil while the environment has no billing entities. Never changes once set."
+          },
           "billing_period": {
             "type": "string",
             "description": "billing_period describes the billing period this invoice covers (e.g., \"January 2024\", \"Q1 2024\")"
@@ -25665,6 +28832,72 @@
           }
         }
       },
+      "JournalEntryResponse": {
+        "type": "object",
+        "properties": {
+          "accounting_period_id": {
+            "type": "string"
+          },
+          "business_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "contract_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/types.JournalEventType"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JournalLineResponse"
+            }
+          },
+          "reversal_of": {
+            "type": "string"
+          },
+          "source_entity_id": {
+            "type": "string"
+          },
+          "source_entity_type": {
+            "$ref": "#/components/schemas/types.RevRecEntityType"
+          }
+        }
+      },
+      "JournalLineResponse": {
+        "type": "object",
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/types.LedgerAccountKey"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/types.JournalDirection"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pob_id": {
+            "type": "string"
+          }
+        }
+      },
       "LineItemChange": {
         "required": [
           "id"
@@ -25867,6 +29100,20 @@
           }
         }
       },
+      "ListBillingEntitiesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BillingEntityResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListCostsheetResponse": {
         "type": "object",
         "properties": {
@@ -25920,6 +29167,17 @@
           },
           "pagination": {
             "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListInstalmentsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Instalment"
+            }
           }
         }
       },
@@ -26293,6 +29551,9 @@
           "error_message": {
             "type": "string"
           },
+          "gateway_attempt_id": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -26333,6 +29594,10 @@
             "items": {
               "$ref": "#/components/schemas/PaymentAttemptResponse"
             }
+          },
+          "connection_id": {
+            "type": "string",
+            "description": "connection_id is the connection that took this payment; null when no gateway connection was used"
           },
           "created_at": {
             "type": "string",
@@ -26421,6 +29686,72 @@
             "type": "string"
           },
           "voided_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PerformanceObligationAssociationResponse": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.RevRecEntityType"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "PerformanceObligationResponse": {
+        "type": "object",
+        "properties": {
+          "amortization_method": {
+            "$ref": "#/components/schemas/types.AmortizationMethod"
+          },
+          "associations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PerformanceObligationAssociationResponse"
+            }
+          },
+          "contract_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pob_status": {
+            "$ref": "#/components/schemas/types.PerformanceObligationStatus"
+          },
+          "recognition_method": {
+            "$ref": "#/components/schemas/types.RecognitionMethod"
+          },
+          "service_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "service_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "updated_at": {
             "type": "string",
             "format": "date-time"
           }
@@ -26760,6 +30091,9 @@
           "pricing_unit": {
             "$ref": "#/components/schemas/PriceUnitResponse"
           },
+          "product_id": {
+            "type": "string"
+          },
           "sequence": {
             "type": "integer",
             "description": "Sequence is the monotonic stamp bumped on every state change that\nsubscription line items need to react to. Read by the plan-price sync;\nset by the database (DEFAULT nextval) on create and by the price\nrepository on termination / compatibility-affecting edits."
@@ -26876,6 +30210,34 @@
           },
           "updated_by": {
             "type": "string"
+          }
+        }
+      },
+      "ProductResponse": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lookup_key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -27161,6 +30523,22 @@
           },
           "reason": {
             "type": "string"
+          }
+        }
+      },
+      "ReplaceBillingTermsRequest": {
+        "required": [
+          "billing_terms"
+        ],
+        "type": "object",
+        "properties": {
+          "billing_terms": {
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BillingTermInput"
+            }
           }
         }
       },
@@ -27526,6 +30904,147 @@
           }
         }
       },
+      "RevenueBreakdown": {
+        "type": "object",
+        "properties": {
+          "actual": {
+            "type": "string"
+          },
+          "pending": {
+            "type": "string"
+          },
+          "scheduled": {
+            "type": "string"
+          },
+          "total": {
+            "type": "string",
+            "description": "actual + pending + scheduled"
+          }
+        }
+      },
+      "RollforwardRequest": {
+        "required": [
+          "currency",
+          "period_start"
+        ],
+        "type": "object",
+        "properties": {
+          "accounts": {
+            "type": "array",
+            "description": "defaults to [deferred_revenue]",
+            "items": {
+              "$ref": "#/components/schemas/types.LedgerAccountKey"
+            }
+          },
+          "contract_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "group_by": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.RevenueReportGroupBy"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 0,
+            "type": "integer",
+            "description": "item rows per page; totals are never paged"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "period_end": {
+            "type": "string",
+            "description": "YYYY-MM, an ended month; defaults to period_start",
+            "format": "date-time"
+          },
+          "period_start": {
+            "type": "string",
+            "description": "YYYY-MM",
+            "format": "date-time"
+          },
+          "pob_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "posted_by": {
+            "type": "string",
+            "description": "only entries posted at or before it: the books as they were then"
+          }
+        }
+      },
+      "RollforwardResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "per period, account and group; empty without group_by",
+            "items": {
+              "$ref": "#/components/schemas/RollforwardRow"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          },
+          "totals": {
+            "type": "array",
+            "description": "per period and account, all groups",
+            "items": {
+              "$ref": "#/components/schemas/RollforwardRow"
+            }
+          }
+        }
+      },
+      "RollforwardRow": {
+        "type": "object",
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/types.LedgerAccountKey"
+          },
+          "closing": {
+            "type": "string"
+          },
+          "contract_id": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "movements": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "a missing category is 0"
+          },
+          "opening": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string",
+            "description": "YYYY-MM"
+          },
+          "pob_id": {
+            "type": "string"
+          }
+        }
+      },
       "SavedCardDetails": {
         "type": "object",
         "properties": {
@@ -27710,6 +31229,82 @@
           }
         }
       },
+      "SelfBillingChargeResponse": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Amount is a unit rate; tiered charges use tiers instead."
+          },
+          "billing_model": {
+            "$ref": "#/components/schemas/types.BillingModel"
+          },
+          "billing_period": {
+            "$ref": "#/components/schemas/types.BillingPeriod"
+          },
+          "billing_period_count": {
+            "type": "integer"
+          },
+          "bucket_size": {
+            "$ref": "#/components/schemas/types.WindowSize"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "invoice_cadence": {
+            "$ref": "#/components/schemas/types.InvoiceCadence"
+          },
+          "line_item_id": {
+            "type": "string"
+          },
+          "meter_display_name": {
+            "type": "string"
+          },
+          "meter_id": {
+            "type": "string"
+          },
+          "price_id": {
+            "type": "string"
+          },
+          "price_unit": {
+            "type": "string"
+          },
+          "price_unit_amount": {
+            "type": "string"
+          },
+          "price_unit_tiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/price.PriceTier"
+            }
+          },
+          "price_unit_type": {
+            "$ref": "#/components/schemas/types.PriceUnitType"
+          },
+          "quantity": {
+            "type": "string",
+            "description": "Quantity is the configured quantity; metered usage is returned in summary.usage."
+          },
+          "tier_mode": {
+            "$ref": "#/components/schemas/types.BillingTier"
+          },
+          "tiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/price.PriceTier"
+            }
+          },
+          "transform_quantity": {
+            "$ref": "#/components/schemas/price.TransformQuantity"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.PriceType"
+          }
+        }
+      },
       "SelfBillingCheckoutRequest": {
         "required": [
           "address_city",
@@ -27800,6 +31395,26 @@
           }
         }
       },
+      "SelfBillingPlanResponse": {
+        "type": "object",
+        "properties": {
+          "charges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SelfBillingChargeResponse"
+            }
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "SelfBillingPortalResponse": {
         "type": "object",
         "properties": {
@@ -27831,6 +31446,9 @@
             "items": {
               "$ref": "#/components/schemas/SelfBillingInvoice"
             }
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SelfBillingPlanResponse"
           },
           "status": {
             "$ref": "#/components/schemas/types.TenantInternalStatus"
@@ -28397,6 +32015,20 @@
           }
         }
       },
+      "SubscriptionEntitlementGrantsResponse": {
+        "type": "object",
+        "properties": {
+          "entitlements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntitlementResponse"
+            }
+          },
+          "grant_state": {
+            "$ref": "#/components/schemas/GrantState"
+          }
+        }
+      },
       "SubscriptionEntitlementsResponse": {
         "type": "object",
         "properties": {
@@ -28408,6 +32040,9 @@
           },
           "plan_id": {
             "type": "string"
+          },
+          "subscription_entitlement_grants": {
+            "$ref": "#/components/schemas/SubscriptionEntitlementGrantsResponse"
           },
           "subscription_id": {
             "type": "string"
@@ -28994,6 +32629,13 @@
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
+          "commitments": {
+            "type": "array",
+            "description": "Commitments are the commitments created with the subscription; set on create only.",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentResponse"
+            }
+          },
           "coupon_associations": {
             "type": "array",
             "description": "CouponAssociations are the coupon associations for this subscription",
@@ -29227,6 +32869,13 @@
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
+          },
+          "commitments": {
+            "type": "array",
+            "description": "Commitments are included when \"commitments\" is in expand parameter",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentResponse"
+            }
           },
           "coupon_associations": {
             "type": "array",
@@ -30010,10 +33659,11 @@
         "type": "object",
         "properties": {
           "cancellation_fee": {
-            "type": "string"
+            "$ref": "#/components/schemas/CancellationFeeInput"
           },
           "effective_at": {
             "type": "string",
+            "description": "EffectiveAt defaults to now; within a second after a billing period edge it is taken as that edge.",
             "format": "date-time"
           }
         }
@@ -30168,6 +33818,15 @@
           }
         }
       },
+      "TriggerInstalmentRequest": {
+        "type": "object",
+        "properties": {
+          "bill_on": {
+            "type": "string",
+            "description": "BillOn within a second after a billing period edge is taken as that edge."
+          }
+        }
+      },
       "UpdateAddonRequest": {
         "type": "object",
         "properties": {
@@ -30194,15 +33853,45 @@
           }
         }
       },
+      "UpdateBillingEntityRequest": {
+        "type": "object",
+        "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
+          "invoice_number_prefix": {
+            "maxLength": 20,
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      },
       "UpdateCommitmentRequest": {
         "type": "object",
         "properties": {
+          "end_date": {
+            "type": "string",
+            "description": "EndDate can't be changed yet; terminate the commitment to end it.",
+            "format": "date-time"
+          },
           "invoice_description": {
             "maxLength": 500,
             "type": "string"
           },
           "invoice_label": {
             "maxLength": 255,
+            "minLength": 1,
             "type": "string"
           },
           "metadata": {
@@ -30210,6 +33899,7 @@
           },
           "name": {
             "maxLength": 255,
+            "minLength": 1,
             "type": "string"
           }
         }
@@ -30312,6 +34002,10 @@
             "type": "string",
             "description": "billing_currency updates the invoicing currency; send \"\" to clear it back to the charge currency"
           },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "billing_entity_id cannot be changed; sending it is rejected"
+          },
           "contact": {
             "maxLength": 20,
             "type": "string",
@@ -30399,7 +34093,8 @@
             "type": "string"
           },
           "usage_limit": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Deprecated: use grant_quota."
           },
           "usage_reset_period": {
             "$ref": "#/components/schemas/types.EntitlementUsageResetPeriod"
@@ -30634,6 +34329,10 @@
               "$ref": "#/components/schemas/CreatePriceTier"
             }
           },
+          "product_id": {
+            "type": "string",
+            "description": "ProductID sets the price's product while it has none; once set it never changes."
+          },
           "tier_mode": {
             "$ref": "#/components/schemas/types.BillingTier"
           },
@@ -30654,6 +34353,17 @@
         "properties": {
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateProductRequest": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
           },
           "name": {
             "type": "string"
@@ -30808,6 +34518,9 @@
           "parent_subscription_id": {
             "type": "string",
             "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear."
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
           },
           "status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"
@@ -31016,6 +34729,45 @@
             "$ref": "#/components/schemas/types.Metadata"
           },
           "name": {
+            "type": "string"
+          }
+        }
+      },
+      "UsageAnalyticInstalment": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "commitment_id": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoice_id": {
+            "type": "string"
+          },
+          "invoice_label": {
+            "type": "string"
+          },
+          "invoiced_at": {
+            "type": "string",
+            "description": "when the invoice billing it was finalized",
+            "format": "date-time"
+          },
+          "service_period_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "service_period_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subscription_id": {
             "type": "string"
           }
         }
@@ -31686,6 +35438,130 @@
           }
         }
       },
+      "WaterfallCell": {
+        "type": "object",
+        "properties": {
+          "deferred": {
+            "type": "string",
+            "description": "details: closing deferred_revenue, ended months only"
+          },
+          "period": {
+            "type": "string",
+            "description": "YYYY-MM"
+          },
+          "revenue": {
+            "$ref": "#/components/schemas/RevenueBreakdown"
+          },
+          "unbilled": {
+            "type": "string",
+            "description": "details: closing unbilled_receivable, ended months only"
+          }
+        }
+      },
+      "WaterfallRequest": {
+        "required": [
+          "currency",
+          "period_end",
+          "period_start"
+        ],
+        "type": "object",
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "description": "report date: pending and scheduled split here; defaults to now"
+          },
+          "contract_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "details": {
+            "type": "boolean",
+            "description": "month-end deferred and unbilled balances"
+          },
+          "group_by": {
+            "$ref": "#/components/schemas/types.RevenueReportGroupBy"
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 0,
+            "type": "integer",
+            "description": "rows per page; totals are never paged"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "period_end": {
+            "type": "string",
+            "description": "YYYY-MM, at most 36 months from period_start",
+            "format": "date-time"
+          },
+          "period_start": {
+            "type": "string",
+            "description": "YYYY-MM",
+            "format": "date-time"
+          },
+          "pob_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "WaterfallResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WaterfallRow"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          },
+          "totals": {
+            "type": "array",
+            "description": "per period over all rows, never paged",
+            "items": {
+              "$ref": "#/components/schemas/WaterfallCell"
+            }
+          }
+        }
+      },
+      "WaterfallRow": {
+        "type": "object",
+        "properties": {
+          "cells": {
+            "type": "array",
+            "description": "one per requested period, in order",
+            "items": {
+              "$ref": "#/components/schemas/WaterfallCell"
+            }
+          },
+          "contract_id": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "pob_id": {
+            "type": "string"
+          }
+        }
+      },
       "WorkflowExecutionDTO": {
         "type": "object",
         "properties": {
@@ -31916,6 +35792,10 @@
           "billing_currency": {
             "type": "string",
             "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is."
+          },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "BillingEntityID is the entity that bills the customer; nil while the environment has no billing entities. Never changes once set."
           },
           "contact": {
             "type": "string",
@@ -33321,6 +37201,10 @@
       "types.CustomerFilter": {
         "type": "object",
         "properties": {
+          "billing_entity_id": {
+            "type": "string",
+            "description": "billing_entity_id filters by the customer's billing entity"
+          },
           "customer_ids": {
             "type": "array",
             "items": {
@@ -33519,6 +37403,13 @@
             "description": "Specific filters for entitlements",
             "items": {
               "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "grant_scopes": {
+            "type": "array",
+            "description": "GrantScopes selects entitlements by grant scope. Empty means feature only, so\nsubscription entitlement grants, which have no feature, never reach feature-based reads.",
+            "items": {
+              "$ref": "#/components/schemas/types.EntitlementGrantScopeEntityType"
             }
           },
           "has_grant_config": {
@@ -34303,7 +38194,9 @@
           "AUTO_INVOICE_THRESHOLD",
           "WALLET_AUTO_TOPUP",
           "SUBSCRIPTION_PAUSED",
-          "SUBSCRIPTION_RESUME"
+          "SUBSCRIPTION_RESUME",
+          "BILLING_TERMS",
+          "COMMITMENT_TERMINATION"
         ],
         "x-enum-varnames": [
           "InvoiceBillingReasonSubscriptionCreate",
@@ -34316,7 +38209,9 @@
           "InvoiceBillingReasonAutoInvoiceThreshold",
           "InvoiceBillingReasonWalletAutoTopup",
           "InvoiceBillingReasonSubscriptionPaused",
-          "InvoiceBillingReasonSubscriptionResume"
+          "InvoiceBillingReasonSubscriptionResume",
+          "InvoiceBillingReasonBillingTerms",
+          "InvoiceBillingReasonCommitmentTermination"
         ],
         "x-speakeasy-name-override": "InvoiceBillingReason"
       },
@@ -34342,6 +38237,10 @@
           "amount_remaining_gt": {
             "type": "number",
             "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts"
+          },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "billing_entity_id filters by the customer's billing entity"
           },
           "billing_reason": {
             "$ref": "#/components/schemas/types.InvoiceBillingReason"
@@ -34416,6 +38315,10 @@
               "$ref": "#/components/schemas/types.PaymentStatus"
             }
           },
+          "period_end_gt": {
+            "type": "string",
+            "description": "period_end_gt filters invoices with period_end > value"
+          },
           "period_end_gte": {
             "type": "string",
             "description": "period_end_gte filters invoices with period_end >= value"
@@ -34427,6 +38330,10 @@
           "period_start_gte": {
             "type": "string",
             "description": "period_start_gte filters invoices with period_start >= value"
+          },
+          "period_start_lt": {
+            "type": "string",
+            "description": "period_start_lt filters invoices with period_start < value"
           },
           "period_start_lte": {
             "type": "string",
@@ -34459,6 +38366,11 @@
           "subscription_id": {
             "type": "string",
             "description": "subscription_id filters invoices generated for a specific subscription\nOnly returns invoices that were created as part of the specified subscription's billing"
+          },
+          "updated_at_gte": {
+            "type": "string",
+            "description": "updated_at_gte filters invoices updated at or after the given instant",
+            "format": "date-time"
           },
           "voided_at_gte": {
             "type": "string",
@@ -34517,6 +38429,9 @@
           },
           "normalize_fixed_to": {
             "$ref": "#/components/schemas/types.BillingPeriod"
+          },
+          "payment_gateways": {
+            "$ref": "#/components/schemas/types.ZohoPaymentGatewaySettings"
           },
           "payment_mode": {
             "type": "string",
@@ -35077,6 +38992,12 @@
             }
           },
           "price_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "product_ids": {
             "type": "array",
             "items": {
               "type": "string"
@@ -36210,14 +40131,16 @@
           "subscription",
           "invoice",
           "tenant",
-          "credit_note"
+          "credit_note",
+          "billing_entity"
         ],
         "x-enum-varnames": [
           "TaxRateEntityTypeCustomer",
           "TaxRateEntityTypeSubscription",
           "TaxRateEntityTypeInvoice",
           "TaxRateEntityTypeTenant",
-          "TaxRateEntityTypeCreditNote"
+          "TaxRateEntityTypeCreditNote",
+          "TaxRateEntityTypeBillingEntity"
         ],
         "x-speakeasy-name-override": "TaxRateEntityType"
       },
@@ -36886,6 +40809,12 @@
           "commitment.created",
           "commitment.updated",
           "commitment.terminated",
+          "billing_terms.created",
+          "billing_terms.updated",
+          "billing_instalment.created",
+          "billing_instalment.updated",
+          "billing_instalment.cancelled",
+          "billing_instalment.invoiced",
           "wallet.created",
           "wallet.updated",
           "wallet.terminated",
@@ -36894,6 +40823,7 @@
           "payment.created",
           "payment.updated",
           "payment.failed",
+          "payment.attempt.failed",
           "payment.success",
           "payment.pending",
           "refund.created",
@@ -36907,6 +40837,7 @@
           "invoice.update.voided",
           "invoice.update",
           "invoice.payment.overdue",
+          "invoice.payment.failed",
           "invoice.sync.success",
           "invoice.sync.failed",
           "wallet.credit_balance.dropped",
@@ -36953,6 +40884,12 @@
           "WebhookEventCommitmentCreated",
           "WebhookEventCommitmentUpdated",
           "WebhookEventCommitmentTerminated",
+          "WebhookEventBillingTermsCreated",
+          "WebhookEventBillingTermsUpdated",
+          "WebhookEventBillingInstalmentCreated",
+          "WebhookEventBillingInstalmentUpdated",
+          "WebhookEventBillingInstalmentCancelled",
+          "WebhookEventBillingInstalmentInvoiced",
           "WebhookEventWalletCreated",
           "WebhookEventWalletUpdated",
           "WebhookEventWalletTerminated",
@@ -36961,6 +40898,7 @@
           "WebhookEventPaymentCreated",
           "WebhookEventPaymentUpdated",
           "WebhookEventPaymentFailed",
+          "WebhookEventPaymentAttemptFailed",
           "WebhookEventPaymentSuccess",
           "WebhookEventPaymentPending",
           "WebhookEventRefundCreated",
@@ -36974,6 +40912,7 @@
           "WebhookEventInvoiceUpdateVoided",
           "WebhookEventInvoiceUpdate",
           "WebhookEventInvoicePaymentOverdue",
+          "WebhookEventInvoicePaymentFailed",
           "WebhookEventInvoiceSyncSuccess",
           "WebhookEventInvoiceSyncFailed",
           "WebhookEventWalletCreditBalanceDropped",
@@ -37155,6 +41094,10 @@
           "amount": {
             "type": "string"
           },
+          "billing_instalment_id": {
+            "type": "string",
+            "description": "billing_instalment_id links this line item to the billing instalment it bills."
+          },
           "commitment_id": {
             "type": "string",
             "description": "commitment_id links this line item to the commitment it bills."
@@ -37275,6 +41218,104 @@
           }
         }
       },
+      "journal.Filter": {
+        "type": "object",
+        "properties": {
+          "accounting_period_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.LedgerAccountKey"
+            }
+          },
+          "contract_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "event_types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.JournalEventType"
+            }
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "journal_entry_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "pob_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "source_entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source_entity_type": {
+            "$ref": "#/components/schemas/types.RevRecEntityType"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          }
+        }
+      },
       "meter.Aggregation": {
         "type": "object",
         "properties": {
@@ -37329,6 +41370,83 @@
           },
           "workflow_id": {
             "type": "string"
+          }
+        }
+      },
+      "pob.Filter": {
+        "type": "object",
+        "properties": {
+          "contract_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "performance_obligation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pob_statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.PerformanceObligationStatus"
+            }
+          },
+          "recognition_methods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.RecognitionMethod"
+            }
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
           }
         }
       },
@@ -37482,6 +41600,9 @@
           "price_unit_type": {
             "$ref": "#/components/schemas/types.PriceUnitType"
           },
+          "product_id": {
+            "type": "string"
+          },
           "sequence": {
             "type": "integer",
             "description": "Sequence is the monotonic stamp bumped on every state change that\nsubscription line items need to react to. Read by the plan-price sync;\nset by the database (DEFAULT nextval) on create and by the price\nrepository on termination / compatibility-affecting edits."
@@ -37554,6 +41675,65 @@
           },
           "round": {
             "$ref": "#/components/schemas/types.RoundType"
+          }
+        }
+      },
+      "product.Filter": {
+        "type": "object",
+        "properties": {
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "lookup_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "product_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
           }
         }
       },
@@ -37829,6 +42009,21 @@
           }
         }
       },
+      "types.AccountingPeriodStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed"
+        ],
+        "x-enum-comments": {
+          "AccountingPeriodStatusClosed": "reserved; close is deferred"
+        },
+        "x-enum-varnames": [
+          "AccountingPeriodStatusOpen",
+          "AccountingPeriodStatusClosed"
+        ],
+        "x-speakeasy-name-override": "AccountingPeriodStatus"
+      },
       "types.ActiveWindow": {
         "type": "object",
         "properties": {
@@ -37855,6 +42050,138 @@
           }
         },
         "x-speakeasy-name-override": "AddonPriceOverrideRef"
+      },
+      "types.AmortizationMethod": {
+        "type": "string",
+        "enum": [
+          "daily",
+          "period_even",
+          "period_even_prorated"
+        ],
+        "x-enum-varnames": [
+          "AmortizationDaily",
+          "AmortizationPeriodEven",
+          "AmortizationPeriodEvenProrated"
+        ],
+        "x-speakeasy-name-override": "AmortizationMethod"
+      },
+      "types.BillingAddress": {
+        "type": "object",
+        "properties": {
+          "address_city": {
+            "type": "string"
+          },
+          "address_country": {
+            "type": "string"
+          },
+          "address_line1": {
+            "type": "string"
+          },
+          "address_line2": {
+            "type": "string"
+          },
+          "address_postal_code": {
+            "type": "string"
+          },
+          "address_state": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BillingAddress"
+      },
+      "types.BillingDetails": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/types.BillingAddress"
+          },
+          "email": {
+            "type": "string"
+          },
+          "help_email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BillingDetails"
+      },
+      "types.BillingEntityMode": {
+        "type": "string",
+        "enum": [
+          "off",
+          "enabling",
+          "enabled"
+        ],
+        "x-enum-varnames": [
+          "BillingEntityModeOff",
+          "BillingEntityModeEnabling",
+          "BillingEntityModeEnabled"
+        ],
+        "x-speakeasy-name-override": "BillingEntityMode"
+      },
+      "types.BillingTermKind": {
+        "type": "string",
+        "enum": [
+          "once",
+          "recurring"
+        ],
+        "x-enum-varnames": [
+          "BillingTermKindOnce",
+          "BillingTermKindRecurring"
+        ],
+        "x-speakeasy-name-override": "BillingTermKind"
+      },
+      "types.BillingTermOwnerType": {
+        "type": "string",
+        "enum": [
+          "commitment"
+        ],
+        "x-enum-varnames": [
+          "BillingTermOwnerCommitment"
+        ],
+        "x-speakeasy-name-override": "BillingTermOwnerType"
+      },
+      "types.BillingTermSplit": {
+        "type": "string",
+        "enum": [
+          "even",
+          "proportional"
+        ],
+        "x-enum-varnames": [
+          "BillingTermSplitEven",
+          "BillingTermSplitProportional"
+        ],
+        "x-speakeasy-name-override": "BillingTermSplit"
+      },
+      "types.BillingTermValueType": {
+        "type": "string",
+        "description": "fixed or remainder; percentage is reserved and rejected as not supported yet",
+        "enum": [
+          "fixed",
+          "percentage",
+          "remainder"
+        ],
+        "x-enum-varnames": [
+          "BillingTermValueFixed",
+          "BillingTermValuePercentage",
+          "BillingTermValueRemainder"
+        ],
+        "x-speakeasy-name-override": "BillingTermValueType"
+      },
+      "types.CancellationFeeType": {
+        "type": "string",
+        "description": "fixed; percentage is reserved and rejected as not supported yet",
+        "enum": [
+          "fixed",
+          "percentage"
+        ],
+        "x-enum-varnames": [
+          "CancellationFeeFixed",
+          "CancellationFeePercentage"
+        ],
+        "x-speakeasy-name-override": "CancellationFeeType"
       },
       "types.CommitmentCollectionMethod": {
         "type": "string",
@@ -37924,6 +42251,36 @@
         ],
         "x-speakeasy-name-override": "CommitmentStatus"
       },
+      "types.ContractStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "active",
+          "ended",
+          "cancelled"
+        ],
+        "x-enum-varnames": [
+          "ContractStatusDraft",
+          "ContractStatusActive",
+          "ContractStatusEnded",
+          "ContractStatusCancelled"
+        ],
+        "x-speakeasy-name-override": "ContractStatus"
+      },
+      "types.EntitlementGrantScopeEntityType": {
+        "type": "string",
+        "enum": [
+          "feature",
+          "subscription",
+          "group"
+        ],
+        "x-enum-varnames": [
+          "EntitlementGrantScopeFeature",
+          "EntitlementGrantScopeSubscription",
+          "EntitlementGrantScopeGroup"
+        ],
+        "x-speakeasy-name-override": "EntitlementGrantScopeEntityType"
+      },
       "types.ImprovementDirection": {
         "type": "string",
         "enum": [
@@ -37935,6 +42292,147 @@
           "ImprovementLower"
         ],
         "x-speakeasy-name-override": "ImprovementDirection"
+      },
+      "types.InstalmentBillTrigger": {
+        "type": "string",
+        "enum": [
+          "date",
+          "manual"
+        ],
+        "x-enum-varnames": [
+          "InstalmentBillTriggerDate",
+          "InstalmentBillTriggerManual"
+        ],
+        "x-speakeasy-name-override": "InstalmentBillTrigger"
+      },
+      "types.InstalmentDelivery": {
+        "type": "string",
+        "enum": [
+          "subscription_invoice",
+          "separate_invoice"
+        ],
+        "x-enum-varnames": [
+          "InstalmentDeliverySubscriptionInvoice",
+          "InstalmentDeliverySeparateInvoice"
+        ],
+        "x-speakeasy-name-override": "InstalmentDelivery"
+      },
+      "types.InstalmentKind": {
+        "type": "string",
+        "enum": [
+          "instalment",
+          "settlement"
+        ],
+        "x-enum-varnames": [
+          "InstalmentKindInstalment",
+          "InstalmentKindSettlement"
+        ],
+        "x-speakeasy-name-override": "InstalmentKind"
+      },
+      "types.InstalmentStatus": {
+        "type": "string",
+        "enum": [
+          "scheduled",
+          "invoiced",
+          "cancelled"
+        ],
+        "x-enum-varnames": [
+          "InstalmentStatusScheduled",
+          "InstalmentStatusInvoiced",
+          "InstalmentStatusCancelled"
+        ],
+        "x-speakeasy-name-override": "InstalmentStatus"
+      },
+      "types.InvoiceBillingEntity": {
+        "type": "object",
+        "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
+          "billing_entity_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "InvoiceBillingEntity"
+      },
+      "types.InvoicePaymentFailureReason": {
+        "type": "string",
+        "enum": [
+          "payment_method_unavailable",
+          "provider_error",
+          "declined"
+        ],
+        "x-enum-varnames": [
+          "InvoicePaymentFailureReasonPaymentMethodUnavailable",
+          "InvoicePaymentFailureReasonProviderError",
+          "InvoicePaymentFailureReasonDeclined"
+        ],
+        "x-speakeasy-name-override": "InvoicePaymentFailureReason"
+      },
+      "types.JournalDirection": {
+        "type": "string",
+        "enum": [
+          "debit",
+          "credit"
+        ],
+        "x-enum-varnames": [
+          "JournalDirectionDebit",
+          "JournalDirectionCredit"
+        ],
+        "x-speakeasy-name-override": "JournalDirection"
+      },
+      "types.JournalEventType": {
+        "type": "string",
+        "enum": [
+          "invoice_finalized",
+          "invoice_voided",
+          "credit_note_finalized",
+          "credit_note_voided",
+          "payment_succeeded",
+          "payment_reversed",
+          "refund_succeeded",
+          "revenue_earned",
+          "revenue_offset"
+        ],
+        "x-enum-varnames": [
+          "JournalEventInvoiceFinalized",
+          "JournalEventInvoiceVoided",
+          "JournalEventCreditNoteFinalized",
+          "JournalEventCreditNoteVoided",
+          "JournalEventPaymentSucceeded",
+          "JournalEventPaymentReversed",
+          "JournalEventRefundSucceeded",
+          "JournalEventRevenueEarned",
+          "JournalEventRevenueOffset"
+        ],
+        "x-speakeasy-name-override": "JournalEventType"
+      },
+      "types.LedgerAccountKey": {
+        "type": "string",
+        "enum": [
+          "cash",
+          "accounts_receivable",
+          "unbilled_receivable",
+          "deferred_revenue",
+          "customer_credit",
+          "tax_payable",
+          "revenue",
+          "contra_revenue"
+        ],
+        "x-enum-varnames": [
+          "LedgerAccountCash",
+          "LedgerAccountReceivable",
+          "LedgerAccountUnbilledReceivable",
+          "LedgerAccountDeferredRevenue",
+          "LedgerAccountCustomerCredit",
+          "LedgerAccountTaxPayable",
+          "LedgerAccountRevenue",
+          "LedgerAccountContraRevenue"
+        ],
+        "x-speakeasy-name-override": "LedgerAccountKey"
       },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
@@ -37957,6 +42455,36 @@
           "type": "string"
         },
         "x-speakeasy-name-override": "Metadata"
+      },
+      "types.PerformanceObligationStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "active",
+          "satisfied",
+          "cancelled"
+        ],
+        "x-enum-varnames": [
+          "PerformanceObligationStatusDraft",
+          "PerformanceObligationStatusActive",
+          "PerformanceObligationStatusSatisfied",
+          "PerformanceObligationStatusCancelled"
+        ],
+        "x-speakeasy-name-override": "PerformanceObligationStatus"
+      },
+      "types.RecognitionMethod": {
+        "type": "string",
+        "enum": [
+          "point_in_time",
+          "straight_line",
+          "as_consumed"
+        ],
+        "x-enum-varnames": [
+          "RecognitionMethodPointInTime",
+          "RecognitionMethodStraightLine",
+          "RecognitionMethodAsConsumed"
+        ],
+        "x-speakeasy-name-override": "RecognitionMethod"
       },
       "types.ReportCategory": {
         "type": "string",
@@ -38004,6 +42532,42 @@
         ],
         "x-speakeasy-name-override": "ReportValueType"
       },
+      "types.RevRecEntityType": {
+        "type": "string",
+        "enum": [
+          "subscription",
+          "subscription_line_item",
+          "invoice",
+          "credit_note",
+          "payment",
+          "refund",
+          "pob"
+        ],
+        "x-enum-varnames": [
+          "RevRecEntityTypeSubscription",
+          "RevRecEntityTypeSubscriptionLineItem",
+          "RevRecEntityTypeInvoice",
+          "RevRecEntityTypeCreditNote",
+          "RevRecEntityTypePayment",
+          "RevRecEntityTypeRefund",
+          "RevRecEntityTypePOB"
+        ],
+        "x-speakeasy-name-override": "RevRecEntityType"
+      },
+      "types.RevenueReportGroupBy": {
+        "type": "string",
+        "enum": [
+          "customer_id",
+          "contract_id",
+          "pob_id"
+        ],
+        "x-enum-varnames": [
+          "RevenueReportGroupByCustomer",
+          "RevenueReportGroupByContract",
+          "RevenueReportGroupByPOB"
+        ],
+        "x-speakeasy-name-override": "RevenueReportGroupBy"
+      },
       "types.TenantInternalStatus": {
         "type": "string",
         "enum": [
@@ -38017,6 +42581,58 @@
           "TenantInternalStatusSuspended"
         ],
         "x-speakeasy-name-override": "TenantInternalStatus"
+      },
+      "types.ZohoPayPalPaymentMethod": {
+        "type": "string",
+        "enum": [
+          "standard",
+          "adaptive"
+        ],
+        "x-enum-varnames": [
+          "ZohoPayPalPaymentMethodStandard",
+          "ZohoPayPalPaymentMethodAdaptive"
+        ],
+        "x-speakeasy-name-override": "ZohoPayPalPaymentMethod"
+      },
+      "types.ZohoPaymentGateway": {
+        "type": "string",
+        "enum": [
+          "paypal",
+          "stripe",
+          "authorize_net",
+          "payflow_pro",
+          "2checkout",
+          "braintree",
+          "razorpay"
+        ],
+        "x-enum-varnames": [
+          "ZohoPaymentGatewayPayPal",
+          "ZohoPaymentGatewayStripe",
+          "ZohoPaymentGatewayAuthorizeNet",
+          "ZohoPaymentGatewayPayflowPro",
+          "ZohoPaymentGateway2Checkout",
+          "ZohoPaymentGatewayBraintree",
+          "ZohoPaymentGatewayRazorpay"
+        ],
+        "x-speakeasy-name-override": "ZohoPaymentGateway"
+      },
+      "types.ZohoPaymentGatewaySettings": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "gateways": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.ZohoPaymentGateway"
+            }
+          },
+          "paypal_payment_method": {
+            "$ref": "#/components/schemas/types.ZohoPayPalPaymentMethod"
+          }
+        },
+        "x-speakeasy-name-override": "ZohoPaymentGatewaySettings"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",
@@ -38044,6 +42660,37 @@
           },
           "wallet_id": {
             "type": "string"
+          }
+        }
+      },
+      "webhookDto.BillingInstalmentWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "instalment": {
+            "$ref": "#/components/schemas/billingterm.Instalment"
+          }
+        }
+      },
+      "webhookDto.BillingTermsWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "billing_terms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/billingterm.Term"
+            }
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "owner_type": {
+            "$ref": "#/components/schemas/types.BillingTermOwnerType"
           }
         }
       },
@@ -38288,6 +42935,9 @@
           "address_state": {
             "type": "string"
           },
+          "billing_entity_id": {
+            "type": "string"
+          },
           "email": {
             "type": "string"
           },
@@ -38429,6 +43079,9 @@
           "amount_remaining": {
             "type": "string"
           },
+          "billing_entity_id": {
+            "type": "string"
+          },
           "billing_period": {
             "type": "string"
           },
@@ -38565,6 +43218,9 @@
           "amount": {
             "type": "string"
           },
+          "billing_instalment_id": {
+            "type": "string"
+          },
           "commitment_info": {
             "$ref": "#/components/schemas/types.CommitmentInfo"
           },
@@ -38635,6 +43291,32 @@
           }
         }
       },
+      "webhookDto.InvoicePaymentFailedWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/webhookDto.Invoice"
+          },
+          "is_auto_charge_attempt": {
+            "type": "boolean"
+          },
+          "payment_id": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.SecretProvider"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/types.InvoicePaymentFailureReason"
+          }
+        }
+      },
       "webhookDto.InvoiceSyncWebhookPayload": {
         "type": "object",
         "properties": {
@@ -38689,6 +43371,9 @@
           "amount": {
             "type": "string"
           },
+          "connection_id": {
+            "type": "string"
+          },
           "currency": {
             "type": "string"
           },
@@ -38731,6 +43416,47 @@
           "voided_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "webhookDto.PaymentAttempt": {
+        "type": "object",
+        "properties": {
+          "attempt_number": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "gateway_attempt_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          }
+        }
+      },
+      "webhookDto.PaymentAttemptWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "attempt": {
+            "$ref": "#/components/schemas/webhookDto.PaymentAttempt"
+          },
+          "checkout_session": {
+            "$ref": "#/components/schemas/webhookDto.CheckoutSession"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/webhookDto.Payment"
           }
         }
       },

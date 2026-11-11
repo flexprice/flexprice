@@ -326,6 +326,26 @@ func (_c *InvoiceCreate) SetFxConversion(v *types.FxConversion) *InvoiceCreate {
 	return _c
 }
 
+// SetBillingEntity sets the "billing_entity" field.
+func (_c *InvoiceCreate) SetBillingEntity(v *types.InvoiceBillingEntity) *InvoiceCreate {
+	_c.mutation.SetBillingEntity(v)
+	return _c
+}
+
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (_c *InvoiceCreate) SetBillingEntityID(v string) *InvoiceCreate {
+	_c.mutation.SetBillingEntityID(v)
+	return _c
+}
+
+// SetNillableBillingEntityID sets the "billing_entity_id" field if the given value is not nil.
+func (_c *InvoiceCreate) SetNillableBillingEntityID(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetBillingEntityID(*v)
+	}
+	return _c
+}
+
 // SetDescription sets the "description" field.
 func (_c *InvoiceCreate) SetDescription(v string) *InvoiceCreate {
 	_c.mutation.SetDescription(v)
@@ -989,6 +1009,14 @@ func (_c *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.FxConversion(); ok {
 		_spec.SetField(invoice.FieldFxConversion, field.TypeJSON, value)
 		_node.FxConversion = value
+	}
+	if value, ok := _c.mutation.BillingEntity(); ok {
+		_spec.SetField(invoice.FieldBillingEntity, field.TypeJSON, value)
+		_node.BillingEntity = value
+	}
+	if value, ok := _c.mutation.BillingEntityID(); ok {
+		_spec.SetField(invoice.FieldBillingEntityID, field.TypeString, value)
+		_node.BillingEntityID = &value
 	}
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)

@@ -283,13 +283,13 @@ func (_c *CommitmentCreate) SetNillableTotalAmount(v *decimal.Decimal) *Commitme
 }
 
 // SetInstalmentInvoicing sets the "instalment_invoicing" field.
-func (_c *CommitmentCreate) SetInstalmentInvoicing(v string) *CommitmentCreate {
+func (_c *CommitmentCreate) SetInstalmentInvoicing(v types.InstalmentDelivery) *CommitmentCreate {
 	_c.mutation.SetInstalmentInvoicing(v)
 	return _c
 }
 
 // SetNillableInstalmentInvoicing sets the "instalment_invoicing" field if the given value is not nil.
-func (_c *CommitmentCreate) SetNillableInstalmentInvoicing(v *string) *CommitmentCreate {
+func (_c *CommitmentCreate) SetNillableInstalmentInvoicing(v *types.InstalmentDelivery) *CommitmentCreate {
 	if v != nil {
 		_c.SetInstalmentInvoicing(*v)
 	}
@@ -305,6 +305,14 @@ func (_c *CommitmentCreate) SetStartDate(v time.Time) *CommitmentCreate {
 // SetEndDate sets the "end_date" field.
 func (_c *CommitmentCreate) SetEndDate(v time.Time) *CommitmentCreate {
 	_c.mutation.SetEndDate(v)
+	return _c
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (_c *CommitmentCreate) SetNillableEndDate(v *time.Time) *CommitmentCreate {
+	if v != nil {
+		_c.SetEndDate(*v)
+	}
 	return _c
 }
 
@@ -563,11 +571,13 @@ func (_c *CommitmentCreate) check() error {
 			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Commitment.collection_method": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.InstalmentInvoicing(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "instalment_invoicing", err: fmt.Errorf(`ent: validator failed for field "Commitment.instalment_invoicing": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.StartDate(); !ok {
 		return &ValidationError{Name: "start_date", err: errors.New(`ent: missing required field "Commitment.start_date"`)}
-	}
-	if _, ok := _c.mutation.EndDate(); !ok {
-		return &ValidationError{Name: "end_date", err: errors.New(`ent: missing required field "Commitment.end_date"`)}
 	}
 	if v, ok := _c.mutation.OnEarlyTermination(); ok {
 		if err := v.Validate(); err != nil {
@@ -731,7 +741,7 @@ func (_c *CommitmentCreate) createSpec() (*Commitment, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := _c.mutation.EndDate(); ok {
 		_spec.SetField(commitment.FieldEndDate, field.TypeTime, value)
-		_node.EndDate = value
+		_node.EndDate = &value
 	}
 	if value, ok := _c.mutation.OnEarlyTermination(); ok {
 		_spec.SetField(commitment.FieldOnEarlyTermination, field.TypeString, value)

@@ -69,6 +69,11 @@ func YearMonth(v string) predicate.InvoiceSequence {
 	return predicate.InvoiceSequence(sql.FieldEQ(FieldYearMonth, v))
 }
 
+// Prefix applies equality check predicate on the "prefix" field. It's identical to PrefixEQ.
+func Prefix(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldEQ(FieldPrefix, v))
+}
+
 // LastValue applies equality check predicate on the "last_value" field. It's identical to LastValueEQ.
 func LastValue(v int64) predicate.InvoiceSequence {
 	return predicate.InvoiceSequence(sql.FieldEQ(FieldLastValue, v))
@@ -287,6 +292,81 @@ func YearMonthEqualFold(v string) predicate.InvoiceSequence {
 // YearMonthContainsFold applies the ContainsFold predicate on the "year_month" field.
 func YearMonthContainsFold(v string) predicate.InvoiceSequence {
 	return predicate.InvoiceSequence(sql.FieldContainsFold(FieldYearMonth, v))
+}
+
+// PrefixEQ applies the EQ predicate on the "prefix" field.
+func PrefixEQ(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldEQ(FieldPrefix, v))
+}
+
+// PrefixNEQ applies the NEQ predicate on the "prefix" field.
+func PrefixNEQ(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldNEQ(FieldPrefix, v))
+}
+
+// PrefixIn applies the In predicate on the "prefix" field.
+func PrefixIn(vs ...string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldIn(FieldPrefix, vs...))
+}
+
+// PrefixNotIn applies the NotIn predicate on the "prefix" field.
+func PrefixNotIn(vs ...string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldNotIn(FieldPrefix, vs...))
+}
+
+// PrefixGT applies the GT predicate on the "prefix" field.
+func PrefixGT(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldGT(FieldPrefix, v))
+}
+
+// PrefixGTE applies the GTE predicate on the "prefix" field.
+func PrefixGTE(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldGTE(FieldPrefix, v))
+}
+
+// PrefixLT applies the LT predicate on the "prefix" field.
+func PrefixLT(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldLT(FieldPrefix, v))
+}
+
+// PrefixLTE applies the LTE predicate on the "prefix" field.
+func PrefixLTE(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldLTE(FieldPrefix, v))
+}
+
+// PrefixContains applies the Contains predicate on the "prefix" field.
+func PrefixContains(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldContains(FieldPrefix, v))
+}
+
+// PrefixHasPrefix applies the HasPrefix predicate on the "prefix" field.
+func PrefixHasPrefix(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldHasPrefix(FieldPrefix, v))
+}
+
+// PrefixHasSuffix applies the HasSuffix predicate on the "prefix" field.
+func PrefixHasSuffix(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldHasSuffix(FieldPrefix, v))
+}
+
+// PrefixIsNil applies the IsNil predicate on the "prefix" field.
+func PrefixIsNil() predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldIsNull(FieldPrefix))
+}
+
+// PrefixNotNil applies the NotNil predicate on the "prefix" field.
+func PrefixNotNil() predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldNotNull(FieldPrefix))
+}
+
+// PrefixEqualFold applies the EqualFold predicate on the "prefix" field.
+func PrefixEqualFold(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldEqualFold(FieldPrefix, v))
+}
+
+// PrefixContainsFold applies the ContainsFold predicate on the "prefix" field.
+func PrefixContainsFold(v string) predicate.InvoiceSequence {
+	return predicate.InvoiceSequence(sql.FieldContainsFold(FieldPrefix, v))
 }
 
 // LastValueEQ applies the EQ predicate on the "last_value" field.

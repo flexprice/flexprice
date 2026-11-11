@@ -144,3 +144,8 @@ type CheckoutSessionExpiryWorkflowResult struct {
 
 // SelfBillingHourlyWorkflowInput is the input for SelfBillingHourlyWorkflow.
 type SelfBillingHourlyWorkflowInput struct{}
+
+// ===================== Billing Instalments Due =====================
+
+// BillingInstalmentsDueWorkflowInput is the input for BillingInstalmentsDueWorkflow.
+type BillingInstalmentsDueWorkflowInput struct{}

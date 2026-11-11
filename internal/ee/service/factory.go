@@ -11,6 +11,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/billingentity"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -33,6 +35,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
@@ -55,6 +58,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
+	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
+	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
+	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -63,6 +69,8 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/pubsub"
+	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
+	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/tracing"
@@ -89,6 +97,7 @@ type ServiceParams struct {
 	ProcessedEventRepo           events.ProcessedEventRepository
 	RawEventRepo                 events.RawEventRepository
 	MeterUsageRepo               events.MeterUsageRepository
+	MeterUsageCheckpointRepo     meterusagecheckpoint.Repository
 	MeterRepo                    meter.Repository
 	PriceRepo                    price.Repository
 	PriceUnitRepo                priceunit.Repository
@@ -144,6 +153,16 @@ type ServiceParams struct {
 	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
 	SelfBillingPostgresRepo      domainsb.PostgresRepository
 	CommitmentRepo               commitment.Repository
+	BillingTermRepo              billingterm.TermRepository
+	BillingInstalmentRepo        billingterm.InstalmentRepository
+	ProductRepo                  productRepo.Repository
+	ContractService              contractsvc.ContractService
+	POBService                   pobsvc.PerformanceObligationService
+	JournalRepo                  journalRepo.Repository
+	JournalService               journalsvc.JournalService
+	BillingEntityRepo            billingentity.Repository
+	EventDeletionRequestRepo     events.DeletionRequestRepository
+	EventDeletionLogRepo         events.DeletedEventsLogRepository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -196,6 +215,7 @@ func NewServiceParams(
 	processedEventRepo events.ProcessedEventRepository,
 	rawEventRepo events.RawEventRepository,
 	meterUsageRepo events.MeterUsageRepository,
+	meterUsageCheckpointRepo meterusagecheckpoint.Repository,
 	meterRepo meter.Repository,
 	priceRepo price.Repository,
 	priceUnitRepo priceunit.Repository,
@@ -260,6 +280,16 @@ func NewServiceParams(
 	selfBillingClickHouseRepo domainsb.ClickHouseRepository,
 	selfBillingPostgresRepo domainsb.PostgresRepository,
 	commitmentRepo commitment.Repository,
+	billingTermRepo billingterm.TermRepository,
+	billingInstalmentRepo billingterm.InstalmentRepository,
+	productRepo productRepo.Repository,
+	contractService contractsvc.ContractService,
+	pobService pobsvc.PerformanceObligationService,
+	journalRepo journalRepo.Repository,
+	journalService journalsvc.JournalService,
+	billingEntityRepo billingentity.Repository,
+	eventDeletionRequestRepo events.DeletionRequestRepository,
+	eventDeletionLogRepo events.DeletedEventsLogRepository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -276,6 +306,7 @@ func NewServiceParams(
 		ProcessedEventRepo:           processedEventRepo,
 		RawEventRepo:                 rawEventRepo,
 		MeterUsageRepo:               meterUsageRepo,
+		MeterUsageCheckpointRepo:     meterUsageCheckpointRepo,
 		MeterRepo:                    meterRepo,
 		PriceRepo:                    priceRepo,
 		PriceUnitRepo:                priceUnitRepo,
@@ -340,5 +371,15 @@ func NewServiceParams(
 		SelfBillingClickHouseRepo:    selfBillingClickHouseRepo,
 		SelfBillingPostgresRepo:      selfBillingPostgresRepo,
 		CommitmentRepo:               commitmentRepo,
+		BillingTermRepo:              billingTermRepo,
+		BillingInstalmentRepo:        billingInstalmentRepo,
+		ProductRepo:                  productRepo,
+		ContractService:              contractService,
+		POBService:                   pobService,
+		JournalRepo:                  journalRepo,
+		JournalService:               journalService,
+		BillingEntityRepo:            billingEntityRepo,
+		EventDeletionRequestRepo:     eventDeletionRequestRepo,
+		EventDeletionLogRepo:         eventDeletionLogRepo,
 	}
 }

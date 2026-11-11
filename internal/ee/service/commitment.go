@@ -4,17 +4,20 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/flexprice/flexprice/internal/validator"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // CommitmentService manages first-class subscription commitments.
@@ -27,7 +30,25 @@ type CommitmentService interface {
 	Terminate(ctx context.Context, id string, req dto.TerminateCommitmentRequest) (*dto.CommitmentResponse, error)
 	TerminateForSubscription(ctx context.Context, subscriptionID string, effectiveAt time.Time) error
 	IsEnabled(ctx context.Context) (bool, error)
-	ActiveForPeriod(ctx context.Context, subscriptionID string, from, to time.Time) ([]*commitment.Commitment, error)
+	// GetBillingTerms returns the commitment's published terms and its current instalments.
+	GetBillingTerms(ctx context.Context, id string) (*dto.BillingTermsResponse, error)
+	// PreviewBillingTerms returns what ReplaceBillingTerms would, writing nothing.
+	PreviewBillingTerms(ctx context.Context, id string, req dto.ReplaceBillingTermsRequest) (*dto.BillingTermsResponse, error)
+	// ReplaceBillingTerms swaps the whole set of terms and replaces the scheduled instalments with theirs; invoiced
+	// instalments are kept.
+	ReplaceBillingTerms(ctx context.Context, id string, req dto.ReplaceBillingTermsRequest) (*dto.BillingTermsResponse, error)
+	// TriggerInstalment bills a manual instalment of the commitment on the given date or now, and returns it.
+	TriggerInstalment(ctx context.Context, id, instalmentID string, req dto.TriggerInstalmentRequest) (*billingterm.Instalment, error)
+	// ListInstalments returns the commitment's instalments in billing order; empty statuses list every status, cancelled included.
+	ListInstalments(ctx context.Context, id string, statuses []types.InstalmentStatus) (*dto.ListInstalmentsResponse, error)
+	// GetInstalment returns one instalment of any commitment in the environment.
+	GetInstalment(ctx context.Context, instalmentID string) (*billingterm.Instalment, error)
+	// BillDueInstalments issues a one-off invoice for each due separate-invoice instalment in every environment with
+	// commitments enabled. A failed instalment is logged and the rest still bill; the failures are returned together.
+	BillDueInstalments(ctx context.Context) error
+	// ListOverlapping returns the subscription's active and terminated commitments whose term overlaps [from, to); a
+	// terminated one still bills up to terminated_at.
+	ListOverlapping(ctx context.Context, subscriptionID string, from, to time.Time) ([]*commitment.Commitment, error)
 	// CheckPriceAttach rejects a usage price, billed from `at` until `until` (nil when open-ended), that would join a
 	// commitment's scope but break its rules: a single-meter commitment gaining a second meter, a bucket-size mismatch,
 	// or overlapping commitments that disagree.
@@ -57,18 +78,6 @@ func (s *commitmentService) IsEnabled(ctx context.Context) (bool, error) {
 	return cfg.Enabled, nil
 }
 
-func (s *commitmentService) Preview(
-	ctx context.Context,
-	req dto.CreateCommitmentRequest,
-) (*dto.CommitmentResponse, error) {
-	c, _, value, err := s.prepare(ctx, &req, commitmentCreateOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: &value}, nil
-}
-
 func (s *commitmentService) requireEnabled(ctx context.Context) error {
 	enabled, err := s.IsEnabled(ctx)
 	if err != nil {
@@ -84,6 +93,14 @@ func (s *commitmentService) requireEnabled(ctx context.Context) error {
 	return nil
 }
 
+func (s *commitmentService) Preview(
+	ctx context.Context,
+	req dto.CreateCommitmentRequest,
+) (*dto.CommitmentResponse, error) {
+	preview, _, err := s.prepare(ctx, &req, commitmentCreateOptions{})
+	return preview, err
+}
+
 // commitmentCreateOptions tunes validation for callers other than the commitments API.
 type commitmentCreateOptions struct {
 	// allowPendingSubscription accepts a subscription that is still incomplete or draft.
@@ -96,94 +113,157 @@ func (s *commitmentService) Create(
 	ctx context.Context,
 	req dto.CreateCommitmentRequest,
 ) (*dto.CommitmentResponse, error) {
-	return s.create(ctx, req, commitmentCreateOptions{})
+	resp, inserted, err := s.create(ctx, req, commitmentCreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	if inserted {
+		s.recomputeDrafts(ctx, resp.SubscriptionID, resp.StartDate)
+	}
+	return resp, nil
 }
 
 // create runs under the subscription's commitments lock so the overlap checks see committed rows; a key replayed
-// while waiting for the lock returns the original commitment (first write wins).
+// while waiting for the lock returns the original commitment (first write wins). It reports whether it inserted one.
 func (s *commitmentService) create(
 	ctx context.Context,
 	req dto.CreateCommitmentRequest,
 	opts commitmentCreateOptions,
-) (*dto.CommitmentResponse, error) {
-	existing, err := s.findReplay(ctx, req)
+) (*dto.CommitmentResponse, bool, error) {
+	replayed, err := s.findReplay(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	if existing != nil {
-		return s.response(ctx, existing, nil)
+	if replayed != nil {
+		resp, err := s.replayResponse(ctx, replayed)
+		return resp, false, err
 	}
 
-	var out *commitment.Commitment
+	var created *dto.CommitmentResponse
 	var cc *commitmentContext
-	inserted := false
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: "commitments:" + req.SubscriptionID}); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to lock subscription commitments").
-				Mark(ierr.ErrInternal)
-		}
-
-		replayed, err := s.findReplay(txCtx, req)
-		if err != nil {
+		if err := s.lockSubscriptionCommitments(txCtx, req.SubscriptionID); err != nil {
 			return err
 		}
 
-		if replayed != nil {
-			out = replayed
-			return nil
-		}
-
-		var c *commitment.Commitment
-		if c, cc, _, err = s.prepare(txCtx, &req, opts); err != nil {
+		var err error
+		if replayed, err = s.findReplay(txCtx, req); err != nil || replayed != nil {
 			return err
 		}
 
-		meterID := scopeMeter(c, cc)
-		if c.CommittedPriceID, err = s.createRatePrice(txCtx, c, cc.Sub, meterID, req.CommittedPrice, "committed"); err != nil {
-			return err
-		}
-
-		if c.OveragePriceID, err = s.createRatePrice(txCtx, c, cc.Sub, meterID, req.OveragePrice, "overage"); err != nil {
-			return err
-		}
-
-		if out, err = s.CommitmentRepo.Create(txCtx, c); err != nil {
-			return err
-		}
-
-		inserted = true
-		return nil
+		created, cc, err = s.insert(txCtx, req, opts)
+		return err
 	})
 	if err != nil && req.IdempotencyKey != nil && ierr.IsAlreadyExists(err) {
-		// Lost a race with a concurrent retry on the same key. Only recoverable at top level: inside an
-		// outer transaction the failed insert has already aborted that transaction.
-		replayed, replayErr := s.findReplay(ctx, req)
-		if replayErr != nil {
-			return nil, replayErr
-		}
-
-		if replayed != nil {
-			return s.response(ctx, replayed, nil)
+		// Lost a race with a concurrent retry on the same key. Only recoverable at top level: inside an outer
+		// transaction the failed insert has already aborted that transaction.
+		var replayErr error
+		if replayed, replayErr = s.findReplay(ctx, req); replayErr != nil {
+			return nil, false, replayErr
 		}
 	}
 
+	if replayed != nil {
+		resp, err := s.replayResponse(ctx, replayed)
+		return resp, false, err
+	}
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	c := created.Commitment
+	s.Logger.Info(ctx, "commitment.created",
+		"operation", "commitment.created",
+		"commitment_id", c.ID,
+		"subscription_id", c.SubscriptionID,
+	)
+	s.publishSystemEvent(ctx, types.WebhookEventCommitmentCreated, c)
+	if len(created.BillingTerms) > 0 {
+		publishBillingTermsEvent(ctx, s.ServiceParams, types.WebhookEventBillingTermsCreated, c)
+		publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, created.Instalments)
+	}
+
+	resp, err := s.valuedResponse(ctx, c, cc.Sub, bucketFor(c, cc))
+	if err != nil {
+		return nil, false, err
+	}
+
+	resp.BillingTerms, resp.Instalments = created.BillingTerms, created.Instalments
+	return resp, true, nil
+}
+
+// insert validates req and writes the commitment with its rate prices, billing terms and instalments. It must run
+// under the subscription's commitments lock.
+func (s *commitmentService) insert(
+	ctx context.Context,
+	req dto.CreateCommitmentRequest,
+	opts commitmentCreateOptions,
+) (*dto.CommitmentResponse, *commitmentContext, error) {
+	granted, err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).
+		hasSubscriptionScopedEntitlement(ctx, req.SubscriptionID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if granted {
+		return nil, nil, ierr.NewError("subscription has a subscription entitlement grant").
+			WithHint("A subscription entitlement grant cannot be combined with a commitment; delete the grant first.").
+			WithReportableDetails(map[string]any{"subscription_id": req.SubscriptionID}).
+			Mark(ierr.ErrValidation)
+	}
+
+	prepared, cc, err := s.prepare(ctx, &req, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	c := prepared.Commitment
+	meterID := scopeMeter(c, cc)
+	if c.CommittedPriceID, err = s.createRatePrice(ctx, c, cc.Sub, meterID, req.CommittedPrice, types.CommitmentRateCommitted); err != nil {
+		return nil, nil, err
+	}
+
+	if c.OveragePriceID, err = s.createRatePrice(ctx, c, cc.Sub, meterID, req.OveragePrice, types.CommitmentRateOverage); err != nil {
+		return nil, nil, err
+	}
+
+	created := &dto.CommitmentResponse{}
+	if created.Commitment, err = s.CommitmentRepo.Create(ctx, c); err != nil {
+		return nil, nil, err
+	}
+
+	if len(prepared.BillingTerms) == 0 {
+		return created, cc, nil
+	}
+
+	if created.BillingTerms, err = s.BillingTermRepo.CreateMany(ctx, prepared.BillingTerms); err != nil {
+		return nil, nil, err
+	}
+
+	if created.Instalments, err = s.BillingInstalmentRepo.CreateMany(ctx, prepared.Instalments); err != nil {
+		return nil, nil, err
+	}
+
+	return created, cc, nil
+}
+
+// replayResponse returns a replayed create's commitment with its current billing terms and instalments.
+func (s *commitmentService) replayResponse(ctx context.Context, c *commitment.Commitment) (*dto.CommitmentResponse, error) {
+	resp, err := s.response(ctx, c)
+	if err != nil || lo.FromPtr(c.CollectionMethod) != types.CommitmentCollectionBillingTerms {
+		return resp, err
+	}
+
+	terms, err := s.GetBillingTerms(ctx, c.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	if !inserted {
-		return s.response(ctx, out, nil)
-	}
-
-	s.Logger.Info(ctx, "commitment.created",
-		"operation", "commitment.created",
-		"commitment_id", out.ID,
-		"subscription_id", out.SubscriptionID,
-	)
-	s.publishSystemEvent(ctx, types.WebhookEventCommitmentCreated, out)
-	return s.response(ctx, out, cc)
+	resp.BillingTerms, resp.Instalments = terms.BillingTerms, terms.Instalments
+	return resp, nil
 }
 
 // findReplay returns the commitment already created under req's idempotency key, or nil when the key is unused.
@@ -214,45 +294,62 @@ func (s *commitmentService) findReplay(ctx context.Context, req dto.CreateCommit
 	return existing, nil
 }
 
-// prepare validates the request and builds the commitment and its value without persisting anything.
+// prepare validates the request and builds the commitment, its value (nil when open-ended) and, under billing
+// terms, the terms and instalments, without persisting anything.
 func (s *commitmentService) prepare(
 	ctx context.Context,
 	req *dto.CreateCommitmentRequest,
 	opts commitmentCreateOptions,
-) (*commitment.Commitment, *commitmentContext, decimal.Decimal, error) {
+) (*dto.CommitmentResponse, *commitmentContext, error) {
 	if err := s.requireEnabled(ctx); err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, err
 	}
 
 	cc, err := s.loadCommitmentContext(ctx, req.SubscriptionID)
 	if err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, err
 	}
 
-	req.ApplyDefaults(cc.Sub.Timezone)
+	req.ApplyDefaults()
+
+	// A date within a second after a billing period edge means the edge; validation sees the aligned dates.
+	if req.StartDate, err = atPeriodEdge(cc.Sub, req.StartDate); err != nil {
+		return nil, nil, err
+	}
+
+	if req.EndDate, err = atPeriodEdgePtr(cc.Sub, req.EndDate); err != nil {
+		return nil, nil, err
+	}
+
+	if err := alignTermDates(cc.Sub, req.BillingTerms); err != nil {
+		return nil, nil, err
+	}
+
 	if err := req.Validate(); err != nil {
-		return nil, nil, decimal.Zero, err
-	}
-
-	if err := s.validateAgainstSubscription(ctx, req, cc, opts); err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, err
 	}
 
 	c := req.ToCommitment(ctx, cc.Sub)
-	for _, rate := range []struct {
+	if err := s.validateAgainstSubscription(ctx, c, req.OveragePrice, cc, opts); err != nil {
+		return nil, nil, err
+	}
+
+	meterID := scopeMeter(c, cc)
+	rates := []struct {
+		rate types.CommitmentRate
 		in   *dto.CommitmentPriceInput
-		kind string
 	}{
-		{in: req.CommittedPrice, kind: "committed"},
-		{in: req.OveragePrice, kind: "overage"},
-	} {
-		if rate.in == nil {
+		{rate: types.CommitmentRateCommitted, in: req.CommittedPrice},
+		{rate: types.CommitmentRateOverage, in: req.OveragePrice},
+	}
+	for _, r := range rates {
+		if r.in == nil {
 			continue
 		}
 
-		priceReq := rate.in.ToCreatePriceRequest(c, cc.Sub, scopeMeter(c, cc), rate.kind)
+		priceReq := r.in.ToCreatePriceRequest(c, cc.Sub, meterID, r.rate)
 		if err := priceReq.Validate(); err != nil {
-			return nil, nil, decimal.Zero, err
+			return nil, nil, err
 		}
 	}
 
@@ -262,17 +359,40 @@ func (s *commitmentService) prepare(
 		amountOf = priceAmountFn(ctx, s.ServiceParams, req.CommittedPrice.ToPrice(c.Currency))
 	}
 
-	periods, err := commitmentPeriods(c, cc.Sub, amountOf, bucketFor(c, cc))
+	value, err := termValue(c, cc.Sub, amountOf, bucketFor(c, cc))
 	if err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, err
 	}
 
-	return c, cc, commitmentValue(periods), nil
+	if lo.FromPtr(c.CollectionMethod) != types.CommitmentCollectionBillingTerms {
+		return &dto.CommitmentResponse{Commitment: c, CommitmentValue: value}, cc, nil
+	}
+
+	// Expansion splits the commitment's total, so the total is set first.
+	c = commitment.NewCommitmentBuilder(c).
+		WithTotalAmount(types.RoundToCurrencyPrecision(lo.FromPtr(value), c.Currency)).
+		WithInstalmentInvoicing(lo.FromPtr(req.InstalmentInvoicing)).
+		Build()
+	terms := lo.Map(req.BillingTerms, func(in dto.BillingTermInput, _ int) *billingterm.Term {
+		return in.ToTerm(ctx, c.ID)
+	})
+
+	instalments, err := s.planInstalments(ctx, c, cc, amountOf, terms, nil, c.StartDate)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &dto.CommitmentResponse{
+		Commitment:      c,
+		CommitmentValue: value,
+		BillingTerms:    terms,
+		Instalments:     instalments,
+	}, cc, nil
 }
 
 // scopeMeter returns the meter of the first scoped line at the commitment start, which backs its rate prices.
 func scopeMeter(c *commitment.Commitment, cc *commitmentContext) string {
-	lines := resolveScopeLines(c.ScopeEntityType, c.ScopeEntityID, cc, c.StartDate)
+	lines := scopeLinesAtStart(c, cc)
 	if len(lines) == 0 {
 		return ""
 	}
@@ -286,12 +406,12 @@ func bucketFor(c *commitment.Commitment, cc *commitmentContext) types.WindowSize
 		return ""
 	}
 
-	lines := resolveScopeLines(c.ScopeEntityType, c.ScopeEntityID, cc, c.StartDate)
+	lines := scopeLinesAtStart(c, cc)
 	if len(lines) == 0 {
 		return ""
 	}
 
-	return price.ResolveBucketSize(cc.Prices[lines[0].PriceID], cc.Meters[lines[0].MeterID])
+	return cc.bucketSize(lines[0])
 }
 
 // createRatePrice creates the subscription-scoped usage price backing a committed or overage rate.
@@ -301,13 +421,13 @@ func (s *commitmentService) createRatePrice(
 	sub *subscription.Subscription,
 	meterID string,
 	in *dto.CommitmentPriceInput,
-	kind string,
+	rate types.CommitmentRate,
 ) (*string, error) {
 	if in == nil {
 		return nil, nil
 	}
 
-	resp, err := NewPriceService(s.ServiceParams).CreatePrice(ctx, in.ToCreatePriceRequest(c, sub, meterID, kind))
+	resp, err := NewPriceService(s.ServiceParams).CreatePrice(ctx, in.ToCreatePriceRequest(c, sub, meterID, rate))
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +441,7 @@ func (s *commitmentService) Get(ctx context.Context, id string) (*dto.Commitment
 		return nil, err
 	}
 
-	return s.response(ctx, c, nil)
+	return s.response(ctx, c)
 }
 
 func (s *commitmentService) List(ctx context.Context, filter *commitment.Filter) (*dto.ListCommitmentsResponse, error) {
@@ -359,7 +479,7 @@ func (s *commitmentService) List(ctx context.Context, filter *commitment.Filter)
 			contexts[c.SubscriptionID] = cc
 		}
 
-		resp, err := s.response(ctx, c, cc)
+		resp, err := s.valuedResponse(ctx, c, cc.Sub, bucketFor(c, cc))
 		if err != nil {
 			return nil, err
 		}
@@ -378,12 +498,8 @@ func (s *commitmentService) Update(
 	id string,
 	req dto.UpdateCommitmentRequest,
 ) (*dto.CommitmentResponse, error) {
-	if err := validator.ValidateRequest(req); err != nil {
+	if err := req.Validate(); err != nil {
 		return nil, err
-	}
-
-	if (req.Name != nil && *req.Name == "") || (req.InvoiceLabel != nil && *req.InvoiceLabel == "") {
-		return nil, ierr.Validation("name and invoice_label must be 1-255 characters")
 	}
 
 	var updated *commitment.Commitment
@@ -422,11 +538,12 @@ func (s *commitmentService) Update(
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventCommitmentUpdated, updated)
-	return s.response(ctx, updated, nil)
+	return s.response(ctx, updated)
 }
 
-// Terminate ends an active commitment at effective_at (default now). A cancellation fee is billed on an immediate
-// one-off invoice, created in the same transaction as the status change.
+// Terminate ends an active commitment at effective_at, which defaults to now and may not be in the future. A
+// cancellation fee and, under billing terms, a settlement are billed on one immediate one-off invoice, created in the
+// same transaction as the status change.
 func (s *commitmentService) Terminate(
 	ctx context.Context,
 	id string,
@@ -440,12 +557,22 @@ func (s *commitmentService) Terminate(
 		return nil, err
 	}
 
-	effectiveAt := lo.FromPtrOr(req.EffectiveAt, time.Now().UTC())
+	now := clock.Now()
+	effectiveAt := lo.FromPtrOr(req.EffectiveAt, now)
+	if effectiveAt.After(now) {
+		return nil, ierr.Validation("future-dated termination is not supported yet")
+	}
+
+	fee := decimal.Zero
+	if req.CancellationFee != nil {
+		fee = req.CancellationFee.Value
+	}
+
 	var out *commitment.Commitment
 	var invoiceID *string
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		var err error
-		out, invoiceID, err = s.terminate(txCtx, id, effectiveAt, req.CancellationFee)
+		out, invoiceID, err = s.terminate(txCtx, id, effectiveAt, fee)
 		return err
 	})
 	if err != nil {
@@ -460,8 +587,9 @@ func (s *commitmentService) Terminate(
 		"termination_invoice_id", lo.FromPtr(invoiceID),
 	)
 	s.publishSystemEvent(ctx, types.WebhookEventCommitmentTerminated, out)
+	s.recomputeDrafts(ctx, out.SubscriptionID, effectiveAt)
 
-	resp, err := s.response(ctx, out, nil)
+	resp, err := s.response(ctx, out)
 	if err != nil {
 		return nil, err
 	}
@@ -470,62 +598,31 @@ func (s *commitmentService) Terminate(
 	return resp, nil
 }
 
-// TerminateForSubscription terminates every active commitment on the subscription whose term runs past effectiveAt,
-// and pulls a termination scheduled after effectiveAt back to it.
+// TerminateForSubscription terminates every active commitment on the subscription whose term runs past effectiveAt.
 func (s *commitmentService) TerminateForSubscription(
 	ctx context.Context,
 	subscriptionID string,
 	effectiveAt time.Time,
 ) error {
 	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: "commitments:" + subscriptionID}); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to lock subscription commitments").
-				Mark(ierr.ErrInternal)
+		if err := s.lockSubscriptionCommitments(txCtx, subscriptionID); err != nil {
+			return err
 		}
 
-		f := commitment.NewNoLimitFilter()
-		f.SubscriptionIDs = []string{subscriptionID}
-		f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive, types.CommitmentStatusTerminated}
-		listed, err := s.CommitmentRepo.List(txCtx, f)
+		listed, err := s.CommitmentRepo.List(txCtx, commitment.NewSubscriptionFilter(subscriptionID, types.CommitmentStatusActive))
 		if err != nil {
 			return err
 		}
 
 		for _, c := range listed {
-			if c.CommitmentStatus == types.CommitmentStatusTerminated {
-				if c.TerminatedAt == nil || !c.TerminatedAt.After(effectiveAt) {
-					continue
-				}
-
-				if err := s.lockCommitment(txCtx, c.ID); err != nil {
+			if c.EndedBy(effectiveAt) {
+				if err := s.settleEnded(txCtx, c); err != nil {
 					return err
 				}
-
-				latest, err := s.CommitmentRepo.Get(txCtx, c.ID)
-				if err != nil {
-					return err
-				}
-
-				if _, err := s.CommitmentRepo.Update(txCtx, commitment.NewCommitmentBuilder(latest).WithTerminatedAt(effectiveAt).Build()); err != nil {
-					return err
-				}
-
-				s.Logger.Info(ctx, "commitment.termination_rescheduled",
-					"operation", "commitment.termination_rescheduled",
-					"commitment_id", c.ID,
-					"subscription_id", subscriptionID,
-					"previous_terminated_at", *c.TerminatedAt,
-					"effective_at", effectiveAt,
-				)
 				continue
 			}
 
-			if !effectiveAt.Before(c.EndDate) {
-				continue
-			}
-
-			out, _, err := s.terminate(txCtx, c.ID, effectiveAt, nil)
+			out, _, err := s.terminate(txCtx, c.ID, effectiveAt, decimal.Zero)
 			if err != nil {
 				return err
 			}
@@ -560,21 +657,62 @@ func (s *commitmentService) publishSystemEvent(ctx context.Context, eventName ty
 		return
 	}
 
-	// The publisher records the event in Postgres, which must not run on the finished transaction.
-	publishCtx := types.WithoutDBTransaction(ctx)
-	publish := func() {
-		if err := s.WebhookPublisher.PublishWebhook(publishCtx, event); err != nil {
-			s.Logger.Error(publishCtx, "failed to publish commitment webhook",
+	publishAfterCommit(ctx, s.ServiceParams, event)
+}
+
+// recomputeDrafts recomputes the drafts and skipped period invoices billing the subscription's periods that end after
+// from, which a backdated commitment change leaves stale. It runs after commit and only logs a failure; finalizing
+// recomputes a draft that still predates the change.
+func (s *commitmentService) recomputeDrafts(ctx context.Context, subscriptionID string, from time.Time) {
+	// A client gone mid-request must not stop the recompute halfway.
+	ctx = context.WithoutCancel(ctx)
+	if err := s.recomputePeriodInvoices(ctx, subscriptionID, from); err != nil {
+		s.Logger.Error(ctx, "failed to recompute the invoices a commitment change left stale",
+			"error", err,
+			"subscription_id", subscriptionID)
+	}
+}
+
+// recomputePeriodInvoices recomputes the period invoices that carry the subscription's charges, its parent's for a
+// grouped child, for periods ending after from; manually edited ones are left alone.
+func (s *commitmentService) recomputePeriodInvoices(ctx context.Context, subscriptionID string, from time.Time) error {
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+
+	invoiced, err := invoicingSubscription(ctx, s.ServiceParams, sub)
+	if err != nil {
+		return err
+	}
+
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = invoiced.ID
+	filter.InvoiceType = types.InvoiceTypeSubscription
+	filter.BillingReason = types.InvoiceBillingReasonSubscriptionCycle
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft, types.InvoiceStatusSkipped}
+	filter.PeriodEndGT = lo.ToPtr(from)
+	filter.SkipLineItems = true
+	stale, err := s.InvoiceRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	invoicing := NewInvoiceService(s.ServiceParams)
+	for _, inv := range stale {
+		if inv.IsManuallyEdited {
+			continue
+		}
+
+		if _, _, err := invoicing.ComputeInvoice(ctx, inv.ID, nil); err != nil {
+			s.Logger.Error(ctx, "failed to recompute an invoice after a commitment change",
 				"error", err,
-				"event_name", eventName,
-				"commitment_id", c.ID,
-			)
+				"subscription_id", subscriptionID,
+				"invoice_id", inv.ID)
 		}
 	}
 
-	if !types.RegisterPostCommit(ctx, publish) {
-		publish()
-	}
+	return nil
 }
 
 // lockCommitment serialises writes to one commitment and must run inside a transaction.
@@ -588,13 +726,26 @@ func (s *commitmentService) lockCommitment(ctx context.Context, id string) error
 	return nil
 }
 
-// terminate re-reads the commitment under its lock and must run inside a transaction. The fee invoice is created
-// before the status change so a billing failure leaves the commitment active.
+// lockSubscriptionCommitments serialises commitment writes and scope changes on one subscription and must run inside
+// a transaction.
+func (s *commitmentService) lockSubscriptionCommitments(ctx context.Context, subscriptionID string) error {
+	if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "commitments:" + subscriptionID}); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to lock subscription commitments").
+			Mark(ierr.ErrInternal)
+	}
+
+	return nil
+}
+
+// terminate re-reads the commitment under its lock and must run inside a transaction. Under billing terms it settles
+// the instalments first. The termination invoice is created before the status change so a billing failure leaves
+// the commitment active.
 func (s *commitmentService) terminate(
 	ctx context.Context,
 	id string,
 	effectiveAt time.Time,
-	fee *decimal.Decimal,
+	fee decimal.Decimal,
 ) (*commitment.Commitment, *string, error) {
 	if err := s.lockCommitment(ctx, id); err != nil {
 		return nil, nil, err
@@ -611,20 +762,38 @@ func (s *commitmentService) terminate(
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	if !effectiveAt.Before(c.EndDate) {
-		return nil, nil, ierr.Validationf("effective_at must be before the commitment end %s", c.EndDate.Format(time.RFC3339))
+	sub, err := s.SubRepo.Get(ctx, c.SubscriptionID)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	var invoiceID *string
-	if fee != nil {
-		if invoiceID, err = s.billCancellationFee(ctx, c, effectiveAt, *fee); err != nil {
+	if effectiveAt, err = atPeriodEdge(sub, effectiveAt); err != nil {
+		return nil, nil, err
+	}
+
+	if c.EndedBy(effectiveAt) {
+		return nil, nil, ierr.Validationf("effective_at must be before the commitment end %s", c.EffectiveEnd().Format(time.RFC3339))
+	}
+
+	if fee.IsPositive() && !c.Binding {
+		return nil, nil, ierr.Validation("cancellation_fee requires a binding commitment")
+	}
+
+	var settlement *billingterm.Instalment
+	if lo.FromPtr(c.CollectionMethod) == types.CommitmentCollectionBillingTerms {
+		if settlement, err = s.settle(ctx, c, effectiveAt); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	// Kept as requested, even before start_date, where nothing is earned.
+	invoiceID, err := s.billTermination(ctx, c, sub, effectiveAt, fee, settlement)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// terminated_at keeps the requested date, even one before start_date.
 	terminated := commitment.NewCommitmentBuilder(c).
-		WithStatus(types.CommitmentStatusTerminated).
+		WithCommitmentStatus(types.CommitmentStatusTerminated).
 		WithTerminatedAt(effectiveAt).
 		Build()
 	out, err := s.CommitmentRepo.Update(ctx, terminated)
@@ -635,33 +804,100 @@ func (s *commitmentService) terminate(
 	return out, invoiceID, nil
 }
 
-// billCancellationFee bills the fee on a one-off invoice, or returns nil when it rounds to nothing.
-func (s *commitmentService) billCancellationFee(
+// billTermination issues the termination invoice carrying the settlement and the cancellation fee, either optional.
+// It returns nil when there is no settlement and the fee rounds to nothing.
+func (s *commitmentService) billTermination(
 	ctx context.Context,
 	c *commitment.Commitment,
+	sub *subscription.Subscription,
 	effectiveAt time.Time,
 	fee decimal.Decimal,
+	settlement *billingterm.Instalment,
 ) (*string, error) {
-	if !c.Binding {
-		return nil, ierr.Validation("cancellation_fee requires a binding commitment")
-	}
-
-	amount := types.RoundToCurrencyPrecision(fee, c.Currency)
-	if !amount.IsPositive() {
+	fee = types.RoundToCurrencyPrecision(fee, c.Currency)
+	if settlement == nil && !fee.IsPositive() {
 		return nil, nil
 	}
 
-	sub, err := s.SubRepo.Get(ctx, c.SubscriptionID)
+	var lines []dto.CreateInvoiceLineItemRequest
+	if settlement != nil {
+		lines = append(lines, instalmentLine(c, settlement))
+	}
+
+	if fee.IsPositive() {
+		line, err := cancellationFeeLine(c, sub, effectiveAt, fee)
+		if err != nil {
+			return nil, err
+		}
+
+		lines = append(lines, line)
+	}
+
+	total := sumAmounts(lines)
+
+	// The invoice period spans its lines: the settled term before effective_at, the rest the fee covers, or both.
+	first := lo.MinBy(lines, func(a, b dto.CreateInvoiceLineItemRequest) bool { return a.PeriodStart.Before(*b.PeriodStart) })
+	last := lo.MaxBy(lines, func(a, b dto.CreateInvoiceLineItemRequest) bool { return a.PeriodEnd.After(*b.PeriodEnd) })
+
+	billingPeriod := string(sub.BillingPeriod)
+	inv, err := NewInvoiceService(s.ServiceParams).CreateInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:     sub.GetInvoicingCustomerID(),
+		SubscriptionID: lo.ToPtr(sub.ID),
+		InvoiceType:    types.InvoiceTypeOneOff,
+		Currency:       c.Currency,
+		BillingReason:  types.InvoiceBillingReasonCommitmentTermination,
+		AmountDue:      total,
+		Total:          total,
+		Subtotal:       total,
+		PeriodStart:    lo.ToPtr(*first.PeriodStart),
+		PeriodEnd:      lo.ToPtr(*last.PeriodEnd),
+		BillingPeriod:  &billingPeriod,
+		IdempotencyKey: lo.ToPtr("commitment_termination_" + c.ID),
+		LineItems:      lines,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// The fee invoice is dated at effective_at; a closed billing period must not gain charges.
+	return lo.ToPtr(inv.ID), nil
+}
+
+// cancellationFeeLine bills the fee from effectiveAt to the term end, or for an open-ended commitment to the end of
+// the billing period holding effectiveAt, cut at the subscription end.
+func cancellationFeeLine(
+	c *commitment.Commitment,
+	sub *subscription.Subscription,
+	effectiveAt time.Time,
+	fee decimal.Decimal,
+) (dto.CreateInvoiceLineItemRequest, error) {
+	// The fee is dated at effective_at, so a closed billing period must not gain it.
 	if effectiveAt.Before(sub.CurrentPeriodStart) {
-		return nil, ierr.Validationf(
+		return dto.CreateInvoiceLineItemRequest{}, ierr.Validationf(
 			"effective_at with a cancellation_fee cannot precede the current billing period start %s",
 			sub.CurrentPeriodStart.Format(time.RFC3339),
 		)
+	}
+
+	// Nor can it fall at or past the subscription end, which bounds the term the fee covers.
+	if sub.EndDate != nil && !effectiveAt.Before(*sub.EndDate) {
+		return dto.CreateInvoiceLineItemRequest{}, ierr.Validationf(
+			"effective_at with a cancellation_fee must be before the subscription end %s",
+			sub.EndDate.Format(time.RFC3339),
+		)
+	}
+
+	end := c.EffectiveEnd()
+	if c.OpenEnded() {
+		holding, err := periodAt(sub, effectiveAt)
+		if err != nil {
+			return dto.CreateInvoiceLineItemRequest{}, err
+		}
+
+		end = &holding.End
+	}
+
+	if sub.EndDate != nil {
+		end = lo.ToPtr(minTime(*end, *sub.EndDate))
 	}
 
 	metadata := types.Metadata{
@@ -672,52 +908,59 @@ func (s *commitmentService) billCancellationFee(
 		metadata[types.MetadataKeyDescription] = *c.InvoiceDescription
 	}
 
-	billingPeriod := string(sub.BillingPeriod)
-	inv, err := NewInvoiceService(s.ServiceParams).CreateInvoice(ctx, dto.CreateInvoiceRequest{
-		CustomerID:     sub.GetInvoicingCustomerID(),
-		SubscriptionID: lo.ToPtr(sub.ID),
-		InvoiceType:    types.InvoiceTypeOneOff,
-		Currency:       c.Currency,
-		BillingReason:  types.InvoiceBillingReasonProration,
-		AmountDue:      amount,
-		Total:          amount,
-		Subtotal:       amount,
-		PeriodStart:    lo.ToPtr(effectiveAt),
-		PeriodEnd:      lo.ToPtr(c.EndDate),
-		BillingPeriod:  &billingPeriod,
-		IdempotencyKey: lo.ToPtr("commitment_termination_" + c.ID),
-		LineItems: []dto.CreateInvoiceLineItemRequest{
-			{
-				DisplayName:  lo.ToPtr(c.InvoiceLabel + " (cancellation fee)"),
-				Quantity:     decimal.NewFromInt(1),
-				Amount:       amount,
-				PeriodStart:  lo.ToPtr(effectiveAt),
-				PeriodEnd:    lo.ToPtr(c.EndDate),
-				CommitmentID: lo.ToPtr(c.ID),
-				EntityType:   lo.ToPtr(string(types.InvoiceLineItemEntityTypeCommitment)),
-				EntityID:     lo.ToPtr(c.ID),
-				Metadata:     metadata,
-			},
-		},
-	})
+	return dto.CreateInvoiceLineItemRequest{
+		DisplayName:  lo.ToPtr(c.InvoiceLabel + " (cancellation fee)"),
+		Quantity:     decimal.NewFromInt(1),
+		Amount:       fee,
+		PeriodStart:  lo.ToPtr(effectiveAt),
+		PeriodEnd:    end,
+		CommitmentID: lo.ToPtr(c.ID),
+		EntityType:   lo.ToPtr(string(types.InvoiceLineItemEntityTypeCommitment)),
+		EntityID:     lo.ToPtr(c.ID),
+		Metadata:     metadata,
+	}, nil
+}
+
+// CoveringMeters returns the IDs of the subscription's active and terminated commitments whose scope covers, during their
+// term, one of its usage lines on the given meters.
+func (s *commitmentService) CoveringMeters(ctx context.Context, subscriptionID string, meterIDs []string) ([]string, error) {
+	commitments, err := s.CommitmentRepo.List(ctx, commitment.NewSubscriptionFilter(
+		subscriptionID, types.CommitmentStatusActive, types.CommitmentStatusTerminated,
+	))
+	if err != nil || len(commitments) == 0 {
+		return nil, err
+	}
+
+	cc, err := s.loadCommitmentContext(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
 	}
 
-	return lo.ToPtr(inv.ID), nil
+	meters := make(map[string]bool, len(meterIDs))
+	for _, id := range meterIDs {
+		meters[id] = true
+	}
+
+	var ids []string
+	for _, c := range commitments {
+		for _, li := range scopeLinesInPeriod(c, cc, c.StartDate, c.EffectiveEnd()) {
+			if meters[li.MeterID] {
+				ids = append(ids, c.ID)
+				break
+			}
+		}
+	}
+
+	return ids, nil
 }
 
-// ActiveForPeriod returns commitments whose term overlaps [from, to), including terminated ones,
-// which still bill up to terminated_at (callers check IsActiveAt).
-func (s *commitmentService) ActiveForPeriod(
+func (s *commitmentService) ListOverlapping(
 	ctx context.Context,
 	subscriptionID string,
 	from time.Time,
 	to time.Time,
 ) ([]*commitment.Commitment, error) {
-	f := commitment.NewNoLimitFilter()
-	f.SubscriptionIDs = []string{subscriptionID}
-	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive, types.CommitmentStatusTerminated}
+	f := commitment.NewSubscriptionFilter(subscriptionID, types.CommitmentStatusActive, types.CommitmentStatusTerminated)
 	f.ActiveFrom, f.ActiveTo = &from, &to
 	return s.CommitmentRepo.List(ctx, f)
 }
@@ -726,7 +969,7 @@ func (s *commitmentService) ActiveForPeriod(
 func identityAmount(capacity decimal.Decimal) decimal.Decimal { return capacity }
 
 // priceAmountFn values a quantity by applying p, the way billing prices usage.
-func priceAmountFn(ctx context.Context, params ServiceParams, p *price.Price) func(decimal.Decimal) decimal.Decimal {
+func priceAmountFn(ctx context.Context, params ServiceParams, p *price.Price) amountFn {
 	prices := NewPriceService(params)
 	return func(qty decimal.Decimal) decimal.Decimal { return prices.CalculateCost(ctx, p, qty) }
 }
@@ -735,7 +978,7 @@ func priceAmountFn(ctx context.Context, params ServiceParams, p *price.Price) fu
 func (s *commitmentService) committedAmountFn(
 	ctx context.Context,
 	c *commitment.Commitment,
-) (func(decimal.Decimal) decimal.Decimal, error) {
+) (amountFn, error) {
 	if c.Type == types.COMMITMENT_TYPE_AMOUNT {
 		return identityAmount, nil
 	}
@@ -752,291 +995,42 @@ func (s *commitmentService) committedAmountFn(
 	return priceAmountFn(ctx, s.ServiceParams, p), nil
 }
 
-// response builds the API response, computing the commitment value. cc may be nil; List passes its
-// per-subscription context so the value math reuses it.
-func (s *commitmentService) response(
+// response builds the API response with the commitment's value. Only window measurement loads the scope, for its
+// bucket size.
+func (s *commitmentService) response(ctx context.Context, c *commitment.Commitment) (*dto.CommitmentResponse, error) {
+	if c.Measurement == types.CommitmentMeasurementWindow {
+		cc, err := s.loadCommitmentContext(ctx, c.SubscriptionID)
+		if err != nil {
+			return nil, err
+		}
+
+		return s.valuedResponse(ctx, c, cc.Sub, bucketFor(c, cc))
+	}
+
+	sub, err := s.SubRepo.Get(ctx, c.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.valuedResponse(ctx, c, sub, "")
+}
+
+// valuedResponse builds the API response with the commitment's value over sub, counting windows in bucket.
+func (s *commitmentService) valuedResponse(
 	ctx context.Context,
 	c *commitment.Commitment,
-	cc *commitmentContext,
+	sub *subscription.Subscription,
+	bucket types.WindowSize,
 ) (*dto.CommitmentResponse, error) {
 	amountOf, err := s.committedAmountFn(ctx, c)
 	if err != nil {
 		return nil, err
 	}
 
-	// Only window measurement needs the scope lines, for its bucket size; otherwise the subscription is enough.
-	if cc == nil && c.Measurement == types.CommitmentMeasurementWindow {
-		if cc, err = s.loadCommitmentContext(ctx, c.SubscriptionID); err != nil {
-			return nil, err
-		}
-	}
-
-	var sub *subscription.Subscription
-	var bucket types.WindowSize
-	if cc != nil {
-		sub, bucket = cc.Sub, bucketFor(c, cc)
-	} else if sub, err = s.SubRepo.Get(ctx, c.SubscriptionID); err != nil {
-		return nil, err
-	}
-
-	periods, err := commitmentPeriods(c, sub, amountOf, bucket)
+	value, err := termValue(c, sub, amountOf, bucket)
 	if err != nil {
 		return nil, err
 	}
 
-	value := commitmentValue(periods)
-	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: &value}, nil
-}
-
-func (s *commitmentService) CheckPriceAttach(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	p *price.Price,
-	at time.Time,
-	until *time.Time,
-) error {
-	_, err := s.checkPriceAttach(ctx, sub, p, at, until)
-	return err
-}
-
-// checkPriceAttach is CheckPriceAttach that also returns the commitment the price would break.
-// It must run inside a transaction.
-func (s *commitmentService) checkPriceAttach(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	p *price.Price,
-	at time.Time,
-	until *time.Time,
-) (string, error) {
-	if p == nil || p.Type != types.PRICE_TYPE_USAGE {
-		return "", nil
-	}
-
-	enabled, err := s.IsEnabled(ctx)
-	if err != nil || !enabled {
-		return "", err
-	}
-
-	// Serialise with create before reading, so a concurrent create is seen.
-	if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "commitments:" + sub.ID}); err != nil {
-		return "", ierr.WithError(err).
-			WithHint("Failed to lock subscription commitments").
-			Mark(ierr.ErrInternal)
-	}
-
-	inScope, err := s.commitmentsInScope(ctx, sub, p, at, until)
-	if err != nil || len(inScope) == 0 {
-		return "", err
-	}
-
-	if meterID, err := s.entitledMeter(ctx, sub, []string{p.MeterID}); err != nil {
-		return "", err
-	} else if meterID != "" {
-		return inScope[0].ID, ierr.Validationf("price %s is on meter %s, which has an active entitlement; it cannot join a commitment's scope", p.ID, meterID)
-	}
-
-	if !billsEverySubscriptionPeriod(sub, p.BillingPeriod, p.BillingPeriodCount) {
-		return inScope[0].ID, ierr.NewErrorf(
-			"commitments require scope prices billed every subscription period; price %s bills on another cadence",
-			p.ID,
-		).
-			WithHint("commitments require scope prices billed every subscription period").
-			Mark(ierr.ErrValidation)
-	}
-
-	m, err := s.MeterRepo.GetMeter(ctx, p.MeterID)
-	if err != nil {
-		return "", err
-	}
-
-	if err := rejectGroupedBucketedPrice(p, m); err != nil {
-		return inScope[0].ID, err
-	}
-
-	cc, err := s.loadCommitmentContext(ctx, sub.ID)
-	if err != nil {
-		return "", err
-	}
-
-	for _, c := range inScope {
-		if err := s.checkAttachAgainst(ctx, c, cc, p, at); err != nil {
-			return c.ID, err
-		}
-	}
-
-	return s.checkAttachPairs(ctx, sub, inScope)
-}
-
-// commitmentsInScope returns commitments in force after `at` and starting before `until` (nil when open-ended)
-// whose scope includes the new usage price. A terminated commitment stays in force through its extended span.
-func (s *commitmentService) commitmentsInScope(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	p *price.Price,
-	at time.Time,
-	until *time.Time,
-) ([]*commitment.Commitment, error) {
-	f := commitment.NewNoLimitFilter()
-	f.SubscriptionIDs = []string{sub.ID}
-	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive, types.CommitmentStatusTerminated}
-	listed, err := s.CommitmentRepo.List(ctx, f)
-	if err != nil {
-		return nil, err
-	}
-
-	var inScope []*commitment.Commitment
-	for _, c := range listed {
-		spanEnd, err := inForceEnd(sub, c)
-		if err != nil {
-			return nil, err
-		}
-
-		if !at.Before(spanEnd) || !c.StartDate.Before(spanEnd) || (until != nil && !c.StartDate.Before(*until)) {
-			continue
-		}
-
-		// A price-scoped commitment never includes a newly attached price (new ID).
-		switch c.ScopeEntityType {
-		case types.CommitmentScopeSubscription:
-		case types.CommitmentScopeGroup:
-			if p.GroupID != c.ScopeEntityID {
-				continue
-			}
-		case types.CommitmentScopeMeter:
-			if p.MeterID != c.ScopeEntityID {
-				continue
-			}
-		default:
-			continue
-		}
-
-		inScope = append(inScope, c)
-	}
-
-	return inScope, nil
-}
-
-// checkAttachAgainst checks the meter and bucket-size rules for one commitment that the new price joins.
-func (s *commitmentService) checkAttachAgainst(
-	ctx context.Context,
-	c *commitment.Commitment,
-	cc *commitmentContext,
-	p *price.Price,
-	at time.Time,
-) error {
-	lines := resolveScopeLines(c.ScopeEntityType, c.ScopeEntityID, cc, maxTime(at, c.StartDate))
-	if len(lines) == 0 {
-		// Nothing in scope at this instant, e.g. the only line was just replaced: check against the term's lines.
-		lines = scopeLinesInPeriod(c.ScopeEntityType, c.ScopeEntityID, cc, c.StartDate, c.EffectiveEnd())
-	}
-
-	if len(lines) == 0 {
-		return nil
-	}
-
-	if (c.Type == types.COMMITMENT_TYPE_QUANTITY || c.OveragePriceID != nil) && p.MeterID != lines[0].MeterID {
-		return ierr.Validationf("commitment %s covers a single meter; price %s is on a different meter", c.ID, p.ID)
-	}
-
-	if c.Measurement != types.CommitmentMeasurementWindow {
-		return nil
-	}
-
-	m, err := s.MeterRepo.GetMeter(ctx, p.MeterID)
-	if err != nil {
-		return err
-	}
-
-	want := price.ResolveBucketSize(cc.Prices[lines[0].PriceID], cc.Meters[lines[0].MeterID])
-	got := price.ResolveBucketSize(p, m)
-	if got != want {
-		return ierr.Validationf(
-			"commitment %s measures by window with bucket size %q; price %s has bucket size %q",
-			c.ID,
-			want,
-			p.ID,
-			got,
-		)
-	}
-
-	return rejectCalendarBuckets(got)
-}
-
-// checkAttachPairs requires commitments that now share the new price and overlap in time to agree on type,
-// measurement and overage price, and those still allocating together to differ in priority.
-func (s *commitmentService) checkAttachPairs(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	inScope []*commitment.Commitment,
-) (string, error) {
-	for i, a := range inScope {
-		for _, b := range inScope[i+1:] {
-			aEnd, err := inForceEnd(sub, a)
-			if err != nil {
-				return "", err
-			}
-
-			bEnd, err := inForceEnd(sub, b)
-			if err != nil {
-				return "", err
-			}
-
-			if !a.StartDate.Before(bEnd) || !b.StartDate.Before(aEnd) {
-				continue
-			}
-
-			allocatingTogether := a.StartDate.Before(b.EffectiveEnd()) && b.StartDate.Before(a.EffectiveEnd())
-			if allocatingTogether && a.Priority == b.Priority {
-				return a.ID, ierr.Validationf(
-					"commitments %s and %s overlap on the new price with the same priority %d",
-					a.ID,
-					b.ID,
-					a.Priority,
-				)
-			}
-
-			if a.Type != b.Type || a.Measurement != b.Measurement {
-				return a.ID, ierr.Validationf(
-					"commitments %s and %s overlap on the new price but differ in type or measurement",
-					a.ID,
-					b.ID,
-				)
-			}
-
-			same, err := s.sameCommitmentOverage(ctx, a, b)
-			if err != nil {
-				return "", err
-			}
-
-			if !same {
-				return a.ID, ierr.Validationf(
-					"commitments %s and %s overlap on the new price but have different overage prices; only equal flat overage amounts combine on the same usage",
-					a.ID,
-					b.ID,
-				)
-			}
-		}
-	}
-
-	return "", nil
-}
-
-// sameCommitmentOverage reports whether both have no overage price, or flat ones with the same amount.
-func (s *commitmentService) sameCommitmentOverage(ctx context.Context, a, b *commitment.Commitment) (bool, error) {
-	if a.OveragePriceID == nil || b.OveragePriceID == nil {
-		return a.OveragePriceID == nil && b.OveragePriceID == nil, nil
-	}
-
-	pa, err := s.PriceRepo.Get(ctx, *a.OveragePriceID)
-	if err != nil {
-		return false, err
-	}
-
-	pb, err := s.PriceRepo.Get(ctx, *b.OveragePriceID)
-	if err != nil {
-		return false, err
-	}
-
-	return pa.BillingModel == types.BILLING_MODEL_FLAT_FEE && pb.BillingModel == types.BILLING_MODEL_FLAT_FEE &&
-		pa.Amount.Equal(pb.Amount), nil
+	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: value}, nil
 }

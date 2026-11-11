@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -25,60 +26,61 @@ type Commitment struct {
 	OveragePriceID      *string                           `json:"overage_price_id,omitempty"`
 	Measurement         types.CommitmentMeasurement       `json:"measurement"`
 	ActiveWindows       types.ActiveWindows               `json:"active_windows,omitempty"`
-	Timezone            string                            `json:"timezone"`
 	Priority            int                               `json:"priority"`
 	Binding             bool                              `json:"binding"`
 	CollectionMethod    *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
 	TotalAmount         *decimal.Decimal                  `json:"total_amount,omitempty" swaggertype:"string"`
-	InstalmentInvoicing *string                           `json:"instalment_invoicing,omitempty"`
+	InstalmentInvoicing *types.InstalmentDelivery         `json:"instalment_invoicing,omitempty"`
 	StartDate           time.Time                         `json:"start_date"`
-	EndDate             time.Time                         `json:"end_date"`
-	OnEarlyTermination  *types.CommitmentEarlyTermination `json:"on_early_termination,omitempty"`
-	CommitmentStatus    types.CommitmentStatus            `json:"commitment_status"`
-	TerminatedAt        *time.Time                        `json:"terminated_at,omitempty"`
-	IdempotencyKey      *string                           `json:"idempotency_key,omitempty"`
-	Metadata            types.Metadata                    `json:"metadata,omitempty"`
-	EnvironmentID       string                            `json:"environment_id"`
+	// EndDate is exclusive; nil for an open-ended commitment, which runs until terminated.
+	EndDate            *time.Time                        `json:"end_date,omitempty"`
+	OnEarlyTermination *types.CommitmentEarlyTermination `json:"on_early_termination,omitempty"`
+	CommitmentStatus   types.CommitmentStatus            `json:"commitment_status"`
+	TerminatedAt       *time.Time                        `json:"terminated_at,omitempty"`
+	IdempotencyKey     *string                           `json:"idempotency_key,omitempty"`
+	Metadata           types.Metadata                    `json:"metadata,omitempty"`
+	EnvironmentID      string                            `json:"environment_id"`
 	types.BaseModel
 }
 
 // IsActiveAt reports whether t falls inside the term and the commitment has not ended early.
 func (c *Commitment) IsActiveAt(t time.Time) bool {
-	if c == nil || t.Before(c.StartDate) || !t.Before(c.EndDate) {
-		return false
-	}
-
-	return c.TerminatedAt == nil || t.Before(*c.TerminatedAt)
+	return c != nil && !t.Before(c.StartDate) && !c.EndedBy(t)
 }
 
-// EffectiveEnd is the end of the billed term: terminated_at when it cuts the term short, otherwise end_date.
-func (c *Commitment) EffectiveEnd() time.Time {
-	if c.TerminatedAt != nil && c.TerminatedAt.Before(c.EndDate) {
-		return *c.TerminatedAt
+// EffectiveEnd is the end of the billed term: terminated_at when it cuts the term short, otherwise end_date; nil while
+// open-ended.
+func (c *Commitment) EffectiveEnd() *time.Time {
+	if c.TerminatedAt != nil && (c.EndDate == nil || c.TerminatedAt.Before(*c.EndDate)) {
+		return lo.ToPtr(*c.TerminatedAt)
 	}
 
-	return c.EndDate
+	if c.EndDate == nil {
+		return nil
+	}
+
+	return lo.ToPtr(*c.EndDate)
 }
 
-// EndedBy reports whether the commitment has no term left after t: t is past its effective end,
-// or it was terminated before it ever started.
+// OpenEnded reports whether the commitment has no effective end: no end_date and not terminated.
+func (c *Commitment) OpenEnded() bool {
+	return c.EffectiveEnd() == nil
+}
+
+// Until returns the effective end capped at latest; an open-ended commitment runs to latest.
+func (c *Commitment) Until(latest time.Time) time.Time {
+	if end := c.EffectiveEnd(); end != nil && !end.After(latest) {
+		return *end
+	}
+
+	return latest
+}
+
+// EndedBy reports whether the commitment has no term left after t: its effective end is at or before t, or it was
+// terminated before it started. An open-ended commitment never ends.
 func (c *Commitment) EndedBy(t time.Time) bool {
 	end := c.EffectiveEnd()
-	return !t.Before(end) || !c.StartDate.Before(end)
-}
-
-// Location returns the commitment timezone, falling back to UTC.
-func (c *Commitment) Location() *time.Location {
-	if c == nil {
-		return time.UTC
-	}
-
-	loc, err := time.LoadLocation(c.Timezone)
-	if err != nil {
-		return time.UTC
-	}
-
-	return loc
+	return end != nil && (!end.After(t) || !end.After(c.StartDate))
 }
 
 func FromEnt(e *ent.Commitment) *Commitment {
@@ -102,7 +104,6 @@ func FromEnt(e *ent.Commitment) *Commitment {
 		OveragePriceID:      e.OveragePriceID,
 		Measurement:         e.Measurement,
 		ActiveWindows:       e.ActiveWindows,
-		Timezone:            e.Timezone,
 		Priority:            e.Priority,
 		Binding:             e.Binding,
 		CollectionMethod:    e.CollectionMethod,
@@ -167,7 +168,15 @@ func NewNoLimitFilter() *Filter {
 	}
 }
 
-func (f Filter) Validate() error {
+// NewSubscriptionFilter selects every commitment of the subscription in the given statuses.
+func NewSubscriptionFilter(subscriptionID string, statuses ...types.CommitmentStatus) *Filter {
+	f := NewNoLimitFilter()
+	f.SubscriptionIDs = []string{subscriptionID}
+	f.Statuses = statuses
+	return f
+}
+
+func (f *Filter) Validate() error {
 	if f.QueryFilter != nil {
 		if err := f.QueryFilter.Validate(); err != nil {
 			return err
@@ -205,7 +214,6 @@ func (f Filter) Validate() error {
 	return nil
 }
 
-// GetLimit implements BaseFilter interface.
 func (f *Filter) GetLimit() int {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetLimit()
@@ -214,7 +222,6 @@ func (f *Filter) GetLimit() int {
 	return f.QueryFilter.GetLimit()
 }
 
-// GetOffset implements BaseFilter interface.
 func (f *Filter) GetOffset() int {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetOffset()
@@ -223,7 +230,6 @@ func (f *Filter) GetOffset() int {
 	return f.QueryFilter.GetOffset()
 }
 
-// GetSort implements BaseFilter interface.
 func (f *Filter) GetSort() string {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetSort()
@@ -232,7 +238,6 @@ func (f *Filter) GetSort() string {
 	return f.QueryFilter.GetSort()
 }
 
-// GetOrder implements BaseFilter interface.
 func (f *Filter) GetOrder() string {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetOrder()
@@ -241,7 +246,7 @@ func (f *Filter) GetOrder() string {
 	return f.QueryFilter.GetOrder()
 }
 
-// GetStatus implements BaseFilter — row-level status, not the commitment status.
+// GetStatus returns the row status, not the commitment status.
 func (f *Filter) GetStatus() string {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetStatus()
@@ -250,7 +255,6 @@ func (f *Filter) GetStatus() string {
 	return f.QueryFilter.GetStatus()
 }
 
-// GetExpand implements BaseFilter interface.
 func (f *Filter) GetExpand() types.Expand {
 	if f.QueryFilter == nil {
 		return types.NewDefaultQueryFilter().GetExpand()

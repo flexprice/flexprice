@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/stripe/stripe-go/v82"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -13,8 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/stripe/stripe-go/v82"
 )
 
 const (
@@ -172,6 +175,11 @@ func (s *CustomerService) existingStripeLink(
 		return nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil
+	}
+
 	queryFilter := types.NewNoLimitPublishedQueryFilter()
 	queryFilter.Limit = lo.ToPtr(1)
 
@@ -180,6 +188,7 @@ func (s *CustomerService) existingStripeLink(
 		EntityID:      ourCustomer.ID,
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{string(types.SecretProviderStripe)},
+		ConnectionID:  conn.ID,
 	}
 
 	existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -246,8 +255,11 @@ func customerCreateIdempotencyKey(ctx context.Context, customerID string) string
 
 // CreateCustomerInStripe creates a customer in Stripe and updates our customer with Stripe ID
 func (s *CustomerService) CreateCustomerInStripe(ctx context.Context, ourCustomer *customer.Customer, customerService interfaces.CustomerService) (*dto.CustomerResponse, error) {
-	// Get Stripe client and config
-	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return dto.EmptyCustomerResponse(), err
+	}
+	stripeClient, _, err := s.client.buildStripeClient(conn)
 	if err != nil {
 		return dto.EmptyCustomerResponse(), err
 	}
@@ -306,9 +318,10 @@ func (s *CustomerService) CreateCustomerInStripe(ctx context.Context, ourCustome
 				"created_via":           "flexprice_to_provider",
 				"stripe_customer_email": ourCustomer.Email,
 				"stripe_customer_name":  ourCustomer.Name,
-				"synced_at":             time.Now().UTC().Format(time.RFC3339),
+				"synced_at":             clock.Now().Format(time.RFC3339),
 			},
 			EnvironmentID: types.GetEnvironmentID(ctx),
+			ConnectionID:  lo.ToPtr(conn.ID),
 			BaseModel:     types.GetDefaultBaseModel(ctx),
 		}
 
@@ -345,6 +358,17 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 		externalID = lookupKey
 		existing, err := customerService.GetCustomerByLookupKey(ctx, lookupKey)
 		if err == nil && existing != nil {
+			if !existing.Customer.InBillingEntity(types.GetBillingEntityID(ctx)) {
+				s.logger.Info(ctx, "lookup key matches a customer of another billing entity, skipping link",
+					"flexprice_customer_id", existing.Customer.ID,
+					"stripe_customer_id", stripeCustomer.ID)
+				return nil
+			}
+			conn, err := s.client.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+
 			// Customer found, check for existing mapping
 			filter := &types.EntityIntegrationMappingFilter{
 				QueryFilter:       types.NewNoLimitPublishedQueryFilter(),
@@ -352,6 +376,7 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 				EntityType:        types.IntegrationEntityTypeCustomer,
 				ProviderTypes:     []string{string(types.SecretProviderStripe)},
 				ProviderEntityIDs: []string{stripeCustomer.ID},
+				ConnectionID:      conn.ID,
 			}
 
 			existingMapping, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -511,6 +536,11 @@ func (s *CustomerService) createEntityIntegrationMapping(ctx context.Context, cu
 		return nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         customerID,
@@ -521,13 +551,14 @@ func (s *CustomerService) createEntityIntegrationMapping(ctx context.Context, cu
 			"created_via":           "provider_to_flexprice",
 			"stripe_customer_email": stripeCustomer.Email,
 			"stripe_customer_name":  stripeCustomer.Name,
-			"synced_at":             time.Now().UTC().Format(time.RFC3339),
+			"synced_at":             clock.Now().Format(time.RFC3339),
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),
+		ConnectionID:  lo.ToPtr(conn.ID),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
 
-	err := s.entityIntegrationMappingRepo.Create(ctx, mapping)
+	err = s.entityIntegrationMappingRepo.Create(ctx, mapping)
 	if err != nil {
 		s.logger.Info(ctx, "failed to create entity mapping for customer",
 			"error", err,
@@ -603,7 +634,7 @@ func (s *CustomerService) SyncCustomerToStripe(ctx context.Context, customer *cu
 		"stripe_customer_name":  customer.Name,
 		"sync_direction":        "flexprice_to_provider",
 		"created_via":           "api",
-		"synced_at":             time.Now().UTC().Format(time.RFC3339),
+		"synced_at":             clock.Now().Format(time.RFC3339),
 	}, nil
 }
 

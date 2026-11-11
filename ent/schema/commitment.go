@@ -138,12 +138,16 @@ func (Commitment) Fields() []ent.Field {
 			SchemaType(varchar("30")).
 			Optional().
 			Nillable().
-			Immutable(),
+			Immutable().
+			GoType(types.InstalmentDelivery("")),
 
 		field.Time("start_date").
 			Immutable(),
 
+		// Null for an open-ended commitment, which runs until terminated.
 		field.Time("end_date").
+			Optional().
+			Nillable().
 			Immutable(),
 
 		field.String("on_early_termination").

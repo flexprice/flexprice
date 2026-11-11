@@ -86,16 +86,27 @@ func (s CommitmentStatus) Validate() error {
 	})
 }
 
+// CommitmentRate names a commitment's rate price: the committed rate or the overage rate.
+type CommitmentRate string
+
+const (
+	CommitmentRateCommitted CommitmentRate = "committed"
+	CommitmentRateOverage   CommitmentRate = "overage"
+)
+
 // CommitmentLineKind tags invoice lines produced for a commitment.
 type CommitmentLineKind string
 
 const (
-	CommitmentLineWithin          CommitmentLineKind = "within_commitment"
-	CommitmentLineOnDemand        CommitmentLineKind = "on_demand"
+	CommitmentLineUtilized        CommitmentLineKind = "utilized"
+	CommitmentLineOverage         CommitmentLineKind = "overage"
 	CommitmentLineTrueUp          CommitmentLineKind = "true_up"
 	CommitmentLineInstalment      CommitmentLineKind = "instalment"
 	CommitmentLineSettlement      CommitmentLineKind = "settlement"
 	CommitmentLineCancellationFee CommitmentLineKind = "cancellation_fee"
+
+	// CommitmentLinePlain is usage no commitment covers; its rows carry no commitment metadata.
+	CommitmentLinePlain CommitmentLineKind = ""
 )
 
 func validateEnum[T ~string](field string, v T, allowed []T) error {
@@ -110,7 +121,7 @@ func validateEnum[T ~string](field string, v T, allowed []T) error {
 
 const minutesPerDay = 24 * 60
 
-// ActiveWindow is a half-open [Start, End) time-of-day range; End before Start wraps past midnight.
+// ActiveWindow is a half-open [Start, End) UTC time-of-day range; End before Start wraps past midnight.
 type ActiveWindow struct {
 	Start Bucket `json:"start"`
 	End   Bucket `json:"end"`
@@ -170,14 +181,14 @@ func (ws ActiveWindows) Validate() error {
 	return nil
 }
 
-// Contains reports whether t, read in loc, falls in any window. Empty windows mean all day.
-func (ws ActiveWindows) Contains(t time.Time, loc *time.Location) bool {
+// Contains reports whether t, read in UTC, falls in any window. Empty windows mean all day.
+func (ws ActiveWindows) Contains(t time.Time) bool {
 	if len(ws) == 0 {
 		return true
 	}
 
-	local := t.In(loc)
-	cur := Bucket{Hour: local.Hour(), Minute: local.Minute()}.MinuteOfDay()
+	utc := t.UTC()
+	cur := Bucket{Hour: utc.Hour(), Minute: utc.Minute()}.MinuteOfDay()
 	for _, w := range ws {
 		if w.Validate() != nil {
 			continue

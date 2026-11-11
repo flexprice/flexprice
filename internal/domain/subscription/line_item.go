@@ -3,12 +3,13 @@ package subscription
 import (
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // SubscriptionLineItem represents a line item in a subscription
@@ -71,7 +72,7 @@ func (li *SubscriptionLineItem) GetMeterID() string {
 }
 
 // IsActive returns true if the line item is active
-// to check if the line item is active and is mostly used with time.Now()
+// to check if the line item is active and is mostly used with clock.Now()
 // and in case of event post processing, we pass the event timestamp
 func (li *SubscriptionLineItem) IsActive(t time.Time) bool {
 	if li.Status != types.StatusPublished {
@@ -214,8 +215,8 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		PriceType:               priceType,
 		MeterID:                 meterID,
 		MeterDisplayName:        meterDisplayName,
-		PriceUnitID:             e.PriceUnitID,
-		PriceUnit:               e.PriceUnit,
+		PriceUnitID:             nilIfEmpty(e.PriceUnitID),
+		PriceUnit:               nilIfEmpty(e.PriceUnit),
 		DisplayName:             displayName,
 		Quantity:                e.Quantity,
 		Currency:                e.Currency,
@@ -274,4 +275,11 @@ func (li *SubscriptionLineItem) GetPeriodEnd(defaultPeriodEnd time.Time) time.Ti
 		return li.EndDate
 	}
 	return defaultPeriodEnd
+}
+
+func nilIfEmpty(s *string) *string {
+	if s == nil || *s == "" {
+		return nil
+	}
+	return s
 }

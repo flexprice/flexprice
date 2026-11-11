@@ -44,7 +44,7 @@ func commitmentFilterFn(ctx context.Context, c *commitment.Commitment, filter in
 		len(f.Statuses) > 0 && !lo.Contains(f.Statuses, c.CommitmentStatus),
 		f.ScopeType != nil && *f.ScopeType != c.ScopeEntityType,
 		len(f.ScopeIDs) > 0 && !lo.Contains(f.ScopeIDs, c.ScopeEntityID),
-		f.ActiveFrom != nil && !c.EndDate.After(*f.ActiveFrom),
+		f.ActiveFrom != nil && c.EndDate != nil && !c.EndDate.After(*f.ActiveFrom),
 		f.ActiveTo != nil && !c.StartDate.Before(*f.ActiveTo):
 		return false
 	}

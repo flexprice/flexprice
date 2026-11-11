@@ -8,6 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -20,7 +24,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/shopspring/decimal"
 )
 
 type IngestEventRequest struct {
@@ -362,7 +365,7 @@ type GetUsageAnalyticsRequest struct {
 	EndTime             time.Time        `json:"end_time,omitempty"`
 	GroupBy             []string         `json:"group_by,omitempty"` // allowed values: "source", "feature_id", "properties.<field_name>"
 	WindowSize          types.WindowSize `json:"window_size,omitempty"`
-	Expand              []string         `json:"expand,omitempty"` // allowed values: "price", "meter", "feature", "subscription_line_item","plan","addon"
+	Expand              []string         `json:"expand,omitempty"` // allowed values: "price", "meter", "feature", "subscription_line_item","plan","addon","source","instalments"
 	// Property filters to filter the events by the keys in `properties` field of the event
 	PropertyFilters map[string][]string `json:"property_filters,omitempty"`
 	// IncludeChildren when true folds child customers' usage into the single aggregated total.
@@ -388,6 +391,25 @@ type GetUsageAnalyticsResponse struct {
 	Currency        string               `json:"currency"`
 	Items           []UsageAnalyticItem  `json:"items"`
 	CustomAnalytics []CustomAnalyticItem `json:"custom_analytics,omitempty"`
+	// Instalments lists, with expand "instalments", the instalments invoiced in the range for the v2 commitments covering
+	// a queried meter; it is empty with property or source filters, or when no usage line runs in the range.
+	Instalments []UsageAnalyticInstalment `json:"instalments,omitempty"`
+	// TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes "instalments".
+	TotalCostWithInstalments *decimal.Decimal `json:"total_cost_with_instalments,omitempty" swaggertype:"string"`
+}
+
+// UsageAnalyticInstalment is one commitment instalment billed inside an analytics range.
+type UsageAnalyticInstalment struct {
+	ID                 string          `json:"id"`
+	CommitmentID       string          `json:"commitment_id"`
+	SubscriptionID     string          `json:"subscription_id,omitempty"`
+	InvoiceID          string          `json:"invoice_id,omitempty"`
+	InvoiceLabel       string          `json:"invoice_label"`
+	Amount             decimal.Decimal `json:"amount" swaggertype:"string"`
+	Currency           string          `json:"currency"`
+	InvoicedAt         *time.Time      `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
+	ServicePeriodStart time.Time       `json:"service_period_start"`
+	ServicePeriodEnd   time.Time       `json:"service_period_end"`
 }
 
 // UsageAnalyticItem represents a single analytic item in the response
@@ -505,7 +527,7 @@ func (r *GetMonitoringDataRequest) Validate() error {
 
 	// Default to last 24 hours if start_time and end_time are not provided
 	if r.StartTime.IsZero() && r.EndTime.IsZero() {
-		r.EndTime = time.Now().UTC()
+		r.EndTime = clock.Now()
 		r.StartTime = r.EndTime.Add(-24 * time.Hour)
 	} else if r.StartTime.IsZero() || r.EndTime.IsZero() {
 		return ierr.NewError("both start_time and end_time must be provided, or neither").
@@ -738,7 +760,7 @@ func (r *ReprocessRawEventsRequest) Validate() error {
 
 	// If end_date is not provided, default to current time
 	if r.EndDate == "" {
-		r.EndDate = time.Now().UTC().Format(time.RFC3339)
+		r.EndDate = clock.Now().Format(time.RFC3339)
 	}
 
 	// Validate end_date format (RFC3339)

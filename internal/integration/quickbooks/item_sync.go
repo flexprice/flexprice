@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -12,7 +16,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
+	"github.com/samber/lo"
 )
 
 // QuickBooksItemSyncService defines the interface for QuickBooks item synchronization
@@ -184,10 +188,16 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 // Checks if price has already been synced to QuickBooks by looking up the mapping.
 // Returns the QuickBooks item ID if mapping exists, or ErrNotFound if price hasn't been synced.
 func (s *ItemSyncService) getQuickBooksItemID(ctx context.Context, priceID string) (string, error) {
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityType = types.IntegrationEntityTypePrice
 	filter.EntityID = priceID
 	filter.ProviderTypes = []string{string(types.SecretProviderQuickBooks)}
+	filter.ConnectionID = conn.ID
 
 	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
@@ -225,6 +235,11 @@ func (s *ItemSyncService) createItemMapping(
 	baseModel := types.GetDefaultBaseModel(ctx)
 	baseModel.TenantID = tenantID
 
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityType:       types.IntegrationEntityTypePrice,
@@ -234,9 +249,10 @@ func (s *ItemSyncService) createItemMapping(
 		EnvironmentID:    environmentID,
 		BaseModel:        baseModel,
 		Metadata: map[string]interface{}{
-			"synced_at":            time.Now().UTC().Format(time.RFC3339),
+			"synced_at":            clock.Now().Format(time.RFC3339),
 			"quickbooks_item_name": itemName,
 		},
+		ConnectionID: lo.ToPtr(conn.ID),
 	}
 
 	return s.EntityIntegrationMappingRepo.Create(ctx, mapping)

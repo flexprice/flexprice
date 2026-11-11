@@ -3,12 +3,15 @@ package dto
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/shopspring/decimal"
 )
 
 // GetCostAnalyticsRequest represents the request to get cost analytics
@@ -46,7 +49,7 @@ func (r *GetCostAnalyticsRequest) Validate() error {
 
 	// Set default time range to last 7 days if not provided
 	if r.StartTime.IsZero() && r.EndTime.IsZero() {
-		now := time.Now().UTC()
+		now := clock.Now()
 		r.EndTime = now
 		r.StartTime = now.Add(-7 * 24 * time.Hour)
 	} else if r.StartTime.IsZero() || r.EndTime.IsZero() {

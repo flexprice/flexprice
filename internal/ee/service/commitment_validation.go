@@ -11,20 +11,25 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
 
+// commitmentContext is a subscription with every published line it has had, and their prices and meters by ID.
 type commitmentContext struct {
 	Sub    *subscription.Subscription
-	Items  []*subscription.SubscriptionLineItem
+	Lines  []*subscription.SubscriptionLineItem
 	Prices map[string]*price.Price
 	Meters map[string]*meter.Meter
 }
 
-// loadCommitmentContext loads a subscription with every line item it has had, and their prices and meters,
-// so a term reaching back before the current period still resolves its scope.
+// bucketSize is the bucket size the line's price bills usage in.
+func (cc *commitmentContext) bucketSize(li *subscription.SubscriptionLineItem) types.WindowSize {
+	return price.ResolveBucketSize(cc.Prices[li.PriceID], cc.Meters[li.MeterID])
+}
+
+// loadCommitmentContext loads a subscription with every line it has had, and their prices and meters, so a term
+// reaching back before the current period still resolves its scope.
 func (s *commitmentService) loadCommitmentContext(
 	ctx context.Context,
 	subscriptionID string,
@@ -37,19 +42,19 @@ func (s *commitmentService) loadCommitmentContext(
 	lf := types.NewNoLimitSubscriptionLineItemFilter()
 	lf.SubscriptionIDs = []string{subscriptionID}
 	lf.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-	items, err := s.SubscriptionLineItemRepo.List(ctx, lf)
+	lines, err := s.SubscriptionLineItemRepo.List(ctx, lf)
 	if err != nil {
 		return nil, err
 	}
 
 	cc := &commitmentContext{
 		Sub:    sub,
-		Items:  items,
+		Lines:  lines,
 		Prices: map[string]*price.Price{},
 		Meters: map[string]*meter.Meter{},
 	}
 
-	priceIDs := lo.Uniq(lo.Map(items, func(li *subscription.SubscriptionLineItem, _ int) string {
+	priceIDs := lo.Uniq(lo.Map(lines, func(li *subscription.SubscriptionLineItem, _ int) string {
 		return li.PriceID
 	}))
 	if len(priceIDs) > 0 {
@@ -66,7 +71,7 @@ func (s *commitmentService) loadCommitmentContext(
 		}
 	}
 
-	meterIDs := lo.Uniq(lo.FilterMap(items, func(li *subscription.SubscriptionLineItem, _ int) (string, bool) {
+	meterIDs := lo.Uniq(lo.FilterMap(lines, func(li *subscription.SubscriptionLineItem, _ int) (string, bool) {
 		return li.MeterID, li.MeterID != ""
 	}))
 	if len(meterIDs) > 0 {
@@ -85,34 +90,19 @@ func (s *commitmentService) loadCommitmentContext(
 	return cc, nil
 }
 
-// resolveScopeLines returns usage line items covered by a scope at time t, ordered by price ID then line ID.
-func resolveScopeLines(
-	scopeType types.CommitmentScopeType,
-	scopeID string,
-	cc *commitmentContext,
-	at time.Time,
-) []*subscription.SubscriptionLineItem {
-	lines := lo.Filter(cc.Items, func(li *subscription.SubscriptionLineItem, _ int) bool {
-		if li.PriceType != types.PRICE_TYPE_USAGE || !lineActiveAt(li, at) {
-			return false
-		}
-
-		p := cc.Prices[li.PriceID]
-		switch scopeType {
-		case types.CommitmentScopeSubscription:
-			return true
-		case types.CommitmentScopeGroup:
-			return p != nil && p.GroupID == scopeID
-		case types.CommitmentScopeMeter:
-			return li.MeterID == scopeID
-		case types.CommitmentScopePrice:
-			return li.PriceID == scopeID
-		}
-
-		return false
+// scopeLinesAt returns the usage lines c's scope covers at the instant at, ordered for fill.
+func scopeLinesAt(c *commitment.Commitment, cc *commitmentContext, at time.Time) []*subscription.SubscriptionLineItem {
+	lines := lo.Filter(cc.Lines, func(li *subscription.SubscriptionLineItem, _ int) bool {
+		return li.PriceType == types.PRICE_TYPE_USAGE && lineActiveAt(li, at) && commitmentCoversLine(c, li, cc.Prices[li.PriceID])
 	})
 	sortLinesForFill(lines)
 	return lines
+}
+
+// scopeLinesAtStart returns the lines c's scope covers when it starts billing: at the later of its start and the
+// subscription's, since a whole-second term edge can sit just below a mid-second line start.
+func scopeLinesAtStart(c *commitment.Commitment, cc *commitmentContext) []*subscription.SubscriptionLineItem {
+	return scopeLinesAt(c, cc, maxTime(c.StartDate, cc.Sub.StartDate))
 }
 
 func lineActiveAt(li *subscription.SubscriptionLineItem, at time.Time) bool {
@@ -123,21 +113,21 @@ func lineActiveAt(li *subscription.SubscriptionLineItem, at time.Time) bool {
 	return li.EndDate.IsZero() || at.Before(li.EndDate)
 }
 
-// scopeLinesInPeriod returns the line items in scope at any point of [from, to), ordered for fill.
+// scopeLinesInPeriod returns the lines c's scope covers at any point of [from, to), ordered for fill; a nil to takes
+// every line joining after from.
 func scopeLinesInPeriod(
-	scopeType types.CommitmentScopeType,
-	scopeID string,
+	c *commitment.Commitment,
 	cc *commitmentContext,
 	from time.Time,
-	to time.Time,
+	to *time.Time,
 ) []*subscription.SubscriptionLineItem {
-	if !from.Before(to) {
+	if endReached(to, from) {
 		return nil
 	}
 
 	at := []time.Time{from}
-	for _, li := range cc.Items {
-		if li.StartDate.After(from) && li.StartDate.Before(to) {
+	for _, li := range cc.Lines {
+		if li.StartDate.After(from) && !endReached(to, li.StartDate) {
 			at = append(at, li.StartDate)
 		}
 	}
@@ -145,7 +135,7 @@ func scopeLinesInPeriod(
 	seen := map[string]bool{}
 	var out []*subscription.SubscriptionLineItem
 	for _, t := range at {
-		for _, li := range resolveScopeLines(scopeType, scopeID, cc, t) {
+		for _, li := range scopeLinesAt(c, cc, t) {
 			if !seen[li.ID] {
 				seen[li.ID] = true
 				out = append(out, li)
@@ -167,13 +157,38 @@ func sortLinesForFill(lines []*subscription.SubscriptionLineItem) {
 	})
 }
 
+// validateAgainstSubscription checks c against its subscription: the term fits it, the scope covers usage lines
+// that suit c over the whole term, and c agrees with the commitments it overlaps.
 func (s *commitmentService) validateAgainstSubscription(
 	ctx context.Context,
-	req *dto.CreateCommitmentRequest,
+	c *commitment.Commitment,
+	overage *dto.CommitmentPriceInput,
 	cc *commitmentContext,
 	opts commitmentCreateOptions,
 ) error {
-	sub := cc.Sub
+	if err := validateTerm(c, cc.Sub, opts); err != nil {
+		return err
+	}
+
+	if err := s.validateScopeEntity(ctx, c, cc.Sub); err != nil {
+		return err
+	}
+
+	if len(scopeLinesAtStart(c, cc)) == 0 {
+		return ierr.Validationf("scope %s/%s covers no usage prices on the subscription", c.ScopeEntityType, c.ScopeEntityID)
+	}
+
+	// Lines scheduled to join later in the term must satisfy the same rules as those present at start.
+	termLines := scopeLinesInPeriod(c, cc, c.StartDate, c.EffectiveEnd())
+	if err := s.validateTermLines(ctx, c, overage, cc, termLines); err != nil {
+		return err
+	}
+
+	return s.validateOverlaps(ctx, c, overage, cc, termLines)
+}
+
+// validateTerm checks that the subscription can take a commitment and that c's term fits inside it.
+func validateTerm(c *commitment.Commitment, sub *subscription.Subscription, opts commitmentCreateOptions) error {
 	accepted := []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusTrialing}
 	if opts.allowPendingSubscription {
 		accepted = append(accepted, types.SubscriptionStatusIncomplete, types.SubscriptionStatusDraft)
@@ -183,20 +198,36 @@ func (s *commitmentService) validateAgainstSubscription(
 		return ierr.Validationf("subscription %s must be active or trialing", sub.ID)
 	}
 
-	if req.StartDate.Before(sub.StartDate) {
+	if sub.CommitmentAmount != nil && sub.CommitmentAmount.IsPositive() {
+		return ierr.Validation("subscription has a legacy subscription-level commitment; remove it before adding a commitment")
+	}
+
+	// A subscription created before starts were whole seconds may start mid-second; a term may start at that second.
+	if c.StartDate.Before(sub.StartDate.Truncate(time.Second)) {
 		return ierr.Validationf("start_date cannot be before the subscription start %s", sub.StartDate.Format(time.RFC3339))
 	}
 
-	if err := validateBoundary(sub, req.EndDate); err != nil {
-		return err
+	// A term starting once the subscription has ended has no period to bill.
+	if sub.EndDate != nil && !c.StartDate.Before(*sub.EndDate) {
+		return ierr.Validationf("start_date must be before the subscription end %s", sub.EndDate.Format(time.RFC3339))
 	}
 
-	if req.Scope.EntityType == types.CommitmentScopeSubscription && req.Scope.EntityID != sub.ID {
-		return ierr.Validationf("subscription scope must reference subscription %s", sub.ID)
+	if sub.EndDate != nil && c.EndDate != nil && c.EndDate.After(*sub.EndDate) {
+		return ierr.Validationf("end_date cannot be after the subscription end %s", sub.EndDate.Format(time.RFC3339))
 	}
 
-	if req.Scope.EntityType == types.CommitmentScopeGroup {
-		g, err := s.GroupRepo.Get(ctx, req.Scope.EntityID)
+	return nil
+}
+
+// validateScopeEntity checks that a subscription scope names c's subscription and a group scope a price group.
+func (s *commitmentService) validateScopeEntity(ctx context.Context, c *commitment.Commitment, sub *subscription.Subscription) error {
+	switch c.ScopeEntityType {
+	case types.CommitmentScopeSubscription:
+		if c.ScopeEntityID != sub.ID {
+			return ierr.Validationf("subscription scope must reference subscription %s", sub.ID)
+		}
+	case types.CommitmentScopeGroup:
+		g, err := s.GroupRepo.Get(ctx, c.ScopeEntityID)
 		if err != nil {
 			return err
 		}
@@ -206,36 +237,40 @@ func (s *commitmentService) validateAgainstSubscription(
 		}
 	}
 
-	lines := resolveScopeLines(req.Scope.EntityType, req.Scope.EntityID, cc, req.StartDate)
-	if len(lines) == 0 {
-		return ierr.Validationf(
-			"scope %s/%s covers no usage prices on the subscription",
-			req.Scope.EntityType,
-			req.Scope.EntityID,
-		)
-	}
+	return nil
+}
 
-	// Lines scheduled to join later in the term must satisfy the same rules as those present at start.
-	termLines := scopeLinesInPeriod(req.Scope.EntityType, req.Scope.EntityID, cc, req.StartDate, req.EndDate)
-	meters := lo.Uniq(lo.Map(termLines, func(li *subscription.SubscriptionLineItem, _ int) string {
+// validateTermLines checks the lines c's scope covers over its term: no entitled meter, a single meter where c needs
+// one, one bucket size for window measurement, no legacy commitments, and prices billed every subscription period.
+func (s *commitmentService) validateTermLines(
+	ctx context.Context,
+	c *commitment.Commitment,
+	overage *dto.CommitmentPriceInput,
+	cc *commitmentContext,
+	lines []*subscription.SubscriptionLineItem,
+) error {
+	meters := lo.Uniq(lo.Map(lines, func(li *subscription.SubscriptionLineItem, _ int) string {
 		return li.MeterID
 	}))
-	if meterID, err := s.entitledMeter(ctx, sub, meters); err != nil {
+	meterID, err := s.entitledMeter(ctx, cc.Sub, meters)
+	if err != nil {
 		return err
-	} else if meterID != "" {
+	}
+
+	if meterID != "" {
 		return ierr.Validationf("meter %s has an active entitlement; a commitment cannot cover entitled usage", meterID)
 	}
 
-	if (req.Type == types.COMMITMENT_TYPE_QUANTITY || req.OveragePrice != nil) && len(meters) != 1 {
+	if (c.Type == types.COMMITMENT_TYPE_QUANTITY || overage != nil) && len(meters) != 1 {
 		return ierr.Validationf(
 			"quantity commitments and custom overage prices need a scope with exactly one meter, found %d",
 			len(meters),
 		)
 	}
 
-	if req.Measurement == types.CommitmentMeasurementWindow {
-		sizes := lo.Uniq(lo.Map(termLines, func(li *subscription.SubscriptionLineItem, _ int) types.WindowSize {
-			return price.ResolveBucketSize(cc.Prices[li.PriceID], cc.Meters[li.MeterID])
+	if c.Measurement == types.CommitmentMeasurementWindow {
+		sizes := lo.Uniq(lo.Map(lines, func(li *subscription.SubscriptionLineItem, _ int) types.WindowSize {
+			return cc.bucketSize(li)
 		}))
 		if len(sizes) != 1 || sizes[0] == "" {
 			return ierr.Validation("window measurement needs bucketed prices that all share one bucket size")
@@ -244,13 +279,17 @@ func (s *commitmentService) validateAgainstSubscription(
 		if err := rejectCalendarBuckets(sizes[0]); err != nil {
 			return err
 		}
+
+		// Active windows must hold whole usage buckets, by v1's rule for time-of-day buckets.
+		windows := lo.Map(c.ActiveWindows, func(w types.ActiveWindow, _ int) types.TimeOfDayBucket {
+			return types.TimeOfDayBucket{Start: w.Start, End: w.End}
+		})
+		if err := types.TimeOfDayBuckets(windows).ValidateWindowAlignment(sizes[0].ToMinutes()); err != nil {
+			return err
+		}
 	}
 
-	if sub.CommitmentAmount != nil && sub.CommitmentAmount.IsPositive() {
-		return ierr.Validation("subscription has a legacy subscription-level commitment; remove it before adding a commitment")
-	}
-
-	for _, li := range termLines {
+	for _, li := range lines {
 		if li.HasAnyCommitment() {
 			return ierr.Validationf("price %s already has a legacy line-item commitment", li.PriceID)
 		}
@@ -259,17 +298,12 @@ func (s *commitmentService) validateAgainstSubscription(
 			return err
 		}
 
-		if !billsEverySubscriptionPeriod(sub, li.BillingPeriod, li.BillingPeriodCount) {
-			return ierr.NewErrorf(
-				"commitments require scope prices billed every subscription period; price %s bills on another cadence",
-				li.PriceID,
-			).
-				WithHint("commitments require scope prices billed every subscription period").
-				Mark(ierr.ErrValidation)
+		if err := rejectOffCadencePrice(cc.Sub, li.PriceID, li.BillingPeriod, li.BillingPeriodCount); err != nil {
+			return err
 		}
 	}
 
-	return s.validateOverlaps(ctx, req, cc, termLines)
+	return nil
 }
 
 // rejectGroupedBucketedPrice rejects a bucketed MAX price grouped by a property: normal billing prices each group's
@@ -303,25 +337,40 @@ func rejectCalendarBuckets(size types.WindowSize) error {
 		Mark(ierr.ErrValidation)
 }
 
-// billsEverySubscriptionPeriod reports whether a price bills on the subscription's own cadence, so its invoice
-// window is the subscription period.
-func billsEverySubscriptionPeriod(sub *subscription.Subscription, period types.BillingPeriod, count int) bool {
-	return period == sub.BillingPeriod && max(count, 1) == max(sub.BillingPeriodCount, 1)
+// rejectOffCadencePrice rejects a scope price that does not bill every subscription period, since a commitment's
+// windows are the subscription's periods.
+func rejectOffCadencePrice(sub *subscription.Subscription, priceID string, period types.BillingPeriod, count int) error {
+	if period == sub.BillingPeriod && max(count, 1) == max(sub.BillingPeriodCount, 1) {
+		return nil
+	}
+
+	return ierr.NewErrorf(
+		"commitments require scope prices billed every subscription period; price %s bills on another cadence",
+		priceID,
+	).
+		WithHint("Use a price billed every subscription period").
+		Mark(ierr.ErrValidation)
 }
 
-// validateOverlaps requires commitments sharing a line item and still allocating to differ in priority, and
-// all overlapping ones to agree on type, measurement, bucket size (for windows) and overage rate; a terminated
-// commitment still counts for the latter through the end of the billing period it was terminated in.
+// validateOverlaps requires the commitments sharing a line with c and still allocating with it to differ in priority,
+// and all that overlap it to agree on type, measurement, bucket size and overage price.
 func (s *commitmentService) validateOverlaps(
 	ctx context.Context,
-	req *dto.CreateCommitmentRequest,
+	c *commitment.Commitment,
+	overage *dto.CommitmentPriceInput,
 	cc *commitmentContext,
 	lines []*subscription.SubscriptionLineItem,
 ) error {
-	f := commitment.NewNoLimitFilter()
-	f.SubscriptionIDs = []string{cc.Sub.ID}
-	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive, types.CommitmentStatusTerminated}
-	existing, err := s.CommitmentRepo.List(ctx, f)
+	existing, err := s.CommitmentRepo.List(ctx, commitment.NewSubscriptionFilter(
+		cc.Sub.ID,
+		types.CommitmentStatusActive,
+		types.CommitmentStatusTerminated,
+	))
+	if err != nil {
+		return err
+	}
+
+	cBlockedUntil, err := blocksUntil(cc.Sub, c)
 	if err != nil {
 		return err
 	}
@@ -330,22 +379,23 @@ func (s *commitmentService) validateOverlaps(
 		return li.ID
 	})
 	for _, other := range existing {
-		spanEnd, err := inForceEnd(cc.Sub, other)
+		otherBlockedUntil, err := blocksUntil(cc.Sub, other)
 		if err != nil {
 			return err
 		}
 
-		if !spanEnd.After(other.StartDate) || !other.StartDate.Before(req.EndDate) || !req.StartDate.Before(spanEnd) {
+		if endReached(otherBlockedUntil, other.StartDate) ||
+			endReached(cBlockedUntil, other.StartDate) ||
+			endReached(otherBlockedUntil, c.StartDate) {
 			continue
 		}
 
-		otherLines := scopeLinesInPeriod(
-			other.ScopeEntityType,
-			other.ScopeEntityID,
-			cc,
-			maxTime(req.StartDate, other.StartDate),
-			minTime(req.EndDate, spanEnd),
-		)
+		overlapEnd := otherBlockedUntil
+		if cBlockedUntil != nil && (otherBlockedUntil == nil || cBlockedUntil.Before(*otherBlockedUntil)) {
+			overlapEnd = cBlockedUntil
+		}
+
+		otherLines := scopeLinesInPeriod(other, cc, maxTime(c.StartDate, other.StartDate), overlapEnd)
 		otherLineIDs := lo.Map(otherLines, func(li *subscription.SubscriptionLineItem, _ int) string {
 			return li.ID
 		})
@@ -353,18 +403,19 @@ func (s *commitmentService) validateOverlaps(
 			continue
 		}
 
-		if other.Priority == req.Priority && req.StartDate.Before(other.EffectiveEnd()) {
-			return ierr.Validationf("priority %d is already used by overlapping commitment %s", req.Priority, other.ID)
+		allocatingTogether := !other.EndedBy(c.StartDate) && !c.EndedBy(other.StartDate)
+		if allocatingTogether && other.Priority == c.Priority {
+			return ierr.Validationf("priority %d is already used by overlapping commitment %s", c.Priority, other.ID)
 		}
 
-		if other.Type != req.Type || other.Measurement != req.Measurement {
+		if other.Type != c.Type || other.Measurement != c.Measurement {
 			return ierr.Validationf("overlapping commitment %s has a different type or measurement", other.ID)
 		}
 
-		if req.Measurement == types.CommitmentMeasurementWindow {
-			want := price.ResolveBucketSize(cc.Prices[lines[0].PriceID], cc.Meters[lines[0].MeterID])
+		if c.Measurement == types.CommitmentMeasurementWindow {
+			want := cc.bucketSize(lines[0])
 			sizes := lo.Map(otherLines, func(li *subscription.SubscriptionLineItem, _ int) types.WindowSize {
-				return price.ResolveBucketSize(cc.Prices[li.PriceID], cc.Meters[li.MeterID])
+				return cc.bucketSize(li)
 			})
 			for _, got := range append(sizes, bucketFor(other, cc)) {
 				if got != "" && got != want {
@@ -378,7 +429,7 @@ func (s *commitmentService) validateOverlaps(
 			}
 		}
 
-		same, err := s.sameOverage(ctx, other, req)
+		same, err := s.sameOverageAsInput(ctx, other, overage)
 		if err != nil {
 			return err
 		}
@@ -394,58 +445,48 @@ func (s *commitmentService) validateOverlaps(
 	return nil
 }
 
-// inForceEnd returns when a commitment stops constraining others: its end, or for a terminated one the end of
-// the billing period holding its cutoff.
-func inForceEnd(sub *subscription.Subscription, c *commitment.Commitment) (time.Time, error) {
-	if c.TerminatedAt == nil {
-		return c.EndDate, nil
-	}
-
-	return terminatedSpanEnd(sub, c)
-}
-
-// terminatedSpanEnd returns the end of the subscription billing period holding a terminated commitment's
-// effective end; a commitment terminated at or before its start spans nothing.
-func terminatedSpanEnd(sub *subscription.Subscription, c *commitment.Commitment) (time.Time, error) {
-	endedAt := c.EffectiveEnd()
-	if !endedAt.After(c.StartDate) {
+// blocksUntil returns when c stops blocking other commitments on its scope: the end of the billing period holding its
+// term end, or that end itself when it never ran. Nil means never.
+func blocksUntil(sub *subscription.Subscription, c *commitment.Commitment) (*time.Time, error) {
+	endedAt := termEnd(sub, c)
+	if endedAt == nil || !endedAt.After(c.StartDate) {
 		return endedAt, nil
 	}
 
-	periods, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
-		InitialPeriodStart: sub.StartDate,
-		EndDate:            &c.EndDate,
-		Anchor:             sub.BillingAnchor,
-		PeriodCount:        sub.BillingPeriodCount,
-		BillingPeriod:      sub.BillingPeriod,
-		Timezone:           sub.Timezone,
-	})
+	end, err := periodEndAt(sub, *endedAt)
 	if err != nil {
-		return time.Time{}, ierr.WithError(err).
-			WithHint("Failed to compute billing periods for commitment").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
-	for _, p := range periods {
-		if !p.End.Before(endedAt) {
-			return p.End, nil
-		}
-	}
-
-	return endedAt, nil
+	return &end, nil
 }
 
-// sameOverage reports whether both sides have no overage price, or flat ones with the same amount.
-func (s *commitmentService) sameOverage(
-	ctx context.Context,
-	other *commitment.Commitment,
-	req *dto.CreateCommitmentRequest,
-) (bool, error) {
-	if other.OveragePriceID == nil || req.OveragePrice == nil {
-		return other.OveragePriceID == nil && req.OveragePrice == nil, nil
+// termEnd returns c's effective end, or the subscription end when c is open-ended.
+func termEnd(sub *subscription.Subscription, c *commitment.Commitment) *time.Time {
+	if c.OpenEnded() {
+		return sub.EndDate
 	}
 
-	if req.OveragePrice.BillingModel != types.BILLING_MODEL_FLAT_FEE {
+	return c.EffectiveEnd()
+}
+
+// endReached reports whether t is at or after end, where a nil end never comes.
+func endReached(end *time.Time, t time.Time) bool {
+	return end != nil && !end.After(t)
+}
+
+// sameOverageAsInput reports whether other and the requested overage price both have none, or flat ones with the
+// same amount.
+func (s *commitmentService) sameOverageAsInput(
+	ctx context.Context,
+	other *commitment.Commitment,
+	in *dto.CommitmentPriceInput,
+) (bool, error) {
+	if other.OveragePriceID == nil || in == nil {
+		return other.OveragePriceID == nil && in == nil, nil
+	}
+
+	if in.BillingModel != types.BILLING_MODEL_FLAT_FEE {
 		return false, nil
 	}
 
@@ -454,77 +495,7 @@ func (s *commitmentService) sameOverage(
 		return false, err
 	}
 
-	return p.BillingModel == types.BILLING_MODEL_FLAT_FEE && p.Amount.Equal(lo.FromPtr(req.OveragePrice.Amount)), nil
-}
-
-// validateBoundary requires end to fall on a subscription billing-period end or the subscription end,
-// and never after the subscription end.
-func validateBoundary(sub *subscription.Subscription, end time.Time) error {
-	if sub.EndDate != nil {
-		if end.Equal(*sub.EndDate) {
-			return nil
-		}
-
-		if end.After(*sub.EndDate) {
-			return ierr.Validationf("end_date cannot be after the subscription end %s", sub.EndDate.Format(time.RFC3339))
-		}
-	}
-
-	// Extend one period past end so the last period is not clipped at end.
-	horizon, err := types.NextBillingDate(&types.NextBillingDateParams{
-		CurrentPeriodStart: end,
-		BillingAnchor:      sub.BillingAnchor,
-		Unit:               sub.BillingPeriodCount,
-		Period:             sub.BillingPeriod,
-		Timezone:           sub.Timezone,
-	})
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to compute billing periods for commitment").
-			Mark(ierr.ErrInternal)
-	}
-
-	periods, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
-		InitialPeriodStart: sub.StartDate,
-		EndDate:            &horizon,
-		Anchor:             sub.BillingAnchor,
-		PeriodCount:        sub.BillingPeriodCount,
-		BillingPeriod:      sub.BillingPeriod,
-		Timezone:           sub.Timezone,
-	})
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to compute billing periods for commitment").
-			Mark(ierr.ErrInternal)
-	}
-
-	var before, after *time.Time
-	for _, p := range periods {
-		switch {
-		case p.End.Equal(end):
-			return nil
-		case p.End.Before(end):
-			before = lo.ToPtr(p.End)
-		case after == nil:
-			after = lo.ToPtr(p.End)
-		}
-	}
-
-	const layout = "2 Jan 2006"
-	switch {
-	case before != nil && after != nil:
-		return ierr.Validationf(
-			"end_date must fall on a billing date; nearest are %s and %s",
-			before.Format(layout),
-			after.Format(layout),
-		)
-	case after != nil:
-		return ierr.Validationf("end_date must fall on a billing date; nearest is %s", after.Format(layout))
-	case before != nil:
-		return ierr.Validationf("end_date must fall on a billing date; nearest is %s", before.Format(layout))
-	}
-
-	return ierr.Validation("end_date must fall on a billing date")
+	return p.BillingModel == types.BILLING_MODEL_FLAT_FEE && p.Amount.Equal(lo.FromPtr(in.Amount)), nil
 }
 
 // entitledMeter returns the first of the meters carrying an enabled metered entitlement on the
@@ -557,109 +528,13 @@ func (s *commitmentService) entitledMeter(
 	return "", nil
 }
 
-// checkLineItemCommitmentAttach runs the commitment price-attach guard for a usage line item joining sub.
-// Other lines cost nothing; with commitments disabled the cost is the cached settings read.
-func checkLineItemCommitmentAttach(
-	ctx context.Context,
-	params ServiceParams,
-	sub *subscription.Subscription,
-	li *subscription.SubscriptionLineItem,
-) error {
-	if li == nil || li.PriceType != types.PRICE_TYPE_USAGE {
-		return nil
-	}
-
-	svc := NewCommitmentService(params)
-	enabled, err := svc.IsEnabled(ctx)
-	if err != nil || !enabled {
-		return err
-	}
-
-	p, err := params.PriceRepo.Get(ctx, li.PriceID)
-	if err != nil {
-		return err
-	}
-
-	return svc.CheckPriceAttach(ctx, sub, p, li.StartDate, lo.EmptyableToPtr(li.EndDate))
-}
-
-// rejectLegacyCommitmentInScope rejects legacy line-item commitment fields on a line that a commitment still
-// in force covers, since the two would bill the same usage twice.
-func rejectLegacyCommitmentInScope(
-	ctx context.Context,
-	params ServiceParams,
-	sub *subscription.Subscription,
-	li *subscription.SubscriptionLineItem,
-) error {
-	if li == nil || !li.HasAnyCommitment() {
-		return nil
-	}
-
-	svc := NewCommitmentService(params)
-	enabled, err := svc.IsEnabled(ctx)
-	if err != nil || !enabled {
-		return err
-	}
-
-	// Serialise with commitment creation, which validates against committed legacy fields.
-	if err := params.DB.LockWithWait(ctx, postgres.LockRequest{Key: "commitments:" + sub.ID}); err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to lock subscription commitments").
-			Mark(ierr.ErrInternal)
-	}
-
-	f := commitment.NewNoLimitFilter()
-	f.SubscriptionIDs = []string{sub.ID}
-	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive, types.CommitmentStatusTerminated}
-	listed, err := params.CommitmentRepo.List(ctx, f)
-	if err != nil || len(listed) == 0 {
-		return err
-	}
-
-	p, err := params.PriceRepo.Get(ctx, li.PriceID)
-	if err != nil {
-		return err
-	}
-
-	for _, c := range listed {
-		overlaps, err := overlapsLine(sub, c, li)
-		if err != nil {
-			return err
-		}
-
-		if overlaps && commitmentCoversLine(c, li, p) {
-			return ierr.Validationf(
-				"line item %s is covered by commitment %s; legacy line-item commitment fields are not allowed",
-				li.ID,
-				c.ID,
-			)
-		}
-	}
-
-	return nil
-}
-
-// overlapsLine reports whether the line's billing interval overlaps the commitment's term, extended for a
-// terminated one.
-func overlapsLine(sub *subscription.Subscription, c *commitment.Commitment, li *subscription.SubscriptionLineItem) (bool, error) {
-	spanEnd, err := inForceEnd(sub, c)
-	if err != nil {
-		return false, err
-	}
-
-	if !li.StartDate.Before(spanEnd) {
-		return false, nil
-	}
-
-	return li.EndDate.IsZero() || c.StartDate.Before(li.EndDate), nil
-}
-
+// commitmentCoversLine reports whether c's scope takes in the line, priced at p.
 func commitmentCoversLine(c *commitment.Commitment, li *subscription.SubscriptionLineItem, p *price.Price) bool {
 	switch c.ScopeEntityType {
 	case types.CommitmentScopeSubscription:
 		return true
 	case types.CommitmentScopeGroup:
-		return p.GroupID == c.ScopeEntityID
+		return p != nil && p.GroupID == c.ScopeEntityID
 	case types.CommitmentScopeMeter:
 		return li.MeterID == c.ScopeEntityID
 	case types.CommitmentScopePrice:
@@ -667,134 +542,4 @@ func commitmentCoversLine(c *commitment.Commitment, li *subscription.Subscriptio
 	}
 
 	return false
-}
-
-// createSyncLineItem inserts a price-sync usage line item in the same transaction as the commitment attach
-// check, under the subscription's commitments lock. A violation is logged and the line skipped, so one
-// subscription never fails the whole sync; it reports whether the line was created.
-func createSyncLineItem(
-	ctx context.Context,
-	params ServiceParams,
-	sub *subscription.Subscription,
-	p *price.Price,
-	li *subscription.SubscriptionLineItem,
-) (bool, error) {
-	svc := &commitmentService{ServiceParams: params}
-	var commitmentID string
-	var checkErr error
-	err := params.DB.WithTx(ctx, func(txCtx context.Context) error {
-		commitmentID, checkErr = svc.checkPriceAttach(txCtx, sub, p, li.StartDate, lo.EmptyableToPtr(li.EndDate))
-		if checkErr != nil {
-			return checkErr
-		}
-
-		return params.SubscriptionLineItemRepo.Create(txCtx, li)
-	})
-	if checkErr != nil && ierr.IsValidation(checkErr) {
-		params.Logger.Info(ctx, "commitment.sync_price_skipped",
-			"operation", "commitment.sync_price_skipped",
-			"subscription_id", sub.ID, "price_id", p.ID, "commitment_id", commitmentID, "reason", checkErr.Error())
-		return false, nil
-	}
-
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
-}
-
-// checkLineItemCommitmentDetach rejects ending a usage line item at endDate when an active binding commitment
-// scopes it and the other lines in its scope do not cover the rest of its term without a gap, which would
-// silently stop billing its minimum. Call it inside the write's transaction, after any replacement line exists.
-func checkLineItemCommitmentDetach(
-	ctx context.Context,
-	params ServiceParams,
-	sub *subscription.Subscription,
-	li *subscription.SubscriptionLineItem,
-	endDate time.Time,
-) error {
-	if li == nil || li.PriceType != types.PRICE_TYPE_USAGE {
-		return nil
-	}
-
-	svc := &commitmentService{ServiceParams: params}
-	enabled, err := svc.IsEnabled(ctx)
-	if err != nil || !enabled {
-		return err
-	}
-
-	// Serialise with other scope changes, so two removals cannot each see the other's line as cover.
-	if err := params.DB.LockWithWait(ctx, postgres.LockRequest{Key: "commitments:" + sub.ID}); err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to lock subscription commitments").
-			Mark(ierr.ErrInternal)
-	}
-
-	f := commitment.NewNoLimitFilter()
-	f.SubscriptionIDs = []string{sub.ID}
-	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive}
-	active, err := params.CommitmentRepo.List(ctx, f)
-	if err != nil || len(active) == 0 {
-		return err
-	}
-
-	cc, err := svc.loadCommitmentContext(ctx, sub.ID)
-	if err != nil {
-		return err
-	}
-
-	p := cc.Prices[li.PriceID]
-	if p == nil {
-		if p, err = params.PriceRepo.Get(ctx, li.PriceID); err != nil {
-			return err
-		}
-	}
-
-	for _, c := range active {
-		end := c.EffectiveEnd()
-		from := maxTime(endDate, c.StartDate)
-		if !c.Binding || !from.Before(end) || !li.StartDate.Before(end) || !commitmentCoversLine(c, li, p) {
-			continue
-		}
-
-		remaining := lo.Filter(cc.Items, func(other *subscription.SubscriptionLineItem, _ int) bool {
-			op := cc.Prices[other.PriceID]
-			return other.ID != li.ID && other.PriceType == types.PRICE_TYPE_USAGE && op != nil && commitmentCoversLine(c, other, op)
-		})
-		if !coversContinuously(remaining, from, end) {
-			return ierr.Validationf(
-				"line item %s is the last line in scope of binding commitment %s for part of its term; terminate the commitment first",
-				li.ID,
-				c.ID,
-			)
-		}
-	}
-
-	return nil
-}
-
-// coversContinuously reports whether the lines together run through all of [from, to) without a gap.
-func coversContinuously(lines []*subscription.SubscriptionLineItem, from, to time.Time) bool {
-	sorted := append([]*subscription.SubscriptionLineItem(nil), lines...)
-	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].StartDate.Before(sorted[j].StartDate) })
-
-	covered := from
-	for _, li := range sorted {
-		if !covered.Before(to) {
-			return true
-		}
-
-		if li.StartDate.After(covered) {
-			return false
-		}
-
-		if li.EndDate.IsZero() {
-			return true
-		}
-
-		covered = maxTime(covered, li.EndDate)
-	}
-
-	return !covered.Before(to)
 }

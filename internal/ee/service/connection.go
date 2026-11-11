@@ -1,9 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -18,6 +22,8 @@ import (
 // itself the check) and discarded immediately, so this is the shortest session AWS permits: STS
 // rejects any durationSeconds below 900 with a ValidationError, so 15m is the floor, not a choice.
 const awsMarketplaceRoleVerificationDuration = 15 * time.Minute
+
+const connectionExistsHint = "A published connection for provider '%s' already exists"
 
 // ConnectionService defines the interface for connection operations
 type ConnectionService interface {
@@ -553,45 +559,23 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		return nil, err
 	}
 
-	// Check for existing published connection with same provider, tenant, and environment
-	existingFilter := &types.ConnectionFilter{
-		ProviderType: req.ProviderType,
-	}
-
-	existingConnections, err := s.ConnectionRepo.List(ctx, existingFilter)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to check for existing connections", "error", err)
+	if err := dto.ValidateConnectionID(req.ID); err != nil {
 		return nil, err
-	}
-
-	// Check if there's already a published connection for this provider, tenant, and environment
-	for _, existingConn := range existingConnections {
-		if existingConn.ProviderType == req.ProviderType &&
-			existingConn.ProviderType != types.SecretProviderS3 &&
-			existingConn.ProviderType != types.SecretProviderGCS &&
-			existingConn.Status == types.StatusPublished {
-			return nil, ierr.NewError("connection already exists").
-				WithHintf("A published connection for provider '%s' already exists in this environment", req.ProviderType).
-				WithReportableDetails(map[string]interface{}{
-					"provider_type":          req.ProviderType,
-					"tenant_id":              tenantID,
-					"environment_id":         environmentID,
-					"existing_connection_id": existingConn.ID,
-				}).
-				Mark(ierr.ErrAlreadyExists)
-		}
 	}
 
 	// Convert DTO to domain model
 	conn := req.ToConnection()
 
 	// Set required fields
-	conn.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION)
+	conn.ID = req.ID
+	if conn.ID == "" {
+		conn.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION)
+	}
 	conn.TenantID = tenantID
 	conn.EnvironmentID = environmentID
 	conn.Status = types.StatusPublished
-	conn.CreatedAt = time.Now()
-	conn.UpdatedAt = time.Now()
+	conn.CreatedAt = clock.Now()
+	conn.UpdatedAt = clock.Now()
 	conn.CreatedBy = types.GetUserID(ctx)
 	conn.UpdatedBy = types.GetUserID(ctx)
 
@@ -771,8 +755,18 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		return nil, err
 	}
 
-	// Create the connection
-	if err := s.ConnectionRepo.Create(ctx, conn); err != nil {
+	beService := NewBillingEntityService(s.ServiceParams)
+	if err := beService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
+		owner, err := beService.ResolveConnectionOwner(txCtx, mode, conn.ProviderType, req.BillingEntityID, req.ID != "")
+		if err != nil {
+			return err
+		}
+		if err := requireNoDuplicateConnection(txCtx, s.ConnectionRepo, conn.ProviderType, owner); err != nil {
+			return err
+		}
+		conn.BillingEntityID = owner
+		return s.ConnectionRepo.Create(txCtx, conn)
+	}); err != nil {
 		s.Logger.Error(ctx, "failed to create connection", "error", err)
 		return nil, err
 	}
@@ -782,7 +776,11 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	// For QuickBooks connections with auth_code, exchange it immediately for tokens
 	// OAuth 2.0 auth codes expire quickly (typically 10 minutes), so we must exchange them ASAP
 	if conn.ProviderType == types.SecretProviderQuickBooks && s.IntegrationFactory != nil {
-		qbIntegration, err := s.IntegrationFactory.GetQuickBooksIntegration(ctx)
+		exchangeCtx := ctx
+		if conn.BillingEntityID != nil {
+			exchangeCtx = types.SetBillingEntityID(ctx, *conn.BillingEntityID)
+		}
+		qbIntegration, err := s.IntegrationFactory.GetQuickBooksIntegration(exchangeCtx)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to get QuickBooks integration after connection creation",
 				"connection_id", conn.ID,
@@ -790,7 +788,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 			// Don't fail connection creation, but log the error
 		} else {
 			// Try to ensure valid access token (will exchange auth_code if present)
-			if err := qbIntegration.Client.EnsureValidAccessToken(ctx); err != nil {
+			if err := qbIntegration.Client.EnsureValidAccessToken(exchangeCtx); err != nil {
 				s.Logger.Error(ctx, "failed to exchange QuickBooks auth code for tokens",
 					"connection_id", conn.ID,
 					"error", err)
@@ -807,7 +805,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 }
 
 func (s *connectionService) validateStorageReachable(ctx context.Context, conn *connection.Connection) error {
-	if conn.ProviderType != types.SecretProviderS3 && conn.ProviderType != types.SecretProviderGCS {
+	if !connection.IsStorageProvider(conn.ProviderType) {
 		return nil
 	}
 	if s.IntegrationFactory == nil {
@@ -866,6 +864,10 @@ func (s *connectionService) GetConnection(ctx context.Context, id string) (*dto.
 
 func (s *connectionService) GetConnections(ctx context.Context, filter *types.ConnectionFilter) (*dto.ListConnectionsResponse, error) {
 	s.Logger.Debug(ctx, "getting connections", "filter", filter)
+
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
+		return nil, err
+	}
 
 	connections, err := s.ConnectionRepo.List(ctx, filter)
 	if err != nil {
@@ -945,18 +947,29 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		return nil, err
 	}
 
-	// Update simple fields if provided
-	if req.Name != "" {
+	changed := false
+	if req.Name != "" && req.Name != conn.Name {
 		conn.Name = req.Name
+		changed = true
 	}
 
-	// Update metadata if provided
 	if req.Metadata != nil {
 		conn.Metadata = req.Metadata
+		changed = true
 	}
 
 	if req.SyncConfig != nil {
+		syncChanged, err := jsonChanged(conn.SyncConfig, req.SyncConfig)
+		if err != nil {
+			return nil, err
+		}
 		conn.SyncConfig = req.SyncConfig
+		changed = changed || syncChanged
+	}
+
+	secretsBefore, err := json.Marshal(conn.EncryptedSecretData)
+	if err != nil {
+		return nil, err
 	}
 
 	// Re-apply to block cross-tenant redirect.
@@ -1100,7 +1113,35 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		conn.EncryptedSecretData.Chargebee.WebhookPassword = encPass
 	}
 
-	conn.UpdatedAt = time.Now()
+	// S3: the key pair rotates as one unit; an omitted session token is cleared.
+	if req.EncryptedSecretData != nil && req.EncryptedSecretData.S3 != nil {
+		if conn.ProviderType != types.SecretProviderS3 {
+			return nil, ierr.NewError("s3 secret update is only valid for s3 connections").
+				Mark(ierr.ErrValidation)
+		}
+		incoming := req.EncryptedSecretData.S3
+		if incoming.AWSAccessKeyID == "" || incoming.AWSSecretAccessKey == "" {
+			return nil, ierr.NewError("aws_access_key_id and aws_secret_access_key must be provided together").
+				WithHint("Send both AWS keys to rotate S3 credentials").
+				Mark(ierr.ErrValidation)
+		}
+		encrypted, encErr := s.encryptMetadata(types.ConnectionMetadata{S3: incoming}, types.SecretProviderS3)
+		if encErr != nil {
+			s.Logger.Error(ctx, "failed to encrypt S3 credentials", "error", encErr, "connection_id", id)
+			return nil, encErr
+		}
+		conn.EncryptedSecretData.S3 = encrypted.S3
+	}
+
+	secretsChanged, err := jsonChanged(json.RawMessage(secretsBefore), conn.EncryptedSecretData)
+	if err != nil {
+		return nil, err
+	}
+	if !changed && !secretsChanged {
+		return dto.ToConnectionResponse(conn), nil
+	}
+
+	conn.UpdatedAt = clock.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
 	// Validate reachability before persisting.
@@ -1108,7 +1149,6 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		return nil, err
 	}
 
-	// Update the connection
 	if err := s.ConnectionRepo.Update(ctx, conn); err != nil {
 		s.Logger.Error(ctx, "failed to update connection", "error", err, "connection_id", id)
 		return nil, err
@@ -1116,6 +1156,19 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 
 	s.Logger.Info(ctx, "connection updated successfully", "connection_id", conn.ID)
 	return dto.ToConnectionResponse(conn), nil
+}
+
+// jsonChanged reports whether a and b serialise to different JSON.
+func jsonChanged(a, b any) (bool, error) {
+	before, err := json.Marshal(a)
+	if err != nil {
+		return false, err
+	}
+	after, err := json.Marshal(b)
+	if err != nil {
+		return false, err
+	}
+	return !bytes.Equal(before, after), nil
 }
 
 func (s *connectionService) DeleteConnection(ctx context.Context, id string) error {
@@ -1154,10 +1207,9 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 		}
 	}
 
-	conn.UpdatedAt = time.Now()
+	conn.UpdatedAt = clock.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
-	// Delete the connection
 	if err := s.ConnectionRepo.Delete(ctx, conn); err != nil {
 		s.Logger.Error(ctx, "failed to delete connection", "error", err, "connection_id", id)
 		return err
@@ -1165,4 +1217,28 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 
 	s.Logger.Info(ctx, "connection deleted successfully", "connection_id", conn.ID)
 	return nil
+}
+
+func errConnectionExists(ctx context.Context, existing *connection.Connection, owner *string) error {
+	hint := fmt.Sprintf(connectionExistsHint, existing.ProviderType) + " in this environment"
+	details := map[string]any{
+		"provider_type":          existing.ProviderType,
+		"tenant_id":              types.GetTenantID(ctx),
+		"environment_id":         types.GetEnvironmentID(ctx),
+		"existing_connection_id": existing.ID,
+	}
+	if owner != nil {
+		hint = fmt.Sprintf(connectionExistsHint, existing.ProviderType) + " for this billing entity"
+		details["billing_entity_id"] = *owner
+	}
+	return ierr.NewError("connection already exists").
+		WithHint(hint).
+		WithReportableDetails(details).
+		Mark(ierr.ErrAlreadyExists)
+}
+
+func errStorageHasNoEntity(provider types.SecretProvider) error {
+	return ierr.NewError("storage connections have no billing entity").
+		WithHintf("%s connections are shared by all billing entities and cannot belong to one", provider).
+		Mark(ierr.ErrValidation)
 }

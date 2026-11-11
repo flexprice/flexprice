@@ -108,6 +108,8 @@ func (s *BillingServiceSuite) setupService() {
 		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
 		MeterUsageRepo:           s.GetStores().MeterUsageRepo,
 		CommitmentRepo:           s.GetStores().CommitmentRepo,
+		BillingTermRepo:          s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:    s.GetStores().BillingInstalmentRepo,
 	})
 }
 
@@ -4150,7 +4152,7 @@ func (s *BillingServiceSuite) TestCalculateNeverResetUsage() {
 			}
 
 			// Call the function under test using the real event service
-			eventService := NewEventService(s.GetStores().EventRepo, s.GetStores().MeterRepo, s.GetPublisher(), s.GetLogger(), s.GetConfig(), nil)
+			eventService := NewEventService(s.GetStores().EventRepo, s.GetStores().MeterRepo, s.GetPublisher(), s.GetLogger(), s.GetConfig(), nil, nil)
 
 			// Create mock events in the event store for our test data
 			for _, event := range tt.totalUsageEvents {
@@ -5920,7 +5922,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_MonthlyMeterOnQuart
 	// March: ts in Mar window, QtyTotal=300
 	seedMeterUsage(time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC), decimal.NewFromInt(300))
 
-	result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, quarterStart, quarterEnd, true, nil)
+	result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, quarterStart, quarterEnd, true, nil, nil)
 	s.Require().NoError(err)
 	s.Require().Len(result.UsageCharges, 3, "one usage line item per month")
 
@@ -6025,7 +6027,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_LongerCadenceUsage_
 				}}))
 			}
 
-			result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, feb1, mar1, true, nil)
+			result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, feb1, mar1, true, nil, nil)
 			s.Require().NoError(err, "a longer usage item must not fail the invoice")
 			s.Require().Len(result.UsageCharges, 1)
 			s.Equal(feb1, *result.UsageCharges[0].PeriodStart)

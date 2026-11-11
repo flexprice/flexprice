@@ -28,50 +28,50 @@ func (s *MeterUsageQuerySuite) SetupTest() {
 
 func (s *MeterUsageQuerySuite) TestAggregation_SUM() {
 	agg := GetMeterUsageAggregator(types.AggregationSum)
-	aggExpr, countExpr := getMeterUsageAggExprs(agg)
+	aggExpr, countExpr := getMeterUsageAggExprs(agg, false)
 	assert.Equal(s.T(), "SUM(qty_total)", aggExpr)
 	assert.Equal(s.T(), "COUNT(DISTINCT id)", countExpr)
 }
 
 func (s *MeterUsageQuerySuite) TestAggregation_COUNT() {
 	agg := GetMeterUsageAggregator(types.AggregationCount)
-	aggExpr, _ := getMeterUsageAggExprs(agg)
+	aggExpr, _ := getMeterUsageAggExprs(agg, false)
 	assert.Equal(s.T(), "COUNT(DISTINCT id)", aggExpr)
 }
 
 func (s *MeterUsageQuerySuite) TestAggregation_COUNT_UNIQUE() {
 	agg := GetMeterUsageAggregator(types.AggregationCountUnique)
-	aggExpr, _ := getMeterUsageAggExprs(agg)
+	aggExpr, _ := getMeterUsageAggExprs(agg, false)
 	assert.Equal(s.T(), "COUNT(DISTINCT unique_hash)", aggExpr)
 }
 
 func (s *MeterUsageQuerySuite) TestAggregation_MAX() {
 	agg := GetMeterUsageAggregator(types.AggregationMax)
-	aggExpr, _ := getMeterUsageAggExprs(agg)
+	aggExpr, _ := getMeterUsageAggExprs(agg, false)
 	assert.Equal(s.T(), "MAX(qty_total)", aggExpr)
 }
 
 func (s *MeterUsageQuerySuite) TestAggregation_AVG() {
 	agg := GetMeterUsageAggregator(types.AggregationAvg)
-	aggExpr, _ := getMeterUsageAggExprs(agg)
+	aggExpr, _ := getMeterUsageAggExprs(agg, false)
 	assert.Equal(s.T(), "ifNotFinite(AVG(qty_total), 0)", aggExpr)
 }
 
 func (s *MeterUsageQuerySuite) TestAggregation_LATEST() {
 	agg := GetMeterUsageAggregator(types.AggregationLatest)
-	aggExpr, _ := getMeterUsageAggExprs(agg)
+	aggExpr, _ := getMeterUsageAggExprs(agg, false)
 	assert.Equal(s.T(), "argMax(qty_total, timestamp)", aggExpr)
 }
 
 func (s *MeterUsageQuerySuite) TestAggregation_SUM_WITH_MULTIPLIER() {
 	agg := GetMeterUsageAggregator(types.AggregationSumWithMultiplier)
-	aggExpr, _ := getMeterUsageAggExprs(agg)
+	aggExpr, _ := getMeterUsageAggExprs(agg, false)
 	assert.Equal(s.T(), "SUM(qty_total)", aggExpr)
 }
 
 func (s *MeterUsageQuerySuite) TestAggregation_WEIGHTED_SUM() {
 	agg := GetMeterUsageAggregator(types.AggregationWeightedSum)
-	aggExpr, _ := getMeterUsageAggExprs(agg)
+	aggExpr, _ := getMeterUsageAggExprs(agg, false)
 	assert.Equal(s.T(), "SUM(qty_total)", aggExpr)
 }
 
@@ -333,6 +333,67 @@ func (s *MeterUsageQuerySuite) TestAggregation_AVG_GuardsEmptySetNaN() {
 	}, s.qb)
 	assert.Contains(s.T(), query, "ifNotFinite(AVG(qty_total), 0)")
 
-	columns := buildMeterUsageAggregationColumns([]types.AggregationType{types.AggregationAvg})
+	columns := buildMeterUsageAggregationColumns([]types.AggregationType{types.AggregationAvg}, false)
 	assert.Equal(s.T(), "ifNotFinite(AVG(qty_total), 0) AS total_usage", columns[0])
+}
+
+// Billed COUNT value must stay distinct.
+func (s *MeterUsageQuerySuite) TestEventCount_FinalUsesCount() {
+	params := func(useFinal bool, aggType types.AggregationType) *events.MeterUsageQueryParams {
+		return &events.MeterUsageQueryParams{
+			TenantID:        "t1",
+			EnvironmentID:   "e1",
+			MeterID:         "m1",
+			AggregationType: aggType,
+			WindowSize:      types.WindowSizeHour,
+			StartTime:       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+			EndTime:         time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+			UseFinal:        useFinal,
+		}
+	}
+
+	tests := []struct {
+		name      string
+		useFinal  bool
+		wantCount string
+	}{
+		{name: "final", useFinal: true, wantCount: "count()"},
+		{name: "no final", useFinal: false, wantCount: "COUNT(DISTINCT id)"},
+	}
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			aggExpr, countExpr := getMeterUsageAggExprs(GetMeterUsageAggregator(types.AggregationCount), tc.useFinal)
+			s.Equal("COUNT(DISTINCT id)", aggExpr)
+			s.Equal(tc.wantCount, countExpr)
+
+			sumQuery := GetMeterUsageAggregator(types.AggregationSum).GetQuery(context.Background(), params(tc.useFinal, types.AggregationSum), s.qb)
+			s.Contains(sumQuery, tc.wantCount+" AS event_count")
+
+			countQuery := GetMeterUsageAggregator(types.AggregationCount).GetQuery(context.Background(), params(tc.useFinal, types.AggregationCount), s.qb)
+			s.Contains(countQuery, "COUNT(DISTINCT id) AS value")
+			s.Contains(countQuery, tc.wantCount+" AS event_count")
+
+			columns := buildMeterUsageAggregationColumns([]types.AggregationType{types.AggregationCount}, tc.useFinal)
+			s.Equal("COUNT(DISTINCT id) AS total_usage", columns[0])
+			s.Equal(tc.wantCount+" AS event_count", columns[len(columns)-1])
+
+			bucketed, _ := s.qb.BuildBucketedQuery(params(tc.useFinal, types.AggregationMax))
+			s.Contains(bucketed, tc.wantCount+" as bucket_event_count")
+
+			grouped := params(tc.useFinal, types.AggregationMax)
+			grouped.GroupBy = []string{"source"}
+			groupedQuery, _ := s.qb.BuildBucketedQuery(grouped)
+			s.Contains(groupedQuery, tc.wantCount+" as group_event_count")
+
+			aggregate, _, dims := s.qb.BuildBucketedAggregateQuery(grouped)
+			s.Contains(aggregate, tc.wantCount+" as bucket_event_count")
+
+			points, _ := s.qb.BuildBucketedPointsQuery(grouped, dims, "api", nil)
+			s.Contains(points, tc.wantCount+" as bucket_event_count")
+
+			if tc.useFinal {
+				s.NotContains(sumQuery+bucketed+groupedQuery+aggregate+points, "COUNT(DISTINCT id)")
+			}
+		})
+	}
 }

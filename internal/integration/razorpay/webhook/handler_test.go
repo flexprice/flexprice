@@ -12,6 +12,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -20,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
@@ -30,6 +32,10 @@ import (
 type webhookTestRazorpayClient struct {
 	razorpay.RazorpayClient
 	refundCalls []string // razorpayPaymentID per call
+}
+
+func (c *webhookTestRazorpayClient) GetConnection(_ context.Context) (*connection.Connection, error) {
+	return &connection.Connection{ID: "conn_test", ProviderType: types.SecretProviderRazorpay}, nil
 }
 
 func (c *webhookTestRazorpayClient) FetchPayment(_ context.Context, _ string) (map[string]interface{}, error) {
@@ -121,6 +127,13 @@ func (s *webhookTestPaymentService) failedAttempts() []dto.RecordAttemptRequest 
 
 type webhookTestInvoiceService struct {
 	interfaces.InvoiceService
+	published *[]webhookDto.InternalInvoicePaymentFailedEvent
+}
+
+func (s webhookTestInvoiceService) PublishInvoicePaymentFailed(_ context.Context, event webhookDto.InternalInvoicePaymentFailedEvent) {
+	if s.published != nil {
+		*s.published = append(*s.published, event)
+	}
 }
 
 func (webhookTestInvoiceService) GetInvoice(_ context.Context, id string) (*dto.InvoiceResponse, error) {
@@ -349,13 +362,20 @@ func (s *WebhookCheckoutBranchingSuite) pendingSession() {
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_PendingSession_RecordsAttemptAndLeavesPaymentOpen() {
 	s.pendingSession()
 	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+	event := s.makeFailedEvent()
+	event.Payload.Payment.Entity.ErrorCode = "BAD_REQUEST_ERROR"
+	event.Payload.Payment.Entity.ErrorReason = "incorrect_card_details"
 
-	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+	err := s.handler.handlePaymentFailed(s.ctx, event, s.services)
 
 	s.NoError(err)
 	s.Require().Len(s.paymentSvc.failedAttempts(), 1)
 	s.Equal("card declined", s.paymentSvc.failedAttempts()[0].ErrorMessage)
 	s.Equal("pay_rzp_001", s.paymentSvc.failedAttempts()[0].GatewayAttemptID)
+	s.Equal(types.Metadata{
+		"error_code":   "BAD_REQUEST_ERROR",
+		"error_reason": "incorrect_card_details",
+	}, s.paymentSvc.failedAttempts()[0].Metadata)
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
 		"a decline on an open checkout session must not seal the payment")
 }
@@ -369,6 +389,27 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RepeatedDeclines_Recor
 
 	s.Len(s.paymentSvc.failedAttempts(), 2)
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus)
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_UPITokenCharge_SealsPayment() {
+	s.paymentSvc.payment.PaymentMethodType = types.PaymentMethodTypeUPI
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusProcessing
+
+	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+
+	s.NoError(err)
+	s.Empty(s.paymentSvc.failedAttempts())
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RedeliveredDecline_RecordsNoAttempt() {
+	s.pendingSession()
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+	s.paymentSvc.payment.Attempts = []*dto.PaymentAttemptResponse{{GatewayAttemptID: lo.ToPtr("pay_rzp_001")}}
+
+	s.NoError(s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services))
+
+	s.Empty(s.paymentSvc.failedAttempts())
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_StandaloneLink_LeavesPaymentOpen() {
@@ -530,4 +571,46 @@ func TestHandleWebhookEvent_UnhandledTypeCountedAsOther(t *testing.T) {
 	require.NoError(t, h.HandleWebhookEvent(types.SetEnvironmentID(types.SetTenantID(context.Background(), "ten_gw_rzp"), "env_gw"), &RazorpayWebhookEvent{Event: "attacker.chosen"}, "env_gw", nil))
 
 	require.Equal(t, int64(1), r.Sum("gateway.webhooks", map[string]string{"tenant_id": "ten_gw_rzp", "provider": "razorpay", "event_type": "other", "outcome": "ignored"}))
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_AutoChargeDeclinePublishesInvoicePaymentFailed() {
+	autoCharge := types.Metadata{types.MetadataKeyPaymentTrigger: types.PaymentTriggerInvoiceAutoCharge}
+	tests := []struct {
+		name          string
+		metadata      types.Metadata
+		priorStatus   types.PaymentStatus
+		wantPublished bool
+	}{
+		{name: "auto-charge decline", metadata: autoCharge, priorStatus: types.PaymentStatusProcessing, wantPublished: true},
+		{name: "redelivered decline", metadata: autoCharge, priorStatus: types.PaymentStatusFailed},
+		{name: "not an auto-charge payment", priorStatus: types.PaymentStatusProcessing},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			var published []webhookDto.InternalInvoicePaymentFailedEvent
+			s.services.InvoiceService = webhookTestInvoiceService{published: &published}
+			s.paymentSvc.payment.PaymentMethodType = types.PaymentMethodTypeCard
+			s.paymentSvc.payment.PaymentStatus = tt.priorStatus
+			s.paymentSvc.payment.DestinationID = "inv_001"
+			s.paymentSvc.payment.Metadata = tt.metadata
+
+			s.NoError(s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services))
+
+			if !tt.wantPublished {
+				s.Empty(published)
+				return
+			}
+			s.Require().Len(published, 1)
+			s.Equal(webhookDto.InternalInvoicePaymentFailedEvent{
+				InvoiceID:           "inv_001",
+				Provider:            types.SecretProviderRazorpay,
+				Reason:              types.InvoicePaymentFailureReasonDeclined,
+				PaymentID:           "pay_flex_001",
+				Error:               "card declined",
+				IsAutoChargeAttempt: true,
+			}, published[0])
+		})
+	}
 }

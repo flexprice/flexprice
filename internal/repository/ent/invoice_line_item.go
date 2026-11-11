@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"strings"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
@@ -16,7 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 const invoiceLineItemBatchSize = 1000
@@ -80,6 +83,7 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		SetCustomCurrency(item.CustomCurrency).
 		SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 		SetNillableCommitmentID(item.CommitmentID).
+		SetNillableBillingInstalmentID(item.BillingInstalmentID).
 		SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 		SetNillableParentLineItemID(item.ParentLineItemID).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
@@ -173,6 +177,7 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 				SetCustomCurrency(item.CustomCurrency).
 				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 				SetNillableCommitmentID(item.CommitmentID).
+				SetNillableBillingInstalmentID(item.BillingInstalmentID).
 				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 				SetNillableParentLineItemID(item.ParentLineItemID).
 				SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
@@ -284,7 +289,7 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 		SetCommitmentInfo(item.CommitmentInfo).
 		SetCustomCurrency(item.CustomCurrency).
 		SetStatus(string(item.Status)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if item.FxConversion != nil {
@@ -339,7 +344,7 @@ func (r *invoiceLineItemRepository) Delete(ctx context.Context, id string) error
 			invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusDeleted)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

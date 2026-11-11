@@ -4,12 +4,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 const (
@@ -299,7 +302,7 @@ func (s *subscriptionModificationService) buildLineItemChangeRequest(
 		return nil, err
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	mods := make([]*lineItemChangeMod, 0, len(params.LineItems))
 
 	for i := range params.LineItems {
@@ -346,7 +349,7 @@ func (s *subscriptionModificationService) requestFromLineItemChangeParams(
 		return nil, err
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	mods := make([]*lineItemChangeMod, 0, len(params.LineItemModifications))
 
 	for _, m := range params.LineItemModifications {
@@ -581,7 +584,7 @@ func (s *subscriptionModificationService) applyLineItemChange(
 			clearLineItemMetadataIDs(newItem, lineageMetadataKeys...)
 
 			if mod.getNewPriceRequest() != nil {
-				if err := checkLineItemCommitmentAttach(txCtx, sp, request.GetSubscription(), newItem); err != nil {
+				if err := checkLineAttach(txCtx, sp, request.GetSubscription(), newItem); err != nil {
 					return err
 				}
 			}
@@ -591,7 +594,7 @@ func (s *subscriptionModificationService) applyLineItemChange(
 			}
 
 			if mod.getNewPriceRequest() != nil {
-				if err := checkLineItemCommitmentDetach(txCtx, sp, request.GetSubscription(), endedItem, effectiveDate); err != nil {
+				if err := checkLineDetach(txCtx, sp, request.GetSubscription(), endedItem, effectiveDate); err != nil {
 					return err
 				}
 			}
@@ -611,6 +614,8 @@ func (s *subscriptionModificationService) applyLineItemChange(
 		return nil, err
 	}
 
+	// Runs after the outermost commit, so the checkout replay and the direct settle are both covered.
+	NotifySubscriptionChanged(ctx, s.serviceParams, request.GetSubscription().ID)
 	return changedLineItems, nil
 }
 

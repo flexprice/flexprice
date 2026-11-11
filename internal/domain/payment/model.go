@@ -28,6 +28,8 @@ type Payment struct {
 	PaymentGateway *string `json:"payment_gateway,omitempty"`
 	// The gateway_payment_id is the transaction identifier from the external payment gateway (optional)
 	GatewayPaymentID *string `json:"gateway_payment_id,omitempty"`
+	// The connection_id is the gateway connection that took this payment (optional)
+	ConnectionID *string `json:"connection_id,omitempty"`
 	// The gateway_tracking_id is the tracking identifier from the external payment gateway (optional)
 	GatewayTrackingID *string `json:"gateway_tracking_id,omitempty"`
 	// The gateway_metadata field contains gateway-specific metadata (optional)
@@ -126,7 +128,7 @@ func (p *Payment) Validate() error {
 				WithHint("Payment method id is invalid for payment links").
 				Mark(ierr.ErrValidation)
 		}
-	} else if p.PaymentMethodType == types.PaymentMethodTypeCard {
+	} else if p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI {
 		// For card payments, payment method ID is optional - it will be fetched automatically if empty
 		// No validation needed here as the payment processor will handle fetching the saved payment method
 	} else if p.PaymentMethodID == "" {
@@ -188,6 +190,7 @@ func FromEnt(p *ent.Payment) *Payment {
 		PaymentMethodID:   p.PaymentMethodID,
 		PaymentGateway:    p.PaymentGateway,
 		GatewayPaymentID:  p.GatewayPaymentID,
+		ConnectionID:      p.ConnectionID,
 		GatewayTrackingID: p.GatewayTrackingID,
 		GatewayMetadata:   p.GatewayMetadata,
 		Amount:            p.Amount,

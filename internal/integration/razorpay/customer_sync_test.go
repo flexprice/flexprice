@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -17,6 +18,10 @@ type stubCustomerClient struct {
 	RazorpayClient
 	createErr    error
 	createResult map[string]interface{}
+}
+
+func (c *stubCustomerClient) GetConnection(_ context.Context) (*connection.Connection, error) {
+	return &connection.Connection{ID: "conn_test", ProviderType: types.SecretProviderRazorpay}, nil
 }
 
 func (c *stubCustomerClient) CreateCustomer(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {

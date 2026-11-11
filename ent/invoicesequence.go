@@ -23,6 +23,8 @@ type InvoiceSequence struct {
 	EnvironmentID string `json:"environment_id,omitempty"`
 	// YearMonth holds the value of the "year_month" field.
 	YearMonth string `json:"year_month,omitempty"`
+	// Prefix holds the value of the "prefix" field.
+	Prefix *string `json:"prefix,omitempty"`
 	// LastValue holds the value of the "last_value" field.
 	LastValue int64 `json:"last_value,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -39,7 +41,7 @@ func (*InvoiceSequence) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoicesequence.FieldID, invoicesequence.FieldLastValue:
 			values[i] = new(sql.NullInt64)
-		case invoicesequence.FieldTenantID, invoicesequence.FieldEnvironmentID, invoicesequence.FieldYearMonth:
+		case invoicesequence.FieldTenantID, invoicesequence.FieldEnvironmentID, invoicesequence.FieldYearMonth, invoicesequence.FieldPrefix:
 			values[i] = new(sql.NullString)
 		case invoicesequence.FieldCreatedAt, invoicesequence.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -81,6 +83,13 @@ func (_m *InvoiceSequence) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field year_month", values[i])
 			} else if value.Valid {
 				_m.YearMonth = value.String
+			}
+		case invoicesequence.FieldPrefix:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field prefix", values[i])
+			} else if value.Valid {
+				_m.Prefix = new(string)
+				*_m.Prefix = value.String
 			}
 		case invoicesequence.FieldLastValue:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -144,6 +153,11 @@ func (_m *InvoiceSequence) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("year_month=")
 	builder.WriteString(_m.YearMonth)
+	builder.WriteString(", ")
+	if v := _m.Prefix; v != nil {
+		builder.WriteString("prefix=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("last_value=")
 	builder.WriteString(fmt.Sprintf("%v", _m.LastValue))

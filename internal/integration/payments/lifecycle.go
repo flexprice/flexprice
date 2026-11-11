@@ -2,15 +2,21 @@ package payments
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // PaymentLifecycle maintains cross-system traceability for Flexprice-initiated payments.
@@ -204,7 +210,7 @@ func (l *PaymentLifecycle) RecordPaymentSuccess(ctx context.Context, params Reco
 
 	succeededAt := params.SucceededAt
 	if succeededAt.IsZero() {
-		succeededAt = time.Now().UTC()
+		succeededAt = clock.Now()
 	}
 
 	updateReq := apidto.UpdatePaymentRequest{
@@ -306,6 +312,7 @@ func (l *PaymentLifecycle) RecordFailedAttempt(ctx context.Context, params Recor
 		PaymentStatus:    types.PaymentStatusFailed,
 		ErrorMessage:     params.ErrorMessage,
 		GatewayAttemptID: params.GatewayPaymentID,
+		Metadata:         params.Metadata,
 	}); err != nil {
 		l.logger.Error(ctx, "failed to record failed payment attempt",
 			"flexprice_payment_id", params.FlexpricePaymentID,
@@ -375,7 +382,7 @@ func (l *PaymentLifecycle) RecordPaymentFailure(ctx context.Context, params Reco
 
 	failedAt := params.FailedAt
 	if failedAt.IsZero() {
-		failedAt = time.Now().UTC()
+		failedAt = clock.Now()
 	}
 	updateReq := apidto.UpdatePaymentRequest{
 		PaymentStatus: lo.ToPtr(string(types.PaymentStatusFailed)),
@@ -462,7 +469,7 @@ func (l *PaymentLifecycle) RecordPaymentVoided(ctx context.Context, params Recor
 
 	voidedAt := params.VoidedAt
 	if voidedAt.IsZero() {
-		voidedAt = time.Now().UTC()
+		voidedAt = clock.Now()
 	}
 	updateReq := apidto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusVoided)),
@@ -543,7 +550,7 @@ func (l *PaymentLifecycle) RecordPaymentRefunded(ctx context.Context, params Rec
 
 	refundedAt := params.RefundedAt
 	if refundedAt.IsZero() {
-		refundedAt = time.Now().UTC()
+		refundedAt = clock.Now()
 	}
 
 	updateReq := apidto.UpdatePaymentRequest{
@@ -598,4 +605,41 @@ func (l *PaymentLifecycle) validateInitiateParams(params InitiatePaymentParams) 
 		return ierr.NewError("currency is required").Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+const invoiceChargeLockTTL = 15 * time.Minute
+
+// LockInvoiceCharge takes the per-invoice charge lock and returns an ErrAlreadyExists error
+// when a charge other than paymentID is PROCESSING. Hold it until the charge is submitted.
+func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo payment.Repository, environmentID, invoiceID, paymentID string) (cache.Lock, error) {
+	key := fmt.Sprintf("razorpay:autocharge:%s:%s:%s", types.GetTenantID(ctx), environmentID, invoiceID)
+	lock, err := locker.AcquireLock(ctx, key, invoiceChargeLockTTL)
+	if err != nil {
+		return nil, err
+	}
+	if !lock.AcquiredSuccessfully() {
+		return nil, errChargeInFlight(invoiceID)
+	}
+
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusProcessing))
+	filter.Limit = lo.ToPtr(2)
+	inFlight, err := paymentRepo.List(ctx, filter)
+	if err == nil && lo.ContainsBy(inFlight, func(p *payment.Payment) bool { return p.ID != paymentID }) {
+		err = errChargeInFlight(invoiceID)
+	}
+	if err != nil {
+		_ = lock.Release(ctx)
+		return nil, err
+	}
+	return lock, nil
+}
+
+func errChargeInFlight(invoiceID string) error {
+	return ierr.NewError("a charge is already in progress for this invoice").
+		WithHint("A charge for this invoice is already in progress; wait for it to settle").
+		WithReportableDetails(map[string]interface{}{"invoice_id": invoiceID}).
+		Mark(ierr.ErrAlreadyExists)
 }

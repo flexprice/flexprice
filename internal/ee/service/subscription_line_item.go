@@ -5,13 +5,16 @@ import (
 	"maps"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // AddSubscriptionLineItem adds a new line item to an existing subscription
@@ -78,11 +81,14 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
 		}
 
-		if err := NewCommitmentService(s.ServiceParams).CheckPriceAttach(txCtx, sub, price.Price, lineItem.StartDate, lo.EmptyableToPtr(lineItem.EndDate)); err != nil {
+		if err := NewCommitmentService(s.ServiceParams).CheckPriceAttach(txCtx, sub, price.Price, lineItem.StartDate, lineEnd(lineItem)); err != nil {
 			return err
 		}
 
-		if err := rejectLegacyCommitmentInScope(txCtx, s.ServiceParams, sub, lineItem); err != nil {
+		if err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).validateWithSubscriptionScopedEntitlement(txCtx, sub, subscriptionEntitlementGrantChange{items: []*subscription.SubscriptionLineItem{lineItem}}); err != nil {
+			return err
+		}
+		if err := checkLegacyLineFields(txCtx, s.ServiceParams, sub, lineItem); err != nil {
 			return err
 		}
 
@@ -146,6 +152,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 	if err != nil {
 		return nil, err
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, subscriptionID)
 
 	priceResp, priceErr := NewPriceService(s.ServiceParams).GetPrice(ctx, lineItem.PriceID)
 	if priceErr != nil {
@@ -163,7 +170,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 	// Apply proration for the add if requested. Skip usage prices (unknown future consumption).
 	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations &&
 		lineItem.PriceType != types.PRICE_TYPE_USAGE {
-		effectiveDate := time.Now().UTC()
+		effectiveDate := clock.Now()
 		if req.StartDate != nil {
 			effectiveDate = req.StartDate.UTC()
 		}
@@ -386,7 +393,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	if lineItem.StartDate.After(now) {
 		if req.EffectiveFrom != nil && req.EffectiveFrom.UTC().After(now) {
 			return nil, ierr.NewError("cannot schedule deletion of a line item that has not started").
@@ -402,6 +409,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 		if err != nil {
 			return nil, err
 		}
+		NotifySubscriptionChanged(ctx, s.ServiceParams, resp.SubscriptionID)
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, resp.SubscriptionID)
 		return resp, nil
 	}
@@ -413,7 +421,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 
 	var resp *dto.SubscriptionLineItemResponse
 	detach := func(ctx context.Context) error {
-		if err := checkLineItemCommitmentDetach(ctx, s.ServiceParams, sub, lineItem, endDate); err != nil {
+		if err := checkLineDetach(ctx, s.ServiceParams, sub, lineItem, endDate); err != nil {
 			return err
 		}
 
@@ -431,6 +439,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 	if err != nil {
 		return nil, err
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, resp.SubscriptionID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, resp.SubscriptionID)
 	return resp, nil
 }
@@ -448,28 +457,30 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 	}
 
 	// Set end date and update
-	var effectiveFrom time.Time
+	var requested time.Time
 	if req.EffectiveFrom != nil {
-		effectiveFrom = req.EffectiveFrom.UTC()
+		requested = req.EffectiveFrom.UTC()
 	} else {
-		effectiveFrom = time.Now().UTC()
+		requested = clock.Now()
 	}
 
 	// Validate effective from date is on or after start date
-	if effectiveFrom.Before(lineItem.StartDate) {
+	if requested.Before(lineItem.StartDate) {
 		return nil, ierr.NewError("effective from date must be on or after start date").
 			WithHint("The effective from date must be on or after the line item's start date").
 			WithReportableDetails(map[string]interface{}{
 				"line_item_id":   lineItemID,
 				"start_date":     lineItem.StartDate,
-				"effective_from": effectiveFrom,
+				"effective_from": requested,
 			}).
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := validateLineItemEndDateChange(lineItem, effectiveFrom); err != nil {
+	if err := validateLineItemEndDateChange(lineItem, requested); err != nil {
 		return nil, err
 	}
+
+	effectiveFrom := requested
 
 	// Capture a snapshot before mutating EndDate — the proration service uses EndDate==zero
 	// to distinguish "active recurring" from "onetime" (pre-existing EndDate at period boundary).
@@ -575,7 +586,7 @@ func (s *subscriptionService) cancelScheduledLineItem(
 		}
 
 		// The line never runs, so it is ended at its start; a reopened predecessor counts as cover.
-		return checkLineItemCommitmentDetach(ctx, s.ServiceParams, sub, lineItem, lineItem.StartDate)
+		return checkLineDetach(ctx, s.ServiceParams, sub, lineItem, lineItem.StartDate)
 	})
 	if err != nil {
 		return nil, err
@@ -739,8 +750,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	// Determine end date for existing line item
-	endDate := time.Now().UTC()
+	endDate := clock.Now()
 	if req.EffectiveFrom != nil {
 		endDate = req.EffectiveFrom.UTC()
 	}
@@ -879,11 +889,11 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return err
 			}
 
-			if err := rejectLegacyCommitmentInScope(ctx, s.ServiceParams, sub, newLineItem); err != nil {
+			if err := checkLineAttach(ctx, s.ServiceParams, sub, newLineItem); err != nil {
 				return err
 			}
 
-			if err := checkLineItemCommitmentAttach(ctx, s.ServiceParams, sub, newLineItem); err != nil {
+			if err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).validateWithSubscriptionScopedEntitlement(ctx, sub, subscriptionEntitlementGrantChange{items: []*subscription.SubscriptionLineItem{newLineItem}}); err != nil {
 				return err
 			}
 
@@ -895,7 +905,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			if err != nil {
 				return err
 			}
-			if err := checkLineItemCommitmentDetach(ctx, s.ServiceParams, sub, &endedLineItem, endDate); err != nil {
+			if err := checkLineDetach(ctx, s.ServiceParams, sub, &endedLineItem, endDate); err != nil {
 				return err
 			}
 			predecessor.SuccessorLineItemID = lo.ToPtr(newLineItem.ID)
@@ -913,6 +923,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			"end_date", endDate,
 		)
 
+		NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: newLineItem}, nil
 	} else {
@@ -955,10 +966,13 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 		// The commitment guard takes an advisory lock, which needs a transaction.
 		err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-			if err := rejectLegacyCommitmentInScope(txCtx, s.ServiceParams, sub, existingLineItem); err != nil {
+			if err := checkLegacyLineFields(txCtx, s.ServiceParams, sub, existingLineItem); err != nil {
 				return err
 			}
 
+			if err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).validateWithSubscriptionScopedEntitlement(txCtx, sub, subscriptionEntitlementGrantChange{items: []*subscription.SubscriptionLineItem{existingLineItem}}); err != nil {
+				return err
+			}
 			return s.SubscriptionLineItemRepo.Update(txCtx, existingLineItem)
 		})
 		if err != nil {
@@ -1287,6 +1301,28 @@ func (s *subscriptionService) ListSubscriptionLineItems(ctx context.Context, fil
 			filter.GetLimit(),
 			filter.GetOffset(),
 		),
+	}, nil
+}
+
+func (s *subscriptionService) GetSubscriptionLineItemHistory(ctx context.Context, lineItemID string) (*dto.ListSubscriptionLineItemsResponse, error) {
+	if lineItemID == "" {
+		return nil, ierr.NewError("line_item_id is required").
+			WithHint("Line item ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	items, err := s.SubscriptionLineItemRepo.ListLineage(ctx, lineItemID)
+	if err != nil {
+		return nil, err
+	}
+
+	responses := lo.Map(items, func(item *subscription.SubscriptionLineItem, _ int) *dto.SubscriptionLineItemResponse {
+		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: item}
+	})
+
+	return &dto.ListSubscriptionLineItemsResponse{
+		Items:      responses,
+		Pagination: types.NewPaginationResponse(len(responses), len(responses), 0),
 	}, nil
 }
 

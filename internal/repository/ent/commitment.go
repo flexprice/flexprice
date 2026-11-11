@@ -3,7 +3,10 @@ package ent
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	entcommitment "github.com/flexprice/flexprice/ent/commitment"
@@ -15,7 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
 )
 
 type commitmentRepository struct {
@@ -65,14 +67,15 @@ func (r *commitmentRepository) Create(ctx context.Context, c *domain.Commitment)
 		SetNillableOveragePriceID(c.OveragePriceID).
 		SetMeasurement(c.Measurement).
 		SetActiveWindows(c.ActiveWindows).
-		SetTimezone(c.Timezone).
+		// Active windows are UTC; the column stays until a migration drops it.
+		SetTimezone(types.DefaultTimezone).
 		SetPriority(c.Priority).
 		SetBinding(c.Binding).
 		SetNillableCollectionMethod(c.CollectionMethod).
 		SetNillableTotalAmount(c.TotalAmount).
 		SetNillableInstalmentInvoicing(c.InstalmentInvoicing).
 		SetStartDate(c.StartDate).
-		SetEndDate(c.EndDate).
+		SetNillableEndDate(c.EndDate).
 		SetNillableOnEarlyTermination(c.OnEarlyTermination).
 		SetNillableIdempotencyKey(c.IdempotencyKey).
 		SetMetadata(c.Metadata).
@@ -184,7 +187,7 @@ func (r *commitmentRepository) Update(ctx context.Context, c *domain.Commitment)
 		SetInvoiceLabel(c.InvoiceLabel).
 		SetMetadata(c.Metadata).
 		SetNillableTerminatedAt(c.TerminatedAt).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if c.CommitmentStatus != "" {
@@ -229,7 +232,7 @@ func (r *commitmentRepository) Delete(ctx context.Context, id string) error {
 			entcommitment.Status(string(types.StatusPublished)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {
@@ -351,7 +354,7 @@ func applyCommitmentFilter(q *ent.CommitmentQuery, f *domain.Filter) (*ent.Commi
 	}
 
 	if f.ActiveFrom != nil {
-		preds = append(preds, entcommitment.EndDateGT(*f.ActiveFrom))
+		preds = append(preds, entcommitment.Or(entcommitment.EndDateIsNil(), entcommitment.EndDateGT(*f.ActiveFrom)))
 	}
 
 	if f.ActiveTo != nil {

@@ -105,3 +105,13 @@ func (l *inMemoryRedisLock) Release(ctx context.Context) error {
 	}
 	return nil
 }
+
+func (r *inMemoryRedisLocker) ReleaseKeys(_ context.Context, keys ...string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, key := range keys {
+		delete(r.values, key)
+	}
+	return nil
+}

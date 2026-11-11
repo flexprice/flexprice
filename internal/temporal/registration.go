@@ -9,7 +9,9 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
 	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
+	addonActivities "github.com/flexprice/flexprice/internal/temporal/activities/addon"
 	alertActivities "github.com/flexprice/flexprice/internal/temporal/activities/alerts"
+	billingEntityActivities "github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	chargebeeActivities "github.com/flexprice/flexprice/internal/temporal/activities/chargebee"
 	cronActivities "github.com/flexprice/flexprice/internal/temporal/activities/cron"
 	customerActivities "github.com/flexprice/flexprice/internal/temporal/activities/customer"
@@ -23,7 +25,6 @@ import (
 	moyasarActivities "github.com/flexprice/flexprice/internal/temporal/activities/moyasar"
 	nomodActivities "github.com/flexprice/flexprice/internal/temporal/activities/nomod"
 	paddleActivities "github.com/flexprice/flexprice/internal/temporal/activities/paddle"
-	addonActivities "github.com/flexprice/flexprice/internal/temporal/activities/addon"
 	planActivities "github.com/flexprice/flexprice/internal/temporal/activities/plan"
 	prepareProcessedEventsActivities "github.com/flexprice/flexprice/internal/temporal/activities/prepareprocessedevents"
 	qbActivities "github.com/flexprice/flexprice/internal/temporal/activities/quickbooks"
@@ -67,7 +68,9 @@ type cronActivityBundle struct {
 	marketplaceReport            *marketplaceActivities.ReportActivities
 	dailyDraftAndCompute         *cronActivities.DailyDraftAndComputeActivities
 	revenueRollup                *cronActivities.RevenueRollupActivities
+	revenueRecognition           *cronActivities.RevenueRecognitionActivities
 	selfBillingHourly            *cronActivities.SelfBillingHourlyActivities
+	commitment                   *cronActivities.CommitmentCronActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -98,6 +101,7 @@ func RegisterWorkflowsAndActivities(
 	// QuickBooks price sync activities
 	qbPriceSyncActivities := qbActivities.NewQuickBooksPriceSyncActivities(
 		params.IntegrationFactory,
+		params.ConnectionRepo,
 		params.PlanRepo,
 		params.PriceRepo,
 		params.Logger,
@@ -148,14 +152,18 @@ func RegisterWorkflowsAndActivities(
 		params.RevenueFactRepo,
 	)
 
+	entityScope := service.NewBillingEntityService(params)
+
 	// HubSpot activities - clean and simple, delegates to existing services
 	hubspotDealSyncActivities := hubspotActivities.NewDealSyncActivities(
 		params.IntegrationFactory,
+		entityScope,
 		params.Logger,
 	)
 
 	hubspotInvoiceSyncActivities := hubspotActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
+		entityScope,
 		params.Logger,
 	)
 
@@ -175,6 +183,7 @@ func RegisterWorkflowsAndActivities(
 
 	hubspotQuoteSyncActivities := hubspotActivities.NewQuoteSyncActivities(
 		params.IntegrationFactory,
+		entityScope,
 		params.Logger,
 	)
 
@@ -183,11 +192,13 @@ func RegisterWorkflowsAndActivities(
 	nomodInvoiceSyncActivities := nomodActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
 		customerService,
+		entityScope,
 		params.Logger,
 	)
 	nomodCustomerSyncActivities := nomodActivities.NewCustomerSyncActivities(
 		params.IntegrationFactory,
 		customerService,
+		entityScope,
 		params.Logger,
 	)
 
@@ -195,6 +206,7 @@ func RegisterWorkflowsAndActivities(
 	whopInvoiceSyncActivities := whopActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
 		customerService,
+		entityScope,
 		params.Logger,
 	)
 
@@ -204,6 +216,7 @@ func RegisterWorkflowsAndActivities(
 		params.IntegrationFactory,
 		customerService,
 		moyasarInvoiceService,
+		entityScope,
 		params.Logger,
 	)
 
@@ -211,61 +224,74 @@ func RegisterWorkflowsAndActivities(
 	paddleInvoiceSyncActivities := paddleActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
 		customerService,
+		entityScope,
 		params.Logger,
 	)
 	paddleCustomerSyncActivities := paddleActivities.NewCustomerSyncActivities(
 		params.IntegrationFactory,
 		customerService,
 		params.InvoiceRepo,
+		entityScope,
 		params.Logger,
 	)
 	paddleSubscriptionSyncActivities := paddleActivities.NewSubscriptionSyncActivities(
 		params.IntegrationFactory,
+		entityScope,
 		params.Logger,
 	)
 
 	// Stripe/Razorpay/Chargebee/QuickBooks invoice sync activities
 	stripeInvoiceSyncActivities := stripeActivities.NewInvoiceSyncActivities(
 		params,
+		entityScope,
 		params.Logger,
 	)
 	stripeCustomerSyncActivities := stripeActivities.NewCustomerSyncActivities(
 		params.IntegrationFactory,
 		customerService,
+		entityScope,
 		params.Logger,
 	)
 	razorpayInvoiceSyncActivities := razorpayActivities.NewInvoiceSyncActivities(
 		params,
+		entityScope,
 		params.Logger,
 	)
 	razorpayCustomerSyncActivities := razorpayActivities.NewCustomerSyncActivities(
 		params.IntegrationFactory,
 		customerService,
+		entityScope,
 		params.Logger,
 	)
 	chargebeeInvoiceSyncActivities := chargebeeActivities.NewInvoiceSyncActivities(
 		params,
+		entityScope,
 		params.Logger,
 	)
 	chargebeeCustomerSyncActivities := chargebeeActivities.NewCustomerSyncActivities(
 		params.IntegrationFactory,
+		entityScope,
 		params.Logger,
 	)
 	qbInvoiceSyncActivities := qbActivities.NewQuickBooksInvoiceSyncActivities(
 		params,
+		entityScope,
 		params.Logger,
 	)
 	qbCustomerSyncActivities := qbActivities.NewQuickBooksCustomerSyncActivities(
 		params.IntegrationFactory,
 		customerService,
+		entityScope,
 		params.Logger,
 	)
 	zohoInvoiceSyncActivities := zohoActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
+		entityScope,
 		params.Logger,
 	)
 	tabsInvoiceSyncActivities := tabsActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
+		entityScope,
 		params.Logger,
 	)
 
@@ -282,6 +308,8 @@ func RegisterWorkflowsAndActivities(
 
 	// Environment clone activities
 	envActivities := environmentActivities.NewEnvironmentActivities(params)
+
+	beActivities := billingEntityActivities.NewBillingEntityActivities(params)
 
 	// Reprocess raw events activities
 	rawEventsReprocessingService := service.NewRawEventsReprocessingService(params)
@@ -312,7 +340,7 @@ func RegisterWorkflowsAndActivities(
 	)
 	marketplaceSnapshotActivities := marketplaceActivities.NewSnapshotActivities(params, params.Logger)
 	marketplaceReportActivities := marketplaceActivities.NewReportActivities(params, mktplaceReporter, params.Logger)
-	marketplaceFlushActivities := marketplaceActivities.NewFlushActivities(params, mktplaceReporter, params.Logger)
+	marketplaceFlushActivities := marketplaceActivities.NewFlushActivities(params, mktplaceReporter, entityScope, params.Logger)
 
 	cronBundle := &cronActivityBundle{
 		creditGrant:                  cronActivities.NewCreditGrantActivities(creditGrantService, params.Logger),
@@ -320,18 +348,20 @@ func RegisterWorkflowsAndActivities(
 		walletCreditExpiry:           cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
 		webhookOutboundRetry:         cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
 		paddleInvoicePullSync:        cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
-		moyasarAuthPaymentSettlement: cronActivities.NewMoyasarAuthPaymentSettlementActivities(params.IntegrationFactory, params.PaymentRepo, params.Logger),
+		moyasarAuthPaymentSettlement: cronActivities.NewMoyasarAuthPaymentSettlementActivities(params.IntegrationFactory, params.PaymentRepo, entityScope, params.Logger),
 		checkoutSessionExpiry:        cronActivities.NewCheckoutSessionExpiryActivities(service.NewCheckoutSessionService(params), params.Logger),
 		marketplaceSnapshot:          marketplaceSnapshotActivities,
 		marketplaceReport:            marketplaceReportActivities,
 		dailyDraftAndCompute:         cronActivities.NewDailyDraftAndComputeActivities(service.NewInvoiceService(params), subscriptionService, params.Logger),
 		revenueRollup:                cronActivities.NewRevenueRollupActivities(revenue.New(params), params.Config, params.Logger),
+		revenueRecognition:           cronActivities.NewRevenueRecognitionActivities(params.JournalService, params.Logger),
 		selfBillingHourly:            cronActivities.NewSelfBillingHourlyActivities(selfbilling.New(params), params.Logger),
+		commitment:                   cronActivities.NewCommitmentCronActivities(service.NewCommitmentService(params), params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, addonActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessRawEventsActivities, replayDLQActivities, envActivities, cronBundle, alertActs, marketplaceFlushActivities)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, addonActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessRawEventsActivities, replayDLQActivities, envActivities, beActivities, cronBundle, alertActs, marketplaceFlushActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -379,6 +409,7 @@ func buildWorkerConfig(
 	reprocessRawEventsActivities *eventsActivities.ReprocessRawEventsActivities,
 	replayDLQActivities *dlqActivities.ReplayDLQActivities,
 	envActivities *environmentActivities.EnvironmentActivities,
+	beActivities *billingEntityActivities.BillingEntityActivities,
 	cron *cronActivityBundle,
 	alertActs *alertActivities.AlertActivities,
 	marketplaceFlushActivities *marketplaceActivities.FlushActivities,
@@ -516,6 +547,7 @@ func buildWorkerConfig(
 			// Invoice workflow activities
 			invoiceActs.ComputeInvoiceActivity,
 			invoiceActs.CreateDraftForCurrentSubscriptionPeriodActivity,
+			invoiceActs.ListPastPeriodDraftsActivity,
 			invoiceActs.FinalizeInvoiceActivity,
 			// invoiceActs.SyncInvoiceToVendorActivity, // Disabled: FinalizeInvoice publishes
 			// WebhookEventInvoiceUpdateFinalized; the integration consumer dispatches sync
@@ -531,6 +563,7 @@ func buildWorkerConfig(
 			workflows.CustomerOnboardingWorkflow,
 			workflows.PrepareProcessedEventsWorkflow,
 			workflows.EnvironmentCloneWorkflow,
+			workflows.BillingEntityEnableWorkflow,
 			workflows.UsageAlertWorkflow,
 		)
 		activitiesList = append(activitiesList,
@@ -542,6 +575,10 @@ func buildWorkerConfig(
 			planActivities.SyncPlanPrices,
 			envActivities.CloneEnvironmentFeatures,
 			envActivities.CloneEnvironmentPlans,
+			beActivities.PrepareBillingEntityEnable,
+			beActivities.AssignBillingEntityCustomers,
+			beActivities.AssignBillingEntityInvoices,
+			beActivities.CompleteBillingEntityEnable,
 			alertActs.SpendAndEntitlementAlertsActivity,
 			alertActs.WalletAlertsActivity,
 		)
@@ -573,7 +610,10 @@ func buildWorkerConfig(
 			cronWorkflows.MarketplaceUsageReportWorkflow,
 			cronWorkflows.DailyDraftAndComputeWorkflow,
 			cronWorkflows.RevenueRollupWorkflow,
+			cronWorkflows.RevenueRecognitionWorkflow,
+			cronWorkflows.RevenueRecognitionBackfillWorkflow,
 			cronWorkflows.SelfBillingHourlyWorkflow,
+			cronWorkflows.BillingInstalmentsDueWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -594,7 +634,10 @@ func buildWorkerConfig(
 			cron.dailyDraftAndCompute.DailyDraftAndComputeActivity,
 			cron.revenueRollup.RollupDirtyActivity,
 			cron.revenueRollup.ReconcileBookedInvoicesActivity,
+			cron.revenueRecognition.RecognizeRevenueActivity,
+			cron.revenueRecognition.BackfillRevenueActivity,
 			cron.selfBillingHourly.SelfBillingHourlyActivity,
+			cron.commitment.BillDueInstalmentsActivity,
 		)
 
 	case types.TemporalTaskQueueBilling:
@@ -605,6 +648,7 @@ func buildWorkerConfig(
 		activitiesList = append(activitiesList,
 			invoiceActs.CreateDraftForCurrentSubscriptionPeriodActivity,
 			invoiceActs.ComputeInvoiceActivity,
+			invoiceActs.ListPastPeriodDraftsActivity,
 		)
 	}
 	return WorkerConfig{

@@ -250,6 +250,37 @@ func (h *UserHandler) CreateSupportChatToken(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// ChangePassword sets a new password for the signed-in user.
+// Used by the dashboard only, so it is left out of the public API spec.
+func (h *UserHandler) ChangePassword(c *gin.Context) {
+	var req dto.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := h.userService.ChangePassword(c.Request.Context(), &req); err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// CreatePasswordLink returns a one-time link for a team member to set their password.
+// Used by the dashboard only, so it is left out of the public API spec.
+func (h *UserHandler) CreatePasswordLink(c *gin.Context) {
+	link, err := h.userService.CreatePasswordLink(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		h.logger.Error(c.Request.Context(), "failed to create password link", "error", err)
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, link)
+}
+
 // @Summary Remove user from tenant
 // @ID removeUser
 // @Description Remove a human user (type=user) from the current tenant. Not supported for service accounts; use DELETE /users/{id} for those.

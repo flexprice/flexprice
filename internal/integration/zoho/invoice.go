@@ -6,6 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -17,8 +22,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 const (
@@ -89,10 +92,16 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		return nil, err
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityType = types.IntegrationEntityTypeInvoice
 	filter.EntityID = req.InvoiceID
 	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+	filter.ConnectionID = conn.ID
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	mappings, err := s.mappingRepo.List(ctx, filter)
 	if err != nil {
@@ -162,11 +171,12 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		EnvironmentID:    flexInvoice.EnvironmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 		Metadata: map[string]interface{}{
-			"synced_at":           time.Now().UTC().Format(time.RFC3339),
+			"synced_at":           clock.Now().Format(time.RFC3339),
 			"zoho_status":         zohoInv.Status,
 			"flexprice_invoice":   req.InvoiceID,
 			"zoho_invoice_number": zohoInv.InvoiceNumber,
 		},
+		ConnectionID: lo.ToPtr(conn.ID),
 	}
 	mapping.TenantID = flexInvoice.TenantID
 	if err := s.mappingRepo.Create(ctx, mapping); err != nil {
@@ -231,6 +241,8 @@ func (s *InvoiceService) buildInvoiceRequest(ctx context.Context, flexInvoice *i
 	reqPayload.CustomFields = append(reqPayload.CustomFields,
 		metadataCustomFields(settings, flexInvoice.Metadata, flexCustomer.Metadata)...)
 
+	reqPayload.PaymentOptions = s.paymentOptions(ctx, flexInvoice.ID, settings)
+
 	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
 	if err != nil {
 		return nil, err
@@ -243,6 +255,31 @@ func (s *InvoiceService) buildInvoiceRequest(ctx context.Context, flexInvoice *i
 	reqPayload.CurrencyCode = curCode
 	reqPayload.ExchangeRate = exchRate
 	return reqPayload, nil
+}
+
+// paymentOptions lists the payment gateways the tenant selected for Zoho invoices. Nil when
+// attaching is off or no gateway is selected.
+func (s *InvoiceService) paymentOptions(ctx context.Context, invoiceID string, settings *types.InvoiceSyncSettings) *PaymentOptions {
+	if !settings.IsZohoPaymentGatewaysEnabled() {
+		return nil
+	}
+
+	gateways := settings.ZohoPaymentGateways()
+	if len(gateways) == 0 {
+		s.logger.Info(ctx, "no payment gateway selected, syncing Zoho invoice without payment options",
+			"invoice_id", invoiceID)
+		return nil
+	}
+
+	paymentGateways := make([]PaymentGateway, 0, len(gateways))
+	for _, gateway := range gateways {
+		paymentGateway := PaymentGateway{Configured: true, GatewayName: gateway}
+		if gateway == types.ZohoPaymentGatewayPayPal {
+			paymentGateway.AdditionalField1 = string(settings.PaymentGateways.PayPalPaymentMethod)
+		}
+		paymentGateways = append(paymentGateways, paymentGateway)
+	}
+	return &PaymentOptions{PaymentGateways: paymentGateways}
 }
 
 // resyncInvoice updates the Zoho contact, then the Zoho invoice when it is still editable.
@@ -328,10 +365,16 @@ func (s *InvoiceService) markPaidIfFlexpricePaid(ctx context.Context, flexpriceI
 // balance means Zoho already considers the invoice settled (whether from a prior call
 // here, or from the existing inbound "Zoho invoice paid" webhook), so this is a no-op.
 func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInvoiceID string) error {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityType = types.IntegrationEntityTypeInvoice
 	filter.EntityID = flexpriceInvoiceID
 	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+	filter.ConnectionID = conn.ID
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	mappings, err := s.mappingRepo.List(ctx, filter)
 	if err != nil {
@@ -391,7 +434,7 @@ func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInv
 		CustomerID:  zohoInv.CustomerID,
 		PaymentMode: settings.ZohoPaymentMode(),
 		Amount:      zohoInv.Balance,
-		Date:        time.Now().UTC().Format("2006-01-02"),
+		Date:        clock.Now().Format("2006-01-02"),
 		Invoices: []CustomerPaymentInvoiceApply{
 			NewCustomerPaymentInvoiceApply(zohoInvoiceID, zohoInv.Balance),
 		},

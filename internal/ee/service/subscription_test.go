@@ -1135,10 +1135,13 @@ func (s *SubscriptionServiceSuite) setupService() {
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
 		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
+		MeterUsageCheckpointRepo:   s.GetStores().MeterUsageCheckpointRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
 		AddonPriceSyncRepo:         s.GetStores().AddonPriceSyncRepo,
 		CommitmentRepo:             s.GetStores().CommitmentRepo,
+		BillingTermRepo:            s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:      s.GetStores().BillingInstalmentRepo,
 		// Read on cancellation to decide whether a marketplace usage flush is needed.
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 	})
@@ -1791,7 +1794,23 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr:       true,
-			expectedError: "end_date cannot be before start_date",
+			expectedError: "end_date must be after start_date",
+			errorType:     "validation",
+		},
+		{
+			name: "start_and_end_date_in_the_same_second",
+			input: dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				StartDate:          lo.ToPtr(s.testData.now.Truncate(time.Second).Add(200 * time.Millisecond)),
+				EndDate:            lo.ToPtr(s.testData.now.Truncate(time.Second).Add(800 * time.Millisecond)),
+				Currency:           "usd",
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+			},
+			wantErr:       true,
+			expectedError: "end_date must be after start_date",
 			errorType:     "validation",
 		},
 		// Collection Method Tests
@@ -2111,7 +2130,7 @@ func (s *SubscriptionServiceSuite) inlineCommitmentRequest() dto.CreateSubscript
 			CommittedPrice: &dto.CommitmentPriceInput{Amount: lo.ToPtr(decimal.RequireFromString("0.048"))},
 			Measurement:    types.CommitmentMeasurementBillingPeriod,
 			StartDate:      start,
-			EndDate:        start.AddDate(1, 0, 0),
+			EndDate:        lo.ToPtr(start.AddDate(1, 0, 0)),
 		}},
 	}
 }
@@ -2127,6 +2146,19 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitment() {
 	s.Require().NoError(err)
 	s.Require().Len(items, 1)
 	s.Equal(resp.ID, items[0].SubscriptionID)
+
+	s.Require().Len(resp.Commitments, 1)
+	s.Equal(items[0].ID, resp.Commitments[0].ID)
+	s.True(resp.Commitments[0].CommitmentValue.Equal(decimal.RequireFromString("4.608")))
+
+	unexpanded, err := s.service.GetSubscriptionV2(ctx, resp.ID, types.NewExpand(""))
+	s.Require().NoError(err)
+	s.Empty(unexpanded.Commitments, "v2 lists commitments only when expanded")
+
+	expanded, err := s.service.GetSubscriptionV2(ctx, resp.ID, types.NewExpand("commitments"))
+	s.Require().NoError(err)
+	s.Require().Len(expanded.Commitments, 1)
+	s.Equal(items[0].ID, expanded.Commitments[0].ID)
 }
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentOnIncompleteSubscription() {
@@ -10655,6 +10687,129 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 	s.Equal(addonID, associations[0].AddonID)
 }
 
+// A child's proration_behavior is stored and prices its opening charges. An omitted value stays none.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_ChildProrationBehavior() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	addonID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ADDON)
+	addonPriceID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+	s.Require().NoError(s.GetStores().AddonRepo.Create(ctx, &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Child Proration Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+		ID:                 addonPriceID,
+		Amount:             decimal.NewFromInt(30),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}))
+
+	proratedExternal := "ext_child_prorate"
+	omittedExternal := "ext_child_omit"
+	for _, spec := range []struct{ externalID, name, email string }{
+		{proratedExternal, "Prorated Child", "prorated-child@example.com"},
+		{omittedExternal, "Omitted Child", "omitted-child@example.com"},
+	} {
+		s.NoError(s.GetStores().CustomerRepo.Create(ctx, &customer.Customer{
+			ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+			ExternalID: spec.externalID,
+			Name:       spec.name,
+			Email:      spec.email,
+			BaseModel:  types.GetDefaultBaseModel(ctx),
+		}))
+	}
+
+	addonStart := s.testData.now.AddDate(0, 0, 3)
+	addonReq := dto.AddAddonToSubscriptionRequest{AddonID: addonID, StartDate: lo.ToPtr(addonStart)}
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{
+					PlanID:             seatPlan.ID,
+					ExternalCustomerID: proratedExternal,
+					ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+					SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+						Addons: []dto.AddAddonToSubscriptionRequest{addonReq},
+					},
+				},
+				{
+					PlanID:             seatPlan.ID,
+					ExternalCustomerID: omittedExternal,
+					SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+						Addons: []dto.AddAddonToSubscriptionRequest{addonReq},
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.Require().NotNil(resp.LatestInvoice)
+
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{resp.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+	children, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Require().Len(children, 2)
+
+	customerExternal := map[string]string{}
+	for _, externalID := range []string{proratedExternal, omittedExternal} {
+		c, err := s.GetStores().CustomerRepo.GetByLookupKey(ctx, externalID)
+		s.Require().NoError(err)
+		customerExternal[c.ID] = externalID
+	}
+	childByExternal := map[string]string{}
+	for _, child := range children {
+		childByExternal[customerExternal[child.CustomerID]] = child.ID
+		switch customerExternal[child.CustomerID] {
+		case proratedExternal:
+			s.Equal(types.ProrationBehaviorCreateProrations, child.ProrationBehavior)
+		case omittedExternal:
+			s.Equal(types.ProrationBehaviorNone, child.ProrationBehavior)
+		}
+	}
+
+	var proratedAmount decimal.Decimal
+	var sawProrated bool
+	for _, li := range resp.LatestInvoice.LineItems {
+		if li.PriceID == nil || *li.PriceID != addonPriceID || li.SubscriptionID == nil {
+			continue
+		}
+		switch *li.SubscriptionID {
+		case childByExternal[proratedExternal]:
+			sawProrated = true
+			proratedAmount = li.Amount
+		case childByExternal[omittedExternal]:
+			s.Fail("mid-period addon must be skipped when the child omits proration_behavior")
+		}
+	}
+	s.True(sawProrated, "parent invoice must include the prorated child addon")
+	s.True(proratedAmount.GreaterThan(decimal.Zero) && proratedAmount.LessThan(decimal.NewFromInt(30)),
+		"expected a partial addon charge, got %s", proratedAmount)
+}
+
 func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_Phases() {
 	ctx := s.GetContext()
 	seatPlan := s.setupSeatFeePlan()
@@ -11382,5 +11537,34 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_SameDayFixedPriceStart
 	s.Require().NoError(err)
 	item, ok := lo.Find(items, func(li *subscription.SubscriptionLineItem) bool { return li.PriceID == p.ID })
 	s.Require().True(ok)
-	s.True(item.StartDate.Equal(subStart), "line item start %s, want %s", item.StartDate, subStart)
+	s.True(item.StartDate.Equal(resp.StartDate), "line item start %s, want subscription start %s", item.StartDate, resp.StartDate)
+}
+
+// A subscription starts on a whole second, like every later billing period edge, so dates derived from its start land
+// on its edges; its line items start with it.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_StartsOnAWholeSecond() {
+	ctx := s.GetContext()
+	start := s.testData.now.Truncate(time.Second).Add(750 * time.Millisecond)
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(start),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+	})
+	s.Require().NoError(err)
+
+	whole := start.Truncate(time.Second)
+	s.True(resp.StartDate.Equal(whole), "start %s", resp.StartDate)
+	s.True(resp.BillingAnchor.Equal(whole), "anchor %s", resp.BillingAnchor)
+	s.True(resp.CurrentPeriodEnd.Equal(whole.AddDate(0, 1, 0)), "first period end %s", resp.CurrentPeriodEnd)
+
+	_, items, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, resp.ID)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(items)
+	for _, item := range items {
+		s.False(item.StartDate.After(whole), "line item %s starts %s", item.ID, item.StartDate)
+	}
 }

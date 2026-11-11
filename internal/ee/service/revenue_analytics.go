@@ -58,8 +58,7 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 		IncludeChildren:    req.IncludeChildren,
 	})
 	if err != nil {
-		s.Logger.Info(ctx, "failed to fetch revenue analytics", "error", err)
-		revenueAnalytics = nil
+		return nil, err
 	}
 
 	// 3. Build response with derived metrics
@@ -84,22 +83,20 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 	}
 
 	// Calculate total revenue from revenue analytics
-	if revenueAnalytics != nil {
-		for _, item := range revenueAnalytics.Items {
-			response.TotalRevenue = response.TotalRevenue.Add(item.TotalCost) // TotalCost in usage analytics represents revenue
-		}
+	for _, item := range revenueAnalytics.Items {
+		response.TotalRevenue = response.TotalRevenue.Add(item.TotalCost) // TotalCost in usage analytics represents revenue
 	}
 
 	// Currency follows events analytics: first subscription currency from meter usage.
 	// Fall back to costsheet price currency when revenue analytics has none.
-	if revenueAnalytics != nil && revenueAnalytics.Currency != "" {
+	if revenueAnalytics.Currency != "" {
 		response.Currency = revenueAnalytics.Currency
 	} else if costAnalytics != nil && costAnalytics.Currency != "" {
 		response.Currency = costAnalytics.Currency
 	}
 
-	// Calculate derived metrics if both cost and revenue are available
-	if costAnalytics != nil && revenueAnalytics != nil {
+	// Calculate derived metrics if cost is available
+	if costAnalytics != nil {
 		response.Margin = response.TotalRevenue.Sub(response.TotalCost)
 
 		if !response.TotalRevenue.IsZero() {
@@ -112,6 +109,6 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 		}
 	}
 
-	// Return response even if cost or revenue analytics failed
+	// Return response even if cost analytics failed
 	return response, nil
 }

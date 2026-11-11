@@ -6,6 +6,11 @@ import (
 	"slices"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -14,8 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // SubscriptionChangeService handles subscription plan changes (upgrades/downgrades)
@@ -106,7 +109,7 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 	}
 
 	// Calculate effective date
-	effectiveDate := time.Now()
+	effectiveDate := clock.Now()
 
 	// Calculate proration if needed.
 	// Trialing subscriptions have never been charged, so there is no unused credit to apply.
@@ -249,7 +252,7 @@ func (s *subscriptionChangeService) ExecuteSubscriptionChangeInternal(
 		}
 
 		// Calculate effective date
-		effectiveDate := time.Now()
+		effectiveDate := clock.Now()
 
 		// Execute the change based on type
 		result, err := s.executeChange(txCtx, currentSub, lineItems, targetPlan, changeType, req, effectiveDate)
@@ -368,8 +371,8 @@ func (s *subscriptionChangeService) scheduleChangeForPeriodEnd(
 		Status:         types.ScheduleStatusPending,
 		TenantID:       sub.TenantID,
 		EnvironmentID:  sub.EnvironmentID,
-		CreatedAt:      time.Now().UTC(),
-		UpdatedAt:      time.Now().UTC(),
+		CreatedAt:      clock.Now(),
+		UpdatedAt:      clock.Now(),
 		CreatedBy:      types.GetUserID(ctx),
 		UpdatedBy:      types.GetUserID(ctx),
 		StatusColumn:   types.StatusPublished,
@@ -683,7 +686,7 @@ func (s *subscriptionChangeService) generateWarnings(
 		warnings = append(warnings, "This is a downgrade. You may lose access to certain features.")
 	}
 
-	if currentSub.TrialEnd != nil && currentSub.TrialEnd.After(time.Now()) {
+	if currentSub.TrialEnd != nil && currentSub.TrialEnd.After(clock.Now()) {
 		warnings = append(warnings, "Changing plans during trial period may end your trial immediately.")
 	}
 

@@ -66,6 +66,10 @@ const (
 	FieldCustomCurrency = "custom_currency"
 	// FieldFxConversion holds the string denoting the fx_conversion field in the database.
 	FieldFxConversion = "fx_conversion"
+	// FieldBillingEntity holds the string denoting the billing_entity field in the database.
+	FieldBillingEntity = "billing_entity"
+	// FieldBillingEntityID holds the string denoting the billing_entity_id field in the database.
+	FieldBillingEntityID = "billing_entity_id"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
 	// FieldDueDate holds the string denoting the due_date field in the database.
@@ -160,6 +164,8 @@ var Columns = []string{
 	FieldTotal,
 	FieldCustomCurrency,
 	FieldFxConversion,
+	FieldBillingEntity,
+	FieldBillingEntityID,
 	FieldDescription,
 	FieldDueDate,
 	FieldPaidAt,
@@ -364,6 +370,11 @@ func ByTotalDiscount(opts ...sql.OrderTermOption) OrderOption {
 // ByTotal orders the results by the total field.
 func ByTotal(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotal, opts...).ToFunc()
+}
+
+// ByBillingEntityID orders the results by the billing_entity_id field.
+func ByBillingEntityID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingEntityID, opts...).ToFunc()
 }
 
 // ByDescription orders the results by the description field.

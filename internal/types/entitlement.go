@@ -90,6 +90,18 @@ type EntitlementFilter struct {
 
 	// HasGrantConfig filters on grant-config presence (grant_quota set or not).
 	HasGrantConfig *bool `form:"has_grant_config" json:"has_grant_config,omitempty"`
+
+	// GrantScopes selects entitlements by grant scope. Empty means feature only, so
+	// subscription entitlement grants, which have no feature, never reach feature-based reads.
+	GrantScopes []EntitlementGrantScopeEntityType `form:"grant_scopes" json:"grant_scopes,omitempty"`
+}
+
+// EffectiveGrantScopes is the scopes a filter selects, feature when none are named.
+func (f *EntitlementFilter) EffectiveGrantScopes() []EntitlementGrantScopeEntityType {
+	if f == nil || len(f.GrantScopes) == 0 {
+		return []EntitlementGrantScopeEntityType{EntitlementGrantScopeFeature}
+	}
+	return f.GrantScopes
 }
 
 // NewDefaultEntitlementFilter creates a new EntitlementFilter with default values
@@ -116,6 +128,12 @@ func (f EntitlementFilter) Validate() error {
 
 	if f.TimeRangeFilter != nil {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	for _, scope := range f.GrantScopes {
+		if err := scope.Validate(); err != nil {
 			return err
 		}
 	}

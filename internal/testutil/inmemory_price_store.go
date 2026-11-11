@@ -55,11 +55,19 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 		}
 	}
 
+	if f.ParentPriceID != nil && p.ParentPriceID != *f.ParentPriceID {
+		return false
+	}
+
 	// Filter by price IDs
 	if len(f.PriceIDs) > 0 {
 		if !lo.Contains(f.PriceIDs, p.ID) {
 			return false
 		}
+	}
+
+	if len(f.ProductIDs) > 0 && !lo.Contains(f.ProductIDs, p.ProductID) {
+		return false
 	}
 
 	// Filter by status

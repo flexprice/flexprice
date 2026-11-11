@@ -5,25 +5,32 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type PriceService interface {
 	CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error)
 	CreateBulkPrice(ctx context.Context, req dto.CreateBulkPriceRequest) (*dto.CreateBulkPriceResponse, error)
 	GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error)
+	// GetPriceHistory returns every version of a plan price, oldest first.
+	GetPriceHistory(ctx context.Context, id string) (*dto.ListPricesResponse, error)
 	GetPricesByPlanID(ctx context.Context, req dto.GetPricesByPlanRequest) (*dto.ListPricesResponse, error)
 	GetPricesBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.ListPricesResponse, error)
 	GetPricesByAddonID(ctx context.Context, addonID string) (*dto.ListPricesResponse, error)
@@ -113,6 +120,10 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		}
 	}
 
+	if err := s.validateNewPriceSubscriptionEntitlementGrant(ctx, p); err != nil {
+		return nil, err
+	}
+
 	if err := s.PriceRepo.Create(ctx, p); err != nil {
 		return nil, err
 	}
@@ -146,6 +157,10 @@ func (s *priceService) preparePriceForCreation(ctx context.Context, req *dto.Cre
 
 	// Validate the price domain object
 	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := s.validateProduct(ctx, p.ProductID); err != nil {
 		return nil, err
 	}
 
@@ -398,6 +413,12 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 			return err
 		}
 
+		for _, p := range prices {
+			if err := s.validateNewPriceSubscriptionEntitlementGrant(txCtx, p); err != nil {
+				return err
+			}
+		}
+
 		// Create prices in bulk
 		if err := s.PriceRepo.CreateBulk(txCtx, prices); err != nil {
 			return err
@@ -509,6 +530,62 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 	}
 
 	return response, nil
+}
+
+func (s *priceService) GetPriceHistory(ctx context.Context, id string) (*dto.ListPricesResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("price_id is required").
+			WithHint("Price ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	p, err := s.PriceRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if p.EntityType != types.PRICE_ENTITY_TYPE_PLAN {
+		return nil, ierr.NewError("price history is only available for plan prices").
+			WithHint("Price history is only available for plan prices").
+			WithReportableDetails(map[string]interface{}{
+				"price_id":    id,
+				"entity_type": p.EntityType,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Every version points at the root, so one level of parent_price_id covers the whole lineage.
+	rootID := p.GetRootPriceID()
+	versions, err := s.PriceRepo.List(ctx, types.NewNoLimitPriceFilter().
+		WithParentPriceID(rootID).
+		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
+		WithEntityIDs([]string{p.EntityID}).
+		WithAllowExpiredPrices(true))
+	if err != nil {
+		return nil, err
+	}
+
+	root := p
+	if rootID != p.ID {
+		if root, err = s.PriceRepo.Get(ctx, rootID); err != nil {
+			return nil, err
+		}
+	}
+	versions = append(versions, root)
+
+	sort.SliceStable(versions, func(i, j int) bool {
+		a, b := versions[i], versions[j]
+		if !lo.FromPtr(a.StartDate).Equal(lo.FromPtr(b.StartDate)) {
+			return lo.FromPtr(a.StartDate).Before(lo.FromPtr(b.StartDate))
+		}
+		return a.CreatedAt.Before(b.CreatedAt)
+	})
+
+	items := lo.Map(versions, func(v *price.Price, _ int) *dto.PriceResponse { return &dto.PriceResponse{Price: v} })
+	return &dto.ListPricesResponse{
+		Items:      items,
+		Pagination: types.NewPaginationResponse(len(items), len(items), 0),
+	}, nil
 }
 
 func (s *priceService) GetPricesByPlanID(ctx context.Context, req dto.GetPricesByPlanRequest) (*dto.ListPricesResponse, error) {
@@ -850,6 +927,22 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		return nil, err
 	}
 
+	if req.ProductID != "" && req.ProductID != existingPrice.ProductID {
+		if existingPrice.ProductID != "" {
+			return nil, ierr.NewError("product_id cannot be changed").
+				WithHint("A price's product can be set once and never changed").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":   id,
+					"product_id": existingPrice.ProductID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := s.validateProduct(ctx, req.ProductID); err != nil {
+			return nil, err
+		}
+		existingPrice.ProductID = req.ProductID
+	}
+
 	// Validate price unit type cannot be changed
 	hasFIATFields := req.Amount != nil || len(req.Tiers) > 0
 	hasCUSTOMFields := req.PriceUnitAmount != nil || len(req.PriceUnitTiers) > 0
@@ -896,7 +989,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		var newPriceResp *dto.PriceResponse
 
 		// Set termination end date - use EndDate from request if provided, otherwise use current time
-		terminationEndDate := time.Now().UTC()
+		terminationEndDate := clock.Now()
 		if req.EffectiveFrom != nil {
 			terminationEndDate = *req.EffectiveFrom
 		}
@@ -1045,7 +1138,7 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.Delet
 	if req.EndDate != nil {
 		endDate = req.EndDate.UTC()
 	} else {
-		endDate = time.Now().UTC()
+		endDate = clock.Now()
 	}
 
 	// Validate end date is on or after start date
@@ -1488,6 +1581,26 @@ func (s *priceService) validateBucketSizeAgainstMeter(ctx context.Context, req *
 	return s.validateBucketedPriceAgainstEntitlements(ctx, m, req.BucketSize, req.BillingModel)
 }
 
+// validateProduct checks that a price's product exists and is published.
+func (s *priceService) validateProduct(ctx context.Context, productID string) error {
+	if productID == "" {
+		return nil
+	}
+	p, err := s.ProductRepo.GetByID(ctx, productID)
+	if err != nil {
+		return err
+	}
+	if p.Status() != types.StatusPublished {
+		return ierr.NewError("product is not published").
+			WithHint("A price can only reference a published product").
+			WithReportableDetails(map[string]interface{}{
+				"product_id": productID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // validateGroup validates that a group exists and is of type "price"
 func (s *priceService) validateGroup(ctx context.Context, prices []*price.Price) error {
 	// 1. Get all group IDs from prices
@@ -1514,26 +1627,22 @@ func (s *priceService) validateGroup(ctx context.Context, prices []*price.Price)
 	return nil
 }
 
-// syncPriceToChargebeeIfEnabled syncs a price to Chargebee if the integration is enabled
+// syncPriceToChargebeeIfEnabled syncs a price to every Chargebee connection in the environment.
 // This is a non-blocking operation - errors are logged but don't fail the price operation
 func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceID, planID string) {
-	// Early return if integration factory is not available
-	if s.IntegrationFactory == nil {
+	if s.IntegrationFactory == nil || s.ConnectionRepo == nil {
 		return
 	}
 
-	// Get Chargebee integration
-	chargebeeIntegration, err := s.IntegrationFactory.GetChargebeeIntegration(ctx)
+	hasConnection, err := hasPublishedConnection(ctx, s.ConnectionRepo, types.SecretProviderChargebee)
 	if err != nil {
-		s.Logger.Debug(ctx, "Chargebee integration not available, skipping sync",
+		s.Logger.Error(ctx, "failed to check Chargebee connections",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
 		return
 	}
-
-	// Check if Chargebee connection exists
-	if !chargebeeIntegration.Client.HasChargebeeConnection(ctx) {
+	if !hasConnection {
 		s.Logger.Debug(ctx, "Chargebee connection not configured, skipping sync",
 			"price_id", priceID,
 			"plan_id", planID)
@@ -1561,7 +1670,14 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 	}
 
 	// Sync to Chargebee (non-blocking - log errors but don't fail)
-	if syncErr := chargebeeIntegration.PlanSyncSvc.SyncPlanToChargebee(ctx, plan, []*price.Price{priceModel}); syncErr != nil {
+	syncErr := ForEachConnection(ctx, s.ConnectionRepo, types.SecretProviderChargebee, func(ctx context.Context, _ *connection.Connection) error {
+		chargebeeIntegration, err := s.IntegrationFactory.GetChargebeeIntegration(ctx)
+		if err != nil {
+			return err
+		}
+		return chargebeeIntegration.PlanSyncSvc.SyncPlanToChargebee(ctx, plan, []*price.Price{priceModel})
+	})
+	if syncErr != nil {
 		s.Logger.Error(ctx, "failed to sync price to Chargebee",
 			"price_id", priceID,
 			"plan_id", planID,
@@ -1700,24 +1816,24 @@ func (s *priceService) syncPriceToQuickBooksIfEnabled(ctx context.Context, price
 	}
 
 	// Check if QuickBooks integration is available
-	if s.IntegrationFactory == nil {
+	if s.IntegrationFactory == nil || s.ConnectionRepo == nil {
 		return
 	}
 
-	// Quick check: does QuickBooks connection exist?
-	_, err := s.IntegrationFactory.GetQuickBooksIntegration(ctx)
+	// Quick check: does any QuickBooks connection exist?
+	hasConnection, err := hasPublishedConnection(ctx, s.ConnectionRepo, types.SecretProviderQuickBooks)
 	if err != nil {
-		if ierr.IsNotFound(err) {
-			// Connection not configured - skip silently
-			s.Logger.Debug(ctx, "QB TEMPORAL SYNC - connection not found, skipping",
-				"price_id", priceID)
-			return
-		}
 		// Actual error - log but don't fail
 		s.Logger.Error(ctx, "error checking QuickBooks connection",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
+		return
+	}
+	if !hasConnection {
+		// Connection not configured - skip silently
+		s.Logger.Debug(ctx, "QB TEMPORAL SYNC - connection not found, skipping",
+			"price_id", priceID)
 		return
 	}
 
@@ -1845,4 +1961,45 @@ func (s *priceService) validateBucketedPriceAgainstEntitlements(ctx context.Cont
 	}
 
 	return nil
+}
+
+// validateNewPriceSubscriptionEntitlementGrant refuses a plan or addon usage price that would break a subscription
+// grant on a subscription using that plan or addon.
+func (s *priceService) validateNewPriceSubscriptionEntitlementGrant(ctx context.Context, p *price.Price) error {
+	if p.Type != types.PRICE_TYPE_USAGE || (p.EntityType != types.PRICE_ENTITY_TYPE_PLAN && p.EntityType != types.PRICE_ENTITY_TYPE_ADDON) {
+		return nil
+	}
+	owner := lo.Ternary(p.EntityType == types.PRICE_ENTITY_TYPE_PLAN, types.ENTITLEMENT_ENTITY_TYPE_PLAN, types.ENTITLEMENT_ENTITY_TYPE_ADDON)
+	return (&entitlementGrantService{ServiceParams: s.ServiceParams}).validateCatalogChange(ctx, owner, p.EntityID, changeForNewPrice(p))
+}
+
+// changeForNewPrice is how a new plan or addon price lands on a subscription: one line, or nothing when the
+// price's cadence or currency keeps it off that subscription.
+func changeForNewPrice(p *price.Price) func(sub *subscription.Subscription) subscriptionEntitlementGrantChange {
+	return func(sub *subscription.Subscription) subscriptionEntitlementGrantChange {
+		candidates := []*dto.PriceResponse{{Price: p}}
+		lands := filterValidPricesForSubscription(candidates, sub, nil)
+		if p.EntityType == types.PRICE_ENTITY_TYPE_ADDON {
+			lands = filterAddonPricesForSubscription(candidates, sub)
+		}
+		if len(lands) == 0 {
+			return subscriptionEntitlementGrantChange{}
+		}
+		return subscriptionEntitlementGrantChange{
+			items:  []*subscription.SubscriptionLineItem{pendingLineForNewPrice(sub, p)},
+			prices: []*price.Price{p},
+		}
+	}
+}
+
+func pendingLineForNewPrice(sub *subscription.Subscription, p *price.Price) *subscription.SubscriptionLineItem {
+	return &subscription.SubscriptionLineItem{
+		ID:                 "pending_" + p.ID,
+		SubscriptionID:     sub.ID,
+		PriceID:            p.ID,
+		PriceType:          p.Type,
+		MeterID:            p.MeterID,
+		BillingPeriod:      p.BillingPeriod,
+		BillingPeriodCount: p.BillingPeriodCount,
+	}
 }

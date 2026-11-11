@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -27,12 +29,13 @@ const (
 	pathCustomerByExternalID = "/customers/external/" // as GetCustomerByExternalID builds it
 	pathSubscriptionsSuffix  = "/subscriptions"       // as GetSubscriptionsForCustomer appends it
 	pathSubscriptions        = "/subscriptions"       // as CreateSubscription builds it
-	pathModifySuffix         = "/modify/execute"      // as ExecuteSubscriptionModify appends it
-	pathInvoiceSearch        = "/invoices/search"     // as QueryInvoice builds it
-	pathCustomerUsage        = "/customers/usage"     // as GetCustomerUsageSummary builds it
-	pathCustomerPortal       = "/customers/portal/"   // as CreateCustomerPortalSession builds it
-	pathCheckoutSessions     = "/checkout/sessions/"  // as GetCheckoutSession builds it
-	pathEventsBulk           = "/events/bulk"         // as IngestEventsBulk builds it
+	pathSubscriptionSearch   = "/subscriptions/search"
+	pathModifySuffix         = "/modify/execute"     // as ExecuteSubscriptionModify appends it
+	pathInvoiceSearch        = "/invoices/search"    // as QueryInvoice builds it
+	pathCustomerUsage        = "/customers/usage"    // as GetCustomerUsageSummary builds it
+	pathCustomerPortal       = "/customers/portal/"  // as CreateCustomerPortalSession builds it
+	pathCheckoutSessions     = "/checkout/sessions/" // as GetCheckoutSession builds it
+	pathEventsBulk           = "/events/bulk"        // as IngestEventsBulk builds it
 )
 
 // notFoundBody is the JSON error envelope the Flexprice API returns for a 404.
@@ -47,13 +50,19 @@ type cannedResponse struct {
 type fakeCloud struct {
 	mu sync.Mutex
 
-	byExtID   map[string]string            // external_id -> customer id
-	metadata  map[string]map[string]string // customer id -> metadata
-	subs      map[string][]map[string]any  // external_id -> subscriptions
-	invoices  []map[string]any
-	checkouts map[string]cannedResponse // checkout session id -> response
-	modify    *cannedResponse           // ExecuteSubscriptionModify response
-	failAll   *cannedResponse           // when set, every request gets this response
+	byExtID    map[string]string            // external_id -> customer id
+	metadata   map[string]map[string]string // customer id -> metadata
+	subs       map[string][]map[string]any  // external_id -> subscriptions
+	plans      map[string]map[string]any
+	prices     map[string]map[string]any
+	subDetails map[string]map[string]any
+	requests   []string
+	searches   []map[string]any
+	failPaths  map[string]cannedResponse
+	invoices   []map[string]any
+	checkouts  map[string]cannedResponse // checkout session id -> response
+	modify     *cannedResponse           // ExecuteSubscriptionModify response
+	failAll    *cannedResponse           // when set, every request gets this response
 
 	created       []string
 	rekeyedTo     []string
@@ -67,10 +76,14 @@ type fakeCloud struct {
 
 func newFakeCloud(existing map[string]string) *fakeCloud {
 	return &fakeCloud{
-		byExtID:   existing,
-		metadata:  map[string]map[string]string{},
-		subs:      map[string][]map[string]any{},
-		checkouts: map[string]cannedResponse{},
+		byExtID:    existing,
+		metadata:   map[string]map[string]string{},
+		subs:       map[string][]map[string]any{},
+		plans:      map[string]map[string]any{"plan_1": {"id": "plan_1", "name": "Self Serve", "prices": []any{}}},
+		subDetails: map[string]map[string]any{},
+		prices:     map[string]map[string]any{},
+		failPaths:  map[string]cannedResponse{},
+		checkouts:  map[string]cannedResponse{},
 	}
 }
 
@@ -80,6 +93,12 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 		defer f.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
+		f.requests = append(f.requests, r.Method+" "+r.URL.RequestURI())
+		if failure, ok := f.failPaths[r.URL.Path]; ok {
+			w.WriteHeader(failure.status)
+			_, _ = w.Write([]byte(failure.body))
+			return
+		}
 		if f.failAll != nil {
 			w.WriteHeader(f.failAll.status)
 			_, _ = w.Write([]byte(f.failAll.body))
@@ -87,6 +106,90 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 		}
 
 		switch {
+		case r.Method == http.MethodPost && r.URL.Path == pathSubscriptionSearch:
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("invalid subscription search body: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			f.searches = append(f.searches, body)
+			ext := body["external_customer_id"].(string)
+			if _, ok := f.byExtID[ext]; !ok {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(notFoundBody))
+				return
+			}
+			statuses := make(map[string]bool)
+			for _, status := range body["subscription_status"].([]any) {
+				statuses[status.(string)] = true
+			}
+
+			var matching []map[string]any
+			for _, sub := range f.subs[ext] {
+				if statuses[fmt.Sprint(sub["subscription_status"])] {
+					matching = append(matching, sub)
+				}
+			}
+
+			createdAt := func(row map[string]any) time.Time {
+				if value, ok := row["created_at"].(time.Time); ok {
+					return value
+				}
+
+				value, _ := time.Parse(time.RFC3339Nano, fmt.Sprint(row["created_at"]))
+				return value
+			}
+
+			sort.SliceStable(matching, func(i, j int) bool {
+				left, right := createdAt(matching[i]), createdAt(matching[j])
+				if left.Equal(right) {
+					return fmt.Sprint(matching[i]["id"]) > fmt.Sprint(matching[j]["id"])
+				}
+
+				return left.After(right)
+			})
+
+			limit := int(body["limit"].(float64))
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": matching[:min(limit, len(matching))]})
+
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/plans/"):
+			plan, ok := f.plans[strings.TrimPrefix(r.URL.Path, "/plans/")]
+			if !ok {
+				t.Errorf("unexpected plan lookup %s", r.URL.Path)
+				w.WriteHeader(http.StatusNotImplemented)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(plan)
+
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/prices/"):
+			p, ok := f.prices[strings.TrimPrefix(r.URL.Path, "/prices/")]
+			if !ok {
+				t.Errorf("unexpected price lookup %s", r.URL.Path)
+				w.WriteHeader(http.StatusNotImplemented)
+				return
+			}
+
+			_ = json.NewEncoder(w).Encode(p)
+
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/subscriptions/") && strings.HasSuffix(r.URL.Path, "/v2"):
+			assert.Equal(t, "plan,subscription_line_items.prices", r.URL.Query().Get("expand"))
+			sub, ok := f.subDetails[strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/subscriptions/"), "/v2")]
+			if !ok {
+				t.Errorf("unexpected subscription lookup %s", r.URL.Path)
+				w.WriteHeader(http.StatusNotImplemented)
+				return
+			}
+			for _, rows := range f.subs {
+				for _, row := range rows {
+					if row["id"] == sub["id"] {
+						row["subscription_status"] = sub["subscription_status"]
+					}
+				}
+			}
+
+			_ = json.NewEncoder(w).Encode(sub)
+
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, pathCustomerByExternalID) && strings.HasSuffix(r.URL.Path, pathSubscriptionsSuffix):
 			ext := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, pathCustomerByExternalID), pathSubscriptionsSuffix)
 			if _, ok := f.byExtID[ext]; !ok {
@@ -140,6 +243,13 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 			_, _ = w.Write([]byte(f.modify.body))
 
 		case r.Method == http.MethodPost && r.URL.Path == pathInvoiceSearch:
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if _, ok := f.byExtID[fmt.Sprint(body["external_customer_id"])]; !ok {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(notFoundBody))
+				return
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"items": f.invoices})
 
 		case r.Method == http.MethodGet && r.URL.Path == pathCustomerUsage:
@@ -328,6 +438,8 @@ func TestLatestSubscription(t *testing.T) {
 		{"newest_cancelled_when_all_cancelled", []map[string]any{sub("s1", "plan_1", cancelled, 1), sub("s2", "plan_1", cancelled, 3)}, "s2", cancelled},
 		{"enterprise_plan_counts", []map[string]any{sub("s1", "plan_enterprise", active, 5)}, "s1", active},
 		{"enterprise_live_beats_newer_cancelled_self_serve", []map[string]any{sub("s1", "plan_enterprise", active, 1), sub("s2", "plan_1", cancelled, 2)}, "s1", active},
+		{"incomplete_is_returned", []map[string]any{sub("s1", "plan_1", types.SubscriptionStatusIncomplete, 1)}, "s1", types.SubscriptionStatusIncomplete},
+		{"paused_is_returned", []map[string]any{sub("s1", "plan_1", types.SubscriptionStatusPaused, 1)}, "s1", types.SubscriptionStatusPaused},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -337,6 +449,20 @@ func TestLatestSubscription(t *testing.T) {
 
 			got, err := c.LatestSubscription(context.Background(), "in:t1")
 			require.NoError(t, err)
+			wantSearches := 1
+			if tt.wantID == "" || tt.wantStatus == cancelled {
+				wantSearches = 2
+			}
+
+			require.Len(t, f.searches, wantSearches)
+			assert.Equal(t, "in:t1", f.searches[0]["external_customer_id"])
+			assert.ElementsMatch(t, []any{"active", "trialing", "incomplete", "paused", "draft"}, f.searches[0]["subscription_status"])
+			assert.EqualValues(t, 1, f.searches[0]["limit"])
+			if wantSearches == 2 {
+				assert.Equal(t, []any{"cancelled"}, f.searches[1]["subscription_status"])
+				assert.EqualValues(t, 1, f.searches[1]["limit"])
+			}
+			assert.NotContains(t, f.searches[0], "plan_id")
 
 			if tt.wantID == "" {
 				assert.Nil(t, got)

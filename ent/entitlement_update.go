@@ -124,6 +124,12 @@ func (_u *EntitlementUpdate) SetNillableFeatureID(v *string) *EntitlementUpdate 
 	return _u
 }
 
+// ClearFeatureID clears the value of the "feature_id" field.
+func (_u *EntitlementUpdate) ClearFeatureID() *EntitlementUpdate {
+	_u.mutation.ClearFeatureID()
+	return _u
+}
+
 // SetFeatureType sets the "feature_type" field.
 func (_u *EntitlementUpdate) SetFeatureType(v types.FeatureType) *EntitlementUpdate {
 	_u.mutation.SetFeatureType(v)
@@ -135,6 +141,12 @@ func (_u *EntitlementUpdate) SetNillableFeatureType(v *types.FeatureType) *Entit
 	if v != nil {
 		_u.SetFeatureType(*v)
 	}
+	return _u
+}
+
+// ClearFeatureType clears the value of the "feature_type" field.
+func (_u *EntitlementUpdate) ClearFeatureType() *EntitlementUpdate {
+	_u.mutation.ClearFeatureType()
 	return _u
 }
 
@@ -447,6 +459,20 @@ func (_u *EntitlementUpdate) SetNillableAggregationMode(v *types.EntitlementAggr
 	return _u
 }
 
+// SetGrantScope sets the "grant_scope" field.
+func (_u *EntitlementUpdate) SetGrantScope(v types.EntitlementGrantScopeEntityType) *EntitlementUpdate {
+	_u.mutation.SetGrantScope(v)
+	return _u
+}
+
+// SetNillableGrantScope sets the "grant_scope" field if the given value is not nil.
+func (_u *EntitlementUpdate) SetNillableGrantScope(v *types.EntitlementGrantScopeEntityType) *EntitlementUpdate {
+	if v != nil {
+		_u.SetGrantScope(*v)
+	}
+	return _u
+}
+
 // Mutation returns the EntitlementMutation object of the builder.
 func (_u *EntitlementUpdate) Mutation() *EntitlementMutation {
 	return _u.mutation
@@ -530,6 +556,11 @@ func (_u *EntitlementUpdate) check() error {
 			return &ValidationError{Name: "aggregation_mode", err: fmt.Errorf(`ent: validator failed for field "Entitlement.aggregation_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.GrantScope(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_scope", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_scope": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -578,8 +609,14 @@ func (_u *EntitlementUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.FeatureID(); ok {
 		_spec.SetField(entitlement.FieldFeatureID, field.TypeString, value)
 	}
+	if _u.mutation.FeatureIDCleared() {
+		_spec.ClearField(entitlement.FieldFeatureID, field.TypeString)
+	}
 	if value, ok := _u.mutation.FeatureType(); ok {
 		_spec.SetField(entitlement.FieldFeatureType, field.TypeString, value)
+	}
+	if _u.mutation.FeatureTypeCleared() {
+		_spec.ClearField(entitlement.FieldFeatureType, field.TypeString)
 	}
 	if value, ok := _u.mutation.IsEnabled(); ok {
 		_spec.SetField(entitlement.FieldIsEnabled, field.TypeBool, value)
@@ -673,6 +710,9 @@ func (_u *EntitlementUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.AggregationMode(); ok {
 		_spec.SetField(entitlement.FieldAggregationMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.GrantScope(); ok {
+		_spec.SetField(entitlement.FieldGrantScope, field.TypeString, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -788,6 +828,12 @@ func (_u *EntitlementUpdateOne) SetNillableFeatureID(v *string) *EntitlementUpda
 	return _u
 }
 
+// ClearFeatureID clears the value of the "feature_id" field.
+func (_u *EntitlementUpdateOne) ClearFeatureID() *EntitlementUpdateOne {
+	_u.mutation.ClearFeatureID()
+	return _u
+}
+
 // SetFeatureType sets the "feature_type" field.
 func (_u *EntitlementUpdateOne) SetFeatureType(v types.FeatureType) *EntitlementUpdateOne {
 	_u.mutation.SetFeatureType(v)
@@ -799,6 +845,12 @@ func (_u *EntitlementUpdateOne) SetNillableFeatureType(v *types.FeatureType) *En
 	if v != nil {
 		_u.SetFeatureType(*v)
 	}
+	return _u
+}
+
+// ClearFeatureType clears the value of the "feature_type" field.
+func (_u *EntitlementUpdateOne) ClearFeatureType() *EntitlementUpdateOne {
+	_u.mutation.ClearFeatureType()
 	return _u
 }
 
@@ -1111,6 +1163,20 @@ func (_u *EntitlementUpdateOne) SetNillableAggregationMode(v *types.EntitlementA
 	return _u
 }
 
+// SetGrantScope sets the "grant_scope" field.
+func (_u *EntitlementUpdateOne) SetGrantScope(v types.EntitlementGrantScopeEntityType) *EntitlementUpdateOne {
+	_u.mutation.SetGrantScope(v)
+	return _u
+}
+
+// SetNillableGrantScope sets the "grant_scope" field if the given value is not nil.
+func (_u *EntitlementUpdateOne) SetNillableGrantScope(v *types.EntitlementGrantScopeEntityType) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetGrantScope(*v)
+	}
+	return _u
+}
+
 // Mutation returns the EntitlementMutation object of the builder.
 func (_u *EntitlementUpdateOne) Mutation() *EntitlementMutation {
 	return _u.mutation
@@ -1207,6 +1273,11 @@ func (_u *EntitlementUpdateOne) check() error {
 			return &ValidationError{Name: "aggregation_mode", err: fmt.Errorf(`ent: validator failed for field "Entitlement.aggregation_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.GrantScope(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_scope", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_scope": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1272,8 +1343,14 @@ func (_u *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlement
 	if value, ok := _u.mutation.FeatureID(); ok {
 		_spec.SetField(entitlement.FieldFeatureID, field.TypeString, value)
 	}
+	if _u.mutation.FeatureIDCleared() {
+		_spec.ClearField(entitlement.FieldFeatureID, field.TypeString)
+	}
 	if value, ok := _u.mutation.FeatureType(); ok {
 		_spec.SetField(entitlement.FieldFeatureType, field.TypeString, value)
+	}
+	if _u.mutation.FeatureTypeCleared() {
+		_spec.ClearField(entitlement.FieldFeatureType, field.TypeString)
 	}
 	if value, ok := _u.mutation.IsEnabled(); ok {
 		_spec.SetField(entitlement.FieldIsEnabled, field.TypeBool, value)
@@ -1367,6 +1444,9 @@ func (_u *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlement
 	}
 	if value, ok := _u.mutation.AggregationMode(); ok {
 		_spec.SetField(entitlement.FieldAggregationMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.GrantScope(); ok {
+		_spec.SetField(entitlement.FieldGrantScope, field.TypeString, value)
 	}
 	_node = &Entitlement{config: _u.config}
 	_spec.Assign = _node.assignValues

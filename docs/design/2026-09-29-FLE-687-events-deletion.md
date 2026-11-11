@@ -93,7 +93,7 @@ Tenant repeatedly asks us to delete a set of events so they can re-send them. Sa
 
 **R6.** While a deletion is in progress for a customer and period, invoice finalization for that customer over an overlapping period is refused.
 
-**R7.** While a deletion is in progress for a customer and period, every consumer that writes `events` or `meter_usage` drops incoming events for that customer whose timestamp falls inside the period.
+**R7.** While a deletion is in progress for a customer and period, every consumer that writes `events` or `meter_usage` **holds** incoming events for that customer whose timestamp falls inside the period: the event is neither written nor acknowledged, and it is not dead-lettered. Kafka redelivers it until the deletion reaches a terminal status, after which it is written normally. An event we are not processing is never acknowledged, so nothing is lost.
 
 **R8.** Deletion releases the Redis deduplication locks for the deleted event ids, so a re-ingest under the same id is not silently dropped.
 
@@ -456,10 +456,13 @@ Two mechanisms, both reading stores that already exist.
 event arrives at a consumer
   customer not in the window set        → write (the normal case, no cost)
   event.timestamp outside the period    → write
-  otherwise                             → drop, return nil, log at Info
+  otherwise                             → return ErrEventDeletionInProgress, log at Error
+                                           (not acked, not dead-lettered, redelivered)
 ```
 
-A dropped event must not fire the rejected-event webhook, must not publish to the analytics sink, must not run the post-insert side effects, and must not acquire a dedup lock. The check sits before all of them.
+A held event must not fire the rejected-event webhook, must not publish to the analytics sink, must not run the post-insert side effects, and must not acquire a dedup lock. The check sits before all of them.
+
+The error is excluded from the poison-queue filter in `internal/pubsub/router`, alongside `errMessageLost`, so an event held this way is redelivered rather than dead-lettered. Nothing in this repository consumes a DLQ topic, so dead-lettering it would be indistinguishable from discarding it. The cost is partition lag for the duration of the deletion: the held message blocks its partition, and events behind it wait. A batch message is held whole, because one Kafka message cannot be part-acknowledged.
 
 This is the only thing that can catch an event still sitting in Kafka when the id set was resolved, because such an event has never reached `meter_usage` and we therefore never learned its id.
 
@@ -764,8 +767,8 @@ No billing cycle is lost. Threshold billing re-evaluates usage against the thres
 | An invoice finalized a moment before the guard read | The guard sees it and refuses, because the advisory lock makes the finalization commit visible before the guard read proceeds. |
 | Finalized invoice ends exactly at `period_start`, or starts exactly at `period_end` | Blocks. The operators are `>=` and `<=`, so an adjacent invoice sharing a boundary is returned. A known over-block, one instant wide, accepted. |
 | Backdated event inside a finalized period the invoice never counted | Blocked anyway. `invoice_line_items` store the aggregate quantity, not the event set, so the period is the only available proxy. |
-| Event still in Kafka when the id set is resolved | Dropped by the suppression window when it reaches a consumer, because it falls in the customer and period being deleted. |
-| Kafka redelivers a deleted event during the deletion | Dropped by the same window. |
+| Event still in Kafka when the id set is resolved | Held by the suppression window when it reaches a consumer, because it falls in the customer and period being deleted. Redelivered until the deletion ends, then written. |
+| Kafka redelivers a deleted event during the deletion | Held by the same window, then written once the deletion ends. The dedup lock release happens before the window comes down, so a redelivery of an id that was deleted lands as a fresh write. |
 | Kafka redelivers a deleted event after the request completes | **Not suppressed.** The window is down. Realistic redelivery happens within seconds, well inside the window, so the exposure is a consumer-group offset reset, which is an operator action. |
 | Event for the same customer but outside the period arrives during the deletion | Written normally. The window checks the timestamp against the period. |
 | Tenant re-ingests a corrected event under the same id after the deletion | Written normally. The window is down and the dedup lock was released. |
@@ -836,7 +839,7 @@ No billing cycle is lost. Threshold billing re-evaluates usage against the thres
 
 **AC20.** A deletion scoped to the subscription-owner customer blocks finalization of an invoice whose `customer_id` is a different invoicing customer but whose `subscription_customer_id` is the deleted one.
 
-**AC21.** With the `meter_usage` consumer stopped, ingest events for a customer, run a deletion over that period, then start the consumer and drain. No row for those ids appears in `meter_usage` or `events`, and each suppressed event logs once at Info.
+**AC21.** With the `meter_usage` consumer stopped, ingest events for a customer, run a deletion over that period, then start the consumer and drain. While the deletion is in progress no row for those ids appears in `meter_usage` or `events`, each held event logs at Error, and no held message reaches a DLQ topic. Once the deletion reaches a terminal status the held events are redelivered and written.
 
 **AC22.** A suppressed event fires no rejected-event webhook, publishes nothing to the analytics sink, runs no post-insert side effects, and acquires no dedup lock.
 

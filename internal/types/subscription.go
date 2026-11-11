@@ -104,8 +104,10 @@ func (s SubscriptionStatus) String() string {
 	return string(s)
 }
 
-func (s SubscriptionStatus) Validate() error {
-	allowed := []SubscriptionStatus{
+// AllSubscriptionStatuses is every status a subscription can hold. Pass it on a
+// filter to opt out of the repository's default narrowing to active.
+func AllSubscriptionStatuses() []SubscriptionStatus {
+	return []SubscriptionStatus{
 		SubscriptionStatusActive,
 		SubscriptionStatusPaused,
 		SubscriptionStatusCancelled,
@@ -113,6 +115,10 @@ func (s SubscriptionStatus) Validate() error {
 		SubscriptionStatusTrialing,
 		SubscriptionStatusDraft,
 	}
+}
+
+func (s SubscriptionStatus) Validate() error {
+	allowed := AllSubscriptionStatuses()
 
 	if s != "" && !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid subscription status").

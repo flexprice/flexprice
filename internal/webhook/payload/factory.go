@@ -45,6 +45,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 			return NewInvoiceSyncPayloadBuilder(f.services)
 		}
 	}
+	f.builders[types.WebhookEventInvoicePaymentFailed] = func() PayloadBuilder {
+		return NewInvoicePaymentFailedPayloadBuilder(f.services)
+	}
 
 	// Register refund builders
 	for _, e := range []types.WebhookEventName{
@@ -133,6 +136,26 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		}
 	}
 
+	for _, e := range []types.WebhookEventName{
+		types.WebhookEventBillingTermsCreated,
+		types.WebhookEventBillingTermsUpdated,
+	} {
+		f.builders[e] = func() PayloadBuilder {
+			return NewBillingTermsPayloadBuilder(f.services)
+		}
+	}
+
+	for _, e := range []types.WebhookEventName{
+		types.WebhookEventBillingInstalmentCreated,
+		types.WebhookEventBillingInstalmentUpdated,
+		types.WebhookEventBillingInstalmentCancelled,
+		types.WebhookEventBillingInstalmentInvoiced,
+	} {
+		f.builders[e] = func() PayloadBuilder {
+			return NewBillingInstalmentPayloadBuilder(f.services)
+		}
+	}
+
 	// wallet builders
 	f.builders[types.WebhookEventWalletCreated] = func() PayloadBuilder {
 		return NewWalletPayloadBuilder(f.services)
@@ -185,6 +208,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	}
 	f.builders[types.WebhookEventPaymentFailed] = func() PayloadBuilder {
 		return NewPaymentPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventPaymentAttemptFailed] = func() PayloadBuilder {
+		return NewPaymentAttemptPayloadBuilder(f.services)
 	}
 	f.builders[types.WebhookEventPaymentSuccess] = func() PayloadBuilder {
 		return NewPaymentPayloadBuilder(f.services)

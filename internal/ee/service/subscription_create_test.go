@@ -2,9 +2,11 @@ package service
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -398,7 +400,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_SessionFai
 		Value:          decimal.NewFromInt(100),
 		Measurement:    types.CommitmentMeasurementBillingPeriod,
 		StartDate:      start,
-		EndDate:        start.AddDate(1, 0, 0),
+		EndDate:        lo.ToPtr(start.AddDate(1, 0, 0)),
 	}}
 	_, err := s.service.CreateSubscription(ctx, req)
 	s.Require().Error(err)
@@ -1228,6 +1230,57 @@ func (s *SubscriptionServiceSuite) TestArchiveDraftCheckoutSubscription_Cascades
 	}
 }
 
+// Archiving an abandoned checkout's subscription cancels its commitments' scheduled instalments and archives their
+// terms, so the separate-invoice run has nothing left to bill for it.
+func (s *SubscriptionServiceSuite) TestArchiveDraftCheckoutSubscription_CancelsBillingTerms() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	subService := s.service.(*subscriptionService)
+
+	req := s.inlineCommitmentRequest()
+	req.SubscriptionStatus = types.SubscriptionStatusDraft
+	committed := &req.Commitments[0]
+	committed.Type, committed.Value, committed.CommittedPrice = types.COMMITMENT_TYPE_AMOUNT, decimal.NewFromInt(100), nil
+	committed.Binding = lo.ToPtr(true)
+	committed.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
+	committed.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
+	committed.BillingTerms = upfrontPlusRemainder()
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+	s.Require().Equal(types.SubscriptionStatusDraft, resp.SubscriptionStatus)
+
+	commitments, err := s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
+	s.Require().NoError(err)
+	s.Require().Len(commitments, 1)
+	owner := commitments[0].ID
+
+	ownedBy := &billingterm.InstalmentFilter{OwnerType: types.BillingTermOwnerCommitment, OwnerIDs: []string{owner}}
+	scheduled, err := s.GetStores().BillingInstalmentRepo.List(ctx, ownedBy)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(scheduled)
+
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	publisher.Reset()
+	s.Require().NoError(subService.archiveDraftCheckoutSubscription(ctx, resp.ID))
+
+	instalments, err := s.GetStores().BillingInstalmentRepo.List(ctx, ownedBy)
+	s.Require().NoError(err)
+	s.Len(instalments, len(scheduled))
+	for _, inst := range instalments {
+		s.Equal(types.InstalmentStatusCancelled, inst.InstalmentStatus, inst.InvoiceLabel)
+	}
+
+	terms, err := s.GetStores().BillingTermRepo.List(ctx, types.BillingTermOwnerCommitment, owner)
+	s.Require().NoError(err)
+	s.Empty(terms, "the archived commitment's terms are archived with it")
+
+	cancelled := lo.FilterMap(publisher.Events(), func(event *types.WebhookEvent, _ int) (string, bool) {
+		return event.EntityID, event.EventName == types.WebhookEventBillingInstalmentCancelled
+	})
+	s.ElementsMatch(lo.Map(scheduled, func(inst *billingterm.Instalment, _ int) string { return inst.ID }), cancelled)
+}
+
 // The cascade must stay inert for the standalone subscriptions every existing gated create produces.
 func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_StandaloneIsUnchanged() {
 	ctx := s.GetContext()
@@ -1648,4 +1701,98 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemGroupingEndToE
 			}
 		})
 	}
+}
+
+// A plan price already scheduled to end gives the new line item that end date, so it does not
+// stay live next to the price that replaces it. A subscription or phase ending earlier still wins,
+// and a price that has ended before the line item would start gets no line item.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemInheritsPriceEndDate() {
+	ctx := s.GetContext()
+	planID := "plan_price_end_date"
+	s.seedFixedPricePlan(planID, decimal.NewFromInt(10), 0)
+
+	cutover := time.Now().UTC().AddDate(0, 0, 7).Truncate(time.Second)
+	endingPrice, err := s.GetStores().PriceRepo.Get(ctx, "price_"+planID)
+	s.Require().NoError(err)
+	endingPrice.EndDate = &cutover
+	s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, endingPrice, true))
+
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+		ID:                 "price_" + planID + "_next",
+		Amount:             decimal.NewFromInt(20),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		StartDate:          &cutover,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}))
+
+	lineItemsFor := func(edit func(req *dto.CreateSubscriptionRequest)) []*subscription.SubscriptionLineItem {
+		req := s.checkoutCreateRequest(planID)
+		req.Checkout = nil
+		edit(&req)
+		resp, err := s.service.CreateSubscription(ctx, req)
+		s.Require().NoError(err)
+		items, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(ctx, resp.Subscription)
+		s.Require().NoError(err)
+		sort.Slice(items, func(i, j int) bool { return items[i].StartDate.Before(items[j].StartDate) })
+		return items
+	}
+	forPrice := func(items []*subscription.SubscriptionLineItem, priceID string) []*subscription.SubscriptionLineItem {
+		return lo.Filter(items, func(li *subscription.SubscriptionLineItem, _ int) bool { return li.PriceID == priceID })
+	}
+	endingPriceID, nextPriceID := "price_"+planID, "price_"+planID+"_next"
+	now := time.Now().UTC().Truncate(time.Second)
+
+	s.Run("price ending after the subscription starts ends the line item at the cutover", func() {
+		items := lineItemsFor(func(req *dto.CreateSubscriptionRequest) {})
+		ending, next := forPrice(items, endingPriceID), forPrice(items, nextPriceID)
+		s.Require().Len(ending, 1)
+		s.Require().Len(next, 1)
+		s.True(ending[0].EndDate.Equal(cutover), "the ending price's line item must end at the price's end date")
+		s.True(next[0].EndDate.IsZero(), "the replacement price's line item stays open")
+		s.True(next[0].StartDate.Equal(cutover), "the replacement price's line item starts at the cutover")
+	})
+
+	s.Run("subscription ending before the price keeps its own end date", func() {
+		subEnd := cutover.AddDate(0, 0, -2)
+		items := lineItemsFor(func(req *dto.CreateSubscriptionRequest) { req.EndDate = &subEnd })
+		ending := forPrice(items, endingPriceID)
+		s.Require().Len(ending, 1)
+		s.True(ending[0].EndDate.Equal(subEnd))
+	})
+
+	s.Run("subscription starting after the price ends gets no line item for it", func() {
+		subStart := cutover.AddDate(0, 0, 3)
+		items := lineItemsFor(func(req *dto.CreateSubscriptionRequest) { req.StartDate = &subStart })
+		s.Empty(forPrice(items, endingPriceID), "a price that ended before the line item would start must not be attached")
+		next := forPrice(items, nextPriceID)
+		s.Require().Len(next, 1)
+		s.True(next[0].StartDate.Equal(subStart))
+		s.True(next[0].EndDate.IsZero())
+	})
+
+	s.Run("later phases apply the price end date too", func() {
+		// P1 ends inside phase 1, phase 2 spans the cutover, phase 3 starts after it
+		phase2Start, phase3Start := cutover.AddDate(0, 0, -3), cutover.AddDate(0, 0, 3)
+		items := lineItemsFor(func(req *dto.CreateSubscriptionRequest) {
+			req.StartDate = &now
+			req.Phases = []dto.SubscriptionPhaseCreateRequest{
+				{StartDate: now, EndDate: &phase2Start},
+				{StartDate: phase2Start, EndDate: &phase3Start},
+				{StartDate: phase3Start},
+			}
+		})
+		ending := forPrice(items, endingPriceID)
+		s.Require().Len(ending, 2, "phase 3 starts after the price ends, so only phases 1 and 2 get a line item for it")
+		s.True(ending[0].EndDate.Equal(phase2Start), "phase 1 ends before the price, so it keeps the phase end")
+		s.True(ending[1].StartDate.Equal(phase2Start))
+		s.True(ending[1].EndDate.Equal(cutover), "phase 2 spans the cutover, so its line item ends at the price's end date")
+	})
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -104,6 +105,7 @@ func (s *subscriptionService) activateDraftSubscription(ctx context.Context, sub
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionActivated, sub.ID)
+	NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 	return nil
 }
 
@@ -123,7 +125,7 @@ func (s *subscriptionService) archiveDraftCheckoutSubscription(ctx context.Conte
 			Mark(ierr.ErrAlreadyExists)
 	}
 
-	children, err := s.childSubscriptions(ctx, subscriptionID)
+	children, err := s.childSubscriptions(ctx, subscriptionID, types.SubscriptionStatusDraft, types.SubscriptionStatusActive, types.SubscriptionStatusTrialing)
 	if err != nil {
 		return err
 	}
@@ -144,6 +146,8 @@ func (s *subscriptionService) archiveDraftCheckoutSubscription(ctx context.Conte
 }
 
 func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.Context, subscriptionID string) error {
+	notifySubscriptionArchived(ctx, s.ServiceParams, subscriptionID)
+
 	addonFilter := types.NewNoLimitAddonAssociationFilter()
 	addonFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
 	addonFilter.EntityIDs = []string{subscriptionID}
@@ -197,16 +201,32 @@ func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.C
 		}
 	}
 
-	commitmentFilter := commitment.NewNoLimitFilter()
-	commitmentFilter.SubscriptionIDs = []string{subscriptionID}
-	commitments, err := s.CommitmentRepo.List(ctx, commitmentFilter)
+	commitments, err := s.CommitmentRepo.List(ctx, commitment.NewSubscriptionFilter(subscriptionID))
 	if err != nil {
 		return err
 	}
 	for _, c := range commitments {
-		if err := s.CommitmentRepo.Delete(ctx, c.ID); err != nil {
+		// An archived commitment collects nothing, so its terms and scheduled instalments go with it.
+		var cancelled []*billingterm.Instalment
+		err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+			if err := s.CommitmentRepo.Delete(txCtx, c.ID); err != nil {
+				return err
+			}
+
+			if _, err := s.BillingTermRepo.Archive(txCtx, types.BillingTermOwnerCommitment, c.ID); err != nil {
+				return err
+			}
+
+			var err error
+			scheduled := []types.InstalmentStatus{types.InstalmentStatusScheduled}
+			cancelled, err = s.BillingInstalmentRepo.Cancel(txCtx, types.BillingTermOwnerCommitment, c.ID, scheduled)
+			return err
+		})
+		if err != nil {
 			return err
 		}
+
+		publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
 	}
 
 	taxFilter := &types.TaxAssociationFilter{

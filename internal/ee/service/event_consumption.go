@@ -47,6 +47,7 @@ type eventConsumptionService struct {
 	bulkPubSub     pubsub.PubSub
 	eventRepo      events.Repository
 	tracingService *tracing.Service
+	deletionWindow EventDeletionWindowService
 }
 
 // NewEventConsumptionService creates a new event consumption service
@@ -54,11 +55,13 @@ func NewEventConsumptionService(
 	params ServiceParams,
 	eventRepo events.Repository,
 	tracingService *tracing.Service,
+	deletionWindow EventDeletionWindowService,
 ) EventConsumptionService {
 	ev := &eventConsumptionService{
 		ServiceParams:  params,
 		eventRepo:      eventRepo,
 		tracingService: tracingService,
+		deletionWindow: deletionWindow,
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
@@ -178,6 +181,18 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 		}
 		if evt.EnvironmentID == "" {
 			evt.EnvironmentID = environmentID
+		}
+		// The whole batch is held: one Kafka message cannot be part-acknowledged,
+		// and writing the rest would duplicate them on every redelivery.
+		if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(ctx, evt.ExternalCustomerID, evt.Timestamp) {
+			s.Logger.Error(ctx, "holding bulk event batch: a deletion is in progress for this customer and period",
+				"error", types.ErrEventDeletionInProgress,
+				"event_id", evt.ID,
+				"external_customer_id", evt.ExternalCustomerID,
+				"timestamp", evt.Timestamp,
+				"message_uuid", msg.UUID,
+			)
+			return types.ErrEventDeletionInProgress
 		}
 		inserts = append(inserts, evt)
 	}
@@ -332,10 +347,12 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 
 	if tenantID == "" && event.TenantID != "" {
 		tenantID = event.TenantID
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
 
 	if environmentID == "" && event.EnvironmentID != "" {
 		environmentID = event.EnvironmentID
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
 	s.Logger.Debug(ctx, "processing event in event consumption service",
@@ -346,6 +363,16 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 		"external_customer_id", event.ExternalCustomerID,
 		"timestamp", event.Timestamp,
 	)
+
+	if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(ctx, event.ExternalCustomerID, event.Timestamp) {
+		s.Logger.Error(ctx, "holding event: a deletion is in progress for this customer and period",
+			"error", types.ErrEventDeletionInProgress,
+			"event_id", event.ID,
+			"external_customer_id", event.ExternalCustomerID,
+			"timestamp", event.Timestamp,
+		)
+		return types.ErrEventDeletionInProgress
+	}
 
 	// Prepare events to insert
 	eventsToInsert := []*events.Event{&event}

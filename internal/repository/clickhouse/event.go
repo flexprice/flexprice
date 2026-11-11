@@ -36,9 +36,9 @@ func safeDecimalFromFloat(f float64) decimal.Decimal {
 	return decimal.NewFromFloat(f)
 }
 
-// clampToZero returns zero if d is negative, otherwise returns d unchanged.
-func clampToZero(d decimal.Decimal) decimal.Decimal {
-	if d.LessThan(decimal.Zero) {
+// normalizeUsageValue preserves signed SUM results and floors other aggregations at zero.
+func normalizeUsageValue(d decimal.Decimal, aggregation types.AggregationType) decimal.Decimal {
+	if aggregation != types.AggregationSum && d.IsNegative() {
 		return decimal.Zero
 	}
 	return d
@@ -46,7 +46,7 @@ func clampToZero(d decimal.Decimal) decimal.Decimal {
 
 // scanBucketedRow scans a row from a bucketed aggregation query.
 // Returns (total, value, windowSize, groupKey, error). groupKey is empty when hasGroupBy is false.
-func scanBucketedRow(rows interface{ Scan(...any) error }, hasGroupBy bool) (total, value decimal.Decimal, windowSize time.Time, groupKey string, err error) {
+func scanBucketedRow(rows interface{ Scan(...any) error }, hasGroupBy bool, aggregation types.AggregationType) (total, value decimal.Decimal, windowSize time.Time, groupKey string, err error) {
 	var totalFloat, valueFloat float64
 	if hasGroupBy {
 		if err = rows.Scan(&totalFloat, &windowSize, &valueFloat, &groupKey); err != nil {
@@ -61,7 +61,7 @@ func scanBucketedRow(rows interface{ Scan(...any) error }, hasGroupBy bool) (tot
 				Mark(ierr.ErrDatabase)
 		}
 	}
-	return clampToZero(safeDecimalFromFloat(totalFloat)), clampToZero(safeDecimalFromFloat(valueFloat)), windowSize, groupKey, nil
+	return normalizeUsageValue(safeDecimalFromFloat(totalFloat), aggregation), normalizeUsageValue(safeDecimalFromFloat(valueFloat), aggregation), windowSize, groupKey, nil
 }
 
 func (r *EventRepository) InsertEvent(ctx context.Context, event *events.Event) error {
@@ -311,7 +311,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 						groupByProperty != "" &&
 						validateGroupByProperty(groupByProperty) == nil
 
-					bucketTotal, bucketValue, bucketTime, groupKey, err := scanBucketedRow(rows, hasGroupBy)
+					bucketTotal, bucketValue, bucketTime, groupKey, err := scanBucketedRow(rows, hasGroupBy, params.AggregationType)
 					if err != nil {
 						SetSpanError(span, err)
 						return nil, err
@@ -335,7 +335,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 							WithHint("Failed to scan float result").
 							Mark(ierr.ErrDatabase)
 					}
-					value = clampToZero(safeDecimalFromFloat(floatValue))
+					value = normalizeUsageValue(safeDecimalFromFloat(floatValue), params.AggregationType)
 				}
 			case types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationWeightedSum:
 				var floatValue float64
@@ -397,12 +397,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 						}).
 						Mark(ierr.ErrDatabase)
 				}
-				result.Value = safeDecimalFromFloat(value)
-
-				// Ensure negative values are treated as zero for all aggregation types
-				if result.Value.LessThan(decimal.Zero) {
-					result.Value = decimal.Zero
-				}
+				result.Value = normalizeUsageValue(safeDecimalFromFloat(value), params.AggregationType)
 			default:
 				err := ierr.NewError("unsupported aggregation type for scanning").
 					WithHint("The specified aggregation type is not supported for scanning").

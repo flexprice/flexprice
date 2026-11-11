@@ -183,3 +183,51 @@ func TestSyncConfigValidateRejectsBadMetadataCustomFields(t *testing.T) {
 	}
 	assert.Error(t, cfg.Validate())
 }
+
+func TestZohoPaymentGatewaySettingsValidate(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings *ZohoPaymentGatewaySettings
+		wantErr  bool
+	}{
+		{"nil settings", nil, false},
+		{"disabled with nothing selected", &ZohoPaymentGatewaySettings{}, false},
+		{"disabled keeps a saved selection", &ZohoPaymentGatewaySettings{Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayStripe}}, false},
+		{"enabled with one gateway", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayRazorpay}}, false},
+		{"enabled with every supported gateway", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{
+			ZohoPaymentGatewayPayPal, ZohoPaymentGatewayStripe, ZohoPaymentGatewayAuthorizeNet, ZohoPaymentGatewayPayflowPro,
+			ZohoPaymentGateway2Checkout, ZohoPaymentGatewayBraintree, ZohoPaymentGatewayRazorpay,
+		}, PayPalPaymentMethod: ZohoPayPalPaymentMethodStandard}, false},
+		{"paypal with standard method", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayPayPal}, PayPalPaymentMethod: ZohoPayPalPaymentMethodStandard}, false},
+		{"paypal with adaptive method", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayPayPal}, PayPalPaymentMethod: ZohoPayPalPaymentMethodAdaptive}, false},
+		{"paypal without a method", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayPayPal}}, true},
+		{"paypal without a method while disabled", &ZohoPaymentGatewaySettings{Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayPayPal}}, true},
+		{"unsupported paypal method", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayPayPal}, PayPalPaymentMethod: "express"}, true},
+		{"paypal method ignored without paypal", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayStripe}}, false},
+		{"enabled with nothing selected", &ZohoPaymentGatewaySettings{Enabled: true}, true},
+		{"unsupported gateway", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayStripe, "paytm"}}, true},
+		{"unsupported gateway while disabled", &ZohoPaymentGatewaySettings{Gateways: []ZohoPaymentGateway{"paytm"}}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.settings.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestSyncConfigValidateRejectsBadZohoPaymentGateways(t *testing.T) {
+	cfg := &SyncConfig{
+		InvoiceSyncSettings: &InvoiceSyncSettings{
+			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+				PaymentGateways: &ZohoPaymentGatewaySettings{Enabled: true},
+			},
+		},
+	}
+	assert.Error(t, cfg.Validate())
+}

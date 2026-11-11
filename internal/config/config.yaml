@@ -676,6 +676,10 @@ checkout:
 hosted_invoice:
   base_url: ""
 
+# Off rejects enabling billing entities for any environment (FLEXPRICE_BILLING_ENTITIES_ENABLED).
+billing_entities:
+  enabled: false
+
 onboarding:
   default_tenant_name: "Flexprice"
 
