@@ -74,7 +74,7 @@ func (s *Email) SendEmail(ctx context.Context, req SendEmailRequest) (*SendEmail
 	messageID, err := s.client.SendEmailIdempotent(ctx, fromAddress, req.ToAddress, req.Subject, "", req.Text, req.IdempotencyKey)
 	if err != nil {
 		s.logger.Error(ctx, "failed to send email",
-			"error", err,
+			"error", "send failed",
 			"to", MaskAddress(req.ToAddress),
 			"subject", req.Subject,
 		)
@@ -157,7 +157,7 @@ func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemp
 	messageID, err := s.client.SendEmail(ctx, fromAddress, req.ToAddress, req.Subject, htmlContent, "")
 	if err != nil {
 		s.logger.Error(ctx, "failed to send templated email",
-			"error", err,
+			"error", "send failed",
 			"from", fromAddress,
 			"to", MaskAddress(req.ToAddress),
 			"subject", req.Subject,

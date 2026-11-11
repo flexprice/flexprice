@@ -161,16 +161,13 @@ func (c *redisCacheImpl) Incr(ctx context.Context, key string, ttl time.Duration
 		return 0, errors.New("redis cache disabled")
 	}
 	redisKey := c.GetRedisKey(key)
-	n, err := c.client.Incr(ctx, redisKey).Result()
-	if err != nil {
+	pipe := c.client.TxPipeline()
+	incr := pipe.Incr(ctx, redisKey)
+	pipe.ExpireNX(ctx, redisKey, ttl)
+	if _, err := pipe.Exec(ctx); err != nil {
 		return 0, err
 	}
-	if n == 1 {
-		if err := c.client.Expire(ctx, redisKey, ttl).Err(); err != nil {
-			return n, err
-		}
-	}
-	return n, nil
+	return incr.Val(), nil
 }
 
 // Set adds a value to the cache with the specified expiration
