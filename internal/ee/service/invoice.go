@@ -1947,6 +1947,12 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	}
 	recordInvoiceTransition(ctx, inv)
 
+	if err := NewPaymentService(s.ServiceParams).(*paymentService).VoidOpenPaymentLinks(ctx, inv.ID, req.SourceID()); err != nil {
+		s.Logger.Error(ctx, "failed to close payment links on void",
+			"error", err,
+			"invoice_id", inv.ID)
+	}
+
 	// A voided invoice will never be paid, so a purchased-credit transaction still
 	// waiting on it must not stay pending: it blocks the wallet's auto-topup guard
 	// indefinitely and is unrecoverable without a manual DB edit.
