@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/storage"
 	temporalClient "github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -48,6 +49,8 @@ type scheduledTaskService struct {
 	logger          *logger.Logger
 	config          *config.Configuration
 	storageResolver storage.Resolver
+	rbac            *rbac.RBACService
+	analytics       AnalyticsService
 }
 
 func NewScheduledTaskService(
@@ -57,6 +60,8 @@ func NewScheduledTaskService(
 	logger *logger.Logger,
 	config *config.Configuration,
 	storageResolver storage.Resolver,
+	rbacService *rbac.RBACService,
+	analytics AnalyticsService,
 ) ScheduledTaskService {
 	return &scheduledTaskService{
 		repo:            repo,
@@ -65,13 +70,47 @@ func NewScheduledTaskService(
 		logger:          logger,
 		config:          config,
 		storageResolver: storageResolver,
+		rbac:            rbacService,
+		analytics:       analytics,
 	}
+}
+
+// requireAnalyticsRead denies report-backed exports to callers without analytics read.
+func requireAnalyticsRead(ctx context.Context, rbacService *rbac.RBACService, entity types.ScheduledTaskEntityType) error {
+	if !entity.IsReportSource() {
+		return nil
+	}
+	if rbacService != nil && rbacService.HasPermission(types.GetRoles(ctx), string(types.EntityAnalytics), string(types.ActionRead)) {
+		return nil
+	}
+	return ierr.NewError("analytics read permission required").
+		WithHint("Report exports require analytics read access").
+		Mark(ierr.ErrPermissionDenied)
+}
+
+func (s *scheduledTaskService) validateSource(ctx context.Context, req dto.CreateScheduledTaskRequest) error {
+	if !req.EntityType.IsReportSource() {
+		return nil
+	}
+	if s.analytics == nil {
+		return ierr.NewError("analytics service not configured").Mark(ierr.ErrInternal)
+	}
+	if req.EntityType == types.ScheduledTaskEntityTypeAnalyticsView {
+		return s.analytics.ValidateViewSource(ctx, req.SourceConfig.ViewID)
+	}
+	return s.analytics.ValidateReportSource(ctx, req.SourceConfig.ReportKey, req.SourceConfig.ReportParams)
 }
 
 // CreateScheduledTask creates a new scheduled task
 func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.CreateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error) {
 	// Validate request
 	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	if err := requireAnalyticsRead(ctx, s.rbac, req.EntityType); err != nil {
+		return nil, err
+	}
+	if err := s.validateSource(ctx, req); err != nil {
 		return nil, err
 	}
 
@@ -236,6 +275,10 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 		return nil, ierr.WithError(err).
 			WithHint("Scheduled task not found").
 			Mark(ierr.ErrNotFound)
+	}
+
+	if err := requireAnalyticsRead(ctx, s.rbac, task.EntityType); err != nil {
+		return nil, err
 	}
 
 	if task.Status == types.StatusArchived || task.Status == types.StatusDeleted {
@@ -588,6 +631,10 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 		return "", time.Time{}, time.Time{}, "", ierr.WithError(err).
 			WithHint("Failed to get scheduled task").
 			Mark(ierr.ErrDatabase)
+	}
+
+	if err := requireAnalyticsRead(ctx, s.rbac, task.EntityType); err != nil {
+		return "", time.Time{}, time.Time{}, "", err
 	}
 
 	if len(req.CustomerExternalIDs) > 0 && task.EntityType != types.ScheduledTaskEntityTypeWalletLedger {

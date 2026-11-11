@@ -69,6 +69,7 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/pubsub"
+	"github.com/flexprice/flexprice/internal/rbac"
 	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
 	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/security"
@@ -197,6 +198,9 @@ type ServiceParams struct {
 
 	// SelfBilling provisions new tenants on Flexprice Cloud. Injected in main to avoid an import cycle; a no-op unless configured.
 	SelfBilling interfaces.SelfBillingHook
+
+	// RBAC gates analytics-backed exports. Injected in main; nil denies them.
+	RBAC *rbac.RBACService
 }
 
 // Common service params
