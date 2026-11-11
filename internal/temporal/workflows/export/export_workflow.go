@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/email"
 	"github.com/flexprice/flexprice/internal/temporal/activities/export"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
@@ -305,6 +306,15 @@ func deliverRun(ctx workflow.Context, details *export.ScheduledTaskDetails, task
 		}).Get(emailCtx, &out)
 		if err != nil {
 			logger.Error("Failed to send export emails", "error", err, "task_id", taskID)
+			for _, addr := range details.EmailRecipients {
+				deliveries = append(deliveries, types.ExportDelivery{
+					Type:   types.ExportDeliveryTypeEmail,
+					Target: email.MaskAddress(addr),
+					Status: types.ExportDeliveryStatusFailed,
+					Detail: "email step failed",
+					At:     workflow.Now(ctx),
+				})
+			}
 		} else {
 			deliveries = append(deliveries, out.Deliveries...)
 		}
