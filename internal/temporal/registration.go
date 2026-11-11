@@ -119,6 +119,8 @@ func RegisterWorkflowsAndActivities(
 		params.Logger,
 		params.Config,
 		params.StorageResolver,
+		params.RBAC,
+		nil,
 	)
 
 	scheduledTaskActivity := exportActivities.NewScheduledTaskActivity(
@@ -150,6 +152,7 @@ func RegisterWorkflowsAndActivities(
 		params.EventRepo,
 		params.SubscriptionLineItemRepo,
 		params.RevenueFactRepo,
+		service.NewAnalyticsService(params),
 	)
 
 	entityScope := service.NewBillingEntityService(params)

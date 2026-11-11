@@ -209,6 +209,18 @@ func (_u *ScheduledTaskUpdate) ClearSchedule() *ScheduledTaskUpdate {
 	return _u
 }
 
+// SetSourceConfig sets the "source_config" field.
+func (_u *ScheduledTaskUpdate) SetSourceConfig(v *types.ExportSourceConfig) *ScheduledTaskUpdate {
+	_u.mutation.SetSourceConfig(v)
+	return _u
+}
+
+// ClearSourceConfig clears the value of the "source_config" field.
+func (_u *ScheduledTaskUpdate) ClearSourceConfig() *ScheduledTaskUpdate {
+	_u.mutation.ClearSourceConfig()
+	return _u
+}
+
 // Mutation returns the ScheduledTaskMutation object of the builder.
 func (_u *ScheduledTaskUpdate) Mutation() *ScheduledTaskMutation {
 	return _u.mutation
@@ -341,6 +353,12 @@ func (_u *ScheduledTaskUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if _u.mutation.ScheduleCleared() {
 		_spec.ClearField(scheduledtask.FieldSchedule, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.SourceConfig(); ok {
+		_spec.SetField(scheduledtask.FieldSourceConfig, field.TypeJSON, value)
+	}
+	if _u.mutation.SourceConfigCleared() {
+		_spec.ClearField(scheduledtask.FieldSourceConfig, field.TypeJSON)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -542,6 +560,18 @@ func (_u *ScheduledTaskUpdateOne) ClearSchedule() *ScheduledTaskUpdateOne {
 	return _u
 }
 
+// SetSourceConfig sets the "source_config" field.
+func (_u *ScheduledTaskUpdateOne) SetSourceConfig(v *types.ExportSourceConfig) *ScheduledTaskUpdateOne {
+	_u.mutation.SetSourceConfig(v)
+	return _u
+}
+
+// ClearSourceConfig clears the value of the "source_config" field.
+func (_u *ScheduledTaskUpdateOne) ClearSourceConfig() *ScheduledTaskUpdateOne {
+	_u.mutation.ClearSourceConfig()
+	return _u
+}
+
 // Mutation returns the ScheduledTaskMutation object of the builder.
 func (_u *ScheduledTaskUpdateOne) Mutation() *ScheduledTaskMutation {
 	return _u.mutation
@@ -704,6 +734,12 @@ func (_u *ScheduledTaskUpdateOne) sqlSave(ctx context.Context) (_node *Scheduled
 	}
 	if _u.mutation.ScheduleCleared() {
 		_spec.ClearField(scheduledtask.FieldSchedule, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.SourceConfig(); ok {
+		_spec.SetField(scheduledtask.FieldSourceConfig, field.TypeJSON, value)
+	}
+	if _u.mutation.SourceConfigCleared() {
+		_spec.ClearField(scheduledtask.FieldSourceConfig, field.TypeJSON)
 	}
 	_node = &ScheduledTask{config: _u.config}
 	_spec.Assign = _node.assignValues

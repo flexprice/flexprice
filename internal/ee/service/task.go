@@ -1275,6 +1275,10 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 			Mark(ierr.ErrNotFound)
 	}
 
+	if err := requireAnalyticsRead(ctx, s.RBAC, scheduledTask.EntityType); err != nil {
+		return "", err
+	}
+
 	if scheduledTask.ManagedCopy {
 		return s.presignManagedCopy(ctx, t, scheduledTask, bucket, key)
 	}

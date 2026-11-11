@@ -155,7 +155,73 @@ const (
 	ScheduledTaskEntityTypeCreditUsage    ScheduledTaskEntityType = "credit_usage"
 	ScheduledTaskEntityTypeUsageAnalytics ScheduledTaskEntityType = "usage_analytics"
 	ScheduledTaskEntityTypeRevenueFacts   ScheduledTaskEntityType = "revenue_facts"
+	ScheduledTaskEntityTypeReport         ScheduledTaskEntityType = "report"
+	ScheduledTaskEntityTypeAnalyticsView  ScheduledTaskEntityType = "analytics_view"
 )
+
+// True for report-backed exports.
+func (e ScheduledTaskEntityType) IsReportSource() bool {
+	return e == ScheduledTaskEntityTypeReport || e == ScheduledTaskEntityTypeAnalyticsView
+}
+
+// One report filter.
+type ReportParamFilter struct {
+	Field string   `json:"field"`
+	Op    string   `json:"op" enums:"eq,in"`
+	Value []string `json:"value,omitempty"`
+}
+
+// Report export parameters.
+type ReportParams struct {
+	Shape      string              `json:"shape" validate:"required" enums:"timeseries,breakdown,scalar"`
+	Dimensions []string            `json:"dimensions,omitempty"`
+	Grain      string              `json:"grain,omitempty" enums:"day,week,month"`
+	Currency   string              `json:"currency,omitempty"`
+	Filters    []ReportParamFilter `json:"filters,omitempty"`
+}
+
+// Report or view source.
+type ExportSourceConfig struct {
+	ReportKey    string        `json:"report_key,omitempty"`
+	ReportParams *ReportParams `json:"report_params,omitempty"`
+	ViewID       string        `json:"view_id,omitempty"`
+}
+
+// Checks config fits entity.
+func (c *ExportSourceConfig) Validate(entity ScheduledTaskEntityType) error {
+	if !entity.IsReportSource() {
+		if c != nil {
+			return ierr.NewError("source_config not allowed").
+				WithHint("source_config is only for report and analytics_view exports").
+				Mark(ierr.ErrValidation)
+		}
+		return nil
+	}
+	if c == nil {
+		return ierr.NewError("source_config is required").
+			WithHint("Provide source_config for report and analytics_view exports").
+			Mark(ierr.ErrValidation)
+	}
+	if entity == ScheduledTaskEntityTypeAnalyticsView {
+		if c.ViewID == "" || c.ReportKey != "" || c.ReportParams != nil {
+			return ierr.NewError("invalid source_config").
+				WithHint("analytics_view exports require only view_id").
+				Mark(ierr.ErrValidation)
+		}
+		return nil
+	}
+	if c.ReportKey == "" || c.ViewID != "" {
+		return ierr.NewError("invalid source_config").
+			WithHint("report exports require report_key and no view_id").
+			Mark(ierr.ErrValidation)
+	}
+	if c.ReportParams == nil || c.ReportParams.Shape == "" {
+		return ierr.NewError("report_params.shape is required").
+			WithHint("Provide report_params with a shape").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
 
 // Validate validates the entity type
 func (e ScheduledTaskEntityType) Validate() error {
@@ -168,6 +234,8 @@ func (e ScheduledTaskEntityType) Validate() error {
 		ScheduledTaskEntityTypeCreditUsage,
 		ScheduledTaskEntityTypeUsageAnalytics,
 		ScheduledTaskEntityTypeRevenueFacts,
+		ScheduledTaskEntityTypeReport,
+		ScheduledTaskEntityTypeAnalyticsView,
 	}
 	if e == "" {
 		return ierr.NewError("entity type is required").
@@ -180,7 +248,7 @@ func (e ScheduledTaskEntityType) Validate() error {
 		}
 	}
 	return ierr.NewError("invalid entity type").
-		WithHint("Entity type must be one of: events, invoice, credit_topups, wallet_debits, wallet_ledger, credit_usage, usage_analytics, revenue_facts").
+		WithHint("Entity type must be one of: events, invoice, credit_topups, wallet_debits, wallet_ledger, credit_usage, usage_analytics, revenue_facts, report, analytics_view").
 		Mark(ierr.ErrValidation)
 }
 

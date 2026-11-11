@@ -15,3 +15,6 @@ actions:
   - target: '$.components.schemas["types.ScheduledTaskInterval"]'
     update:
       x-speakeasy-unknown-values: allow
+  - target: '$.components.schemas["types.ScheduledTaskEntityType"]'
+    update:
+      x-speakeasy-unknown-values: allow

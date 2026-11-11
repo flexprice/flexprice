@@ -189,6 +189,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		CustomerExternalIDs: input.CustomerExternalIDs,
 		ManagedCopy:         taskDetails.ManagedCopy,
 		TaskID:              taskID,
+		SourceConfig:        taskDetails.SourceConfig,
 	}
 
 	var exportOutput export.ExportDataOutput
@@ -232,6 +233,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 			FileURL:     exportOutput.FileURL,
 			RecordCount: exportOutput.RecordCount,
 			FileSize:    exportOutput.FileSizeBytes,
+			Metadata:    exportOutput.Metadata,
 		}
 
 		err = workflow.ExecuteActivity(ctx, taskActivity.CompleteTask, completeInput).Get(ctx, nil)

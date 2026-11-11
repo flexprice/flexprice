@@ -12,10 +12,12 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/storage"
 	temporalClient "github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -48,6 +50,8 @@ type scheduledTaskService struct {
 	logger          *logger.Logger
 	config          *config.Configuration
 	storageResolver storage.Resolver
+	rbac            *rbac.RBACService
+	analytics       AnalyticsService
 }
 
 func NewScheduledTaskService(
@@ -57,6 +61,8 @@ func NewScheduledTaskService(
 	logger *logger.Logger,
 	config *config.Configuration,
 	storageResolver storage.Resolver,
+	rbacService *rbac.RBACService,
+	analytics AnalyticsService,
 ) ScheduledTaskService {
 	return &scheduledTaskService{
 		repo:            repo,
@@ -65,13 +71,73 @@ func NewScheduledTaskService(
 		logger:          logger,
 		config:          config,
 		storageResolver: storageResolver,
+		rbac:            rbacService,
+		analytics:       analytics,
 	}
+}
+
+// Denies report exports without analytics read.
+func requireAnalyticsRead(ctx context.Context, rbacService *rbac.RBACService, entity types.ScheduledTaskEntityType) error {
+	if !entity.IsReportSource() {
+		return nil
+	}
+	if rbacService != nil && rbacService.HasPermission(types.GetRoles(ctx), string(types.EntityAnalytics), string(types.ActionRead)) {
+		return nil
+	}
+	return ierr.NewError("analytics read permission required").
+		WithHint("Report exports require analytics read access").
+		Mark(ierr.ErrPermissionDenied)
+}
+
+func (s *scheduledTaskService) validateSource(ctx context.Context, req dto.CreateScheduledTaskRequest) error {
+	if !req.EntityType.IsReportSource() {
+		return nil
+	}
+	if s.analytics == nil {
+		return ierr.NewError("analytics service not configured").Mark(ierr.ErrInternal)
+	}
+	if req.EntityType == types.ScheduledTaskEntityTypeAnalyticsView {
+		return s.analytics.ValidateViewSource(ctx, req.SourceConfig.ViewID, intervalWindowDays(req.Interval))
+	}
+	if err := s.analytics.ValidateReportSource(ctx, req.SourceConfig.ReportKey, req.SourceConfig.ReportParams); err != nil {
+		return err
+	}
+	return checkReportRange(req.SourceConfig.ReportKey, intervalWindowDays(req.Interval))
+}
+
+// Longest window per interval.
+func intervalWindowDays(interval types.ScheduledTaskInterval) int {
+	switch interval {
+	case types.ScheduledTaskIntervalDaily:
+		return 1
+	case types.ScheduledTaskIntervalWeekly:
+		return 7
+	case types.ScheduledTaskIntervalMonthly:
+		return 31
+	}
+	return 0
+}
+
+func checkReportRange(key string, days int) error {
+	entry, ok := analytics.LookupReport(key)
+	if !ok || entry.MaxRangeDays <= 0 || days <= entry.MaxRangeDays {
+		return nil
+	}
+	return ierr.NewErrorf("report covers at most %d days", entry.MaxRangeDays).
+		WithHintf("This report covers at most %d days; choose a shorter interval or window", entry.MaxRangeDays).
+		Mark(ierr.ErrValidation)
 }
 
 // CreateScheduledTask creates a new scheduled task
 func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.CreateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error) {
 	// Validate request
 	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	if err := requireAnalyticsRead(ctx, s.rbac, req.EntityType); err != nil {
+		return nil, err
+	}
+	if err := s.validateSource(ctx, req); err != nil {
 		return nil, err
 	}
 
@@ -120,6 +186,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		Name:               req.Name,
 		ManagedCopy:        managedCopy,
 		Schedule:           req.Schedule,
+		SourceConfig:       req.SourceConfig,
 		Status:             types.StatusPublished,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -235,6 +302,10 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 		return nil, ierr.WithError(err).
 			WithHint("Scheduled task not found").
 			Mark(ierr.ErrNotFound)
+	}
+
+	if err := requireAnalyticsRead(ctx, s.rbac, task.EntityType); err != nil {
+		return nil, err
 	}
 
 	// Check if task is archived
@@ -588,10 +659,30 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 			Mark(ierr.ErrDatabase)
 	}
 
+	if err := requireAnalyticsRead(ctx, s.rbac, task.EntityType); err != nil {
+		return "", time.Time{}, time.Time{}, "", err
+	}
+
 	if len(req.CustomerExternalIDs) > 0 && task.EntityType != types.ScheduledTaskEntityTypeWalletLedger {
 		return "", time.Time{}, time.Time{}, "", ierr.NewError("customer filter is not supported for this export").
 			WithHintf("customer_external_ids can only be used with %s exports", types.ScheduledTaskEntityTypeWalletLedger).
 			Mark(ierr.ErrValidation)
+	}
+
+	if task.EntityType.IsReportSource() {
+		for _, bound := range []*time.Time{customStart, customEnd} {
+			if bound != nil && !bound.UTC().Equal(bound.UTC().Truncate(24*time.Hour)) {
+				return "", time.Time{}, time.Time{}, "", ierr.NewError("report window must be whole UTC days").
+					WithHint("start_time and end_time must be midnight UTC for report exports").
+					Mark(ierr.ErrValidation)
+			}
+		}
+		if customStart != nil && customEnd != nil && task.SourceConfig != nil {
+			days := int(customEnd.Sub(*customStart).Hours()+23) / 24
+			if err := checkReportRange(task.SourceConfig.ReportKey, days); err != nil {
+				return "", time.Time{}, time.Time{}, "", err
+			}
+		}
 	}
 
 	// Determine time range and mode

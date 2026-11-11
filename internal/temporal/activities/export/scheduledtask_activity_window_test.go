@@ -97,3 +97,22 @@ func TestDetails_BadTimezoneIsNonRetryable(t *testing.T) {
 	require.ErrorAs(t, err, &appErr)
 	require.True(t, appErr.NonRetryable())
 }
+
+func TestDetails_ReportRowUsesUTCWindowAndCarriesSourceConfig(t *testing.T) {
+	cfg := &types.ExportSourceConfig{ReportKey: "invoice_total", ReportParams: &types.ReportParams{Shape: "timeseries"}}
+	a := newDetailsActivity(t, &scheduledtask.ScheduledTask{
+		ID:           "st1",
+		EntityType:   types.ScheduledTaskEntityTypeReport,
+		Interval:     types.ScheduledTaskIntervalDaily,
+		Schedule:     &types.ExportSchedule{Minute: 30, Timezone: "Asia/Kolkata"},
+		SourceConfig: cfg,
+	})
+	got, err := a.GetScheduledTaskDetails(context.Background(), GetScheduledTaskDetailsInput{
+		ScheduledTaskID:       "st1",
+		WorkflowExecutionTime: mustTime(t, "2026-11-09T19:00:00Z"),
+	})
+	require.NoError(t, err)
+	require.Equal(t, mustTime(t, "2026-11-08T00:00:00Z"), got.StartTime)
+	require.Equal(t, mustTime(t, "2026-11-09T00:00:00Z"), got.EndTime)
+	require.Equal(t, cfg, got.SourceConfig)
+}
