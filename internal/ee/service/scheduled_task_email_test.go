@@ -144,6 +144,28 @@ func TestUpdate_EmailConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []string{"b@x.com"}, repo.settings.EmailConfig.Recipients)
 		require.Equal(t, []string{"b@x.com"}, resp.EmailConfig.Recipients)
+		require.True(t, repo.wroteEmail)
+	})
+
+	t.Run("blank entry rejects", func(t *testing.T) {
+		for _, blank := range []string{"", "   "} {
+			repo := &exportRepoFake{task: newTask()}
+			s, _ := emailService(repo, true)
+			_, err := s.UpdateScheduledTask(exportCtx(), "st1", dto.UpdateScheduledTaskRequest{
+				EmailConfig: &types.ExportEmailConfig{Recipients: []string{"a@x.com", blank}},
+			})
+			require.Error(t, err)
+			require.True(t, ierr.IsValidation(err))
+			require.Contains(t, errText(err), "Recipient can't be empty")
+			require.Nil(t, repo.settings)
+		}
+	})
+
+	t.Run("blank entry rejects on create", func(t *testing.T) {
+		s, _ := emailService(&exportRepoFake{}, true)
+		_, err := s.CreateScheduledTask(exportCtx(), emailCreateReq(types.ScheduledTaskIntervalDaily, "a@x.com", " "))
+		require.Error(t, err)
+		require.True(t, ierr.IsValidation(err))
 	})
 
 	t.Run("empty list clears", func(t *testing.T) {
@@ -156,6 +178,7 @@ func TestUpdate_EmailConfig(t *testing.T) {
 		require.NotNil(t, repo.settings)
 		require.Nil(t, repo.settings.EmailConfig)
 		require.Nil(t, resp.EmailConfig)
+		require.True(t, repo.wroteEmail)
 	})
 
 	t.Run("absent keeps", func(t *testing.T) {
@@ -166,6 +189,7 @@ func TestUpdate_EmailConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []string{"a@x.com"}, repo.settings.EmailConfig.Recipients)
 		require.Equal(t, []string{"a@x.com"}, resp.EmailConfig.Recipients)
+		require.False(t, repo.wroteEmail)
 	})
 
 	t.Run("hourly stored interval rejects", func(t *testing.T) {
