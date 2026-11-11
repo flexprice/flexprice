@@ -20,7 +20,7 @@ const MaxCostColumns = 50
 // defaultCostRange is the range used when start_time and end_time are both omitted.
 const defaultCostRange = 7 * 24 * time.Hour
 
-// CostExpand names the IDs a response row can carry.
+// CostExpand names an object map a response can carry for the IDs on its rows.
 type CostExpand string
 
 const (
@@ -28,6 +28,8 @@ const (
 	CostExpandPlan         CostExpand = "plan"
 	CostExpandAddon        CostExpand = "addon"
 	CostExpandSubscription CostExpand = "subscription"
+	CostExpandMeter        CostExpand = "meter"
+	CostExpandFeature      CostExpand = "feature"
 )
 
 // CostAnalyticsRequest is the body of POST /analytics/cost/query.
@@ -80,7 +82,7 @@ func (r *CostAnalyticsRequest) ToQuery(now time.Time) (*costanalytics.Query, err
 		FeatureIDs:          lo.Uniq(r.FeatureIDs),
 		Search:              r.Search,
 		Deduplicate:         r.Deduplicate,
-		WithLineItemIDs:     len(r.Expand) > 0,
+		WithLineItemIDs:     true,
 		Limit:               lo.Ternary(r.Limit == 0, costanalytics.DefaultLimit, r.Limit),
 		Offset:              r.Offset,
 	}
@@ -150,7 +152,7 @@ func (r *CostAnalyticsRequest) ToQuery(now time.Time) (*costanalytics.Query, err
 
 	for _, e := range r.Expand {
 		switch e {
-		case CostExpandPrice, CostExpandPlan, CostExpandAddon, CostExpandSubscription:
+		case CostExpandPrice, CostExpandPlan, CostExpandAddon, CostExpandSubscription, CostExpandMeter, CostExpandFeature:
 		default:
 			return nil, costValidationErr("unknown expand %q", e)
 		}
@@ -178,6 +180,14 @@ type CostAnalyticsResponse struct {
 	// UnappliedCouponIDs are coupons active in the range that apply_discounts cannot spread over events
 	// (fixed amount or one-time); the invoice may be lower by them.
 	UnappliedCouponIDs []string `json:"unapplied_coupon_ids,omitempty"`
+	// Object maps, keyed by ID, for the IDs on this page's rows; each is set only when requested in expand.
+	// Meters and features are those of the rows' prices.
+	Prices        map[string]*PriceResponse        `json:"prices,omitempty"`
+	Plans         map[string]*PlanResponse         `json:"plans,omitempty"`
+	Addons        map[string]*AddonResponse        `json:"addons,omitempty"`
+	Subscriptions map[string]*SubscriptionResponse `json:"subscriptions,omitempty"`
+	Meters        map[string]*MeterResponse        `json:"meters,omitempty"`
+	Features      map[string]*FeatureResponse      `json:"features,omitempty"`
 }
 
 // CostAnalyticsTotals are summed over every row, not just the page.

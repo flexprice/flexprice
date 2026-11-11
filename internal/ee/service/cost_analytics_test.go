@@ -396,6 +396,36 @@ func (s *CostAnalyticsSuite) TestPercentageCouponsDiscountEachLineAsTheInvoiceDo
 	s.Empty(resp.UnappliedCouponIDs)
 }
 
+func (s *CostAnalyticsSuite) TestRowsAlwaysCarryIDsAndExpandAddsObjectMaps() {
+	resp, err := s.query(func(r *dto.CostAnalyticsRequest) {
+		r.MeterIDs = []string{"m_tokens"}
+		r.GroupBy = []string{"meter_id"}
+	})
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	row := resp.Items[0]
+	s.Equal([]string{"p_tok_new", "p_tok_old"}, row.PriceIDs, "IDs come back without expand")
+	s.Equal([]string{"plan_cost"}, row.PlanIDs)
+	s.Equal([]string{"sub_parent"}, row.SubscriptionIDs)
+	s.Nil(resp.Prices)
+	s.Nil(resp.Plans)
+
+	resp, err = s.query(func(r *dto.CostAnalyticsRequest) {
+		r.MeterIDs = []string{"m_tokens"}
+		r.GroupBy = []string{"meter_id"}
+		r.Expand = []dto.CostExpand{dto.CostExpandPrice, dto.CostExpandPlan, dto.CostExpandAddon,
+			dto.CostExpandSubscription, dto.CostExpandMeter, dto.CostExpandFeature}
+	})
+	s.NoError(err)
+	s.ElementsMatch([]string{"p_tok_new", "p_tok_old"}, lo.Keys(resp.Prices))
+	s.Equal("0.0025", resp.Prices["p_tok_new"].Amount.String())
+	s.Equal([]string{"plan_cost"}, lo.Keys(resp.Plans))
+	s.Empty(resp.Addons, "no add-on priced these rows")
+	s.Equal([]string{"sub_parent"}, lo.Keys(resp.Subscriptions))
+	s.Equal([]string{"m_tokens"}, lo.Keys(resp.Meters))
+	s.Equal([]string{"f_tokens"}, lo.Keys(resp.Features))
+}
+
 func (s *CostAnalyticsSuite) TestColumnsMetricsAndPaging() {
 	resp, err := s.query(func(r *dto.CostAnalyticsRequest) {
 		r.GroupBy = []string{"meter_id"}

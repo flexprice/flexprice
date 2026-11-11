@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	ca "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -60,7 +61,8 @@ type costInputs struct {
 	excluded       map[string]string // meter ID → reason
 	lineByID       map[string]*subscription.SubscriptionLineItem
 	meterByID      map[string]*meter.Meter
-	featureByMeter map[string]string
+	featureByMeter map[string]*feature.Feature
+	subByID        map[string]*subscription.Subscription
 	// applyDiscounts prices lines after their percentage coupons; other coupons go to unappliedCoupons.
 	applyDiscounts   bool
 	unappliedCoupons map[string]bool
@@ -97,7 +99,8 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 		unappliedCoupons: map[string]bool{},
 		lineByID:         map[string]*subscription.SubscriptionLineItem{},
 		meterByID:        map[string]*meter.Meter{},
-		featureByMeter:   map[string]string{},
+		featureByMeter:   map[string]*feature.Feature{},
+		subByID:          map[string]*subscription.Subscription{},
 	}
 	billing := newBillingService(s.ServiceParams)
 	for _, cs := range subs {
@@ -135,7 +138,13 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 		return nil, err
 	}
 
-	resp := toCostAnalyticsResponse(q, req.Expand, currency, result, in.lineByID, in.excluded)
+	for _, cs := range subs {
+		in.subByID[cs.owner.ID] = cs.owner
+	}
+	resp := toCostAnalyticsResponse(q, currency, result, in.lineByID, in.excluded)
+	if err := s.expandCostObjects(ctx, req.Expand, resp, in); err != nil {
+		return nil, err
+	}
 	resp.UnappliedCouponIDs = lo.Keys(in.unappliedCoupons)
 	sort.Strings(resp.UnappliedCouponIDs)
 	return resp, nil
@@ -314,7 +323,7 @@ func (s *costAnalyticsService) addBilledLines(
 		in.windows = append(in.windows, costanalytics.LineWindow{
 			LineItemID:          li.ID,
 			MeterID:             li.MeterID,
-			FeatureID:           in.featureByMeter[li.MeterID],
+			FeatureID:           featureID(in.featureByMeter[li.MeterID]),
 			ExternalCustomerIDs: cs.customerIDs,
 			Segment:             seg,
 			Start:               start,
@@ -418,7 +427,7 @@ func (s *costAnalyticsService) loadMeters(ctx context.Context, items []*subscrip
 	}
 	for _, f := range features {
 		if f.MeterID != "" {
-			in.featureByMeter[f.MeterID] = f.ID
+			in.featureByMeter[f.MeterID] = f
 		}
 	}
 	return nil
@@ -451,7 +460,6 @@ func singleCurrency(windows []costanalytics.LineWindow) (string, error) {
 // "(none)" and keeps the top column values by total cost.
 func toCostAnalyticsResponse(
 	q *costanalytics.Query,
-	expand []dto.CostExpand,
 	currency string,
 	result *costanalytics.Result,
 	lineByID map[string]*subscription.SubscriptionLineItem,
@@ -503,7 +511,7 @@ func toCostAnalyticsResponse(
 				item.Metrics[name] = dto.CostAnalyticsValue{Count: v.Count, Values: v.Values}
 			}
 		}
-		expandCostItem(&item, expand, row.LineItemIDs, lineByID)
+		costItemIDs(&item, row.LineItemIDs, lineByID)
 		resp.Items = append(resp.Items, item)
 	}
 	return resp
@@ -542,10 +550,8 @@ func costColumns(costs map[string]decimal.Decimal, shown map[string]bool, money 
 	return out
 }
 
-func expandCostItem(item *dto.CostAnalyticsItem, expand []dto.CostExpand, lineIDs []string, lineByID map[string]*subscription.SubscriptionLineItem) {
-	if len(expand) == 0 {
-		return
-	}
+// costItemIDs sets the prices, plans, add-ons and subscriptions of the lines behind a row.
+func costItemIDs(item *dto.CostAnalyticsItem, lineIDs []string, lineByID map[string]*subscription.SubscriptionLineItem) {
 	var prices, plans, addons, subs []string
 	for _, id := range lineIDs {
 		li := lineByID[id]
@@ -561,21 +567,100 @@ func expandCostItem(item *dto.CostAnalyticsItem, expand []dto.CostExpand, lineID
 			addons = append(addons, li.EntityID)
 		}
 	}
-	ids := func(v []string) []string {
-		v = lo.Uniq(lo.Compact(v))
-		sort.Strings(v)
-		return v
+	item.PriceIDs, item.PlanIDs, item.AddonIDs, item.SubscriptionIDs = sortedIDs(prices), sortedIDs(plans), sortedIDs(addons), sortedIDs(subs)
+}
+
+func sortedIDs(ids []string) []string {
+	ids = lo.Uniq(lo.Compact(ids))
+	sort.Strings(ids)
+	return ids
+}
+
+// expandCostObjects fills the object maps requested in expand, for the IDs on the page's rows.
+func (s *costAnalyticsService) expandCostObjects(ctx context.Context, expand []dto.CostExpand, resp *dto.CostAnalyticsResponse, in *costInputs) error {
+	want := lo.SliceToMap(expand, func(e dto.CostExpand) (dto.CostExpand, bool) { return e, true })
+	if len(want) == 0 {
+		return nil
 	}
-	for _, e := range lo.Uniq(expand) {
-		switch e {
-		case dto.CostExpandPrice:
-			item.PriceIDs = ids(prices)
-		case dto.CostExpandPlan:
-			item.PlanIDs = ids(plans)
-		case dto.CostExpandAddon:
-			item.AddonIDs = ids(addons)
-		case dto.CostExpandSubscription:
-			item.SubscriptionIDs = ids(subs)
+	ids := func(pick func(dto.CostAnalyticsItem) []string) []string {
+		return sortedIDs(lo.FlatMap(resp.Items, func(it dto.CostAnalyticsItem, _ int) []string { return pick(it) }))
+	}
+	priceIDs := ids(func(it dto.CostAnalyticsItem) []string { return it.PriceIDs })
+	priceByID := map[string]*price.Price{}
+	for _, li := range in.lineByID {
+		if li.Price != nil {
+			priceByID[li.PriceID] = li.Price
 		}
 	}
+	meterIDs := sortedIDs(lo.FilterMap(priceIDs, func(id string, _ int) (string, bool) {
+		p := priceByID[id]
+		return lo.FromPtr(p).MeterID, p != nil
+	}))
+
+	if want[dto.CostExpandPrice] {
+		resp.Prices = map[string]*dto.PriceResponse{}
+		for _, id := range priceIDs {
+			if p := priceByID[id]; p != nil {
+				resp.Prices[id] = &dto.PriceResponse{Price: p}
+			}
+		}
+	}
+	if want[dto.CostExpandSubscription] {
+		resp.Subscriptions = map[string]*dto.SubscriptionResponse{}
+		for _, id := range ids(func(it dto.CostAnalyticsItem) []string { return it.SubscriptionIDs }) {
+			if sub := in.subByID[id]; sub != nil {
+				resp.Subscriptions[id] = &dto.SubscriptionResponse{Subscription: sub}
+			}
+		}
+	}
+	if want[dto.CostExpandPlan] {
+		resp.Plans = map[string]*dto.PlanResponse{}
+		if planIDs := ids(func(it dto.CostAnalyticsItem) []string { return it.PlanIDs }); len(planIDs) > 0 {
+			plans, err := s.PlanRepo.ListByIDs(ctx, planIDs)
+			if err != nil {
+				return err
+			}
+			for _, p := range plans {
+				resp.Plans[p.ID] = &dto.PlanResponse{Plan: p}
+			}
+		}
+	}
+	if want[dto.CostExpandAddon] {
+		resp.Addons = map[string]*dto.AddonResponse{}
+		if addonIDs := ids(func(it dto.CostAnalyticsItem) []string { return it.AddonIDs }); len(addonIDs) > 0 {
+			filter := types.NewNoLimitAddonFilter()
+			filter.AddonIDs = addonIDs
+			addons, err := s.AddonRepo.List(ctx, filter)
+			if err != nil {
+				return err
+			}
+			for _, a := range addons {
+				resp.Addons[a.ID] = &dto.AddonResponse{Addon: a}
+			}
+		}
+	}
+	if want[dto.CostExpandMeter] {
+		resp.Meters = map[string]*dto.MeterResponse{}
+		for _, id := range meterIDs {
+			if m := in.meterByID[id]; m != nil {
+				resp.Meters[id] = dto.ToMeterResponse(m)
+			}
+		}
+	}
+	if want[dto.CostExpandFeature] {
+		resp.Features = map[string]*dto.FeatureResponse{}
+		for _, id := range meterIDs {
+			if f := in.featureByMeter[id]; f != nil {
+				resp.Features[f.ID] = &dto.FeatureResponse{Feature: f}
+			}
+		}
+	}
+	return nil
+}
+
+func featureID(f *feature.Feature) string {
+	if f == nil {
+		return ""
+	}
+	return f.ID
 }
