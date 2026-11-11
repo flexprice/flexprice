@@ -69,7 +69,7 @@ type SendExportEmailsInput struct {
 	EnvID           string
 	ExportName      string
 	EntityType      types.ScheduledTaskEntityType
-	Interval       types.ScheduledTaskInterval
+	Interval        types.ScheduledTaskInterval
 	Recipients      []string
 	RunStatus       types.TaskStatus
 	WindowStart     time.Time

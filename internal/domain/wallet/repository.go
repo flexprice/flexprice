@@ -40,7 +40,8 @@ type Repository interface {
 	UpdateWalletBalance(ctx context.Context, walletID string, finalBalance, newCreditBalance decimal.Decimal) error
 
 	// Export operations
-	GetCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*CreditTopupsExportData, error)
+	// GetCreditTopupsForExport pages top-ups; nil customerIDs means all.
+	GetCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int, customerIDs []string) ([]*CreditTopupsExportData, error)
 	// GetWalletDebitsForExport returns the next limit debits after the cursor, one row per credit batch each drew from.
 	GetWalletDebitsForExport(ctx context.Context, tenantID, envID string, after WalletDebitsExportCursor, endTime time.Time, limit int) ([]*WalletDebitsExportData, error)
 	// ListWalletIDsForLedgerExport returns, in order, the wallets of the given customers, or with no

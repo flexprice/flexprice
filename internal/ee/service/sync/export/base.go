@@ -155,6 +155,12 @@ func (s *ExportService) Export(ctx context.Context, request *dto.ExportRequest) 
 		}
 	}
 
+	if request.SourceConfig.GetCustomerFilter() != nil && !request.EntityType.AllowsCustomerFilter() {
+		return nil, ierr.NewError("customer_filter not supported for this export").
+			WithHint("This data can't be limited to customers yet.").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Get the appropriate exporter for the entity type
 	exporter := s.getExporter(request.EntityType)
 	if exporter == nil {
@@ -445,13 +451,13 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 	case types.ScheduledTaskEntityTypeEvents:
 		return NewEventExporter(s.meterUsageRepo, s.priceRepo, s.integrationFactory, s.config, s.logger)
 	case types.ScheduledTaskEntityTypeInvoice:
-		return NewInvoiceExporter(s.invoiceRepo, s.integrationFactory, s.logger)
+		return NewInvoiceExporter(s.invoiceRepo, s.customerRepo, s.integrationFactory, s.logger)
 	case types.ScheduledTaskEntityTypeCreditTopups:
 		if s.walletRepo == nil {
 			s.logger.Info(context.Background(), "wallet repository not configured for credit topup export")
 			return nil
 		}
-		return NewCreditTopupExporter(s.walletRepo, s.integrationFactory, s.logger)
+		return NewCreditTopupExporter(s.walletRepo, s.customerRepo, s.integrationFactory, s.logger)
 	case types.ScheduledTaskEntityTypeWalletDebits:
 		if s.walletRepo == nil {
 			s.logger.Info(context.Background(), "wallet repository not configured for wallet debit export")
@@ -463,7 +469,7 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 			s.logger.Info(context.Background(), "wallet repository not configured for wallet ledger export")
 			return nil
 		}
-		return NewWalletLedgerExporter(s.walletRepo, s.logger)
+		return NewWalletLedgerExporter(s.walletRepo, s.customerRepo, s.logger)
 	case types.ScheduledTaskEntityTypeCreditUsage:
 		if s.walletRepo == nil || s.walletBalanceGetter == nil || s.customerRepo == nil {
 			s.logger.Info(context.Background(), "wallet or customer repository not configured for credit usage export",
@@ -492,7 +498,7 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 			s.logger.Info(context.Background(), "report runner not configured for report export")
 			return nil
 		}
-		return NewReportExporter(s.reportRunner, entityType)
+		return NewReportExporter(s.reportRunner, entityType, s.customerRepo)
 	case types.ScheduledTaskEntityTypeCustomers:
 		if s.customerRepo == nil {
 			s.logger.Info(context.Background(), "customer repository not configured for customers export")
