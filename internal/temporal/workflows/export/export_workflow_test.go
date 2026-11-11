@@ -188,13 +188,21 @@ func TestExecuteExportWorkflow_HourlySendsNoEmail(t *testing.T) {
 
 func TestExecuteExportWorkflow_EmailActivityErrorKeepsRunSuccess(t *testing.T) {
 	r := newDeliveryRun(export.ScheduledTaskDetails{
-		Interval: types.ScheduledTaskIntervalDaily, EmailRecipients: []string{"a@x.com"},
+		Interval: types.ScheduledTaskIntervalDaily, EmailRecipients: []string{"alice@x.com", "bob@x.com"},
 	}, nil, errors.New("down"))
 	r.run()
 
 	require.NoError(t, r.env.GetWorkflowError())
 	require.Len(t, r.recorded, 1)
-	require.Len(t, r.recorded[0].Deliveries, 1)
+	ds := r.recorded[0].Deliveries
+	require.Len(t, ds, 3)
+	for _, d := range ds[1:] {
+		require.Equal(t, types.ExportDeliveryTypeEmail, d.Type)
+		require.Equal(t, types.ExportDeliveryStatusFailed, d.Status)
+		require.Equal(t, "email step failed", d.Detail)
+		require.NotContains(t, d.Target, "alice")
+		require.NotContains(t, d.Target, "bob")
+	}
 }
 
 func TestExecuteExportWorkflow_DefaultVersionSkipsDeliveries(t *testing.T) {
