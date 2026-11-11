@@ -50,11 +50,11 @@ func (s ScheduledTaskInterval) Validate() error {
 
 // ExportSchedule is an export's run time.
 type ExportSchedule struct {
-	Hour       int    `json:"hour"`
-	Minute     int    `json:"minute"`
-	DayOfWeek  *int   `json:"day_of_week,omitempty"`
-	DayOfMonth *int   `json:"day_of_month,omitempty"`
-	Timezone   string `json:"timezone"`
+	Hour       int    `json:"hour" minimum:"0" maximum:"23"`
+	Minute     int    `json:"minute" minimum:"0" maximum:"59"`
+	DayOfWeek  *int   `json:"day_of_week,omitempty" minimum:"0" maximum:"6"`
+	DayOfMonth *int   `json:"day_of_month,omitempty" minimum:"1" maximum:"28"`
+	Timezone   string `json:"timezone" binding:"required"`
 }
 
 // Validate checks fields for interval.
@@ -69,7 +69,7 @@ func (s *ExportSchedule) Validate(interval ScheduledTaskInterval) error {
 			WithHint("Minute must be between 0 and 59").
 			Mark(ierr.ErrValidation)
 	}
-	if _, err := s.Location(); err != nil || s.Timezone == "Local" {
+	if _, err := s.Location(); err != nil {
 		return ierr.NewError("invalid schedule timezone").
 			WithHint("Timezone must be a valid IANA name such as Asia/Kolkata").
 			Mark(ierr.ErrValidation)
@@ -101,7 +101,7 @@ func (s *ExportSchedule) Validate(interval ScheduledTaskInterval) error {
 
 // Location resolves the timezone.
 func (s *ExportSchedule) Location() (*time.Location, error) {
-	if s.Timezone == "" {
+	if s.Timezone == "" || s.Timezone == "Local" {
 		return nil, ierr.NewError("timezone is required").
 			WithHint("Schedule timezone must be specified").
 			Mark(ierr.ErrValidation)

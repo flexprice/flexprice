@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/storage/storagetypes"
@@ -292,6 +294,29 @@ func TestUpdate_EnabledOnlyUnchanged(t *testing.T) {
 	require.True(t, resp.Enabled)
 	require.Empty(t, handle.updates)
 	require.Nil(t, repo.settings)
+}
+
+func TestUpdate_RejectsDeletedAndArchived(t *testing.T) {
+	for _, status := range []types.Status{types.StatusDeleted, types.StatusArchived} {
+		row := scheduledRow(nil)
+		row.Status = status
+		repo := &exportRepoFake{task: row}
+		s := newExportService(repo, &exportTemporalFake{handle: &exportHandleFake{}})
+
+		enabled := true
+		_, err := s.UpdateScheduledTask(exportCtx(), "st_1", dto.UpdateScheduledTaskRequest{Enabled: &enabled})
+		require.Error(t, err, status)
+		require.True(t, ierr.IsValidation(err))
+		require.Nil(t, repo.settings)
+	}
+}
+
+func TestTriggerForceRun_NoWindowOmitsTimes(t *testing.T) {
+	resp := dto.TriggerForceRunResponse{WorkflowID: "w", Mode: "force run"}
+	b, err := json.Marshal(resp)
+	require.NoError(t, err)
+	require.NotContains(t, string(b), "start_time")
+	require.NotContains(t, string(b), "end_time")
 }
 
 func TestUpdate_ScheduleUpdatesTemporalThenDB(t *testing.T) {
