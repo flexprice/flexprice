@@ -873,6 +873,24 @@ func (s *InMemoryWalletStore) GetWalletDebitsForExport(ctx context.Context, tena
 	return results, nil
 }
 
+// ListWalletIDsByCustomerIDs mirrors the Postgres listing.
+func (s *InMemoryWalletStore) ListWalletIDsByCustomerIDs(ctx context.Context, tenantID, envID string, customerIDs []string) ([]string, error) {
+	all, err := s.wallets.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve wallets for export").
+			Mark(ierr.ErrDatabase)
+	}
+	var walletIDs []string
+	for _, w := range all {
+		if w.TenantID == tenantID && w.EnvironmentID == envID && lo.Contains(customerIDs, w.CustomerID) {
+			walletIDs = append(walletIDs, w.ID)
+		}
+	}
+	sort.Strings(walletIDs)
+	return walletIDs, nil
+}
+
 // ListWalletIDsForLedgerExport mirrors the Postgres listing without the customer filter or late
 // payments, which need other stores.
 func (s *InMemoryWalletStore) ListWalletIDsForLedgerExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, customerExternalIDs []string) ([]string, error) {
