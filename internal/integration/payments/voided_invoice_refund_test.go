@@ -94,3 +94,12 @@ func TestRefundIfInvoiceVoided_RefundErrorStillHandled(t *testing.T) {
 	require.Equal(t, 1, logs.Len())
 	require.Contains(t, logs.All()[0].Message, "manual reconciliation required")
 }
+
+func TestRefundIfInvoiceVoided_SkipsSettledPayment(t *testing.T) {
+	for _, status := range []types.PaymentStatus{types.PaymentStatusSucceeded, types.PaymentStatusOverpaid, types.PaymentStatusPartiallyRefunded} {
+		r := &fakeRefunder{}
+		handled := runRefundGuard(status, types.PaymentDestinationTypeInvoice, types.InvoiceStatusVoided, r, logger.NewNoopLogger())
+		require.False(t, handled, status)
+		require.Empty(t, r.calls, status)
+	}
+}

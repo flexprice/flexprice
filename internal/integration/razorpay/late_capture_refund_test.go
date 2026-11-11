@@ -52,6 +52,9 @@ func (p *lateCapturePayments) GetPayment(context.Context, string) (*dto.PaymentR
 }
 
 func (p *lateCapturePayments) UpdatePayment(_ context.Context, _ string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error) {
+	if req.PaymentStatus == nil {
+		return &dto.PaymentResponse{ID: "pay_fp", PaymentStatus: p.status}, nil
+	}
 	target := types.PaymentStatus(lo.FromPtr(req.PaymentStatus))
 	if err := p.status.ValidateTransitionTo(target); err != nil {
 		return nil, err
@@ -66,16 +69,24 @@ func TestRefundLateCapturedPayment(t *testing.T) {
 		name        string
 		status      types.PaymentStatus
 		wantUpdates []types.PaymentStatus
+		wantStatus  types.PaymentStatus
 	}{
 		{
 			name:        "pending checkout payment records the capture before the refund",
 			status:      types.PaymentStatusPending,
 			wantUpdates: []types.PaymentStatus{types.PaymentStatusSucceeded, types.PaymentStatusRefunded},
+			wantStatus:  types.PaymentStatusRefunded,
 		},
 		{
 			name:        "payment already synced to succeeded is only refunded",
 			status:      types.PaymentStatusSucceeded,
 			wantUpdates: []types.PaymentStatus{types.PaymentStatusRefunded},
+			wantStatus:  types.PaymentStatusRefunded,
+		},
+		{
+			name:       "voided payment keeps its status and only gets the refund reference",
+			status:     types.PaymentStatusVoided,
+			wantStatus: types.PaymentStatusVoided,
 		},
 	}
 
@@ -90,7 +101,7 @@ func TestRefundLateCapturedPayment(t *testing.T) {
 
 			assert.Equal(t, 1, client.refunds)
 			assert.Equal(t, tt.wantUpdates, payments.updates)
-			assert.Equal(t, types.PaymentStatusRefunded, payments.status)
+			assert.Equal(t, tt.wantStatus, payments.status)
 		})
 	}
 }

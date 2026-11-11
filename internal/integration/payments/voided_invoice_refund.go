@@ -31,6 +31,11 @@ func RefundIfInvoiceVoided(ctx context.Context, p RefundIfInvoiceVoidedParams) (
 		return false
 	}
 
+	switch pay.PaymentStatus {
+	case types.PaymentStatusSucceeded, types.PaymentStatusOverpaid, types.PaymentStatusPartiallyRefunded:
+		return false
+	}
+
 	inv, err := p.InvoiceService.GetInvoice(ctx, pay.DestinationID)
 	if err != nil || inv == nil || inv.InvoiceStatus != types.InvoiceStatusVoided {
 		return false

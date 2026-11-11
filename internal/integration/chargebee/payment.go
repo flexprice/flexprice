@@ -84,10 +84,14 @@ func (s *PaymentService) RefundLateCapturedPayment(
 			Mark(ierr.ErrInternal)
 	}
 
-	updateReq := dto.UpdatePaymentRequest{
-		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
-		RefundedAt:       lo.ToPtr(clock.Now()),
-		GatewayPaymentID: lo.ToPtr(chargebeeTransactionID),
+	updateReq := dto.UpdatePaymentRequest{GatewayPaymentID: lo.ToPtr(chargebeeTransactionID)}
+	switch existingPayment.PaymentStatus {
+	case types.PaymentStatusFailed, types.PaymentStatusVoided:
+		s.logger.Info(ctx, "late-captured payment is in a final status, recording refund reference only",
+			"payment_id", flexpricePaymentID, "status", existingPayment.PaymentStatus)
+	default:
+		updateReq.PaymentStatus = lo.ToPtr(string(types.PaymentStatusRefunded))
+		updateReq.RefundedAt = lo.ToPtr(clock.Now())
 	}
 	if refundID != "" {
 		metadata := lo.Assign(existingPayment.Metadata, types.Metadata{"chargebee_refund_id": refundID})
