@@ -465,14 +465,14 @@ func (s *commitmentService) settle(
 	return created[0], nil
 }
 
-// owedAtTermination reports whether a termination at terminatedAt still bills the instalment: its bill date is on or
-// before the termination.
+// owedAtTermination reports whether a termination at terminatedAt still bills the instalment: it fell due by the
+// termination and pays for time before it, so an advance instalment due at the termination is not billed.
 func owedAtTermination(inst *billingterm.Instalment, terminatedAt time.Time) bool {
-	return !inst.BillOn.After(terminatedAt)
+	return !inst.BillOn.After(terminatedAt) && inst.ServicePeriodStart.Before(terminatedAt)
 }
 
-// cancelledByTermination reports whether c, the instalment's commitment, was terminated before the instalment's bill
-// date, so the instalment is never billed.
+// cancelledByTermination reports whether c, the instalment's commitment, was terminated without owing the instalment,
+// so the instalment is never billed.
 func cancelledByTermination(c *commitment.Commitment, inst *billingterm.Instalment) bool {
 	return c != nil && c.CommitmentStatus == types.CommitmentStatusTerminated && c.TerminatedAt != nil &&
 		!owedAtTermination(inst, *c.TerminatedAt)
@@ -632,7 +632,7 @@ func (s *commitmentService) billInstalment(ctx context.Context, listed *billingt
 		if cancelledByTermination(c, instalment) {
 			s.Logger.Info(ctx, "commitment.instalment_skipped",
 				"operation", "commitment.instalment_skipped",
-				"reason", "commitment terminated before the instalment's bill date",
+				"reason", "the commitment's termination does not owe the instalment",
 				"instalment_id", instalment.ID,
 				"commitment_id", c.ID,
 				"terminated_at", lo.FromPtr(c.TerminatedAt),

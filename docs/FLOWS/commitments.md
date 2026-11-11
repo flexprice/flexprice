@@ -30,7 +30,7 @@ usage within it is shown at $0 and no true-up is billed.
 | Waterfall | Per window, commitments in priority order drain their pools across their lines in fill order | `allocate` |
 | Billing terms | Rules (`once` / `recurring`, `fixed` / `remainder`) that expand into instalments | `domain/billingterm` |
 | Instalment | One scheduled bill of part of the commitment's total: `scheduled` → `invoiced` (or `cancelled`) | `domain/billingterm/instalment.go` |
-| Settlement | The instalment a termination adds for the instalments already due but not yet billed | `settle` |
+| Settlement | The instalment a termination adds for the instalments it still owes that were not yet billed | `settle` |
 | v1 / legacy | Commitment fields on a subscription line item, billed by `commitmentCalculator` | `billing_commitment.go` |
 
 ## 3. File map
@@ -306,7 +306,7 @@ none. A termination's settlement always goes on a separate invoice.
 | `separate_invoice` | The `BillingInstalmentsDue` Temporal schedule (`internal/temporal/service/schedules.go`) runs `BillDueInstalments`. For each environment with v2 on, `billInstalment` issues a one-off invoice per due instalment under the commitment lock. |
 
 Instalments wait while the subscription is trialing or paused. `TriggerInstalment` sets a manual milestone's `bill_on`
-(it may only move earlier). Both paths skip an instalment whose commitment was terminated before its bill date.
+(it may only move earlier). Both paths skip an instalment its commitment's termination does not owe (section 10).
 
 ### 9.4 Claiming, refreshing and voiding — `invoice_instalments.go`
 
@@ -324,8 +324,8 @@ Instalments wait while the subscription is trialing or paused. `TriggerInstalmen
   invoice lock together with the move to processing ([payment_processor.go:88](../../internal/ee/service/payment_processor.go#L88)).
 - **Void.** `rescheduleInstalments` puts a voided invoice's instalments back to `scheduled` and clears `invoice_id` and
   `invoiced_at`, under their commitments' locks ([invoice.go:1934](../../internal/ee/service/invoice.go#L1934)). An
-  instalment whose commitment was terminated before its bill date is cancelled instead (`cancelledByTermination`, the
-  rule `settle` applies), so it is never billed again.
+  instalment its commitment's termination does not owe is cancelled instead (`cancelledByTermination`, the rule
+  `settle` applies), so it is never billed again.
 
 ### 9.5 Events
 
@@ -335,14 +335,22 @@ Instalments wait while the subscription is trialing or paused. `TriggerInstalmen
 
 ## 10. Terminating
 
-`POST /v1/commitments/{id}/terminate` → `Terminate` → `terminate` ([commitment.go:678](../../internal/ee/service/commitment.go#L678)),
+`POST /v1/commitments/{id}/terminate` → `Terminate` → `terminate` ([commitment.go:744](../../internal/ee/service/commitment.go#L744)),
 under the commitment lock:
 1. Refuse unless the commitment is active and `effective_at` is before its end; a fee needs a binding commitment.
-2. Under billing terms, `settle` cancels the scheduled instalments and adds a settlement instalment for those already
-   due by `effective_at`. Later ones are not billed and nothing is refunded; the fee covers anything more.
+   `effective_at` defaults to now and cannot be in the future.
+2. Under billing terms, `settle` cancels the scheduled instalments and adds a settlement instalment for those the
+   termination still owes (`owedAtTermination`): due by `effective_at` and paying for time before it. An advance
+   instalment due exactly at `effective_at` is not billed. Later ones are not billed and nothing is refunded; the fee
+   covers anything more.
 3. `billTermination` issues one immediate one-off invoice, `billing_reason: COMMITMENT_TERMINATION`, carrying the
    settlement and the cancellation fee (`cancellationFeeLine`).
 4. Set the status to terminated with `terminated_at`. Later invoices clip the floor at `terminated_at`.
+
+`effective_at` is the only date a termination takes: coverage and instalments stop together. A termination cannot keep
+coverage until a later end date while stopping advance instalments sooner. The fee is billed on its own invoice when
+the termination is recorded, not on the subscription invoice of the period holding `effective_at`, and with a fee
+`effective_at` cannot precede the current billing period start.
 
 After the commit, `recomputeDrafts` recomputes the subscription's drafts and skipped period invoices for periods ending after
 `effective_at`, so a backdated termination stops billing the commitment on drafts computed before it. `Create` does the
