@@ -116,3 +116,17 @@ func TestDetails_ReportRowUsesUTCWindowAndCarriesSourceConfig(t *testing.T) {
 	require.Equal(t, mustTime(t, "2026-11-09T00:00:00Z"), got.EndTime)
 	require.Equal(t, cfg, got.SourceConfig)
 }
+
+func TestDetails_NilEmailConfigHasNoRecipients(t *testing.T) {
+	a := newDetailsActivity(t, &scheduledtask.ScheduledTask{
+		ID:       "st1",
+		Interval: types.ScheduledTaskIntervalDaily,
+		Schedule: &types.ExportSchedule{Minute: 30, Timezone: "Asia/Kolkata"},
+	})
+	got, err := a.GetScheduledTaskDetails(context.Background(), GetScheduledTaskDetailsInput{
+		ScheduledTaskID:       "st1",
+		WorkflowExecutionTime: mustTime(t, "2026-11-09T19:00:00Z"),
+	})
+	require.NoError(t, err)
+	require.Empty(t, got.EmailRecipients)
+}
