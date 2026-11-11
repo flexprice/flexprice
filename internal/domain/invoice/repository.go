@@ -55,8 +55,8 @@ type Repository interface {
 	// GetNextBillingSequence returns the next billing sequence number for a subscription
 	GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error)
 
-	// GetInvoicesForExport retrieves invoices for export purposes with pagination
-	GetInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*Invoice, error)
+	// GetInvoicesForExport pages invoices; nil customerIDs means all.
+	GetInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int, customerIDs []string) ([]*Invoice, error)
 
 	// Dashboard methods
 	GetRevenueTrend(ctx context.Context, windowCount int) ([]types.RevenueTrendWindow, error)

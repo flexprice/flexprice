@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -35,10 +36,34 @@ type ReportExporter struct {
 	runner   ReportRunner
 	entity   types.ScheduledTaskEntityType
 	metadata map[string]string
+	scope    customerScope
 }
 
-func NewReportExporter(runner ReportRunner, entity types.ScheduledTaskEntityType) *ReportExporter {
-	return &ReportExporter{runner: runner, entity: entity}
+func NewReportExporter(runner ReportRunner, entity types.ScheduledTaskEntityType, customerRepo customer.Repository) *ReportExporter {
+	return &ReportExporter{runner: runner, entity: entity, scope: newCustomerScope(customerRepo, maxScopedReportCustomers)}
+}
+
+// Copies params with a customer filter.
+func withCustomerFilter(params *types.ReportParams, customerIDs []string) *types.ReportParams {
+	scoped := &types.ReportParams{}
+	if params != nil {
+		*scoped = *params
+	}
+	scoped.Filters = append(append([]types.ReportParamFilter{}, scoped.Filters...),
+		types.ReportParamFilter{Field: "customer_id", Op: "in", Value: customerIDs})
+	return scoped
+}
+
+// Header when no customers match.
+func emptyReportHeader(key string, params *types.ReportParams) []string {
+	var header []string
+	if params != nil && params.Shape == string(types.ShapeTimeseries) {
+		header = append(header, "bucket")
+	}
+	if params != nil {
+		header = append(header, params.Dimensions...)
+	}
+	return append(header, key)
 }
 
 func (e *ReportExporter) GetFilenamePrefix() string {
@@ -60,6 +85,22 @@ func (e *ReportExporter) PrepareData(ctx context.Context, request *dto.ExportReq
 
 	var result *dto.AnalyticsQueryResult
 	var err error
+	reportParams := request.SourceConfig.ReportParams
+	if request.SourceConfig.GetCustomerFilter() != nil && e.entity != types.ScheduledTaskEntityTypeReport {
+		return nil, 0, ierr.NewError("customer_filter not supported for this export").
+			WithHint("This data can't be limited to customers yet.").
+			Mark(ierr.ErrValidation)
+	}
+	refs, scoped, err := e.scope.resolve(ctx, request)
+	if err != nil {
+		return nil, 0, err
+	}
+	if scoped {
+		if len(refs) == 0 {
+			return writeReportCSV(emptyReportHeader(request.SourceConfig.ReportKey, reportParams), nil, nil)
+		}
+		reportParams = withCustomerFilter(reportParams, refIDs(refs))
+	}
 	if e.entity == types.ScheduledTaskEntityTypeAnalyticsView {
 		var viewUpdatedAt time.Time
 		result, viewUpdatedAt, err = e.runner.RunViewForExport(ctx, request.SourceConfig.ViewID, rng)
@@ -70,7 +111,7 @@ func (e *ReportExporter) PrepareData(ctx context.Context, request *dto.ExportReq
 			return nil, 0, fmt.Errorf("%w: %w", ErrViewDeleted, err)
 		}
 	} else {
-		result, err = e.runner.RunReportForExport(ctx, request.SourceConfig.ReportKey, request.SourceConfig.ReportParams, rng)
+		result, err = e.runner.RunReportForExport(ctx, request.SourceConfig.ReportKey, reportParams, rng)
 	}
 	if err != nil {
 		return nil, 0, err
@@ -86,13 +127,17 @@ func (e *ReportExporter) PrepareData(ctx context.Context, request *dto.ExportReq
 		textCols[i] = col.Type != types.ColumnTypeDecimal && col.Role != types.ColumnRoleMetric
 	}
 
+	return writeReportCSV(header, textCols, result.Rows)
+}
+
+func writeReportCSV(header []string, textCols []bool, rows [][]string) ([]byte, int, error) {
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
 	if err := w.Write(header); err != nil {
 		return nil, 0, ierr.WithError(err).WithHint("Failed to write CSV header").Mark(ierr.ErrSystem)
 	}
-	out := make([]string, 0, len(result.Columns))
-	for _, row := range result.Rows {
+	out := make([]string, 0, len(header))
+	for _, row := range rows {
 		out = out[:0]
 		for i, cell := range row {
 			if i < len(textCols) && textCols[i] {
@@ -108,7 +153,7 @@ func (e *ReportExporter) PrepareData(ctx context.Context, request *dto.ExportReq
 	if err := w.Error(); err != nil {
 		return nil, 0, ierr.WithError(err).WithHint("Failed to write CSV rows").Mark(ierr.ErrSystem)
 	}
-	return buf.Bytes(), len(result.Rows), nil
+	return buf.Bytes(), len(rows), nil
 }
 
 // Stops spreadsheets evaluating event-supplied text.

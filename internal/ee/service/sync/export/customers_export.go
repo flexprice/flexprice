@@ -49,7 +49,7 @@ func (e *CustomersExporter) PrepareData(ctx context.Context, request *dto.Export
 	return buf.Bytes(), count, nil
 }
 
-// WriteData ignores the time window; it is a snapshot.
+// WriteData ignores the time window.
 func (e *CustomersExporter) WriteData(ctx context.Context, request *dto.ExportRequest, w io.Writer) (int, error) {
 	ctx = types.SetTenantID(ctx, request.TenantID)
 	ctx = types.SetEnvironmentID(ctx, request.EnvID)

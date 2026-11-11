@@ -1204,7 +1204,7 @@ func (r *walletRepository) GetWalletsByFilter(ctx context.Context, filter *types
 }
 
 // GetCreditTopupsForExport retrieves wallet transactions joined with wallet and customer data for export
-func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*walletdomain.CreditTopupsExportData, error) {
+func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int, customerIDs []string) ([]*walletdomain.CreditTopupsExportData, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "get_credit_topups_for_export", map[string]interface{}{
 		"tenant_id": tenantID,
@@ -1217,6 +1217,11 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 	defer FinishSpan(span)
 
 	client := r.client.Reader(ctx)
+
+	customerClause := ""
+	if customerIDs != nil {
+		customerClause = "AND c.id = ANY($10)"
+	}
 
 	// Use raw SQL for complex join query
 	query := `
@@ -1250,11 +1255,12 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 			AND wt.status = $5
 			AND wt.created_at >= $6
 			AND wt.created_at < $7
+			` + customerClause + `
 		ORDER BY wt.created_at ASC
 		LIMIT $8 OFFSET $9
 	`
 
-	rows, err := client.QueryContext(ctx, query,
+	args := []interface{}{
 		tenantID,
 		envID,
 		string(types.TransactionTypeCredit),
@@ -1264,7 +1270,11 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 		endTime,
 		limit,
 		offset,
-	)
+	}
+	if customerIDs != nil {
+		args = append(args, pq.Array(customerIDs))
+	}
+	rows, err := client.QueryContext(ctx, query, args...)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).

@@ -29,6 +29,7 @@ type CreditUsageExporter struct {
 	walletBalanceGetter WalletBalanceGetter
 	integrationFactory  *integration.Factory
 	logger              *logger.Logger
+	scope               customerScope
 }
 
 // CreditUsageExportData represents the joined data for one customer row in the credit usage export.
@@ -71,6 +72,7 @@ func NewCreditUsageExporter(
 		walletBalanceGetter: walletBalanceGetter,
 		integrationFactory:  integrationFactory,
 		logger:              logger,
+		scope:               newCustomerScope(customerRepo, maxScopedCustomers),
 	}
 }
 
@@ -85,13 +87,22 @@ func (e *CreditUsageExporter) PrepareData(ctx context.Context, request *dto.Expo
 	ctx = types.SetTenantID(ctx, request.TenantID)
 	ctx = types.SetEnvironmentID(ctx, request.EnvID)
 
-	customers, err := e.customerRepo.ListAll(ctx, &types.CustomerFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-	})
+	refs, scoped, err := e.scope.resolve(ctx, request)
 	if err != nil {
-		return nil, 0, ierr.WithError(err).
-			WithHint("Failed to list customers").
-			Mark(ierr.ErrDatabase)
+		return nil, 0, err
+	}
+	listFilter := &types.CustomerFilter{QueryFilter: types.NewNoLimitQueryFilter()}
+	if scoped {
+		listFilter.CustomerIDs = refIDs(refs)
+	}
+	var customers []*customer.Customer
+	if !scoped || len(refs) > 0 {
+		customers, err = e.customerRepo.ListAll(ctx, listFilter)
+		if err != nil {
+			return nil, 0, ierr.WithError(err).
+				WithHint("Failed to list customers").
+				Mark(ierr.ErrDatabase)
+		}
 	}
 
 	e.logger.Info(ctx, "found customers to process",

@@ -31,6 +31,7 @@ type UsageAnalyticsExporter struct {
 	lineItemRepo         subscription.LineItemRepository
 	usageAnalyticsGetter UsageAnalyticsGetter
 	logger               *logger.Logger
+	scope                customerScope
 }
 
 // NewUsageAnalyticsExporter creates a new usage analytics exporter
@@ -47,6 +48,7 @@ func NewUsageAnalyticsExporter(
 		lineItemRepo:         lineItemRepo,
 		usageAnalyticsGetter: usageAnalyticsGetter,
 		logger:               logger,
+		scope:                newCustomerScope(customerRepo, maxScopedCustomers),
 	}
 }
 
@@ -135,9 +137,23 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 			Mark(ierr.ErrInternal)
 	}
 
-	customers, err := e.resolveExportCustomers(ctx, request.StartTime, request.EndTime)
+	refs, scoped, err := e.scope.resolve(ctx, request)
 	if err != nil {
 		return nil, 0, err
+	}
+	var customers []*customer.Customer
+	if !scoped || len(refs) > 0 {
+		customers, err = e.resolveExportCustomers(ctx, request.StartTime, request.EndTime)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+	if scoped {
+		allowed := lo.SliceToMap(refs, func(r customer.Ref) (string, struct{}) { return r.ID, struct{}{} })
+		customers = lo.Filter(customers, func(c *customer.Customer, _ int) bool {
+			_, ok := allowed[c.ID]
+			return ok
+		})
 	}
 
 	if len(customers) == 0 {
