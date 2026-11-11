@@ -19422,6 +19422,27 @@
         }
       }
     },
+    "/webhook-events/invoice.payment.failed": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "invoice.payment.failed",
+        "description": "Fired when a payment of an invoice does not succeed. `reason` is `payment_method_unavailable`, `provider_error` or `declined`; `is_auto_charge_attempt` is true when Flexprice charged the saved payment method. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.InvoicePaymentFailedWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook-events/invoice.payment.overdue": {
       "post": {
         "tags": [
@@ -23411,9 +23432,6 @@
           "termination_invoice_id": {
             "type": "string"
           },
-          "timezone": {
-            "type": "string"
-          },
           "total_amount": {
             "type": "string"
           },
@@ -24284,9 +24302,6 @@
           "subscription_id": {
             "type": "string",
             "description": "SubscriptionID is required on POST /commitments and set server-side on inline commitments."
-          },
-          "timezone": {
-            "type": "string"
           },
           "type": {
             "$ref": "#/components/schemas/types.CommitmentType"
@@ -40815,6 +40830,7 @@
           "invoice.update.voided",
           "invoice.update",
           "invoice.payment.overdue",
+          "invoice.payment.failed",
           "invoice.sync.success",
           "invoice.sync.failed",
           "wallet.credit_balance.dropped",
@@ -40889,6 +40905,7 @@
           "WebhookEventInvoiceUpdateVoided",
           "WebhookEventInvoiceUpdate",
           "WebhookEventInvoicePaymentOverdue",
+          "WebhookEventInvoicePaymentFailed",
           "WebhookEventInvoiceSyncSuccess",
           "WebhookEventInvoiceSyncFailed",
           "WebhookEventWalletCreditBalanceDropped",
@@ -42334,6 +42351,20 @@
         },
         "x-speakeasy-name-override": "InvoiceBillingEntity"
       },
+      "types.InvoicePaymentFailureReason": {
+        "type": "string",
+        "enum": [
+          "payment_method_unavailable",
+          "provider_error",
+          "declined"
+        ],
+        "x-enum-varnames": [
+          "InvoicePaymentFailureReasonPaymentMethodUnavailable",
+          "InvoicePaymentFailureReasonProviderError",
+          "InvoicePaymentFailureReasonDeclined"
+        ],
+        "x-speakeasy-name-override": "InvoicePaymentFailureReason"
+      },
       "types.JournalDirection": {
         "type": "string",
         "enum": [
@@ -43250,6 +43281,32 @@
           },
           "subscription_line_item_id": {
             "type": "string"
+          }
+        }
+      },
+      "webhookDto.InvoicePaymentFailedWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/webhookDto.Invoice"
+          },
+          "is_auto_charge_attempt": {
+            "type": "boolean"
+          },
+          "payment_id": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.SecretProvider"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/types.InvoicePaymentFailureReason"
           }
         }
       },

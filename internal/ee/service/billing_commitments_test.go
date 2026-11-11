@@ -54,7 +54,6 @@ func (s *BillingServiceSuite) newTestCommitment(
 		Type:               typ,
 		Value:              dec(value),
 		Measurement:        types.CommitmentMeasurementBillingPeriod,
-		Timezone:           "UTC",
 		Priority:           1,
 		Binding:            true,
 		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),
@@ -546,7 +545,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_WindowAcrossCommitmentPeriods
 }
 
 func (s *BillingServiceSuite) TestCommitmentLoader_StackedWindowed_Simplismart() {
-	// Stacked GPU reservations at reduced scale: per-minute meter; C1 = 8 all day (p1, 0.048); C2 = 32, 09:00-21:00 IST from 25 Aug (p2, 0.0491667).
+	// Stacked GPU reservations at reduced scale: per-minute meter; C1 = 8 all day (p1, 0.048); C2 = 32, 03:30-15:30 UTC (09:00-21:00 IST) from 25 Aug (p2, 0.0491667).
 	ctx := s.GetContext()
 	s.setupTestData()
 	s.enableCommitmentsV2()
@@ -614,11 +613,10 @@ func (s *BillingServiceSuite) TestCommitmentLoader_StackedWindowed_Simplismart()
 		periodEnd,
 	)
 	c2.Measurement, c2.CommittedPriceID, c2.Priority = types.CommitmentMeasurementWindow, lo.ToPtr(p2.ID), 2
-	c2.Timezone = "Asia/Kolkata"
 	c2.ActiveWindows = types.ActiveWindows{
 		{
-			Start: types.Bucket{Hour: 9},
-			End:   types.Bucket{Hour: 21},
+			Start: types.Bucket{Hour: 3, Minute: 30},
+			End:   types.Bucket{Hour: 15, Minute: 30},
 		},
 	}
 	s.storeCommitment(c1)
@@ -2246,7 +2244,6 @@ func (s *EntitlementQuantityTestSuite) recalcCommitment(id string, value string,
 		Type:               types.COMMITMENT_TYPE_AMOUNT,
 		Value:              dec(value),
 		Measurement:        types.CommitmentMeasurementBillingPeriod,
-		Timezone:           "UTC",
 		Priority:           priority,
 		Binding:            true,
 		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),
@@ -2713,8 +2710,8 @@ func TestActiveBuckets_CountsTheBucketsTheTermAndWindowsHold(t *testing.T) {
 			want:       24,
 		},
 		{
-			name: "hours inside active windows in the commitment's timezone",
-			commitment: commitment.Commitment{StartDate: jan, Timezone: "Asia/Kolkata", ActiveWindows: types.ActiveWindows{
+			name: "hours inside active windows",
+			commitment: commitment.Commitment{StartDate: jan, ActiveWindows: types.ActiveWindows{
 				{Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 17}},
 			}},
 			span:   day,
@@ -2740,8 +2737,7 @@ func TestActiveBuckets_CountsTheBucketsTheTermAndWindowsHold(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			l := &commitmentLoader{
-				sub:               &subscription.Subscription{BillingAnchor: jan, EndDate: tt.subEnd},
-				scopeByCommitment: map[string]*loadedScope{tt.commitment.ID: {location: tt.commitment.Location()}},
+				sub: &subscription.Subscription{BillingAnchor: jan, EndDate: tt.subEnd},
 			}
 			require.Equal(t, tt.want, l.activeBuckets(&tt.commitment, tt.span, tt.bucket))
 		})
@@ -2823,13 +2819,12 @@ func TestProjectedPeriodEnd(t *testing.T) {
 }
 
 // BenchmarkActiveBuckets_ElevenMonthsOfMinutes counts the minute buckets an annual commitment period accrued before its
-// last billing period, for a commitment outside UTC.
+// last billing period.
 func BenchmarkActiveBuckets_ElevenMonthsOfMinutes(b *testing.B) {
 	start := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-	c := &commitment.Commitment{StartDate: start, Timezone: "Asia/Kolkata"}
+	c := &commitment.Commitment{StartDate: start}
 	l := &commitmentLoader{
-		sub:               &subscription.Subscription{BillingAnchor: start},
-		scopeByCommitment: map[string]*loadedScope{c.ID: {location: c.Location()}},
+		sub: &subscription.Subscription{BillingAnchor: start},
 	}
 	elapsed := types.Period{Start: start, End: start.AddDate(0, 11, 0)}
 	b.ReportAllocs()

@@ -279,6 +279,14 @@ func (s *commitmentService) validateTermLines(
 		if err := rejectCalendarBuckets(sizes[0]); err != nil {
 			return err
 		}
+
+		// Active windows must hold whole usage buckets, by v1's rule for time-of-day buckets.
+		windows := lo.Map(c.ActiveWindows, func(w types.ActiveWindow, _ int) types.TimeOfDayBucket {
+			return types.TimeOfDayBucket{Start: w.Start, End: w.End}
+		})
+		if err := types.TimeOfDayBuckets(windows).ValidateWindowAlignment(sizes[0].ToMinutes()); err != nil {
+			return err
+		}
 	}
 
 	for _, li := range lines {

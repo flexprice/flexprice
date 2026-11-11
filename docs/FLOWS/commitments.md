@@ -10,7 +10,7 @@ The design decisions behind this code live in `docs/design/2026-10-07-FLE-1513-c
 A commitment promises that a subscription will use at least some **capacity** on a **scope** of its usage lines, over a
 **term**. The capacity is an amount (`type: amount`, money) or a quantity (`type: quantity`, units valued at a
 committed price). It renews every subscription billing period (`measurement: billing_period`) or every usage bucket,
-such as every hour (`measurement: window`, optionally limited to `active_windows` times of day). When an invoice is
+such as every hour (`measurement: window`, optionally limited to `active_windows` UTC times of day). When an invoice is
 computed, the scoped usage is poured into the capacity. Usage that fits is billed on **utilized** lines, usage beyond
 it on **overage** lines. A **binding** commitment also bills the unused rest of its capacity as a **true-up**. Under
 `collection_method: billing_terms` the commitment's whole value is billed on a schedule of **instalments** instead, so
@@ -30,7 +30,7 @@ usage within it is shown at $0 and no true-up is billed.
 | Waterfall | Per window, commitments in priority order drain their pools across their lines in fill order | `allocate` |
 | Billing terms | Rules (`once` / `recurring`, `fixed` / `remainder`) that expand into instalments | `domain/billingterm` |
 | Instalment | One scheduled bill of part of the commitment's total: `scheduled` → `invoiced` (or `cancelled`) | `domain/billingterm/instalment.go` |
-| Settlement | The instalment a termination adds for the instalments already due but not yet billed | `settle` |
+| Settlement | The instalment a termination adds for the instalments it still owes that were not yet billed | `settle` |
 | v1 / legacy | Commitment fields on a subscription line item, billed by `commitmentCalculator` | `billing_commitment.go` |
 
 ## 3. File map
@@ -65,9 +65,9 @@ so it must not be flipped back.
 API: `POST /v1/commitments` ([router.go:730](../../internal/api/router.go#L730)) → `CreateCommitmentRequest`.
 
 1. **DTO** (`dto/commitment.go`). `Validate` checks field-level rules: required fields, `active_windows` only with
-   `measurement: window`, billing terms only with `collection_method: billing_terms`. `prepare` then moves the start,
-   end and term dates that fall within a second after a billing period edge to that edge (`atPeriodEdge`), and
-   `ToCommitment` builds the domain model.
+   `measurement: window`, no `timezone` other than UTC, billing terms only with `collection_method: billing_terms`.
+   `prepare` then moves the start, end and term dates that fall within a second after a billing period edge to that
+   edge (`atPeriodEdge`), and `ToCommitment` builds the domain model.
 2. **`Create` → `create`** ([commitment.go:112](../../internal/ee/service/commitment.go#L112)). In a transaction it takes the
    subscription's commitments lock (`commitments:<subscription_id>`), so concurrent creates and scope changes on one
    subscription see each other. An idempotency key seen before returns the original commitment (`findReplay`,
@@ -80,6 +80,7 @@ API: `POST /v1/commitments` ([router.go:730](../../internal/api/router.go#L730))
      - `validateScopeEntity`: the scope names something real.
      - `validateTermLines`: over the whole term the scoped lines must not have entitled meters, must be on one meter
        where needed, share one bucket size for windows, carry no legacy commitment fields, and bill every period.
+       `active_windows` must hold whole usage buckets, checked with v1's `ValidateWindowAlignment`.
      - `validateOverlaps`: commitments sharing a line must agree on type, measurement, bucket size and overage price,
        and differ in priority while they allocate together. `blocksUntil` lets a commitment keep blocking until the
        end of the billing period holding its end, because that period's invoice still allocates it.
@@ -129,11 +130,11 @@ With `expand: ["instalments"]`, the response lists the instalments invoiced in t
 `invoiced_at`) for the commitments on the customer's subscriptions that covered a queried meter during their term
 (`CoveringMeters`), whether or not the range has usage. A range in which no usage line runs lists none.
 
-### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:59](../../internal/ee/service/billing_commitments.go#L59))
+### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:58](../../internal/ee/service/billing_commitments.go#L58))
 
 1. `ListOverlapping`: active and terminated commitments whose term overlaps the invoice period.
 2. `loadCommitmentContext` once for the subscription.
-3. `load` per commitment ([billing_commitments.go:157](../../internal/ee/service/billing_commitments.go#L157)):
+3. `load` per commitment ([billing_commitments.go:156](../../internal/ee/service/billing_commitments.go#L156)):
    - Skip it when it ended before the period, or when none of its scope lines are billed by this invoice.
    - Load the committed price (quantity) and the overage price; build `amountOf`, which values capacity in money.
    - `commitmentPeriods(window)` returns the billing periods overlapping the invoice window, cut to the term.
@@ -144,11 +145,11 @@ With `expand: ["instalments"]`, the response lists the instalments invoiced in t
 4. `sortCommitmentStack` sorts by priority, then start, then ID. `checkSharedLines` rejects a line shared by commitments
    of different stacks, which would bill its usage twice.
 
-### 6.3 Laying out a stack — `Stacks` ([billing_commitments.go:351](../../internal/ee/service/billing_commitments.go#L351))
+### 6.3 Laying out a stack — `Stacks` ([billing_commitments.go:349](../../internal/ee/service/billing_commitments.go#L349))
 
 Commitments are grouped into stacks by (type, measurement, bucket size). Each stack is laid out, then allocated.
 
-**Period measurement — `buildPeriodStack`** ([billing_commitments.go:723](../../internal/ee/service/billing_commitments.go#L723))
+**Period measurement — `buildPeriodStack`** ([billing_commitments.go:764](../../internal/ee/service/billing_commitments.go#L764))
 - Windows are the invoice period split at every commitment start and end, every line version edge, and every
   usage bucket key (`periodSplits`).
 - Bucketed prices put each bucket's usage in its own window (`splitLineIntoBuckets`). Other prices read their period
@@ -157,16 +158,19 @@ Commitments are grouped into stacks by (type, measurement, bucket size). Each st
 - Each commitment has **one pool**, the period's capacity. Windows where `appliesAt` is false (before its start, at or
   after its term end) get `noPool`.
 
-**Window measurement — `buildWindowStack`** ([billing_commitments.go:610](../../internal/ee/service/billing_commitments.go#L610))
+**Window measurement — `buildWindowStack`** ([billing_commitments.go:608](../../internal/ee/service/billing_commitments.go#L608))
 - Windows are the usage buckets of the elapsed period (`generateBucketStarts`), so an empty bucket still counts.
-- Each commitment gets **one pool per bucket** it applies to, each holding `value`. A bucket starting before the
-  invoice period belongs to the previous invoice.
+- Each commitment gets **one pool per bucket** it covers, each holding `value`. A bucket belongs to the period holding
+  its end. While a commitment carries a line across a period edge that cuts a bucket, the later period bills the whole
+  bucket, reading its usage from the bucket's start (`bucketSpan`); otherwise each side bills its own part.
 - The floor counts the applying buckets with `activeBuckets`. `accruedAmount` values it as a difference of cumulative
   rounded values, so the partial floors of a period always add up to its whole floor.
 
-`appliesAt(c, t)` ([billing_commitments.go:674](../../internal/ee/service/billing_commitments.go#L674)) is the single
-question "does the commitment's capacity apply at t": within its term (ending with the subscription when open-ended),
-and inside its active windows.
+A commitment covers a bucket when the bucket ends after `start_date` and no later than the term's end, and its start
+falls inside the active windows (`coversBucket`, `holdsBucket`
+[billing_commitments.go:674](../../internal/ee/service/billing_commitments.go#L674)).
+Period stacks ask `appliesAt(c, t)` instead: within the term (ending with the subscription when open-ended), and inside
+the active windows.
 
 ### 6.4 Allocating — `allocate` ([commitment_engine.go:137](../../internal/ee/service/commitment_engine.go#L137))
 
@@ -188,7 +192,7 @@ This file has no I/O.
   termination, outside its active windows): the line's own price, with no commitment metadata.
 - `absorbDrift` makes individually rounded rows add up to their rounded target.
 
-`BillingLines` then runs `coverWithBillingTerms` ([billing_commitments.go:434](../../internal/ee/service/billing_commitments.go#L434)).
+`BillingLines` then runs `coverWithBillingTerms` ([billing_commitments.go:432](../../internal/ee/service/billing_commitments.go#L432)).
 For billing-terms commitments it zeroes the utilized rows and drops the true-up, because their instalments carry the
 value. Overage is still billed.
 
@@ -203,8 +207,8 @@ Returns the subscription billing periods overlapping `span`, each cut to the com
 - Each period records its uncut **regular** billing period (`FullStart`, `FullEnd`, from the period grid), which is
   what proration divides by.
 - `periodCapacity` gives the capacity within a span: for `billing_period`, `value × (span length / regular period
-  length)`; for `window`, `value ×` the buckets that start in it (counted arithmetically for clock buckets, walked when
-  there are active windows or calendar buckets).
+  length)`; for `window`, `value ×` the buckets ending in `(span.Start, span.End]` (counted arithmetically for clock
+  buckets, walked when there are active windows or calendar buckets).
 
 Callers pass the span they need:
 
@@ -222,7 +226,7 @@ Callers pass the span they need:
 
 ### 7.3 `containingPeriod` and whole seconds
 
-`containingPeriod(periods, window)` ([billing_commitments.go:1096](../../internal/ee/service/billing_commitments.go#L1096))
+`containingPeriod(periods, window)` ([billing_commitments.go:1139](../../internal/ee/service/billing_commitments.go#L1139))
 checks **containment in the regular billing period**, not equality with the commitment period. Example: a monthly
 subscription anchored on the 10th, and a monthly $100 commitment starting 15 Jan.
 
@@ -302,7 +306,7 @@ none. A termination's settlement always goes on a separate invoice.
 | `separate_invoice` | The `BillingInstalmentsDue` Temporal schedule (`internal/temporal/service/schedules.go`) runs `BillDueInstalments`. For each environment with v2 on, `billInstalment` issues a one-off invoice per due instalment under the commitment lock. |
 
 Instalments wait while the subscription is trialing or paused. `TriggerInstalment` sets a manual milestone's `bill_on`
-(it may only move earlier). Both paths skip an instalment whose commitment was terminated before its bill date.
+(it may only move earlier). Both paths skip an instalment its commitment's termination does not owe (section 10).
 
 ### 9.4 Claiming, refreshing and voiding — `invoice_instalments.go`
 
@@ -320,8 +324,8 @@ Instalments wait while the subscription is trialing or paused. `TriggerInstalmen
   invoice lock together with the move to processing ([payment_processor.go:88](../../internal/ee/service/payment_processor.go#L88)).
 - **Void.** `rescheduleInstalments` puts a voided invoice's instalments back to `scheduled` and clears `invoice_id` and
   `invoiced_at`, under their commitments' locks ([invoice.go:1934](../../internal/ee/service/invoice.go#L1934)). An
-  instalment whose commitment was terminated before its bill date is cancelled instead (`cancelledByTermination`, the
-  rule `settle` applies), so it is never billed again.
+  instalment its commitment's termination does not owe is cancelled instead (`cancelledByTermination`, the rule
+  `settle` applies), so it is never billed again.
 
 ### 9.5 Events
 
@@ -331,14 +335,22 @@ Instalments wait while the subscription is trialing or paused. `TriggerInstalmen
 
 ## 10. Terminating
 
-`POST /v1/commitments/{id}/terminate` → `Terminate` → `terminate` ([commitment.go:678](../../internal/ee/service/commitment.go#L678)),
+`POST /v1/commitments/{id}/terminate` → `Terminate` → `terminate` ([commitment.go:744](../../internal/ee/service/commitment.go#L744)),
 under the commitment lock:
 1. Refuse unless the commitment is active and `effective_at` is before its end; a fee needs a binding commitment.
-2. Under billing terms, `settle` cancels the scheduled instalments and adds a settlement instalment for those already
-   due by `effective_at`. Later ones are not billed and nothing is refunded; the fee covers anything more.
+   `effective_at` defaults to now and cannot be in the future.
+2. Under billing terms, `settle` cancels the scheduled instalments and adds a settlement instalment for those the
+   termination still owes (`owedAtTermination`): due by `effective_at` and paying for time before it. An advance
+   instalment due exactly at `effective_at` is not billed. Later ones are not billed and nothing is refunded; the fee
+   covers anything more.
 3. `billTermination` issues one immediate one-off invoice, `billing_reason: COMMITMENT_TERMINATION`, carrying the
    settlement and the cancellation fee (`cancellationFeeLine`).
 4. Set the status to terminated with `terminated_at`. Later invoices clip the floor at `terminated_at`.
+
+`effective_at` is the only date a termination takes: coverage and instalments stop together. A termination cannot keep
+coverage until a later end date while stopping advance instalments sooner. The fee is billed on its own invoice when
+the termination is recorded, not on the subscription invoice of the period holding `effective_at`, and with a fee
+`effective_at` cannot precede the current billing period start.
 
 After the commit, `recomputeDrafts` recomputes the subscription's drafts and skipped period invoices for periods ending after
 `effective_at`, so a backdated termination stops billing the commitment on drafts computed before it. `Create` does the

@@ -1026,6 +1026,11 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 	}
 
 	monthlyArrears := []dto.BillingTermInput{monthlyArrearsTerm()}
+	monthlyAdvance := []dto.BillingTermInput{{
+		Kind:           types.BillingTermKindRecurring,
+		ValueType:      types.BillingTermValueRemainder,
+		InvoiceCadence: lo.ToPtr(types.InvoiceCadenceAdvance),
+	}}
 
 	tests := []struct {
 		name           string
@@ -1070,6 +1075,20 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 			wantCancelled:  12,
 			wantSettlement: "300",
 			wantService:    types.Period{Start: jan, End: time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)},
+		},
+		{
+			name:           "monthly advance, terminated as May's falls due",
+			terms:          monthlyAdvance,
+			at:             may,
+			wantCancelled:  12,
+			wantSettlement: "400",
+			wantService:    types.Period{Start: jan, End: may},
+		},
+		{
+			name:          "all upfront, terminated at the start",
+			terms:         []dto.BillingTermInput{wholeValueUpfront(nil)},
+			at:            jan,
+			wantCancelled: 1,
 		},
 	}
 	for _, tt := range tests {
@@ -1805,24 +1824,32 @@ func (s *CommitmentE2ESuite) TestPlanInstalments_AnEditStartsAtTheAnniversaryPer
 	s.True(planned[0].BillOn.Equal(time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)), "starts on %s", planned[0].BillOn)
 }
 
-// A terminated commitment still owes the instalments due by its termination, one falling due at that instant included.
+// A terminated commitment still owes the instalments due by its termination that pay for time before it: an arrears
+// instalment falling due at that instant is owed, an advance one is not.
 func TestCancelledByTermination(t *testing.T) {
+	feb := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 	mar := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	apr := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	advance := &billingterm.Instalment{BillOn: mar, ServicePeriodStart: mar, ServicePeriodEnd: apr}
+	arrears := &billingterm.Instalment{BillOn: mar, ServicePeriodStart: feb, ServicePeriodEnd: mar}
 	tests := []struct {
 		name         string
+		inst         *billingterm.Instalment
 		status       types.CommitmentStatus
 		terminatedAt *time.Time
 		want         bool
 	}{
-		{name: "active", status: types.CommitmentStatusActive},
-		{name: "terminated after it fell due", status: types.CommitmentStatusTerminated, terminatedAt: lo.ToPtr(mar.AddDate(0, 0, 14))},
-		{name: "terminated as it fell due", status: types.CommitmentStatusTerminated, terminatedAt: &mar},
-		{name: "terminated before it fell due", status: types.CommitmentStatusTerminated, terminatedAt: lo.ToPtr(mar.AddDate(0, 0, -14)), want: true},
+		{name: "active", inst: advance, status: types.CommitmentStatusActive},
+		{name: "advance terminated after it fell due", inst: advance, status: types.CommitmentStatusTerminated, terminatedAt: lo.ToPtr(mar.AddDate(0, 0, 14))},
+		{name: "advance terminated as it fell due", inst: advance, status: types.CommitmentStatusTerminated, terminatedAt: &mar, want: true},
+		{name: "advance terminated before it fell due", inst: advance, status: types.CommitmentStatusTerminated, terminatedAt: lo.ToPtr(mar.AddDate(0, 0, -14)), want: true},
+		{name: "arrears terminated as it fell due", inst: arrears, status: types.CommitmentStatusTerminated, terminatedAt: &mar},
+		{name: "arrears terminated before it fell due", inst: arrears, status: types.CommitmentStatusTerminated, terminatedAt: lo.ToPtr(mar.AddDate(0, 0, -14)), want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &commitment.Commitment{CommitmentStatus: tt.status, TerminatedAt: tt.terminatedAt}
-			require.Equal(t, tt.want, cancelledByTermination(c, &billingterm.Instalment{BillOn: mar}))
+			require.Equal(t, tt.want, cancelledByTermination(c, tt.inst))
 		})
 	}
 }
@@ -1855,7 +1882,6 @@ func TestAnniversaryPeriods(t *testing.T) {
 				Value:       decimal.NewFromInt(100),
 				Currency:    "usd",
 				Measurement: types.CommitmentMeasurementBillingPeriod,
-				Timezone:    types.DefaultTimezone,
 				StartDate:   tt.start,
 				EndDate:     lo.ToPtr(tt.start.AddDate(1, 0, 0)),
 			}

@@ -175,9 +175,8 @@ func periodCapacity(
 			buckets = int64(cutByEnd.Sub(first) / dur)
 		}
 	} else {
-		loc := c.Location()
 		for b := first; b.Before(cutByEnd); b = nextBucketStart(b, bucket, &anchor) {
-			if c.ActiveWindows.Contains(b, loc) {
+			if c.ActiveWindows.Contains(b) {
 				buckets++
 			}
 		}

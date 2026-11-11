@@ -28,6 +28,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
@@ -105,6 +106,7 @@ type InvoiceService interface {
 	SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, invoiceID string) error
 	SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error
 	PublishInvoiceSyncWebhook(ctx context.Context, invoiceID string, provider types.SecretProvider, syncErr string)
+	PublishInvoicePaymentFailed(ctx context.Context, event webhookDto.InternalInvoicePaymentFailedEvent)
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
 	IsInvoiceFinalizationDue(ctx context.Context, inv *invoice.Invoice) (bool, error)
 	ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*invoice.Invoice, error)
@@ -2228,7 +2230,7 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 	}
 
 	// A submitted auto-charge skips the sync so the customer gets no payable link for it.
-	charged, err := s.autoChargeRazorpayInvoice(ctx, inv, razorpayIntegration.InvoiceSyncSvc)
+	charged, err := s.autoChargeRazorpayInvoice(ctx, inv, razorpayIntegration.PaymentSvc)
 	if err != nil || charged {
 		return err
 	}
@@ -2262,7 +2264,8 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 }
 
 // autoChargeRazorpayInvoice charges the saved Razorpay mandate when the invoice's subscription collects automatically.
-func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *invoice.Invoice, syncSvc *razorpay.InvoiceSyncService) (bool, error) {
+// It returns true when nothing is left for the invoice sync to do.
+func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *invoice.Invoice, razorpaySvc *razorpay.PaymentService) (bool, error) {
 	if inv.SubscriptionID == nil {
 		return false, nil
 	}
@@ -2275,7 +2278,117 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		return false, nil
 	}
 
-	return syncSvc.TryAutoCharge(ctx, inv)
+	failedEvent := webhookDto.InternalInvoicePaymentFailedEvent{
+		InvoiceID:           inv.ID,
+		Provider:            types.SecretProviderRazorpay,
+		IsAutoChargeAttempt: true,
+	}
+
+	razorpayCustomerID, token, err := razorpaySvc.SelectSavedToken(ctx, inv.CustomerID, inv.AmountRemaining, "")
+	if err != nil {
+		s.Logger.Info(ctx, "list Razorpay tokens failed, sending the invoice instead",
+			"invoice_id", inv.ID, "customer_id", inv.CustomerID, "error", err)
+		return false, nil
+	}
+	if token == nil {
+		failedEvent.Reason = types.InvoicePaymentFailureReasonPaymentMethodUnavailable
+		s.PublishInvoicePaymentFailed(ctx, failedEvent)
+		return false, nil
+	}
+
+	if s.Locker != nil {
+		lock, err := payments.LockInvoiceCharge(ctx, s.Locker, s.PaymentRepo, inv.EnvironmentID, inv.ID, "")
+		if ierr.IsAlreadyExists(err) {
+			return true, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		defer func() {
+			if releaseErr := lock.Release(ctx); releaseErr != nil {
+				s.Logger.Error(ctx, "failed to release auto-charge lock", "error", releaseErr, "invoice_id", inv.ID)
+			}
+		}()
+	}
+
+	freshInv, err := s.InvoiceRepo.Get(ctx, inv.ID)
+	if err != nil {
+		return false, err
+	}
+	if freshInv.PaymentStatus == types.PaymentStatusSucceeded || freshInv.PaymentStatus == types.PaymentStatusOverpaid {
+		return true, nil
+	}
+
+	cust, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
+	if err != nil {
+		return false, err
+	}
+
+	paymentSvc := NewPaymentService(s.ServiceParams)
+	pymnt, err := paymentSvc.CreatePayment(ctx, &dto.CreatePaymentRequest{
+		IdempotencyKey:    "autocharge:" + inv.ID,
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     inv.ID,
+		PaymentMethodType: token.Method,
+		PaymentMethodID:   token.GatewayMethodID,
+		PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeRazorpay),
+		Amount:            freshInv.AmountRemaining,
+		Currency:          freshInv.Currency,
+		PaymentTrigger:    types.PaymentTriggerInvoiceAutoCharge,
+	})
+	if err != nil {
+		return false, err
+	}
+	// A reused payment that already moved on was charged or reported by an earlier run.
+	if pymnt.PaymentStatus != types.PaymentStatusInitiated && pymnt.PaymentStatus != types.PaymentStatusPending {
+		return true, nil
+	}
+
+	result, err := razorpaySvc.AutoCharge(ctx, razorpay.AutoChargeRequest{
+		InvoiceID:          inv.ID,
+		RazorpayCustomerID: razorpayCustomerID,
+		TokenID:            token.GatewayMethodID,
+		Amount:             freshInv.AmountRemaining,
+		Currency:           freshInv.Currency,
+		FlexPricePaymentID: pymnt.ID,
+		Contact:            lo.FromPtr(cust.Contact),
+		Email:              cust.Email,
+	})
+	if err != nil {
+		// TODO: a timeout can still capture at Razorpay after this; refund a capture that lands on this FAILED payment.
+		failed := string(types.PaymentStatusFailed)
+		errMsg := err.Error()
+		if _, updateErr := paymentSvc.UpdatePayment(ctx, pymnt.ID, dto.UpdatePaymentRequest{
+			PaymentStatus: &failed,
+			FailedAt:      lo.ToPtr(clock.Now()),
+			ErrorMessage:  &errMsg,
+		}); updateErr != nil {
+			s.Logger.Error(ctx, "failed to mark auto-charge payment as failed",
+				"error", updateErr,
+				"invoice_id", inv.ID,
+				"payment_id", pymnt.ID)
+		}
+
+		failedEvent.Reason = types.InvoicePaymentFailureReasonProviderError
+		failedEvent.PaymentID = pymnt.ID
+		failedEvent.Error = errMsg
+		s.PublishInvoicePaymentFailed(ctx, failedEvent)
+		return false, nil
+	}
+
+	processing := string(types.PaymentStatusProcessing)
+	if _, err := paymentSvc.UpdatePayment(ctx, pymnt.ID, dto.UpdatePaymentRequest{
+		PaymentStatus:    &processing,
+		GatewayPaymentID: lo.EmptyableToPtr(result.RazorpayPaymentID),
+		Amount:           &freshInv.AmountRemaining,
+	}); err != nil {
+		// The charge is submitted; the Razorpay webhook reconciles via flexprice_payment_id.
+		s.Logger.Error(ctx, "failed to mark auto-charge payment as processing",
+			"error", err,
+			"invoice_id", inv.ID,
+			"payment_id", pymnt.ID)
+	}
+	return true, nil
 }
 
 // SyncInvoiceToChargebeeIfEnabled syncs the invoice to Chargebee if Chargebee connection is enabled.
@@ -4276,6 +4389,31 @@ func (s *invoiceService) PublishInvoiceSyncWebhook(ctx context.Context, invoiceI
 			"event_name", eventName,
 			"invoice_id", invoiceID,
 			"provider", provider)
+	}
+}
+
+// PublishInvoicePaymentFailed publishes invoice.payment.failed; the tenant comes from ctx.
+func (s *invoiceService) PublishInvoicePaymentFailed(ctx context.Context, internal webhookDto.InternalInvoicePaymentFailedEvent) {
+	internal.TenantID = types.GetTenantID(ctx)
+	event, err := types.NewWebhookEvent(types.WebhookEventInvoicePaymentFailed).
+		WithIdentityFromContext(ctx).
+		WithEntity(types.SystemEntityTypeInvoice, internal.InvoiceID).
+		WithPayload(internal).
+		Build()
+	if err != nil {
+		s.Logger.Error(ctx, "failed to build invoice payment failed webhook",
+			"error", err,
+			"invoice_id", internal.InvoiceID,
+			"provider", internal.Provider)
+		return
+	}
+
+	if err := s.WebhookPublisher.PublishWebhook(ctx, event); err != nil {
+		s.Logger.Error(ctx, "failed to publish invoice payment failed webhook",
+			"error", err,
+			"invoice_id", internal.InvoiceID,
+			"provider", internal.Provider,
+			"reason", internal.Reason)
 	}
 }
 
