@@ -1364,6 +1364,10 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 			Mark(ierr.ErrValidation)
 	}
 
+	if err := s.requireObject(ctx, store, key, id, false); err != nil {
+		return "", err
+	}
+
 	url, err := store.PresignGet(ctx, key, 30*time.Minute)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to generate presigned URL", "error", err)
@@ -1401,6 +1405,10 @@ func (s *taskService) presignManagedCopy(ctx context.Context, t *task.Task, st *
 			Mark(ierr.ErrInternal)
 	}
 
+	if err := s.requireObject(ctx, store, key, t.ID, true); err != nil {
+		return "", err
+	}
+
 	url, err := store.PresignGet(ctx, key, 30*time.Minute)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to generate presigned URL", "error", err, "task_id", t.ID)
@@ -1409,4 +1417,25 @@ func (s *taskService) presignManagedCopy(ctx context.Context, t *task.Task, st *
 			Mark(ierr.ErrInternal)
 	}
 	return url, nil
+}
+
+// Fails not-found when file is gone.
+func (s *taskService) requireObject(ctx context.Context, store storage.Storage, key, taskID string, strict bool) error {
+	exists, err := store.Exists(ctx, key)
+	if err != nil && !strict {
+		s.Logger.Info(ctx, "export file check skipped", "task_id", taskID)
+		return nil
+	}
+	if err != nil {
+		s.Logger.Error(ctx, "failed to check export file", "error", err, "task_id", taskID)
+		return ierr.WithError(err).
+			WithHint("Failed to check export file").
+			Mark(ierr.ErrInternal)
+	}
+	if !exists {
+		return ierr.NewError("The export file has expired or was removed").
+			WithHint("The export file has expired or was removed").
+			Mark(ierr.ErrNotFound)
+	}
+	return nil
 }

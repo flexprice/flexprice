@@ -66,6 +66,9 @@ type ScheduledTaskDetails struct {
 	JobConfig       *types.S3JobConfig
 	ManagedCopy     bool
 	SourceConfig    *types.ExportSourceConfig
+	Name            string
+	Interval        types.ScheduledTaskInterval
+	EmailRecipients []string
 }
 
 // GetScheduledTaskDetails fetches scheduled task and calculates time range
@@ -143,7 +146,15 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 		"start_time", startTime,
 		"end_time", endTime)
 
+	var recipients []string
+	if task.EmailConfig != nil {
+		recipients = task.EmailConfig.Recipients
+	}
+
 	return &ScheduledTaskDetails{
+		Name:            task.Name,
+		Interval:        task.Interval,
+		EmailRecipients: recipients,
 		ScheduledTaskID: task.ID,
 		TenantID:        task.TenantID,
 		EnvID:           task.EnvironmentID,

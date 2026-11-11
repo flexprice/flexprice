@@ -77,6 +77,9 @@ func (ScheduledTask) Fields() []ent.Field {
 		field.JSON("source_config", &types.ExportSourceConfig{}).
 			Optional().
 			Comment("Report export source"),
+		field.JSON("email_config", &types.ExportEmailConfig{}).
+			Optional().
+			Comment("Export email recipients"),
 	}
 }
 

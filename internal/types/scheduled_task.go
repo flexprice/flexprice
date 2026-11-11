@@ -252,6 +252,32 @@ func (e ScheduledTaskEntityType) Validate() error {
 		Mark(ierr.ErrValidation)
 }
 
+// MaxExportEmailRecipients caps recipients per export.
+const MaxExportEmailRecipients = 10
+
+// ExportEmailConfig lists export email recipients.
+type ExportEmailConfig struct {
+	Recipients []string `json:"recipients"`
+}
+
+// NormalizeRecipients trims, lowercases and dedupes, keeping order.
+func NormalizeRecipients(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, raw := range in {
+		addr := NormalizeEmail(raw)
+		if addr == "" {
+			continue
+		}
+		if _, dup := seen[addr]; dup {
+			continue
+		}
+		seen[addr] = struct{}{}
+		out = append(out, addr)
+	}
+	return out
+}
+
 // S3CompressionType represents the compression type for S3 uploads
 type S3CompressionType string
 
@@ -607,4 +633,26 @@ func (s *S3JobConfig) GetExportMetadataFields() ExportMetadataFields {
 		return nil
 	}
 	return s.ExportMetadataFields
+}
+
+// Export delivery types and statuses.
+const (
+	ExportDeliveryTypeFlexprice = "flexprice"
+	ExportDeliveryTypeS3        = "s3"
+	ExportDeliveryTypeGCS       = "gcs"
+	ExportDeliveryTypeEmail     = "email"
+
+	ExportDeliveryStatusDelivered   = "delivered"
+	ExportDeliveryStatusFailed      = "failed"
+	ExportDeliveryStatusSkipped     = "skipped"
+	ExportDeliveryStatusRateLimited = "rate_limited"
+)
+
+// ExportDelivery is one destination result.
+type ExportDelivery struct {
+	Type   string    `json:"type"`
+	Target string    `json:"target"`
+	Status string    `json:"status"`
+	Detail string    `json:"detail,omitempty"`
+	At     time.Time `json:"at"`
 }

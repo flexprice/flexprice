@@ -49,6 +49,7 @@ type Configuration struct {
 	S3                     S3Config                     `validate:"required"`
 	Storage                StorageConfig                `mapstructure:"storage" validate:"omitempty"`
 	GCS                    GCSConfig                    `mapstructure:"gcs" validate:"omitempty"`
+	Exports                ExportsConfig                `mapstructure:"exports" validate:"omitempty"`
 	FlexpriceS3Exports     FlexpriceS3ExportsConfig     `mapstructure:"flexprice_s3_exports" validate:"omitempty"`
 	FlexpriceGCSExports    FlexpriceGCSExportsConfig    `mapstructure:"flexprice_gcs_exports" validate:"omitempty"`
 	FlexpriceS3Imports     FlexpriceS3ImportsConfig     `mapstructure:"flexprice_s3_imports" validate:"omitempty"`
@@ -157,6 +158,17 @@ type BucketConfig struct {
 	Bucket                string `mapstructure:"bucket" validate:"required"`
 	PresignExpiryDuration string `mapstructure:"presign_expiry_duration" validate:"required"`
 	KeyPrefix             string `mapstructure:"key_prefix" validate:"omitempty"`
+}
+
+// ExportsConfig holds scheduled export delivery settings.
+type ExportsConfig struct {
+	ConsoleBaseURL   string `mapstructure:"console_base_url" validate:"omitempty"`
+	MaxEmailsPerHour int    `mapstructure:"max_emails_per_hour" validate:"omitempty"`
+}
+
+// ExportEmailAvailable reports email delivery readiness.
+func (c *Configuration) ExportEmailAvailable() bool {
+	return c.Email.Enabled && c.Email.ResendAPIKey != "" && c.Email.FromAddress != "" && c.Exports.ConsoleBaseURL != ""
 }
 
 // Credential sources for FlexpriceS3ExportsConfig. Exactly one is active per

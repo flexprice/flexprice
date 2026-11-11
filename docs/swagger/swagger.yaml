@@ -3719,6 +3719,10 @@ definitions:
     properties:
       connection_id:
         type: string
+      email_config:
+        allOf:
+        - $ref: '#/definitions/types.ExportEmailConfig'
+        description: Users in this account who receive each run by email.
       enabled:
         type: boolean
       entity_type:
@@ -4981,6 +4985,13 @@ definitions:
     properties:
       plan_change:
         $ref: '#/definitions/PlanChangeScheduleResult'
+    type: object
+  ExportEmailCapability:
+    properties:
+      available:
+        type: boolean
+      max_recipients:
+        type: integer
     type: object
   FXRateResponse:
     properties:
@@ -8026,12 +8037,19 @@ definitions:
       vpa:
         type: string
     type: object
+  ScheduledTaskCapabilitiesResponse:
+    properties:
+      email:
+        $ref: '#/definitions/ExportEmailCapability'
+    type: object
   ScheduledTaskResponse:
     properties:
       connection_id:
         type: string
       created_at:
         type: string
+      email_config:
+        $ref: '#/definitions/types.ExportEmailConfig'
       enabled:
         type: boolean
       entity_type:
@@ -10545,6 +10563,10 @@ definitions:
     type: object
   UpdateScheduledTaskRequest:
     properties:
+      email_config:
+        allOf:
+        - $ref: '#/definitions/types.ExportEmailConfig'
+        description: Absent keeps recipients; empty recipients clears them.
       enabled:
         type: boolean
       name:
@@ -16378,6 +16400,13 @@ definitions:
     - EntitlementGrantScopeFeature
     - EntitlementGrantScopeSubscription
     - EntitlementGrantScopeGroup
+  types.ExportEmailConfig:
+    properties:
+      recipients:
+        items:
+          type: string
+        type: array
+    type: object
   types.ExportSchedule:
     properties:
       day_of_month:
@@ -26747,6 +26776,28 @@ paths:
       summary: Trigger force run
       tags:
       - Scheduled Tasks
+  /tasks/scheduled/capabilities:
+    get:
+      description: Use when building the export form to learn whether email delivery
+        is available and the recipient limit.
+      operationId: getScheduledTaskCapabilities
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ScheduledTaskCapabilitiesResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get scheduled task capabilities
+      tags:
+      - Scheduled Tasks
+      x-scope: read
   /tasks/scheduled/schedule-draft-finalization:
     post:
       consumes:

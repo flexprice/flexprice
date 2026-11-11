@@ -274,6 +274,10 @@ data:
       # (resend_api_key) is NOT rendered — it's bound from FLEXPRICE_EMAIL_RESEND_API_KEY via BindEnv.
       zapier_webhook_url: {{ .Values.app.email.zapierWebhookUrl | quote }}
     
+    exports:
+      console_base_url: {{ .Values.exports.consoleBaseUrl | quote }}
+      max_emails_per_hour: {{ .Values.exports.maxEmailsPerHour }}
+
     feature_flag:
       enable_feature_usage_for_analytics: {{ .Values.featureFlag.enableFeatureUsageForAnalytics }}
       force_v1_for_tenant: {{ .Values.featureFlag.forceV1ForTenant | quote }}

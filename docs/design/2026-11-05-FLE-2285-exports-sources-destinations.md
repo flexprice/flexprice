@@ -204,6 +204,16 @@ Limits: query timeout 5 minutes, activity retries 3, validation errors non-retry
 - `POST /tasks/scheduled` accepts `source_config` and the new entity types, and responses return `source_config`. The entity type enum is open in the OpenAPI overlay.
 - P2-R8: report sources need analytics read on create, update, run and download. The check fails closed. Delete, get and list are not gated. Scheduled runs do not re-check the creator's permissions; download stays gated.
 
+**Phase 3 as built.**
+- Decisions: a Flexprice copy is made only when the export has no S3 connection (no `DeliverS3`, no managed copy for S3 exports). Deleting a connection still deletes its exports (no `DetachConnection`). Email is sent per run, plain text, deeplink only, to at most 10 tenant users, never for hourly exports, with a per-tenant hourly cap. Email is offered only when configured.
+- `email_config {recipients}` column (migration `20261111120000`). Create and update validate recipients (syntax, dedupe, max 10, tenant users only). On `PUT`, an absent `email_config` leaves it unchanged and `[]` clears it.
+- `GET /tasks/scheduled/capabilities` returns `{email:{available,max_recipients}}`. `available` is `email.enabled` and a Resend key and `exports.console_base_url` all set.
+- Config: `exports.console_base_url` and `exports.max_emails_per_hour` (default 200); env `FLEXPRICE_EXPORTS_CONSOLE_BASE_URL` and `FLEXPRICE_EXPORTS_MAX_EMAILS_PER_HOUR`.
+- Workflow: after the run completes or fails, `GetVersion("export-deliveries")` v1 runs `SendExportEmails` (non-hourly, with recipients), then `RecordDeliveries`, which writes `metadata.deliveries[{type: flexprice|s3|gcs|email, target (masked), status: delivered|failed|skipped|rate_limited, detail, at}]`. Failed runs also send email.
+- Email cap: Redis counter `exports:email:{tenant}:{yyyymmddhh}`. With Redis disabled there is no cap; a counter error marks the delivery failed. Resend idempotency key is `exports-{task_id}-{sha256(recipient)[:16]}`.
+- Deeplink: `{console_base_url}/exports/{scheduled_task_id}/runs/{task_id}?env={environment_id}`.
+- Download: a missing object returns 404 "expired or removed".
+
 The shapes below (`destinations`, `source_config`, `style`, `run_now`) are removed from Phase 1 and kept as the later-phase sketch.
 
 Reuse `/tasks/scheduled`; extend its DTOs.

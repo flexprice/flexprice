@@ -186,3 +186,19 @@ func (r *InMemoryRedis) GetBulk(ctx context.Context, keys []string) (map[string]
 	}
 	return found, missing
 }
+
+// Incr increments counter, sets ttl.
+func (r *InMemoryRedis) Incr(_ context.Context, key string, ttl time.Duration) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.values[key]
+	n, _ := e.value.(int64)
+	if !ok || (!e.expiration.IsZero() && time.Now().After(e.expiration)) {
+		n = 0
+		e = inMemoryRedisEntry{expiration: time.Now().Add(ttl)}
+	}
+	n++
+	e.value = n
+	r.values[key] = e
+	return n, nil
+}

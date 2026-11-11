@@ -47,6 +47,8 @@ const (
 	FieldSchedule = "schedule"
 	// FieldSourceConfig holds the string denoting the source_config field in the database.
 	FieldSourceConfig = "source_config"
+	// FieldEmailConfig holds the string denoting the email_config field in the database.
+	FieldEmailConfig = "email_config"
 	// Table holds the table name of the scheduledtask in the database.
 	Table = "scheduled_tasks"
 )
@@ -71,6 +73,7 @@ var Columns = []string{
 	FieldManagedCopy,
 	FieldSchedule,
 	FieldSourceConfig,
+	FieldEmailConfig,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

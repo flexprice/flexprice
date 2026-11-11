@@ -246,3 +246,31 @@ func TestBillingConfig_HasSecureZapierWebhookURL(t *testing.T) {
 		})
 	}
 }
+
+func TestExportEmailAvailable(t *testing.T) {
+	tests := []struct {
+		name    string
+		enabled bool
+		key     string
+		from    string
+		baseURL string
+		want    bool
+	}{
+		{"all set", true, "k", "a@b.co", "https://app", true},
+		{"disabled", false, "k", "a@b.co", "https://app", false},
+		{"no key", true, "", "a@b.co", "https://app", false},
+		{"no from", true, "k", "", "https://app", false},
+		{"no base url", true, "k", "a@b.co", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Configuration{
+				Email:   EmailConfig{Enabled: tt.enabled, ResendAPIKey: tt.key, FromAddress: tt.from},
+				Exports: ExportsConfig{ConsoleBaseURL: tt.baseURL},
+			}
+			if got := c.ExportEmailAvailable(); got != tt.want {
+				t.Errorf("got %v want %v", got, tt.want)
+			}
+		})
+	}
+}

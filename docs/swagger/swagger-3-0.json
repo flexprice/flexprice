@@ -15925,6 +15925,44 @@
         "x-codegen-request-body-name": "scheduled_task"
       }
     },
+    "/tasks/scheduled/capabilities": {
+      "get": {
+        "tags": [
+          "Scheduled Tasks"
+        ],
+        "summary": "Get scheduled task capabilities",
+        "description": "Use when building the export form to learn whether email delivery is available and the recipient limit.",
+        "operationId": "getScheduledTaskCapabilities",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledTaskCapabilitiesResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/tasks/scheduled/schedule-draft-finalization": {
       "post": {
         "tags": [
@@ -25443,6 +25481,9 @@
           "connection_id": {
             "type": "string"
           },
+          "email_config": {
+            "$ref": "#/components/schemas/types.ExportEmailConfig"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -27058,6 +27099,17 @@
         "properties": {
           "plan_change": {
             "$ref": "#/components/schemas/PlanChangeScheduleResult"
+          }
+        }
+      },
+      "ExportEmailCapability": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "max_recipients": {
+            "type": "integer"
           }
         }
       },
@@ -31111,6 +31163,14 @@
           }
         }
       },
+      "ScheduledTaskCapabilitiesResponse": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "$ref": "#/components/schemas/ExportEmailCapability"
+          }
+        }
+      },
       "ScheduledTaskResponse": {
         "type": "object",
         "properties": {
@@ -31120,6 +31180,9 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "email_config": {
+            "$ref": "#/components/schemas/types.ExportEmailConfig"
           },
           "enabled": {
             "type": "boolean"
@@ -34364,6 +34427,9 @@
       "UpdateScheduledTaskRequest": {
         "type": "object",
         "properties": {
+          "email_config": {
+            "$ref": "#/components/schemas/types.ExportEmailConfig"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -42282,6 +42348,18 @@
           "EntitlementGrantScopeGroup"
         ],
         "x-speakeasy-name-override": "EntitlementGrantScopeEntityType"
+      },
+      "types.ExportEmailConfig": {
+        "type": "object",
+        "properties": {
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "x-speakeasy-name-override": "ExportEmailConfig"
       },
       "types.ExportSchedule": {
         "type": "object",

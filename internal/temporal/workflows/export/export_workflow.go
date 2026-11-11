@@ -213,6 +213,8 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		}
 		_ = workflow.ExecuteActivity(ctx, taskActivity.UpdateTaskStatus, failInput).Get(ctx, nil)
 
+		deliverRun(ctx, &taskDetails, taskID, types.TaskStatusFailed, 0, err)
+
 		success = false
 	} else {
 		logger.Info("Export completed",
@@ -244,6 +246,8 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 
 		success = true
 
+		deliverRun(ctx, &taskDetails, taskID, types.TaskStatusCompleted, exportOutput.RecordCount, nil)
+
 		logger.Info("Export workflow completed successfully", "task_id", taskID)
 	}
 
@@ -261,4 +265,85 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		RecordCount: exportOutput.RecordCount,
 		Success:     true,
 	}, nil
+}
+
+const maxDeliveryDetailLen = 200
+
+// Never fails the run.
+func deliverRun(ctx workflow.Context, details *export.ScheduledTaskDetails, taskID string, status types.TaskStatus, recordCount int, runErr error) {
+	if workflow.GetVersion(ctx, "export-deliveries", workflow.DefaultVersion, 1) != 1 {
+		return
+	}
+	logger := workflow.GetLogger(ctx)
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 2 * time.Minute,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
+	})
+	var delivery export.DeliveryActivity
+
+	deliveries := []types.ExportDelivery{fileDelivery(ctx, details, runErr)}
+
+	if len(details.EmailRecipients) > 0 && details.Interval != types.ScheduledTaskIntervalHourly {
+		var out export.SendExportEmailsOutput
+		emailCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+			StartToCloseTimeout: 5 * time.Minute,
+			RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
+		})
+		err := workflow.ExecuteActivity(emailCtx, delivery.SendExportEmails, export.SendExportEmailsInput{
+			TaskID:          taskID,
+			ScheduledTaskID: details.ScheduledTaskID,
+			TenantID:        details.TenantID,
+			EnvID:           details.EnvID,
+			ExportName:      details.Name,
+			EntityType:      details.EntityType,
+			Interval:        details.Interval,
+			Recipients:      details.EmailRecipients,
+			RunStatus:       status,
+			WindowStart:     details.StartTime,
+			WindowEnd:       details.EndTime,
+			RecordCount:     recordCount,
+		}).Get(emailCtx, &out)
+		if err != nil {
+			logger.Error("Failed to send export emails", "error", err, "task_id", taskID)
+		} else {
+			deliveries = append(deliveries, out.Deliveries...)
+		}
+	}
+
+	err := workflow.ExecuteActivity(ctx, delivery.RecordDeliveries, export.RecordDeliveriesInput{
+		TaskID:     taskID,
+		TenantID:   details.TenantID,
+		EnvID:      details.EnvID,
+		Deliveries: deliveries,
+	}).Get(ctx, nil)
+	if err != nil {
+		logger.Error("Failed to record deliveries", "error", err, "task_id", taskID)
+	}
+}
+
+func fileDelivery(ctx workflow.Context, details *export.ScheduledTaskDetails, runErr error) types.ExportDelivery {
+	d := types.ExportDelivery{
+		Type:   types.ExportDeliveryTypeFlexprice,
+		Target: "Flexprice",
+		Status: types.ExportDeliveryStatusDelivered,
+		At:     workflow.Now(ctx),
+	}
+	if details.ConnectionID != "" {
+		d.Type = types.ExportDeliveryTypeS3
+		d.Target = "s3"
+		if cfg := details.JobConfig; cfg != nil {
+			d.Target = cfg.Bucket + "/" + cfg.KeyPrefix
+			if cfg.Provider == types.SecretProviderGCS {
+				d.Type = types.ExportDeliveryTypeGCS
+			}
+		}
+	}
+	if runErr != nil {
+		d.Status = types.ExportDeliveryStatusFailed
+		d.Detail = runErr.Error()
+		if r := []rune(d.Detail); len(r) > maxDeliveryDetailLen {
+			d.Detail = string(r[:maxDeliveryDetailLen])
+		}
+	}
+	return d
 }

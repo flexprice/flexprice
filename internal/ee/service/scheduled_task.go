@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"net/mail"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -15,6 +16,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
+	"github.com/flexprice/flexprice/internal/domain/user"
+	"github.com/flexprice/flexprice/internal/email"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
@@ -37,6 +40,7 @@ type ScheduledTaskService interface {
 	UpdateScheduledTask(ctx context.Context, id string, req dto.UpdateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error)
 	DeleteScheduledTask(ctx context.Context, id string) error
 	TriggerForceRun(ctx context.Context, id string, req dto.TriggerForceRunRequest) (*dto.TriggerForceRunResponse, error)
+	GetCapabilities(ctx context.Context) *dto.ScheduledTaskCapabilitiesResponse
 
 	CalculateIntervalBoundaries(currentTime time.Time, interval types.ScheduledTaskInterval) (startTime, endTime time.Time)
 	ScheduleUpdateBillingPeriod(ctx context.Context) (string, error)
@@ -52,6 +56,7 @@ type scheduledTaskService struct {
 	storageResolver storage.Resolver
 	rbac            *rbac.RBACService
 	analytics       AnalyticsService
+	userRepo        user.Repository
 }
 
 func NewScheduledTaskService(
@@ -63,6 +68,7 @@ func NewScheduledTaskService(
 	storageResolver storage.Resolver,
 	rbacService *rbac.RBACService,
 	analytics AnalyticsService,
+	userRepo user.Repository,
 ) ScheduledTaskService {
 	return &scheduledTaskService{
 		repo:            repo,
@@ -73,7 +79,68 @@ func NewScheduledTaskService(
 		storageResolver: storageResolver,
 		rbac:            rbacService,
 		analytics:       analytics,
+		userRepo:        userRepo,
 	}
+}
+
+// emailConfigOrNil normalizes recipients; empty becomes nil.
+func emailConfigOrNil(cfg *types.ExportEmailConfig) *types.ExportEmailConfig {
+	if cfg == nil {
+		return nil
+	}
+	recipients := types.NormalizeRecipients(cfg.Recipients)
+	if len(recipients) == 0 {
+		return nil
+	}
+	return &types.ExportEmailConfig{Recipients: recipients}
+}
+
+// Requires recipients be tenant users.
+func (s *scheduledTaskService) validateRecipients(ctx context.Context, interval types.ScheduledTaskInterval, cfg *types.ExportEmailConfig) error {
+	normalized := emailConfigOrNil(cfg)
+	if normalized == nil {
+		return nil
+	}
+	if !s.config.ExportEmailAvailable() {
+		return ierr.NewError("email is not configured").
+			WithHint("Email is not configured").
+			Mark(ierr.ErrValidation)
+	}
+	if interval == types.ScheduledTaskIntervalHourly {
+		return ierr.NewError("email not supported for hourly exports").
+			WithHint("Email delivery is not available for hourly exports").
+			Mark(ierr.ErrValidation)
+	}
+	if len(normalized.Recipients) > types.MaxExportEmailRecipients {
+		return ierr.NewError("too many recipients").
+			WithHintf("At most %d recipients are allowed", types.MaxExportEmailRecipients).
+			Mark(ierr.ErrValidation)
+	}
+	if types.GetTenantID(ctx) == "" {
+		return ierr.NewError("tenant missing from context").Mark(ierr.ErrInternal)
+	}
+	if s.userRepo == nil {
+		return ierr.NewError("user repository not configured").Mark(ierr.ErrInternal)
+	}
+	for _, addr := range normalized.Recipients {
+		masked := email.MaskAddress(addr)
+		if parsed, err := mail.ParseAddress(addr); err != nil || parsed.Address != addr {
+			return ierr.NewError("invalid recipient").
+				WithHintf("%s is not a valid email address", masked).
+				Mark(ierr.ErrValidation)
+		}
+		if _, err := s.userRepo.GetByEmail(ctx, addr); err != nil {
+			if !ierr.IsNotFound(err) {
+				return ierr.NewError("failed to verify recipient").
+					WithHint("Could not verify email recipients").
+					Mark(ierr.ErrDatabase)
+			}
+			return ierr.NewError("recipient is not a user").
+				WithHintf("%s is not a user in this account", masked).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
 }
 
 // Denies report exports without analytics read.
@@ -140,6 +207,9 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 	if err := s.validateSource(ctx, req); err != nil {
 		return nil, err
 	}
+	if err := s.validateRecipients(ctx, req.Interval, req.EmailConfig); err != nil {
+		return nil, err
+	}
 
 	// Create scheduled task
 	now := clock.Now()
@@ -187,6 +257,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		ManagedCopy:        managedCopy,
 		Schedule:           req.Schedule,
 		SourceConfig:       req.SourceConfig,
+		EmailConfig:        emailConfigOrNil(req.EmailConfig),
 		Status:             types.StatusPublished,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -319,7 +390,7 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 			Mark(ierr.ErrValidation)
 	}
 
-	if req.Name != nil || req.Schedule != nil {
+	if req.Name != nil || req.Schedule != nil || req.EmailConfig != nil {
 		if err := s.updateExportSettings(ctx, task, req); err != nil {
 			return nil, err
 		}
@@ -930,4 +1001,13 @@ func (s *scheduledTaskService) ScheduleDraftFinalization(ctx context.Context) (s
 	}
 
 	return "Triggered draft finalization schedule successfully", nil
+}
+
+func (s *scheduledTaskService) GetCapabilities(_ context.Context) *dto.ScheduledTaskCapabilitiesResponse {
+	return &dto.ScheduledTaskCapabilitiesResponse{
+		Email: dto.ExportEmailCapability{
+			Available:     s.config.ExportEmailAvailable(),
+			MaxRecipients: types.MaxExportEmailRecipients,
+		},
+	}
 }
