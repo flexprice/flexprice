@@ -30,7 +30,7 @@ func TestCustomerKeysetPaging(t *testing.T) {
 
 	runID := types.GenerateUUIDWithPrefix("kset")
 	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_"+runID)
-	repo := NewCustomerRepository(client, log, nil)
+	repo := NewCustomerRepository(client, log, noopRedisCache{})
 	base := types.GetDefaultBaseModel(ctx)
 
 	var created []*domainCustomer.Customer
