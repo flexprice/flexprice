@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.temporal.io/api/serviceerror"
 	sdkclient "go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/temporal"
 )
 
 type fakeHandle struct {
@@ -37,7 +38,10 @@ func (h *fakeHandle) Update(_ context.Context, opts sdkclient.ScheduleUpdateOpti
 		return h.updateErr
 	}
 	out, err := opts.DoUpdate(sdkclient.ScheduleUpdateInput{Description: sdkclient.ScheduleDescription{Schedule: h.schedule}})
-	if err != nil || out == nil {
+	if errors.Is(err, temporal.ErrSkipScheduleUpdate) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
 	h.updates++
@@ -116,6 +120,31 @@ func TestReconcileExportScheduleTimeouts(t *testing.T) {
 
 	run()
 	require.Equal(t, 1, old.updates)
+}
+
+type racedHandle struct {
+	fakeHandle
+	described sdkclient.Schedule
+}
+
+func (h *racedHandle) Describe(context.Context) (*sdkclient.ScheduleDescription, error) {
+	return &sdkclient.ScheduleDescription{Schedule: h.described}, nil
+}
+
+type racedGetter struct{ h *racedHandle }
+
+func (g racedGetter) GetScheduleHandle(context.Context, string) models.ScheduleHandle { return g.h }
+
+func TestReconcileExportSchedule_AlreadyCurrentSkips(t *testing.T) {
+	h := &racedHandle{
+		fakeHandle: fakeHandle{schedule: scheduleWithTimeout(types.ExportWorkflowTimeout)},
+		described:  scheduleWithTimeout(60 * time.Minute),
+	}
+
+	changed, err := reconcileExportSchedule(context.Background(), racedGetter{h}, "s")
+	require.NoError(t, err)
+	require.False(t, changed)
+	require.Zero(t, h.updates)
 }
 
 type pagedEnvs struct {
