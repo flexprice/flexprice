@@ -24,6 +24,10 @@ func (r *InMemoryReportsRepo) Enabled() bool { return r.On }
 
 func (r *InMemoryReportsRepo) MaxRows() int { return r.Max }
 
+func (r *InMemoryReportsRepo) ReportColumns(_ *domainAnalytics.ResolvedView, _, _ string) ([]domainAnalytics.ReportColumn, error) {
+	return r.Columns, r.Err
+}
+
 func (r *InMemoryReportsRepo) RunReport(_ context.Context, rv *domainAnalytics.ResolvedView, tenantID, environmentID string) (*domainAnalytics.ReportResult, error) {
 	r.Last, r.LastTenantID, r.LastEnvironmentID = rv, tenantID, environmentID
 	if r.Err != nil {

@@ -267,6 +267,29 @@ func TestCreditUsageExporter_CustomerScope(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 2, n)
 	})
+	t.Run("filter status decides archived customers", func(t *testing.T) {
+		env := setup(t)
+		c := env.addCustomer(t, "old", "ext-old", "N old", nil)
+		w := env.addWallet(t, "w-old", c.ID, 10, nil)
+		env.setBalance(w.ID, w, 10)
+		c.Status = types.StatusArchived
+		require.NoError(t, env.customerStore.Update(env.ctx, c))
+		archived := types.StatusArchived
+
+		ids := func(f *types.CustomerFilter) []string {
+			env.req.SourceConfig = &types.ExportSourceConfig{CustomerFilter: f}
+			out, _, err := env.exporter.PrepareData(env.ctx, env.req)
+			require.NoError(t, err)
+			h, rows := parseCSVOutput(t, out)
+			return lo.Map(rows, func(r []string, _ int) string {
+				return colVal(t, h, r, string(wallet.CreditUsageCSVHeadersCustomerID))
+			})
+		}
+
+		require.ElementsMatch(t, []string{"a", "b"}, ids(&types.CustomerFilter{}))
+		require.ElementsMatch(t, []string{"old"}, ids(&types.CustomerFilter{QueryFilter: &types.QueryFilter{Status: &archived}}))
+		require.ElementsMatch(t, []string{"a", "b", "old"}, ids(&types.CustomerFilter{Filters: []*types.FilterCondition{}}))
+	})
 	t.Run("zero matches is header only", func(t *testing.T) {
 		env := setup(t)
 		out, n, err := env.exporter.PrepareData(env.ctx, scoped(env, "nobody"))
@@ -398,13 +421,13 @@ func TestReportExporter_CustomerScope(t *testing.T) {
 		require.Same(t, params, runner.gotParams)
 	})
 	t.Run("zero matches is header only without running the report", func(t *testing.T) {
-		runner := &fakeRunner{result: result}
+		runner := &fakeRunner{result: result, columns: []string{"customer_id", "currency", "invoice_total"}}
 		e, ctx := newReportScopeEnv(t, runner)
 		out, n, err := e.PrepareData(ctx, reportScopedRequest(&types.ReportParams{Shape: "breakdown", Dimensions: []string{"customer_id"}}, "nobody"))
 		require.NoError(t, err)
 		require.Zero(t, n)
 		require.Zero(t, runner.calls)
-		require.Equal(t, "customer_id,invoice_total\n", string(out))
+		require.Equal(t, "customer_id,currency,invoice_total\n", string(out))
 	})
 	t.Run("over the cap fails without running the report", func(t *testing.T) {
 		runner := &fakeRunner{result: result}

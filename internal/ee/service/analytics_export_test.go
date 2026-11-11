@@ -3,10 +3,12 @@ package service
 import (
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/analytics"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -124,6 +126,30 @@ func TestRunViewForExport_ReportFamilyUnsupportedFilterOp(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, ierr.IsValidation(err))
 	assert.Nil(t, repo.Last)
+}
+
+func TestReportColumnsForExport_MatchesRunReport(t *testing.T) {
+	cols := reportCols("customer_id", "currency", "invoice_total", "invoice_total_prev")
+	repo := &testutil.InMemoryReportsRepo{On: true, Columns: cols, Rows: [][]string{{"c", "usd", "2", "1"}}}
+	svc, _ := exportSvc(repo)
+	s := svc.(*analyticsService)
+	rng := "2026-11-09..2026-11-10"
+
+	for _, compare := range []string{"", "previous_period"} {
+		req := &dto.ReportQueryRequest{Shape: "breakdown", Dimensions: []string{"customer_id"}, Range: rng, Compare: compare}
+		ran, err := svc.RunReport(billingCtx(), "invoice_total", req)
+		require.NoError(t, err)
+		want := lo.Map(ran.Columns, func(c *dto.AnalyticsColumn, _ int) string { return c.Name })
+
+		got, err := s.reportColumns(billingCtx(), "invoice_total", req)
+
+		require.NoError(t, err)
+		assert.Equal(t, want, got, "compare=%q", compare)
+	}
+
+	got, err := svc.ReportColumnsForExport(billingCtx(), "invoice_total", &types.ReportParams{Shape: "breakdown", Dimensions: []string{"customer_id"}}, rng)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"customer_id", "currency", "invoice_total", "invoice_total_prev"}, got)
 }
 
 func TestRunReportForExport_RepoOverflowPropagates(t *testing.T) {
