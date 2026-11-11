@@ -30,7 +30,7 @@ func NewScheduledTaskHandler(
 // @ID createScheduledTask
 // @Description Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.
 // @Description connection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.
-// @Description interval is hourly, daily, weekly, monthly or manual; exports with a connection also accept 15MIN and 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule.
+// @Description interval is hourly, daily, weekly, monthly or manual; exports with a connection also accept 15MIN and 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule. Weekly schedules require day_of_week and monthly schedules require day_of_month; each is rejected for other intervals.
 // @Description Window = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.
 // @Tags Scheduled Tasks
 // @Accept json
@@ -209,7 +209,7 @@ func (h *ScheduledTaskHandler) DeleteScheduledTask(c *gin.Context) {
 // @Summary Trigger force run
 // @ID triggerScheduledTaskRun
 // @Description Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.
-// @Description Without a time range, scheduled and manual exports run for the previous period and the response start and end times are zero.
+// @Description Without a requested time range, manual exports and exports with a schedule omit start_time and end_time from the response; other exports return the calculated range.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
