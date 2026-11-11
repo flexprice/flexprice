@@ -84,7 +84,13 @@ type ledgerRepo struct {
 	wallet.Repository
 	walletIDs   []string
 	customerIDs []string
+	scopedIDs   []string
 	batches     [][]string
+}
+
+func (r *ledgerRepo) ListWalletIDsByCustomerIDs(_ context.Context, _, _ string, customerIDs []string) ([]string, error) {
+	r.scopedIDs = customerIDs
+	return r.walletIDs, nil
 }
 
 func (r *ledgerRepo) ListWalletIDsForLedgerExport(_ context.Context, _, _ string, _, _ time.Time, customerExternalIDs []string) ([]string, error) {
