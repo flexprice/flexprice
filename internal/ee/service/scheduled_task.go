@@ -97,7 +97,7 @@ func (s *scheduledTaskService) validateSource(ctx context.Context, req dto.Creat
 		return ierr.NewError("analytics service not configured").Mark(ierr.ErrInternal)
 	}
 	if req.EntityType == types.ScheduledTaskEntityTypeAnalyticsView {
-		return s.analytics.ValidateViewSource(ctx, req.SourceConfig.ViewID)
+		return s.analytics.ValidateViewSource(ctx, req.SourceConfig.ViewID, intervalWindowDays(req.Interval))
 	}
 	if err := s.analytics.ValidateReportSource(ctx, req.SourceConfig.ReportKey, req.SourceConfig.ReportParams); err != nil {
 		return err

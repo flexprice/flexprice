@@ -40,19 +40,19 @@ func TestValidateViewSource(t *testing.T) {
 	svc, _ := exportSvc(&testutil.InMemoryReportsRepo{On: true})
 	ctx := userCtx("env_1")
 
-	err := svc.ValidateViewSource(ctx, "missing")
+	err := svc.ValidateViewSource(ctx, "missing", 1)
 	assert.True(t, ierr.IsNotFound(err))
 
 	good := &analytics.View{Name: "ok", Definition: billingView(types.ShapeScalar)}
 	require.NoError(t, svc.CreateView(ctx, good))
-	assert.NoError(t, svc.ValidateViewSource(ctx, good.ID))
+	assert.NoError(t, svc.ValidateViewSource(ctx, good.ID, 1))
 
 	withVar := billingView(types.ShapeScalar)
 	withVar.Filters = []*analytics.Filter{{Field: "currency", Op: types.EQUAL, Value: []string{"{{cur}}"}}}
 	withVar.Variables = []*analytics.Variable{{Name: "cur", Type: types.VariableTypeString, Required: true}}
 	v := &analytics.View{Name: "var", Definition: withVar}
 	require.NoError(t, svc.CreateView(ctx, v))
-	err = svc.ValidateViewSource(ctx, v.ID)
+	err = svc.ValidateViewSource(ctx, v.ID, 1)
 	require.Error(t, err)
 	assert.True(t, ierr.IsValidation(err))
 }
@@ -148,4 +148,46 @@ func TestRunViewForExport_RowCap(t *testing.T) {
 	_, _, err := svc.RunViewForExport(ctx, v.ID, "2026-11-09..2026-11-10")
 	require.Error(t, err)
 	assert.True(t, ierr.IsValidation(err))
+}
+
+func TestValidateViewSource_WindowCap(t *testing.T) {
+	svc, _ := exportSvc(&testutil.InMemoryReportsRepo{On: true})
+	ctx := userCtx("env_1")
+
+	billing := billingView(types.ShapeTimeseries)
+	billing.Metrics = []types.Metric{types.MetricEventsVolume}
+	billing.Time.Grain = types.GrainDay
+	v := &analytics.View{Name: "vol", Definition: billing}
+	require.NoError(t, svc.CreateView(ctx, v))
+
+	assert.NoError(t, svc.ValidateViewSource(ctx, v.ID, 7))
+	err := svc.ValidateViewSource(ctx, v.ID, 31)
+	require.Error(t, err)
+	assert.True(t, ierr.IsValidation(err))
+}
+
+func TestReportViewVariables(t *testing.T) {
+	repo := &testutil.InMemoryReportsRepo{On: true, Columns: reportCols("customer_id", "invoice_total"), Rows: [][]string{{"c", "1"}}}
+	svc, _ := exportSvc(repo)
+	ctx := userCtx("env_1")
+
+	def := reportDef(types.MetricInvoiceTotal, types.ShapeBreakdown, "last_7_days")
+	def.Dimensions = []string{"customer_id"}
+	def.Filters = []*analytics.Filter{{Field: "invoice_type", Op: types.EQUAL, Value: []string{"{{kind}}"}}, nil}
+	def.Sort = []*analytics.SortSpec{nil}
+	def.Variables = []*analytics.Variable{{Name: "kind", Type: types.VariableTypeString, Required: true}}
+	noDefault := &analytics.View{Name: "nd", Definition: def}
+	require.NoError(t, svc.CreateView(ctx, noDefault))
+	assert.True(t, ierr.IsValidation(svc.ValidateViewSource(ctx, noDefault.ID, 7)))
+
+	withDefault := *def
+	withDefault.Variables = []*analytics.Variable{{Name: "kind", Type: types.VariableTypeString, Required: true, Default: []string{"SUBSCRIPTION"}}}
+	ok := &analytics.View{Name: "wd", Definition: &withDefault}
+	require.NoError(t, svc.CreateView(ctx, ok))
+	require.NoError(t, svc.ValidateViewSource(ctx, ok.ID, 7))
+
+	_, _, err := svc.RunViewForExport(ctx, ok.ID, "2026-11-09..2026-11-10")
+	require.NoError(t, err)
+	require.Len(t, repo.Last.Filters, 1)
+	assert.Equal(t, []string{"SUBSCRIPTION"}, repo.Last.Filters[0].Value)
 }
