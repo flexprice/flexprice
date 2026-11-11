@@ -421,13 +421,7 @@ func (s *scheduledTaskService) runNow(ctx context.Context, task *scheduledtask.S
 		s.logger.Error(ctx, "run_now failed", "error", err, "scheduled_task_id", task.ID)
 		return nil
 	}
-	return &dto.TriggerForceRunResponse{
-		WorkflowID: workflowID,
-		Message:    "Force run triggered successfully",
-		StartTime:  &startTime,
-		EndTime:    &endTime,
-		Mode:       mode,
-	}
+	return forceRunResponse(workflowID, startTime, endTime, mode)
 }
 
 // GetScheduledTask retrieves a scheduled task by ID
@@ -691,6 +685,10 @@ func (s *scheduledTaskService) TriggerForceRun(ctx context.Context, id string, r
 		"end_time", endTime,
 		"mode", mode)
 
+	return forceRunResponse(workflowID, startTime, endTime, mode), nil
+}
+
+func forceRunResponse(workflowID string, startTime, endTime time.Time, mode string) *dto.TriggerForceRunResponse {
 	resp := &dto.TriggerForceRunResponse{
 		WorkflowID: workflowID,
 		Message:    "Force run triggered successfully",
@@ -699,7 +697,7 @@ func (s *scheduledTaskService) TriggerForceRun(ctx context.Context, id string, r
 	if !startTime.IsZero() && !endTime.IsZero() {
 		resp.StartTime, resp.EndTime = &startTime, &endTime
 	}
-	return resp, nil
+	return resp
 }
 
 // ===== PRIVATE HELPER METHODS =====
