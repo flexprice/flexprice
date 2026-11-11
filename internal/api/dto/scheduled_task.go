@@ -309,4 +309,5 @@ type ExportResponse struct {
 	FileURL       string                        `json:"file_url"`
 	FileSizeBytes int64                         `json:"file_size_bytes"`
 	ExportedAt    time.Time                     `json:"exported_at"`
+	Metadata      map[string]string             `json:"metadata,omitempty"`
 }
