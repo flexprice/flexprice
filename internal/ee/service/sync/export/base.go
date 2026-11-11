@@ -1,6 +1,7 @@
 package export
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
@@ -166,22 +168,26 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 	ctx = types.SetTenantID(ctx, request.TenantID)
 	ctx = types.SetEnvironmentID(ctx, request.EnvID)
 
-	conn, err := s.connectionRepo.Get(ctx, request.ConnectionID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get connection for export").
-			Mark(ierr.ErrDatabase)
+	var conn *connection.Connection
+	if !request.ManagedCopy {
+		var err error
+		conn, err = s.connectionRepo.Get(ctx, request.ConnectionID)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to get connection for export").
+				Mark(ierr.ErrDatabase)
+		}
+
+		switch conn.ProviderType {
+		case types.SecretProviderS3, types.SecretProviderGCS:
+		default:
+			return nil, ierr.NewError("unsupported provider type").
+				WithHintf("Provider type '%s' is not supported for exports", conn.ProviderType).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
-	switch conn.ProviderType {
-	case types.SecretProviderS3, types.SecretProviderGCS:
-	default:
-		return nil, ierr.NewError("unsupported provider type").
-			WithHintf("Provider type '%s' is not supported for exports", conn.ProviderType).
-			Mark(ierr.ErrValidation)
-	}
-
-	store, err := s.resolveExportStore(ctx, request)
+	store, err := s.resolveExportStore(ctx, request, conn)
 	if err != nil {
 		if ierr.IsValidation(err) {
 			return nil, err
@@ -288,7 +294,22 @@ func exportObjectKey(request *dto.ExportRequest, exporter Exporter) string {
 	if len(request.CustomerExternalIDs) > 0 {
 		filename += "-customers-" + customerFilterDigest(request.CustomerExternalIDs)
 	}
+	if suffix := runKeySuffix(request.TaskID); suffix != "" {
+		filename += "-" + suffix
+	}
 	return storage.ObjectKey(request.JobConfig.KeyPrefix, filenamePrefix, filename, "csv", request.JobConfig.Compression == types.S3CompressionTypeGzip)
+}
+
+func runKeySuffix(taskID string) string {
+	if len(taskID) > 12 {
+		taskID = taskID[len(taskID)-12:]
+	}
+	return strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-' {
+			return r
+		}
+		return '-'
+	}, taskID)
 }
 
 func (s *ExportService) exportResponse(ctx context.Context, request *dto.ExportRequest, recordCount int, uploadResponse *storage.UploadResponse) *dto.ExportResponse {
@@ -305,18 +326,89 @@ func (s *ExportService) exportResponse(ctx context.Context, request *dto.ExportR
 	}
 }
 
-func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.ExportRequest) (storage.Storage, error) {
+func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.ExportRequest, conn *connection.Connection) (storage.Storage, error) {
 	if request.JobConfig == nil {
 		return nil, ierr.NewError("job configuration is required").
 			WithHint("job configuration must be provided for storage uploads").
 			Mark(ierr.ErrValidation)
 	}
 
+	if request.ManagedCopy {
+		return s.resolvePlatformExportStore(ctx, request)
+	}
+
+	if err := s.checkManagedDestination(ctx, conn, request.JobConfig); err != nil {
+		return nil, err
+	}
 	return s.storageResolver.ForConnectionExport(ctx, request.ConnectionID, request.JobConfig)
+}
+
+// checkManagedDestination pins managed connections to the platform bucket.
+func (s *ExportService) checkManagedDestination(ctx context.Context, conn *connection.Connection, cfg *types.S3JobConfig) error {
+	if conn == nil || conn.SyncConfig == nil || conn.SyncConfig.Storage == nil || !conn.SyncConfig.Storage.IsFlexpriceManaged {
+		return nil
+	}
+	if s.config == nil {
+		return ierr.NewError("managed export destination unavailable").Mark(ierr.ErrValidation)
+	}
+	bucket := s.config.FlexpriceS3Exports.Bucket
+	if conn.ProviderType == types.SecretProviderGCS {
+		bucket = s.config.FlexpriceGCSExports.Bucket
+	}
+	scope := fmt.Sprintf("%s/%s", types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
+	inScope := strings.HasPrefix(cfg.KeyPrefix, "exports/"+scope+"/") || cfg.KeyPrefix == scope || strings.HasPrefix(cfg.KeyPrefix, scope+"/")
+	if bucket == "" || cfg.Bucket != bucket || !inScope || strings.Contains(cfg.KeyPrefix, "..") {
+		return ierr.NewError("managed export destination mismatch").
+			WithHint("job config does not match the Flexprice export bucket or tenant prefix").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// Platform store, validated against job config.
+func (s *ExportService) resolvePlatformExportStore(ctx context.Context, request *dto.ExportRequest) (storage.Storage, error) {
+	store, err := s.storageResolver.ForPlatform(ctx, storage.PurposeExport)
+	if err != nil {
+		return nil, err
+	}
+
+	_, bucket, _, err := storage.ParseFileURL(store.FileURL("x"))
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := request.JobConfig
+	cfgProvider := cfg.Provider
+	if cfgProvider == "" {
+		cfgProvider = types.SecretProviderS3
+	}
+	prefix := fmt.Sprintf("exports/%s/%s/", types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
+	if cfg.Bucket != bucket || string(cfgProvider) != string(store.Provider()) || !strings.HasPrefix(cfg.KeyPrefix, prefix) || strings.Contains(cfg.KeyPrefix, "..") {
+		return nil, ierr.NewError("managed export destination mismatch").
+			WithHint("job config does not match the Flexprice export bucket or tenant prefix").
+			Mark(ierr.ErrValidation)
+	}
+	return store, nil
 }
 
 func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.ExportRequest, exporter Exporter, store storage.Storage, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
 	key := exportObjectKey(request, exporter)
+	gzipped := request.JobConfig.Compression == types.S3CompressionTypeGzip
+	body := csvBytes
+	if gzipped {
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		_, err := gz.Write(csvBytes)
+		if err == nil {
+			err = gz.Close()
+		}
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to compress export").
+				Mark(ierr.ErrSystem)
+		}
+		body = buf.Bytes()
+	}
 
 	// Use resolved destination, not JobConfig.Bucket.
 	s.logger.Info(ctx, "uploading export",
@@ -324,11 +416,12 @@ func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.Export
 		"provider", store.Provider(),
 		"destination", store.FileURL(key))
 
-	uploadResponse, err := store.Upload(ctx, &storage.UploadRequest{
-		Key:      key,
-		Data:     csvBytes,
-		Format:   storage.UploadFormatCSV,
-		Compress: request.JobConfig.Compression == types.S3CompressionTypeGzip,
+	uploadResponse, err := store.UploadStream(ctx, &storage.StreamUploadRequest{
+		Key:              key,
+		Body:             bytes.NewReader(body),
+		Format:           storage.UploadFormatCSV,
+		Gzipped:          gzipped,
+		UncompressedSize: int64(len(csvBytes)),
 	})
 	if err != nil {
 		return nil, ierr.WithError(err).

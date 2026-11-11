@@ -11,6 +11,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"go.temporal.io/sdk/temporal"
 )
 
 // IntervalBoundaryCalculator defines the interface for calculating interval boundaries
@@ -63,6 +64,7 @@ type ScheduledTaskDetails struct {
 	StartTime       time.Time
 	EndTime         time.Time
 	JobConfig       *types.S3JobConfig
+	ManagedCopy     bool
 }
 
 // GetScheduledTaskDetails fetches scheduled task and calculates time range
@@ -115,6 +117,12 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 			"scheduled_task_id", input.ScheduledTaskID,
 			"start_time", startTime,
 			"end_time", endTime)
+	} else if task.Schedule != nil || task.Interval == types.ScheduledTaskIntervalManual {
+		startTime, endTime, err = scheduledtask.Window(task.Interval, task.Schedule, executionTime)
+		if err != nil {
+			a.logger.Error(ctx, "failed to compute export window", "error", err, "scheduled_task_id", input.ScheduledTaskID)
+			return nil, temporal.NewNonRetryableApplicationError("invalid export schedule", "InvalidSchedule", err)
+		}
 	} else {
 		// For scheduled runs: uses interval boundaries or incremental sync
 		startTime, endTime = a.calculateTimeRange(ctx, task, executionTime)
@@ -138,6 +146,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 		StartTime:       startTime,
 		EndTime:         endTime,
 		JobConfig:       jobConfig,
+		ManagedCopy:     task.ManagedCopy,
 	}, nil
 }
 

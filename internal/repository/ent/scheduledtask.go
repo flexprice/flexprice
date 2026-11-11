@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // ScheduledTaskRepository implements the scheduled task repository using ent
@@ -41,10 +42,17 @@ func (r *ScheduledTaskRepository) Create(ctx context.Context, task *domainst.Sch
 		SetEntityType(task.EntityType).
 		SetInterval(task.Interval).
 		SetEnabled(task.Enabled).
+		SetManagedCopy(task.ManagedCopy).
 		SetStatus(string(task.Status)).
 		SetCreatedBy(task.CreatedBy).
 		SetUpdatedBy(task.UpdatedBy)
 
+	if task.Name != "" {
+		create = create.SetName(task.Name)
+	}
+	if task.Schedule != nil {
+		create = create.SetSchedule(task.Schedule)
+	}
 	if task.JobConfig != nil {
 		create = create.SetJobConfig(task.JobConfig)
 	}
@@ -141,6 +149,48 @@ func (r *ScheduledTaskRepository) Update(ctx context.Context, task *domainst.Sch
 			Mark(ierr.ErrNotFound)
 	}
 
+	return nil
+}
+
+// UpdateSettings writes editable settings.
+func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask) error {
+	update := r.client.Writer(ctx).ScheduledTask.
+		UpdateOneID(task.ID).
+		Where(
+			scheduledtask.TenantID(types.GetTenantID(ctx)),
+			scheduledtask.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetEnabled(task.Enabled).
+		SetUpdatedBy(task.UpdatedBy)
+
+	if task.Name != "" {
+		update = update.SetName(task.Name)
+	} else {
+		update = update.ClearName()
+	}
+	if task.Schedule != nil {
+		update = update.SetSchedule(task.Schedule)
+	} else {
+		update = update.ClearSchedule()
+	}
+	if task.TemporalScheduleID != "" {
+		update = update.SetTemporalScheduleID(task.TemporalScheduleID)
+	} else {
+		update = update.ClearTemporalScheduleID()
+	}
+
+	saved, err := update.Save(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return ierr.NewError("scheduled task not found").
+				WithHint("No rows matched ID + tenant + environment").
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to update scheduled task settings").
+			Mark(ierr.ErrDatabase)
+	}
+	task.UpdatedAt = saved.UpdatedAt
 	return nil
 }
 
@@ -262,6 +312,9 @@ func (r *ScheduledTaskRepository) entToModel(entTask *ent.ScheduledTask) *domain
 		Enabled:            entTask.Enabled,
 		JobConfig:          entTask.JobConfig,
 		TemporalScheduleID: entTask.TemporalScheduleID,
+		Name:               lo.FromPtr(entTask.Name),
+		ManagedCopy:        entTask.ManagedCopy,
+		Schedule:           entTask.Schedule,
 		Status:             types.Status(entTask.Status),
 		CreatedAt:          entTask.CreatedAt,
 		UpdatedAt:          entTask.UpdatedAt,

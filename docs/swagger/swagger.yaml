@@ -3726,17 +3726,22 @@ definitions:
       interval:
         allOf:
         - $ref: '#/definitions/types.ScheduledTaskInterval'
-        description: 'Note: "custom" is excluded from API (internal testing only)'
+        description: '"custom" is excluded from API.'
         enum:
         - hourly
         - daily
+        - weekly
+        - monthly
+        - manual
       job_config:
         $ref: '#/definitions/types.S3JobConfig'
+      name:
+        type: string
+      schedule:
+        $ref: '#/definitions/types.ExportSchedule'
     required:
-    - connection_id
     - entity_type
     - interval
-    - job_config
     type: object
   CreateSubscriptionEntitlementGrantRequest:
     properties:
@@ -8034,12 +8039,21 @@ definitions:
       interval:
         allOf:
         - $ref: '#/definitions/types.ScheduledTaskInterval'
-        description: 'Note: "custom" is excluded from API docs'
+        description: '"custom" is excluded from API.'
         enum:
         - hourly
         - daily
+        - weekly
+        - monthly
+        - manual
       job_config:
         $ref: '#/definitions/types.S3JobConfig'
+      managed_copy:
+        type: boolean
+      name:
+        type: string
+      schedule:
+        $ref: '#/definitions/types.ExportSchedule'
       status:
         type: string
       tenant_id:
@@ -10527,8 +10541,10 @@ definitions:
     properties:
       enabled:
         type: boolean
-    required:
-    - enabled
+      name:
+        type: string
+      schedule:
+        $ref: '#/definitions/types.ExportSchedule'
     type: object
   UpdateServiceAccountRequest:
     properties:
@@ -14241,6 +14257,9 @@ definitions:
     - custom
     - hourly
     - daily
+    - weekly
+    - monthly
+    - manual
     type: string
     x-enum-comments:
       ScheduledTaskIntervalCustom: 10 minutes for testing
@@ -14250,6 +14269,9 @@ definitions:
     - ScheduledTaskIntervalCustom
     - ScheduledTaskIntervalHourly
     - ScheduledTaskIntervalDaily
+    - ScheduledTaskIntervalWeekly
+    - ScheduledTaskIntervalMonthly
+    - ScheduledTaskIntervalManual
   types.SecretProvider:
     enum:
     - flexprice
@@ -16346,6 +16368,19 @@ definitions:
     - EntitlementGrantScopeFeature
     - EntitlementGrantScopeSubscription
     - EntitlementGrantScopeGroup
+  types.ExportSchedule:
+    properties:
+      day_of_month:
+        type: integer
+      day_of_week:
+        type: integer
+      hour:
+        type: integer
+      minute:
+        type: integer
+      timezone:
+        type: string
+    type: object
   types.ImprovementDirection:
     enum:
     - higher
@@ -26410,7 +26445,8 @@ paths:
       consumes:
       - application/json
       description: Use when listing or managing scheduled tasks in an admin UI. Returns
-        a list; supports filtering by status, type, and pagination.
+        all exports, including those without a connection; supports filtering and
+        pagination.
       operationId: listScheduledTasks
       parameters:
       - description: Limit
@@ -26460,8 +26496,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: Use when setting up recurring data exports or other scheduled jobs.
-        Ideal for report generation or syncing data on a schedule.
+      description: |-
+        Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.
+        connection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression.
+        interval is hourly, daily, weekly, monthly or manual; clients should tolerate new values. schedule ({hour, minute, day_of_week, day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual.
+        Window = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.
       operationId: createScheduledTask
       parameters:
       - description: Scheduled Task
@@ -26564,8 +26603,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Use when pausing or resuming a scheduled task. Only the enabled
-        field can be changed.
+      description: Use when pausing, resuming, renaming or rescheduling a scheduled
+        task. Send at least one of enabled, name or schedule.
       operationId: updateScheduledTask
       parameters:
       - description: Scheduled Task ID
@@ -26573,7 +26612,7 @@ paths:
         name: id
         required: true
         type: string
-      - description: 'Update request (enabled: true/false to pause/resume)'
+      - description: Update request (enabled, name, schedule)
         in: body
         name: scheduled_task
         required: true
@@ -26607,8 +26646,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Use when you need to run a scheduled export immediately (e.g. on-demand
-        report or catch-up). Supports optional custom time range.
+      description: |-
+        Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.
+        Without a time range, scheduled and manual exports run for the previous period and the response start and end times are zero.
       operationId: triggerScheduledTaskRun
       parameters:
       - description: Scheduled Task ID

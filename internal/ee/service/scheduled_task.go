@@ -87,171 +87,23 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		"entity_type", req.EntityType,
 		"connection_id", req.ConnectionID)
 
-	// Fetch the connection to check if it's Flexprice-managed
-	conn, err := s.connectionRepo.Get(ctx, req.ConnectionID)
-	if err != nil {
-		s.logger.Error(ctx, "failed to get connection", "connection_id", req.ConnectionID, "error", err)
-		return nil, ierr.WithError(err).
-			WithHint("Connection not found").
-			Mark(ierr.ErrNotFound)
-	}
+	taskID := types.GenerateUUIDWithPrefix("schtask")
 
-	// Check if this is a Flexprice-managed S3 connection
-	jobConfig := req.JobConfig
-	isManaged := conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged
-
-	if conn.ProviderType == types.SecretProviderGCS && isManaged {
-		// GCS needs no region; skip S3 validation.
-		s.logger.Info(ctx, "handling flexprice-managed GCS connection for scheduled task",
-			"connection_id", req.ConnectionID,
-			"tenant_id", tenantID)
-
-		if req.JobConfig == nil {
-			return nil, ierr.NewError("job config is required for flexprice-managed GCS").
-				WithHint("Storage job configuration must be provided").
-				Mark(ierr.ErrValidation)
-		}
-
-		if err := req.JobConfig.Compression.Validate(); err != nil {
-			return nil, err
-		}
-
-		if err := s.config.FlexpriceGCSExports.Validate(); err != nil {
-			return nil, err
-		}
-
-		jobConfig = &types.S3JobConfig{
-			Provider:             types.SecretProviderGCS,
-			Bucket:               s.config.FlexpriceGCSExports.Bucket,
-			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix, // Tenant + Environment isolation
-			Compression:          req.JobConfig.Compression,
-			ExportMetadataFields: req.JobConfig.ExportMetadataFields,
-		}
-		if jobConfig.Compression == "" {
-			jobConfig.Compression = types.S3CompressionTypeNone
-		}
-
-		if err := jobConfig.ExportMetadataFields.ValidateAndDefault(req.EntityType); err != nil {
-			return nil, err
-		}
-
-		s.logger.Info(ctx, "populated job config for flexprice-managed GCS",
-			"bucket", jobConfig.Bucket,
-			"key_prefix", jobConfig.KeyPrefix,
-			"tenant_id", tenantID,
-			"environment_id", envID,
-			"compression", jobConfig.Compression)
-	} else if conn.ProviderType == types.SecretProviderS3 && isManaged {
-		s.logger.Info(ctx, "handling flexprice-managed S3 connection for scheduled task",
-			"connection_id", req.ConnectionID,
-			"tenant_id", tenantID)
-
-		// For Flexprice-managed: validate only compression and encryption first
-		if req.JobConfig == nil {
-			return nil, ierr.NewError("job config is required for flexprice-managed S3").
-				WithHint("S3 job configuration must be provided").
-				Mark(ierr.ErrValidation)
-		}
-
-		if err := req.JobConfig.ValidateForFlexpriceManaged(); err != nil {
-			s.logger.Error(ctx, "invalid job config for flexprice-managed S3", "error", err)
-			return nil, err
-		}
-
-		// Populate bucket, region, and key_prefix from config
-		jobConfig = &types.S3JobConfig{
-			Bucket:               s.config.FlexpriceS3Exports.Bucket,
-			Region:               s.config.FlexpriceS3Exports.Region,
-			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix, // Tenant + Environment isolation
-			Compression:          req.JobConfig.Compression,
-			Encryption:           req.JobConfig.Encryption,
-			ExportMetadataFields: req.JobConfig.ExportMetadataFields,
-		}
-
-		// Set defaults if not provided
-		if jobConfig.Compression == "" {
-			jobConfig.Compression = types.S3CompressionTypeNone
-		}
-		if jobConfig.Encryption == "" {
-			jobConfig.Encryption = types.S3EncryptionTypeAES256
-		}
-
-		s.logger.Info(ctx, "populated job config for flexprice-managed S3",
-			"bucket", jobConfig.Bucket,
-			"region", jobConfig.Region,
-			"key_prefix", jobConfig.KeyPrefix,
-			"tenant_id", tenantID,
-			"environment_id", envID,
-			"compression", jobConfig.Compression,
-			"encryption", jobConfig.Encryption)
-
-		// Final validation after population
-		if err := jobConfig.Validate(); err != nil {
-			s.logger.Error(ctx, "invalid populated job config for flexprice-managed S3", "error", err)
-			return nil, err
-		}
-		if err := jobConfig.ExportMetadataFields.ValidateAndDefault(req.EntityType); err != nil {
-			return nil, err
-		}
+	var jobConfig *types.S3JobConfig
+	var err error
+	managedCopy := req.ConnectionID == ""
+	if managedCopy {
+		jobConfig, err = s.flexpriceJobConfig(ctx, req, taskID)
 	} else {
-		// Custom GCS is not supported; only managed GCS.
-		if conn.ProviderType == types.SecretProviderGCS {
-			return nil, ierr.NewError("custom GCS storage is not supported").
-				WithHint("Only Flexprice-managed GCS storage is supported").
-				Mark(ierr.ErrValidation)
-		}
-		// Provider from connection, not caller JSON.
-		if req.JobConfig != nil {
-			req.JobConfig.Provider = conn.ProviderType
-		}
-		if err := req.JobConfig.Validate(); err != nil {
-			s.logger.Error(ctx, "invalid job config for custom S3 connection", "error", err)
-			return nil, err
-		}
-		if err := req.JobConfig.ExportMetadataFields.ValidateAndDefault(req.EntityType); err != nil {
-			return nil, err
-		}
-		jobConfig = req.JobConfig
+		jobConfig, err = s.connectionJobConfig(ctx, req)
 	}
-
-	exportStorage, err := s.storageResolver.ForConnectionExport(ctx, req.ConnectionID, jobConfig)
 	if err != nil {
-		s.logger.Error(ctx, "export storage is not resolvable for scheduled task",
-			"error", err, "connection_id", req.ConnectionID)
 		return nil, err
 	}
 
-	// Customer-owned buckets must be reachable and writable with the connection's keys before the export is saved.
-	if !isManaged {
-		probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		defer cancel()
-		if err := exportStorage.ValidateConnection(probeCtx); err != nil {
-			s.logger.Error(ctx, "export bucket is not reachable with the connection's credentials",
-				"connection_id", req.ConnectionID,
-				"bucket", jobConfig.Bucket,
-				"region", jobConfig.Region,
-				"error", err)
-			return nil, err
-		}
-
-		// Exports write under <key_prefix>/<entity_type>/, so probe that folder.
-		markerKey := storage.ObjectKey(jobConfig.KeyPrefix, string(req.EntityType), "flexprice-write-check", "txt", false)
-		if err := exportStorage.ValidateWrite(probeCtx, markerKey); err != nil {
-			s.logger.Error(ctx, "export bucket is not writable with the connection's credentials",
-				"connection_id", req.ConnectionID,
-				"bucket", jobConfig.Bucket,
-				"key", markerKey,
-				"error", err)
-			return nil, err
-		}
-	}
-
-	// Generate task ID upfront
-	taskID := types.GenerateUUIDWithPrefix("schtask")
-
-	// Set temporal schedule ID upfront (same as task ID)
+	// Manual exports skip Temporal
 	var temporalScheduleID string
-	if req.Enabled && s.temporalClient != nil {
+	if req.Enabled && s.temporalClient != nil && req.Interval != types.ScheduledTaskIntervalManual {
 		temporalScheduleID = taskID
 	}
 
@@ -264,7 +116,10 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		Interval:           req.Interval,
 		Enabled:            req.Enabled,
 		JobConfig:          jobConfig,
-		TemporalScheduleID: temporalScheduleID, // Set upfront!
+		TemporalScheduleID: temporalScheduleID,
+		Name:               req.Name,
+		ManagedCopy:        managedCopy,
+		Schedule:           req.Schedule,
 		Status:             types.StatusPublished,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -287,7 +142,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		"interval", task.Interval)
 
 	// Start Temporal schedule if enabled
-	if task.Enabled && s.temporalClient != nil {
+	if temporalScheduleID != "" {
 		err = s.startScheduledTask(ctx, task)
 		if err != nil {
 			s.logger.Error(ctx, "failed to start temporal schedule", "error", err)
@@ -393,7 +248,16 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 			Mark(ierr.ErrValidation)
 	}
 
-	// Track if enabled status changed
+	if req.Name != nil || req.Schedule != nil {
+		if err := s.updateExportSettings(ctx, task, req); err != nil {
+			return nil, err
+		}
+	}
+
+	if req.Enabled == nil {
+		return dto.ToScheduledTaskResponse(task), nil
+	}
+
 	wasEnabled := task.Enabled
 	newEnabled := *req.Enabled
 
@@ -557,10 +421,13 @@ func (s *scheduledTaskService) startScheduledTask(ctx context.Context, task *sch
 	s.logger.Info(ctx, "creating new temporal schedule", "task_id", task.ID)
 
 	scheduleID := task.ID
-	cronExpr := s.getCronExpression(types.ScheduledTaskInterval(task.Interval))
+	if task.Interval == types.ScheduledTaskIntervalManual {
+		return nil
+	}
 
-	scheduleSpec := client.ScheduleSpec{
-		CronExpressions: []string{cronExpr},
+	scheduleSpec, err := s.scheduleSpec(task)
+	if err != nil {
+		return err
 	}
 
 	action := &client.ScheduleWorkflowAction{
@@ -585,8 +452,9 @@ func (s *scheduledTaskService) startScheduledTask(ctx context.Context, task *sch
 		Action: action,
 		Paused: false,
 	}
+	timezoneScheduleOptions(task, &scheduleOptions)
 
-	_, err := s.temporalClient.CreateSchedule(ctx, scheduleOptions)
+	_, err = s.temporalClient.CreateSchedule(ctx, scheduleOptions)
 	if err != nil {
 		s.logger.Error(ctx, "failed to create temporal schedule", "error", err)
 		return ierr.WithError(err).
@@ -597,7 +465,7 @@ func (s *scheduledTaskService) startScheduledTask(ctx context.Context, task *sch
 	s.logger.Info(ctx, "temporal schedule created successfully",
 		"task_id", task.ID,
 		"schedule_id", scheduleID,
-		"cron", cronExpr)
+		"cron", scheduleSpec.CronExpressions)
 
 	return nil
 }
@@ -629,6 +497,9 @@ func (s *scheduledTaskService) pauseScheduledTask(ctx context.Context, task *sch
 // - Creating new schedules if they don't exist
 // - Handling schedules that are already running
 func (s *scheduledTaskService) resumeScheduledTask(ctx context.Context, task *scheduledtask.ScheduledTask) error {
+	if task.Interval == types.ScheduledTaskIntervalManual {
+		return nil
+	}
 	if task.TemporalScheduleID == "" {
 		s.logger.Info(ctx, "no temporal schedule ID, creating new schedule", "task_id", task.ID)
 		err := s.startScheduledTask(ctx, task)
@@ -727,7 +598,12 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 	var startTime, endTime time.Time
 	var mode string
 
-	if customStart != nil && customEnd != nil {
+	noWindow := customStart == nil && customEnd == nil &&
+		(task.Schedule != nil || task.Interval == types.ScheduledTaskIntervalManual)
+
+	if noWindow {
+		mode = "force run"
+	} else if customStart != nil && customEnd != nil {
 		// User provided custom time range
 		startTime = *customStart
 		endTime = *customEnd
@@ -777,9 +653,11 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 		TenantID:            task.TenantID,
 		EnvID:               task.EnvironmentID,
 		UserID:              types.GetUserID(ctx), // Get user ID from context for force runs
-		CustomStartTime:     &startTime,           // Always pass calculated time range for force runs
-		CustomEndTime:       &endTime,
 		CustomerExternalIDs: req.CustomerExternalIDs,
+	}
+	if !noWindow {
+		input.CustomStartTime = &startTime
+		input.CustomEndTime = &endTime
 	}
 
 	workflowRun, err := s.temporalClient.StartWorkflow(ctx, workflowOptions, exportWorkflows.ExecuteExportWorkflow, input)

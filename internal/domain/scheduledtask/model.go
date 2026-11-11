@@ -17,6 +17,9 @@ type ScheduledTask struct {
 	Enabled            bool
 	JobConfig          *types.S3JobConfig
 	TemporalScheduleID string // Temporal schedule ID
+	Name               string
+	ManagedCopy        bool
+	Schedule           *types.ExportSchedule
 	Status             types.Status
 	CreatedAt          time.Time
 	UpdatedAt          time.Time

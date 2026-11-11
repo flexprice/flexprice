@@ -1529,6 +1529,7 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 	if dst != nil {
 		s3Cfg.EndpointURL = dst.endpointURL
 		s3Cfg.UsePathStyle = dst.usePathStyle
+		s3Cfg.PublicOnlyEndpoint = dst.endpointURL != ""
 	}
 
 	return s3backend.New(ctx, s3Cfg, f.logger)
