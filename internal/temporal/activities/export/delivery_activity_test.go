@@ -264,12 +264,37 @@ func TestSendExportEmails_EmptyTenantRefused(t *testing.T) {
 	require.Empty(t, sender.sent)
 }
 
-func TestRecordDeliveries_WritesMetadata(t *testing.T) {
-	repo := &memTaskRepo{row: &task.Task{Metadata: map[string]interface{}{"start_time": "s"}}}
+type staleReaderRepo struct {
+	task.Repository
+	t      *testing.T
+	stored *task.Task
+}
+
+func (r *staleReaderRepo) Get(context.Context, string) (*task.Task, error) {
+	r.t.Fatal("deliveries must not read the task")
+	return nil, nil
+}
+
+func (r *staleReaderRepo) Update(context.Context, *task.Task) error {
+	r.t.Fatal("deliveries must not rewrite the task")
+	return nil
+}
+
+func (r *staleReaderRepo) SetTaskMetadataKey(_ context.Context, _, key string, value any) error {
+	r.stored.Metadata[key] = value
+	return nil
+}
+
+func TestRecordDeliveries_OnlyWritesDeliveriesKey(t *testing.T) {
+	repo := &staleReaderRepo{t: t, stored: &task.Task{
+		TaskStatus: types.TaskStatusCompleted,
+		Metadata:   map[string]interface{}{"start_time": "s"},
+	}}
 	a := NewDeliveryActivity(nil, nil, nil, repo, &config.Configuration{}, logger.NewNoopLogger())
 	ds := []types.ExportDelivery{{Type: "flexprice", Target: "Flexprice", Status: "delivered"}}
 
 	require.NoError(t, a.RecordDeliveries(context.Background(), RecordDeliveriesInput{TaskID: "t", TenantID: "t1", EnvID: "e1", Deliveries: ds}))
-	require.Equal(t, ds, repo.updated.Metadata["deliveries"])
-	require.Equal(t, "s", repo.updated.Metadata["start_time"])
+	require.Equal(t, ds, repo.stored.Metadata["deliveries"])
+	require.Equal(t, "s", repo.stored.Metadata["start_time"])
+	require.Equal(t, types.TaskStatusCompleted, repo.stored.TaskStatus)
 }

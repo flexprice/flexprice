@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/flexprice/flexprice/internal/clock"
 
@@ -246,6 +247,50 @@ func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
 			WithReportableDetails(map[string]interface{}{
 				"task_id": t.ID,
 			}).
+			Mark(ierr.ErrNotFound)
+		SetSpanError(span, err)
+		return err
+	}
+
+	SetSpanSuccess(span)
+	return nil
+}
+
+func (r *taskRepository) SetTaskMetadataKey(ctx context.Context, id, key string, value any) error {
+	span := StartRepositorySpan(ctx, "task", "set_metadata_key", map[string]interface{}{
+		"task_id": id,
+	})
+	defer FinishSpan(span)
+
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to encode task metadata").
+			Mark(ierr.ErrValidation)
+	}
+
+	const query = `
+		UPDATE tasks
+		SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), ARRAY[$1]::text[], $2::jsonb, true),
+		    updated_at = $3,
+		    updated_by = $4
+		WHERE id = $5 AND tenant_id = $6 AND environment_id = $7 AND status = $8`
+
+	result, err := r.client.Writer(ctx).ExecContext(ctx, query,
+		key, string(encoded), clock.Now(), types.GetUserID(ctx), id,
+		types.GetTenantID(ctx), types.GetEnvironmentID(ctx), string(types.StatusPublished))
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to update task metadata").
+			WithReportableDetails(map[string]interface{}{"task_id": id}).
+			Mark(ierr.ErrDatabase)
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		err := ierr.NewError("task not found").
+			WithHint("The task may not exist or may have been deleted").
+			WithReportableDetails(map[string]interface{}{"task_id": id}).
 			Mark(ierr.ErrNotFound)
 		SetSpanError(span, err)
 		return err

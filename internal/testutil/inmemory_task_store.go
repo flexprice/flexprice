@@ -89,6 +89,20 @@ func (s *InMemoryTaskStore) Delete(ctx context.Context, id string) error {
 	return s.InMemoryStore.Delete(ctx, id)
 }
 
+func (s *InMemoryTaskStore) SetTaskMetadataKey(ctx context.Context, id, key string, value any) error {
+	stored, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return ierr.NewError("task not found").Mark(ierr.ErrNotFound)
+	}
+	updated := copyTask(stored)
+	updated.Metadata = make(map[string]interface{}, len(stored.Metadata)+1)
+	for k, v := range stored.Metadata {
+		updated.Metadata[k] = v
+	}
+	updated.Metadata[key] = value
+	return s.InMemoryStore.Update(ctx, id, updated)
+}
+
 func (s *InMemoryTaskStore) List(ctx context.Context, filter *types.TaskFilter) ([]*task.Task, error) {
 	return s.InMemoryStore.List(ctx, filter, taskFilterFn, taskSortFn)
 }

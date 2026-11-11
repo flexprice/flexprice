@@ -15,4 +15,6 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.TaskFilter) (int, error)
 	Update(ctx context.Context, task *Task) error
 	Delete(ctx context.Context, id string) error
+	// SetTaskMetadataKey writes one metadata key on the writer.
+	SetTaskMetadataKey(ctx context.Context, id, key string, value any) error
 }
