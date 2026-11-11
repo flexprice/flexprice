@@ -27,7 +27,7 @@ type AnalyticsService interface {
 	UpdateView(ctx context.Context, v *analytics.View) error
 	DeleteView(ctx context.Context, id string) error
 	ValidateReportSource(ctx context.Context, key string, params *types.ReportParams) error
-	ValidateViewSource(ctx context.Context, viewID string) error
+	ValidateViewSource(ctx context.Context, viewID string, windowDays int) error
 	RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error)
 	RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error)
 }
@@ -619,16 +619,32 @@ func (s *analyticsService) ValidateReportSource(_ context.Context, key string, p
 	return err
 }
 
-func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string) error {
+func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string, windowDays int) error {
 	v, err := s.views.Get(ctx, viewID)
 	if err != nil {
 		return err
 	}
 	if v.Definition != nil && v.Definition.Family == types.FamilyReport {
-		return s.requireReports()
+		if err := s.requireReports(); err != nil {
+			return err
+		}
+		if _, err := analytics.ResolveVariables(v.Definition, nil); err != nil {
+			return err
+		}
+		return checkReportRange(string(v.Definition.Metrics[0]), windowDays)
 	}
-	_, err = analytics.ResolveVariables(v.Definition, nil)
-	return err
+	rv, err := analytics.ResolveVariables(v.Definition, nil)
+	if err != nil {
+		return err
+	}
+	if rv.Family == types.FamilyBilling && len(rv.Metrics) == 1 {
+		if bm, ok := analytics.LookupBillingMetric(rv.Metrics[0]); ok && bm.MaxRangeDays > 0 && windowDays > bm.MaxRangeDays {
+			return ierr.NewErrorf("view covers at most %d days", bm.MaxRangeDays).
+				WithHintf("This view covers at most %d days; choose a shorter interval", bm.MaxRangeDays).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
 }
 
 func (s *analyticsService) RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error) {
@@ -666,17 +682,27 @@ func (s *analyticsService) runReportView(ctx context.Context, def *analytics.Vie
 	if len(def.Metrics) == 0 {
 		return nil, ierr.NewError("report view has no report key").Mark(ierr.ErrValidation)
 	}
+	rv, err := analytics.ResolveVariables(def, nil)
+	if err != nil {
+		return nil, err
+	}
 	req := &dto.ReportQueryRequest{
 		Shape: string(def.Shape), Dimensions: def.Dimensions, Range: def.Time.Range,
 		Grain: string(def.Time.Grain), Currency: def.Currency, Compare: def.Compare, Limit: def.Limit,
 	}
-	for _, f := range def.Filters {
+	for _, f := range rv.Filters {
+		if f == nil {
+			continue
+		}
 		if f.Op != types.EQUAL && f.Op != types.IN {
 			return nil, ierr.NewErrorf("unsupported filter op %q", f.Op).Mark(ierr.ErrValidation)
 		}
 		req.Filters = append(req.Filters, dto.ReportFilter{Field: f.Field, Op: string(f.Op), Value: f.Value})
 	}
 	for _, so := range def.Sort {
+		if so == nil {
+			continue
+		}
 		req.Sort = append(req.Sort, dto.ReportSort{Field: so.Field, Dir: string(so.Dir)})
 	}
 	return s.RunReport(ctx, string(def.Metrics[0]), req)

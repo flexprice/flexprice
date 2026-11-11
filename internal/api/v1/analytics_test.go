@@ -84,7 +84,7 @@ func (s *stubAnalyticsService) ValidateReportSource(_ context.Context, _ string,
 	return s.err
 }
 
-func (s *stubAnalyticsService) ValidateViewSource(_ context.Context, _ string) error {
+func (s *stubAnalyticsService) ValidateViewSource(_ context.Context, _ string, _ int) error {
 	return s.err
 }
 
