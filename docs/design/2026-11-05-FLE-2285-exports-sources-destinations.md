@@ -137,7 +137,7 @@ Task status: no new values. A new-style run is `COMPLETED` once the managed copy
 
 **Phase 1 as built.** Window = previous period (day, Monday-to-Monday week, calendar month; hourly = previous hour) ending at the latest period boundary at or before the scheduled start, in the schedule's timezone, converted to UTC instants. `manual` exports use the previous UTC day unless `/run` gives a window. Exports without a schedule keep today's windows. The report and view rules below are later phases.
 
-**Phase 2 as built.** P2-R2: report sources allow only `daily`, `weekly`, `monthly` and `manual`, and `schedule` is required unless `manual`. The window is the previous UTC period, counted back from the scheduled start. A `/run` with a custom start and end must use whole UTC days.
+**Phase 2 as built.** P2-R2: report sources allow only `daily`, `weekly`, `monthly` and `manual`, and `schedule` is required unless `manual`. The window is the previous UTC period, counted back from the scheduled start. A `/run` with a custom start and end must use whole UTC days. A manual report run with no `/run` window uses the previous UTC day. A scheduled report window is the last full UTC period before the fire time, so a run early in a local day east of UTC covers the UTC day before yesterday's local date; this is intentional, because the UTC day must be closed. A report's `MaxRangeDays` is enforced at create (daily 1 day, weekly 7, monthly 31; manual is skipped) and on `/run` for a custom window longer than the cap.
 
 The window is computed in the `details` step from the **scheduled start time** (no ingestion buffer; the fire time is the user's choice), never from wall clock, so catch-up runs after downtime get the correct historical window. It is stored on the `Task` on the first attempt; retries reuse it.
 
@@ -202,7 +202,7 @@ Limits: query timeout 5 minutes, activity retries 3, validation errors non-retry
 
 **Phase 2 as built.**
 - `POST /tasks/scheduled` accepts `source_config` and the new entity types, and responses return `source_config`. The entity type enum is open in the OpenAPI overlay.
-- P2-R8: report sources need analytics read on create, update, run and download. The check fails closed. Delete, get and list are not gated.
+- P2-R8: report sources need analytics read on create, update, run and download. The check fails closed. Delete, get and list are not gated. Scheduled runs do not re-check the creator's permissions; download stays gated.
 
 The shapes below (`destinations`, `source_config`, `style`, `run_now`) are removed from Phase 1 and kept as the later-phase sketch.
 

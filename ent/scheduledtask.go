@@ -51,7 +51,7 @@ type ScheduledTask struct {
 	ManagedCopy bool `json:"managed_copy,omitempty"`
 	// Run time of the export
 	Schedule *types.ExportSchedule `json:"schedule,omitempty"`
-	// Report or analytics view an export reads
+	// Report export source
 	SourceConfig *types.ExportSourceConfig `json:"source_config,omitempty"`
 	selectValues sql.SelectValues
 }

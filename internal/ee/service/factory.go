@@ -199,7 +199,7 @@ type ServiceParams struct {
 	// SelfBilling provisions new tenants on Flexprice Cloud. Injected in main to avoid an import cycle; a no-op unless configured.
 	SelfBilling interfaces.SelfBillingHook
 
-	// RBAC gates analytics-backed exports. Injected in main; nil denies them.
+	// Gates analytics exports; nil denies.
 	RBAC *rbac.RBACService
 }
 
