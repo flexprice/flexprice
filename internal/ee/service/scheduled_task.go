@@ -97,6 +97,15 @@ func emailConfigOrNil(cfg *types.ExportEmailConfig) *types.ExportEmailConfig {
 
 // Requires recipients be tenant users.
 func (s *scheduledTaskService) validateRecipients(ctx context.Context, interval types.ScheduledTaskInterval, cfg *types.ExportEmailConfig) error {
+	if cfg != nil {
+		for _, raw := range cfg.Recipients {
+			if types.NormalizeEmail(raw) == "" {
+				return ierr.NewError("empty recipient").
+					WithHint("Recipient can't be empty").
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
 	normalized := emailConfigOrNil(cfg)
 	if normalized == nil {
 		return nil

@@ -158,8 +158,8 @@ func (r *ScheduledTaskRepository) Update(ctx context.Context, task *domainst.Sch
 	return nil
 }
 
-// UpdateSettings writes editable settings.
-func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask) error {
+// UpdateSettings writes editable settings; email_config only when writeEmail.
+func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask, writeEmail bool) error {
 	update := r.client.Writer(ctx).ScheduledTask.
 		UpdateOneID(task.ID).
 		Where(
@@ -184,10 +184,12 @@ func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *doma
 	} else {
 		update = update.ClearTemporalScheduleID()
 	}
-	if task.EmailConfig != nil {
-		update = update.SetEmailConfig(task.EmailConfig)
-	} else {
-		update = update.ClearEmailConfig()
+	if writeEmail {
+		if task.EmailConfig != nil {
+			update = update.SetEmailConfig(task.EmailConfig)
+		} else {
+			update = update.ClearEmailConfig()
+		}
 	}
 
 	saved, err := update.Save(ctx)
