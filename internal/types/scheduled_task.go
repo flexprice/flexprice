@@ -169,15 +169,15 @@ func (e ScheduledTaskEntityType) IsReportSource() bool {
 // One report filter.
 type ReportParamFilter struct {
 	Field string   `json:"field"`
-	Op    string   `json:"op"`
+	Op    string   `json:"op" enums:"eq,in"`
 	Value []string `json:"value,omitempty"`
 }
 
 // Report export parameters.
 type ReportParams struct {
-	Shape      string              `json:"shape"`
+	Shape      string              `json:"shape" validate:"required" enums:"timeseries,breakdown,scalar"`
 	Dimensions []string            `json:"dimensions,omitempty"`
-	Grain      string              `json:"grain,omitempty"`
+	Grain      string              `json:"grain,omitempty" enums:"day,week,month"`
 	Currency   string              `json:"currency,omitempty"`
 	Filters    []ReportParamFilter `json:"filters,omitempty"`
 }
