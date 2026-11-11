@@ -313,3 +313,17 @@ func (h *ScheduledTaskHandler) ScheduleDraftFinalization(c *gin.Context) {
 		"message": response,
 	})
 }
+
+// @Summary Get scheduled task capabilities
+// @ID getScheduledTaskCapabilities
+// @Description Use when building the export form to learn whether email delivery is available and the recipient limit.
+// @Tags Scheduled Tasks
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Success 200 {object} dto.ScheduledTaskCapabilitiesResponse
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /tasks/scheduled/capabilities [get]
+func (h *ScheduledTaskHandler) GetCapabilities(c *gin.Context) {
+	c.JSON(http.StatusOK, h.service.GetCapabilities(c.Request.Context()))
+}

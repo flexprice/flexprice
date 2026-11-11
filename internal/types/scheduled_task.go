@@ -252,6 +252,9 @@ func (e ScheduledTaskEntityType) Validate() error {
 		Mark(ierr.ErrValidation)
 }
 
+// MaxExportEmailRecipients caps recipients per export.
+const MaxExportEmailRecipients = 10
+
 // S3CompressionType represents the compression type for S3 uploads
 type S3CompressionType string
 
