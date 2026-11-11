@@ -244,3 +244,51 @@ func TestUpdateAndForceRun_EventsExportUnaffected(t *testing.T) {
 	_, err = s.TriggerForceRun(ctx, "st_1", dto.TriggerForceRunRequest{})
 	require.NoError(t, err)
 }
+
+func TestCreateReportExport_RangeCap(t *testing.T) {
+	one := 1
+	sched := func(iv types.ScheduledTaskInterval) *types.ExportSchedule {
+		s := &types.ExportSchedule{Hour: 1, Timezone: "UTC"}
+		switch iv {
+		case types.ScheduledTaskIntervalWeekly:
+			s.DayOfWeek = &one
+		case types.ScheduledTaskIntervalMonthly:
+			s.DayOfMonth = &one
+		}
+		return s
+	}
+	tests := []struct {
+		name     string
+		key      string
+		interval types.ScheduledTaskInterval
+		wantErr  bool
+	}{
+		{"monthly events_volume rejected", "events_volume", types.ScheduledTaskIntervalMonthly, true},
+		{"weekly events_volume accepted", "events_volume", types.ScheduledTaskIntervalWeekly, false},
+		{"daily invoice_total accepted", "invoice_total", types.ScheduledTaskIntervalDaily, false},
+		{"manual events_volume skipped", "events_volume", types.ScheduledTaskIntervalManual, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo, tc := &exportRepoFake{}, &exportTemporalFake{}
+			s := newExportService(repo, tc)
+			s.rbac = testRBAC(t)
+			s.analytics = &sourceValidatorFake{}
+			req := reportCreateReq()
+			req.Interval = tt.interval
+			req.SourceConfig.ReportKey = tt.key
+			if tt.interval != types.ScheduledTaskIntervalManual {
+				req.Schedule = sched(tt.interval)
+			}
+
+			_, err := s.CreateScheduledTask(withRoles(exportCtx(), roleWithAnalytics), req)
+			if tt.wantErr {
+				require.Error(t, err)
+				require.True(t, ierr.IsValidation(err), "got %v", err)
+				require.Nil(t, repo.created)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}

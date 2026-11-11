@@ -12,25 +12,25 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// ReportRunner runs saved reports and views for export.
+// Runs reports and views.
 type ReportRunner interface {
 	RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error)
 	RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error)
 }
 
-// RunMetadataExporter exposes metadata gathered while preparing data.
+// Exposes run metadata.
 type RunMetadataExporter interface {
 	RunMetadata() map[string]string
 }
 
-// ReportExporter exports a report or analytics view as CSV.
+// Exports a report as CSV.
 type ReportExporter struct {
 	runner   ReportRunner
 	entity   types.ScheduledTaskEntityType
 	metadata map[string]string
 }
 
-// NewReportExporter creates an exporter for a report or analytics view source.
+// Creates a report exporter.
 func NewReportExporter(runner ReportRunner, entity types.ScheduledTaskEntityType) *ReportExporter {
 	return &ReportExporter{runner: runner, entity: entity}
 }
@@ -39,7 +39,7 @@ func (e *ReportExporter) GetFilenamePrefix() string {
 	return string(e.entity)
 }
 
-// RunMetadata returns metadata recorded by the last PrepareData.
+// Returns last run metadata.
 func (e *ReportExporter) RunMetadata() map[string]string {
 	return e.metadata
 }
