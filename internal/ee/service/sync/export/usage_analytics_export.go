@@ -143,7 +143,11 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 	}
 	var customers []*customer.Customer
 	if !scoped || len(refs) > 0 {
-		customers, err = e.resolveExportCustomers(ctx, request.StartTime, request.EndTime)
+		var scope *types.CustomerFilter
+		if scoped {
+			scope = request.SourceConfig.GetCustomerFilter()
+		}
+		customers, err = e.resolveExportCustomers(ctx, request.StartTime, request.EndTime, scope)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -269,7 +273,12 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 
 // resolveExportCustomers returns the union of customers that had events in the export window
 // and customers with published commitment true-up subscription line items.
-func (e *UsageAnalyticsExporter) resolveExportCustomers(ctx context.Context, startTime, endTime time.Time) ([]*customer.Customer, error) {
+func (e *UsageAnalyticsExporter) resolveExportCustomers(ctx context.Context, startTime, endTime time.Time, scope *types.CustomerFilter) ([]*customer.Customer, error) {
+	newFilter := types.NewCustomerFilter
+	if scope != nil {
+		newFilter = func() *types.CustomerFilter { return statusFilter(scope) }
+	}
+
 	externalCustomerIDs, err := e.eventRepo.GetDistinctExternalCustomerIDs(ctx, startTime, endTime)
 	if err != nil {
 		return nil, err
@@ -283,7 +292,7 @@ func (e *UsageAnalyticsExporter) resolveExportCustomers(ctx context.Context, sta
 	var customers []*customer.Customer
 
 	if len(externalCustomerIDs) > 0 {
-		eventFilter := types.NewCustomerFilter()
+		eventFilter := newFilter()
 		eventFilter.ExternalIDs = externalCustomerIDs
 		eventCustomers, err := e.customerRepo.ListAll(ctx, eventFilter)
 		if err != nil {
@@ -301,7 +310,7 @@ func (e *UsageAnalyticsExporter) resolveExportCustomers(ctx context.Context, sta
 	}
 
 	if len(remainingTrueUpCustomerIDs) > 0 {
-		trueUpFilter := types.NewCustomerFilter()
+		trueUpFilter := newFilter()
 		trueUpFilter.CustomerIDs = remainingTrueUpCustomerIDs
 		trueUpCustomers, err := e.customerRepo.ListAll(ctx, trueUpFilter)
 		if err != nil {

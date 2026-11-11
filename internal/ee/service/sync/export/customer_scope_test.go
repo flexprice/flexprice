@@ -345,6 +345,28 @@ func TestUsageAnalyticsExporter_CustomerScope(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 2, n)
 	})
+	t.Run("archived customers follow the filter status", func(t *testing.T) {
+		env := setup(t)
+		arc := env.addCustomer(t, "arc", "ext-arc", "N arc", nil)
+		arc.Status = types.StatusArchived
+		require.NoError(t, env.customerStore.Update(env.ctx, arc))
+		env.addEvent(t, arc.ExternalID, env.req.StartTime.Add(time.Minute))
+		env.setAnalytics(arc.ExternalID, []dto.UsageAnalyticItem{{FeatureID: "f", FeatureName: "F", EventName: "e", EventCount: 1}})
+
+		env.req.SourceConfig = &types.ExportSourceConfig{CustomerFilter: &types.CustomerFilter{
+			CustomerIDs: []string{"arc"}, Filters: []*types.FilterCondition{},
+		}}
+		out, n, err := env.exporter.PrepareData(env.ctx, env.req)
+		require.NoError(t, err)
+		require.Equal(t, 1, n)
+		h, rows := parseCSVOutput(t, out)
+		require.Equal(t, "arc", colVal(t, h, rows[0], string(UsageAnalyticsCSVHeadersCustomerID)))
+
+		env.req.SourceConfig = &types.ExportSourceConfig{CustomerFilter: &types.CustomerFilter{CustomerIDs: []string{"arc"}}}
+		_, n, err = env.exporter.PrepareData(env.ctx, env.req)
+		require.NoError(t, err)
+		require.Zero(t, n)
+	})
 	t.Run("zero matches is header only without analytics", func(t *testing.T) {
 		env := setup(t)
 		out, n, err := env.exporter.PrepareData(env.ctx, scoped(env, "nobody"))
