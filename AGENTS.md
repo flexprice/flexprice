@@ -41,7 +41,9 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
 - Every query filters on both. Missing filter = data leak = critical bug.
 - No cross-tenant reads. No shared mutable state between tenants.
 - The admin portal (`deployment.mode=admin`) may resolve a tenant from an operator-supplied email. That lookup stays in `internal/ee/service/admin`.
-- Self-billing may read hourly event counts, invoice totals and environment types across tenants, only inside `internal/ee/service/selfbilling`, through `domain/selfbilling.ClickHouseRepository` and `PostgresRepository`. No other package may call those repositories. These two and the admin email lookup are the only cross-tenant reads.
+- Self-billing may read hourly event counts, invoice totals and environment types across tenants, only inside `internal/ee/service/selfbilling`, through `domain/selfbilling.ClickHouseRepository` and `PostgresRepository`. No other package may call those repositories.
+- System maintenance jobs (Temporal crons and startup reconciles) may list rows across tenants, but only the row id with its `tenant_id` and `environment_id`, and every follow-up read or write must run in a context scoped to that row's tenant and environment and filter on both. Current jobs: the stale export run sweep (`ListStaleExportTasks`, then `FailStaleExportTask`), the export schedule timeout reconcile (tenants, then environments, then scheduled tasks), checkout session expiry and wallet expiry. A new job joins this list in the same PR.
+- Self-billing, the admin email lookup and the system maintenance jobs above are the only cross-tenant reads.
 
 ### Event processing (billing correctness)
 - All event handlers MUST be idempotent — duplicate delivery must not alter state twice.
