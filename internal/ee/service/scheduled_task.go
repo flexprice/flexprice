@@ -95,7 +95,7 @@ func emailConfigOrNil(cfg *types.ExportEmailConfig) *types.ExportEmailConfig {
 	return &types.ExportEmailConfig{Recipients: recipients}
 }
 
-// Checks recipients are valid users of this tenant.
+// Requires recipients be tenant users.
 func (s *scheduledTaskService) validateRecipients(ctx context.Context, interval types.ScheduledTaskInterval, cfg *types.ExportEmailConfig) error {
 	normalized := emailConfigOrNil(cfg)
 	if normalized == nil {

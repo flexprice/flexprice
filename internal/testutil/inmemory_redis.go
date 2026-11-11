@@ -187,7 +187,7 @@ func (r *InMemoryRedis) GetBulk(ctx context.Context, keys []string) (map[string]
 	return found, missing
 }
 
-// Incr increments an int64 counter, setting ttl on creation.
+// Incr increments counter, sets ttl.
 func (r *InMemoryRedis) Incr(_ context.Context, key string, ttl time.Duration) (int64, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

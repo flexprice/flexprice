@@ -639,6 +639,7 @@ func (s *S3JobConfig) GetExportMetadataFields() ExportMetadataFields {
 const (
 	ExportDeliveryTypeFlexprice = "flexprice"
 	ExportDeliveryTypeS3        = "s3"
+	ExportDeliveryTypeGCS       = "gcs"
 	ExportDeliveryTypeEmail     = "email"
 
 	ExportDeliveryStatusDelivered   = "delivered"
@@ -647,7 +648,7 @@ const (
 	ExportDeliveryStatusRateLimited = "rate_limited"
 )
 
-// ExportDelivery is one destination's result for a run.
+// ExportDelivery is one destination result.
 type ExportDelivery struct {
 	Type   string    `json:"type"`
 	Target string    `json:"target"`
