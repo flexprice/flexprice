@@ -44,7 +44,14 @@ func (s customerScope) resolve(ctx context.Context, request *dto.ExportRequest) 
 
 // idListFilter keeps the stored filter's status.
 func idListFilter(stored *types.CustomerFilter, ids []string) *types.CustomerFilter {
-	f := &types.CustomerFilter{QueryFilter: types.NewNoLimitQueryFilter(), CustomerIDs: ids}
+	f := statusFilter(stored)
+	f.CustomerIDs = ids
+	return f
+}
+
+// statusFilter is an unpaged filter with the stored filter's status.
+func statusFilter(stored *types.CustomerFilter) *types.CustomerFilter {
+	f := &types.CustomerFilter{QueryFilter: types.NewNoLimitQueryFilter()}
 	status := stored.GetStatus()
 	if status == "" {
 		f.Filters = []*types.FilterCondition{}
