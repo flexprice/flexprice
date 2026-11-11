@@ -29,7 +29,6 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
 	revenuereportsvc "github.com/flexprice/flexprice/internal/ee/service/revenuereport"
 	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
-	"github.com/flexprice/flexprice/internal/email"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
@@ -57,7 +56,6 @@ import (
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/flexprice/flexprice/internal/webhook"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/environment"
@@ -106,11 +104,6 @@ func main() {
 
 			// Logger
 			logger.NewLogger,
-			func(l *logger.Logger) *zap.Logger { return l.Desugar() },
-			func(cfg *config.Configuration) *email.EmailClient {
-				return email.NewEmailClient(email.Config{Enabled: cfg.Email.Enabled, APIKey: cfg.Email.ResendAPIKey, FromAddress: cfg.Email.FromAddress, ReplyTo: cfg.Email.ReplyTo})
-			},
-			email.NewEmail,
 
 			// Security
 			security.NewEncryptionService,

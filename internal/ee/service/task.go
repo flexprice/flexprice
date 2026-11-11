@@ -1364,7 +1364,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := s.requireObject(ctx, store, key, id); err != nil {
+	if err := s.requireObject(ctx, store, key, id, false); err != nil {
 		return "", err
 	}
 
@@ -1405,7 +1405,7 @@ func (s *taskService) presignManagedCopy(ctx context.Context, t *task.Task, st *
 			Mark(ierr.ErrInternal)
 	}
 
-	if err := s.requireObject(ctx, store, key, t.ID); err != nil {
+	if err := s.requireObject(ctx, store, key, t.ID, true); err != nil {
 		return "", err
 	}
 
@@ -1419,9 +1419,13 @@ func (s *taskService) presignManagedCopy(ctx context.Context, t *task.Task, st *
 	return url, nil
 }
 
-// Fails with not-found when the export file is gone.
-func (s *taskService) requireObject(ctx context.Context, store storage.Storage, key, taskID string) error {
+// Fails not-found when file is gone.
+func (s *taskService) requireObject(ctx context.Context, store storage.Storage, key, taskID string, strict bool) error {
 	exists, err := store.Exists(ctx, key)
+	if err != nil && !strict {
+		s.Logger.Info(ctx, "export file check skipped", "task_id", taskID)
+		return nil
+	}
 	if err != nil {
 		s.Logger.Error(ctx, "failed to check export file", "error", err, "task_id", taskID)
 		return ierr.WithError(err).
