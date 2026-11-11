@@ -287,7 +287,7 @@ func (r *taskRepository) ListStaleExportTasks(ctx context.Context, olderThan tim
 	return refs, nil
 }
 
-func (r *taskRepository) FailStaleExportTask(ctx context.Context, id string, reason string) (bool, error) {
+func (r *taskRepository) FailStaleExportTask(ctx context.Context, id string, olderThan time.Time, reason string) (bool, error) {
 	span := StartRepositorySpan(ctx, "task", "fail_stale_export", map[string]interface{}{"task_id": id})
 	defer FinishSpan(span)
 
@@ -298,6 +298,8 @@ func (r *taskRepository) FailStaleExportTask(ctx context.Context, id string, rea
 			task.TenantID(types.GetTenantID(ctx)),
 			task.EnvironmentID(types.GetEnvironmentID(ctx)),
 			task.Status(string(types.StatusPublished)),
+			task.TaskType(string(types.TaskTypeExport)),
+			task.CreatedAtLT(olderThan),
 			task.TaskStatusIn(string(types.TaskStatusProcessing), string(types.TaskStatusPending)),
 		).
 		SetTaskStatus(string(types.TaskStatusFailed)).

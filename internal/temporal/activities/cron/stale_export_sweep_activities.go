@@ -42,7 +42,7 @@ func (a *StaleExportSweepActivities) SweepStaleExportRunsActivity(ctx context.Co
 		passFailed := 0
 		for _, ref := range refs {
 			rowCtx := types.SetEnvironmentID(types.SetTenantID(ctx, ref.TenantID), ref.EnvironmentID)
-			changed, err := a.taskRepo.FailStaleExportTask(rowCtx, ref.ID, staleExportReason)
+			changed, err := a.taskRepo.FailStaleExportTask(rowCtx, ref.ID, cutoff, staleExportReason)
 			if err != nil {
 				a.logger.Error(ctx, "failed to fail stale export run", "error", err, "task_id", ref.ID)
 				continue

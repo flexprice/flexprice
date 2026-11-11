@@ -73,7 +73,8 @@ func TestTaskRepository_StaleExportTasks(t *testing.T) {
 	imp := create(tenantA, "a_import", types.TaskTypeImport, types.TaskStatusProcessing, 3*time.Hour)
 	recent := create(tenantA, "a_recent", types.TaskTypeExport, types.TaskStatusProcessing, time.Hour)
 
-	refs, err := repo.ListStaleExportTasks(context.Background(), clock.Now().Add(-2*time.Hour), 100000)
+	cutoff := clock.Now().Add(-2 * time.Hour)
+	refs, err := repo.ListStaleExportTasks(context.Background(), cutoff, 100000)
 	require.NoError(t, err)
 	got := map[string]domainTask.StaleRef{}
 	for _, ref := range refs {
@@ -86,7 +87,7 @@ func TestTaskRepository_StaleExportTasks(t *testing.T) {
 	require.Equal(t, "env_b_"+runID, got[staleB].EnvironmentID)
 	require.Equal(t, types.DefaultTenantID, got[staleA].TenantID)
 
-	changed, err := repo.FailStaleExportTask(tenantB, staleA, "Run did not finish.")
+	changed, err := repo.FailStaleExportTask(tenantB, staleA, cutoff, "Run did not finish.")
 	require.NoError(t, err)
 	require.False(t, changed)
 	row, err := repo.Get(tenantA, staleA)
@@ -94,7 +95,7 @@ func TestTaskRepository_StaleExportTasks(t *testing.T) {
 	require.Equal(t, types.TaskStatusProcessing, row.TaskStatus)
 
 	for id, ctx := range map[string]context.Context{staleA: tenantA, staleB: tenantB} {
-		changed, err := repo.FailStaleExportTask(ctx, id, "Run did not finish.")
+		changed, err := repo.FailStaleExportTask(ctx, id, cutoff, "Run did not finish.")
 		require.NoError(t, err)
 		require.True(t, changed)
 		row, err := repo.Get(ctx, id)
@@ -104,14 +105,14 @@ func TestTaskRepository_StaleExportTasks(t *testing.T) {
 		require.NotNil(t, row.FailedAt)
 	}
 
-	changed, err = repo.FailStaleExportTask(tenantA, staleA, "again")
+	changed, err = repo.FailStaleExportTask(tenantA, staleA, cutoff, "again")
 	require.NoError(t, err)
 	require.False(t, changed)
 
 	for id, want := range map[string]types.TaskStatus{
 		done: types.TaskStatusCompleted, imp: types.TaskStatusProcessing, recent: types.TaskStatusProcessing,
 	} {
-		changed, err := repo.FailStaleExportTask(tenantA, id, "x")
+		changed, err := repo.FailStaleExportTask(tenantA, id, cutoff, "x")
 		require.NoError(t, err)
 		require.False(t, changed)
 		row, err := repo.Get(tenantA, id)

@@ -126,13 +126,14 @@ func (s *InMemoryTaskStore) ListStaleExportTasks(_ context.Context, olderThan ti
 	return refs, nil
 }
 
-func (s *InMemoryTaskStore) FailStaleExportTask(ctx context.Context, id string, reason string) (bool, error) {
+func (s *InMemoryTaskStore) FailStaleExportTask(ctx context.Context, id string, olderThan time.Time, reason string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	t, ok := s.items[id]
 	if !ok || t.TenantID != types.GetTenantID(ctx) || t.EnvironmentID != types.GetEnvironmentID(ctx) ||
-		t.Status != types.StatusPublished || !isUnfinished(t) {
+		t.Status != types.StatusPublished || !isUnfinished(t) ||
+		t.TaskType != types.TaskTypeExport || !t.CreatedAt.Before(olderThan) {
 		return false, nil
 	}
 	now := clock.Now()
