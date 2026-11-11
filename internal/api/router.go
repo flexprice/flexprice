@@ -610,6 +610,7 @@ func NewRouter(
 			{
 				scheduledTasks.POST("", write(types.EntityTask, types.ActionWrite), handlers.ScheduledTask.CreateScheduledTask)
 				scheduledTasks.GET("", observe(types.EntityTask), handlers.ScheduledTask.ListScheduledTasks)
+				scheduledTasks.GET("/capabilities", observe(types.EntityTask), handlers.ScheduledTask.GetCapabilities)
 				scheduledTasks.GET("/:id", observe(types.EntityTask), handlers.ScheduledTask.GetScheduledTask)
 				scheduledTasks.PUT("/:id", write(types.EntityTask, types.ActionWrite), handlers.ScheduledTask.UpdateScheduledTask)
 				scheduledTasks.DELETE("/:id", write(types.EntityTask, types.ActionWrite), handlers.ScheduledTask.DeleteScheduledTask)

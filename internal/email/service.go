@@ -56,7 +56,7 @@ func NewEmail(client *EmailClient, logger *zap.Logger) *Email {
 func (s *Email) SendEmail(ctx context.Context, req SendEmailRequest) (*SendEmailResponse, error) {
 	if !s.client.IsEnabled() {
 		s.logger.Info(ctx, "email client is disabled, skipping email send",
-			"to", req.ToAddress,
+			"to", MaskAddress(req.ToAddress),
 			"subject", req.Subject,
 		)
 		return &SendEmailResponse{
@@ -71,11 +71,11 @@ func (s *Email) SendEmail(ctx context.Context, req SendEmailRequest) (*SendEmail
 		fromAddress = req.FromAddress
 	}
 
-	messageID, err := s.client.SendEmail(ctx, fromAddress, req.ToAddress, req.Subject, "", req.Text)
+	messageID, err := s.client.SendEmailIdempotent(ctx, fromAddress, req.ToAddress, req.Subject, "", req.Text, req.IdempotencyKey)
 	if err != nil {
 		s.logger.Error(ctx, "failed to send email",
 			"error", err,
-			"to", req.ToAddress,
+			"to", MaskAddress(req.ToAddress),
 			"subject", req.Subject,
 		)
 		return &SendEmailResponse{
@@ -86,7 +86,7 @@ func (s *Email) SendEmail(ctx context.Context, req SendEmailRequest) (*SendEmail
 
 	s.logger.Info(ctx, "email sent successfully",
 		"message_id", messageID,
-		"to", req.ToAddress,
+		"to", MaskAddress(req.ToAddress),
 		"subject", req.Subject,
 	)
 
@@ -100,7 +100,7 @@ func (s *Email) SendEmail(ctx context.Context, req SendEmailRequest) (*SendEmail
 func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemplateRequest) (*SendEmailWithTemplateResponse, error) {
 	if !s.client.IsEnabled() {
 		s.logger.Info(ctx, "email client is disabled, skipping email send",
-			"to", req.ToAddress,
+			"to", MaskAddress(req.ToAddress),
 			"subject", req.Subject,
 			"template", req.TemplatePath,
 		)
@@ -118,7 +118,7 @@ func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemp
 
 	s.logger.Debug(ctx, "preparing to send templated email",
 		"from", fromAddress,
-		"to", req.ToAddress,
+		"to", MaskAddress(req.ToAddress),
 		"subject", req.Subject,
 		"template", req.TemplatePath,
 	)
@@ -159,7 +159,7 @@ func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemp
 		s.logger.Error(ctx, "failed to send templated email",
 			"error", err,
 			"from", fromAddress,
-			"to", req.ToAddress,
+			"to", MaskAddress(req.ToAddress),
 			"subject", req.Subject,
 			"template", req.TemplatePath,
 		)
@@ -172,7 +172,7 @@ func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemp
 	s.logger.Info(ctx, "templated email sent successfully",
 		"message_id", messageID,
 		"from", fromAddress,
-		"to", req.ToAddress,
+		"to", MaskAddress(req.ToAddress),
 		"subject", req.Subject,
 		"template", req.TemplatePath,
 	)

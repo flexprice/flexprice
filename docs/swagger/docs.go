@@ -13168,6 +13168,39 @@ const docTemplate = `{
                 }
             }
         },
+        "/tasks/scheduled/capabilities": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when building the export form to learn whether email delivery is available and the recipient limit.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Scheduled Tasks"
+                ],
+                "summary": "Get scheduled task capabilities",
+                "operationId": "getScheduledTaskCapabilities",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ScheduledTaskCapabilitiesResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/tasks/scheduled/schedule-draft-finalization": {
             "post": {
                 "security": [
@@ -24293,6 +24326,17 @@ const docTemplate = `{
                 }
             }
         },
+        "ExportEmailCapability": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "max_recipients": {
+                    "type": "integer"
+                }
+            }
+        },
         "FXRateResponse": {
             "type": "object",
             "properties": {
@@ -28478,6 +28522,14 @@ const docTemplate = `{
             "properties": {
                 "vpa": {
                     "type": "string"
+                }
+            }
+        },
+        "ScheduledTaskCapabilitiesResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "$ref": "#/definitions/ExportEmailCapability"
                 }
             }
         },

@@ -14,6 +14,8 @@ type SendEmailRequest struct {
 	ToAddress   string `json:"to_address" validate:"required,email" example:"user@example.com"`
 	Subject     string `json:"subject" validate:"required" example:"Welcome to Flexprice"`
 	Text        string `json:"text" validate:"required" example:"Hello, welcome to our platform!"`
+	// IdempotencyKey dedupes retried sends when set.
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
 }
 
 // SendEmailResponse represents the response from sending an email

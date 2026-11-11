@@ -37,6 +37,7 @@ type ScheduledTaskService interface {
 	UpdateScheduledTask(ctx context.Context, id string, req dto.UpdateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error)
 	DeleteScheduledTask(ctx context.Context, id string) error
 	TriggerForceRun(ctx context.Context, id string, req dto.TriggerForceRunRequest) (*dto.TriggerForceRunResponse, error)
+	GetCapabilities(ctx context.Context) *dto.ScheduledTaskCapabilitiesResponse
 
 	CalculateIntervalBoundaries(currentTime time.Time, interval types.ScheduledTaskInterval) (startTime, endTime time.Time)
 	ScheduleUpdateBillingPeriod(ctx context.Context) (string, error)
@@ -930,4 +931,13 @@ func (s *scheduledTaskService) ScheduleDraftFinalization(ctx context.Context) (s
 	}
 
 	return "Triggered draft finalization schedule successfully", nil
+}
+
+func (s *scheduledTaskService) GetCapabilities(_ context.Context) *dto.ScheduledTaskCapabilitiesResponse {
+	return &dto.ScheduledTaskCapabilitiesResponse{
+		Email: dto.ExportEmailCapability{
+			Available:     s.config.ExportEmailAvailable(),
+			MaxRecipients: types.MaxExportEmailRecipients,
+		},
+	}
 }
