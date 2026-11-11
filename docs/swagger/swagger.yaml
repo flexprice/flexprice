@@ -16565,6 +16565,9 @@ definitions:
       field:
         type: string
       op:
+        enum:
+        - eq
+        - in
         type: string
       value:
         items:
@@ -16584,9 +16587,19 @@ definitions:
           $ref: '#/definitions/types.ReportParamFilter'
         type: array
       grain:
+        enum:
+        - day
+        - week
+        - month
         type: string
       shape:
+        enum:
+        - timeseries
+        - breakdown
+        - scalar
         type: string
+    required:
+    - shape
     type: object
   types.ReportValueType:
     enum:
