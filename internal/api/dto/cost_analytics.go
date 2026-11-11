@@ -46,8 +46,10 @@ type CostAnalyticsRequest struct {
 	Metrics            []CostAnalyticsMetric `json:"metrics,omitempty"`
 	Expand             []CostExpand          `json:"expand,omitempty"`
 	Deduplicate        bool                  `json:"deduplicate,omitempty"`
-	Limit              int                   `json:"limit,omitempty"`
-	Offset             int                   `json:"offset,omitempty"`
+	// ApplyDiscounts prices each line after its percentage coupons (forever or repeated), as the invoice does.
+	ApplyDiscounts bool `json:"apply_discounts,omitempty"`
+	Limit          int  `json:"limit,omitempty"`
+	Offset         int  `json:"offset,omitempty"`
 }
 
 // CostAnalyticsFilter keeps (in) or drops (not_in) events by a key's values; "(none)" matches events without the key.
@@ -173,6 +175,9 @@ type CostAnalyticsResponse struct {
 	Items          []CostAnalyticsItem     `json:"items"`
 	ExcludedMeters []CostExcludedMeter     `json:"excluded_meters"`
 	ContractRows   []CostAnalyticsContract `json:"contract_rows"`
+	// UnappliedCouponIDs are coupons active in the range that apply_discounts cannot spread over events
+	// (fixed amount or one-time); the invoice may be lower by them.
+	UnappliedCouponIDs []string `json:"unapplied_coupon_ids,omitempty"`
 }
 
 // CostAnalyticsTotals are summed over every row, not just the page.

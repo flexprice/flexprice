@@ -9,6 +9,8 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/costanalytics"
+	"github.com/flexprice/flexprice/internal/domain/coupon"
+	ca "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -59,6 +61,9 @@ type costInputs struct {
 	lineByID       map[string]*subscription.SubscriptionLineItem
 	meterByID      map[string]*meter.Meter
 	featureByMeter map[string]string
+	// applyDiscounts prices lines after their percentage coupons; other coupons go to unappliedCoupons.
+	applyDiscounts   bool
+	unappliedCoupons map[string]bool
 }
 
 func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.CostAnalyticsRequest) (*dto.CostAnalyticsResponse, error) {
@@ -87,10 +92,12 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 	}
 
 	in := &costInputs{
-		excluded:       map[string]string{},
-		lineByID:       map[string]*subscription.SubscriptionLineItem{},
-		meterByID:      map[string]*meter.Meter{},
-		featureByMeter: map[string]string{},
+		excluded:         map[string]string{},
+		applyDiscounts:   req.ApplyDiscounts,
+		unappliedCoupons: map[string]bool{},
+		lineByID:         map[string]*subscription.SubscriptionLineItem{},
+		meterByID:        map[string]*meter.Meter{},
+		featureByMeter:   map[string]string{},
 	}
 	billing := newBillingService(s.ServiceParams)
 	for _, cs := range subs {
@@ -128,7 +135,10 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 		return nil, err
 	}
 
-	return toCostAnalyticsResponse(q, req.Expand, currency, result, in.lineByID, in.excluded), nil
+	resp := toCostAnalyticsResponse(q, req.Expand, currency, result, in.lineByID, in.excluded)
+	resp.UnappliedCouponIDs = lo.Keys(in.unappliedCoupons)
+	sort.Strings(resp.UnappliedCouponIDs)
+	return resp, nil
 }
 
 // requestedMeterIDs resolves meter_ids and feature_ids to one meter set; nil means every meter.
@@ -270,6 +280,13 @@ func (s *costAnalyticsService) addBilledLines(
 		return err
 	}
 
+	discount := func(string) decimal.Decimal { return decimal.NewFromInt(1) }
+	if in.applyDiscounts {
+		if discount, err = s.periodDiscounts(ctx, cs.owner, seg, in); err != nil {
+			return err
+		}
+	}
+
 	itemByID := lo.KeyBy(items, func(li *subscription.SubscriptionLineItem) string { return li.ID })
 	precision := types.GetCurrencyPrecision(cs.owner.Currency)
 	for _, c := range charges {
@@ -303,10 +320,45 @@ func (s *costAnalyticsService) addBilledLines(
 			Start:               start,
 			End:                 end,
 			Currency:            li.Price.Currency,
-			UnitPrice:           li.Price.Amount,
+			UnitPrice:           li.Price.Amount.Mul(discount(li.ID)),
 		})
 	}
 	return nil
+}
+
+// periodDiscounts returns each line's price multiplier from the percentage coupons (forever or
+// repeated) active in the billing period: line coupons, then subscription coupons, compounding, as
+// usage analytics applies them. Any other active coupon is recorded as not applied.
+func (s *costAnalyticsService) periodDiscounts(ctx context.Context, owner *subscription.Subscription, seg costanalytics.BillingPeriodSegment, in *costInputs) (func(lineID string) decimal.Decimal, error) {
+	applicable := func(c *coupon.Coupon) bool {
+		return c.Type == types.CouponTypePercentage && c.PercentageOff != nil &&
+			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated)
+	}
+	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{owner}, seg.PeriodStart, seg.PeriodEnd,
+		func(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
+			if !c.IsValid() {
+				return false
+			}
+			if !applicable(c) {
+				in.unappliedCoupons[c.ID] = true
+				return false
+			}
+			return true
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	hundred := decimal.NewFromInt(100)
+	factor := func(assocs []*ca.CouponAssociation) decimal.Decimal {
+		f := decimal.NewFromInt(1)
+		for _, a := range assocs {
+			f = f.Mul(hundred.Sub(*a.Coupon.PercentageOff)).Div(hundred)
+		}
+		return decimal.Max(f, decimal.Zero)
+	}
+	subFactor := factor(sel.SubLevel[owner.ID])
+	return func(lineID string) decimal.Decimal { return factor(sel.LineLevel[lineID]).Mul(subFactor) }, nil
 }
 
 // flatExclusion returns why a billed line cannot be spread over its events at its unit price, or "".

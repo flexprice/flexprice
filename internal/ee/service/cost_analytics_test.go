@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
@@ -352,6 +354,46 @@ func (s *CostAnalyticsSuite) TestPausedChildHasNoCostAsTheParentInvoiceSkipsIt()
 	s.NoError(err)
 	s.Empty(resp.Items)
 	s.Equal("0.00", resp.Totals.Cost)
+}
+
+func (s *CostAnalyticsSuite) TestPercentageCouponsDiscountEachLineAsTheInvoiceDoes() {
+	ctx := s.GetContext()
+	st := s.GetStores()
+	addCoupon := func(id string, typ types.CouponType, cadence types.CouponCadence, amount string, lineID *string) {
+		c := &coupon.Coupon{ID: id, Name: id, Type: typ, Cadence: cadence, Currency: "usd", BaseModel: types.GetDefaultBaseModel(ctx)}
+		if typ == types.CouponTypePercentage {
+			c.PercentageOff = lo.ToPtr(decimal.RequireFromString(amount))
+		} else {
+			c.AmountOff = lo.ToPtr(decimal.RequireFromString(amount))
+		}
+		s.NoError(st.CouponRepo.Create(ctx, c))
+		s.NoError(st.CouponAssociationRepo.Create(ctx, &coupon_association.CouponAssociation{
+			ID: "ca_" + id, CouponID: id, SubscriptionID: s.parent.ID, SubscriptionLineItemID: lineID,
+			StartDate: costOct1, BaseModel: types.GetDefaultBaseModel(ctx),
+		}))
+	}
+	addCoupon("c_line20", types.CouponTypePercentage, types.CouponCadenceForever, "20", lo.ToPtr("li_tok_new"))
+	addCoupon("c_sub10", types.CouponTypePercentage, types.CouponCadenceRepeated, "10", nil)
+	addCoupon("c_fixed5", types.CouponTypeFixed, types.CouponCadenceForever, "5", nil)
+
+	tokens := func(apply bool) *dto.CostAnalyticsResponse {
+		resp, err := s.query(func(r *dto.CostAnalyticsRequest) {
+			r.MeterIDs = []string{"m_tokens"}
+			r.ApplyDiscounts = apply
+		})
+		s.NoError(err)
+		return resp
+	}
+
+	// alice: $2,000 on the old line × 0.9, plus $5,000 on the new line × 0.8 × 0.9; bob: $6,000 × 0.9.
+	resp := tokens(true)
+	s.Equal(map[string]string{"alice": "5400.00", "bob": "5400.00"}, costByGroup(resp, "properties.user"))
+	s.Equal("10800.00", resp.Totals.Cost)
+	s.Equal([]string{"c_fixed5"}, resp.UnappliedCouponIDs, "a fixed-amount coupon cannot be spread over events")
+
+	resp = tokens(false)
+	s.Equal(map[string]string{"alice": "7000.00", "bob": "6000.00"}, costByGroup(resp, "properties.user"))
+	s.Empty(resp.UnappliedCouponIDs)
 }
 
 func (s *CostAnalyticsSuite) TestColumnsMetricsAndPaging() {
