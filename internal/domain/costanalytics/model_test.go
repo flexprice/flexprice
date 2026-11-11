@@ -90,17 +90,6 @@ func TestQueryValidate(t *testing.T) {
 	}
 }
 
-func TestBillingPeriodSegmentCoversWholePeriod(t *testing.T) {
-	oct1 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
-	nov1 := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
-	whole := BillingPeriodSegment{PeriodStart: oct1, PeriodEnd: nov1, Start: oct1, End: nov1}
-	require.True(t, whole.CoversWholePeriod())
-
-	partial := whole
-	partial.Start = oct1.AddDate(0, 0, 7)
-	require.False(t, partial.CoversWholePeriod())
-}
-
 func TestValidateRejectsKeysParseKeyCannotProduce(t *testing.T) {
 	base := func() *Query {
 		return &Query{

@@ -245,12 +245,6 @@ type BillingPeriodSegment struct {
 	SubscriptionID         string
 	PeriodStart, PeriodEnd time.Time // full billing period
 	Start, End             time.Time // requested range clipped to the period
-	Closed                 bool      // period has ended
-}
-
-// CoversWholePeriod reports whether the segment spans its full billing period.
-func (s BillingPeriodSegment) CoversWholePeriod() bool {
-	return s.Start.Equal(s.PeriodStart) && s.End.Equal(s.PeriodEnd)
 }
 
 // LineWindow is one line item inside one billing period segment: the only pricing input ClickHouse gets.

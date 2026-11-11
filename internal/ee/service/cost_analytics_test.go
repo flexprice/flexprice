@@ -236,9 +236,13 @@ func (s *CostAnalyticsSuite) TestPriceChangeAttributesEachEventAtItsOwnPrice() {
 	s.Equal("alice", resp.Items[0].Group["properties.user"], "default sort is total cost, descending")
 }
 
-func (s *CostAnalyticsSuite) TestFullPeriodLineTotalsEqualTheInvoice() {
+// assertLinesEqualInvoice checks that every line in the breakdown costs exactly what the October
+// invoice charges for it, and returns how many lines there were.
+func (s *CostAnalyticsSuite) assertLinesEqualInvoice() int {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.parent.ID)
+	s.NoError(err)
 	inv, err := s.billing.PrepareSubscriptionInvoiceRequest(s.GetContext(), &dto.PrepareSubscriptionInvoiceRequestParams{
-		Subscription: s.parent, PeriodStart: costOct1, PeriodEnd: costNov1, ReferencePoint: types.ReferencePointPeriodEnd,
+		Subscription: sub, PeriodStart: costOct1, PeriodEnd: costNov1, ReferencePoint: types.ReferencePointPeriodEnd,
 	})
 	s.NoError(err)
 	invoiced := map[string]decimal.Decimal{}
@@ -253,22 +257,23 @@ func (s *CostAnalyticsSuite) TestFullPeriodLineTotalsEqualTheInvoice() {
 		r.Expand = []dto.CostExpand{dto.CostExpandPrice}
 	})
 	s.NoError(err)
-	s.NotEmpty(resp.Items)
 	for _, item := range resp.Items {
 		s.Len(item.PriceIDs, 1)
 		want, ok := invoiced[item.PriceIDs[0]]
 		s.True(ok, "line %s has no invoice line", item.Group["sub_line_item_id"])
 		s.Equal(want.StringFixed(2), item.Cost, "line %s", item.Group["sub_line_item_id"])
 	}
-	s.Len(resp.Items, 4, "tok_old, tok_new, calls, scaled; tiered is excluded")
+	return len(resp.Items)
+}
+
+func (s *CostAnalyticsSuite) TestFullPeriodLineTotalsEqualTheInvoice() {
+	s.Equal(4, s.assertLinesEqualInvoice(), "tok_old, tok_new, calls, scaled; tiered is excluded")
 }
 
 func (s *CostAnalyticsSuite) TestUnsupportedMeterIsExcludedNotApproximated() {
 	resp, err := s.query(nil)
 	s.NoError(err)
-	s.Equal([]dto.CostExcludedMeter{{
-		MeterID: "m_tiered", SubLineItemID: "li_tiered", SubscriptionID: "sub_parent", Reason: excludedNotFlatPrice,
-	}}, resp.ExcludedMeters)
+	s.Equal([]dto.CostExcludedMeter{{MeterID: "m_tiered", Reason: excludedNotFlatPrice}}, resp.ExcludedMeters)
 	// 13,000 tokens + 4 calls × 0.01 + 40 scaled × 0.5; the tiered $ never appears.
 	s.Equal("13020.04", resp.Totals.Cost)
 	s.Equal(map[string]string{"alice": "7020.00", "bob": "6000.00", "123": "0.03", "(none)": "0.01"}, costByGroup(resp, "properties.user"))
@@ -294,26 +299,37 @@ func (s *CostAnalyticsSuite) TestEntitlementsAndGrantsExcludeTheirMeters() {
 	s.NoError(err)
 	reasons := lo.SliceToMap(resp.ExcludedMeters, func(e dto.CostExcludedMeter) (string, string) { return e.MeterID, e.Reason })
 	s.Equal(map[string]string{
-		"m_calls": excludedEntitlement, "m_scaled": excludedEntitlementGrant, "m_tiered": excludedNotFlatPrice,
+		"m_calls": excludedEntitlement, "m_scaled": excludedEntitlement, "m_tiered": excludedNotFlatPrice,
 	}, reasons)
 	s.Equal("13000.00", resp.Totals.Cost)
 }
 
-func (s *CostAnalyticsSuite) TestSubscriptionGrantExcludesEveryMeter() {
+func (s *CostAnalyticsSuite) TestSubscriptionGrantExcludesTheLinesBillingLowered() {
 	ctx := s.GetContext()
-	_, err := s.GetStores().EntitlementGrantRepo.Create(ctx, &entitlementgrant.EntitlementGrant{
+	// Billing refuses subscription grants next to a tiered line, so end it before the period.
+	tiered, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, "li_tiered")
+	s.NoError(err)
+	tiered.EndDate = costOct1
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, tiered))
+	_, err = s.GetStores().EntitlementGrantRepo.Create(ctx, &entitlementgrant.EntitlementGrant{
 		ID: "eg_sub", CustomerID: "cust_parent", SubscriptionID: "sub_parent",
 		ScopeEntityType: types.EntitlementGrantScopeSubscription, ScopeEntityID: "sub_parent",
 		Measure: types.EntitlementGrantMeasureAmount, Quota: decimal.NewFromInt(10),
 		ValidFrom: costOct1, ValidTo: costNov1, BaseModel: types.GetDefaultBaseModel(ctx),
 	})
 	s.NoError(err)
+	// Billing applies the grant from its stored usage, which the invoice run refreshes.
+	s.assertLinesEqualInvoice()
 
 	resp, err := s.query(nil)
 	s.NoError(err)
-	s.Empty(resp.Items)
-	s.Equal("0.00", resp.Totals.Cost)
-	s.Len(resp.ExcludedMeters, 4)
+	// Billing spreads the $10 over the tokens and scaled lines; calls stay at their flat price.
+	s.Equal([]dto.CostExcludedMeter{
+		{MeterID: "m_scaled", Reason: excludedBillingAdjusted},
+		{MeterID: "m_tokens", Reason: excludedBillingAdjusted},
+	}, resp.ExcludedMeters)
+	s.Equal("0.04", resp.Totals.Cost)
+	s.Equal(1, s.assertLinesEqualInvoice(), "only the calls line remains, equal to its invoice line")
 }
 
 func (s *CostAnalyticsSuite) TestChildSeesOnlyItsOwnEventsAtTheParentsPrices() {
@@ -386,16 +402,26 @@ func TestSplitByBillingPeriod(t *testing.T) {
 		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
 	}
 	cs := costSubscription{sub: sub, owner: sub, start: time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC), end: time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)}
-	segs := splitByBillingPeriod(cs, time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC))
+	segs, err := splitByBillingPeriod(cs)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if len(segs) != 2 {
 		t.Fatalf("want 2 segments, got %d", len(segs))
 	}
 	sep1, oct1 := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
-	if !segs[0].PeriodStart.Equal(sep1) || !segs[0].PeriodEnd.Equal(oct1) || !segs[0].Start.Equal(cs.start) || !segs[0].End.Equal(oct1) || !segs[0].Closed {
+	if !segs[0].PeriodStart.Equal(sep1) || !segs[0].PeriodEnd.Equal(oct1) || !segs[0].Start.Equal(cs.start) || !segs[0].End.Equal(oct1) {
 		t.Fatalf("segment 1 wrong: %+v", segs[0])
 	}
-	if !segs[1].Start.Equal(oct1) || !segs[1].End.Equal(cs.end) || segs[1].Closed || segs[1].CoversWholePeriod() {
+	if !segs[1].Start.Equal(oct1) || !segs[1].End.Equal(cs.end) || !segs[1].PeriodEnd.Equal(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("segment 2 wrong: %+v", segs[1])
+	}
+
+	// Billing cannot invoice a subscription without a valid schedule, so neither can cost analytics.
+	broken := *sub
+	broken.BillingPeriod = "FORTNIGHTLY"
+	if _, err := splitByBillingPeriod(costSubscription{sub: &broken, owner: &broken, start: cs.start, end: cs.end}); err == nil {
+		t.Fatal("want an error for an invalid billing period")
 	}
 }

@@ -21,14 +21,12 @@ import (
 
 // Reasons a meter is left out of a cost breakdown.
 const (
-	excludedNotFlatPrice      = "not_flat_price"
-	excludedCustomPriceUnit   = "custom_price_unit"
-	excludedUnsupportedMeter  = "unsupported_meter"
-	excludedLineCommitment    = "line_commitment"
-	excludedCommitment        = "commitment"
-	excludedEntitlement       = "entitlement"
-	excludedEntitlementGrant  = "entitlement_grant"
-	excludedSubscriptionGrant = "subscription_entitlement_grant"
+	excludedNotFlatPrice     = "not_flat_price"
+	excludedCustomPriceUnit  = "custom_price_unit"
+	excludedUnsupportedMeter = "unsupported_meter"
+	excludedCommitment       = "commitment"
+	excludedEntitlement      = "entitlement"
+	excludedBillingAdjusted  = "billing_adjusted"
 )
 
 // CostAnalyticsService attributes billed cost to the events, and their properties, that caused it.
@@ -54,12 +52,13 @@ type costSubscription struct {
 	start, end  time.Time
 }
 
-// costLine is a usage line item with its price and meter.
-type costLine struct {
-	item      *subscription.SubscriptionLineItem
-	price     *price.Price
-	meter     *meter.Meter
-	featureID string
+// costInputs collects the line windows handed to ClickHouse and what the response needs besides.
+type costInputs struct {
+	windows        []costanalytics.LineWindow
+	excluded       map[string]string // meter ID → reason
+	lineByID       map[string]*subscription.SubscriptionLineItem
+	meterByID      map[string]*meter.Meter
+	featureByMeter map[string]string
 }
 
 func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.CostAnalyticsRequest) (*dto.CostAnalyticsResponse, error) {
@@ -87,56 +86,27 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 		return nil, err
 	}
 
-	var (
-		windows  []costanalytics.LineWindow
-		excluded = map[string]dto.CostExcludedMeter{}
-		lineByID = map[string]*subscription.SubscriptionLineItem{}
-	)
+	in := &costInputs{
+		excluded:       map[string]string{},
+		lineByID:       map[string]*subscription.SubscriptionLineItem{},
+		meterByID:      map[string]*meter.Meter{},
+		featureByMeter: map[string]string{},
+	}
+	billing := newBillingService(s.ServiceParams)
 	for _, cs := range subs {
-		lines, err := s.usageLineItems(ctx, cs.owner, meterFilter)
+		segments, err := splitByBillingPeriod(cs)
 		if err != nil {
 			return nil, err
 		}
-		if len(lines) == 0 {
-			continue
-		}
-		entitled, err := s.entitledMeters(ctx, cs.owner)
-		if err != nil {
-			return nil, err
-		}
-		for _, seg := range splitByBillingPeriod(cs, clock.Now()) {
-			ineligible, err := s.checkEligible(ctx, cs.owner, seg, lines, entitled)
-			if err != nil {
+		for _, seg := range segments {
+			if err := s.addBilledLines(ctx, billing, cs, seg, meterFilter, in); err != nil {
 				return nil, err
-			}
-			for meterID, e := range ineligible {
-				if _, seen := excluded[meterID]; !seen {
-					excluded[meterID] = e
-				}
-			}
-			for _, l := range lines {
-				start, end := l.item.GetPeriodStart(seg.Start), l.item.GetPeriodEnd(seg.End)
-				if !start.Before(end) {
-					continue
-				}
-				lineByID[l.item.ID] = l.item
-				windows = append(windows, costanalytics.LineWindow{
-					LineItemID:          l.item.ID,
-					MeterID:             l.item.MeterID,
-					FeatureID:           l.featureID,
-					ExternalCustomerIDs: cs.customerIDs,
-					Segment:             seg,
-					Start:               start,
-					End:                 end,
-					Currency:            l.price.Currency,
-					UnitPrice:           l.price.Amount,
-				})
 			}
 		}
 	}
 
-	// A meter with any ineligible line is left out entirely, so no row mixes priced and unpriced usage.
-	windows = lo.Filter(windows, func(w costanalytics.LineWindow, _ int) bool { _, out := excluded[w.MeterID]; return !out })
+	// A meter with any line billing did not price flat is left out entirely, so no row mixes priced and unpriced usage.
+	windows := lo.Filter(in.windows, func(w costanalytics.LineWindow, _ int) bool { _, out := in.excluded[w.MeterID]; return !out })
 
 	currency, err := singleCurrency(windows)
 	if err != nil {
@@ -158,7 +128,7 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 		return nil, err
 	}
 
-	return toCostAnalyticsResponse(q, req.Expand, currency, result, lineByID, excluded), nil
+	return toCostAnalyticsResponse(q, req.Expand, currency, result, in.lineByID, in.excluded), nil
 }
 
 // requestedMeterIDs resolves meter_ids and feature_ids to one meter set; nil means every meter.
@@ -186,22 +156,18 @@ func (s *costAnalyticsService) requestedMeterIDs(ctx context.Context, q *costana
 // subscriptionsInRange returns the customer's subscriptions active in [start, end), each with the
 // subscription that prices it and the customers whose events it covers.
 func (s *costAnalyticsService) subscriptionsInRange(ctx context.Context, cust *customer.Customer, start, end time.Time) ([]costSubscription, error) {
-	filter := types.NewNoLimitSubscriptionFilter()
-	filter.CustomerID = cust.ID
-	filter.SubscriptionStatus = []types.SubscriptionStatus{
-		types.SubscriptionStatusActive,
-		types.SubscriptionStatusTrialing,
-		types.SubscriptionStatusPaused,
-		types.SubscriptionStatusCancelled,
-	}
-	subs, err := s.SubRepo.List(ctx, filter)
+	subs, err := customerSubscriptionsWithParents(ctx, s.SubRepo, cust.ID, false)
 	if err != nil {
 		return nil, err
 	}
+	byID := lo.KeyBy(subs, func(sub *subscription.Subscription) string { return sub.ID })
 
 	subService := NewSubscriptionService(s.ServiceParams)
 	out := make([]costSubscription, 0, len(subs))
 	for _, sub := range subs {
+		if sub.CustomerID != cust.ID {
+			continue // a parent owned by another customer, loaded only to price its inherited child
+		}
 		subStart, subEnd := maxTime(start, sub.StartDate), end
 		if sub.EndDate != nil && sub.EndDate.Before(subEnd) {
 			subEnd = *sub.EndDate
@@ -216,9 +182,9 @@ func (s *costAnalyticsService) subscriptionsInRange(ctx context.Context, cust *c
 		cs := costSubscription{sub: sub, owner: sub, start: subStart, end: subEnd}
 		if sub.SubscriptionType == types.SubscriptionTypeInherited && lo.FromPtr(sub.ParentSubscriptionID) != "" {
 			// A child is priced on its parent's lines, over its own events only.
-			parent, err := s.SubRepo.Get(ctx, lo.FromPtr(sub.ParentSubscriptionID))
-			if err != nil {
-				return nil, err
+			parent := byID[lo.FromPtr(sub.ParentSubscriptionID)]
+			if parent == nil {
+				continue // the parent is not billed, so neither is the child
 			}
 			cs.owner = parent
 			cs.customerIDs = []string{cust.ExternalID}
@@ -237,14 +203,11 @@ func (s *costAnalyticsService) subscriptionsInRange(ctx context.Context, cust *c
 }
 
 // splitByBillingPeriod cuts a subscription's range at the billing period boundaries of its owner.
-func splitByBillingPeriod(cs costSubscription, now time.Time) []costanalytics.BillingPeriodSegment {
+func splitByBillingPeriod(cs costSubscription) ([]costanalytics.BillingPeriodSegment, error) {
 	owner := cs.owner
 	grid, err := types.NewBillingPeriodGrid(owner.BillingAnchor, owner.BillingPeriod, max(owner.BillingPeriodCount, 1), owner.Timezone)
 	if err != nil {
-		// A subscription without a valid schedule is one segment; flat cost does not depend on periods.
-		return []costanalytics.BillingPeriodSegment{{
-			SubscriptionID: cs.sub.ID, PeriodStart: cs.start, PeriodEnd: cs.end, Start: cs.start, End: cs.end,
-		}}
+		return nil, err
 	}
 
 	var segments []costanalytics.BillingPeriodSegment
@@ -259,200 +222,146 @@ func splitByBillingPeriod(cs costSubscription, now time.Time) []costanalytics.Bi
 			PeriodEnd:      p.End,
 			Start:          t,
 			End:            minTime(p.End, cs.end),
-			Closed:         !p.End.After(now),
 		}
 		segments = append(segments, seg)
 		t = seg.End
 	}
-	return segments
+	return segments, nil
 }
 
-// usageLineItems returns the owner's usage line items on the requested meters, with prices and meters.
-func (s *costAnalyticsService) usageLineItems(ctx context.Context, owner *subscription.Subscription, meterFilter map[string]bool) ([]costLine, error) {
-	filter := types.NewNoLimitSubscriptionLineItemFilter()
-	filter.SubscriptionIDs = []string{owner.ID}
-	filter.ActiveFilter = false
-	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-	items, err := s.SubscriptionLineItemRepo.List(ctx, filter)
+// addBilledLines prices the owner's billing period through billing, as its invoice is priced, and turns
+// each line billing charged at a plain flat rate into a line window clipped to the segment. Every
+// other line excludes its meter.
+func (s *costAnalyticsService) addBilledLines(
+	ctx context.Context,
+	billing *billingService,
+	cs costSubscription,
+	seg costanalytics.BillingPeriodSegment,
+	meterFilter map[string]bool,
+	in *costInputs,
+) error {
+	// Billing gets every line: subscription-wide rules (grants, commitments) spread across all of them.
+	items, err := billing.periodLineItems(ctx, cs.owner.ID, seg.PeriodStart)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	items = lo.Filter(items, func(li *subscription.SubscriptionLineItem, _ int) bool {
-		return li.PriceType == types.PRICE_TYPE_USAGE && li.MeterID != "" && (meterFilter == nil || meterFilter[li.MeterID])
-	})
-	if len(items) == 0 {
-		return nil, nil
+	requested := func(meterID string) bool { return meterID != "" && (meterFilter == nil || meterFilter[meterID]) }
+	if !lo.ContainsBy(items, func(li *subscription.SubscriptionLineItem) bool {
+		return li.PriceType == types.PRICE_TYPE_USAGE && requested(li.MeterID)
+	}) {
+		return nil
 	}
 
-	priceFilter := types.NewNoLimitPriceFilter()
-	priceFilter.PriceIDs = lo.Uniq(lo.Map(items, func(li *subscription.SubscriptionLineItem, _ int) string { return li.PriceID }))
-	priceFilter.AllowExpiredPrices = true
-	prices, err := s.PriceRepo.List(ctx, priceFilter)
+	// Only UsageCharges are read: fixed charges here skip invoice prep's cadence and one-time rules.
+	result, err := billing.calculateMeterUsageCharges(ctx, cs.owner, items, seg.PeriodStart, seg.PeriodEnd, true, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	priceByID := lo.KeyBy(prices, func(p *price.Price) string { return p.ID })
+	charges := result.UsageCharges
+	if err := s.loadMeters(ctx, items, in); err != nil {
+		return err
+	}
 
-	meters, err := s.MeterRepo.ListByIDs(ctx, lo.Uniq(lo.Map(items, func(li *subscription.SubscriptionLineItem, _ int) string { return li.MeterID })))
-	if err != nil {
-		return nil, err
-	}
-	meterByID := lo.KeyBy(meters, func(m *meter.Meter) string { return m.ID })
+	itemByID := lo.KeyBy(items, func(li *subscription.SubscriptionLineItem) string { return li.ID })
+	precision := types.GetCurrencyPrecision(cs.owner.Currency)
+	for _, c := range charges {
+		li := itemByID[lo.FromPtr(c.SubscriptionLineItemID)]
+		if li == nil {
+			// A charge billing could not tie to a line still hides that meter's usage.
+			if meterID := lo.FromPtr(c.MeterID); requested(meterID) {
+				excludeMeter(in, meterID, excludedBillingAdjusted)
+			}
+			continue
+		}
+		if li.PriceType != types.PRICE_TYPE_USAGE || !requested(li.MeterID) {
+			continue
+		}
+		if reason := flatExclusion(cs.owner, li, in.meterByID[li.MeterID], c, precision); reason != "" {
+			excludeMeter(in, li.MeterID, reason)
+			continue
+		}
 
-	featureFilter := types.NewNoLimitFeatureFilter()
-	featureFilter.MeterIDs = lo.Keys(meterByID)
-	features, err := s.FeatureRepo.List(ctx, featureFilter)
-	if err != nil {
-		return nil, err
+		start, end := maxTime(seg.Start, lo.FromPtr(c.PeriodStart)), minTime(seg.End, lo.FromPtr(c.PeriodEnd))
+		if !start.Before(end) {
+			continue
+		}
+		in.lineByID[li.ID] = li
+		in.windows = append(in.windows, costanalytics.LineWindow{
+			LineItemID:          li.ID,
+			MeterID:             li.MeterID,
+			FeatureID:           in.featureByMeter[li.MeterID],
+			ExternalCustomerIDs: cs.customerIDs,
+			Segment:             seg,
+			Start:               start,
+			End:                 end,
+			Currency:            li.Price.Currency,
+			UnitPrice:           li.Price.Amount,
+		})
 	}
-	featureByMeter := map[string]string{}
+	return nil
+}
+
+// flatExclusion returns why a billed line cannot be spread over its events at its unit price, or "".
+// The last check compares billing's amount with quantity × unit price, so any rule billing applied
+// that changed the money (grants, adjustments) excludes the line.
+func flatExclusion(owner *subscription.Subscription, li *subscription.SubscriptionLineItem, m *meter.Meter, c dto.CreateInvoiceLineItemRequest, precision int32) string {
+	p := li.Price
+	switch {
+	case p == nil || p.BillingModel != types.BILLING_MODEL_FLAT_FEE:
+		return excludedNotFlatPrice
+	case p.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM || lo.FromPtr(li.PriceUnitID) != "" || lo.FromPtr(li.PriceUnit) != "":
+		return excludedCustomPriceUnit
+	case m == nil || !isCostSupportedMeter(m) || price.IsBucketed(p, m):
+		return excludedUnsupportedMeter
+	case owner.HasCommitment() || c.CommitmentID != nil || c.CommitmentInfo != nil || c.Metadata[types.MetadataKeyIsOverage] == types.MetadataValueTrue:
+		return excludedCommitment
+	case lo.FromPtr(c.AdjustedEntitlementQuantity).IsPositive():
+		return excludedEntitlement
+	case !c.Amount.Equal(c.Quantity.Mul(p.Amount).Round(precision)):
+		return excludedBillingAdjusted
+	}
+	return ""
+}
+
+func excludeMeter(in *costInputs, meterID, reason string) {
+	if _, seen := in.excluded[meterID]; !seen {
+		in.excluded[meterID] = reason
+	}
+}
+
+// loadMeters fills the meters and their features for line items not seen yet.
+func (s *costAnalyticsService) loadMeters(ctx context.Context, items []*subscription.SubscriptionLineItem, in *costInputs) error {
+	var missing []string
+	for _, li := range items {
+		if _, ok := in.meterByID[li.MeterID]; li.MeterID != "" && !ok {
+			missing = append(missing, li.MeterID)
+		}
+	}
+	missing = lo.Uniq(missing)
+	if len(missing) == 0 {
+		return nil
+	}
+
+	meters, err := s.MeterRepo.ListByIDs(ctx, missing)
+	if err != nil {
+		return err
+	}
+	for _, m := range meters {
+		in.meterByID[m.ID] = m
+	}
+
+	filter := types.NewNoLimitFeatureFilter()
+	filter.MeterIDs = missing
+	features, err := s.FeatureRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
 	for _, f := range features {
 		if f.MeterID != "" {
-			featureByMeter[f.MeterID] = f.ID
+			in.featureByMeter[f.MeterID] = f.ID
 		}
 	}
-
-	out := make([]costLine, 0, len(items))
-	for _, li := range items {
-		p, m := priceByID[li.PriceID], meterByID[li.MeterID]
-		if p == nil || m == nil {
-			return nil, ierr.NewError("price or meter of a usage line item not found").
-				WithReportableDetails(map[string]any{"line_item_id": li.ID, "price_id": li.PriceID, "meter_id": li.MeterID}).
-				Mark(ierr.ErrNotFound)
-		}
-		out = append(out, costLine{item: li, price: p, meter: m, featureID: featureByMeter[li.MeterID]})
-	}
-	return out, nil
-}
-
-// checkEligible returns the meters whose lines this segment cannot price as flat, with the first
-// line and reason found. Every rule that changes a flat bill (entitlements, grants, commitments) excludes.
-func (s *costAnalyticsService) checkEligible(
-	ctx context.Context,
-	owner *subscription.Subscription,
-	seg costanalytics.BillingPeriodSegment,
-	lines []costLine,
-	entitled map[string]bool,
-) (map[string]dto.CostExcludedMeter, error) {
-	out := map[string]dto.CostExcludedMeter{}
-	exclude := func(l costLine, reason string) {
-		if _, seen := out[l.item.MeterID]; !seen {
-			out[l.item.MeterID] = dto.CostExcludedMeter{
-				MeterID: l.item.MeterID, SubLineItemID: l.item.ID, SubscriptionID: owner.ID, Reason: reason,
-			}
-		}
-	}
-	active := lo.Filter(lines, func(l costLine, _ int) bool {
-		return l.item.GetPeriodStart(seg.Start).Before(l.item.GetPeriodEnd(seg.End))
-	})
-	if len(active) == 0 {
-		return out, nil
-	}
-
-	blockers, err := s.loadBlockers(ctx, owner, seg)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, l := range active {
-		switch {
-		case l.price.BillingModel != types.BILLING_MODEL_FLAT_FEE:
-			exclude(l, excludedNotFlatPrice)
-		case l.price.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM || lo.FromPtr(l.item.PriceUnitID) != "":
-			exclude(l, excludedCustomPriceUnit)
-		case !isCostSupportedMeter(l.meter) || price.IsBucketed(l.price, l.meter):
-			exclude(l, excludedUnsupportedMeter)
-		case l.item.HasAnyCommitment():
-			exclude(l, excludedLineCommitment)
-		case blockers.commitment:
-			exclude(l, excludedCommitment)
-		case entitled[l.item.MeterID]:
-			exclude(l, excludedEntitlement)
-		case blockers.grantedMeters[l.item.MeterID]:
-			exclude(l, excludedEntitlementGrant)
-		case blockers.subscriptionGrant:
-			exclude(l, excludedSubscriptionGrant)
-		}
-	}
-	return out, nil
-}
-
-// costBlockers are the owner-level rules that change a flat bill in a billing period.
-type costBlockers struct {
-	commitment        bool
-	subscriptionGrant bool
-	grantedMeters     map[string]bool
-}
-
-func (s *costAnalyticsService) loadBlockers(ctx context.Context, owner *subscription.Subscription, seg costanalytics.BillingPeriodSegment) (costBlockers, error) {
-	b := costBlockers{grantedMeters: map[string]bool{}}
-
-	b.commitment = owner.HasCommitment()
-	if !b.commitment {
-		svc := newCommitmentService(s.ServiceParams)
-		enabled, err := svc.IsEnabled(ctx)
-		if err != nil {
-			return b, err
-		}
-		if enabled {
-			commitments, err := svc.ListOverlapping(ctx, owner.ID, seg.PeriodStart, seg.PeriodEnd)
-			if err != nil {
-				return b, err
-			}
-			b.commitment = len(commitments) > 0
-		}
-	}
-
-	if s.EntitlementGrantRepo == nil {
-		return b, nil
-	}
-	grants, err := s.EntitlementGrantRepo.List(ctx, types.NewNoLimitEntitlementGrantFilter().
-		WithSubscriptionIDs(owner.ID).
-		WithCycleOverlap(seg.PeriodStart, seg.PeriodEnd))
-	if err != nil {
-		return b, err
-	}
-	// Grants outlive their entitlement config, so their features are read directly.
-	var grantFeatures []string
-	for _, g := range grants {
-		switch {
-		case g.IsSubscriptionScoped():
-			b.subscriptionGrant = true
-		case g.IsFeatureScoped():
-			grantFeatures = append(grantFeatures, g.ScopeEntityID)
-		}
-	}
-	if len(grantFeatures) > 0 {
-		filter := types.NewNoLimitFeatureFilter()
-		filter.FeatureIDs = lo.Uniq(grantFeatures)
-		features, err := s.FeatureRepo.List(ctx, filter)
-		if err != nil {
-			return b, err
-		}
-		for _, f := range features {
-			if f.MeterID != "" {
-				b.grantedMeters[f.MeterID] = true
-			}
-		}
-	}
-	return b, nil
-}
-
-// entitledMeters returns the meters with an enabled entitlement; billing zeroes or reduces them,
-// whether the entitlement is limited or not.
-func (s *costAnalyticsService) entitledMeters(ctx context.Context, owner *subscription.Subscription) (map[string]bool, error) {
-	entitlements, err := NewSubscriptionService(s.ServiceParams).GetAggregatedSubscriptionEntitlementsForSubscription(ctx, owner, nil)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]bool{}
-	for _, f := range entitlements.Features {
-		if f.Feature != nil && types.FeatureType(f.Feature.Type) == types.FeatureTypeMetered &&
-			f.Feature.MeterID != "" && f.Entitlement != nil && f.Entitlement.IsEnabled {
-			out[f.Feature.MeterID] = true
-		}
-	}
-	return out, nil
+	return nil
 }
 
 // isCostSupportedMeter reports whether qty_total is the billed quantity of each event.
@@ -486,7 +395,7 @@ func toCostAnalyticsResponse(
 	currency string,
 	result *costanalytics.Result,
 	lineByID map[string]*subscription.SubscriptionLineItem,
-	excluded map[string]dto.CostExcludedMeter,
+	excluded map[string]string,
 ) *dto.CostAnalyticsResponse {
 	precision := types.GetCurrencyPrecision(currency)
 	money := func(d decimal.Decimal) string { return d.Round(precision).StringFixed(precision) }
@@ -496,13 +405,16 @@ func toCostAnalyticsResponse(
 		Currency:       currency,
 		TotalCount:     result.TotalCount,
 		Items:          make([]dto.CostAnalyticsItem, 0, len(result.Items)),
-		ExcludedMeters: lo.Values(excluded),
+		ExcludedMeters: make([]dto.CostExcludedMeter, 0, len(excluded)),
 		ContractRows:   []dto.CostAnalyticsContract{},
 		Totals: dto.CostAnalyticsTotals{
 			Cost:       money(result.Totals.Cost),
 			Quantity:   result.Totals.Quantity.String(),
 			EventCount: result.Totals.EventCount,
 		},
+	}
+	for meterID, reason := range excluded {
+		resp.ExcludedMeters = append(resp.ExcludedMeters, dto.CostExcludedMeter{MeterID: meterID, Reason: reason})
 	}
 	sort.Slice(resp.ExcludedMeters, func(i, j int) bool { return resp.ExcludedMeters[i].MeterID < resp.ExcludedMeters[j].MeterID })
 

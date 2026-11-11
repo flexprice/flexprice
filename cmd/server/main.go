@@ -543,8 +543,7 @@ func provideHandlers(
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
 		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
-		Analytics:                v1.NewAnalyticsHandler(analyticsService, revenueService, logger),
-		CostAnalytics:            v1.NewCostAnalyticsHandler(costAnalyticsService, logger),
+		Analytics:                v1.NewAnalyticsHandler(analyticsService, revenueService, costAnalyticsService, logger),
 	}
 }
 

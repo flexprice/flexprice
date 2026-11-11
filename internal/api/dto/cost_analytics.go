@@ -208,12 +208,10 @@ type CostAnalyticsValue struct {
 	Values []string `json:"values,omitempty"`
 }
 
-// CostExcludedMeter is a requested meter left out of every row and total, with the line and reason.
+// CostExcludedMeter is a requested meter left out of every row and total, and why.
 type CostExcludedMeter struct {
-	MeterID        string `json:"meter_id"`
-	SubLineItemID  string `json:"sub_line_item_id,omitempty"`
-	SubscriptionID string `json:"subscription_id,omitempty"`
-	Reason         string `json:"reason"`
+	MeterID string `json:"meter_id"`
+	Reason  string `json:"reason"`
 }
 
 // CostAnalyticsContract is a named amount not caused by events, such as a commitment true-up.

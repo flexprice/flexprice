@@ -1631,6 +1631,24 @@ func (s *billingService) attachPricesToLineItems(ctx context.Context, lineItems 
 	return nil
 }
 
+// periodLineItems returns the line items billed in the period starting at periodStart, with prices attached.
+// Line items loaded via GetWithLineItems are filtered by sub.CurrentPeriodStart, so historical periods
+// (recalculation, past invoices) reload them by the invoice's period start.
+func (s *billingService) periodLineItems(ctx context.Context, subscriptionID string, periodStart time.Time) ([]*subscription.SubscriptionLineItem, error) {
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.SubscriptionIDs = []string{subscriptionID}
+	filter.ActiveFilter = true
+	filter.CurrentPeriodStart = &periodStart
+	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.attachPricesToLineItems(ctx, lineItems); err != nil {
+		return nil, err
+	}
+	return lineItems, nil
+}
+
 func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	ctx context.Context,
 	params *dto.PrepareSubscriptionInvoiceRequestParams,
@@ -1649,22 +1667,11 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		return nil, err
 	}
 
-	// Line items loaded via GetWithLineItems are filtered by sub.CurrentPeriodStart; for historical
-	// periods (recalculation, past invoices) reload using the invoice billing period start.
-	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
-	lineItemFilter.SubscriptionIDs = []string{sub.ID}
-	lineItemFilter.ActiveFilter = true
-	lineItemFilter.CurrentPeriodStart = &periodStart
-	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
+	lineItems, err := s.periodLineItems(ctx, sub.ID, periodStart)
 	if err != nil {
 		return nil, err
 	}
 	sub.LineItems = lineItems
-
-	// Attach prices so cost calculations (CalculateFixedCharges, tiers, etc.) have the full price object.
-	if err := s.attachPricesToLineItems(ctx, sub.LineItems); err != nil {
-		return nil, err
-	}
 
 	// Previews stay read-only and bill from the stored grant usage.
 	isPreview := lo.Contains([]types.InvoiceReferencePoint{
