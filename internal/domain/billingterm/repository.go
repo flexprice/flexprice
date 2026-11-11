@@ -45,6 +45,9 @@ type InstalmentRepository interface {
 	// CancelScheduled cancels the given instalments that are still scheduled and returns only the rows it changed.
 	CancelScheduled(ctx context.Context, ids []string) ([]*Instalment, error)
 
+	// Reinstate moves the given cancelled instalments back to scheduled and returns only the rows it changed.
+	Reinstate(ctx context.Context, ids []string) ([]*Instalment, error)
+
 	// Claim moves the given scheduled instalments to invoiced on the invoice, finalized at invoicedAt, and returns only
 	// the rows it changed.
 	Claim(ctx context.Context, invoiceID string, invoicedAt time.Time, ids []string) ([]*Instalment, error)

@@ -186,9 +186,14 @@ func (r *commitmentRepository) Update(ctx context.Context, c *domain.Commitment)
 		SetName(c.Name).
 		SetInvoiceLabel(c.InvoiceLabel).
 		SetMetadata(c.Metadata).
-		SetNillableTerminatedAt(c.TerminatedAt).
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
+
+	if c.TerminatedAt != nil {
+		upd = upd.SetTerminatedAt(*c.TerminatedAt)
+	} else {
+		upd = upd.ClearTerminatedAt()
+	}
 
 	if c.CommitmentStatus != "" {
 		upd = upd.SetCommitmentStatus(c.CommitmentStatus)

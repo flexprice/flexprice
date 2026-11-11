@@ -55,6 +55,12 @@ func (b *commitmentBuilder) WithTerminatedAt(t time.Time) *commitmentBuilder {
 	return b
 }
 
+// WithoutTerminatedAt clears terminated_at, as a revoked termination leaves it.
+func (b *commitmentBuilder) WithoutTerminatedAt() *commitmentBuilder {
+	b.c.TerminatedAt = nil
+	return b
+}
+
 // WithTotalAmount sets the total the billing terms split into instalments.
 func (b *commitmentBuilder) WithTotalAmount(v decimal.Decimal) *commitmentBuilder {
 	b.c.TotalAmount = &v

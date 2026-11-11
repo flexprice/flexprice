@@ -340,6 +340,39 @@ func (r *billingInstalmentRepository) CancelScheduled(ctx context.Context, ids [
 	return billingterm.InstalmentsFromEnt(rows), nil
 }
 
+func (r *billingInstalmentRepository) Reinstate(ctx context.Context, ids []string) ([]*billingterm.Instalment, error) {
+	if len(ids) == 0 {
+		return []*billingterm.Instalment{}, nil
+	}
+
+	span := StartRepositorySpan(ctx, "billing_instalment", "reinstate", map[string]interface{}{
+		"count": len(ids),
+	})
+	defer FinishSpan(span)
+
+	rows, err := r.client.Writer(ctx).BillingInstalment.Update().
+		Where(r.scope(ctx)...).
+		Where(
+			entbillinginstalment.IDIn(ids...),
+			entbillinginstalment.InstalmentStatusEQ(types.InstalmentStatusCancelled),
+		).
+		SetInstalmentStatus(types.InstalmentStatusScheduled).
+		ClearInvoiceID().
+		ClearInvoicedAt().
+		SetUpdatedAt(clock.Now()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SaveReturning(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to reinstate billing instalments").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return billingterm.InstalmentsFromEnt(rows), nil
+}
+
 func (r *billingInstalmentRepository) Claim(ctx context.Context, invoiceID string, invoicedAt time.Time, ids []string) ([]*billingterm.Instalment, error) {
 	if len(ids) == 0 {
 		return []*billingterm.Instalment{}, nil

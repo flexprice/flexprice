@@ -338,10 +338,10 @@ func (r *UpdateCommitmentRequest) Validate() error {
 }
 
 // TerminateCommitmentRequest ends a commitment at effective_at. A future effective_at records the termination now;
-// cancellation_fee is billed at once, in the commitment currency.
+// cancellation_fee is billed at once, in the commitment currency, and only while no earlier fee invoice is live.
 type TerminateCommitmentRequest struct {
 	// EffectiveAt defaults to now and may be in the future; within a second after a billing period edge it is taken as
-	// that edge. On a pending termination, an earlier date moves it.
+	// that edge. On a pending termination, it moves the termination earlier or later.
 	EffectiveAt     *time.Time            `json:"effective_at,omitempty"`
 	CancellationFee *CancellationFeeInput `json:"cancellation_fee,omitempty"`
 }
