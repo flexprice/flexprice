@@ -120,3 +120,32 @@ func TestTriggerForceRun_ReportWindowMustBeWholeUTCDays(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, starter.args)
 }
+
+func TestTriggerForceRun_ReportWindowCappedByMaxRangeDays(t *testing.T) {
+	task := &scheduledtask.ScheduledTask{
+		ID:           "st_1",
+		EntityType:   types.ScheduledTaskEntityTypeReport,
+		Interval:     types.ScheduledTaskIntervalManual,
+		SourceConfig: &types.ExportSourceConfig{ReportKey: "events_volume", ReportParams: &types.ReportParams{Shape: "timeseries"}},
+	}
+	at := func(s string) *time.Time {
+		v, err := time.Parse(time.RFC3339, s)
+		require.NoError(t, err)
+		return &v
+	}
+	starter := &workflowStarter{}
+	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, temporalClient: starter, logger: logger.NewNoopLogger(), rbac: testRBAC(t)}
+	ctx := withRoles(context.Background(), roleWithAnalytics)
+
+	_, _, _, _, err := s.triggerForceRun(ctx, task.ID, dto.TriggerForceRunRequest{
+		StartTime: at("2026-11-01T00:00:00Z"), EndTime: at("2026-11-11T00:00:00Z"),
+	})
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err), "got %v", err)
+	require.Nil(t, starter.args)
+
+	_, _, _, _, err = s.triggerForceRun(ctx, task.ID, dto.TriggerForceRunRequest{
+		StartTime: at("2026-11-04T00:00:00Z"), EndTime: at("2026-11-11T00:00:00Z"),
+	})
+	require.NoError(t, err)
+}
