@@ -596,6 +596,16 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 			Mark(ierr.ErrValidation)
 	}
 
+	if task.EntityType.IsReportSource() {
+		for _, bound := range []*time.Time{customStart, customEnd} {
+			if bound != nil && !bound.UTC().Equal(bound.UTC().Truncate(24*time.Hour)) {
+				return "", time.Time{}, time.Time{}, "", ierr.NewError("report window must be whole UTC days").
+					WithHint("start_time and end_time must be midnight UTC for report exports").
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
 	// Determine time range and mode
 	var startTime, endTime time.Time
 	var mode string
