@@ -2,13 +2,16 @@ package service
 
 import (
 	"context"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -254,4 +257,64 @@ func TestList_OriginFilters(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, repo.listed.Origin)
 	require.Equal(t, types.ExportOriginCustomersPage, repo.listed.ExcludeOrigin)
+}
+
+func TestCreate_CustomersHourlyRejected(t *testing.T) {
+	s := customerExportService(&originRepoFake{}, &customerCountFake{})
+	req := customersReq()
+	req.Interval = types.ScheduledTaskIntervalHourly
+	_, err := s.CreateScheduledTask(exportCtx(), req)
+	require.True(t, ierr.IsValidation(err), "got %v", err)
+}
+
+func TestCreate_BadRunWindowRejectedBeforeCreate(t *testing.T) {
+	repo := &originRepoFake{}
+	s := customerExportService(repo, &customerCountFake{})
+	s.rbac = testRBAC(t)
+	s.analytics = &sourceValidatorFake{}
+	req := reportCreateReq()
+	req.RunNow = true
+	req.RunWindow = &dto.ExportRunWindow{
+		StartTime: time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2020, 1, 2, 10, 0, 0, 0, time.UTC),
+	}
+	_, err := s.CreateScheduledTask(withRoles(exportCtx(), roleWithAnalytics), req)
+	require.True(t, ierr.IsValidation(err), "got %v", err)
+	require.Nil(t, repo.created)
+
+	req.RunWindow = &dto.ExportRunWindow{
+		StartTime: time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+	_, err = s.CreateScheduledTask(withRoles(exportCtx(), roleWithAnalytics), req)
+	require.True(t, ierr.IsValidation(err), "got %v", err)
+	require.Nil(t, repo.created)
+}
+
+func TestCreate_PagingInFilterNeverRejects(t *testing.T) {
+	repo := &originRepoFake{}
+	s := customerExportService(repo, &customerCountFake{})
+	req := customersReq()
+	req.SourceConfig.CustomerFilter = &types.CustomerFilter{
+		QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(5000), Offset: lo.ToPtr(-1)},
+		ExternalID:  "x",
+	}
+	_, err := s.CreateScheduledTask(exportCtx(), req)
+	require.NoError(t, err)
+	require.Nil(t, repo.created.SourceConfig.CustomerFilter.QueryFilter)
+}
+
+func TestCreate_BadCustomerFilterIsHTTP400(t *testing.T) {
+	repoErr := ierr.WithError(ierr.NewError("unknown field").WithHint("Unknown filter field").Mark(ierr.ErrValidation)).
+		WithHint("Failed to apply query options").
+		Mark(ierr.ErrDatabase)
+	s := customerExportService(&originRepoFake{}, &customerCountFake{err: repoErr})
+
+	_, err := s.CreateScheduledTask(exportCtx(), customersReq())
+	require.Error(t, err)
+	// Status resolution iterates a map; repeat to catch ambiguity.
+	for i := 0; i < 100; i++ {
+		status, _ := ierr.ResolveError(err)
+		require.Equal(t, http.StatusBadRequest, status)
+	}
 }
