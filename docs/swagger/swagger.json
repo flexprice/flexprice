@@ -22338,7 +22338,7 @@
                     "type": "string"
                 },
                 "email_config": {
-                    "description": "Users in this account who receive each run by email.",
+                    "description": "Run notification recipients.",
                     "$ref": "#/definitions/types.ExportEmailConfig"
                 },
                 "enabled": {
@@ -31218,7 +31218,7 @@
             "type": "object",
             "properties": {
                 "email_config": {
-                    "description": "Absent keeps recipients; empty recipients clears them.",
+                    "description": "Absent keeps; empty clears.",
                     "$ref": "#/definitions/types.ExportEmailConfig"
                 },
                 "enabled": {
