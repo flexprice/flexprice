@@ -10,6 +10,8 @@ import (
 type Repository interface {
 	Create(ctx context.Context, subscription *Subscription) error
 	Get(ctx context.Context, id string) (*Subscription, error)
+	// GetTimezone reads the timezone without accessing the shared subscription cache.
+	GetTimezone(ctx context.Context, id string) (string, error)
 
 	GetForUpdate(ctx context.Context, id string) (*Subscription, error)
 	Update(ctx context.Context, subscription *Subscription) error

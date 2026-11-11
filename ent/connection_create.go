@@ -141,6 +141,20 @@ func (_c *ConnectionCreate) SetSyncConfig(v *types.SyncConfig) *ConnectionCreate
 	return _c
 }
 
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (_c *ConnectionCreate) SetBillingEntityID(v string) *ConnectionCreate {
+	_c.mutation.SetBillingEntityID(v)
+	return _c
+}
+
+// SetNillableBillingEntityID sets the "billing_entity_id" field if the given value is not nil.
+func (_c *ConnectionCreate) SetNillableBillingEntityID(v *string) *ConnectionCreate {
+	if v != nil {
+		_c.SetBillingEntityID(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ConnectionCreate) SetID(v string) *ConnectionCreate {
 	_c.mutation.SetID(v)
@@ -322,6 +336,10 @@ func (_c *ConnectionCreate) createSpec() (*Connection, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SyncConfig(); ok {
 		_spec.SetField(connection.FieldSyncConfig, field.TypeJSON, value)
 		_node.SyncConfig = value
+	}
+	if value, ok := _c.mutation.BillingEntityID(); ok {
+		_spec.SetField(connection.FieldBillingEntityID, field.TypeString, value)
+		_node.BillingEntityID = &value
 	}
 	return _node, _spec
 }

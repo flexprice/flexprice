@@ -18,6 +18,7 @@ const (
 	InvoiceLineItemEntityTypePlan         InvoiceLineItemEntityType = "plan"
 	InvoiceLineItemEntityTypeAddon        InvoiceLineItemEntityType = "addon"
 	InvoiceLineItemEntityTypeSubscription InvoiceLineItemEntityType = "subscription"
+	InvoiceLineItemEntityTypeCommitment   InvoiceLineItemEntityType = "commitment"
 )
 
 // InvoiceLineItemMetadataKey represents well-known metadata keys on invoice line items.
@@ -302,6 +303,21 @@ const (
 	// InvoiceBillingReasonWalletAutoTopup is generated when a wallet balance drops
 	// below the auto-topup threshold and invoiced top-up is enabled.
 	InvoiceBillingReasonWalletAutoTopup InvoiceBillingReason = "WALLET_AUTO_TOPUP"
+
+	// InvoiceBillingReasonSubscriptionPaused records a period, or part of one, during which the
+	// subscription was paused. It has no line items, is never computed and is always SKIPPED.
+	InvoiceBillingReasonSubscriptionPaused InvoiceBillingReason = "SUBSCRIPTION_PAUSED"
+
+	// InvoiceBillingReasonSubscriptionResume is the first invoice after a paused subscription resumes.
+	// Compute: advance charges from the resume time to the next billing date (ReferencePointPeriodStart).
+	InvoiceBillingReasonSubscriptionResume InvoiceBillingReason = "SUBSCRIPTION_RESUME"
+
+	// InvoiceBillingReasonBillingTerms is an invoice that carries only billing-term instalments (separate delivery).
+	InvoiceBillingReasonBillingTerms InvoiceBillingReason = "BILLING_TERMS"
+
+	// InvoiceBillingReasonCommitmentTermination bills what terminating a commitment owes: its cancellation fee, its
+	// billing-terms settlement, or both.
+	InvoiceBillingReasonCommitmentTermination InvoiceBillingReason = "COMMITMENT_TERMINATION"
 )
 
 func (r InvoiceBillingReason) String() string {
@@ -319,6 +335,10 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonManual,
 		InvoiceBillingReasonAutoInvoiceThreshold,
 		InvoiceBillingReasonWalletAutoTopup,
+		InvoiceBillingReasonSubscriptionPaused,
+		InvoiceBillingReasonSubscriptionResume,
+		InvoiceBillingReasonBillingTerms,
+		InvoiceBillingReasonCommitmentTermination,
 	}
 
 	if r != "" && !lo.Contains(allowed, r) {
@@ -418,15 +438,17 @@ const (
 //
 // Note: Sequences reset monthly and are tenant-environment-scoped for isolation.
 type InvoiceConfig struct {
-	InvoiceNumberPrefix                    string              `json:"prefix,omitempty" validate:"required,min=1"`
+	InvoiceNumberPrefix                    string              `json:"prefix,omitempty" validate:"required,min=1,max=20"`
 	InvoiceNumberFormat                    InvoiceNumberFormat `json:"format,omitempty" validate:"required"`
 	InvoiceNumberStartSequence             int                 `json:"start_sequence,omitempty" validate:"required,min=0"`
 	InvoiceNumberTimezone                  string              `json:"timezone,omitempty" validate:"required,min=1"`
 	InvoiceNumberSeparator                 string              `json:"separator,omitempty"` // Empty string ("") is valid for no separator
 	InvoiceNumberSuffixLength              int                 `json:"suffix_length,omitempty" validate:"required,min=1,max=10"`
-	DueDateDays                            *int                `json:"due_date_days,omitempty" validate:"omitempty,min=0"` // Number of days after period end when payment is due
+	DueDateDays                            *int                `json:"due_date_days,omitempty" validate:"omitempty,min=0"` // Number of days after the issue date when payment is due
+	PaymentTerms                           *PaymentTerms       `json:"payment_terms,omitempty"`                            // Tenant default payment terms; takes precedence over due_date_days when set
 	AutoCompletePurchasedCreditTransaction bool                `json:"auto_complete_purchased_credit_transaction,omitempty"`
 	FinalizationDelaySeconds               int                 `json:"finalization_delay_seconds,omitempty" validate:"omitempty,min=0"` // Seconds to wait after invoice creation before finalization. 0 = immediate.
+	AutoFinalize                           bool                `json:"auto_finalize"`                                                   // When false, drafts are not finalized at period end and wait for a manual finalize. Defaults to true.
 	IncludeZeroValueLineItems              bool                `json:"include_zero_value_line_items"`                                   // Keep usage line items with zero quantity and zero amount on the invoice. Skipped by default.
 }
 
@@ -458,6 +480,12 @@ func (c InvoiceConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if c.PaymentTerms != nil {
+		if err := c.PaymentTerms.Validate(); err != nil {
+			return err
+		}
+	}
+
 	// Validate timezone directly on the struct
 	if err := ValidateTimezone(c.InvoiceNumberTimezone); err != nil {
 		return ierr.WithError(err).
@@ -482,6 +510,9 @@ type InvoiceFilter struct {
 	// customer_id filters invoices for a specific customer using FlexPrice's internal customer ID
 	// This is the ID returned by FlexPrice when creating or retrieving customers
 	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
+
+	// billing_entity_id filters by the customer's billing entity
+	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
 
 	// external_customer_id filters invoices for a customer using your system's customer identifier
 	// This is the ID you provided when creating the customer in FlexPrice
@@ -529,11 +560,17 @@ type InvoiceFilter struct {
 	PeriodEndGTE *time.Time `json:"period_end_gte,omitempty" form:"period_end_gte" validate:"omitempty,time_rfc3339"`
 	// period_end_lte filters invoices with period_end <= value
 	PeriodEndLTE *time.Time `json:"period_end_lte,omitempty" form:"period_end_lte" validate:"omitempty,time_rfc3339"`
+	// period_start_lt filters invoices with period_start < value
+	PeriodStartLT *time.Time `json:"period_start_lt,omitempty" form:"period_start_lt" validate:"omitempty,time_rfc3339"`
+	// period_end_gt filters invoices with period_end > value
+	PeriodEndGT *time.Time `json:"period_end_gt,omitempty" form:"period_end_gt" validate:"omitempty,time_rfc3339"`
 
 	// finalized_at_gte filters invoices finalized at or after the given instant
 	FinalizedAtGTE *time.Time `json:"finalized_at_gte,omitempty" form:"finalized_at_gte" validate:"omitempty,time_rfc3339"`
 	// voided_at_gte filters invoices voided at or after the given instant
 	VoidedAtGTE *time.Time `json:"voided_at_gte,omitempty" form:"voided_at_gte" validate:"omitempty,time_rfc3339"`
+	// updated_at_gte filters invoices updated at or after the given instant
+	UpdatedAtGTE *time.Time `json:"updated_at_gte,omitempty" form:"updated_at_gte" validate:"omitempty,time_rfc3339"`
 
 	// SkipLineItems if true, will not include line items in the response
 	SkipLineItems bool `json:"skip_line_items,omitempty" form:"skip_line_items"`

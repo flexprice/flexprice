@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -142,7 +144,7 @@ func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context, cu
 		SuccessURL:            r.SuccessURL,
 		FailureURL:            r.FailureURL,
 		CancelURL:             r.CancelURL,
-		ExpiresAt:             r.ResolveExpiresAt(time.Now()),
+		ExpiresAt:             r.ResolveExpiresAt(clock.Now()),
 		Metadata:              r.Metadata,
 		BaseModel:             types.GetDefaultBaseModel(ctx),
 	}
@@ -211,7 +213,7 @@ func (r *PayFirstCheckoutRequest) ToCheckoutSession(ctx context.Context, custome
 		SuccessURL:            r.Checkout.SuccessURL,
 		FailureURL:            r.Checkout.FailureURL,
 		CancelURL:             r.Checkout.CancelURL,
-		ExpiresAt:             time.Now().UTC().Add(r.Checkout.PaymentProvider.SessionExpiry()),
+		ExpiresAt:             clock.Now().Add(r.Checkout.PaymentProvider.SessionExpiry()),
 		Metadata:              r.Checkout.Metadata,
 		BaseModel:             types.GetDefaultBaseModel(ctx),
 	}
@@ -257,12 +259,12 @@ func ValidateCheckoutSessionForCompletion(session *domainCheckout.CheckoutSessio
 		}
 		return cfg.WalletTopupParams.Validate()
 	case types.CheckoutActionAddAddon:
-		if cfg.AddAddonParams == nil {
+		if cfg.AddAddonParams == nil && len(cfg.AddAddonBatchParams) == 0 {
 			return ierr.NewError("session has no add_addon_params").
 				WithHint("checkout session must have add_addon_params before it can be completed").
 				Mark(ierr.ErrValidation)
 		}
-		return cfg.AddAddonParams.Validate()
+		return cfg.Validate(types.CheckoutActionAddAddon)
 	case types.CheckoutActionPayInvoice:
 		if cfg.PayInvoiceParams == nil {
 			return ierr.NewError("session has no pay_invoice_params").

@@ -7,14 +7,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // quantityChangeRequest is the validated, ready-to-apply intent for a quantity change.
@@ -85,7 +88,7 @@ func (s *subscriptionModificationService) requestFromModifySubscriptionParams(
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	mods := make([]*quantityChangeLineItemMod, 0, len(params.LineItemModifications))
 	for _, m := range params.LineItemModifications {
 		lineItem, err := sp.SubscriptionLineItemRepo.Get(ctx, m.LineItemID)
@@ -291,6 +294,7 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 	params *dto.SubModifyQuantityChangeRequest,
 ) (*quantityChangeRequest, error) {
 	sp := s.serviceParams
+	subSvc := NewSubscriptionService(sp).(*subscriptionService)
 
 	if params == nil {
 		return nil, ierr.NewError("quantity_change_params is required").
@@ -317,7 +321,7 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	mods := make([]*quantityChangeLineItemMod, 0, len(params.LineItems))
 
 	for _, change := range params.LineItems {
@@ -368,6 +372,12 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 				WithHint("Quantity changes are only supported for fixed-price line items").
 				WithReportableDetails(map[string]interface{}{"line_item_id": change.ID, "price_type": lineItem.PriceType}).
 				Mark(ierr.ErrValidation)
+		}
+
+		if successor, err := subSvc.findPublishedSuccessor(ctx, lineItem); err != nil {
+			return nil, err
+		} else if successor != nil {
+			return nil, alreadyScheduledVersionError(change.ID, successor.ID)
 		}
 
 		if err := validateChangeEffectiveDateWithinLineItemWindow(effectiveDate, sub, lineItem, change.ID); err != nil {
@@ -589,6 +599,7 @@ func (s *subscriptionModificationService) applyQuantityChange(
 	}
 
 	sp := s.serviceParams
+	subSvc := NewSubscriptionService(sp).(*subscriptionService)
 	mods := request.GetModifications()
 	if len(mods) == 0 {
 		return []dto.ChangedLineItem{}, nil
@@ -606,7 +617,7 @@ func (s *subscriptionModificationService) applyQuantityChange(
 			effectiveDate := mod.getEffectiveDate()
 			lineItemID := mod.getLineItemID()
 
-			lineItem, err := sp.SubscriptionLineItemRepo.Get(txCtx, lineItemID)
+			lineItem, err := sp.SubscriptionLineItemRepo.GetForUpdate(txCtx, lineItemID)
 			if err != nil {
 				return err
 			}
@@ -629,14 +640,22 @@ func (s *subscriptionModificationService) applyQuantityChange(
 					Mark(ierr.ErrValidation)
 			}
 
+			if successor, err := subSvc.findPublishedSuccessor(txCtx, lineItem); err != nil {
+				return err
+			} else if successor != nil {
+				return alreadyScheduledVersionError(lineItemID, successor.ID)
+			}
+
 			// Preserve a finite original window on the replacement; open-ended stays open-ended.
 			newItemEndDate := time.Time{}
 			if !lineItem.EndDate.IsZero() {
 				newItemEndDate = lineItem.EndDate
 			}
 
+			newItemID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
 			endedItem := subscription.NewSubscriptionLineItemBuilder(lineItem).
 				WithEndDate(effectiveDate).
+				WithSuccessorLineItemID(lo.ToPtr(newItemID)).
 				Build()
 			if err := sp.SubscriptionLineItemRepo.Update(txCtx, endedItem); err != nil {
 				return ierr.WithError(err).
@@ -646,12 +665,18 @@ func (s *subscriptionModificationService) applyQuantityChange(
 
 			// Copy from the ended line item, then override identity / window / quantity.
 			newItem := subscription.NewSubscriptionLineItemBuilder(endedItem).
-				WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)).
+				WithID(newItemID).
 				WithQuantity(mod.getQuantity()).
 				WithStartDate(effectiveDate).
 				WithEndDate(newItemEndDate).
 				WithBaseModel(types.GetDefaultBaseModel(txCtx)).
+				WithPredecessorLineItemID(lo.ToPtr(lineItemID)).
+				WithSuccessorLineItemID(nil).
 				Build()
+			clearLineItemMetadataIDs(newItem, lineageMetadataKeys...)
+			if err := checkLineAttach(txCtx, sp, request.GetSubscription(), newItem); err != nil {
+				return err
+			}
 			if err := sp.SubscriptionLineItemRepo.Create(txCtx, newItem); err != nil {
 				return err
 			}
@@ -1067,15 +1092,16 @@ func buildProrationChargeInvoiceRequest(
 		Metadata:       types.WithCollapsedInvoiceDisplayName(nil, "Quantity change"),
 		LineItems: []dto.CreateInvoiceLineItemRequest{
 			{
-				PriceID:         &priceID,
-				PriceType:       &priceType,
-				PlanDisplayName: &planDisplayName,
-				DisplayName:     &displayName,
-				Amount:          netAmount,
-				Quantity:        qtyDelta,
-				PeriodStart:     &effectiveDate,
-				PeriodEnd:       &periodEnd,
-				Metadata:        types.Metadata{"description": lineItemDescription},
+				PriceID:                &priceID,
+				SubscriptionLineItemID: &oldItem.ID,
+				PriceType:              &priceType,
+				PlanDisplayName:        &planDisplayName,
+				DisplayName:            &displayName,
+				Amount:                 netAmount,
+				Quantity:               qtyDelta,
+				PeriodStart:            &effectiveDate,
+				PeriodEnd:              &periodEnd,
+				Metadata:               types.Metadata{"description": lineItemDescription},
 			},
 		},
 	}

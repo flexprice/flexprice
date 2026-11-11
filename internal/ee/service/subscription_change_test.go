@@ -66,6 +66,7 @@ func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 		InvoiceLineItemRepo:          s.GetStores().InvoiceLineItemRepo,
 		TenantRepo:                   s.GetStores().TenantRepo,
 		InvoiceRepo:                  s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo:       s.GetStores().HostedInvoiceTokenRepo,
 		FeatureRepo:                  s.GetStores().FeatureRepo,
 		EntitlementRepo:              s.GetStores().EntitlementRepo,
 		EntitlementGrantRepo:         s.GetStores().EntitlementGrantRepo,
@@ -85,12 +86,16 @@ func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 		ConnectionRepo:               s.GetStores().ConnectionRepo,
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 		SettingsRepo:                 s.GetStores().SettingsRepo,
+		CommitmentRepo:               s.GetStores().CommitmentRepo,
+		BillingTermRepo:              s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:        s.GetStores().BillingInstalmentRepo,
 		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
 		EventPublisher:               s.GetPublisher(),
 		WebhookPublisher:             s.GetWebhookPublisher(),
 		ProrationCalculator:          s.GetCalculator(),
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:            s.GetStores().PlanPriceSyncRepo,
+		AddonPriceSyncRepo:           s.GetStores().AddonPriceSyncRepo,
 	}
 
 	s.subscriptionChangeService = NewSubscriptionChangeService(serviceParams).(*subscriptionChangeService)

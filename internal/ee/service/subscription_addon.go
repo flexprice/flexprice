@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // pendingCheckoutSessionForAssociation reports whether an outstanding checkout already gates this
@@ -27,12 +28,11 @@ func (s *subscriptionService) pendingCheckoutSessionForAssociation(
 
 	for _, session := range sessions {
 		cfg := session.Configuration.ToCheckoutConfiguration()
-		if cfg.AddAddonParams == nil {
-			continue
-		}
-		for _, ref := range cfg.AddAddonParams.Removes {
-			if ref.AssociationID == associationID {
-				return true, nil
+		for _, params := range cfg.AddAddonEntries() {
+			for _, ref := range params.Removes {
+				if ref.AssociationID == associationID {
+					return true, nil
+				}
 			}
 		}
 	}
@@ -48,10 +48,6 @@ func (s *subscriptionService) pendingCheckoutSessionForAssociation(
 // settling is finalizeCheckoutInvoiceAndPayment's job. Credit-grant proration is not
 // suppressed, so grants scale exactly as they would have pay-later.
 func (s *subscriptionService) applyAddAddonCheckoutParams(ctx context.Context, params *types.AddAddonParams) error {
-	if err := params.Validate(); err != nil {
-		return err
-	}
-
 	return s.DB.WithTx(ctx, func(ctx context.Context) error {
 		sub, err := s.loadSubscriptionForChange(ctx, params.SubscriptionID, true)
 		if err != nil {
@@ -181,7 +177,8 @@ func (s *subscriptionService) replayAddonChangeRequest(
 				Metadata:          association.Metadata,
 				CouponRefs:        ref.Coupons,
 			},
-			Existing: association,
+			Existing:       association,
+			PriceOverrides: ref.PriceOverrides,
 		})
 	}
 

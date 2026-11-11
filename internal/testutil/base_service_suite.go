@@ -8,11 +8,15 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
 	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/billingentity"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_application"
@@ -29,8 +33,10 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/group"
+	"github.com/flexprice/flexprice/internal/domain/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
@@ -40,6 +46,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/refund"
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
@@ -94,6 +101,7 @@ type Stores struct {
 	CreditNoteLineItemRepo       creditnote.CreditNoteLineItemRepository
 	TaxRateRepo                  taxrate.Repository
 	FXRateRepo                   fxrate.Repository
+	HostedInvoiceTokenRepo       hostedinvoicetoken.Repository
 	TaxAppliedRepo               taxapplied.Repository
 	TaxAssociationRepo           taxassociation.Repository
 	CouponRepo                   coupon.Repository
@@ -108,11 +116,19 @@ type Stores struct {
 	AlertRepo                    alert.Repository
 	GroupRepo                    group.Repository
 	MeterUsageRepo               events.MeterUsageRepository
+	MeterUsageCheckpointRepo     meterusagecheckpoint.Repository
 	PlanPriceSyncRepo            planpricesync.Repository
+	AddonPriceSyncRepo           addonpricesync.Repository
 	CheckoutSessionRepo          domainCheckout.Repository
 	UsageRecordRepo              usagerecord.Repository
 	AnalyticsViewRepo            domainAnalytics.Repository
 	RevenueFactRepo              revenuefact.Repository
+	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
+	SelfBillingPostgresRepo      domainsb.PostgresRepository
+	CommitmentRepo               commitment.Repository
+	BillingTermRepo              billingterm.TermRepository
+	BillingInstalmentRepo        billingterm.InstalmentRepository
+	BillingEntityRepo            billingentity.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -192,6 +208,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		encryptionService,
 		nil, // TemporalService — not needed in unit tests
 		NewInMemoryRedisLocker(nil),
+		s.stores.SettingsRepo,
 	)
 }
 
@@ -224,7 +241,10 @@ func (s *BaseServiceTestSuite) setupStores() {
 	subStore.SetInvoiceStore(invoiceStore)
 	priceStore := NewInMemoryPriceStore()
 	planPriceSyncStore := NewInMemoryPlanPriceSyncStore(priceStore, subStore, lineItemStore)
+	addonAssociationStore := NewInMemoryAddonAssociationStore()
+	addonPriceSyncStore := NewInMemoryAddonPriceSyncStore(priceStore, subStore, lineItemStore, addonAssociationStore)
 	couponStore := NewInMemoryCouponStore()
+	selfBillingStore := NewInMemorySelfBillingStore()
 	s.stores = Stores{
 		SubscriptionRepo:             subStore,
 		SubscriptionLineItemRepo:     lineItemStore,
@@ -256,13 +276,14 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CreditNoteLineItemRepo:       NewInMemoryCreditNoteLineItemStore(),
 		TaxRateRepo:                  NewInMemoryTaxRateStore(),
 		FXRateRepo:                   NewInMemoryFXRateStore(),
+		HostedInvoiceTokenRepo:       NewInMemoryHostedInvoiceTokenStore(),
 		TaxAppliedRepo:               NewInMemoryTaxAppliedStore(),
 		TaxAssociationRepo:           NewInMemoryTaxAssociationStore(),
 		CouponRepo:                   couponStore,
 		CouponAssociationRepo:        NewInMemoryCouponAssociationStore(couponStore),
 		CouponApplicationRepo:        NewInMemoryCouponApplicationStore(),
 		AddonRepo:                    NewInMemoryAddonStore(),
-		AddonAssociationRepo:         NewInMemoryAddonAssociationStore(),
+		AddonAssociationRepo:         addonAssociationStore,
 		ConnectionRepo:               NewInMemoryConnectionStore(),
 		EntityIntegrationMappingRepo: NewInMemoryEntityIntegrationMappingStore(),
 		SettingsRepo:                 NewInMemorySettingsStore(),
@@ -270,11 +291,19 @@ func (s *BaseServiceTestSuite) setupStores() {
 		AlertRepo:                    NewInMemoryAlertSettingsStore(),
 		GroupRepo:                    NewInMemoryGroupStore(),
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
+		MeterUsageCheckpointRepo:     NewInMemoryMeterUsageCheckpointStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
+		AddonPriceSyncRepo:           addonPriceSyncStore,
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
 		UsageRecordRepo:              NewInMemoryUsageRecordStore(),
 		AnalyticsViewRepo:            NewInMemoryAnalyticsViewStore(),
 		RevenueFactRepo:              NewInMemoryRevenueFactStore(),
+		SelfBillingClickHouseRepo:    selfBillingStore,
+		SelfBillingPostgresRepo:      selfBillingStore,
+		CommitmentRepo:               NewInMemoryCommitmentStore(),
+		BillingTermRepo:              NewInMemoryBillingTermStore(),
+		BillingInstalmentRepo:        NewInMemoryBillingInstalmentStore(),
+		BillingEntityRepo:            NewInMemoryBillingEntityStore(),
 	}
 
 	// Cache stores
@@ -321,6 +350,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.EntityIntegrationMappingRepo.(*InMemoryEntityIntegrationMappingStore).Clear()
 	s.stores.TaxRateRepo.(*InMemoryTaxRateStore).Clear()
 	s.stores.FXRateRepo.(*InMemoryFXRateStore).Clear()
+	s.stores.HostedInvoiceTokenRepo.(*InMemoryHostedInvoiceTokenStore).Clear()
 	s.stores.TaxAppliedRepo.(*InMemoryTaxAppliedStore).Clear()
 	s.stores.TaxAssociationRepo.(*InMemoryTaxAssociationStore).Clear()
 	s.stores.CouponRepo.(*InMemoryCouponStore).Clear()
@@ -335,11 +365,18 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.AlertRepo.(*InMemoryAlertSettingsStore).Clear()
 	s.stores.GroupRepo.(*InMemoryGroupStore).Clear()
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
+	s.stores.MeterUsageCheckpointRepo.(*InMemoryMeterUsageCheckpointStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
+	s.stores.AddonPriceSyncRepo.(*InMemoryAddonPriceSyncStore).Clear()
 	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()
 	s.stores.UsageRecordRepo.(*InMemoryUsageRecordStore).Clear()
 	s.stores.AnalyticsViewRepo.(*InMemoryAnalyticsViewStore).Clear()
 	s.stores.RevenueFactRepo.(*InMemoryRevenueFactStore).Clear()
+	s.stores.SelfBillingClickHouseRepo.(*InMemorySelfBillingStore).Clear()
+	s.stores.CommitmentRepo.(*InMemoryCommitmentStore).Clear()
+	s.stores.BillingTermRepo.(*InMemoryBillingTermStore).Clear()
+	s.stores.BillingInstalmentRepo.(*InMemoryBillingInstalmentStore).Clear()
+	s.stores.BillingEntityRepo.(*InMemoryBillingEntityStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

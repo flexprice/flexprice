@@ -58,7 +58,7 @@ func (s *CancelCustomerFlow) Run(ctx context.Context) error {
 	if _, err := s.client.Subscriptions().Cancel(ctx, target.ID, types.CancelSubscriptionRequest{
 		CancellationType:               cancelType,
 		ProrationBehavior:              &prorate,
-		CancelImmediatelyInovicePolicy: &generateInvoice,
+		CancelImmediatelyInvoicePolicy: &generateInvoice,
 		Reason:                         strPtr("e2eprobe-cancel-customer-flow"),
 	}); err != nil {
 		// A previous tick may have already cancelled the sub server-side (e.g.

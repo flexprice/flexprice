@@ -23,6 +23,16 @@ func GenerateUUIDWithPrefix(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, GenerateUUID())
 }
 
+// IsPrefixedUUID reports whether id is what GenerateUUIDWithPrefix produces: the prefix, an underscore and a valid ULID.
+func IsPrefixedUUID(id, prefix string) bool {
+	rest, ok := strings.CutPrefix(id, prefix+"_")
+	if !ok {
+		return false
+	}
+	_, err := ulid.ParseStrict(rest)
+	return err == nil
+}
+
 var (
 	sidGenerator *shortid.Shortid
 	once         sync.Once
@@ -69,6 +79,7 @@ const (
 	UUID_PREFIX_FEATURE                    = "feat"
 	UUID_PREFIX_EVENT                      = "event"
 	UUID_PREFIX_METER                      = "meter"
+	UUID_PREFIX_METER_USAGE_CHECKPOINT     = "muc"
 	UUID_PREFIX_PLAN                       = "plan"
 	UUID_PREFIX_PRICE                      = "price"
 	UUID_PREFIX_INVOICE                    = "inv"
@@ -122,7 +133,24 @@ const (
 	UUID_PREFIX_ANALYTICS_VIEW             = "aview"
 	UUID_PREFIX_REVENUE_FACT               = "revfact"
 	UUID_PREFIX_FX_RATE                    = "fxr"
+	UUID_PREFIX_HOSTED_INVOICE_TOKEN       = "hit"
 	UUID_PREFIX_ACTIVITY                   = "act"
+	UUID_PREFIX_PRODUCT                    = "product"
+	UUID_PREFIX_CONTRACT                   = "contract"
+	UUID_PREFIX_CONTRACT_ASSOCIATION       = "contract_assoc"
+	UUID_PREFIX_PERFORMANCE_OBLIGATION     = "pob"
+	UUID_PREFIX_POB_ASSOCIATION            = "pob_assoc"
+	UUID_PREFIX_ACCOUNTING_PERIOD          = "acct_period"
+	UUID_PREFIX_JOURNAL_ENTRY              = "je"
+	UUID_PREFIX_JOURNAL_LINE               = "jl"
+	UUID_PREFIX_EVENT_DELETION_REQUEST     = "evtdel"
+
+	// UUID_PREFIX_COMMITMENT prefixes first-class subscription commitment IDs.
+	UUID_PREFIX_COMMITMENT = "cmt"
+
+	UUID_PREFIX_BILLING_TERM       = "bterm"
+	UUID_PREFIX_BILLING_INSTALMENT = "binst"
+	UUID_PREFIX_BILLING_ENTITY     = "be"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"

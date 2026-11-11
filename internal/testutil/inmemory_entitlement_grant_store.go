@@ -249,6 +249,9 @@ func (s *InMemoryEntitlementGrantStore) UpdateSnapshot(ctx context.Context, g *e
 	existing.GrantStatus = g.GrantStatus
 	existing.LastComputedAt = g.LastComputedAt
 	existing.QuotaCrossedAt = g.QuotaCrossedAt
+	if g.IsSubscriptionScoped() && g.Metadata != nil {
+		existing.Metadata = g.Metadata
+	}
 	existing.UpdatedAt = time.Now().UTC()
 	return s.InMemoryStore.Update(ctx, g.ID, existing)
 }

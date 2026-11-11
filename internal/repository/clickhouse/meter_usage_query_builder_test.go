@@ -46,122 +46,47 @@ func TestBuildDetailedGroupByColumns_ExternalCustomerIDAlongsideExisting(t *test
 	require.Equal(t, "prop_region", result.FieldMapping["properties.region"])
 }
 
-// TestBuildDetailedPointsQuery_NarrowsByExternalCustomerID proves the
-// per-group points sub-query added by Change 2 narrows to the same customer
-// as the aggregate row it belongs to, mirroring the existing Source narrowing.
-func TestBuildDetailedPointsQuery_NarrowsByExternalCustomerID(t *testing.T) {
+// TestBuildDetailedPointsQuery_GroupsByAggregateColumns proves one points query
+// returns every group: it selects and groups by the aggregate's group-by columns plus window_start.
+func TestBuildDetailedPointsQuery_GroupsByAggregateColumns(t *testing.T) {
 	qb := NewMeterUsageQueryBuilder()
 
 	params := &events.MeterUsageDetailedAnalyticsParams{
 		TenantID:      "tenant_1",
 		EnvironmentID: "env_1",
-		WindowSize:    types.WindowSizeDay,
+		WindowSize:    types.WindowSizeWeek,
+		GroupBy:       []string{"meter_id", "source", "external_customer_id", "properties.user_id"},
 	}
-	groupByResult, err := qb.BuildDetailedGroupByColumns(&events.MeterUsageDetailedAnalyticsParams{
-		GroupBy: []string{"external_customer_id"},
-	})
+	groupByResult, err := qb.BuildDetailedGroupByColumns(params)
 	require.NoError(t, err)
 
-	result := &events.MeterUsageDetailedResult{ExternalCustomerID: "cust_1"}
-	query, args := qb.BuildDetailedPointsQuery(params, result, groupByResult)
-	require.Contains(t, query, "external_customer_id = ?")
-	require.Contains(t, args, "cust_1")
-	require.Equal(t, 1, strings.Count(query, "external_customer_id = ?"))
+	query, _ := qb.BuildDetailedPointsQuery(params, groupByResult)
+	require.Contains(t, query, "JSONExtractString(properties, 'user_id') AS prop_user_id")
+	require.Contains(t, query, "GROUP BY meter_id, source, external_customer_id, JSONExtractString(properties, 'user_id'), window_start")
+	require.Less(t, strings.Index(query, "prop_user_id"), strings.Index(query, "AS window_start"),
+		"group columns must precede window_start so the scanner reads them first")
 }
 
-// TestBuildDetailedPointsQuery_ConstrainsEmptyCustomerGroup proves the points
-// sub-query still constrains external_customer_id for the empty-ID group (events
-// with no customer). Without the group predicate the sub-query would sum every
-// customer allowed by the base filters, disagreeing with the aggregate row that
-// only holds the empty-ID group.
-func TestBuildDetailedPointsQuery_ConstrainsEmptyCustomerGroup(t *testing.T) {
+// TestBuildDetailedPointsQuery_NoPerGroupPredicates proves the points query binds only
+// the base filters, so a group with an empty value is grouped rather than filtered.
+func TestBuildDetailedPointsQuery_NoPerGroupPredicates(t *testing.T) {
 	qb := NewMeterUsageQueryBuilder()
 
 	params := &events.MeterUsageDetailedAnalyticsParams{
 		TenantID:      "tenant_1",
 		EnvironmentID: "env_1",
 		WindowSize:    types.WindowSizeDay,
+		GroupBy:       []string{"meter_id", "external_customer_id", "properties.user_id"},
 	}
-	groupByResult, err := qb.BuildDetailedGroupByColumns(&events.MeterUsageDetailedAnalyticsParams{
-		GroupBy: []string{"external_customer_id"},
-	})
+	groupByResult, err := qb.BuildDetailedGroupByColumns(params)
 	require.NoError(t, err)
 
-	result := &events.MeterUsageDetailedResult{ExternalCustomerID: ""} // empty-ID group
-	query, args := qb.BuildDetailedPointsQuery(params, result, groupByResult)
-	require.Contains(t, query, "external_customer_id = ?")
-	require.Equal(t, 1, strings.Count(query, "external_customer_id = ?"))
-	// The empty group value must be bound as the last arg, not dropped.
-	require.Equal(t, "", args[len(args)-1])
-}
-
-// TestBuildDetailedPointsQuery_NoStructuralPredicateWhenNotGrouped proves a
-// dimension that was not grouped adds no per-group predicate, even if the
-// result carries a stray value — the points query relies on the base filters.
-func TestBuildDetailedPointsQuery_NoStructuralPredicateWhenNotGrouped(t *testing.T) {
-	qb := NewMeterUsageQueryBuilder()
-
-	params := &events.MeterUsageDetailedAnalyticsParams{
-		TenantID:      "tenant_1",
-		EnvironmentID: "env_1",
-		WindowSize:    types.WindowSizeDay,
-	}
-	groupByResult, err := qb.BuildDetailedGroupByColumns(&events.MeterUsageDetailedAnalyticsParams{
-		GroupBy: []string{"meter_id"},
-	})
-	require.NoError(t, err)
-
-	result := &events.MeterUsageDetailedResult{MeterID: "meter_1", ExternalCustomerID: "leftover"}
-	query, _ := qb.BuildDetailedPointsQuery(params, result, groupByResult)
-	require.Contains(t, query, "meter_id = ?")
+	query, args := qb.BuildDetailedPointsQuery(params, groupByResult)
+	_, baseArgs := qb.BuildDetailedWhereClause(params)
+	require.Equal(t, baseArgs, args)
+	require.NotContains(t, query, "meter_id = ?")
 	require.NotContains(t, query, "external_customer_id = ?")
-}
-
-func TestBuildDetailedPointsQuery_ConstrainsEmptyPropertyGroup(t *testing.T) {
-	qb := NewMeterUsageQueryBuilder()
-
-	params := &events.MeterUsageDetailedAnalyticsParams{
-		TenantID:      "tenant_1",
-		EnvironmentID: "env_1",
-		WindowSize:    types.WindowSizeWeek,
-		GroupBy:       []string{"source", "meter_id", "properties.user_id"},
-	}
-	groupByResult, err := qb.BuildDetailedGroupByColumns(params)
-	require.NoError(t, err)
-
-	result := &events.MeterUsageDetailedResult{
-		MeterID:    "meter_1",
-		Source:     "src_1",
-		Properties: map[string]string{"user_id": ""},
-	}
-	query, args := qb.BuildDetailedPointsQuery(params, result, groupByResult)
-	require.Contains(t, query, "JSONExtractString(properties, ?) = ?")
-	require.Contains(t, args, "user_id")
-	require.Contains(t, args, "")
-	require.Contains(t, query, "source = ?")
-	require.Contains(t, query, "meter_id = ?")
-}
-
-func TestBuildDetailedPointsQuery_NarrowsByNonEmptyProperty(t *testing.T) {
-	qb := NewMeterUsageQueryBuilder()
-
-	params := &events.MeterUsageDetailedAnalyticsParams{
-		TenantID:      "tenant_1",
-		EnvironmentID: "env_1",
-		WindowSize:    types.WindowSizeWeek,
-		GroupBy:       []string{"properties.user_id"},
-	}
-	groupByResult, err := qb.BuildDetailedGroupByColumns(params)
-	require.NoError(t, err)
-
-	result := &events.MeterUsageDetailedResult{
-		Properties: map[string]string{"user_id": "abc"},
-	}
-	query, args := qb.BuildDetailedPointsQuery(params, result, groupByResult)
-	require.Contains(t, query, "JSONExtractString(properties, ?) = ?")
-	require.Equal(t, 1, strings.Count(query, "JSONExtractString(properties, ?) = ?"))
-	require.Equal(t, "user_id", args[len(args)-2])
-	require.Equal(t, "abc", args[len(args)-1])
+	require.NotContains(t, query, "JSONExtractString(properties, ?) = ?")
 }
 
 func TestBuildDetailedGroupByColumns_RejectsUnknownEntry(t *testing.T) {

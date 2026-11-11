@@ -108,14 +108,14 @@ type PaymentProviderConfig struct {
 // paymentDefaultSettleTimeout covers gateways slower than the global default:
 // Razorpay test-mode mandate debits capture up to a few minutes after submission.
 var paymentDefaultSettleTimeout = map[string]time.Duration{
-	"razorpay": 10 * time.Minute,
+	"razorpay":  10 * time.Minute,
+	"chargebee": 5 * time.Minute,
 }
 
 // paymentFixedCustomer is the same in every region; its cards or mandates are saved by hand.
 var paymentFixedCustomer = map[string]string{
 	"stripe":    "e2eprobe-cust-pay-stripe-cards",
 	"chargebee": "e2eprobe-cust-pay-chargebee-cards",
-	"razorpay":  "e2eprobe-cust-pay-razorpay-mandate",
 }
 
 // paymentDeclineCardLast4 identifies the gateway test card that saves but declines when charged.
@@ -124,12 +124,10 @@ var paymentDeclineCardLast4 = map[string]string{
 	"chargebee": "0004",
 }
 
-// paymentAutoChargeInterval spaces auto-charge runs, which debit hand-saved cards and mandates:
-// Razorpay test card mandates refuse the 22nd debit of a day.
+// paymentAutoChargeInterval spaces auto-charge runs, which debit hand-saved cards.
 var paymentAutoChargeInterval = map[string]time.Duration{
 	"stripe":    6 * time.Hour,
 	"chargebee": 6 * time.Hour,
-	"razorpay":  12 * time.Hour,
 }
 
 var paymentDefaultCurrency = map[string]string{
@@ -217,7 +215,7 @@ func LoadConfig() (*Config, error) {
 		APIKey:              os.Getenv("E2EPROBE_API_KEY"),
 		Enabled:             getBool("E2EPROBE_ENABLED", true),
 		DryRun:              getBool("E2EPROBE_DRY_RUN", false),
-		EventIngestRate:     getInt(&warnings, "E2EPROBE_EVENT_INGEST_RATE", 1),
+		EventIngestRate:     getInt(&warnings, "E2EPROBE_EVENT_INGEST_RATE", 5),
 		EventIngestSeed:     getInt64(&warnings, "E2EPROBE_EVENT_INGEST_SEED", 42),
 		ListenerPort:        getInt(&warnings, "E2EPROBE_LISTENER_PORT", 8765),
 		TenantID:            os.Getenv("E2EPROBE_TENANT_ID"),

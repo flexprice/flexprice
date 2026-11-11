@@ -13,6 +13,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -103,6 +104,19 @@ func (l *syncTestLocker) AcquireLock(_ context.Context, _ string, _ time.Duratio
 	return syncTestLock{acquired: acquired, releaseCalls: &l.releaseCalls}, nil
 }
 
+// stubConnectionRepo resolves every provider to one published test connection.
+type stubConnectionRepo struct {
+	connection.Repository
+}
+
+func (stubConnectionRepo) GetByProvider(_ context.Context, provider types.SecretProvider) (*connection.Connection, error) {
+	return &connection.Connection{ID: "conn_test", ProviderType: provider}, nil
+}
+
+func testClient() *Client {
+	return NewClient(stubConnectionRepo{}, nil, logger.NewNoopLogger())
+}
+
 func testContext() context.Context {
 	ctx := types.SetTenantID(context.Background(), "tenant_test")
 	return types.SetEnvironmentID(ctx, "env_test")
@@ -186,7 +200,7 @@ func TestEnsureCustomerSyncedToStripe(t *testing.T) {
 			mappingRepo := &syncTestMappingRepo{mappings: tt.mappings}
 			locker := &syncTestLocker{acquiredOnCall: tt.lockAcquiredOnCall}
 
-			svc := NewCustomerService(nil, nil, mappingRepo, locker, logger.NewNoopLogger())
+			svc := NewCustomerService(testClient(), nil, mappingRepo, locker, logger.NewNoopLogger())
 
 			resp, err := svc.EnsureCustomerSyncedToStripe(testContext(), customerID, customerSvc)
 
@@ -249,7 +263,7 @@ func TestGetStripeCustomerID(t *testing.T) {
 				updateErr: tt.updateErr,
 			}
 			locker := &syncTestLocker{acquiredOnCall: 1}
-			svc := NewCustomerService(nil, nil, &syncTestMappingRepo{mappings: tt.mappings}, locker, logger.NewNoopLogger())
+			svc := NewCustomerService(testClient(), nil, &syncTestMappingRepo{mappings: tt.mappings}, locker, logger.NewNoopLogger())
 
 			stripeID, err := svc.GetStripeCustomerID(testContext(), customerID, customerSvc)
 
@@ -295,4 +309,84 @@ func TestDefaultPaymentMethodID(t *testing.T) {
 			DefaultPaymentMethod: &stripeapi.PaymentMethod{ID: "pm_default"},
 		},
 	}))
+}
+
+// The service has no Stripe client, so reaching Stripe would panic: an unlinked customer must
+// return first.
+func TestUpdateCustomerInStripe_UnlinkedCustomerIsSkipped(t *testing.T) {
+	customerSvc := &syncTestCustomerService{
+		customer: &customer.Customer{
+			ID:   "cust_test001",
+			Name: "Acme",
+		},
+	}
+	svc := NewCustomerService(testClient(), nil, &syncTestMappingRepo{}, &syncTestLocker{}, logger.NewNoopLogger())
+
+	err := svc.UpdateCustomerInStripe(testContext(), customerSvc.customer, customerSvc)
+
+	require.NoError(t, err)
+}
+
+func TestCustomerUpdateParams(t *testing.T) {
+	tests := []struct {
+		name        string
+		customer    *customer.Customer
+		wantAddress *stripeapi.AddressParams
+	}{
+		{
+			name: "full address",
+			customer: &customer.Customer{
+				Name:              "Acme",
+				Email:             "billing@acme.test",
+				AddressLine1:      "1 Main St",
+				AddressLine2:      "Suite 2",
+				AddressCity:       "Austin",
+				AddressState:      "TX",
+				AddressPostalCode: "78701",
+				AddressCountry:    "US",
+			},
+			wantAddress: &stripeapi.AddressParams{
+				Line1:      stripeapi.String("1 Main St"),
+				Line2:      stripeapi.String("Suite 2"),
+				City:       stripeapi.String("Austin"),
+				State:      stripeapi.String("TX"),
+				PostalCode: stripeapi.String("78701"),
+				Country:    stripeapi.String("US"),
+			},
+		},
+		{
+			name: "country and postal code alone are still sent, which is all Stripe Tax needs",
+			customer: &customer.Customer{
+				Name:              "Acme",
+				Email:             "billing@acme.test",
+				AddressPostalCode: "78701",
+				AddressCountry:    "US",
+			},
+			wantAddress: &stripeapi.AddressParams{
+				Line1:      stripeapi.String(""),
+				Line2:      stripeapi.String(""),
+				City:       stripeapi.String(""),
+				State:      stripeapi.String(""),
+				PostalCode: stripeapi.String("78701"),
+				Country:    stripeapi.String("US"),
+			},
+		},
+		{
+			name: "no address leaves Stripe's alone",
+			customer: &customer.Customer{
+				Name:  "Acme",
+				Email: "billing@acme.test",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := customerUpdateParams(tt.customer)
+
+			assert.Equal(t, tt.customer.Name, *params.Name)
+			assert.Equal(t, tt.customer.Email, *params.Email)
+			assert.Equal(t, tt.wantAddress, params.Address)
+		})
+	}
 }

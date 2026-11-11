@@ -3,7 +3,10 @@ package expression
 import (
 	"encoding/json"
 	"math"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -322,4 +325,76 @@ func TestCELEvaluator_NonNumericErrorOmitsRawValue(t *testing.T) {
 	if !strings.Contains(err.Error(), `"a"`) {
 		t.Fatalf("error message should name the property: %v", err)
 	}
+}
+
+func TestCELEvaluator_Identifiers(t *testing.T) {
+	ids, err := NewCELEvaluator().Identifiers("max(input_tokens, 1) * 2 + output_tokens")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"input_tokens", "output_tokens"}, ids)
+
+	_, err = NewCELEvaluator().Identifiers("input_tokens +")
+	assert.Error(t, err)
+}
+
+func TestCELEvaluator_ValidateLimits(t *testing.T) {
+	eval := NewCELEvaluator()
+
+	long := "a" + strings.Repeat(" + a", MaxExpressionLength/4+1)
+	require.Greater(t, len(long), MaxExpressionLength)
+	err := eval.Validate(long)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "maximum length")
+
+	ids := make([]string, MaxExpressionIdents+1)
+	for i := range ids {
+		ids[i] = "v" + strings.Repeat("x", i%3) + string(rune('a'+i/26)) + string(rune('a'+i%26))
+	}
+	err = eval.Validate(strings.Join(ids, " + "))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "distinct identifiers")
+
+	require.NoError(t, eval.Validate("input_tokens * 2 + max(output_tokens, 1)"))
+	got, err := eval.EvaluateQuantity("input_tokens * 2", map[string]interface{}{"input_tokens": 3})
+	require.NoError(t, err)
+	assert.True(t, got.Equal(decimal.NewFromInt(6)))
+}
+
+func TestCELEvaluator_CacheBounded(t *testing.T) {
+	eval := &CELEvaluator{parser: NewCELEvaluator().parser}
+	for i := 0; i < maxCachedPrograms+5; i++ {
+		_, err := eval.EvaluateQuantity("a + "+strconv.Itoa(i), map[string]interface{}{"a": 1})
+		require.NoError(t, err)
+	}
+	assert.LessOrEqual(t, eval.cacheSize.Load(), int64(maxCachedPrograms))
+}
+
+func TestCELEvaluator_CacheBoundedConcurrent(t *testing.T) {
+	eval := &CELEvaluator{parser: NewCELEvaluator().parser}
+	const workers, perWorker = 8, 2000
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := 0; i < perWorker; i++ {
+				_, err := eval.Identifiers("a + " + strconv.Itoa(w*perWorker+i))
+				assert.NoError(t, err)
+				assert.LessOrEqual(t, eval.cacheSize.Load(), int64(maxCachedPrograms))
+			}
+		}(w)
+	}
+	wg.Wait()
+
+	n := 0
+	eval.cache.Range(func(_, _ any) bool { n++; return true })
+	assert.LessOrEqual(t, n, maxCachedPrograms)
+	assert.Equal(t, int64(n), eval.cacheSize.Load())
+}
+
+// Cost is linear in size without macros; source check only.
+func TestCELEvaluator_ProgramOptionsInSource(t *testing.T) {
+	src, err := os.ReadFile("cel_evaluator.go")
+	require.NoError(t, err)
+	assert.Contains(t, string(src), "cel.CostLimit(evalCostLimit)")
+	assert.Contains(t, string(src), "cel.InterruptCheckFrequency(")
 }

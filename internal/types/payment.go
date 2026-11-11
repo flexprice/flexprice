@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 )
@@ -233,6 +235,9 @@ type PaymentFilter struct {
 	Currency          *string  `form:"currency"`
 	GatewayPaymentID  *string  `form:"gateway_payment_id"`
 	GatewayTrackingID *string  `form:"gateway_tracking_id"` // For filtering by gateway tracking ID
+
+	// UpdatedAtGTE bounds updated_at, which every lifecycle change bumps.
+	UpdatedAtGTE *time.Time `form:"updated_at_gte"`
 }
 
 // NewNoLimitPaymentFilter creates a new payment filter with no limit
@@ -451,3 +456,12 @@ func (f *PaymentMethodFilter) IsUnlimited() bool {
 	}
 	return f.QueryFilter.IsUnlimited()
 }
+
+// InvoicePaymentFailureReason is why a payment of an invoice did not succeed.
+type InvoicePaymentFailureReason string
+
+const (
+	InvoicePaymentFailureReasonPaymentMethodUnavailable InvoicePaymentFailureReason = "payment_method_unavailable"
+	InvoicePaymentFailureReasonProviderError            InvoicePaymentFailureReason = "provider_error"
+	InvoicePaymentFailureReasonDeclined                 InvoicePaymentFailureReason = "declined"
+)

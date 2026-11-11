@@ -10,8 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -23,8 +28,6 @@ import (
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 const eventDeduplicationLockTTL = 24 * time.Hour
@@ -57,6 +60,7 @@ type meterUsageTrackingService struct {
 	meterUsageRepo      events.MeterUsageRepository
 	expressionEvaluator expression.Evaluator
 	analyticsPublisher  analytics.MeterUsageSinkPublisher
+	deletionWindow      EventDeletionWindowService
 }
 
 // NewMeterUsageTrackingService creates a new meter usage tracking service
@@ -64,12 +68,14 @@ func NewMeterUsageTrackingService(
 	params ServiceParams,
 	meterUsageRepo events.MeterUsageRepository,
 	analyticsPublisher analytics.MeterUsageSinkPublisher,
+	deletionWindow EventDeletionWindowService,
 ) MeterUsageTrackingService {
 	svc := &meterUsageTrackingService{
 		ServiceParams:       params,
 		meterUsageRepo:      meterUsageRepo,
 		expressionEvaluator: expression.NewCELEvaluator(),
 		analyticsPublisher:  analyticsPublisher,
+		deletionWindow:      deletionWindow,
 	}
 
 	ps, err := kafka.NewPubSubFromConfig(
@@ -121,7 +127,7 @@ func (s *meterUsageTrackingService) PublishEvent(ctx context.Context, event *eve
 		partitionKey = fmt.Sprintf("%s:%s", event.TenantID, event.ExternalCustomerID)
 	}
 
-	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, time.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
+	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, clock.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
 	msg := message.NewMessage(uniqueID, payload)
 	msg.Metadata.Set("tenant_id", event.TenantID)
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
@@ -221,7 +227,7 @@ func (s *meterUsageTrackingService) RegisterBulkHandler(router *pubsubRouter.Rou
 }
 
 func stampIngestedAt(records []*events.MeterUsage) {
-	now := time.Now().UTC()
+	now := clock.Now()
 	for _, record := range records {
 		record.IngestedAt = now
 	}
@@ -286,6 +292,19 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		}
 		evt.EventName = strings.TrimSpace(evt.EventName)
 
+		// Ahead of the dedup lock: a held event must take no lock. The whole batch
+		// is held, and the deferred release above returns the locks it already took.
+		if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(ctx, evt.ExternalCustomerID, evt.Timestamp) {
+			s.Logger.Error(ctx, "holding bulk meter usage batch: a deletion is in progress for this customer and period",
+				"error", types.ErrEventDeletionInProgress,
+				"event_id", evt.ID,
+				"external_customer_id", evt.ExternalCustomerID,
+				"timestamp", evt.Timestamp,
+				"message_uuid", msg.UUID,
+			)
+			return types.ErrEventDeletionInProgress
+		}
+
 		if dedupEnabled && evt.ID != "" && !evt.ForceReprocess {
 			cacheKey := cache.GenerateKey(ctx, cache.PrefixEvent, evt.ID)
 			lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
@@ -325,7 +344,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 				)
 				continue
 			}
-			if qty.IsNegative() {
+			if qty.IsNegative() && m.Aggregation.Type != types.AggregationSum {
 				qty = decimal.Zero
 			}
 			records = append(records, &events.MeterUsage{
@@ -428,6 +447,19 @@ func (s *meterUsageTrackingService) processMessage(ctx context.Context, msg *mes
 // processEvent matches an event to meters and writes meter_usage records.
 // No subscription/feature/price resolution needed.
 func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *events.Event) (err error) {
+	// Ahead of everything else: a suppressed event fires no rejected-event
+	// webhook, publishes nothing to the analytics sink, runs no post-insert side
+	// effects and acquires no dedup lock.
+	if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(ctx, event.ExternalCustomerID, event.Timestamp) {
+		s.Logger.Error(ctx, "holding event: a deletion is in progress for this customer and period",
+			"error", types.ErrEventDeletionInProgress,
+			"event_id", event.ID,
+			"external_customer_id", event.ExternalCustomerID,
+			"timestamp", event.Timestamp,
+		)
+		return types.ErrEventDeletionInProgress
+	}
+
 	// Step 0: Check if the event is already processed
 	if event.ID != "" &&
 		!event.ForceReprocess &&
@@ -490,7 +522,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 			continue
 		}
 
-		if qty.IsNegative() {
+		if qty.IsNegative() && m.Aggregation.Type != types.AggregationSum {
 			s.Logger.Info(ctx, "negative quantity, setting to zero",
 				"event_id", event.ID,
 				"meter_id", m.ID,
@@ -590,7 +622,7 @@ func (s *meterUsageTrackingService) publishRejectedEventWebhook(ctx context.Cont
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeEvent,
 		EntityID:      event.ID,

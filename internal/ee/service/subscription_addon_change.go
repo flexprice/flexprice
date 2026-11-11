@@ -2,18 +2,25 @@ package service
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
+
+// errAddonChangeNotACharge is returned from the pay-first transaction so it rolls back instead of committing.
+var errAddonChangeNotACharge = errors.New("addon change net is not a charge")
 
 type AddonChangeService interface {
 	Execute(ctx context.Context, req AddonChangeRequest) (*addonChangeConfig, *SettleProrationResult, error)
@@ -29,13 +36,21 @@ type AddonChangeService interface {
 	Settle(ctx context.Context, config *addonChangeConfig, mode SettleMode) (*SettleProrationResult, error)
 
 	ExecutePayFirst(ctx context.Context, req AddonChangeRequest, checkout *dto.CheckoutParams) (*ExecutePayFirstResponse, error)
+
+	// ExecuteGrouped applies changes across a grouped invoicing group and settles one document on the parent.
+	ExecuteGrouped(ctx context.Context, parentID string, reqs []AddonChangeRequest) ([]*addonChangeConfig, *SettleProrationResult, error)
+
+	PreviewGrouped(ctx context.Context, parent *subscription.Subscription, reqs []AddonChangeRequest) ([]*addonChangeConfig, *SettleProrationResult, error)
+
+	ExecutePayFirstGrouped(ctx context.Context, parentID string, reqs []AddonChangeRequest, checkout *dto.CheckoutParams) (*ExecutePayFirstResponse, error)
 }
 
-// AddonAdd is one attach in a batch. Existing is set only on a checkout-completion replay,
-// where the association already exists as pending and is activated rather than created.
+// AddonAdd is one attach in a batch. Existing and PriceOverrides are set only on a checkout-completion
+// replay, where the association already exists as pending and its override prices were minted at execute.
 type AddonAdd struct {
-	Request  *dto.AddAddonToSubscriptionRequest
-	Existing *addonassociation.AddonAssociation
+	Request        *dto.AddAddonToSubscriptionRequest
+	Existing       *addonassociation.AddonAssociation
+	PriceOverrides []types.AddonPriceOverrideRef
 }
 
 type AddonChangeRequest struct {
@@ -81,8 +96,16 @@ func (r AddonChangeRequest) Validate() error {
 // customer pays, the session collecting it, and what Settle raised — a draft holding the net.
 type ExecutePayFirstResponse struct {
 	config  *addonChangeConfig
+	configs []*addonChangeConfig
 	session *dto.CheckoutSessionResponse
 	settled *SettleProrationResult
+}
+
+func (r *ExecutePayFirstResponse) getConfigs() []*addonChangeConfig {
+	if r == nil {
+		return nil
+	}
+	return r.configs
 }
 
 func (r *ExecutePayFirstResponse) getConfig() *addonChangeConfig {
@@ -205,11 +228,19 @@ func (s *addonChangeService) Resolve(ctx context.Context, req AddonChangeRequest
 	}
 
 	sub := req.Subscription
+	if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
+		return nil, ierr.NewError("cannot change addons on a paused subscription").
+			WithHint("Resume the subscription before changing its addons").
+			WithReportableDetails(map[string]any{
+				"subscription_id": sub.ID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
 	config := &addonChangeConfig{sub: sub}
 
 	// One `now` for the whole change: resolving per entry would give each immediate entry a
 	// different timestamp and split one proration pass into several.
-	now := time.Now().UTC()
+	now := clock.Now()
 
 	for _, remove := range req.Removes {
 		removeReq := resolveRemoveChangeAt(remove, now, sub.CurrentPeriodEnd)
@@ -255,6 +286,11 @@ func (s *addonChangeService) Resolve(ctx context.Context, req AddonChangeRequest
 			}
 		}
 
+		if err := applyPriceOverrideRefs(params, add.PriceOverrides); err != nil {
+			sub.LineItems = originalLineItems
+			return nil, err
+		}
+
 		config.attaches = append(config.attaches, params)
 		sub.LineItems = lo.Flatten([][]*subscription.SubscriptionLineItem{sub.LineItems, params.getLineItems()})
 	}
@@ -273,6 +309,31 @@ func (s *addonChangeService) Resolve(ctx context.Context, req AddonChangeRequest
 	return config, nil
 }
 
+// applyPriceOverrideRefs repoints a replayed attach's line items at the override prices minted at execute.
+func applyPriceOverrideRefs(attach *addonAttachParams, refs []types.AddonPriceOverrideRef) error {
+	for _, ref := range refs {
+		lineItem, ok := lo.Find(attach.getLineItems(), func(li *subscription.SubscriptionLineItem) bool {
+			return li.PriceID == ref.PriceID
+		})
+		if !ok {
+			return ierr.NewError("addon price named by the checkout override no longer exists").
+				WithHint("The addon's prices changed while its checkout was outstanding").
+				WithReportableDetails(map[string]any{
+					"association_id": attach.getAssociation().ID,
+					"price_id":       ref.PriceID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		lineItem.PriceID = ref.OverridePriceID
+		if ref.Quantity != nil {
+			lineItem.Quantity = *ref.Quantity
+		}
+	}
+
+	return nil
+}
+
 func resolveAttachChangeAt(
 	req *dto.AddAddonToSubscriptionRequest,
 	now, periodEnd time.Time,
@@ -283,10 +344,7 @@ func resolveAttachChangeAt(
 		resolved.ChangeAt = nil
 	}
 
-	if resolved.StartDate == nil {
-		resolved.StartDate = lo.ToPtr(now)
-	}
-
+	resolved.StartDate = lo.ToPtr(lo.FromPtrOr(resolved.StartDate, now))
 	return resolved
 }
 
@@ -479,6 +537,11 @@ func (s *addonChangeService) Persist(ctx context.Context, config *addonChangeCon
 		return err
 	}
 
+	// Checked once the batch's own attaches exist, so a swap's incoming line keeps a commitment's scope covered.
+	if err := s.checkRemovalCommitments(ctx, config); err != nil {
+		return err
+	}
+
 	// Overrides repoint line items at prices that did not exist when Resolve quoted, so the
 	// quote has to be retaken against what will actually be billed.
 	if config.hasPriceOverrides() {
@@ -544,25 +607,30 @@ func (s *addonChangeService) persistRemovals(ctx context.Context, config *addonC
 	return nil
 }
 
+func (s *addonChangeService) checkRemovalCommitments(ctx context.Context, config *addonChangeConfig) error {
+	for _, detach := range config.getDetaches() {
+		for _, lineItem := range detach.getLineItems() {
+			if err := checkLineDetach(ctx, s.ServiceParams, config.getSubscription(), lineItem, detach.getEffectiveDate()); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (s *addonChangeService) persistAttaches(ctx context.Context, config *addonChangeConfig) error {
 	sub := config.getSubscription()
 
 	toCreate := []*addonassociation.AddonAssociation{}
 	toActivate := []string{}
 
+	// Overrides repoint the line items at new prices, so they must land before the line items are written.
+	if _, err := s.applyPriceOverrides(ctx, config); err != nil {
+		return err
+	}
+
 	for _, attach := range config.getAttaches() {
-		req := attach.getRequest()
-
-		// Overrides mint subscription-scoped prices and repoint the line items at them, so they
-		// must land before the line items are written.
-		if len(req.OverrideLineItems) > 0 {
-			if err := s.sub.ProcessSubscriptionPriceOverrides(
-				ctx, sub, req.OverrideLineItems, attach.getLineItems(), attach.getPriceMap(),
-			); err != nil {
-				return err
-			}
-		}
-
 		association := attach.getAssociation()
 		if attach.isReplayAttach() {
 			association.AddonStatus = types.AddonStatusActive
@@ -589,6 +657,12 @@ func (s *addonChangeService) persistAttaches(ctx context.Context, config *addonC
 		lineItems = append(lineItems, attach.getLineItems()...)
 	}
 
+	for _, li := range lineItems {
+		if err := checkLineAttach(ctx, s.ServiceParams, sub, li); err != nil {
+			return err
+		}
+	}
+
 	if err := s.SubscriptionLineItemRepo.CreateBulk(ctx, lineItems); err != nil {
 		return err
 	}
@@ -602,6 +676,47 @@ func (s *addonChangeService) persistAttaches(ctx context.Context, config *addonC
 		}
 	}
 	return nil
+}
+
+// applyPriceOverrides mints each attach's override prices and repoints its line items at them.
+// Returns the swaps keyed by association ID.
+func (s *addonChangeService) applyPriceOverrides(
+	ctx context.Context,
+	config *addonChangeConfig,
+) (map[string][]types.AddonPriceOverrideRef, error) {
+	refs := map[string][]types.AddonPriceOverrideRef{}
+
+	for _, attach := range config.getAttaches() {
+		overrides := attach.getRequest().OverrideLineItems
+		if len(overrides) == 0 {
+			continue
+		}
+
+		lineItems := attach.getLineItems()
+		before := lo.Map(lineItems, func(li *subscription.SubscriptionLineItem, _ int) subscription.SubscriptionLineItem {
+			return *li
+		})
+
+		if err := s.sub.ProcessSubscriptionPriceOverrides(
+			ctx, config.getSubscription(), overrides, lineItems, attach.getPriceMap(),
+		); err != nil {
+			return nil, err
+		}
+
+		for i, li := range lineItems {
+			if li.PriceID == before[i].PriceID {
+				continue
+			}
+			ref := types.AddonPriceOverrideRef{PriceID: before[i].PriceID, OverridePriceID: li.PriceID}
+			if !li.Quantity.Equal(before[i].Quantity) {
+				ref.Quantity = lo.ToPtr(li.Quantity)
+			}
+			associationID := attach.getAssociation().ID
+			refs[associationID] = append(refs[associationID], ref)
+		}
+	}
+
+	return refs, nil
 }
 
 // Settle raises the one netted document the batch owes: an invoice when the net is a charge,
@@ -679,10 +794,6 @@ func (s *addonChangeService) Execute(
 // ExecutePayFirst writes the change's pending half and locks its net on a draft invoice, then
 // opens a checkout for it. Returns a nil config when the net is not a charge — there is nothing
 // to collect, so the caller applies the change immediately instead.
-//
-// Steps 1-4 run under the subscription row lock; the provider call cannot, because it is
-// outbound HTTP. That is safe because everything committed before it is inert: pending
-// associations are invisible to billing and the draft is not finalized.
 func (s *addonChangeService) ExecutePayFirst(
 	ctx context.Context,
 	req AddonChangeRequest,
@@ -726,12 +837,13 @@ func (s *addonChangeService) ExecutePayFirst(
 			return err
 		}
 
-		resolved, err := s.Resolve(txCtx, req)
+		resolved, overrides, err := s.resolvePayFirst(txCtx, req)
 		if err != nil {
 			return err
 		}
+		// Not a charge: the error keeps the transaction from committing the override prices just minted.
 		if !resolved.getQuote().NetAmount().GreaterThan(decimal.Zero) {
-			return nil
+			return errAddonChangeNotACharge
 		}
 
 		// Attaches only: applying a removal now would end line items before payment, and
@@ -746,7 +858,7 @@ func (s *addonChangeService) ExecutePayFirst(
 			return err
 		}
 
-		checkoutParams = addonChangeCheckoutParams(resolved)
+		checkoutParams = addonChangeCheckoutParams(resolved, overrides)
 		if err := checkoutParams.Validate(); err != nil {
 			return err
 		}
@@ -754,11 +866,11 @@ func (s *addonChangeService) ExecutePayFirst(
 		config, settled = resolved, drafted
 		return nil
 	})
+	if errors.Is(err, errAddonChangeNotACharge) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
-	}
-	if config == nil {
-		return nil, nil
 	}
 
 	session, err := NewCheckoutSessionService(s.ServiceParams).StartPayFirstCheckoutSession(ctx, &dto.PayFirstCheckoutRequest{
@@ -771,16 +883,44 @@ func (s *addonChangeService) ExecutePayFirst(
 		Checkout:     checkout,
 	})
 	if err != nil {
-		s.archiveGatedChange(ctx, config, settled.GetDraft(), err)
+		s.archiveGatedChange(ctx, checkoutParams, settled.GetDraft(), err)
 		return nil, err
 	}
 
 	return &ExecutePayFirstResponse{config: config, session: session, settled: settled}, nil
 }
 
+// resolvePayFirst resolves a gated change and, when it carries overrides, mints them and re-quotes
+// so the draft bills the override prices.
+func (s *addonChangeService) resolvePayFirst(
+	ctx context.Context,
+	req AddonChangeRequest,
+) (*addonChangeConfig, map[string][]types.AddonPriceOverrideRef, error) {
+	config, err := s.Resolve(ctx, req)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !config.hasPriceOverrides() {
+		return config, nil, nil
+	}
+
+	overrides, err := s.applyPriceOverrides(ctx, config)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.quote(ctx, config); err != nil {
+		return nil, nil, err
+	}
+
+	return config, overrides, nil
+}
+
 // addonChangeCheckoutParams records everything completion needs to replay the change without
 // trusting execute-time state.
-func addonChangeCheckoutParams(config *addonChangeConfig) *types.AddAddonParams {
+func addonChangeCheckoutParams(
+	config *addonChangeConfig,
+	overrides map[string][]types.AddonPriceOverrideRef,
+) *types.AddAddonParams {
 	params := &types.AddAddonParams{SubscriptionID: config.getSubscription().ID}
 
 	for _, attach := range config.getAttaches() {
@@ -792,6 +932,7 @@ func addonChangeCheckoutParams(config *addonChangeConfig) *types.AddAddonParams 
 			ProrationBehavior: req.ProrationBehavior,
 			StartDate:         attach.getRequestedStart(),
 			Coupons:           lo.Flatten(lo.Values(attach.getCoupons())),
+			PriceOverrides:    overrides[attach.getAssociation().ID],
 		})
 	}
 
@@ -811,18 +952,27 @@ func addonChangeCheckoutParams(config *addonChangeConfig) *types.AddAddonParams 
 // never activated, so they are archived rather than cancelled.
 func (s *addonChangeService) archiveGatedChange(
 	ctx context.Context,
-	config *addonChangeConfig,
+	params *types.AddAddonParams,
 	draft *dto.InvoiceResponse,
 	cause error,
 ) {
-	ids := lo.Map(config.getAttaches(), func(attach *addonAttachParams, _ int) string {
-		return attach.getAssociation().ID
-	})
+	ids := lo.Map(params.Addons, func(ref types.AddAddonRef, _ int) string { return ref.AssociationID })
 	if len(ids) > 0 {
 		if err := s.AddonAssociationRepo.DeleteBulk(ctx, ids); err != nil {
 			s.Logger.Error(ctx, "failed to archive pending addon associations after pay-first failure",
 				"error", err,
 				"association_ids", ids,
+				"original_error", cause,
+			)
+		}
+	}
+
+	priceIDs := lo.FlatMap(params.Addons, func(ref types.AddAddonRef, _ int) []string { return ref.OverridePriceIDs() })
+	if len(priceIDs) > 0 {
+		if err := s.PriceRepo.DeleteBulk(ctx, priceIDs); err != nil {
+			s.Logger.Error(ctx, "failed to delete override prices after pay-first failure",
+				"error", err,
+				"price_ids", priceIDs,
 				"original_error", cause,
 			)
 		}
@@ -851,9 +1001,9 @@ func validateAddonChangeCheckout(req AddonChangeRequest, checkout *dto.CheckoutP
 	sub := req.Subscription
 	for _, add := range req.Adds {
 		addReq := add.Request
-		if len(addReq.OverrideLineItems) > 0 || len(addReq.LineItemCommitments) > 0 {
-			return ierr.NewError("override_line_items and line_item_commitments are not supported with checkout").
-				WithHint("Send the change without checkout to use price overrides or line item commitments").
+		if len(addReq.LineItemCommitments) > 0 {
+			return ierr.NewError("line_item_commitments is not supported with checkout").
+				WithHint("Send the change without checkout to use line item commitments").
 				WithReportableDetails(map[string]any{
 					"subscription_id": sub.ID,
 					"addon_id":        addReq.AddonID,
@@ -890,4 +1040,245 @@ func (s *addonChangeService) Preview(
 	}
 
 	return config, settled, nil
+}
+
+func (s *addonChangeService) ExecuteGrouped(
+	ctx context.Context,
+	parentID string,
+	reqs []AddonChangeRequest,
+) ([]*addonChangeConfig, *SettleProrationResult, error) {
+	var (
+		configs []*addonChangeConfig
+		settled *SettleProrationResult
+	)
+
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		parent, err := s.lockGroupedTargets(ctx, parentID, reqs)
+		if err != nil {
+			return err
+		}
+
+		configs = make([]*addonChangeConfig, 0, len(reqs))
+		for _, req := range reqs {
+			config, err := s.Resolve(ctx, req)
+			if err != nil {
+				return err
+			}
+			if err := s.Persist(ctx, config); err != nil {
+				return err
+			}
+			configs = append(configs, config)
+		}
+
+		// Merged only after Persist, which re-quotes a change with price overrides.
+		settled, err = s.settleGrouped(ctx, parent, configs, SettleModeIssue)
+		return err
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	attemptProrationPayments(ctx, s.ServiceParams, settled.GetChanged())
+
+	return configs, settled, nil
+}
+
+// ExecutePayFirstGrouped is ExecutePayFirst across a grouped invoicing group: one draft on the
+// parent and one checkout for the parent's invoicing customer. Returns nil when the net is not a charge.
+func (s *addonChangeService) ExecutePayFirstGrouped(
+	ctx context.Context,
+	parentID string,
+	reqs []AddonChangeRequest,
+	checkout *dto.CheckoutParams,
+) (*ExecutePayFirstResponse, error) {
+	for _, req := range reqs {
+		if err := validateAddonChangeCheckout(req, checkout); err != nil {
+			return nil, err
+		}
+	}
+
+	var (
+		configs []*addonChangeConfig
+		settled *SettleProrationResult
+		batch   []*types.AddAddonParams
+		payerID string
+	)
+
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		parent, err := s.lockGroupedTargets(txCtx, parentID, reqs)
+		if err != nil {
+			return err
+		}
+		payerID = parent.GetInvoicingCustomerID()
+
+		resolved := make([]*addonChangeConfig, 0, len(reqs))
+		overrides := map[string][]types.AddonPriceOverrideRef{}
+		net := decimal.Zero
+		for _, req := range reqs {
+			if err := validateAddonChangeCheckout(req, checkout); err != nil {
+				return err
+			}
+			if err := ensureNoPendingCheckoutSession(txCtx, s.ServiceParams, req.Subscription.ID); err != nil {
+				return err
+			}
+
+			config, configOverrides, err := s.resolvePayFirst(txCtx, req)
+			if err != nil {
+				return err
+			}
+			net = net.Add(config.getQuote().NetAmount())
+			resolved = append(resolved, config)
+			// Association IDs are unique across the group, so one map serves every entry.
+			overrides = lo.Assign(overrides, configOverrides)
+		}
+		// Not a charge: the error keeps the transaction from committing the override prices just minted.
+		if !net.GreaterThan(decimal.Zero) {
+			return errAddonChangeNotACharge
+		}
+
+		for _, config := range resolved {
+			if err := s.PersistPending(txCtx, config); err != nil {
+				return err
+			}
+		}
+
+		drafted, err := s.settleGrouped(txCtx, parent, resolved, SettleModeDraft)
+		if err != nil {
+			return err
+		}
+
+		batch = lo.Map(resolved, func(config *addonChangeConfig, _ int) *types.AddAddonParams {
+			return addonChangeCheckoutParams(config, overrides)
+		})
+		// Parent first, matching lockGroupedTargets, so completion locks in the same order.
+		sort.SliceStable(batch, func(i, j int) bool { return batch[i].SubscriptionID == parent.ID })
+		if err := (&types.CheckoutConfiguration{AddAddonBatchParams: batch}).Validate(types.CheckoutActionAddAddon); err != nil {
+			return err
+		}
+
+		configs, settled = resolved, drafted
+		return nil
+	})
+	if errors.Is(err, errAddonChangeNotACharge) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	session, err := NewCheckoutSessionService(s.ServiceParams).StartPayFirstCheckoutSession(ctx, &dto.PayFirstCheckoutRequest{
+		CustomerID: payerID,
+		Action:     types.CheckoutActionAddAddon,
+		Configuration: types.CheckoutConfiguration{
+			AddAddonBatchParams: batch,
+		},
+		DraftInvoice: &settled.GetDraft().Invoice,
+		Checkout:     checkout,
+	})
+	if err != nil {
+		draft := settled.GetDraft()
+		for _, params := range batch {
+			s.archiveGatedChange(ctx, params, draft, err)
+			draft = nil
+		}
+		return nil, err
+	}
+
+	return &ExecutePayFirstResponse{configs: configs, session: session, settled: settled}, nil
+}
+
+func (s *addonChangeService) PreviewGrouped(
+	ctx context.Context,
+	parent *subscription.Subscription,
+	reqs []AddonChangeRequest,
+) ([]*addonChangeConfig, *SettleProrationResult, error) {
+	configs := make([]*addonChangeConfig, 0, len(reqs))
+	for _, req := range reqs {
+		if err := validateGroupedChangeTarget(parent, req.Subscription); err != nil {
+			return nil, nil, err
+		}
+
+		config, err := s.Resolve(ctx, req)
+		if err != nil {
+			return nil, nil, err
+		}
+		configs = append(configs, config)
+	}
+
+	settled, err := s.settleGrouped(ctx, parent, configs, SettleModePreview)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return configs, settled, nil
+}
+
+// lockGroupedTargets locks the parent, then the other targets in ID order so concurrent group changes cannot deadlock.
+func (s *addonChangeService) lockGroupedTargets(
+	ctx context.Context,
+	parentID string,
+	reqs []AddonChangeRequest,
+) (*subscription.Subscription, error) {
+	parent, err := s.sub.loadSubscriptionForChange(ctx, parentID, true)
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Slice(reqs, func(i, j int) bool { return reqs[i].Subscription.ID < reqs[j].Subscription.ID })
+	for i := range reqs {
+		locked := parent
+		if reqs[i].Subscription.ID != parentID {
+			if locked, err = s.sub.loadSubscriptionForChange(ctx, reqs[i].Subscription.ID, true); err != nil {
+				return nil, err
+			}
+		}
+		if err := validateGroupedChangeTarget(parent, locked); err != nil {
+			return nil, err
+		}
+		reqs[i].Subscription = locked
+	}
+
+	return parent, nil
+}
+
+// settleGrouped nets every target's quote into one document on the parent.
+func (s *addonChangeService) settleGrouped(
+	ctx context.Context,
+	parent *subscription.Subscription,
+	configs []*addonChangeConfig,
+	mode SettleMode,
+) (*SettleProrationResult, error) {
+	merged := emptyProrationSummary(parent)
+	periodStart := parent.CurrentPeriodEnd
+	keys := make([]string, 0, len(configs))
+	reason := ""
+
+	for _, config := range configs {
+		merged.Merge(config.getQuote())
+		if config.getPeriodStart().Before(periodStart) {
+			periodStart = config.getPeriodStart()
+		}
+		keys = append(keys, config.getIdempotencyKey())
+		if reason == "" {
+			reason = config.getReason()
+		}
+	}
+	sort.Strings(keys)
+
+	idempotencyKey := ""
+	if mode != SettleModePreview {
+		idempotencyKey = prorationChargeInvoiceKey(LineItemProrationRequest{
+			Subscription:   parent,
+			EffectiveDate:  periodStart,
+			IdempotencyKey: strings.Join(keys, ","),
+		})
+	}
+
+	req := NewSettleProrationRequest(
+		parent, merged, periodStart, parent.CurrentPeriodEnd,
+		"Subscription update", idempotencyKey, mode,
+	)
+	req.Reason = reason
+
+	return NewLineItemProrationService(s.ServiceParams).Settle(ctx, req)
 }

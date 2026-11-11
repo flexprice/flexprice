@@ -759,3 +759,18 @@ resource "aws_eks_node_group" "flexprice_app" {
 ```
 
 The chart's `nodeSelector` key `eks.amazonaws.com/nodegroup: flexprice-app` matches the node group name automatically — no additional label configuration needed.
+
+### Worker GC memory budget
+
+Enable `worker.gc.enabled` to calculate `GOMEMLIMIT` from
+`worker.resources.limits.memory` at Helm render time. `worker.gc.memoryLimitRatio`
+defaults to `0.8`; `worker.gc.gogc` defaults to `100`. Settings apply only to the
+Temporal worker, and are disabled by default. A 1Gi limit produces an 858993459-byte
+Go budget; changing the limit to 2Gi produces 1717986918 bytes automatically on
+redeployment. This uses the hard limit, never the memory request.
+
+The memory limit must be positive and use bytes, binary Ki/Mi/Gi/Ti/Pi/Ei, or decimal
+k/M/G/T/P/E units. Missing limits, unsupported quantities, invalid ratios, and
+conflicting global GC environment settings fail rendering. The ratio must be
+strictly between zero and one. Go's limit is soft: live data and non-Go memory can
+still cause OOMs. Disable `worker.gc.enabled` to remove these generated settings.

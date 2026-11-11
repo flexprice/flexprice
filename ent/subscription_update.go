@@ -485,6 +485,20 @@ func (_u *SubscriptionUpdate) SetNillableTimezone(v *string) *SubscriptionUpdate
 	return _u
 }
 
+// SetProrationBehavior sets the "proration_behavior" field.
+func (_u *SubscriptionUpdate) SetProrationBehavior(v types.ProrationBehavior) *SubscriptionUpdate {
+	_u.mutation.SetProrationBehavior(v)
+	return _u
+}
+
+// SetNillableProrationBehavior sets the "proration_behavior" field if the given value is not nil.
+func (_u *SubscriptionUpdate) SetNillableProrationBehavior(v *types.ProrationBehavior) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetProrationBehavior(*v)
+	}
+	return _u
+}
+
 // SetLineItemGrouping sets the "line_item_grouping" field.
 func (_u *SubscriptionUpdate) SetLineItemGrouping(v types.LineItemGrouping) *SubscriptionUpdate {
 	_u.mutation.SetLineItemGrouping(v)
@@ -964,6 +978,11 @@ func (_u *SubscriptionUpdate) check() error {
 			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ProrationBehavior(); ok {
+		if err := subscription.ProrationBehaviorValidator(string(v)); err != nil {
+			return &ValidationError{Name: "proration_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.proration_behavior": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.LineItemGrouping(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "line_item_grouping", err: fmt.Errorf(`ent: validator failed for field "Subscription.line_item_grouping": %w`, err)}
@@ -1122,6 +1141,9 @@ func (_u *SubscriptionUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.Timezone(); ok {
 		_spec.SetField(subscription.FieldTimezone, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ProrationBehavior(); ok {
+		_spec.SetField(subscription.FieldProrationBehavior, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.LineItemGrouping(); ok {
 		_spec.SetField(subscription.FieldLineItemGrouping, field.TypeString, value)
@@ -1967,6 +1989,20 @@ func (_u *SubscriptionUpdateOne) SetNillableTimezone(v *string) *SubscriptionUpd
 	return _u
 }
 
+// SetProrationBehavior sets the "proration_behavior" field.
+func (_u *SubscriptionUpdateOne) SetProrationBehavior(v types.ProrationBehavior) *SubscriptionUpdateOne {
+	_u.mutation.SetProrationBehavior(v)
+	return _u
+}
+
+// SetNillableProrationBehavior sets the "proration_behavior" field if the given value is not nil.
+func (_u *SubscriptionUpdateOne) SetNillableProrationBehavior(v *types.ProrationBehavior) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetProrationBehavior(*v)
+	}
+	return _u
+}
+
 // SetLineItemGrouping sets the "line_item_grouping" field.
 func (_u *SubscriptionUpdateOne) SetLineItemGrouping(v types.LineItemGrouping) *SubscriptionUpdateOne {
 	_u.mutation.SetLineItemGrouping(v)
@@ -2459,6 +2495,11 @@ func (_u *SubscriptionUpdateOne) check() error {
 			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ProrationBehavior(); ok {
+		if err := subscription.ProrationBehaviorValidator(string(v)); err != nil {
+			return &ValidationError{Name: "proration_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.proration_behavior": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.LineItemGrouping(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "line_item_grouping", err: fmt.Errorf(`ent: validator failed for field "Subscription.line_item_grouping": %w`, err)}
@@ -2634,6 +2675,9 @@ func (_u *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscripti
 	}
 	if value, ok := _u.mutation.Timezone(); ok {
 		_spec.SetField(subscription.FieldTimezone, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ProrationBehavior(); ok {
+		_spec.SetField(subscription.FieldProrationBehavior, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.LineItemGrouping(); ok {
 		_spec.SetField(subscription.FieldLineItemGrouping, field.TypeString, value)

@@ -90,6 +90,20 @@ func postTenant(server *Server, body, secret string) *httptest.ResponseRecorder 
 	return rec
 }
 
+func TestCORSPreflightAllowsDashboard(t *testing.T) {
+	server := newTestServer(&fakeEnvironmentService{})
+	req := httptest.NewRequest(http.MethodOptions, "/v1/tenants", nil)
+	req.Header.Set("Origin", "https://admin-dashboard-prod-usw1.tail2511f3.ts.net")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	req.Header.Set("Access-Control-Request-Headers", "x-admin-secret,content-type")
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Headers"))
+}
+
 func TestHealth(t *testing.T) {
 	server := newTestServer(&fakeEnvironmentService{})
 
@@ -719,10 +733,10 @@ func TestRemoveUserErrors(t *testing.T) {
 			wantCalled: true,
 		},
 		{
-			name:       "last user of the tenant",
+			name:       "service account",
 			body:       body,
 			secret:     "test-secret",
-			serviceErr: ierr.NewError("cannot remove the last user in the tenant").Mark(ierr.ErrValidation),
+			serviceErr: ierr.NewError("only human users can be removed").Mark(ierr.ErrValidation),
 			wantStatus: http.StatusBadRequest,
 			wantCalled: true,
 		},

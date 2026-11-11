@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -13,7 +16,6 @@ import (
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
 )
 
 type CustomerService = interfaces.CustomerService
@@ -48,7 +50,19 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 		}
 	}
 
-	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	billingEntityService := NewBillingEntityService(s.ServiceParams)
+	if err := billingEntityService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
+		requested := req.BillingEntityID
+		// Inbound provider events carry their connection's entity in ctx.
+		if requested == nil && mode == types.BillingEntityModeEnabled && types.GetBillingEntityID(txCtx) != "" {
+			requested = lo.ToPtr(types.GetBillingEntityID(txCtx))
+		}
+		billingEntityID, err := billingEntityService.ResolveBillingEntityID(txCtx, mode, requested)
+		if err != nil {
+			return err
+		}
+		cust.BillingEntityID = billingEntityID
+
 		if err := s.CustomerRepo.Create(txCtx, cust); err != nil {
 			// No need to wrap the error as the repository already returns properly formatted errors
 			return err
@@ -69,11 +83,15 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 			}
 		}
 
-		// If no tax rate overrides are provided, link the tenant tax rate to the customer
+		// If no tax rate overrides are provided, link the entity's (or, without one, the tenant's) default rates
 		if req.TaxRateOverrides == nil {
 			filter := types.NewNoLimitTaxAssociationFilter()
 			filter.EntityType = types.TaxRateEntityTypeTenant
 			filter.EntityID = types.GetTenantID(txCtx)
+			if cust.BillingEntityID != nil {
+				filter.EntityType = types.TaxRateEntityTypeBillingEntity
+				filter.EntityID = *cust.BillingEntityID
+			}
 			filter.AutoApply = lo.ToPtr(true)
 			tenantTaxAssociations, err := taxService.ListTaxAssociations(txCtx, filter)
 			if err != nil {
@@ -137,6 +155,9 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 
 	// Validate expand fields
 	if err := filter.GetExpand().Validate(types.CustomerExpandConfig); err != nil {
+		return nil, err
+	}
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
 		return nil, err
 	}
 
@@ -221,6 +242,7 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	if err != nil {
 		return nil, err
 	}
+	before := *cust
 
 	// Update basic fields
 	if req.ExternalID != nil && *req.ExternalID != cust.ExternalID {
@@ -303,9 +325,66 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventCustomerUpdated, cust.ID)
-	s.syncCustomerUpdateToZoho(ctx, cust)
+
+	syncCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, cust.ID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to resolve billing entity, customer update not pushed to integrations",
+			"error", err,
+			"customer_id", cust.ID)
+		return &dto.CustomerResponse{Customer: cust}, nil
+	}
+	s.syncCustomerUpdateToZoho(syncCtx, cust)
+	s.syncCustomerUpdateToStripe(syncCtx, &before, cust)
 
 	return &dto.CustomerResponse{Customer: cust}, nil
+}
+
+// syncCustomerUpdateToStripe runs in the request rather than async: a checkout taxed against the
+// Stripe customer can follow immediately. A Stripe failure never fails the update.
+func (s *customerService) syncCustomerUpdateToStripe(ctx context.Context, before, after *customer.Customer) {
+	if !stripeFieldsChanged(before, after) || s.IntegrationFactory == nil || s.ConnectionRepo == nil {
+		return
+	}
+
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if ierr.IsNotFound(err) {
+		return
+	}
+	if err != nil {
+		s.Logger.Error(ctx, "failed to read the Stripe connection, customer update not pushed to Stripe",
+			"error", err,
+			"customer_id", after.ID)
+		return
+	}
+	if conn == nil || !conn.IsCustomerOutboundEnabled() {
+		return
+	}
+
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to load the Stripe integration, customer update not pushed to Stripe",
+			"error", err,
+			"customer_id", after.ID)
+		return
+	}
+
+	if err := stripeIntegration.CustomerSvc.UpdateCustomerInStripe(ctx, after, s); err != nil {
+		s.Logger.Error(ctx, "failed to push customer update to Stripe",
+			"error", err,
+			"customer_id", after.ID)
+	}
+}
+
+// stripeFieldsChanged reports whether anything the Stripe customer mirrors was changed.
+func stripeFieldsChanged(before, after *customer.Customer) bool {
+	return before.Name != after.Name ||
+		before.Email != after.Email ||
+		before.AddressLine1 != after.AddressLine1 ||
+		before.AddressLine2 != after.AddressLine2 ||
+		before.AddressCity != after.AddressCity ||
+		before.AddressState != after.AddressState ||
+		before.AddressPostalCode != after.AddressPostalCode ||
+		before.AddressCountry != after.AddressCountry
 }
 
 func (s *customerService) syncCustomerUpdateToZoho(ctx context.Context, cust *customer.Customer) {
@@ -414,7 +493,7 @@ func (s *customerService) publishSystemEvent(ctx context.Context, eventName type
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeCustomer,
 		EntityID:      customerID,

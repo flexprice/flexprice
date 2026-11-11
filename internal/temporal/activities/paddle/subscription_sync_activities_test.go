@@ -67,6 +67,7 @@ func buildActivityFactory(
 		encSvc,
 		nil, // TemporalService — not needed in activity unit tests
 		testutil.NewInMemoryRedisLocker(nil),
+		nil,
 	)
 }
 
@@ -126,7 +127,7 @@ func TestSyncSubscriptionToPaddle_NoPaddleConnection(t *testing.T) {
 	subStore := testutil.NewInMemorySubscriptionStore()
 
 	factory := buildActivityFactory(connectionStore, mappingStore, invoiceStore, subStore)
-	act := paddleactivities.NewSubscriptionSyncActivities(factory, buildTestActivityLogger())
+	act := paddleactivities.NewSubscriptionSyncActivities(factory, nil, buildTestActivityLogger())
 
 	input := models.PaddleSubscriptionSyncWorkflowInput{
 		SubscriptionID: "sub_no_conn",
@@ -156,7 +157,7 @@ func TestSyncSubscriptionToPaddle_ValidationError(t *testing.T) {
 		testutil.NewInMemoryInvoiceStore(),
 		testutil.NewInMemorySubscriptionStore(),
 	)
-	act := paddleactivities.NewSubscriptionSyncActivities(factory, buildTestActivityLogger())
+	act := paddleactivities.NewSubscriptionSyncActivities(factory, nil, buildTestActivityLogger())
 
 	// Missing subscription_id.
 	input := models.PaddleSubscriptionSyncWorkflowInput{
@@ -187,7 +188,7 @@ func TestCheckSubscriptionSyncStatus_NoPaddleConnection(t *testing.T) {
 	subStore := testutil.NewInMemorySubscriptionStore()
 
 	factory := buildActivityFactory(connectionStore, mappingStore, invoiceStore, subStore)
-	act := paddleactivities.NewSubscriptionSyncActivities(factory, buildTestActivityLogger())
+	act := paddleactivities.NewSubscriptionSyncActivities(factory, nil, buildTestActivityLogger())
 
 	input := models.PaddleInvoiceSyncWorkflowInput{
 		InvoiceID:     "inv_no_conn",
@@ -232,7 +233,7 @@ func TestCheckSubscriptionSyncStatus_NoMapping(t *testing.T) {
 	seedTestInvoice(ctx, t, invoiceStore, inv)
 
 	factory := buildActivityFactory(connectionStore, mappingStore, invoiceStore, subStore)
-	act := paddleactivities.NewSubscriptionSyncActivities(factory, buildTestActivityLogger())
+	act := paddleactivities.NewSubscriptionSyncActivities(factory, nil, buildTestActivityLogger())
 
 	// Provide subscriptionID directly to skip invoice lookup.
 	input := models.PaddleInvoiceSyncWorkflowInput{
@@ -271,7 +272,7 @@ func TestCheckSubscriptionSyncStatus_MappingExists(t *testing.T) {
 	subStore := testutil.NewInMemorySubscriptionStore()
 
 	factory := buildActivityFactory(connectionStore, mappingStore, invoiceStore, subStore)
-	act := paddleactivities.NewSubscriptionSyncActivities(factory, buildTestActivityLogger())
+	act := paddleactivities.NewSubscriptionSyncActivities(factory, nil, buildTestActivityLogger())
 
 	input := models.PaddleInvoiceSyncWorkflowInput{
 		InvoiceID:      "inv_mapping_exists",
@@ -319,7 +320,7 @@ func TestCheckSubscriptionSyncStatus_NoSubscriptionID_FallbackToInvoice(t *testi
 	subStore := testutil.NewInMemorySubscriptionStore()
 
 	factory := buildActivityFactory(connectionStore, mappingStore, invoiceStore, subStore)
-	act := paddleactivities.NewSubscriptionSyncActivities(factory, buildTestActivityLogger())
+	act := paddleactivities.NewSubscriptionSyncActivities(factory, nil, buildTestActivityLogger())
 
 	// No SubscriptionID in input — activity must fall back to invoice lookup.
 	input := models.PaddleInvoiceSyncWorkflowInput{
@@ -363,7 +364,7 @@ func TestCheckSubscriptionSyncStatus_InvoiceWithNoSubscription(t *testing.T) {
 	subStore := testutil.NewInMemorySubscriptionStore()
 
 	factory := buildActivityFactory(connectionStore, mappingStore, invoiceStore, subStore)
-	act := paddleactivities.NewSubscriptionSyncActivities(factory, buildTestActivityLogger())
+	act := paddleactivities.NewSubscriptionSyncActivities(factory, nil, buildTestActivityLogger())
 
 	// No SubscriptionID in input — activity will look up invoice and find no subscription_id.
 	input := models.PaddleInvoiceSyncWorkflowInput{

@@ -156,15 +156,33 @@ metadata:
     {{- include "flexprice.keepAnnotation" . | nindent 4 }}
   {{- end }}
 spec:
+  {{- with .Values.clickhouse.altinity.bootstrapServiceTemplateName }}
+  defaults:
+    templates:
+      serviceTemplate: {{ . | quote }}
+  {{- end }}
   configuration:
     clusters:
       - name: flexprice
+        {{- with .Values.clickhouse.altinity.schemaPolicy }}
+        schemaPolicy:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         layout:
           shardsCount: 1
-          {{- if and (gt (int (.Values.clickhouse.altinity.replicasCount | default 1)) 1) (not .Values.clickhouse.altinity.keeper.hosts) }}
+          {{- $replicas := .Values.clickhouse.altinity.replicas | default list }}
+          {{- $count := int (.Values.clickhouse.altinity.replicasCount | default 1) }}
+          {{- if $replicas }}
+            {{- $count = len $replicas }}
+          {{- end }}
+          {{- if and (gt $count 1) (not .Values.clickhouse.altinity.keeper.hosts) }}
             {{- fail "clickhouse.altinity.replicasCount > 1 requires clickhouse.altinity.keeper.hosts: without a Keeper quorum the replicated tables come up read-only." }}
           {{- end }}
-          replicasCount: {{ .Values.clickhouse.altinity.replicasCount | default 1 }}
+          replicasCount: {{ $count }}
+          {{- with $replicas }}
+          replicas:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
         templates:
           podTemplate: clickhouse-pod
           dataVolumeClaimTemplate: clickhouse-data
@@ -254,6 +272,10 @@ spec:
       allow_nullable_key: 1
 
   templates:
+    {{- with .Values.clickhouse.altinity.bootstrapServiceTemplates }}
+    serviceTemplates:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
     podTemplates:
       - name: clickhouse-pod
         spec:
@@ -264,7 +286,7 @@ spec:
           {{- if .Values.clickhouse.altinity.podSecurityContext }}
           securityContext:
             {{- toYaml .Values.clickhouse.altinity.podSecurityContext | nindent 12 }}
-          {{- else if gt (int (.Values.clickhouse.altinity.replicasCount | default 1)) 1 }}
+          {{- else if and (not .Values.clickhouse.altinity.replicas) (gt (int (.Values.clickhouse.altinity.replicasCount | default 1)) 1) }}
           securityContext:
             fsGroup: 101
             fsGroupChangePolicy: OnRootMismatch
@@ -283,7 +305,7 @@ spec:
           {{- if .Values.clickhouse.altinity.affinity }}
           affinity:
             {{- toYaml .Values.clickhouse.altinity.affinity | nindent 12 }}
-          {{- else if gt (int (.Values.clickhouse.altinity.replicasCount | default 1)) 1 }}
+          {{- else if and (not .Values.clickhouse.altinity.replicas) (gt (int (.Values.clickhouse.altinity.replicasCount | default 1)) 1) }}
           affinity:
             podAntiAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
@@ -311,6 +333,10 @@ spec:
               volumeMounts:
                 - name: clickhouse-data
                   mountPath: /var/lib/clickhouse
+
+      {{- with .Values.clickhouse.altinity.additionalPodTemplates }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
 
     volumeClaimTemplates:
       - name: clickhouse-data

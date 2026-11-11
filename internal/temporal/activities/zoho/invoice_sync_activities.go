@@ -6,7 +6,9 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
@@ -14,12 +16,14 @@ import (
 
 type InvoiceSyncActivities struct {
 	integrationFactory *integration.Factory
+	entityScope        interfaces.BillingEntityScope
 	logger             *logger.Logger
 }
 
-func NewInvoiceSyncActivities(integrationFactory *integration.Factory, logger *logger.Logger) *InvoiceSyncActivities {
+func NewInvoiceSyncActivities(integrationFactory *integration.Factory, entityScope interfaces.BillingEntityScope, logger *logger.Logger) *InvoiceSyncActivities {
 	return &InvoiceSyncActivities{
 		integrationFactory: integrationFactory,
+		entityScope:        entityScope,
 		logger:             logger,
 	}
 }
@@ -27,6 +31,11 @@ func NewInvoiceSyncActivities(integrationFactory *integration.Factory, logger *l
 func (a *InvoiceSyncActivities) SyncInvoiceToZoho(ctx context.Context, input models.ZohoBooksInvoiceSyncWorkflowInput) error {
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, "", input.InvoiceID, "")
+	if err != nil {
+		return err
+	}
 
 	zohoIntegration, err := a.integrationFactory.GetZohoBooksIntegration(ctx)
 	if err != nil {
@@ -44,6 +53,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToZoho(ctx context.Context, input mod
 
 	_, err = zohoIntegration.InvoiceSvc.SyncInvoiceToZoho(ctx, zoho.ZohoInvoiceSyncRequest{
 		InvoiceID: input.InvoiceID,
+		Resync:    input.Resync,
 	})
 	if err != nil {
 		a.logger.Error(ctx, "Zoho Books invoice sync activity failed",
@@ -51,6 +61,9 @@ func (a *InvoiceSyncActivities) SyncInvoiceToZoho(ctx context.Context, input mod
 			"invoice_id", input.InvoiceID,
 			"tenant_id", input.TenantID,
 			"environment_id", input.EnvironmentID)
+		if zoho.IsZohoRequestRejected(err) {
+			return temporal.NewNonRetryableApplicationError("Zoho Books rejected the invoice sync", "ZohoRequestRejected", err)
+		}
 	}
 	return err
 }
@@ -58,6 +71,11 @@ func (a *InvoiceSyncActivities) SyncInvoiceToZoho(ctx context.Context, input mod
 func (a *InvoiceSyncActivities) MarkZohoBooksInvoicePaid(ctx context.Context, input models.ZohoBooksInvoiceMarkPaidWorkflowInput) error {
 	ctx = types.SetTenantID(ctx, input.TenantID())
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID())
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, "", input.InvoiceID(), "")
+	if err != nil {
+		return err
+	}
 
 	zohoIntegration, err := a.integrationFactory.GetZohoBooksIntegration(ctx)
 	if err != nil {

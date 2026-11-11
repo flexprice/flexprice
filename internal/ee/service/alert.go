@@ -2,13 +2,15 @@ package service
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // AlertService owns alert_settings CRUD and all usage-driven alert evaluation:
@@ -163,7 +165,7 @@ func (s *alertService) UpdateAlertSettings(ctx context.Context, id string, req d
 
 	alertSettings.Config = newConfig
 	alertSettings.Enabled = newConfig.IsAlertEnabled()
-	alertSettings.UpdatedAt = time.Now().UTC()
+	alertSettings.UpdatedAt = clock.Now()
 	alertSettings.UpdatedBy = types.GetUserID(ctx)
 
 	if err := s.AlertRepo.Update(ctx, alertSettings); err != nil {

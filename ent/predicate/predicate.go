@@ -6,6 +6,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// AccountingPeriod is the predicate function for accountingperiod builders.
+type AccountingPeriod func(*sql.Selector)
+
 // Addon is the predicate function for addon builders.
 type Addon func(*sql.Selector)
 
@@ -24,14 +27,32 @@ type AnalyticsView func(*sql.Selector)
 // Auth is the predicate function for auth builders.
 type Auth func(*sql.Selector)
 
+// BillingEntity is the predicate function for billingentity builders.
+type BillingEntity func(*sql.Selector)
+
+// BillingInstalment is the predicate function for billinginstalment builders.
+type BillingInstalment func(*sql.Selector)
+
 // BillingSequence is the predicate function for billingsequence builders.
 type BillingSequence func(*sql.Selector)
+
+// BillingTerm is the predicate function for billingterm builders.
+type BillingTerm func(*sql.Selector)
 
 // CheckoutSession is the predicate function for checkoutsession builders.
 type CheckoutSession func(*sql.Selector)
 
+// Commitment is the predicate function for commitment builders.
+type Commitment func(*sql.Selector)
+
 // Connection is the predicate function for connection builders.
 type Connection func(*sql.Selector)
+
+// Contract is the predicate function for contract builders.
+type Contract func(*sql.Selector)
+
+// ContractAssociation is the predicate function for contractassociation builders.
+type ContractAssociation func(*sql.Selector)
 
 // Costsheet is the predicate function for costsheet builders.
 type Costsheet func(*sql.Selector)
@@ -72,6 +93,9 @@ type EntityIntegrationMapping func(*sql.Selector)
 // Environment is the predicate function for environment builders.
 type Environment func(*sql.Selector)
 
+// EventDeletionRequest is the predicate function for eventdeletionrequest builders.
+type EventDeletionRequest func(*sql.Selector)
+
 // FXRate is the predicate function for fxrate builders.
 type FXRate func(*sql.Selector)
 
@@ -80,6 +104,9 @@ type Feature func(*sql.Selector)
 
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
+
+// HostedInvoiceToken is the predicate function for hostedinvoicetoken builders.
+type HostedInvoiceToken func(*sql.Selector)
 
 // IncomingWebhookEvent is the predicate function for incomingwebhookevent builders.
 type IncomingWebhookEvent func(*sql.Selector)
@@ -93,8 +120,17 @@ type InvoiceLineItem func(*sql.Selector)
 // InvoiceSequence is the predicate function for invoicesequence builders.
 type InvoiceSequence func(*sql.Selector)
 
+// JournalEntry is the predicate function for journalentry builders.
+type JournalEntry func(*sql.Selector)
+
+// JournalLine is the predicate function for journalline builders.
+type JournalLine func(*sql.Selector)
+
 // Meter is the predicate function for meter builders.
 type Meter func(*sql.Selector)
+
+// MeterUsageCheckpoint is the predicate function for meterusagecheckpoint builders.
+type MeterUsageCheckpoint func(*sql.Selector)
 
 // Payment is the predicate function for payment builders.
 type Payment func(*sql.Selector)
@@ -105,6 +141,12 @@ type PaymentAttempt func(*sql.Selector)
 // PaymentMethod is the predicate function for paymentmethod builders.
 type PaymentMethod func(*sql.Selector)
 
+// PerformanceObligation is the predicate function for performanceobligation builders.
+type PerformanceObligation func(*sql.Selector)
+
+// PerformanceObligationAssociation is the predicate function for performanceobligationassociation builders.
+type PerformanceObligationAssociation func(*sql.Selector)
+
 // Plan is the predicate function for plan builders.
 type Plan func(*sql.Selector)
 
@@ -113,6 +155,9 @@ type Price func(*sql.Selector)
 
 // PriceUnit is the predicate function for priceunit builders.
 type PriceUnit func(*sql.Selector)
+
+// Product is the predicate function for product builders.
+type Product func(*sql.Selector)
 
 // Refund is the predicate function for refund builders.
 type Refund func(*sql.Selector)

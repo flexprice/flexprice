@@ -13,6 +13,44 @@ type InternalInvoiceSyncEvent struct {
 	Error     string               `json:"error,omitempty"`
 }
 
+// InternalInvoicePaymentFailedEvent is what the publisher puts in WebhookEvent.Payload.
+type InternalInvoicePaymentFailedEvent struct {
+	InvoiceID           string                            `json:"invoice_id"`
+	TenantID            string                            `json:"tenant_id"`
+	Provider            types.SecretProvider              `json:"provider"`
+	Reason              types.InvoicePaymentFailureReason `json:"reason"`
+	PaymentID           string                            `json:"payment_id,omitempty"`
+	Error               string                            `json:"error,omitempty"`
+	IsAutoChargeAttempt bool                              `json:"is_auto_charge_attempt"`
+}
+
+type InvoicePaymentFailedWebhookPayload struct {
+	EventType           types.WebhookEventName            `json:"event_type"`
+	Invoice             *Invoice                          `json:"invoice"`
+	Provider            types.SecretProvider              `json:"provider"`
+	Reason              types.InvoicePaymentFailureReason `json:"reason"`
+	PaymentID           *string                           `json:"payment_id,omitempty"`
+	Error               *string                           `json:"error,omitempty"`
+	IsAutoChargeAttempt bool                              `json:"is_auto_charge_attempt"`
+}
+
+func NewInvoicePaymentFailedWebhookPayload(invoice *dto.InvoiceResponse, event InternalInvoicePaymentFailedEvent, eventType types.WebhookEventName) *InvoicePaymentFailedWebhookPayload {
+	payload := &InvoicePaymentFailedWebhookPayload{
+		EventType:           eventType,
+		Invoice:             NewInvoice(invoice),
+		Provider:            event.Provider,
+		Reason:              event.Reason,
+		IsAutoChargeAttempt: event.IsAutoChargeAttempt,
+	}
+	if event.PaymentID != "" {
+		payload.PaymentID = &event.PaymentID
+	}
+	if event.Error != "" {
+		payload.Error = &event.Error
+	}
+	return payload
+}
+
 // ProviderDetails describes the provider's copy of a synced invoice.
 type ProviderDetails struct {
 	Provider         types.SecretProvider `json:"provider"`

@@ -6,14 +6,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/nyaruka/phonenumbers"
+	"golang.org/x/text/language"
+	"golang.org/x/text/language/display"
+
 	customerDomain "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/nyaruka/phonenumbers"
-	"golang.org/x/text/language"
-	"golang.org/x/text/language/display"
+	"github.com/samber/lo"
 )
 
 const (
@@ -116,10 +120,16 @@ func (s *CustomerService) SyncCustomerUpdate(ctx context.Context, flexpriceCusto
 }
 
 func (s *CustomerService) findMapping(ctx context.Context, customerID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityType = types.IntegrationEntityTypeCustomer
 	filter.EntityID = customerID
 	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+	filter.ConnectionID = conn.ID
 
 	mappings, err := s.mappingRepo.List(ctx, filter)
 	if err != nil {
@@ -299,6 +309,11 @@ func contactPersonIDs(c *customerDomain.Customer, contact *ContactResponse) map[
 }
 
 func (s *CustomerService) createCustomerMapping(ctx context.Context, customer *customerDomain.Customer, contact *ContactResponse) error {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         customer.ID,
@@ -308,12 +323,13 @@ func (s *CustomerService) createCustomerMapping(ctx context.Context, customer *c
 		EnvironmentID:    customer.EnvironmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 		Metadata: map[string]interface{}{
-			mappingKeySyncedAt:         time.Now().UTC().Format(time.RFC3339),
+			mappingKeySyncedAt:         clock.Now().Format(time.RFC3339),
 			mappingKeyContactName:      contact.ContactName,
 			mappingKeyPrimaryEmail:     contact.Email,
 			mappingKeyPrimaryContactID: contact.PrimaryContact,
 			mappingKeyContactPersonIDs: contactPersonIDs(customer, contact),
 		},
+		ConnectionID: lo.ToPtr(conn.ID),
 	}
 	mapping.TenantID = customer.TenantID
 	if err := s.mappingRepo.Create(ctx, mapping); err != nil {

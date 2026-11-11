@@ -79,6 +79,10 @@ const (
 	FieldInvoiceLevelDiscount = "invoice_level_discount"
 	// FieldSubscriptionLineItemID holds the string denoting the subscription_line_item_id field in the database.
 	FieldSubscriptionLineItemID = "subscription_line_item_id"
+	// FieldCommitmentID holds the string denoting the commitment_id field in the database.
+	FieldCommitmentID = "commitment_id"
+	// FieldBillingInstalmentID holds the string denoting the billing_instalment_id field in the database.
+	FieldBillingInstalmentID = "billing_instalment_id"
 	// FieldAdjustedEntitlementQuantity holds the string denoting the adjusted_entitlement_quantity field in the database.
 	FieldAdjustedEntitlementQuantity = "adjusted_entitlement_quantity"
 	// FieldParentLineItemID holds the string denoting the parent_line_item_id field in the database.
@@ -144,6 +148,8 @@ var Columns = []string{
 	FieldLineItemDiscount,
 	FieldInvoiceLevelDiscount,
 	FieldSubscriptionLineItemID,
+	FieldCommitmentID,
+	FieldBillingInstalmentID,
 	FieldAdjustedEntitlementQuantity,
 	FieldParentLineItemID,
 	FieldCustomCurrency,
@@ -347,6 +353,16 @@ func ByInvoiceLevelDiscount(opts ...sql.OrderTermOption) OrderOption {
 // BySubscriptionLineItemID orders the results by the subscription_line_item_id field.
 func BySubscriptionLineItemID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionLineItemID, opts...).ToFunc()
+}
+
+// ByCommitmentID orders the results by the commitment_id field.
+func ByCommitmentID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCommitmentID, opts...).ToFunc()
+}
+
+// ByBillingInstalmentID orders the results by the billing_instalment_id field.
+func ByBillingInstalmentID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingInstalmentID, opts...).ToFunc()
 }
 
 // ByAdjustedEntitlementQuantity orders the results by the adjusted_entitlement_quantity field.

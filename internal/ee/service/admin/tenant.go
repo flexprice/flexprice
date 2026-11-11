@@ -28,11 +28,10 @@ type TenantService interface {
 
 type tenantService struct {
 	service.ServiceParams
-	tenants service.TenantService
 }
 
-func NewTenantService(params service.ServiceParams, tenants service.TenantService) TenantService {
-	return &tenantService{ServiceParams: params, tenants: tenants}
+func NewTenantService(params service.ServiceParams) TenantService {
+	return &tenantService{ServiceParams: params}
 }
 
 func (s *tenantService) CreateTenant(ctx context.Context, req admindto.CreateTenantRequest) (*admindto.CreateTenantResponse, error) {
@@ -80,10 +79,8 @@ func (s *tenantService) CreateTenant(ctx context.Context, req admindto.CreateTen
 		return nil, err
 	}
 
-	// Only after the commit: the billing customer's events are sent at once, and a rollback could not recall them.
-	if err := s.tenants.CreateTenantAsBillingCustomer(ctx, newTenant); err != nil {
-		s.Logger.Error(ctx, "failed to create billing customer for tenant", "error", err, "tenant_id", tenantID)
-	}
+	// Only after the commit: provisioning calls Flexprice Cloud, and a rollback could not recall it.
+	s.SelfBilling.OnTenantCreated(ctx, tenantID, newTenant.Name, req.Email)
 
 	s.Logger.Info(ctx, "created tenant", "tenant_id", tenantID, "user_id", userID, "production", req.CreateProduction)
 	return admindto.NewCreateTenantResponse(dto.NewTenantResponse(newTenant), owner, envs), nil

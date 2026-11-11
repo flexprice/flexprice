@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
@@ -16,7 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
 )
 
 // Checkout charge modes, a metrics label; "none" means the gateway was not contacted yet.
@@ -109,6 +112,10 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 			WithHint("The customer must be active to create a checkout session").
 			WithReportableDetails(map[string]any{"customer_id": customer.ID, "status": customer.Status}).
 			Mark(ierr.ErrValidation)
+	}
+	ctx, err = s.scopeCheckout(ctx, customer.ID, req.PaymentProvider)
+	if err != nil {
+		return nil, err
 	}
 
 	session := req.ToCheckoutSession(ctx, customer.ID)
@@ -303,6 +310,7 @@ func (s *checkoutSessionService) Cancel(ctx context.Context, id string) (*dto.Ch
 			Mark(ierr.ErrValidation)
 	}
 
+	ctx = types.WithForceWriter(ctx)
 	session, err := s.CheckoutSessionRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -485,10 +493,15 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 
 	// Only the attaches wrote anything: a gated removal leaves its association active and
 	// billable until payment lands, so an abandoned checkout has nothing to undo for it.
-	if cfg.AddAddonParams != nil && len(cfg.AddAddonParams.Addons) > 0 {
-		ids := lo.Map(cfg.AddAddonParams.Addons, func(ref types.AddAddonRef, _ int) string {
-			return ref.AssociationID
-		})
+	var ids []string
+	priceIDsByAssociation := map[string][]string{}
+	for _, params := range cfg.AddAddonEntries() {
+		for _, ref := range params.Addons {
+			ids = append(ids, ref.AssociationID)
+			priceIDsByAssociation[ref.AssociationID] = ref.OverridePriceIDs()
+		}
+	}
+	if len(ids) > 0 {
 
 		associations, err := s.AddonAssociationRepo.GetByIDs(ctx, ids)
 		if err != nil {
@@ -504,6 +517,16 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 			if err := s.AddonAssociationRepo.DeleteBulk(ctx, pending); err != nil {
 				s.Logger.Error(ctx, "failed to archive pending addon associations",
 					"association_ids", pending, "error", err)
+				return err
+			}
+		}
+
+		// Override prices of attaches that never activated are referenced by nothing.
+		priceIDs := lo.FlatMap(pending, func(id string, _ int) []string { return priceIDsByAssociation[id] })
+		if len(priceIDs) > 0 {
+			if err := s.PriceRepo.DeleteBulk(ctx, priceIDs); err != nil {
+				s.Logger.Error(ctx, "failed to delete override prices of pending addon associations",
+					"price_ids", priceIDs, "error", err)
 				return err
 			}
 		}
@@ -546,7 +569,7 @@ func archiveDraftInvoice(ctx context.Context, sp ServiceParams, invoiceID string
 const cleanupExpiredBatchSize = 1000
 
 func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, effectiveDate *time.Time) (*types.CheckoutSessionCleanupResult, error) {
-	cutoff := time.Now().UTC()
+	cutoff := clock.Now()
 	if effectiveDate != nil {
 		cutoff = effectiveDate.UTC()
 	}
@@ -613,7 +636,7 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 	}
 
 	// Atomic claim: only one concurrent caller gets n > 0.
-	now := time.Now().UTC()
+	now := clock.Now()
 	ctx = activity.WithAction(ctx, sessionID, activity.CheckoutSessionCompleted)
 	claimed, err := s.CheckoutSessionRepo.MarkCompleted(ctx, sessionID, now, mergedResult)
 	if err != nil {
@@ -676,7 +699,7 @@ func (s *checkoutSessionService) publishCheckoutEvent(ctx context.Context, sessi
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(payload),
 		EntityType:    types.SystemEntityTypeCheckoutSession,
 		EntityID:      session.ID,
@@ -718,7 +741,11 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 		return nil, nil, err
 	}
 
-	invResp, skipped, err := buildCheckoutDraftInvoice(ctx, s.ServiceParams, subResp)
+	invResp, skipped, err := buildCheckoutDraftInvoice(ctx, s.ServiceParams, dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: subResp.ID,
+		PeriodStart:    subResp.CurrentPeriodStart,
+		PeriodEnd:      subResp.CurrentPeriodEnd,
+	})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -730,19 +757,16 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 	return subResp, invResp, nil
 }
 
+// buildCheckoutDraftInvoice creates, computes and taxes an in-advance checkout draft for req's period.
 func buildCheckoutDraftInvoice(
 	ctx context.Context,
 	params ServiceParams,
-	subResp *dto.SubscriptionResponse,
+	req dto.CreateSubscriptionDraftInvoiceRequest,
 ) (*dto.InvoiceResponse, bool, error) {
 	invSvc := NewInvoiceService(params)
-	invResp, err := invSvc.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
-		SubscriptionID: subResp.ID,
-		PeriodStart:    subResp.CurrentPeriodStart,
-		PeriodEnd:      subResp.CurrentPeriodEnd,
-		ReferencePoint: types.ReferencePointPeriodStart,
-		SourceType:     types.InvoiceSourceTypeCheckout,
-	})
+	req.ReferencePoint = types.ReferencePointPeriodStart
+	req.SourceType = types.InvoiceSourceTypeCheckout
+	invResp, err := invSvc.CreateDraftInvoiceForSubscription(ctx, req)
 	if err != nil {
 		return nil, false, err
 	}
@@ -804,6 +828,19 @@ func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv 
 	})
 }
 
+// scopeCheckout puts the customer's billing entity in ctx and rejects a provider that entity has not connected.
+func (s *checkoutSessionService) scopeCheckout(ctx context.Context, customerID string, provider types.CheckoutPaymentProvider) (context.Context, error) {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+	if err != nil {
+		return ctx, err
+	}
+	gateway, ok := provider.ToPaymentGateway()
+	if !ok {
+		return ctx, nil
+	}
+	return ctx, requireProviderConnected(ctx, s.ServiceParams, types.SecretProvider(gateway))
+}
+
 // StartPayFirstCheckoutSession creates a checkout session on an existing DRAFT invoice,
 // fulfills payment + provider link, and publishes checkout.session.initiated.
 // On session create failure the draft is archived. On fulfill failure the session is cleaned up.
@@ -855,7 +892,7 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 		return nil, err
 	}
 
-	if err := s.fulfillCheckoutSession(ctx, session, req.DraftInvoice); err != nil {
+	terminate := func(ctx context.Context, err error) error {
 		if _, cleanupErr := s.terminateCheckoutSession(ctx, session, err); cleanupErr != nil {
 			s.Logger.Error(ctx, "checkout cleanup failed after pay-first fulfillment error",
 				"session_id", session.ID,
@@ -863,7 +900,14 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 				"original_err", err,
 			)
 		}
-		return nil, err
+		return err
+	}
+	ctx, err := s.scopeCheckout(ctx, req.CustomerID, session.PaymentProvider)
+	if err != nil {
+		return nil, terminate(ctx, err)
+	}
+	if err := s.fulfillCheckoutSession(ctx, session, req.DraftInvoice); err != nil {
+		return nil, terminate(ctx, err)
 	}
 
 	sessionResp := s.toPollableResponse(ctx, session, false)
@@ -885,13 +929,19 @@ func (s *checkoutSessionService) fulfillCheckoutSession(
 	}
 	session.CheckoutInvoiceID = &inv.ID
 	session.CheckoutPaymentID = &payResp.ID
+	if err := s.CheckoutSessionRepo.Update(ctx, session); err != nil {
+		return err
+	}
 
 	providerResult, err := s.callCheckoutProvider(ctx, session, payResp)
 	if err != nil {
+		if s.completedDuringProviderCall(ctx, session) {
+			return nil
+		}
 		return err
 	}
 	s.recordGatewayHandles(ctx, payResp.ID, providerResult)
 	session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
 	session.CheckoutStatus = types.CheckoutStatusPending
-	return s.CheckoutSessionRepo.Update(ctx, session)
+	return s.savePendingSession(ctx, session)
 }

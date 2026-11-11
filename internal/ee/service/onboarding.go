@@ -5,11 +5,16 @@ import (
 	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- synthetic demo data, non-security
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"encoding/json"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
@@ -21,15 +26,13 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // OnboardingService handles onboarding-related operations
 type OnboardingService interface {
 	GenerateEvents(ctx context.Context, req *dto.OnboardingEventsRequest) (*dto.OnboardingEventsResponse, error)
 	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
-	OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) error
+	OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) (*dto.TenantResponse, error)
 	SetupSandboxEnvironment(ctx context.Context, tenantID, userID, envID string) error
 }
 
@@ -132,7 +135,7 @@ func (s *onboardingService) GenerateEvents(ctx context.Context, req *dto.Onboard
 		TenantID:         types.GetTenantID(ctx),
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		UserID:           types.GetUserID(ctx),
-		RequestTimestamp: time.Now(),
+		RequestTimestamp: clock.Now(),
 		SubscriptionID:   req.SubscriptionID,
 	}
 
@@ -170,7 +173,7 @@ func (s *onboardingService) GenerateEvents(ctx context.Context, req *dto.Onboard
 
 	return &dto.OnboardingEventsResponse{
 		Message:        "Event generation started",
-		StartedAt:      time.Now(),
+		StartedAt:      clock.Now(),
 		Duration:       req.Duration,
 		Count:          req.Duration * 5, // Five events per second
 		CustomerID:     customerID,
@@ -275,7 +278,7 @@ func (s *onboardingService) processMessage(ctx context.Context, msg *message.Mes
 
 // generateEvents generates events at a rate of 1 per second
 func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.OnboardingEventsMessage) {
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc, nil)
 
 	// Calculate total events to generate
 	totalEvents := eventMsg.Duration * 5
@@ -407,14 +410,15 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 		EventID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EVENT),
 		ExternalCustomerID: eventMsg.CustomerExtID,
 		EventName:          meter.EventName,
-		Timestamp:          time.Now(),
+		Timestamp:          clock.Now(),
 		Properties:         properties,
 		Source:             "onboarding",
 	}
 }
 
-// OnboardNewUserWithTenant creates a new tenant, assigns it to the user, and sets up default environments
-func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) error {
+// OnboardNewUserWithTenant creates a new tenant, assigns it to the user, and sets up default environments.
+// It returns the tenant so the caller can provision self-billing once its transaction commits.
+func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) (*dto.TenantResponse, error) {
 	tenantName := req.TenantName
 	if tenantName == "" {
 		tenantName = s.Config.Onboarding.DefaultTenantName
@@ -423,12 +427,13 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 	tenantService := NewTenantService(s.ServiceParams)
 
 	resp, err := tenantService.CreateTenant(ctx, dto.CreateTenantRequest{
-		Name:     tenantName,
-		ID:       req.TenantID,
-		Metadata: req.Metadata,
+		Name:           tenantName,
+		ID:             req.TenantID,
+		Metadata:       req.Metadata,
+		BillingDetails: &dto.TenantBillingDetails{Email: req.Email},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	tenantID := resp.ID
@@ -445,13 +450,13 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 			Status:    types.StatusPublished,
 			CreatedBy: req.UserID,
 			UpdatedBy: req.UserID,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+			CreatedAt: clock.Now(),
+			UpdatedAt: clock.Now(),
 		},
 	}
 
 	if err := s.UserRepo.Create(ctx, newUser); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create default environments (development, production, sandbox)
@@ -469,18 +474,18 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 				Status:    types.StatusPublished,
 				CreatedBy: req.UserID,
 				UpdatedBy: req.UserID,
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
+				CreatedAt: clock.Now(),
+				UpdatedAt: clock.Now(),
 			},
 		}
 
 		if err := s.EnvironmentRepo.Create(ctx, env); err != nil {
-			return err
+			return nil, err
 		}
 
 		// if envType == types.EnvironmentDevelopment {
 		// 	if err := s.SetupSandboxEnvironment(ctx, tenantID, req.UserID, env.ID); err != nil {
-		// 		return err
+		// 		return nil, err
 		// 	}
 		// }
 	}
@@ -488,7 +493,7 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 	// Send Zapier webhook for onboarding (never fails - errors are logged internally)
 	_ = s.sendZapierWebhook(ctx, req.Email)
 
-	return nil
+	return resp, nil
 }
 
 // SetupSandboxEnvironment sets up the sandbox environment with generic AI-focused features for hackathon participants
@@ -842,7 +847,7 @@ func (s *onboardingService) createDefaultSubscriptions(ctx context.Context, cust
 		CustomerID:         customer.ID,
 		PlanID:             proPlan.ID,
 		Currency:           "USD",
-		StartDate:          lo.ToPtr(time.Now()),
+		StartDate:          lo.ToPtr(clock.Now()),
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,

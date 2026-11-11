@@ -27,10 +27,17 @@ func (s *customerPortalService) AddPaymentMethod(ctx context.Context, req *dto.P
 	if err != nil {
 		return nil, err
 	}
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
 
 	provider, gw, err := s.methodProviderFor(ctx, customerID,
 		types.IntegrationCapabilityAddPaymentMethod, req.PaymentProvider)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireProviderConnected(ctx, s.ServiceParams, types.SecretProvider(gw)); err != nil {
 		return nil, err
 	}
 
@@ -99,6 +106,10 @@ func (s *customerPortalService) mutateSavedMethod(
 	}
 
 	customerID, err := s.portalCustomerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
 	if err != nil {
 		return nil, err
 	}

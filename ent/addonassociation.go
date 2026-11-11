@@ -49,8 +49,10 @@ type AddonAssociation struct {
 	// CancelledAt holds the value of the "cancelled_at" field.
 	CancelledAt *time.Time `json:"cancelled_at,omitempty"`
 	// Metadata holds the value of the "metadata" field.
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	selectValues sql.SelectValues
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	// SyncedPriceSequence holds the value of the "synced_price_sequence" field.
+	SyncedPriceSequence int64 `json:"synced_price_sequence,omitempty"`
+	selectValues        sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -60,6 +62,8 @@ func (*AddonAssociation) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case addonassociation.FieldMetadata:
 			values[i] = new([]byte)
+		case addonassociation.FieldSyncedPriceSequence:
+			values[i] = new(sql.NullInt64)
 		case addonassociation.FieldID, addonassociation.FieldTenantID, addonassociation.FieldStatus, addonassociation.FieldCreatedBy, addonassociation.FieldUpdatedBy, addonassociation.FieldEnvironmentID, addonassociation.FieldEntityID, addonassociation.FieldEntityType, addonassociation.FieldAddonID, addonassociation.FieldAddonStatus, addonassociation.FieldCancellationReason:
 			values[i] = new(sql.NullString)
 		case addonassociation.FieldCreatedAt, addonassociation.FieldUpdatedAt, addonassociation.FieldStartDate, addonassociation.FieldEndDate, addonassociation.FieldCancelledAt:
@@ -186,6 +190,12 @@ func (_m *AddonAssociation) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
+		case addonassociation.FieldSyncedPriceSequence:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field synced_price_sequence", values[i])
+			} else if value.Valid {
+				_m.SyncedPriceSequence = value.Int64
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -275,6 +285,9 @@ func (_m *AddonAssociation) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
+	builder.WriteString(", ")
+	builder.WriteString("synced_price_sequence=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SyncedPriceSequence))
 	builder.WriteByte(')')
 	return builder.String()
 }

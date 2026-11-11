@@ -10,6 +10,7 @@ import (
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
@@ -326,21 +327,23 @@ func TestInvoiceConversion(t *testing.T) {
 func (s *InvoiceConversionSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.svc = NewInvoiceService(ServiceParams{
-		Logger:              s.GetLogger(),
-		Config:              s.GetConfig(),
-		DB:                  s.GetDB(),
-		SubRepo:             s.GetStores().SubscriptionRepo,
-		CustomerRepo:        s.GetStores().CustomerRepo,
-		InvoiceRepo:         s.GetStores().InvoiceRepo,
-		InvoiceLineItemRepo: s.GetStores().InvoiceLineItemRepo,
-		FXRateRepo:          s.GetStores().FXRateRepo,
-		TaxRateRepo:         s.GetStores().TaxRateRepo,
-		TaxAppliedRepo:      s.GetStores().TaxAppliedRepo,
-		TaxAssociationRepo:  s.GetStores().TaxAssociationRepo,
-		SettingsRepo:        s.GetStores().SettingsRepo,
-		WalletRepo:          s.GetStores().WalletRepo,
-		EventPublisher:      s.GetPublisher(),
-		WebhookPublisher:    s.GetWebhookPublisher(),
+		Logger:                 s.GetLogger(),
+		Config:                 s.GetConfig(),
+		DB:                     s.GetDB(),
+		SubRepo:                s.GetStores().SubscriptionRepo,
+		CustomerRepo:           s.GetStores().CustomerRepo,
+		InvoiceRepo:            s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo: s.GetStores().HostedInvoiceTokenRepo,
+		ConnectionRepo:         s.GetStores().ConnectionRepo,
+		InvoiceLineItemRepo:    s.GetStores().InvoiceLineItemRepo,
+		FXRateRepo:             s.GetStores().FXRateRepo,
+		TaxRateRepo:            s.GetStores().TaxRateRepo,
+		TaxAppliedRepo:         s.GetStores().TaxAppliedRepo,
+		TaxAssociationRepo:     s.GetStores().TaxAssociationRepo,
+		SettingsRepo:           s.GetStores().SettingsRepo,
+		WalletRepo:             s.GetStores().WalletRepo,
+		EventPublisher:         s.GetPublisher(),
+		WebhookPublisher:       s.GetWebhookPublisher(),
 	}).(*invoiceService)
 }
 
@@ -636,6 +639,16 @@ func (s *InvoiceConversionSuite) TestFinalizeTaxesSubscriptionInvoiceOnce() {
 
 			s.seedCustomer("cust_once", tc.billing)
 			s.seedTenantRate("usd", "inr", "83")
+			s.Require().NoError(s.GetStores().SubscriptionRepo.Create(s.ctx(), &subscription.Subscription{
+				ID:                 "sub_once",
+				CustomerID:         "cust_once",
+				Currency:           "usd",
+				SubscriptionStatus: types.SubscriptionStatusActive,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				EnvironmentID:      types.GetEnvironmentID(s.ctx()),
+				BaseModel:          types.GetDefaultBaseModel(s.ctx()),
+			}))
 			s.seedDraftInvoice("inv_once_tax", "cust_once", "usd", types.InvoiceTypeSubscription, lo.ToPtr("sub_once"),
 				[]*invoice.InvoiceLineItem{line("il_once", "100")})
 
@@ -734,19 +747,21 @@ func (s *InvoiceConversionSuite) TestRejectPrepaidCrossCurrencyOneOff() {
 // TestPaymentBeforeConversionRejected covers the no-payment-before-conversion guard.
 func (s *InvoiceConversionSuite) TestPaymentBeforeConversionRejected() {
 	paySvc := NewPaymentService(ServiceParams{
-		Logger:              s.GetLogger(),
-		Config:              s.GetConfig(),
-		DB:                  s.GetDB(),
-		CustomerRepo:        s.GetStores().CustomerRepo,
-		InvoiceRepo:         s.GetStores().InvoiceRepo,
-		InvoiceLineItemRepo: s.GetStores().InvoiceLineItemRepo,
-		SubRepo:             s.GetStores().SubscriptionRepo,
-		CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
-		PaymentRepo:         s.GetStores().PaymentRepo,
-		SettingsRepo:        s.GetStores().SettingsRepo,
-		WalletRepo:          s.GetStores().WalletRepo,
-		EventPublisher:      s.GetPublisher(),
-		WebhookPublisher:    s.GetWebhookPublisher(),
+		Logger:                 s.GetLogger(),
+		Config:                 s.GetConfig(),
+		DB:                     s.GetDB(),
+		CustomerRepo:           s.GetStores().CustomerRepo,
+		InvoiceRepo:            s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo: s.GetStores().HostedInvoiceTokenRepo,
+		ConnectionRepo:         s.GetStores().ConnectionRepo,
+		InvoiceLineItemRepo:    s.GetStores().InvoiceLineItemRepo,
+		SubRepo:                s.GetStores().SubscriptionRepo,
+		CheckoutSessionRepo:    s.GetStores().CheckoutSessionRepo,
+		PaymentRepo:            s.GetStores().PaymentRepo,
+		SettingsRepo:           s.GetStores().SettingsRepo,
+		WalletRepo:             s.GetStores().WalletRepo,
+		EventPublisher:         s.GetPublisher(),
+		WebhookPublisher:       s.GetWebhookPublisher(),
 	}).(*paymentService)
 
 	s.seedCustomer("cust_pay_inr", lo.ToPtr("inr"))

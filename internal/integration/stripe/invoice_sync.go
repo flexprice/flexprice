@@ -5,15 +5,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+	"github.com/stripe/stripe-go/v82"
+
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
-	"github.com/stripe/stripe-go/v82"
 )
 
 // InvoiceSyncService handles synchronization of FlexPrice invoices with Stripe
@@ -113,12 +116,12 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 		InvoiceID:       req.InvoiceID,
 		StripeInvoiceID: finalizedInvoice.ID,
 		Status:          string(finalizedInvoice.Status),
-		Amount:          decimal.NewFromInt(finalizedInvoice.Total).Div(decimal.NewFromInt(100)),
+		Amount:          types.FromSmallestUnit(finalizedInvoice.Total, string(finalizedInvoice.Currency)),
 		Currency:        string(finalizedInvoice.Currency),
 		InvoiceURL:      finalizedInvoice.HostedInvoiceURL,
 		PaymentURL:      finalizedInvoice.HostedInvoiceURL, // Same as invoice URL for Stripe
 		CreatedAt:       time.Unix(finalizedInvoice.Created, 0),
-		UpdatedAt:       time.Now(),
+		UpdatedAt:       clock.Now(),
 	}
 
 	s.logger.Info(ctx, "Stripe invoice sync completed successfully",
@@ -177,8 +180,8 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 	// Stripe requires due_date when collection_method is send_invoice.
 	// Use the invoice due date if it's at least 15 minutes from now; otherwise default.
 	if collectionMethod == types.CollectionMethodSendInvoice {
-		minDueDate := time.Now().UTC().Add(15 * time.Minute)
-		dueDate := time.Now().UTC().Add(time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour)
+		minDueDate := clock.Now().Add(15 * time.Minute)
+		dueDate := clock.Now().Add(time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour)
 		if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(minDueDate) {
 			dueDate = *flexInvoice.DueDate
 		}
@@ -262,8 +265,8 @@ func buildInvoiceItemParams(
 	stripeInvoiceID string,
 	productIDByPriceID map[string]string,
 ) *stripe.InvoiceItemCreateParams {
-	amountCents := lineItem.Amount.Mul(decimal.NewFromInt(100)).IntPart()
 	currency := strings.ToLower(lineItem.Currency)
+	amountCents := types.ToSmallestUnit(lineItem.Amount, currency)
 
 	params := &stripe.InvoiceItemCreateParams{
 		Customer:    stripe.String(customerID),
@@ -388,7 +391,6 @@ func (s *InvoiceSyncService) SyncPaymentToStripe(ctx context.Context, invoiceID 
 	}
 
 	stripeInvoiceID := mapping.ProviderEntityID
-	amountCents := paymentAmount.Mul(decimal.NewFromInt(100)).IntPart()
 
 	s.logger.Info(ctx, "syncing external payment to Stripe",
 		"invoice_id", invoiceID,
@@ -403,6 +405,8 @@ func (s *InvoiceSyncService) SyncPaymentToStripe(ctx context.Context, invoiceID 
 			WithHint("Unable to get invoice from Stripe").
 			Mark(ierr.ErrSystem)
 	}
+
+	amountCents := types.ToSmallestUnit(paymentAmount, string(stripeInvoice.Currency))
 
 	// Only proceed if invoice is finalized and not fully paid
 	if stripeInvoice.Status != stripe.InvoiceStatusOpen {
@@ -508,10 +512,16 @@ func (s *InvoiceSyncService) GetFlexPriceInvoiceID(ctx context.Context, stripeIn
 		return "", ierr.NewError("entity integration mapping repository not available").Mark(ierr.ErrNotFound)
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		ProviderEntityIDs: []string{stripeInvoiceID},
 		EntityType:        types.IntegrationEntityTypeInvoice,
 		ProviderTypes:     []string{"stripe"},
+		ConnectionID:      conn.ID,
 		QueryFilter:       types.NewDefaultQueryFilter(),
 	}
 
@@ -543,10 +553,16 @@ func (s *InvoiceSyncService) getExistingStripeMapping(ctx context.Context, invoi
 		return nil, ierr.NewError("entity integration mapping repository not available").Mark(ierr.ErrNotFound)
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityID:      invoiceID,
 		EntityType:    types.IntegrationEntityTypeInvoice,
 		ProviderTypes: []string{"stripe"},
+		ConnectionID:  conn.ID,
 		QueryFilter:   types.NewDefaultQueryFilter(),
 	}
 
@@ -569,6 +585,11 @@ func (s *InvoiceSyncService) createInvoiceMapping(ctx context.Context, invoiceID
 		return nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         invoiceID,
@@ -576,10 +597,11 @@ func (s *InvoiceSyncService) createInvoiceMapping(ctx context.Context, invoiceID
 		ProviderType:     "stripe",
 		ProviderEntityID: stripeInvoiceID,
 		Metadata: map[string]interface{}{
-			"sync_timestamp": time.Now().Unix(),
+			"sync_timestamp": clock.Now().Unix(),
 			"sync_source":    "flexprice",
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),
+		ConnectionID:  lo.ToPtr(conn.ID),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
 
@@ -637,7 +659,7 @@ func (s *InvoiceSyncService) updateStripeInvoiceMetadata(ctx context.Context, st
 	}
 
 	// Add new payment amount (convert to cents as decimal for precision)
-	paymentAmountCents := paymentAmount.Mul(decimal.NewFromInt(100))
+	paymentAmountCents := decimal.NewFromInt(types.ToSmallestUnit(paymentAmount, string(currentInvoice.Currency)))
 	newTotalCredits := currentCredits.Add(paymentAmountCents)
 
 	// Update the invoice metadata with only the credits total

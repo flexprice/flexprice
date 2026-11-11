@@ -5,8 +5,13 @@ import (
 	"math"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/chargebee/chargebee-go/v3/enum"
 	chargebeeInvoice "github.com/chargebee/chargebee-go/v3/models/invoice"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -16,8 +21,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // ChargebeeInvoiceService defines the interface for Chargebee invoice operations
@@ -502,10 +505,16 @@ func (s *InvoiceService) getChargebeeItemPriceIDAndCheckTiered(ctx context.Conte
 	}
 
 	// Query entity mapping table for price ID
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return "", false, err
+	}
+
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityID = flexPriceID
 	filter.EntityType = types.IntegrationEntityTypeItemPrice
 	filter.ProviderTypes = []string{string(types.SecretProviderChargebee)}
+	filter.ConnectionID = conn.ID
 
 	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
@@ -547,10 +556,16 @@ func (s *InvoiceService) getChargebeeItemPriceIDAndCheckTiered(ctx context.Conte
 }
 
 func (s *InvoiceService) GetExistingChargebeeMapping(ctx context.Context, invoiceID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityID = invoiceID
 	filter.EntityType = types.IntegrationEntityTypeInvoice
 	filter.ProviderTypes = []string{string(types.SecretProviderChargebee)}
+	filter.ConnectionID = conn.ID
 
 	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
@@ -597,6 +612,11 @@ func (s *InvoiceService) LinkInvoiceMapping(ctx context.Context, invoiceID, char
 		return nil
 	}
 
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityType:       types.IntegrationEntityTypeInvoice,
@@ -605,6 +625,7 @@ func (s *InvoiceService) LinkInvoiceMapping(ctx context.Context, invoiceID, char
 		ProviderEntityID: chargebeeInvoiceID,
 		EnvironmentID:    inv.EnvironmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 	mapping.TenantID = inv.TenantID
 
@@ -813,7 +834,7 @@ func (s *InvoiceService) ReconcileInvoicePayment(ctx context.Context, invoiceID 
 
 	// Set PaidAt timestamp if payment succeeded or overpaid (and not already set)
 	if (newPaymentStatus == types.PaymentStatusSucceeded || newPaymentStatus == types.PaymentStatusOverpaid) && inv.PaidAt == nil {
-		now := time.Now().UTC()
+		now := clock.Now()
 		inv.PaidAt = &now
 	}
 
@@ -835,9 +856,15 @@ func (s *InvoiceService) ReconcileInvoicePayment(ctx context.Context, invoiceID 
 
 // GetFlexPriceInvoiceIDByChargebeeInvoiceID retrieves the FlexPrice invoice ID from entity mapping
 func (s *InvoiceService) GetFlexPriceInvoiceIDByChargebeeInvoiceID(ctx context.Context, chargebeeInvoiceID string) (string, error) {
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.ProviderEntityIDs = []string{chargebeeInvoiceID}
 	filter.ProviderTypes = []string{string(types.SecretProviderChargebee)}
+	filter.ConnectionID = conn.ID
 	filter.EntityType = types.IntegrationEntityTypeInvoice
 
 	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
@@ -907,7 +934,12 @@ func (s *InvoiceService) ProcessChargebeePaymentFromWebhook(
 	}
 
 	// Step 3: Create payment record in FlexPrice using repository
-	now := time.Now()
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
+	now := clock.Now()
 	methodType, mapped := paymentMethodTypeFor(enum.PaymentMethod(req.PaymentMethod))
 	if !mapped {
 		methodType = types.PaymentMethodTypeCard
@@ -944,6 +976,7 @@ func (s *InvoiceService) ProcessChargebeePaymentFromWebhook(
 
 	// Set gateway payment ID and succeeded status
 	paymentModel.GatewayPaymentID = &req.ChargebeeTransactionID
+	paymentModel.ConnectionID = lo.ToPtr(conn.ID)
 	paymentModel.PaymentStatus = types.PaymentStatusSucceeded
 	paymentModel.SucceededAt = &now
 

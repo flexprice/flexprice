@@ -55,6 +55,7 @@ func (s *PlanServiceSuite) SetupTest() {
 		IntegrationFactory:       s.GetIntegrationFactory(),
 		ConnectionRepo:           s.GetStores().ConnectionRepo,
 		PlanPriceSyncRepo:        s.GetStores().PlanPriceSyncRepo,
+		AddonPriceSyncRepo:       s.GetStores().AddonPriceSyncRepo,
 	}
 	s.service = NewPlanService(s.params)
 }

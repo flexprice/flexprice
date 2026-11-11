@@ -47,12 +47,21 @@ const (
 	MetadataKeyOverageFactor      = "overage_factor"
 	MetadataKeyCommitmentAmount   = "commitment_amount"
 	MetadataKeyCommitmentUtilized = "commitment_utilized"
+	MetadataKeyCommitmentLineKind = "commitment_line_kind"
+	MetadataKeyCommitmentID       = "commitment_id"
+	MetadataKeyCommitmentRate     = "commitment_rate"
 	MetadataKeyUsageResetPeriod   = "usage_reset_period"
 	MetadataKeyIsPreview          = "is_preview"
 	MetadataKeyDescription        = "description"
 
 	// MetadataValueTrue is the canonical truthy value for the boolean flags above.
 	MetadataValueTrue = "true"
+)
+
+// Payment metadata marking which flow created the payment.
+const (
+	MetadataKeyPaymentTrigger       = "payment_trigger"
+	PaymentTriggerInvoiceAutoCharge = "invoice_auto_charge"
 )
 
 // GetBool nil-safely reports whether key holds the canonical truthy value.

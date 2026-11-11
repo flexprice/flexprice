@@ -194,6 +194,7 @@ func SetupDummyBillingCustomer() error {
 		encService,
 		nil, // TemporalService — not available in script context
 		nil, // Locker — not needed in script context
+		nil, // settingsRepo — not needed in script context
 	)
 
 	typstCompiler := typst.DefaultCompiler(appLogger)
@@ -259,7 +260,7 @@ func SetupDummyBillingCustomer() error {
 	customerSvc := service.NewCustomerService(params)
 	subscriptionSvc := service.NewSubscriptionService(params)
 	walletSvc := service.NewWalletService(params)
-	eventSvc := service.NewEventService(eventRepo, meterRepo, eventPublisher, appLogger, cfg, nil)
+	eventSvc := service.NewEventService(eventRepo, meterRepo, eventPublisher, appLogger, cfg, nil, nil)
 
 	ctx := context.Background()
 	ctx = types.SetTenantID(ctx, tenantID)

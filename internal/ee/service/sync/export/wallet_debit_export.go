@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gocarina/gocsv"
+	"github.com/shopspring/decimal"
 )
 
 // WalletDebitExporter exports wallet debits, one row per credit batch each debit drew from.
@@ -28,6 +29,8 @@ type WalletDebitCSV struct {
 	Currency                   string `csv:"currency"`
 	TransactionReason          string `csv:"transaction_reason"`
 	InvoiceID                  string `csv:"invoice_id"`
+	InvoicePeriodStart         string `csv:"invoice_period_start"` // RFC3339; empty when the invoice has no period
+	InvoicePeriodEnd           string `csv:"invoice_period_end"`
 	CreditTransactionID        string `csv:"credit_transaction_id"`
 	Credits                    string `csv:"credits"`
 	CreditBalanceBefore        string `csv:"credit_balance_before"`
@@ -114,6 +117,8 @@ func toWalletDebitCSV(d *wallet.WalletDebitsExportData) *WalletDebitCSV {
 		Currency:                   d.Currency,
 		TransactionReason:          string(d.TransactionReason),
 		InvoiceID:                  d.InvoiceID,
+		InvoicePeriodStart:         timeOrEmpty(d.InvoicePeriodStart),
+		InvoicePeriodEnd:           timeOrEmpty(d.InvoicePeriodEnd),
 		CreditTransactionID:        d.CreditTransactionID,
 		Credits:                    d.Credits.String(),
 		CreditBalanceBefore:        d.CreditBalanceBefore.String(),
@@ -130,11 +135,16 @@ func toWalletDebitCSV(d *wallet.WalletDebitsExportData) *WalletDebitCSV {
 // topUpAmountUsed spreads the wallet transaction's paid amount evenly over its credits and takes
 // the share for the credits this debit drew.
 func topUpAmountUsed(d *wallet.WalletDebitsExportData) string {
-	if d.WalletTxnAmountPaid == nil || d.WalletTxnCredits == nil || d.WalletTxnCredits.IsZero() {
+	return shareOfAmountPaid(d.Credits, d.WalletTxnCredits, d.WalletTxnAmountPaid, d.Currency)
+}
+
+// shareOfAmountPaid is the part of what a credit was bought for that drawn of its credits take,
+// or empty when the credit has no paid amount.
+func shareOfAmountPaid(drawn decimal.Decimal, credits, amountPaid *decimal.Decimal, currency string) string {
+	if amountPaid == nil || credits == nil || credits.IsZero() {
 		return ""
 	}
-	amount := d.Credits.Mul(*d.WalletTxnAmountPaid).Div(*d.WalletTxnCredits)
-	return types.RoundToCurrencyPrecision(amount, d.Currency).String()
+	return types.RoundToCurrencyPrecision(drawn.Mul(*amountPaid).Div(*credits), currency).String()
 }
 
 // GetFilenamePrefix returns the prefix for the exported file

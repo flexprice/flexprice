@@ -21,7 +21,15 @@ func (r *GetSubscriptionEntitlementsRequest) Validate() error {
 
 // SubscriptionEntitlementsResponse represents the response for subscription entitlements
 type SubscriptionEntitlementsResponse struct {
-	SubscriptionID string               `json:"subscription_id"`
-	PlanID         string               `json:"plan_id"`
-	Features       []*AggregatedFeature `json:"features"`
+	SubscriptionID                string                                 `json:"subscription_id"`
+	PlanID                        string                                 `json:"plan_id"`
+	Features                      []*AggregatedFeature                   `json:"features"`
+	SubscriptionEntitlementGrants *SubscriptionEntitlementGrantsResponse `json:"subscription_entitlement_grants,omitempty"`
+}
+
+// SubscriptionEntitlementGrantsResponse is the subscription's dollar entitlement grants over every usage line, and
+// what was spent against them this period.
+type SubscriptionEntitlementGrantsResponse struct {
+	Entitlements []*EntitlementResponse `json:"entitlements"`
+	GrantState   *GrantState            `json:"grant_state,omitempty"`
 }

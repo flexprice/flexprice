@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -31,6 +32,14 @@ func (f *fakeStorage) Upload(ctx context.Context, req *storage.UploadRequest) (*
 	}, nil
 }
 
+func (f *fakeStorage) UploadStream(ctx context.Context, req *storage.StreamUploadRequest) (*storage.UploadResponse, error) {
+	data, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	return f.Upload(ctx, &storage.UploadRequest{Key: req.Key, Data: data, Format: req.Format})
+}
+
 func (f *fakeStorage) Download(ctx context.Context, key string) ([]byte, error) {
 	data, ok := f.objects[key]
 	if !ok {
@@ -49,6 +58,8 @@ func (f *fakeStorage) PresignGet(ctx context.Context, key string, d time.Duratio
 }
 
 func (f *fakeStorage) ValidateConnection(ctx context.Context) error { return nil }
+
+func (f *fakeStorage) ValidateWrite(ctx context.Context, key string) error { return nil }
 
 func (f *fakeStorage) FileURL(key string) string { return "s3://fake-bucket/" + key }
 

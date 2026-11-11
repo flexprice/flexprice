@@ -2,7 +2,8 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/secret"
@@ -196,7 +197,7 @@ func (r *secretRepository) UpdateLastUsed(ctx context.Context, id string) error 
 	// Update without tenant ID check since this is called during API key verification
 	// where we might not have the tenant ID in the context yet
 	updated, err := client.Secret.UpdateOneID(id).
-		SetLastUsedAt(time.Now().UTC()).
+		SetLastUsedAt(clock.Now()).
 		Save(ctx)
 
 	if err != nil {
@@ -419,7 +420,7 @@ func (r *secretRepository) SetCache(ctx context.Context, secret *domainSecret.Se
 		"secret_id": secret.ID,
 	})
 	defer cache.FinishSpan(span)
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, secret.Value)
+	cacheKey := secretCacheKey(secret.Value)
 	r.cache.ForceCacheSet(ctx, cacheKey, secret, cache.ExpiryDefaultInMemory)
 }
 
@@ -428,7 +429,7 @@ func (r *secretRepository) GetCache(ctx context.Context, key string) *domainSecr
 		"secret_id": key,
 	})
 	defer cache.FinishSpan(span)
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, key)
+	cacheKey := secretCacheKey(key)
 	value, found := r.cache.ForceCacheGet(ctx, cacheKey)
 	if !found {
 		return nil
@@ -446,6 +447,11 @@ func (r *secretRepository) DeleteCache(ctx context.Context, key string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, key)
+	cacheKey := secretCacheKey(key)
 	r.cache.ForceCacheDelete(ctx, cacheKey)
+}
+
+// Auth lookup runs without tenant.
+func secretCacheKey(value string) string {
+	return cache.GenerateKey(context.Background(), cache.PrefixSecret, value)
 }

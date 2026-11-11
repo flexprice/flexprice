@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
@@ -1105,6 +1106,7 @@ func (s *SubscriptionServiceSuite) setupService() {
 		MeterRepo:                  s.GetStores().MeterRepo,
 		CustomerRepo:               s.GetStores().CustomerRepo,
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo:     s.GetStores().HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,
 		EntitlementRepo:            s.GetStores().EntitlementRepo,
 		EntitlementGrantRepo:       s.GetStores().EntitlementGrantRepo,
@@ -1133,8 +1135,13 @@ func (s *SubscriptionServiceSuite) setupService() {
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
 		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
+		MeterUsageCheckpointRepo:   s.GetStores().MeterUsageCheckpointRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
+		AddonPriceSyncRepo:         s.GetStores().AddonPriceSyncRepo,
+		CommitmentRepo:             s.GetStores().CommitmentRepo,
+		BillingTermRepo:            s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:      s.GetStores().BillingInstalmentRepo,
 		// Read on cancellation to decide whether a marketplace usage flush is needed.
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 	})
@@ -1787,7 +1794,23 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingCycle:       types.BillingCycleAnniversary,
 			},
 			wantErr:       true,
-			expectedError: "end_date cannot be before start_date",
+			expectedError: "end_date must be after start_date",
+			errorType:     "validation",
+		},
+		{
+			name: "start_and_end_date_in_the_same_second",
+			input: dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				StartDate:          lo.ToPtr(s.testData.now.Truncate(time.Second).Add(200 * time.Millisecond)),
+				EndDate:            lo.ToPtr(s.testData.now.Truncate(time.Second).Add(800 * time.Millisecond)),
+				Currency:           "usd",
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+			},
+			wantErr:       true,
+			expectedError: "end_date must be after start_date",
 			errorType:     "validation",
 		},
 		// Collection Method Tests
@@ -2087,6 +2110,189 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_StandaloneWithPositive
 	s.Equal(types.SubscriptionTypeStandalone, resp.SubscriptionType)
 	s.Require().NotNil(resp.AutoInvoiceThreshold)
 	s.True(resp.AutoInvoiceThreshold.Equal(th))
+}
+
+func (s *SubscriptionServiceSuite) inlineCommitmentRequest() dto.CreateSubscriptionRequest {
+	start := s.testData.now.Truncate(time.Second)
+	return dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(start),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		Commitments: []dto.CreateCommitmentRequest{{
+			Name:           "Storage floor",
+			Scope:          dto.CommitmentScopeInput{EntityType: types.CommitmentScopePrice, EntityID: s.testData.prices.storage.ID},
+			Type:           types.COMMITMENT_TYPE_QUANTITY,
+			Value:          decimal.NewFromInt(8),
+			CommittedPrice: &dto.CommitmentPriceInput{Amount: lo.ToPtr(decimal.RequireFromString("0.048"))},
+			Measurement:    types.CommitmentMeasurementBillingPeriod,
+			StartDate:      start,
+			EndDate:        lo.ToPtr(start.AddDate(1, 0, 0)),
+		}},
+	}
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitment() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+
+	resp, err := s.service.CreateSubscription(ctx, s.inlineCommitmentRequest())
+	s.Require().NoError(err)
+
+	items, err := s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.Equal(resp.ID, items[0].SubscriptionID)
+
+	s.Require().Len(resp.Commitments, 1)
+	s.Equal(items[0].ID, resp.Commitments[0].ID)
+	s.True(resp.Commitments[0].CommitmentValue.Equal(decimal.RequireFromString("4.608")))
+
+	unexpanded, err := s.service.GetSubscriptionV2(ctx, resp.ID, types.NewExpand(""))
+	s.Require().NoError(err)
+	s.Empty(unexpanded.Commitments, "v2 lists commitments only when expanded")
+
+	expanded, err := s.service.GetSubscriptionV2(ctx, resp.ID, types.NewExpand("commitments"))
+	s.Require().NoError(err)
+	s.Require().Len(expanded.Commitments, 1)
+	s.Equal(items[0].ID, expanded.Commitments[0].ID)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentOnIncompleteSubscription() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+
+	req := s.inlineCommitmentRequest()
+	req.CollectionMethod = lo.ToPtr(types.CollectionMethodSendInvoice)
+	req.PaymentBehavior = lo.ToPtr(types.PaymentBehaviorDefaultIncomplete)
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusIncomplete, resp.SubscriptionStatus)
+
+	items, err := s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.Equal(resp.ID, items[0].SubscriptionID)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentRejectedWhenDisabled() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)
+
+	before, err := s.GetStores().SubscriptionRepo.List(ctx, types.NewSubscriptionFilter())
+	s.Require().NoError(err)
+
+	_, err = s.service.CreateSubscription(ctx, s.inlineCommitmentRequest())
+	s.Require().Error(err)
+	s.True(ierr.IsInvalidOperation(err))
+
+	items, listErr := s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
+	s.Require().NoError(listErr)
+	s.Empty(items)
+	subs, listErr := s.GetStores().SubscriptionRepo.List(ctx, types.NewSubscriptionFilter())
+	s.Require().NoError(listErr)
+	s.Len(subs, len(before))
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineSubscriptionScopeTakesTheNewSubscriptionID() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+
+	req := s.inlineCommitmentRequest()
+	req.Commitments[0].Type, req.Commitments[0].CommittedPrice = types.COMMITMENT_TYPE_AMOUNT, nil
+	req.Commitments[0].Value = decimal.NewFromInt(100)
+	req.Commitments[0].Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeSubscription}
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+
+	items, err := s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.Equal(resp.ID, items[0].ScopeEntityID)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_InlinePriceScopeFollowsThePriceOverride() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+
+	req := s.inlineCommitmentRequest()
+	req.OverrideLineItems = []dto.OverrideLineItemRequest{{
+		PriceID: s.testData.prices.storage.ID,
+		Amount:  lo.ToPtr(decimal.RequireFromString("0.2")),
+	}}
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+
+	items, err := s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.NotEqual(s.testData.prices.storage.ID, items[0].ScopeEntityID, "the plan price is no longer billed")
+
+	scoped, err := s.GetStores().PriceRepo.Get(ctx, items[0].ScopeEntityID)
+	s.Require().NoError(err)
+	s.Equal(s.testData.prices.storage.ID, scoped.ParentPriceID)
+	s.True(scoped.Amount.Equal(decimal.RequireFromString("0.2")), "got %s", scoped.Amount)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentScopesAFirstPhaseLineItem() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+
+	extrasPlan := &plan.Plan{ID: "plan_phase_extras", Name: "Phase extras", BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, extrasPlan))
+	phasePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.RequireFromString("0.05"),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           extrasPlan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, phasePrice))
+
+	req := s.inlineCommitmentRequest()
+	req.Phases = []dto.SubscriptionPhaseCreateRequest{{
+		StartDate: lo.FromPtr(req.StartDate),
+		LineItems: []dto.CreateSubscriptionLineItemRequest{{PriceID: phasePrice.ID}},
+	}}
+	req.Commitments[0].Scope.EntityID = phasePrice.ID
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+
+	items, err := s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.Equal(phasePrice.ID, items[0].ScopeEntityID)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineIdempotencyKeyFromAnotherSubscriptionIsRejected() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+
+	req := s.inlineCommitmentRequest()
+	req.Commitments[0].IdempotencyKey = lo.ToPtr("contract-inline")
+	first, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+
+	_, err = s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+	s.Contains(err.Error(), first.ID)
+
+	items, err := s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.Equal(first.ID, items[0].SubscriptionID)
 }
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_AutoInvoiceThresholdRejectedWhenPlanHasFixedPrice() {
@@ -2981,6 +3187,7 @@ func (s *SubscriptionServiceSuite) createInvoiceService() InvoiceService {
 		MeterRepo:                  s.GetStores().MeterRepo,
 		CustomerRepo:               s.GetStores().CustomerRepo,
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo:     s.GetStores().HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,
 		EntitlementRepo:            s.GetStores().EntitlementRepo,
 		EntitlementGrantRepo:       s.GetStores().EntitlementGrantRepo,
@@ -6989,6 +7196,7 @@ func (s *SubscriptionServiceSuite) TestFilterLineItemsWithEndDate() {
 		MeterRepo:                s.GetStores().MeterRepo,
 		CustomerRepo:             s.GetStores().CustomerRepo,
 		InvoiceRepo:              s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo:   s.GetStores().HostedInvoiceTokenRepo,
 		EntitlementRepo:          s.GetStores().EntitlementRepo,
 		EnvironmentRepo:          s.GetStores().EnvironmentRepo,
 		FeatureRepo:              s.GetStores().FeatureRepo,
@@ -10479,6 +10687,129 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 	s.Equal(addonID, associations[0].AddonID)
 }
 
+// A child's proration_behavior is stored and prices its opening charges. An omitted value stays none.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_ChildProrationBehavior() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	addonID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ADDON)
+	addonPriceID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+	s.Require().NoError(s.GetStores().AddonRepo.Create(ctx, &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Child Proration Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+		ID:                 addonPriceID,
+		Amount:             decimal.NewFromInt(30),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}))
+
+	proratedExternal := "ext_child_prorate"
+	omittedExternal := "ext_child_omit"
+	for _, spec := range []struct{ externalID, name, email string }{
+		{proratedExternal, "Prorated Child", "prorated-child@example.com"},
+		{omittedExternal, "Omitted Child", "omitted-child@example.com"},
+	} {
+		s.NoError(s.GetStores().CustomerRepo.Create(ctx, &customer.Customer{
+			ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+			ExternalID: spec.externalID,
+			Name:       spec.name,
+			Email:      spec.email,
+			BaseModel:  types.GetDefaultBaseModel(ctx),
+		}))
+	}
+
+	addonStart := s.testData.now.AddDate(0, 0, 3)
+	addonReq := dto.AddAddonToSubscriptionRequest{AddonID: addonID, StartDate: lo.ToPtr(addonStart)}
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{
+					PlanID:             seatPlan.ID,
+					ExternalCustomerID: proratedExternal,
+					ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+					SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+						Addons: []dto.AddAddonToSubscriptionRequest{addonReq},
+					},
+				},
+				{
+					PlanID:             seatPlan.ID,
+					ExternalCustomerID: omittedExternal,
+					SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+						Addons: []dto.AddAddonToSubscriptionRequest{addonReq},
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.Require().NotNil(resp.LatestInvoice)
+
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{resp.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+	children, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Require().Len(children, 2)
+
+	customerExternal := map[string]string{}
+	for _, externalID := range []string{proratedExternal, omittedExternal} {
+		c, err := s.GetStores().CustomerRepo.GetByLookupKey(ctx, externalID)
+		s.Require().NoError(err)
+		customerExternal[c.ID] = externalID
+	}
+	childByExternal := map[string]string{}
+	for _, child := range children {
+		childByExternal[customerExternal[child.CustomerID]] = child.ID
+		switch customerExternal[child.CustomerID] {
+		case proratedExternal:
+			s.Equal(types.ProrationBehaviorCreateProrations, child.ProrationBehavior)
+		case omittedExternal:
+			s.Equal(types.ProrationBehaviorNone, child.ProrationBehavior)
+		}
+	}
+
+	var proratedAmount decimal.Decimal
+	var sawProrated bool
+	for _, li := range resp.LatestInvoice.LineItems {
+		if li.PriceID == nil || *li.PriceID != addonPriceID || li.SubscriptionID == nil {
+			continue
+		}
+		switch *li.SubscriptionID {
+		case childByExternal[proratedExternal]:
+			sawProrated = true
+			proratedAmount = li.Amount
+		case childByExternal[omittedExternal]:
+			s.Fail("mid-period addon must be skipped when the child omits proration_behavior")
+		}
+	}
+	s.True(sawProrated, "parent invoice must include the prorated child addon")
+	s.True(proratedAmount.GreaterThan(decimal.Zero) && proratedAmount.LessThan(decimal.NewFromInt(30)),
+		"expected a partial addon charge, got %s", proratedAmount)
+}
+
 func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_Phases() {
 	ctx := s.GetContext()
 	seatPlan := s.setupSeatFeePlan()
@@ -11159,4 +11490,33 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_NoneAddonDatedMidPerio
 	s.True(addonCharge(start, time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)).IsZero(), "addon is free in [Jan 15, Feb 1)")
 	s.True(addonCharge(time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC), time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)).Equal(decimal.NewFromInt(31)),
 		"addon is billed in full from Feb 1")
+}
+
+// A subscription starts on a whole second, like every later billing period edge, so dates derived from its start land
+// on its edges; its line items start with it.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_StartsOnAWholeSecond() {
+	ctx := s.GetContext()
+	start := s.testData.now.Truncate(time.Second).Add(750 * time.Millisecond)
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(start),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+	})
+	s.Require().NoError(err)
+
+	whole := start.Truncate(time.Second)
+	s.True(resp.StartDate.Equal(whole), "start %s", resp.StartDate)
+	s.True(resp.BillingAnchor.Equal(whole), "anchor %s", resp.BillingAnchor)
+	s.True(resp.CurrentPeriodEnd.Equal(whole.AddDate(0, 1, 0)), "first period end %s", resp.CurrentPeriodEnd)
+
+	_, items, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, resp.ID)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(items)
+	for _, item := range items {
+		s.False(item.StartDate.After(whole), "line item %s starts %s", item.ID, item.StartDate)
+	}
 }

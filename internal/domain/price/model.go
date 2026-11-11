@@ -8,12 +8,15 @@ import (
 	"math"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // max active prices per entity is 3000
@@ -130,6 +133,8 @@ type Price struct {
 	// GroupID references the group this price belongs to
 	GroupID string `db:"group_id" json:"group_id,omitempty"`
 
+	ProductID string `db:"product_id" json:"product_id,omitempty"`
+
 	// StartDate is the start date of the price
 	StartDate *time.Time `db:"start_date" json:"start_date,omitempty"`
 
@@ -207,6 +212,16 @@ func (p *Price) CopyWith(ctx context.Context, overrides *PriceCloneOverrides) *P
 	return lo.ToPtr(out)
 }
 
+// LineItemStart returns the start of a line item of this price opening at the period edge from: the price's start when
+// it falls in a later second, else from.
+func (p *Price) LineItemStart(from time.Time) time.Time {
+	if p == nil || p.StartDate == nil || !p.StartDate.Truncate(time.Second).After(from) {
+		return from
+	}
+
+	return *p.StartDate
+}
+
 // IsUsage returns true if the price is a usage based price
 func (p *Price) IsUsage() bool {
 	return p.Type == types.PRICE_TYPE_USAGE && p.MeterID != ""
@@ -278,16 +293,30 @@ func (p *Price) CalculateAmount(quantity decimal.Decimal) decimal.Decimal {
 	return result
 }
 
-// CalculateTierAmount performs calculation for tier price with flat and fixed ampunt
+// CalculateTierAmount performs calculation for tier price with flat and fixed ampunt.
+// A package tier charges unit_amount per package of divide_by units.
 func (pt *PriceTier) CalculateTierAmount(quantity decimal.Decimal, currency string) decimal.Decimal {
-	tierCost := pt.UnitAmount.Mul(quantity)
+	units := quantity
+	if tq := pt.TransformQuantity; tq != nil && tq.DivideBy > 0 {
+		units = quantity.Div(decimal.NewFromInt(int64(tq.DivideBy)))
+		if tq.Round == types.ROUND_DOWN {
+			units = units.Floor()
+		} else {
+			units = units.Ceil()
+		}
+	}
+	tierCost := pt.UnitAmount.Mul(units)
 	if pt.FlatAmount != nil {
 		tierCost = tierCost.Add(*pt.FlatAmount)
 	}
 	return tierCost
 }
 
+// GetPerUnitCost returns the tier's rate per unit; a package tier spreads unit_amount over divide_by.
 func (pt *PriceTier) GetPerUnitCost() decimal.Decimal {
+	if tq := pt.TransformQuantity; tq != nil && tq.DivideBy > 0 {
+		return pt.UnitAmount.Div(decimal.NewFromInt(int64(tq.DivideBy)))
+	}
 	return pt.UnitAmount
 }
 
@@ -357,6 +386,9 @@ type PriceTier struct {
 	// flat_amount is the flat amount for the given tier (optional)
 	// Applied on top of unit_amount*quantity. Useful for cases like "2.7$ + 5c"
 	FlatAmount *decimal.Decimal `json:"flat_amount,omitempty" swaggertype:"string"`
+
+	// transform_quantity bills unit_amount per package of divide_by units; round defaults to up
+	TransformQuantity *TransformQuantity `json:"transform_quantity,omitempty"`
 }
 
 // TODO : comeup with a better way to handle jsonb fields
@@ -465,8 +497,9 @@ func FromEnt(e *ent.Price) *Price {
 		tiers = make(JSONBTiers, len(e.Tiers))
 		for i, tier := range e.Tiers {
 			tiers[i] = PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: tier.UnitAmount,
+				UpTo:              tier.UpTo,
+				UnitAmount:        tier.UnitAmount,
+				TransformQuantity: (*TransformQuantity)(tier.TransformQuantity),
 			}
 			if tier.FlatAmount != nil {
 				flatAmount := tier.FlatAmount
@@ -481,8 +514,9 @@ func FromEnt(e *ent.Price) *Price {
 		priceUnitTiers = make(JSONBTiers, len(e.PriceUnitTiers))
 		for i, tier := range e.PriceUnitTiers {
 			priceUnitTiers[i] = PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: tier.UnitAmount,
+				UpTo:              tier.UpTo,
+				UnitAmount:        tier.UnitAmount,
+				TransformQuantity: (*TransformQuantity)(tier.TransformQuantity),
 			}
 			if tier.FlatAmount != nil {
 				flatAmount := tier.FlatAmount
@@ -524,6 +558,7 @@ func FromEnt(e *ent.Price) *Price {
 		EntityID:               e.EntityID,
 		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
 		GroupID:                lo.FromPtr(e.GroupID),
+		ProductID:              lo.FromPtr(e.ProductID),
 		StartDate:              e.StartDate,
 		EndDate:                e.EndDate,
 		Sequence:               e.Sequence,
@@ -560,9 +595,10 @@ func ToEntTiersFromJSONB(jsonbTiers JSONBTiers) []*types.PriceTier {
 	tiers := make([]*types.PriceTier, len(jsonbTiers))
 	for i, tier := range jsonbTiers {
 		tiers[i] = &types.PriceTier{
-			UpTo:       tier.UpTo,
-			UnitAmount: tier.UnitAmount,
-			FlatAmount: tier.FlatAmount,
+			UpTo:              tier.UpTo,
+			UnitAmount:        tier.UnitAmount,
+			FlatAmount:        tier.FlatAmount,
+			TransformQuantity: (*types.TransformQuantity)(tier.TransformQuantity),
 		}
 	}
 	return tiers
@@ -733,7 +769,7 @@ func (p *Price) GetRootPriceID() string {
 // IsActive checks if the price is currently active based on status and dates
 func (p *Price) IsActive(currentTime *time.Time) bool {
 	if currentTime == nil {
-		currentTime = lo.ToPtr(time.Now().UTC())
+		currentTime = lo.ToPtr(clock.Now())
 	}
 
 	// Check if price is published

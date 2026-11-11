@@ -50,6 +50,12 @@ type Invoice struct {
 	// fx_conversion is the frozen fiat→fiat conversion applied at finalize; nil when the invoice was never converted.
 	FxConversion *types.FxConversion `json:"fx_conversion,omitempty"`
 
+	// BillingEntity is the billing entity frozen at finalization; nil for customers without an entity.
+	BillingEntity *types.InvoiceBillingEntity `json:"billing_entity,omitempty"`
+
+	// BillingEntityID is the entity that bills the invoice; nil while the environment has no billing entities. Never changes once set.
+	BillingEntityID *string `json:"billing_entity_id"`
+
 	// subtotal is the sum of all line items before any taxes, discounts, or additional fees
 	Subtotal decimal.Decimal `json:"subtotal" swaggertype:"string"`
 
@@ -192,6 +198,8 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		AmountPaid:             e.AmountPaid,
 		CustomCurrency:         e.CustomCurrency,
 		FxConversion:           e.FxConversion,
+		BillingEntity:          e.BillingEntity,
+		BillingEntityID:        e.BillingEntityID,
 		Subtotal:               e.Subtotal,
 		Total:                  e.Total,
 		TotalDiscount:          lo.FromPtrOr(e.TotalDiscount, decimal.Zero),
@@ -240,6 +248,31 @@ func FromEnt(e *ent.Invoice) *Invoice {
 
 func (i *Invoice) GetRemainingAmount() decimal.Decimal {
 	return i.AmountDue.Sub(i.AmountPaid)
+}
+
+// ResolveServicePeriod returns the coverage envelope of this invoice's selected line items.
+// A nil include selects all items. The end stays exclusive; invalid periods are ignored.
+func (i *Invoice) ResolveServicePeriod(include func(*InvoiceLineItem) bool) (start, end *time.Time) {
+	for _, item := range i.LineItems {
+		if item == nil || item.PeriodStart == nil || item.PeriodEnd == nil {
+			continue
+		}
+		if include != nil && !include(item) {
+			continue
+		}
+		if item.PeriodStart.IsZero() || item.PeriodEnd.IsZero() || item.PeriodEnd.Before(*item.PeriodStart) {
+			continue
+		}
+		if start == nil || item.PeriodStart.Before(*start) {
+			value := *item.PeriodStart
+			start = &value
+		}
+		if end == nil || item.PeriodEnd.After(*end) {
+			value := *item.PeriodEnd
+			end = &value
+		}
+	}
+	return start, end
 }
 
 func (i *Invoice) Validate() error {

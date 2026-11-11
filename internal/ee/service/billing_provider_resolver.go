@@ -27,7 +27,7 @@ type BillingProviderCapabilities struct {
 }
 
 func (s *BillingProviderResolver) ListProviders(ctx context.Context) ([]BillingProviderCapabilities, error) {
-	connections, err := s.ConnectionRepo.ListAllPublished(ctx)
+	connections, err := s.ConnectionRepo.ListPublishedInScope(ctx)
 	if err != nil {
 		return nil, err
 	}

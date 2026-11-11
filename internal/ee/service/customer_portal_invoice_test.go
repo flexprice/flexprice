@@ -108,7 +108,7 @@ func TestPaymentActionFrom(t *testing.T) {
 // The activation guard must be narrow: only an invoice whose payment is meant to
 // activate a subscription still sitting unactivated is refused.
 func (s *PortalWalletSuite) TestPayInvoiceActivationGuard() {
-	portal := s.svc.(*customerPortalService)
+	invoices := NewInvoiceService(s.svc.(*customerPortalService).ServiceParams).(*invoiceService)
 
 	tests := []struct {
 		name       string
@@ -139,7 +139,7 @@ func (s *PortalWalletSuite) TestPayInvoiceActivationGuard() {
 				BillingReason:  string(tt.reason),
 			}}
 
-			err := portal.shouldAllowToPayInvoice(s.ctx, inv)
+			err := invoices.shouldAllowToPayInvoice(s.ctx, inv)
 			if tt.wantRefuse {
 				s.Error(err, "payment would settle the invoice and leave the subscription behind")
 				return
@@ -151,9 +151,9 @@ func (s *PortalWalletSuite) TestPayInvoiceActivationGuard() {
 
 // A one-off invoice has no subscription to activate and must never be refused.
 func (s *PortalWalletSuite) TestPayInvoiceActivationGuardIgnoresOneOffInvoices() {
-	portal := s.svc.(*customerPortalService)
+	invoices := NewInvoiceService(s.svc.(*customerPortalService).ServiceParams).(*invoiceService)
 
-	err := portal.shouldAllowToPayInvoice(s.ctx, &dto.InvoiceResponse{
+	err := invoices.shouldAllowToPayInvoice(s.ctx, &dto.InvoiceResponse{
 		Invoice: invoice.Invoice{ID: "inv_oneoff", BillingReason: string(types.InvoiceBillingReasonSubscriptionCreate)},
 	})
 	s.NoError(err)

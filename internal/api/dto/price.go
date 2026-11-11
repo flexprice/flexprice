@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/price"
 	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type CreatePriceRequest struct {
@@ -57,6 +60,8 @@ type CreatePriceRequest struct {
 
 	// GroupID is the id of the group to add the price to
 	GroupID string `json:"group_id,omitempty"`
+
+	ProductID string `json:"product_id,omitempty"`
 }
 
 type PriceUnitConfig struct {
@@ -78,6 +83,9 @@ type CreatePriceTier struct {
 	// flat_amount is the flat amount for the given tier (optional)
 	// Applied on top of unit_amount*quantity. Useful for cases like "2.7$ + 5c"
 	FlatAmount *decimal.Decimal `json:"flat_amount,omitempty" swaggertype:"string"`
+
+	// transform_quantity bills unit_amount per package of divide_by units; round defaults to up
+	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
 }
 
 type UpdatePriceRequest struct {
@@ -119,6 +127,9 @@ type UpdatePriceRequest struct {
 	// If provided as empty string (""), the group will be removed (price will be ungrouped)
 	// If provided as a group ID, the price will be assigned to that group (must exist and be published)
 	GroupID *string `json:"group_id,omitempty"`
+
+	// ProductID sets the price's product while it has none; once set it never changes.
+	ProductID string `json:"product_id,omitempty"`
 }
 
 type PriceResponse struct {
@@ -188,6 +199,10 @@ func (t *CreatePriceTier) Validate() error {
 				"flat_amount": t.FlatAmount.String(),
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	if err := t.TransformQuantity.Validate(); err != nil {
+		return err
 	}
 
 	return nil
@@ -283,6 +298,16 @@ func (r *CreatePriceRequest) Validate() error {
 				}).
 				Mark(ierr.ErrValidation)
 		}
+	}
+
+	hasPriceUnitTiers := r.PriceUnitConfig != nil && len(r.PriceUnitConfig.PriceUnitTiers) > 0
+	if r.BillingModel != types.BILLING_MODEL_TIERED && (len(r.Tiers) > 0 || hasPriceUnitTiers) {
+		return ierr.NewError("tiers can only be set on a TIERED price").
+			WithHint("Set billing_model to TIERED with tier_mode SLAB or VOLUME to apply tiers").
+			WithReportableDetails(map[string]interface{}{
+				"billing_model": r.BillingModel,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// 6. Validate billing model specific requirements
@@ -441,7 +466,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 
 	startDate := r.StartDate
 	if startDate == nil {
-		now := time.Now().UTC()
+		now := clock.Now()
 		startDate = &now
 	}
 
@@ -497,6 +522,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		GroupID:            r.GroupID,
+		ProductID:          r.ProductID,
 	}
 
 	// Set type-specific fields
@@ -545,6 +571,13 @@ func (r *CreatePriceRequest) convertTiers(tiers []CreatePriceTier) (priceDomain.
 			UpTo:       tier.UpTo,
 			UnitAmount: tier.UnitAmount,
 			FlatAmount: tier.FlatAmount,
+		}
+		if tier.TransformQuantity != nil {
+			transformQuantity := *tier.TransformQuantity
+			if transformQuantity.Round == "" {
+				transformQuantity.Round = types.ROUND_UP
+			}
+			priceTiers[i].TransformQuantity = &transformQuantity
 		}
 	}
 
@@ -679,6 +712,7 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	createReq.MeterID = lo.Ternary(existingPrice.Type == types.PRICE_TYPE_USAGE, existingPrice.MeterID, "")
 	createReq.ParentPriceID = existingPrice.GetRootPriceID()
 	createReq.DisplayName = existingPrice.DisplayName
+	createReq.ProductID = existingPrice.ProductID
 
 	// Bucketing: unset inherits, the sentinel clears, anything else replaces.
 	switch r.BucketSize {
@@ -754,8 +788,9 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 				priceUnitConfig.PriceUnitTiers = make([]CreatePriceTier, len(existingPrice.PriceUnitTiers))
 				for i, tier := range existingPrice.PriceUnitTiers {
 					priceUnitConfig.PriceUnitTiers[i] = CreatePriceTier{
-						UpTo:       tier.UpTo,
-						UnitAmount: tier.UnitAmount,
+						UpTo:              tier.UpTo,
+						UnitAmount:        tier.UnitAmount,
+						TransformQuantity: tier.TransformQuantity,
 					}
 					priceUnitConfig.PriceUnitTiers[i].FlatAmount = tier.FlatAmount
 				}
@@ -769,8 +804,9 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 				createReq.Tiers = make([]CreatePriceTier, len(existingPrice.Tiers))
 				for i, tier := range existingPrice.Tiers {
 					createReq.Tiers[i] = CreatePriceTier{
-						UpTo:       tier.UpTo,
-						UnitAmount: tier.UnitAmount,
+						UpTo:              tier.UpTo,
+						UnitAmount:        tier.UnitAmount,
+						TransformQuantity: tier.TransformQuantity,
 					}
 					createReq.Tiers[i].FlatAmount = tier.FlatAmount
 				}

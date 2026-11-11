@@ -333,6 +333,7 @@ func (s *Service) initMeter(ctx context.Context) error {
 	}
 	opts = append(opts, s.httpMetricViews()...)
 	opts = append(opts, s.appMetricViews()...)
+	opts = append(opts, dbDurationView())
 
 	mp := sdkmetric.NewMeterProvider(opts...)
 	otel.SetMeterProvider(mp)
@@ -393,6 +394,16 @@ func (s *Service) appMetricViews() []sdkmetric.Option {
 
 func dropView(match sdkmetric.Instrument) sdkmetric.Option {
 	return sdkmetric.WithView(sdkmetric.NewView(match, sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}}))
+}
+
+func dbDurationView() sdkmetric.Option {
+	return sdkmetric.WithView(sdkmetric.NewView(
+		sdkmetric.Instrument{Name: "db.client.duration", Scope: instrumentation.Scope{Name: tracerName}},
+		sdkmetric.Stream{Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+			Boundaries: []float64{1, 5, 10, 25, 50, 100, 250, 1000, 5000},
+			NoMinMax:   true,
+		}},
+	))
 }
 
 // newMetricExporter builds the OTLP metric exporter (gRPC or HTTP), mirroring

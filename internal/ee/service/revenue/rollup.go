@@ -7,6 +7,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -20,8 +25,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // Skip reasons logged by RollupSubscription. Multi-period commitments are
@@ -959,7 +962,7 @@ func (s *revenueService) scanScopeFor(ctx context.Context, req types.RollupDirty
 		activeParents: activeParents,
 		accruing:      accruing,
 		since:         req.Since,
-		now:           time.Now().UTC(),
+		now:           clock.Now(),
 	}
 }
 
@@ -1293,12 +1296,12 @@ func (s *revenueService) subscriptionLocation(ctx context.Context, cache map[str
 		return loc
 	}
 	loc := time.UTC
-	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	timezone, err := s.SubRepo.GetTimezone(ctx, subscriptionID)
 	if err != nil {
 		s.Logger.Info(ctx, "revenue facts falling back to UTC day bounds",
 			"subscription_id", subscriptionID, "error", err.Error())
 	} else {
-		loc = locationOf(sub.Timezone)
+		loc = locationOf(timezone)
 	}
 	cache[subscriptionID] = loc
 	return loc

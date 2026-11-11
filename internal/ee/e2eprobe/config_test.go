@@ -42,7 +42,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if !c.Enabled || c.DryRun || c.EventIngestRate != 1 || c.OTEL.Enabled {
+	if !c.Enabled || c.DryRun || c.EventIngestRate != 5 || c.OTEL.Enabled {
 		t.Errorf("defaults mismatch: %+v", c)
 	}
 	if c.EventIngestSeed != 42 {
@@ -345,13 +345,13 @@ func TestLoadConfig_PaymentsFixedCustomer(t *testing.T) {
 	want := map[string][2]string{
 		"stripe":    {"e2eprobe-cust-pay-stripe-cards", "0341"},
 		"chargebee": {"e2eprobe-cust-pay-chargebee-cards", "0004"},
-		"razorpay":  {"e2eprobe-cust-pay-razorpay-mandate", ""},
+		"razorpay":  {"", ""},
 	}
 	for _, p := range c.Payments.Providers {
 		if got := [2]string{p.FixedCustomerExternalID, p.DeclineCardLast4}; got != want[p.Provider] {
 			t.Errorf("%s = %v, want %v", p.Provider, got, want[p.Provider])
 		}
-		if wantInterval := map[string]time.Duration{"stripe": 6 * time.Hour, "chargebee": 6 * time.Hour, "razorpay": 12 * time.Hour}[p.Provider]; p.AutoChargeInterval != wantInterval {
+		if wantInterval := map[string]time.Duration{"stripe": 6 * time.Hour, "chargebee": 6 * time.Hour}[p.Provider]; p.AutoChargeInterval != wantInterval {
 			t.Errorf("%s auto-charge interval = %v, want %v", p.Provider, p.AutoChargeInterval, wantInterval)
 		}
 	}

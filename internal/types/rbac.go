@@ -73,6 +73,7 @@ const (
 	EntityCustomer        Entity = "customer"
 	EntityPlan            Entity = "plan"
 	EntityAddon           Entity = "addon"
+	EntityProduct         Entity = "product"
 	EntityGroup           Entity = "group"
 	EntityAlertSettings   Entity = "alert_settings"
 	EntitySubscription    Entity = "subscription"
@@ -92,6 +93,7 @@ const (
 	EntityCostsheet       Entity = "costsheet"
 	EntityCreditNote      Entity = "creditnote"
 	EntityCoupon          Entity = "coupon"
+	EntityCommitment      Entity = "commitment"
 	EntityAI              Entity = "ai"
 	EntityPortal          Entity = "portal"
 	EntityWebhook         Entity = "webhook"
@@ -102,4 +104,5 @@ const (
 	EntityWorkflow        Entity = "workflow"
 	EntityAnalytics       Entity = "analytics"
 	EntityFXRate          Entity = "fxrate"
+	EntityBillingEntity   Entity = "billing_entity"
 )

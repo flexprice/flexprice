@@ -5,8 +5,13 @@ import (
 	"errors"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqljson"
+	"github.com/lib/pq"
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/ent"
 	entCheckout "github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -17,8 +22,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
-	"github.com/samber/lo"
 )
 
 type checkoutSessionRepository struct {
@@ -131,6 +134,7 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 			entCheckout.ID(s.ID),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entCheckout.CheckoutStatusIn(types.ActiveCheckoutStatuses()...),
 		).
 		SetStatus(string(s.Status)).
 		SetCheckoutStatus(s.CheckoutStatus).
@@ -143,7 +147,7 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 		SetNillableCancelledAt(s.CancelledAt).
 		SetNillableFailureReason(s.FailureReason).
 		SetMetadata(map[string]string(s.Metadata)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {
@@ -152,7 +156,7 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 	}
 	if len(rows) == 0 {
 		return ierr.NewError("checkout session not found").
-			WithHintf("checkout session %s not found or already archived", s.ID).
+			WithHintf("checkout session %s not found, archived or already terminal", s.ID).
 			Mark(ierr.ErrNotFound)
 	}
 
@@ -328,7 +332,7 @@ func (r *checkoutSessionRepository) Delete(ctx context.Context, id string) error
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {
@@ -364,7 +368,7 @@ func (r *checkoutSessionRepository) MarkCompleted(ctx context.Context, sessionID
 		SetCheckoutStatus(types.CheckoutStatusCompleted).
 		SetCompletedAt(completedAt).
 		SetProviderResult(providerResult).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {
@@ -399,7 +403,7 @@ func (r *checkoutSessionRepository) MarkTerminal(ctx context.Context, sessionID 
 			entCheckout.CheckoutStatusIn(types.ActiveCheckoutStatuses()...),
 		).
 		SetCheckoutStatus(status).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 	if failureReason != nil {
 		q = q.SetFailureReason(*failureReason)
@@ -552,6 +556,11 @@ func (o CheckoutSessionQueryOptions) applyEntityQueryOptions(_ context.Context, 
 						entCheckout.FieldConfiguration,
 						f.Configuration.SubscriptionID,
 						sqljson.Path("add_addon_params", "subscription_id"),
+					),
+					sqljson.ValueContains(
+						entCheckout.FieldConfiguration,
+						[]map[string]string{{"subscription_id": f.Configuration.SubscriptionID}},
+						sqljson.Path("add_addon_batch_params"),
 					),
 				))
 			}))

@@ -6,6 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -14,8 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/types/integrations"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // AutoChargeRequest is the input for PaymentService.AutoCharge.
@@ -325,7 +328,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		expireBy := *req.ExpiresAt
 		// Clamp past the floor, not onto it: Razorpay checks the bound on receipt, so a
 		// timestamp sitting exactly on it is already stale by then.
-		if minExpireBy := time.Now().UTC().Add(razorpayMinExpireByBuffer + razorpayExpireBySafetyMargin); expireBy.Before(minExpireBy) {
+		if minExpireBy := clock.Now().Add(razorpayMinExpireByBuffer + razorpayExpireBySafetyMargin); expireBy.Before(minExpireBy) {
 			expireBy = minExpireBy
 		}
 		paymentLinkData["expire_by"] = expireBy.Unix()
@@ -399,7 +402,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		createdAt = int64(createdAtFloat)
 	} else {
 		// Fallback to current time if created_at is missing
-		createdAt = time.Now().Unix()
+		createdAt = clock.Now().Unix()
 		s.logger.Info(ctx, "missing created_at in Razorpay payment link response, using current time",
 			"invoice_id", req.InvoiceID,
 			"payment_link_id", paymentLinkID)
@@ -674,7 +677,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 	paymentMethodID := extractPaymentMethodID(payment, method)
 
 	// Create payment record with all details in metadata (for traceability)
-	now := time.Now().UTC()
+	now := clock.Now()
 	gatewayType := types.PaymentGatewayTypeRazorpay
 	createReq := &dto.CreatePaymentRequest{
 		DestinationType:   types.PaymentDestinationTypeInvoice,
@@ -824,6 +827,30 @@ func selectAutoChargeToken(
 	return nil, false
 }
 
+// SelectSavedToken returns the customer's Razorpay ID and a recurring token able to pay amount; token is nil when there is none.
+func (s *PaymentService) SelectSavedToken(
+	ctx context.Context,
+	customerID string,
+	amount decimal.Decimal,
+	preferred types.PaymentMethodType,
+) (razorpayCustomerID string, token *interfaces.ProviderPaymentMethod, err error) {
+	razorpayCustomerID, tokens, err := s.customerSvc.ListCustomerTokens(ctx, customerID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	token, ok := selectAutoChargeToken(tokens, preferred, amount)
+	if !ok {
+		s.logger.Info(ctx, "no usable Razorpay token",
+			"customer_id", customerID,
+			"amount", amount.String(),
+			"preferred_method", preferred,
+			"tokens_inspected", len(tokens))
+		return razorpayCustomerID, nil, nil
+	}
+	return razorpayCustomerID, token, nil
+}
+
 // ChargeSavedToken selects a confirmed token for an already-mapped Razorpay
 // customer and submits AutoCharge.
 func (s *PaymentService) ChargeSavedToken(
@@ -834,21 +861,13 @@ func (s *PaymentService) ChargeSavedToken(
 		return nil, false, nil
 	}
 
-	razorpayCustomerID, tokens, err := s.customerSvc.ListCustomerTokens(ctx, req.Customer.ID)
+	razorpayCustomerID, token, err := s.SelectSavedToken(ctx, req.Customer.ID, req.Amount, req.PreferredMethod)
 	if err != nil {
-		s.logger.Info(ctx, "charge saved token: list tokens failed",
-			"customer_id", req.Customer.ID, "invoice_id", req.InvoiceID, "error", err)
+		s.logger.Info(ctx, "list Razorpay tokens failed, no saved token to charge",
+			"customer_id", req.Customer.ID, "error", err)
 		return nil, false, nil
 	}
-
-	token, ok := selectAutoChargeToken(tokens, req.PreferredMethod, req.Amount)
-	if !ok {
-		s.logger.Info(ctx, "charge saved token: no usable token",
-			"customer_id", req.Customer.ID,
-			"invoice_id", req.InvoiceID,
-			"amount", req.Amount.String(),
-			"preferred_method", req.PreferredMethod,
-			"tokens_inspected", len(tokens))
+	if token == nil {
 		return nil, false, nil
 	}
 
@@ -1011,7 +1030,7 @@ func (s *PaymentService) submitRecurringPayment(ctx context.Context, req AutoCha
 		return nil, err
 	}
 
-	razorpayPaymentID, _ := payment["id"].(string)
+	razorpayPaymentID, _ := payment["razorpay_payment_id"].(string)
 	s.logger.Info(ctx, "recurring payment submitted to Razorpay",
 		"invoice_id", req.InvoiceID,
 		"order_id", orderID,
@@ -1087,7 +1106,7 @@ func (s *PaymentService) RefundLateCapturedPayment(
 	if existingPayment.PaymentStatus != types.PaymentStatusSucceeded && existingPayment.PaymentStatus != types.PaymentStatusOverpaid {
 		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, dto.UpdatePaymentRequest{
 			PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
-			SucceededAt:      lo.ToPtr(time.Now()),
+			SucceededAt:      lo.ToPtr(clock.Now()),
 			GatewayPaymentID: lo.ToPtr(razorpayPaymentID),
 		}); err != nil {
 			return ierr.WithError(err).
@@ -1103,7 +1122,7 @@ func (s *PaymentService) RefundLateCapturedPayment(
 
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
-		RefundedAt:       lo.ToPtr(time.Now()),
+		RefundedAt:       lo.ToPtr(clock.Now()),
 		GatewayPaymentID: lo.ToPtr(razorpayPaymentID),
 	}
 	if refundID != "" {

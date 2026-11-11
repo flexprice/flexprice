@@ -5,6 +5,10 @@ import (
 	"errors"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -15,7 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
 )
 
 const addonAssociationBatchSize = 1000
@@ -116,6 +119,7 @@ func (r *addonAssociationRepository) Create(ctx context.Context, a *domainAddonA
 		SetCancellationReason(a.CancellationReason).
 		SetNillableCancelledAt(a.CancelledAt).
 		SetMetadata(a.Metadata).
+		SetSyncedPriceSequence(a.SyncedPriceSequence).
 		SetCreatedBy(types.GetUserID(ctx)).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetCreatedAt(a.CreatedAt).
@@ -301,7 +305,7 @@ func (r *addonAssociationRepository) Update(ctx context.Context, a *domainAddonA
 		SetCancellationReason(a.CancellationReason).
 		SetNillableCancelledAt(a.CancelledAt).
 		SetMetadata(a.Metadata).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -347,7 +351,7 @@ func (r *addonAssociationRepository) Delete(ctx context.Context, id string) erro
 			addonassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -406,6 +410,7 @@ func (r *addonAssociationRepository) CreateBulk(ctx context.Context, association
 			SetCancellationReason(a.CancellationReason).
 			SetNillableCancelledAt(a.CancelledAt).
 			SetMetadata(a.Metadata).
+			SetSyncedPriceSequence(a.SyncedPriceSequence).
 			SetStatus(string(a.Status)).
 			SetCreatedBy(types.GetUserID(ctx)).
 			SetUpdatedBy(types.GetUserID(ctx)).
@@ -462,7 +467,7 @@ func (r *addonAssociationRepository) CancelBulk(ctx context.Context, ids []strin
 		SetEndDate(effectiveAt).
 		SetCancelledAt(effectiveAt).
 		SetAddonStatus(string(types.AddonStatusCancelled)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if reason != "" {
@@ -502,7 +507,7 @@ func (r *addonAssociationRepository) ActivateBulk(ctx context.Context, ids []str
 			addonassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetAddonStatus(string(types.AddonStatusActive)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if _, err := update.Save(ctx); err != nil {
@@ -538,7 +543,7 @@ func (r *addonAssociationRepository) DeleteBulk(ctx context.Context, ids []strin
 			addonassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if _, err := update.Save(ctx); err != nil {

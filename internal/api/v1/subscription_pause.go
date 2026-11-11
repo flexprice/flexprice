@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// SubscriptionPauseHandler handles API requests for subscription pauses
+// SubscriptionPauseHandler handles API requests for pausing and resuming subscriptions
 type SubscriptionPauseHandler struct {
 	service service.SubscriptionService
 	log     *logger.Logger
@@ -24,50 +24,40 @@ func NewSubscriptionPauseHandler(service service.SubscriptionService, log *logge
 	}
 }
 
+// @Summary Pause subscription
+// @ID pauseSubscription
+// @Description Use when a customer stops temporarily. Pauses an active subscription now: usage and arrear fixed charges up to the pause are billed on a closing invoice, and every paused period after it gets a $0 skipped invoice.
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Subscription ID"
+// @Param request body dto.PauseSubscriptionRequest true "Pause subscription request"
+// @Success 200 {object} dto.PauseSubscriptionResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /subscriptions/{id}/pause [post]
 func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
-	subscriptionID := c.Param("id")
-	if subscriptionID == "" {
-		h.log.Info(c.Request.Context(), "subscription ID is required")
-		c.Error(ierr.NewError("Subscription ID is required").Mark(ierr.ErrValidation))
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	var req dto.PauseSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error(c.Request.Context(), "failed to bind request", "error", err)
+		h.log.Error(c.Request.Context(), "failed to bind pause subscription request", "error", err)
 		c.Error(ierr.WithError(err).
-			WithHint("Invalid request body").
+			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
 		return
 	}
 
-	// Handle dry run request to calculate impact
-	if req.DryRun {
-		impact, err := h.service.CalculatePauseImpact(
-			c.Request.Context(),
-			subscriptionID,
-			&req,
-		)
-		if err != nil {
-			h.log.Error(c.Request.Context(), "failed to calculate pause impact", "error", err, "subscription_id", subscriptionID)
-			c.Error(err)
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"impact": impact,
-		})
-		return
-	}
-
-	// Process the actual pause
-	resp, err := h.service.PauseSubscription(
-		c.Request.Context(),
-		subscriptionID,
-		&req,
-	)
+	resp, err := h.service.PauseSubscription(c.Request.Context(), id, &req)
 	if err != nil {
-		h.log.Error(c.Request.Context(), "failed to pause subscription", "error", err, "subscription_id", subscriptionID)
 		c.Error(err)
 		return
 	}
@@ -75,67 +65,40 @@ func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Resume subscription
+// @ID resumeSubscription
+// @Description Use when a paused customer comes back. Resumes a paused subscription now on its existing billing anchor: the first period runs from the resume to the next billing date and its advance charges are invoiced at once.
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Subscription ID"
+// @Param request body dto.ResumeSubscriptionRequest true "Resume subscription request"
+// @Success 200 {object} dto.ResumeSubscriptionResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /subscriptions/{id}/resume [post]
 func (h *SubscriptionPauseHandler) ResumeSubscription(c *gin.Context) {
-	subscriptionID := c.Param("id")
-	if subscriptionID == "" {
-		h.log.Info(c.Request.Context(), "subscription ID is required")
-		c.Error(ierr.NewError("Subscription ID is required").Mark(ierr.ErrValidation))
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	var req dto.ResumeSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error(c.Request.Context(), "failed to bind resume subscription request", "error", err)
 		c.Error(ierr.WithError(err).
-			WithHint("Invalid request body").
+			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
 		return
 	}
 
-	// Handle dry run request to calculate impact
-	if req.DryRun {
-		impact, err := h.service.CalculateResumeImpact(
-			c.Request.Context(),
-			subscriptionID,
-			&req,
-		)
-		if err != nil {
-			h.log.Error(c.Request.Context(), "failed to calculate resume impact", "error", err, "subscription_id", subscriptionID)
-			c.Error(err)
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"impact": impact,
-		})
-		return
-	}
-
-	// Process the actual resume
-	resp, err := h.service.ResumeSubscription(
-		c.Request.Context(),
-		subscriptionID,
-		&req,
-	)
+	resp, err := h.service.ResumeSubscription(c.Request.Context(), id, &req)
 	if err != nil {
-		h.log.Error(c.Request.Context(), "failed to resume subscription", "error", err, "subscription_id", subscriptionID)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
-}
-
-func (h *SubscriptionPauseHandler) ListPauses(c *gin.Context) {
-	subscriptionID := c.Param("id")
-	if subscriptionID == "" {
-		h.log.Info(c.Request.Context(), "subscription ID is required")
-		c.Error(ierr.NewError("Subscription ID is required").Mark(ierr.ErrValidation))
-		return
-	}
-
-	resp, err := h.service.ListPauses(c.Request.Context(), subscriptionID)
-	if err != nil {
-		h.log.Error(c.Request.Context(), "failed to list subscription pauses", "error", err, "subscription_id", subscriptionID)
 		c.Error(err)
 		return
 	}

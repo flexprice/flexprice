@@ -4,16 +4,17 @@
 # Version: strictly from the release tag only (e.g. v1.2.3 -> 1.2.3). No manual input, sdk-version.json, or npm lookup. Skip when version equals .speakeasy/gen/go.yaml.
 # Docs: generate uploads the spec plus the Go, Python and TypeScript code samples to the Speakeasy registry and promotes
 # them to the main tag, which rebuilds https://spec.speakeasy.com/flexprice/prod/swagger-json-with-code-samples.
-# refresh-docs waits for that URL to match the release, copies that file to S3 (served at https://swagger.flexprice.io),
+# refresh-docs waits for that URL to match the release, copies that file to S3 (served by CloudFront),
 # then adds the release to version.mdx in the docs repo so Mintlify redeploys.
 #
 # Triggers: release published only. When version unchanged vs gen/go.yaml, generate and publish are skipped.
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
 # Docs redeploy: secret DOCS_REPO_TOKEN (fine-grained PAT: Contents R/W on the docs repo); optional variables DOCS_REPO
 # (default flexprice/flexprice-docs) and DOCS_BRANCH (default main). refresh-docs fails when the token is unset.
-# Spec copy: variable OPENAPI_SPEC_S3, JSON {"role", "region", "bucket", "distribution"}; skipped while unset.
+# Spec copy: variable OPENAPI_SPEC_S3, JSON {"role", "region", "bucket", "distribution", "url"}; skipped while unset.
 # When set, secret AWS_ACCOUNT_ID is required to construct the role ARN. The role needs
 # s3:PutObject on <bucket>/openapi.json, and cloudfront:CreateInvalidation and cloudfront:GetInvalidation on the distribution.
+# url is where the distribution is served, e.g. https://swagger.flexprice.io.
 # Published packages: pip install flexprice | npm i @flexprice/sdk | npm i @flexprice/mcp-server
 # Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk, flexprice/javascript-sdk, flexprice/python-sdk, flexprice/mcp-server.
 #
@@ -130,12 +131,12 @@ jobs:
       # make swagger needs Node (fix_swagger_internal_types.mjs) and Python 3 (fix_swagger_refs.sh)
       # before OpenAPI generation — not only for Speakeasy steps below.
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "20"
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
 
@@ -160,6 +161,8 @@ jobs:
 
       # Speakeasy install.sh uses VERSION for CLI version; our workflow sets VERSION for SDK. Unset so install fetches latest CLI.
       - name: Install Speakeasy CLI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         # Vendor's official installer over HTTPS; it verifies the CLI archive
         # checksum before install. Release-pipeline only.
         # nosemgrep: yaml.github-actions.security.gha-curl-pipe-shell.gha-curl-pipe-shell
@@ -188,40 +191,44 @@ jobs:
 
       # Overwrite Speakeasy version in artifacts with resolved version only
       - name: Apply resolved version to SDK artifacts
-        run: ./scripts/force-sdk-version.sh "${{ needs.version-check.outputs.version }}"
+        env:
+          RESOLVED_VERSION: ${{ needs.version-check.outputs.version }}
+        run: ./scripts/force-sdk-version.sh "$RESOLVED_VERSION"
 
       - name: Generate job summary
+        env:
+          RESOLVED_VERSION: ${{ needs.version-check.outputs.version }}
         run: |
           echo "## Generate SDKs" >> $GITHUB_STEP_SUMMARY
-          echo "**Resolved version:** ${{ needs.version-check.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Resolved version:** $RESOLVED_VERSION" >> $GITHUB_STEP_SUMMARY
           echo "**Artifacts:** api-go, api-typescript, api-python, api-mcp" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload api-go artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: api-go
           path: api/go/
 
       - name: Upload api-typescript artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: api-typescript
           path: api/typescript/
 
       - name: Upload api-python artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: api-python
           path: api/python/
 
       - name: Upload api-mcp artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: api-mcp
           path: api/mcp/
 
       - name: Upload openapi-spec artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: openapi-spec
           path: docs/swagger/swagger-3-0.json
@@ -248,15 +255,23 @@ jobs:
             exit 1
           fi
 
-      - name: Check AWS account ID for S3 publication
+      - name: Check the S3 publication settings
         if: vars.OPENAPI_SPEC_S3 != ''
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          OPENAPI_SPEC_S3: ${{ vars.OPENAPI_SPEC_S3 }}
         run: |
+          set -euo pipefail
           if ! [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then
             echo "::error::AWS_ACCOUNT_ID must be set to a 12-digit AWS account ID when OPENAPI_SPEC_S3 is set. Configure the secret in repository Settings -> Secrets and variables -> Actions."
             exit 1
           fi
+          for key in role region bucket distribution url; do
+            if ! jq -e --arg k "$key" '(.[$k] // "") | test("\\S")' <<<"$OPENAPI_SPEC_S3" >/dev/null; then
+              echo "::error::OPENAPI_SPEC_S3 is missing the \"$key\" key. It needs role, region, bucket, distribution and url."
+              exit 1
+            fi
+          done
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -264,7 +279,7 @@ jobs:
           persist-credentials: false
 
       - name: Download openapi-spec artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: openapi-spec
           path: release-spec
@@ -279,7 +294,7 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ fromJson(vars.OPENAPI_SPEC_S3).role }}
           aws-region: ${{ fromJson(vars.OPENAPI_SPEC_S3).region }}
 
-      # CloudFront serves openapi.json at the root of swagger.flexprice.io (its default root object).
+      # CloudFront serves openapi.json at the site root (its default root object).
       - name: Upload the spec to S3 and clear the CloudFront cache
         if: vars.OPENAPI_SPEC_S3 != ''
         env:
@@ -291,12 +306,19 @@ jobs:
           aws s3 cp "$RUNNER_TEMP/openapi.json" "s3://$BUCKET/openapi.json" --only-show-errors \
             --content-type application/json --cache-control "public, max-age=300"
           INVALIDATION=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" \
-            --paths "/*" --query Invalidation.Id --output text)
+            --paths /openapi.json --query Invalidation.Id --output text)
           aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION" --id "$INVALIDATION"
 
-      - name: Check swagger.flexprice.io serves this release
+      # Two assertions: the CDN serves the bytes just uploaded (no truncation, no stale
+      # cache), and those bytes still carry this release's base spec.
+      - name: Check the hosted spec serves this release
         if: vars.OPENAPI_SPEC_S3 != ''
-        run: python3 scripts/wait-for-docs-spec.py "$RUNNER_TEMP/openapi.json" --url https://swagger.flexprice.io --exact
+        env:
+          SPEC_URL: ${{ fromJson(vars.OPENAPI_SPEC_S3).url }}
+        run: |
+          set -euo pipefail
+          python3 scripts/wait-for-docs-spec.py "$RUNNER_TEMP/openapi.json" --url "$SPEC_URL" --exact
+          python3 scripts/wait-for-docs-spec.py release-spec/swagger-3-0.json --url "$SPEC_URL" --timeout 0
 
       # The release is recorded as a new row in the docs repo's version.mdx.
       - name: Redeploy docs
@@ -353,62 +375,65 @@ jobs:
           persist-credentials: false
 
       - name: Download artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
 
       - name: Set target repo
+        env:
+          LANG_KEY: ${{ matrix.lang }}
+          DEFAULT_REPO: ${{ matrix.default_repo }}
         run: |
-          case "${{ matrix.lang }}" in
-            go)         echo "REPO=${SDK_GO_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
-            python)     echo "REPO=${SDK_PYTHON_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
-            typescript) echo "REPO=${SDK_TYPESCRIPT_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
-            mcp)        echo "REPO=${SDK_MCP_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
+          case "$LANG_KEY" in
+            go)         echo "REPO=${SDK_GO_REPO:-$DEFAULT_REPO}" >> $GITHUB_ENV ;;
+            python)     echo "REPO=${SDK_PYTHON_REPO:-$DEFAULT_REPO}" >> $GITHUB_ENV ;;
+            typescript) echo "REPO=${SDK_TYPESCRIPT_REPO:-$DEFAULT_REPO}" >> $GITHUB_ENV ;;
+            mcp)        echo "REPO=${SDK_MCP_REPO:-$DEFAULT_REPO}" >> $GITHUB_ENV ;;
           esac
 
       - name: Push SDK to repo
+        env:
+          LANG_KEY: ${{ matrix.lang }}
+          ARTIFACT: ${{ matrix.artifact }}
         run: |
           # Use resolved version only (from version-check)
-          VERSION="${{ env.VERSION }}"
           [ -z "$VERSION" ] && VERSION="0.0.0"
-          git clone https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/${{ env.REPO }}.git /tmp/sdk-repo
+          git clone "https://x-access-token:${SDK_DEPLOY_GIT_TOKEN}@github.com/${REPO}.git" /tmp/sdk-repo
           cd /tmp/sdk-repo
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
-          cp -r "$GITHUB_WORKSPACE/${{ matrix.artifact }}/." /tmp/sdk-repo/
+          cp -r "$GITHUB_WORKSPACE/$ARTIFACT/." /tmp/sdk-repo/
           [ -f "$GITHUB_WORKSPACE/LICENSE" ] && cp "$GITHUB_WORKSPACE/LICENSE" /tmp/sdk-repo/
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           if [ -n "$(git status --porcelain)" ]; then
             git add .
-            git commit -m "Release ${{ matrix.lang }} SDK v${VERSION}"
+            git commit -m "Release ${LANG_KEY} SDK v${VERSION}"
             if ! git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-              git tag -a "v${VERSION}" -m "${{ matrix.lang }} SDK version ${VERSION}"
+              git tag -a "v${VERSION}" -m "${LANG_KEY} SDK version ${VERSION}"
             fi
             git push origin main
             git push origin "v${VERSION}" 2>/dev/null || true
           fi
-          echo "Pushed ${{ matrix.lang }} SDK to ${{ env.REPO }}"
+          echo "Pushed ${LANG_KEY} SDK to ${REPO}"
 
       - name: Create Go SDK GitHub release
         if: matrix.lang == 'go'
         env:
           GH_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
         run: |
-          VERSION="${{ env.VERSION }}"
           [ -z "$VERSION" ] && VERSION="0.0.0"
           TAG="v${VERSION}"
           TITLE="Go SDK ${TAG}"
-          NOTES="Automated release for Go SDK ${TAG}."
 
-          if gh release view "$TAG" --repo "${{ env.REPO }}" >/dev/null 2>&1; then
-            echo "Release $TAG already exists in ${{ env.REPO }}; skipping."
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG already exists in $REPO; skipping."
           else
             gh release create "$TAG" \
-              --repo "${{ env.REPO }}" \
+              --repo "$REPO" \
               --title "$TITLE" \
               --notes "Automated release for Go SDK ${TAG}."
-            echo "Created release $TAG in ${{ env.REPO }}."
+            echo "Created release $TAG in $REPO."
           fi
 
   # ---------------------------------------------------------------------------
@@ -434,7 +459,7 @@ jobs:
           TS_REPO="${SDK_TYPESCRIPT_REPO:-flexprice/javascript-sdk}"
           MCP_REPO="${SDK_MCP_REPO:-flexprice/mcp-server}"
           echo "## SDKs pushed to GitHub" >> $GITHUB_STEP_SUMMARY
-          echo "**Resolved version:** v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Resolved version:** v${VERSION}" >> $GITHUB_STEP_SUMMARY
           echo "- Go: https://github.com/$GO_REPO" >> $GITHUB_STEP_SUMMARY
           echo "- Python: https://github.com/$PY_REPO" >> $GITHUB_STEP_SUMMARY
           echo "- TypeScript: https://github.com/$TS_REPO" >> $GITHUB_STEP_SUMMARY
@@ -466,7 +491,7 @@ jobs:
             artifact: api-mcp
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ${{ matrix.artifact }}
           path: sdk
@@ -483,7 +508,7 @@ jobs:
 
       - name: Set up Node (TypeScript)
         if: matrix.lang == 'typescript'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
@@ -521,7 +546,7 @@ jobs:
 
       - name: Set up Python
         if: matrix.lang == 'python'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
 

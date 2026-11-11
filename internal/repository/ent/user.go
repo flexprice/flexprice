@@ -2,7 +2,8 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/ent"
 	entUser "github.com/flexprice/flexprice/ent/user"
@@ -31,6 +32,7 @@ func NewUserRepository(client postgres.IClient, logger *logger.Logger, redisCach
 
 // Create creates a new user
 func (r *userRepository) Create(ctx context.Context, user *domainUser.User) error {
+	user.Email = types.NormalizeEmail(user.Email)
 	r.logger.Debug(ctx, "creating user", "user_id", user.ID, "email", user.Email, "tenant_id", user.TenantID)
 
 	// Start a span for this repository operation
@@ -106,7 +108,7 @@ func (r *userRepository) Update(ctx context.Context, user *domainUser.User) erro
 			entUser.TenantID(tenantID),
 		).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now().UTC())
+		SetUpdatedAt(clock.Now())
 
 	if user.Metadata != nil {
 		updateQuery = updateQuery.SetMetadata(user.Metadata)
@@ -168,7 +170,7 @@ func (r *userRepository) UpdateRoles(ctx context.Context, id string, roles []str
 		).
 		SetRoles(roles).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		Save(ctx)
 
 	if err != nil {
@@ -221,7 +223,7 @@ func (r *userRepository) Delete(ctx context.Context, id string) error {
 		).
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		Save(ctx)
 
 	if err != nil {
@@ -317,7 +319,7 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domainU
 
 	// For login, we don't have tenant ID in context, so we just search by email
 	query := client.User.Query().Where(
-		entUser.Email(email),
+		entUser.EmailEqualFold(types.NormalizeEmail(email)),
 		entUser.Status(string(types.StatusPublished)),
 	)
 

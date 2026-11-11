@@ -6,12 +6,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // CreateWalletRequest represents the request to create a wallet
@@ -238,7 +241,7 @@ func (r *CreateWalletRequest) Validate() error {
 	}
 
 	if r.InitialCreditsExpiryDateUTC != nil {
-		if r.InitialCreditsExpiryDateUTC.Before(time.Now().UTC()) {
+		if r.InitialCreditsExpiryDateUTC.Before(clock.Now()) {
 			return ierr.NewError("initial_credits_to_load_expiry_date_utc cannot be in the past").
 				WithHint("Expiry date must be in the future").
 				Mark(ierr.ErrValidation)
@@ -332,6 +335,9 @@ type TopUpWalletRequest struct {
 	// expiry_date_utc is the expiry date in UTC timezone
 	// ex 2025-01-01 00:00:00 UTC
 	ExpiryDateUTC *time.Time `json:"expiry_date_utc,omitempty"`
+	// effective_date is stored as the credit transaction's created_at.
+	// Omit to use the current time. Must not be in the future.
+	EffectiveDate *time.Time `json:"effective_date,omitempty"`
 	// priority is the priority of the transaction
 	// lower number means higher priority
 	// default is nil which means no priority at all
@@ -410,9 +416,31 @@ func (r *TopUpWalletRequest) Validate() error {
 
 	if r.ExpiryDateUTC != nil {
 		// check if the expiry date is in the past
-		if r.ExpiryDateUTC.Before(time.Now().UTC()) {
+		if r.ExpiryDateUTC.Before(clock.Now()) {
 			return ierr.NewError("expiry_date_utc cannot be in the past").
 				WithHint("Expiry date must be in the future").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if r.EffectiveDate != nil {
+		if r.EffectiveDate.After(clock.Now()) {
+			return ierr.NewError("effective_date cannot be in the future").
+				WithHint("Effective date must be now or in the past").
+				Mark(ierr.ErrValidation)
+		}
+		expiry := r.ExpiryDateUTC
+		if expiry == nil {
+			expiry = types.ParseYYYYMMDDToDate(r.ExpiryDate)
+		}
+		if expiry != nil && !r.EffectiveDate.Before(*expiry) {
+			return ierr.NewError("effective_date must be before the credit expiry").
+				WithHint("Date the grant before it expires").
+				Mark(ierr.ErrValidation)
+		}
+		if r.BonusCreditsExpiryDateUTC != nil && !r.EffectiveDate.Before(*r.BonusCreditsExpiryDateUTC) {
+			return ierr.NewError("effective_date must be before the bonus credit expiry").
+				WithHint("Date the grant before the bonus credits expire").
 				Mark(ierr.ErrValidation)
 		}
 	}
@@ -432,7 +460,7 @@ func (r *TopUpWalletRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.BonusCreditsExpiryDateUTC != nil && r.BonusCreditsExpiryDateUTC.Before(time.Now().UTC()) {
+	if r.BonusCreditsExpiryDateUTC != nil && r.BonusCreditsExpiryDateUTC.Before(clock.Now()) {
 		return ierr.NewError("bonus_credits_expiry_date_utc cannot be in the past").
 			WithHint("Bonus credits expiry date must be in the future").
 			Mark(ierr.ErrValidation)

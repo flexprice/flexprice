@@ -204,6 +204,20 @@ func (_c *AddonAssociationCreate) SetMetadata(v map[string]interface{}) *AddonAs
 	return _c
 }
 
+// SetSyncedPriceSequence sets the "synced_price_sequence" field.
+func (_c *AddonAssociationCreate) SetSyncedPriceSequence(v int64) *AddonAssociationCreate {
+	_c.mutation.SetSyncedPriceSequence(v)
+	return _c
+}
+
+// SetNillableSyncedPriceSequence sets the "synced_price_sequence" field if the given value is not nil.
+func (_c *AddonAssociationCreate) SetNillableSyncedPriceSequence(v *int64) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetSyncedPriceSequence(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AddonAssociationCreate) SetID(v string) *AddonAssociationCreate {
 	_c.mutation.SetID(v)
@@ -269,6 +283,10 @@ func (_c *AddonAssociationCreate) defaults() {
 		v := addonassociation.DefaultAddonStatus
 		_c.mutation.SetAddonStatus(v)
 	}
+	if _, ok := _c.mutation.SyncedPriceSequence(); !ok {
+		v := addonassociation.DefaultSyncedPriceSequence
+		_c.mutation.SetSyncedPriceSequence(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -321,6 +339,9 @@ func (_c *AddonAssociationCreate) check() error {
 		if err := addonassociation.AddonStatusValidator(v); err != nil {
 			return &ValidationError{Name: "addon_status", err: fmt.Errorf(`ent: validator failed for field "AddonAssociation.addon_status": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.SyncedPriceSequence(); !ok {
+		return &ValidationError{Name: "synced_price_sequence", err: errors.New(`ent: missing required field "AddonAssociation.synced_price_sequence"`)}
 	}
 	return nil
 }
@@ -420,6 +441,10 @@ func (_c *AddonAssociationCreate) createSpec() (*AddonAssociation, *sqlgraph.Cre
 	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(addonassociation.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
+	}
+	if value, ok := _c.mutation.SyncedPriceSequence(); ok {
+		_spec.SetField(addonassociation.FieldSyncedPriceSequence, field.TypeInt64, value)
+		_node.SyncedPriceSequence = value
 	}
 	return _node, _spec
 }

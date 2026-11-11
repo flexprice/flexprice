@@ -6,11 +6,15 @@ import (
 	domainActivity "github.com/flexprice/flexprice/internal/domain/activity"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
 	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/billingentity"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	costsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -28,8 +32,10 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/group"
+	"github.com/flexprice/flexprice/internal/domain/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
@@ -40,6 +46,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
@@ -51,6 +58,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
+	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
+	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
+	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -59,6 +69,8 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/pubsub"
+	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
+	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/tracing"
@@ -85,6 +97,7 @@ type ServiceParams struct {
 	ProcessedEventRepo           events.ProcessedEventRepository
 	RawEventRepo                 events.RawEventRepository
 	MeterUsageRepo               events.MeterUsageRepository
+	MeterUsageCheckpointRepo     meterusagecheckpoint.Repository
 	MeterRepo                    meter.Repository
 	PriceRepo                    price.Repository
 	PriceUnitRepo                priceunit.Repository
@@ -113,6 +126,7 @@ type ServiceParams struct {
 	CreditGrantApplicationRepo   creditgrantapplication.Repository
 	TaxRateRepo                  taxrate.Repository
 	FXRateRepo                   fxrate.Repository
+	HostedInvoiceTokenRepo       hostedinvoicetoken.Repository
 	TaxAssociationRepo           taxassociation.Repository
 	TaxAppliedRepo               taxapplied.Repository
 	CouponRepo                   coupon.Repository
@@ -129,11 +143,26 @@ type ServiceParams struct {
 	GroupRepo                    group.Repository
 	ScheduledTaskRepo            scheduledtask.Repository
 	PlanPriceSyncRepo            planpricesync.Repository
+	AddonPriceSyncRepo           addonpricesync.Repository
 	WorkflowExecutionRepo        workflowexecution.Repository
 	CheckoutSessionRepo          domainCheckout.Repository
 	AnalyticsViewRepo            domainAnalytics.Repository
+	ReportsRepo                  domainAnalytics.ReportsRepository
 	RevenueFactRepo              revenuefact.Repository
 	ActivityRepo                 domainActivity.Repository
+	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
+	SelfBillingPostgresRepo      domainsb.PostgresRepository
+	CommitmentRepo               commitment.Repository
+	BillingTermRepo              billingterm.TermRepository
+	BillingInstalmentRepo        billingterm.InstalmentRepository
+	ProductRepo                  productRepo.Repository
+	ContractService              contractsvc.ContractService
+	POBService                   pobsvc.PerformanceObligationService
+	JournalRepo                  journalRepo.Repository
+	JournalService               journalsvc.JournalService
+	BillingEntityRepo            billingentity.Repository
+	EventDeletionRequestRepo     events.DeletionRequestRepository
+	EventDeletionLogRepo         events.DeletedEventsLogRepository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -165,6 +194,9 @@ type ServiceParams struct {
 	// in main — a plain constructor here would import that package back into
 	// this one. Nil skips the hooks (facts not wired in this deployment).
 	RevenueFacts interfaces.RevenueService
+
+	// SelfBilling provisions new tenants on Flexprice Cloud. Injected in main to avoid an import cycle; a no-op unless configured.
+	SelfBilling interfaces.SelfBillingHook
 }
 
 // Common service params
@@ -183,6 +215,7 @@ func NewServiceParams(
 	processedEventRepo events.ProcessedEventRepository,
 	rawEventRepo events.RawEventRepository,
 	meterUsageRepo events.MeterUsageRepository,
+	meterUsageCheckpointRepo meterusagecheckpoint.Repository,
 	meterRepo meter.Repository,
 	priceRepo price.Repository,
 	priceUnitRepo priceunit.Repository,
@@ -213,6 +246,7 @@ func NewServiceParams(
 	taxAppliedRepo taxapplied.Repository,
 	taxRateRepo taxrate.Repository,
 	fxRateRepo fxrate.Repository,
+	hostedInvoiceTokenRepo hostedinvoicetoken.Repository,
 	couponRepo coupon.Repository,
 	couponAssociationRepo coupon_association.Repository,
 	couponApplicationRepo coupon_application.Repository,
@@ -234,13 +268,28 @@ func NewServiceParams(
 	walletBalanceAlertPubSub types.WalletBalanceAlertPubSub,
 	webhookPubSub pubsub.PubSub,
 	planPriceSyncRepo planpricesync.Repository,
+	addonPriceSyncRepo addonpricesync.Repository,
 	workflowExecutionRepo workflowexecution.Repository,
 	checkoutSessionRepo domainCheckout.Repository,
 	usageRecordRepo usagerecord.Repository,
 	encryptionService security.EncryptionService,
 	analyticsViewRepo domainAnalytics.Repository,
+	reportsRepo domainAnalytics.ReportsRepository,
 	revenueFactRepo revenuefact.Repository,
 	activityRepo domainActivity.Repository,
+	selfBillingClickHouseRepo domainsb.ClickHouseRepository,
+	selfBillingPostgresRepo domainsb.PostgresRepository,
+	commitmentRepo commitment.Repository,
+	billingTermRepo billingterm.TermRepository,
+	billingInstalmentRepo billingterm.InstalmentRepository,
+	productRepo productRepo.Repository,
+	contractService contractsvc.ContractService,
+	pobService pobsvc.PerformanceObligationService,
+	journalRepo journalRepo.Repository,
+	journalService journalsvc.JournalService,
+	billingEntityRepo billingentity.Repository,
+	eventDeletionRequestRepo events.DeletionRequestRepository,
+	eventDeletionLogRepo events.DeletedEventsLogRepository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -257,6 +306,7 @@ func NewServiceParams(
 		ProcessedEventRepo:           processedEventRepo,
 		RawEventRepo:                 rawEventRepo,
 		MeterUsageRepo:               meterUsageRepo,
+		MeterUsageCheckpointRepo:     meterUsageCheckpointRepo,
 		MeterRepo:                    meterRepo,
 		PriceRepo:                    priceRepo,
 		PriceUnitRepo:                priceUnitRepo,
@@ -285,6 +335,7 @@ func NewServiceParams(
 		CreditNoteLineItemRepo:       creditNoteLineItemRepo,
 		TaxRateRepo:                  taxRateRepo,
 		FXRateRepo:                   fxRateRepo,
+		HostedInvoiceTokenRepo:       hostedInvoiceTokenRepo,
 		TaxAssociationRepo:           taxConfigRepo,
 		TaxAppliedRepo:               taxAppliedRepo,
 		EventPublisher:               eventPublisher,
@@ -310,10 +361,25 @@ func NewServiceParams(
 		WalletBalanceAlertPubSub:     walletBalanceAlertPubSub,
 		WebhookPubSub:                webhookPubSub,
 		PlanPriceSyncRepo:            planPriceSyncRepo,
+		AddonPriceSyncRepo:           addonPriceSyncRepo,
 		WorkflowExecutionRepo:        workflowExecutionRepo,
 		CheckoutSessionRepo:          checkoutSessionRepo,
 		AnalyticsViewRepo:            analyticsViewRepo,
+		ReportsRepo:                  reportsRepo,
 		RevenueFactRepo:              revenueFactRepo,
 		ActivityRepo:                 activityRepo,
+		SelfBillingClickHouseRepo:    selfBillingClickHouseRepo,
+		SelfBillingPostgresRepo:      selfBillingPostgresRepo,
+		CommitmentRepo:               commitmentRepo,
+		BillingTermRepo:              billingTermRepo,
+		BillingInstalmentRepo:        billingInstalmentRepo,
+		ProductRepo:                  productRepo,
+		ContractService:              contractService,
+		POBService:                   pobService,
+		JournalRepo:                  journalRepo,
+		JournalService:               journalService,
+		BillingEntityRepo:            billingEntityRepo,
+		EventDeletionRequestRepo:     eventDeletionRequestRepo,
+		EventDeletionLogRepo:         eventDeletionLogRepo,
 	}
 }

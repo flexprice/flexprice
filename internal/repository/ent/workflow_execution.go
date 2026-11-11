@@ -241,30 +241,6 @@ func (r *workflowExecutionRepository) ListAll(ctx context.Context, filter *types
 	return r.List(ctx, filter)
 }
 
-func (r *workflowExecutionRepository) Delete(ctx context.Context, id string) error {
-	span := StartRepositorySpan(ctx, "workflow_execution", "delete", map[string]interface{}{
-		"id": id,
-	})
-	defer FinishSpan(span)
-
-	client := r.client.Writer(ctx)
-	r.log.Debug(ctx, "deleting workflow execution", "id", id)
-	err := client.WorkflowExecution.DeleteOneID(id).Exec(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHintf("Workflow execution not found: %s", id).
-				Mark(ierr.ErrNotFound)
-		}
-		return ierr.WithError(err).
-			WithHint("Failed to delete workflow execution").
-			Mark(ierr.ErrDatabase)
-	}
-	SetSpanSuccess(span)
-	return nil
-}
-
 func (r *workflowExecutionRepository) UpdateStatus(
 	ctx context.Context,
 	workflowID, runID string,

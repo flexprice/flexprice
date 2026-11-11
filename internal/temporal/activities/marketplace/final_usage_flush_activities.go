@@ -4,6 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"go.temporal.io/sdk/activity"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -12,11 +17,11 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	temporalModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"go.temporal.io/sdk/activity"
 )
 
 // reportTimestampSafetyMargin is subtracted from the final record's period_end when it is reported,
@@ -48,12 +53,13 @@ type FlushActivities struct {
 	customerRepo                 customer.Repository
 	usageRecordRepo              usagerecord.Repository
 	mktplaceReporter             *MarketplaceReporter
+	entityScope                  interfaces.BillingEntityScope
 	logger                       *logger.Logger
 }
 
 // NewFlushActivities builds the activity set. The reporter is constructed once at registration and
 // shared with the reporting cron.
-func NewFlushActivities(params service.ServiceParams, mktplaceReporter *MarketplaceReporter, log *logger.Logger) *FlushActivities {
+func NewFlushActivities(params service.ServiceParams, mktplaceReporter *MarketplaceReporter, entityScope interfaces.BillingEntityScope, log *logger.Logger) *FlushActivities {
 	return &FlushActivities{
 		subscriptionService:          service.NewSubscriptionService(params),
 		billingService:               service.NewBillingService(params),
@@ -63,6 +69,7 @@ func NewFlushActivities(params service.ServiceParams, mktplaceReporter *Marketpl
 		customerRepo:                 params.CustomerRepo,
 		usageRecordRepo:              params.UsageRecordRepo,
 		mktplaceReporter:             mktplaceReporter,
+		entityScope:                  entityScope,
 		logger:                       log,
 	}
 }
@@ -82,6 +89,14 @@ func (a *FlushActivities) subscriptionMarketplaceMappings(ctx context.Context, s
 	})
 }
 
+// mappingConnection returns the mapping's connection, else the provider's connection.
+func (a *FlushActivities) mappingConnection(ctx context.Context, m *entityintegrationmapping.EntityIntegrationMapping) (*connection.Connection, error) {
+	if connectionID := lo.FromPtr(m.ConnectionID); connectionID != "" {
+		return a.connectionRepo.Get(ctx, connectionID)
+	}
+	return a.connectionRepo.GetByProvider(ctx, types.SecretProvider(m.ProviderType))
+}
+
 // MarketplaceSubscriptionFinalUsageFlushActivity reports the subscription's outstanding usage in two
 // phases — first the backlog of unsynced records, then the final window up to the cancellation — and
 // archives its marketplace mappings. The phases are kept separate, and logged separately, so a run's
@@ -97,6 +112,11 @@ func (a *FlushActivities) MarketplaceSubscriptionFinalUsageFlushActivity(
 ) (*temporalModels.MarketplaceSubscriptionFinalUsageFlushWorkflowResult, error) {
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, "", "", input.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
 
 	log := activity.GetLogger(ctx)
 	tenantID := input.TenantID
@@ -122,15 +142,16 @@ func (a *FlushActivities) MarketplaceSubscriptionFinalUsageFlushActivity(
 	marketplaceConns := make([]*marketplaceConnection, 0, len(subMappings))
 	connectionResolutionFailed := false
 	for _, m := range subMappings {
-		conn, err := a.connectionRepo.GetByProvider(ctx, types.SecretProvider(m.ProviderType))
+		conn, err := a.mappingConnection(ctx, m)
 		if err != nil {
 			a.logger.Error(ctx, "marketplace subscription flush: failed to resolve marketplace connection",
 				"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", input.SubscriptionID,
-				"provider_type", m.ProviderType, "error", err, "stage", "get_connection")
+				"provider_type", m.ProviderType, "connection_id", lo.FromPtr(m.ConnectionID),
+				"error", err, "stage", "get_connection")
 			connectionResolutionFailed = true
 			continue
 		}
-		prepared, err := a.mktplaceReporter.prepareMarketplaceConnection(ctx, conn)
+		prepared, err := a.mktplaceReporter.prepareMarketplaceConnection(connection.WithOwner(ctx, conn), conn)
 		if err != nil {
 			// already logged inside prepareMarketplaceConnection at the stage that failed
 			connectionResolutionFailed = true
@@ -157,7 +178,7 @@ func (a *FlushActivities) MarketplaceSubscriptionFinalUsageFlushActivity(
 				Field:    lo.ToPtr("period_end"),
 				Operator: lo.ToPtr(types.GREATER_THAN_EQUAL),
 				DataType: lo.ToPtr(types.DataTypeDate),
-				Value:    &types.Value{Date: lo.ToPtr(time.Now().UTC().Add(-backlogSubmissionWindow))},
+				Value:    &types.Value{Date: lo.ToPtr(clock.Now().Add(-backlogSubmissionWindow))},
 			},
 			{
 				Field:    lo.ToPtr("period_end"),

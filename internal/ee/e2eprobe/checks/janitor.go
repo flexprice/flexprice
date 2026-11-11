@@ -343,7 +343,7 @@ func (j *Janitor) cancelCustomerSubs(ctx context.Context, custID, extID string) 
 		}
 		_, cErr := j.client.Subscriptions().Cancel(ctx, *sub.ID, types.CancelSubscriptionRequest{
 			CancellationType:               immediate,
-			CancelImmediatelyInovicePolicy: &generateInvoice,
+			CancelImmediatelyInvoicePolicy: &generateInvoice,
 			Reason:                         strPtrJanitor("e2eprobe-janitor-orphan-sweep"),
 		})
 		if cErr != nil && !isNotFound(cErr) {

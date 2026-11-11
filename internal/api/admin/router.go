@@ -4,21 +4,24 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
+
 	v1 "github.com/flexprice/flexprice/internal/api/admin/v1"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
-	"github.com/gin-gonic/gin"
 )
 
 // Handlers is the admin portal HTTP surface. Add a handler here, construct it
 // in provideAdminHandlers, and register its routes in NewRouter.
 type Handlers struct {
-	Health      *v1.HealthHandler
-	Me          *v1.MeHandler
-	Environment *v1.EnvironmentHandler
-	Tenant      *v1.TenantHandler
-	User        *v1.UserHandler
-	Settings    *v1.SettingsHandler
+	Health             *v1.HealthHandler
+	Me                 *v1.MeHandler
+	Environment        *v1.EnvironmentHandler
+	Tenant             *v1.TenantHandler
+	User               *v1.UserHandler
+	Settings           *v1.SettingsHandler
+	DLQ                *v1.DLQHandler
+	RevenueRecognition *v1.RevenueRecognitionHandler
 }
 
 // Server is the Gin engine for deployment mode "admin".
@@ -28,12 +31,17 @@ type Server struct {
 }
 
 func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
+	// Admin-only deployments never build the public router, so install here too.
+	middleware.InstallMicrosecondBinding()
+
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 	engine.Use(middleware.RequestIDMiddleware)
 	if log != nil {
 		engine.Use(middleware.LoggingMiddleware(log))
 	}
+	// The dashboard is a different tailnet host from this API, so the browser preflight must succeed.
+	engine.Use(middleware.CORSMiddleware)
 
 	engine.GET("/health", handlers.Health.Health)
 	engine.POST("/health", handlers.Health.Health)
@@ -44,6 +52,8 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 	group.Use(requireSecret(secret))
 	{
 		group.GET("/me", handlers.Me.Me)
+		group.POST("/dlq/replay", handlers.DLQ.Replay)
+		group.GET("/dlq/replay/runs/:workflow_id", handlers.DLQ.GetReplay)
 
 		environment := group.Group("/environments")
 		{
@@ -73,6 +83,13 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 		settings := group.Group("/settings")
 		{
 			settings.PUT("/tenant_config", handlers.Settings.UpdateTenantConfig)
+		}
+
+		revenueRecognition := group.Group("/revenue_recognition")
+		{
+			revenueRecognition.PUT("/config", handlers.RevenueRecognition.UpdateConfig)
+			revenueRecognition.POST("/backfill", handlers.RevenueRecognition.StartBackfill)
+			revenueRecognition.GET("/backfill/runs/:workflow_id", handlers.RevenueRecognition.GetBackfill)
 		}
 	}
 

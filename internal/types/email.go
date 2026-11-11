@@ -1,6 +1,14 @@
 package types
 
-import "regexp"
+import (
+	"regexp"
+	"strings"
+)
+
+// NormalizeEmail trims and lowercases an email for storage and lookup.
+func NormalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
 
 func IsValidEmail(email string) bool {
 	if email == "" || !emailRegex.MatchString(email) {

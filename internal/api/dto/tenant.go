@@ -4,10 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 )
 
 type TenantBillingDetails struct {
@@ -91,8 +94,8 @@ func (r *CreateTenantRequest) ToTenant(ctx context.Context) *tenant.Tenant {
 		InternalStatus: types.TenantInternalStatusTrialing,
 		BillingDetails: billingDetails,
 		Metadata:       r.Metadata,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		CreatedAt:      clock.Now(),
+		UpdatedAt:      clock.Now(),
 	}
 
 }
@@ -185,9 +188,4 @@ func setIfProvided(dst *string, src *string) {
 	if src != nil {
 		*dst = *src
 	}
-}
-
-type TenantBillingUsage struct {
-	Usage         *CustomerUsageSummaryResponse `json:"usage"`
-	Subscriptions []*SubscriptionResponse       `json:"subscriptions"`
 }

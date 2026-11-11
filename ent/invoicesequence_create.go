@@ -46,6 +46,20 @@ func (_c *InvoiceSequenceCreate) SetYearMonth(v string) *InvoiceSequenceCreate {
 	return _c
 }
 
+// SetPrefix sets the "prefix" field.
+func (_c *InvoiceSequenceCreate) SetPrefix(v string) *InvoiceSequenceCreate {
+	_c.mutation.SetPrefix(v)
+	return _c
+}
+
+// SetNillablePrefix sets the "prefix" field if the given value is not nil.
+func (_c *InvoiceSequenceCreate) SetNillablePrefix(v *string) *InvoiceSequenceCreate {
+	if v != nil {
+		_c.SetPrefix(*v)
+	}
+	return _c
+}
+
 // SetLastValue sets the "last_value" field.
 func (_c *InvoiceSequenceCreate) SetLastValue(v int64) *InvoiceSequenceCreate {
 	_c.mutation.SetLastValue(v)
@@ -201,6 +215,10 @@ func (_c *InvoiceSequenceCreate) createSpec() (*InvoiceSequence, *sqlgraph.Creat
 	if value, ok := _c.mutation.YearMonth(); ok {
 		_spec.SetField(invoicesequence.FieldYearMonth, field.TypeString, value)
 		_node.YearMonth = value
+	}
+	if value, ok := _c.mutation.Prefix(); ok {
+		_spec.SetField(invoicesequence.FieldPrefix, field.TypeString, value)
+		_node.Prefix = &value
 	}
 	if value, ok := _c.mutation.LastValue(); ok {
 		_spec.SetField(invoicesequence.FieldLastValue, field.TypeInt64, value)

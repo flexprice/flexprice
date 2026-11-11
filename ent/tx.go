@@ -14,6 +14,8 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// AccountingPeriod is the client for interacting with the AccountingPeriod builders.
+	AccountingPeriod *AccountingPeriodClient
 	// Addon is the client for interacting with the Addon builders.
 	Addon *AddonClient
 	// AddonAssociation is the client for interacting with the AddonAssociation builders.
@@ -26,12 +28,24 @@ type Tx struct {
 	AnalyticsView *AnalyticsViewClient
 	// Auth is the client for interacting with the Auth builders.
 	Auth *AuthClient
+	// BillingEntity is the client for interacting with the BillingEntity builders.
+	BillingEntity *BillingEntityClient
+	// BillingInstalment is the client for interacting with the BillingInstalment builders.
+	BillingInstalment *BillingInstalmentClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
 	BillingSequence *BillingSequenceClient
+	// BillingTerm is the client for interacting with the BillingTerm builders.
+	BillingTerm *BillingTermClient
 	// CheckoutSession is the client for interacting with the CheckoutSession builders.
 	CheckoutSession *CheckoutSessionClient
+	// Commitment is the client for interacting with the Commitment builders.
+	Commitment *CommitmentClient
 	// Connection is the client for interacting with the Connection builders.
 	Connection *ConnectionClient
+	// Contract is the client for interacting with the Contract builders.
+	Contract *ContractClient
+	// ContractAssociation is the client for interacting with the ContractAssociation builders.
+	ContractAssociation *ContractAssociationClient
 	// Costsheet is the client for interacting with the Costsheet builders.
 	Costsheet *CostsheetClient
 	// Coupon is the client for interacting with the Coupon builders.
@@ -58,12 +72,16 @@ type Tx struct {
 	EntityIntegrationMapping *EntityIntegrationMappingClient
 	// Environment is the client for interacting with the Environment builders.
 	Environment *EnvironmentClient
+	// EventDeletionRequest is the client for interacting with the EventDeletionRequest builders.
+	EventDeletionRequest *EventDeletionRequestClient
 	// FXRate is the client for interacting with the FXRate builders.
 	FXRate *FXRateClient
 	// Feature is the client for interacting with the Feature builders.
 	Feature *FeatureClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
+	// HostedInvoiceToken is the client for interacting with the HostedInvoiceToken builders.
+	HostedInvoiceToken *HostedInvoiceTokenClient
 	// IncomingWebhookEvent is the client for interacting with the IncomingWebhookEvent builders.
 	IncomingWebhookEvent *IncomingWebhookEventClient
 	// Invoice is the client for interacting with the Invoice builders.
@@ -72,20 +90,32 @@ type Tx struct {
 	InvoiceLineItem *InvoiceLineItemClient
 	// InvoiceSequence is the client for interacting with the InvoiceSequence builders.
 	InvoiceSequence *InvoiceSequenceClient
+	// JournalEntry is the client for interacting with the JournalEntry builders.
+	JournalEntry *JournalEntryClient
+	// JournalLine is the client for interacting with the JournalLine builders.
+	JournalLine *JournalLineClient
 	// Meter is the client for interacting with the Meter builders.
 	Meter *MeterClient
+	// MeterUsageCheckpoint is the client for interacting with the MeterUsageCheckpoint builders.
+	MeterUsageCheckpoint *MeterUsageCheckpointClient
 	// Payment is the client for interacting with the Payment builders.
 	Payment *PaymentClient
 	// PaymentAttempt is the client for interacting with the PaymentAttempt builders.
 	PaymentAttempt *PaymentAttemptClient
 	// PaymentMethod is the client for interacting with the PaymentMethod builders.
 	PaymentMethod *PaymentMethodClient
+	// PerformanceObligation is the client for interacting with the PerformanceObligation builders.
+	PerformanceObligation *PerformanceObligationClient
+	// PerformanceObligationAssociation is the client for interacting with the PerformanceObligationAssociation builders.
+	PerformanceObligationAssociation *PerformanceObligationAssociationClient
 	// Plan is the client for interacting with the Plan builders.
 	Plan *PlanClient
 	// Price is the client for interacting with the Price builders.
 	Price *PriceClient
 	// PriceUnit is the client for interacting with the PriceUnit builders.
 	PriceUnit *PriceUnitClient
+	// Product is the client for interacting with the Product builders.
+	Product *ProductClient
 	// Refund is the client for interacting with the Refund builders.
 	Refund *RefundClient
 	// RevenueFact is the client for interacting with the RevenueFact builders.
@@ -259,15 +289,22 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.AccountingPeriod = NewAccountingPeriodClient(tx.config)
 	tx.Addon = NewAddonClient(tx.config)
 	tx.AddonAssociation = NewAddonAssociationClient(tx.config)
 	tx.AlertLogs = NewAlertLogsClient(tx.config)
 	tx.AlertSettings = NewAlertSettingsClient(tx.config)
 	tx.AnalyticsView = NewAnalyticsViewClient(tx.config)
 	tx.Auth = NewAuthClient(tx.config)
+	tx.BillingEntity = NewBillingEntityClient(tx.config)
+	tx.BillingInstalment = NewBillingInstalmentClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
+	tx.BillingTerm = NewBillingTermClient(tx.config)
 	tx.CheckoutSession = NewCheckoutSessionClient(tx.config)
+	tx.Commitment = NewCommitmentClient(tx.config)
 	tx.Connection = NewConnectionClient(tx.config)
+	tx.Contract = NewContractClient(tx.config)
+	tx.ContractAssociation = NewContractAssociationClient(tx.config)
 	tx.Costsheet = NewCostsheetClient(tx.config)
 	tx.Coupon = NewCouponClient(tx.config)
 	tx.CouponApplication = NewCouponApplicationClient(tx.config)
@@ -281,20 +318,28 @@ func (tx *Tx) init() {
 	tx.EntitlementGrant = NewEntitlementGrantClient(tx.config)
 	tx.EntityIntegrationMapping = NewEntityIntegrationMappingClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)
+	tx.EventDeletionRequest = NewEventDeletionRequestClient(tx.config)
 	tx.FXRate = NewFXRateClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
+	tx.HostedInvoiceToken = NewHostedInvoiceTokenClient(tx.config)
 	tx.IncomingWebhookEvent = NewIncomingWebhookEventClient(tx.config)
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)
 	tx.InvoiceSequence = NewInvoiceSequenceClient(tx.config)
+	tx.JournalEntry = NewJournalEntryClient(tx.config)
+	tx.JournalLine = NewJournalLineClient(tx.config)
 	tx.Meter = NewMeterClient(tx.config)
+	tx.MeterUsageCheckpoint = NewMeterUsageCheckpointClient(tx.config)
 	tx.Payment = NewPaymentClient(tx.config)
 	tx.PaymentAttempt = NewPaymentAttemptClient(tx.config)
 	tx.PaymentMethod = NewPaymentMethodClient(tx.config)
+	tx.PerformanceObligation = NewPerformanceObligationClient(tx.config)
+	tx.PerformanceObligationAssociation = NewPerformanceObligationAssociationClient(tx.config)
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.PriceUnit = NewPriceUnitClient(tx.config)
+	tx.Product = NewProductClient(tx.config)
 	tx.Refund = NewRefundClient(tx.config)
 	tx.RevenueFact = NewRevenueFactClient(tx.config)
 	tx.ScheduledTask = NewScheduledTaskClient(tx.config)
@@ -325,7 +370,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: Addon.QueryXXX(), the query will be executed
+// applies a query, for example: AccountingPeriod.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

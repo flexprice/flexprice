@@ -66,28 +66,29 @@ func (s *ProrationServiceSuite) TearDownTest() {
 
 func (s *ProrationServiceSuite) setupService() {
 	s.service = NewProrationService(ServiceParams{
-		Logger:              s.GetLogger(),
-		Config:              s.GetConfig(),
-		DB:                  s.GetDB(),
-		SubRepo:             s.GetStores().SubscriptionRepo,
-		PlanRepo:            s.GetStores().PlanRepo,
-		PriceRepo:           s.GetStores().PriceRepo,
-		EventRepo:           s.GetStores().EventRepo,
-		MeterRepo:           s.GetStores().MeterRepo,
-		CustomerRepo:        s.GetStores().CustomerRepo,
-		InvoiceRepo:         s.GetStores().InvoiceRepo,
-		EntitlementRepo:     s.GetStores().EntitlementRepo,
-		EnvironmentRepo:     s.GetStores().EnvironmentRepo,
-		FeatureRepo:         s.GetStores().FeatureRepo,
-		TenantRepo:          s.GetStores().TenantRepo,
-		UserRepo:            s.GetStores().UserRepo,
-		AuthRepo:            s.GetStores().AuthRepo,
-		WalletRepo:          s.GetStores().WalletRepo,
-		PaymentRepo:         s.GetStores().PaymentRepo,
-		SettingsRepo:        s.GetStores().SettingsRepo,
-		EventPublisher:      s.GetPublisher(),
-		WebhookPublisher:    s.GetWebhookPublisher(),
-		ProrationCalculator: s.GetCalculator(),
+		Logger:                 s.GetLogger(),
+		Config:                 s.GetConfig(),
+		DB:                     s.GetDB(),
+		SubRepo:                s.GetStores().SubscriptionRepo,
+		PlanRepo:               s.GetStores().PlanRepo,
+		PriceRepo:              s.GetStores().PriceRepo,
+		EventRepo:              s.GetStores().EventRepo,
+		MeterRepo:              s.GetStores().MeterRepo,
+		CustomerRepo:           s.GetStores().CustomerRepo,
+		InvoiceRepo:            s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo: s.GetStores().HostedInvoiceTokenRepo,
+		EntitlementRepo:        s.GetStores().EntitlementRepo,
+		EnvironmentRepo:        s.GetStores().EnvironmentRepo,
+		FeatureRepo:            s.GetStores().FeatureRepo,
+		TenantRepo:             s.GetStores().TenantRepo,
+		UserRepo:               s.GetStores().UserRepo,
+		AuthRepo:               s.GetStores().AuthRepo,
+		WalletRepo:             s.GetStores().WalletRepo,
+		PaymentRepo:            s.GetStores().PaymentRepo,
+		SettingsRepo:           s.GetStores().SettingsRepo,
+		EventPublisher:         s.GetPublisher(),
+		WebhookPublisher:       s.GetWebhookPublisher(),
+		ProrationCalculator:    s.GetCalculator(),
 	})
 }
 
@@ -174,7 +175,7 @@ func (s *ProrationServiceSuite) setupTestData() {
 		InvoiceNumberStartSequence: 1,
 		InvoiceNumberSeparator:     "-",
 		InvoiceNumberSuffixLength:  5,
-	})
+	}, "INV")
 	s.NoError(err)
 
 	nextSeq, err := s.GetStores().InvoiceRepo.GetNextBillingSequence(s.GetContext(), s.testData.subscription.ID)
@@ -420,6 +421,7 @@ func (s *ProrationScenarioSuite) SetupTest() {
 		MeterRepo:                    st.MeterRepo,
 		CustomerRepo:                 st.CustomerRepo,
 		InvoiceRepo:                  st.InvoiceRepo,
+		HostedInvoiceTokenRepo:       st.HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:          st.InvoiceLineItemRepo,
 		EntitlementRepo:              st.EntitlementRepo,
 		EntitlementGrantRepo:         st.EntitlementGrantRepo,
@@ -449,6 +451,7 @@ func (s *ProrationScenarioSuite) SetupTest() {
 		MeterUsageRepo:               st.MeterUsageRepo,
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:            st.PlanPriceSyncRepo,
+		AddonPriceSyncRepo:           st.AddonPriceSyncRepo,
 		EntityIntegrationMappingRepo: st.EntityIntegrationMappingRepo,
 	}
 	s.subSvc = NewSubscriptionService(s.params)

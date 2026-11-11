@@ -3,9 +3,12 @@ package wallet
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // WalletOperation represents the request to credit or debit a wallet
@@ -52,6 +55,8 @@ type WalletOperation struct {
 	// BonusExpiryDate is the expiry timestamp applied to the bonus tx (independent of the
 	// purchase tx's ExpiryDate/ExpiryDateTime). nil means the bonus never expires.
 	BonusExpiryDate *time.Time `json:"-"`
+	// EffectiveDate, when set on a credit, is stored as the transaction's created_at.
+	EffectiveDate *time.Time `json:"-"`
 	// SourceType/SourceID set the transaction's source (see Transaction).
 	SourceType types.WalletTxSourceType `json:"-"`
 	SourceID   string                   `json:"-"`
@@ -111,7 +116,7 @@ func (w *WalletOperation) Validate() error {
 	}
 
 	if w.ExpiryDateTime != nil {
-		if w.ExpiryDateTime.Before(time.Now().UTC()) {
+		if w.ExpiryDateTime.Before(clock.Now()) {
 			return ierr.NewError("expiry date cannot be in the past").
 				WithHint("Expiry date must be in the future").
 				WithReportableDetails(map[string]interface{}{
@@ -130,7 +135,7 @@ func (w *WalletOperation) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 
-		if expiryTime.Before(time.Now().UTC()) {
+		if expiryTime.Before(clock.Now()) {
 			return ierr.NewError("expiry date cannot be in the past").
 				WithHint("Expiry date must be in the future").
 				WithReportableDetails(map[string]interface{}{
@@ -140,7 +145,7 @@ func (w *WalletOperation) Validate() error {
 		}
 	}
 
-	if w.BonusExpiryDate != nil && w.BonusExpiryDate.Before(time.Now().UTC()) {
+	if w.BonusExpiryDate != nil && w.BonusExpiryDate.Before(clock.Now()) {
 		return ierr.NewError("bonus expiry date cannot be in the past").
 			WithHint("Bonus expiry date must be in the future").
 			WithReportableDetails(map[string]interface{}{

@@ -29,6 +29,19 @@ func NewCustomerPortalHandler(
 	}
 }
 
+// @Summary Create customer portal session
+// @ID createCustomerPortalSession
+// @Description Use when sending a customer to their self-serve billing portal (invoices, usage, payment methods). Returns a short-lived URL and token scoped to that customer.
+// @Tags Customers
+// @x-scope "write"
+// @Produce json
+// @Security ApiKeyAuth
+// @Param external_id path string true "Customer external ID"
+// @Success 200 {object} dto.PortalSessionResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Customer not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /customers/portal/{external_id} [get]
 func (h *CustomerPortalHandler) CreateSession(c *gin.Context) {
 	externalID := c.Param("external_id")
 	if externalID == "" {
@@ -184,6 +197,38 @@ func (h *CustomerPortalHandler) GetAnalytics(c *gin.Context) {
 	}
 
 	response, err := h.portalService.GetAnalytics(c.Request.Context(), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *CustomerPortalHandler) GetPropertyKeys(c *gin.Context) {
+	var req dto.PortalPropertyKeysRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.portalService.GetGroupablePropertyKeys(c.Request.Context(), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *CustomerPortalHandler) GetPropertyValues(c *gin.Context) {
+	var req dto.PortalPropertyValuesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.portalService.GetPropertyValues(c.Request.Context(), req)
 	if err != nil {
 		c.Error(err)
 		return

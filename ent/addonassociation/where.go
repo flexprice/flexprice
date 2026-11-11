@@ -139,6 +139,11 @@ func CancelledAt(v time.Time) predicate.AddonAssociation {
 	return predicate.AddonAssociation(sql.FieldEQ(FieldCancelledAt, v))
 }
 
+// SyncedPriceSequence applies equality check predicate on the "synced_price_sequence" field. It's identical to SyncedPriceSequenceEQ.
+func SyncedPriceSequence(v int64) predicate.AddonAssociation {
+	return predicate.AddonAssociation(sql.FieldEQ(FieldSyncedPriceSequence, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.AddonAssociation {
 	return predicate.AddonAssociation(sql.FieldEQ(FieldTenantID, v))
@@ -1067,6 +1072,46 @@ func MetadataIsNil() predicate.AddonAssociation {
 // MetadataNotNil applies the NotNil predicate on the "metadata" field.
 func MetadataNotNil() predicate.AddonAssociation {
 	return predicate.AddonAssociation(sql.FieldNotNull(FieldMetadata))
+}
+
+// SyncedPriceSequenceEQ applies the EQ predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceEQ(v int64) predicate.AddonAssociation {
+	return predicate.AddonAssociation(sql.FieldEQ(FieldSyncedPriceSequence, v))
+}
+
+// SyncedPriceSequenceNEQ applies the NEQ predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceNEQ(v int64) predicate.AddonAssociation {
+	return predicate.AddonAssociation(sql.FieldNEQ(FieldSyncedPriceSequence, v))
+}
+
+// SyncedPriceSequenceIn applies the In predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceIn(vs ...int64) predicate.AddonAssociation {
+	return predicate.AddonAssociation(sql.FieldIn(FieldSyncedPriceSequence, vs...))
+}
+
+// SyncedPriceSequenceNotIn applies the NotIn predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceNotIn(vs ...int64) predicate.AddonAssociation {
+	return predicate.AddonAssociation(sql.FieldNotIn(FieldSyncedPriceSequence, vs...))
+}
+
+// SyncedPriceSequenceGT applies the GT predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceGT(v int64) predicate.AddonAssociation {
+	return predicate.AddonAssociation(sql.FieldGT(FieldSyncedPriceSequence, v))
+}
+
+// SyncedPriceSequenceGTE applies the GTE predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceGTE(v int64) predicate.AddonAssociation {
+	return predicate.AddonAssociation(sql.FieldGTE(FieldSyncedPriceSequence, v))
+}
+
+// SyncedPriceSequenceLT applies the LT predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceLT(v int64) predicate.AddonAssociation {
+	return predicate.AddonAssociation(sql.FieldLT(FieldSyncedPriceSequence, v))
+}
+
+// SyncedPriceSequenceLTE applies the LTE predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceLTE(v int64) predicate.AddonAssociation {
+	return predicate.AddonAssociation(sql.FieldLTE(FieldSyncedPriceSequence, v))
 }
 
 // And groups predicates with the AND operator between them.

@@ -6,16 +6,20 @@ package revenue
 // whole billing period.
 
 import (
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/flexprice/flexprice/internal/ee/service"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // revenuePeriod is a billing window whose End is the inclusive last calendar
@@ -392,7 +396,7 @@ func newPeriodOnlyFact(li previewLineItem, period revenuePeriod, day time.Time, 
 		Currency:          li.Currency,
 		Status:            types.FactProvisional,
 		Version:           1,
-		ComputedAt:        time.Now().UTC(),
+		ComputedAt:        clock.Now(),
 	}
 }
 
@@ -491,7 +495,7 @@ func decomposeUsageMarginal(li previewLineItem, curve []dayCharge) []*revenuefac
 			Currency:          li.Currency,
 			Status:            types.FactProvisional,
 			Version:           1,
-			ComputedAt:        time.Now().UTC(),
+			ComputedAt:        clock.Now(),
 		})
 		prev = dc
 	}
@@ -503,7 +507,7 @@ func decomposeUsageMarginal(li previewLineItem, curve []dayCharge) []*revenuefac
 // price has no tiers.
 func listRate(p *price.Price) decimal.Decimal {
 	if len(p.Tiers) > 0 {
-		return p.Tiers[0].UnitAmount
+		return p.Tiers[0].GetPerUnitCost()
 	}
 	// A package price's Amount buys a whole block of units, so the per-unit
 	// list rate is that amount spread over the block. TierDelta then carries

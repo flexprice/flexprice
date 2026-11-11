@@ -3,14 +3,19 @@ package repository
 import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
+	"github.com/flexprice/flexprice/internal/config"
 	domainActivity "github.com/flexprice/flexprice/internal/domain/activity"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
 	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/billingentity"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -28,9 +33,11 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/group"
+	"github.com/flexprice/flexprice/internal/domain/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -41,6 +48,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	domainsystemevent "github.com/flexprice/flexprice/internal/domain/systemevent"
@@ -55,8 +63,13 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
+	accountingPeriodRepo "github.com/flexprice/flexprice/internal/repository/accountingperiod"
 	clickhouseRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
+	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
+	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
+	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
+	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"go.uber.org/fx"
 )
@@ -123,6 +136,10 @@ func NewPlanPriceSyncRepository(p RepositoryParams) planpricesync.Repository {
 	return entRepo.NewPlanPriceSyncRepository(p.EntClient, p.Logger)
 }
 
+func NewAddonPriceSyncRepository(p RepositoryParams) addonpricesync.Repository {
+	return entRepo.NewAddonPriceSyncRepository(p.EntClient, p.Logger)
+}
+
 func NewSubscriptionRepository(p RepositoryParams) subscription.Repository {
 	return entRepo.NewSubscriptionRepository(p.EntClient, p.Logger, p.RedisCache)
 }
@@ -165,6 +182,28 @@ func NewFeatureRepository(p RepositoryParams) feature.Repository {
 
 func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {
 	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.InMemoryCache, p.RedisCache)
+}
+
+func NewMeterUsageCheckpointRepository(p RepositoryParams) meterusagecheckpoint.Repository {
+	return entRepo.NewMeterUsageCheckpointRepository(p.EntClient, p.Logger)
+}
+
+func NewCommitmentRepository(p RepositoryParams) commitment.Repository {
+	return entRepo.NewCommitmentRepository(p.EntClient, p.Logger)
+}
+
+// NewBillingTermRepository provides the billing term repository.
+func NewBillingTermRepository(p RepositoryParams) billingterm.TermRepository {
+	return entRepo.NewBillingTermRepository(p.EntClient, p.Logger)
+}
+
+// NewBillingInstalmentRepository provides the billing instalment repository.
+func NewBillingInstalmentRepository(p RepositoryParams) billingterm.InstalmentRepository {
+	return entRepo.NewBillingInstalmentRepository(p.EntClient, p.Logger)
+}
+
+func NewBillingEntityRepository(p RepositoryParams) billingentity.Repository {
+	return entRepo.NewBillingEntityRepository(p.EntClient, p.Logger)
 }
 
 func NewEntitlementGrantRepository(p RepositoryParams) entitlementgrant.Repository {
@@ -243,6 +282,10 @@ func NewFXRateRepository(p RepositoryParams) fxrate.Repository {
 	return entRepo.NewFXRateRepository(p.EntClient, p.Logger)
 }
 
+func NewHostedInvoiceTokenRepository(p RepositoryParams) hostedinvoicetoken.Repository {
+	return entRepo.NewHostedInvoiceTokenRepository(p.EntClient, p.Logger)
+}
+
 func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {
 	return entRepo.NewTaxAssociationRepository(p.EntClient, p.Logger, p.RedisCache)
 }
@@ -253,6 +296,26 @@ func NewTaxAppliedRepository(p RepositoryParams) taxapplied.Repository {
 
 func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
 	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.InMemoryCache)
+}
+
+func NewProductRepository(p RepositoryParams) productRepo.Repository {
+	return productRepo.NewRepository(p.EntClient, p.Logger)
+}
+
+func NewContractRepository(p RepositoryParams) contractRepo.Repository {
+	return contractRepo.NewRepository(p.EntClient, p.Logger)
+}
+
+func NewPerformanceObligationRepository(p RepositoryParams) pobRepo.Repository {
+	return pobRepo.NewRepository(p.EntClient, p.Logger)
+}
+
+func NewAccountingPeriodRepository(p RepositoryParams) accountingPeriodRepo.Repository {
+	return accountingPeriodRepo.NewRepository(p.EntClient, p.Logger)
+}
+
+func NewJournalRepository(p RepositoryParams) journalRepo.Repository {
+	return journalRepo.NewRepository(p.EntClient, p.Logger)
 }
 
 func NewAddonRepository(p RepositoryParams) addon.Repository {
@@ -315,6 +378,26 @@ func NewAnalyticsViewRepository(p RepositoryParams) domainAnalytics.Repository {
 	return entRepo.NewAnalyticsViewRepository(p.EntClient, p.Logger)
 }
 
+func NewReportsRepository(cfg *config.Configuration, log *logger.Logger, rc cache.RedisCache) (domainAnalytics.ReportsRepository, error) {
+	return clickhouseRepo.NewReportsRepository(cfg, log, rc)
+}
+
 func NewRevenueFactRepository(p RepositoryParams) revenuefact.Repository {
 	return entRepo.NewRevenueFactRepository(p.EntClient, p.Logger)
+}
+
+func NewSelfBillingClickHouseRepository(p RepositoryParams) domainsb.ClickHouseRepository {
+	return clickhouseRepo.NewSelfBillingRepository(p.ClickHouseDB, p.Logger)
+}
+
+func NewSelfBillingPostgresRepository(p RepositoryParams) domainsb.PostgresRepository {
+	return entRepo.NewSelfBillingRepository(p.EntClient, p.Logger)
+}
+
+func NewEventDeletionRequestRepository(p RepositoryParams) events.DeletionRequestRepository {
+	return entRepo.NewEventDeletionRequestRepository(p.EntClient, p.Logger)
+}
+
+func NewEventDeletionLogRepository(p RepositoryParams) events.DeletedEventsLogRepository {
+	return clickhouseRepo.NewEventDeletionLogRepository(p.ClickHouseDB, p.Logger)
 }

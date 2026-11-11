@@ -2,12 +2,14 @@ package testutil
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // InMemoryCheckoutSessionStore implements domainCheckout.Repository for tests.
@@ -39,7 +41,7 @@ func (s *InMemoryCheckoutSessionStore) Create(ctx context.Context, session *doma
 			}
 		}
 	}
-	return s.InMemoryStore.Create(ctx, session.ID, session)
+	return s.InMemoryStore.Create(ctx, session.ID, cloneCheckoutSession(session))
 }
 
 func (s *InMemoryCheckoutSessionStore) Get(ctx context.Context, id string) (*domainCheckout.CheckoutSession, error) {
@@ -47,12 +49,24 @@ func (s *InMemoryCheckoutSessionStore) Get(ctx context.Context, id string) (*dom
 	if err != nil {
 		return nil, err
 	}
-	// Hand back a copy. The real repository returns a fresh row per read, and callers
-	// mutate what they read; sharing the stored record races every concurrent reader.
-	//
-	// The struct copy is not enough on its own — the JSONB fields are pointers, so two
-	// readers would still share whatever they point at.
+	return cloneCheckoutSession(stored), nil
+}
+
+// cloneCheckoutSession copies a session the way a database row read or write would. The real
+// repository returns a fresh row per read, and callers mutate what they read; sharing the
+// stored record races every concurrent reader and hides writes that were never saved.
+//
+// The struct copy is not enough on its own — the JSONB fields are pointers, so two
+// readers would still share whatever they point at. Configuration is copied through JSON,
+// as it is stored.
+func cloneCheckoutSession(stored *domainCheckout.CheckoutSession) *domainCheckout.CheckoutSession {
 	session := *stored
+	if raw, err := json.Marshal(stored.Configuration); err == nil {
+		var cfg domainCheckout.JSONBCheckoutConfiguration
+		if json.Unmarshal(raw, &cfg) == nil {
+			session.Configuration = cfg
+		}
+	}
 	if stored.ProviderResult != nil {
 		pr := *stored.ProviderResult
 		session.ProviderResult = &pr
@@ -72,7 +86,7 @@ func (s *InMemoryCheckoutSessionStore) Get(ctx context.Context, id string) (*dom
 		}
 		session.Metadata = m
 	}
-	return &session, nil
+	return &session
 }
 
 func (s *InMemoryCheckoutSessionStore) GetByCheckoutInvoiceID(ctx context.Context, invoiceID string) (*domainCheckout.CheckoutSession, error) {
@@ -105,7 +119,19 @@ func (s *InMemoryCheckoutSessionStore) GetSessionByPaymentID(ctx context.Context
 }
 
 func (s *InMemoryCheckoutSessionStore) Update(ctx context.Context, session *domainCheckout.CheckoutSession) error {
-	return s.InMemoryStore.Update(ctx, session.ID, session)
+	s.claimMu.Lock()
+	defer s.claimMu.Unlock()
+
+	current, err := s.Get(ctx, session.ID)
+	if err != nil {
+		return err
+	}
+	if current.CheckoutStatus.IsTerminal() {
+		return ierr.NewError("checkout session not found").
+			WithHintf("checkout session %s not found, archived or already terminal", session.ID).
+			Mark(ierr.ErrNotFound)
+	}
+	return s.InMemoryStore.Update(ctx, session.ID, cloneCheckoutSession(session))
 }
 
 func checkoutSessionFilterFn(ctx context.Context, session *domainCheckout.CheckoutSession, f interface{}) bool {
@@ -195,8 +221,9 @@ func checkoutSessionFilterFn(ctx context.Context, session *domainCheckout.Checko
 		if cfg.SubscriptionID != "" {
 			matchesModify := sessionCfg.ModifySubscriptionParams != nil &&
 				sessionCfg.ModifySubscriptionParams.SubscriptionID == cfg.SubscriptionID
-			matchesAddAddon := sessionCfg.AddAddonParams != nil &&
-				sessionCfg.AddAddonParams.SubscriptionID == cfg.SubscriptionID
+			matchesAddAddon := lo.ContainsBy(sessionCfg.AddAddonEntries(), func(p *types.AddAddonParams) bool {
+				return p.SubscriptionID == cfg.SubscriptionID
+			})
 			if !matchesModify && !matchesAddAddon {
 				return false
 			}

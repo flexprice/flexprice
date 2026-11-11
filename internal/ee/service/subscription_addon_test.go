@@ -448,32 +448,6 @@ func (s *SubscriptionServiceSuite) TestAddAddon_CheckoutRejectsUnsupportedCombin
 	ctx := s.GetContext()
 	sub := s.testData.subscription
 
-	s.Run("override_line_items", func() {
-		addonID := "addon_reject_override"
-		s.seedFixedPriceAddon(addonID, decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
-
-		now := s.testData.now
-		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
-			SubscriptionID: sub.ID,
-			Checkout:       s.razorpayCheckoutParams(),
-			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
-				AddonID:           addonID,
-				Cadence:           types.AddonCadenceRecurring,
-				StartDate:         &now,
-				ProrationBehavior: types.ProrationBehaviorCreateProrations,
-				OverrideLineItems: []dto.OverrideLineItemRequest{{
-					PriceID:  "price_" + addonID,
-					Quantity: lo.ToPtr(decimal.NewFromInt(2)),
-				}},
-			},
-		})
-
-		s.Require().Error(err)
-		s.True(ierr.IsValidation(err))
-		s.Empty(s.addonLineItemsFor(sub.ID, addonID))
-		s.Zero(s.checkoutSessionCount())
-	})
-
 	s.Run("line_item_commitments", func() {
 		addonID := "addon_reject_commitment"
 		s.seedFixedPriceAddon(addonID, decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
@@ -1885,6 +1859,74 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_ManyAddons_AttachWitho
 
 	s.Empty(s.oneOffInvoicesFor(resp.ID), "creation raises no proration document")
 	s.Empty(s.prorationCredits(), "and moves no money through the wallet")
+}
+
+// A subscription that attaches an addon at creation must not be reported as behind the addon's
+// usage prices: the attach stamps the association at the addon's current usage-price sequence,
+// so the sync status reads zero associations behind without any manual sync. Reproduces the
+// report of a freshly attached addon showing as behind with a watermark of 0.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_Addon_StampsSyncWatermark() {
+	ctx := s.GetContext()
+	const addonID = "addon_sync_watermark"
+	const usageSeq int64 = 100
+
+	s.NoError(s.GetStores().AddonRepo.Create(ctx, &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Usage Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
+
+	// A published usage price with a real sequence, the catalog state the sync status reads as
+	// its target. The in-memory price store never assigns a sequence, so set it explicitly.
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+		ID:                 "price_" + addonID,
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		Sequence:           usageSeq,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}))
+
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+			Addons: []dto.AddAddonToSubscriptionRequest{{
+				AddonID: addonID,
+				Cadence: types.AddonCadenceRecurring,
+			}},
+		},
+	})
+	s.Require().NoError(err)
+
+	assocFilter := types.NewNoLimitAddonAssociationFilter()
+	assocFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	assocFilter.EntityIDs = []string{resp.ID}
+	associations, err := s.GetStores().AddonAssociationRepo.List(ctx, assocFilter)
+	s.Require().NoError(err)
+	s.Require().Len(associations, 1, "the addon gets its association")
+	s.Equal(usageSeq, associations[0].SyncedPriceSequence,
+		"attach must stamp the association at the addon's current usage-price sequence, not leave it at 0")
+
+	addonSvc := &addonService{ServiceParams: s.service.(*subscriptionService).ServiceParams}
+	status, err := addonSvc.addonPriceSyncStatus(ctx, addonID)
+	s.Require().NoError(err)
+	s.Equal(usageSeq, status.CurrentSequence)
+	s.Zero(status.UnsyncedAssociationCount, "a freshly attached addon is already in sync")
+	s.True(status.Synced, "the sync status must not report a freshly attached addon as behind")
 }
 
 // Everything after the addons in createSubscription reads a sub whose line items exclude them,

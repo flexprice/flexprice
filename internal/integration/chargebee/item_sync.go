@@ -418,21 +418,11 @@ func (s *ItemPriceService) CreateItemPrice(ctx context.Context, req *ItemPriceCr
 
 	// Add tiers for tiered/volume pricing
 	if len(req.Tiers) > 0 {
-		createParams.Tiers = make([]*itemprice.CreateTierParams, len(req.Tiers))
-		for i, tier := range req.Tiers {
-			if tier.StartingUnit > math.MaxInt32 || (tier.EndingUnit != nil && *tier.EndingUnit > math.MaxInt32) {
-				return nil, ierr.NewError("tier unit exceeds Chargebee's supported range").
-					WithHint("Tier boundaries must fit in a 32-bit integer for Chargebee").
-					Mark(ierr.ErrValidation)
-			}
-			createParams.Tiers[i] = &itemprice.CreateTierParams{
-				StartingUnit: lo.ToPtr(int32(tier.StartingUnit)), // #nosec G115 -- bounds checked above
-				Price:        lo.ToPtr(int64(tier.Price)),
-			}
-			if tier.EndingUnit != nil {
-				createParams.Tiers[i].EndingUnit = lo.ToPtr(int32(*tier.EndingUnit)) // #nosec G115 -- bounds checked above
-			}
+		tiers, err := buildCreateTierParams(req.Tiers)
+		if err != nil {
+			return nil, err
 		}
+		createParams.Tiers = tiers
 	}
 
 	// Add period for package pricing
@@ -575,6 +565,32 @@ func mapPricingModel(p *price.Price) string {
 	}
 }
 
+// buildCreateTierParams converts tiers to Chargebee create params; a tier with a package size is priced per package.
+func buildCreateTierParams(tiers []ChargebeeTier) ([]*itemprice.CreateTierParams, error) {
+	params := make([]*itemprice.CreateTierParams, len(tiers))
+	for i, tier := range tiers {
+		if tier.StartingUnit > math.MaxInt32 ||
+			(tier.EndingUnit != nil && *tier.EndingUnit > math.MaxInt32) ||
+			(tier.PackageSize != nil && *tier.PackageSize > math.MaxInt32) {
+			return nil, ierr.NewError("tier unit exceeds Chargebee's supported range").
+				WithHint("Tier boundaries must fit in a 32-bit integer for Chargebee").
+				Mark(ierr.ErrValidation)
+		}
+		params[i] = &itemprice.CreateTierParams{
+			StartingUnit: lo.ToPtr(int32(tier.StartingUnit)), // #nosec G115 -- bounds checked above
+			Price:        lo.ToPtr(int64(tier.Price)),
+		}
+		if tier.EndingUnit != nil {
+			params[i].EndingUnit = lo.ToPtr(int32(*tier.EndingUnit)) // #nosec G115 -- bounds checked above
+		}
+		if tier.PackageSize != nil {
+			params[i].PricingType = enum.PricingTypePackage
+			params[i].PackageSize = lo.ToPtr(int32(*tier.PackageSize)) // #nosec G115 -- bounds checked above
+		}
+	}
+	return params, nil
+}
+
 // convertTiersForChargebee converts FlexPrice tiers to Chargebee tier format
 func convertTiersForChargebee(flexPriceTiers []*types.PriceTier, currency string) []ChargebeeTier {
 	if len(flexPriceTiers) == 0 {
@@ -591,6 +607,10 @@ func convertTiersForChargebee(flexPriceTiers []*types.PriceTier, currency string
 		chargebeeTier := ChargebeeTier{
 			StartingUnit: startingUnit,
 			Price:        priceInt,
+		}
+		if tier.TransformQuantity != nil && tier.TransformQuantity.DivideBy > 0 {
+			packageSize := int64(tier.TransformQuantity.DivideBy)
+			chargebeeTier.PackageSize = &packageSize
 		}
 
 		// Set ending unit (nil for last tier)
@@ -666,6 +686,11 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 		"plan_id", plan.ID,
 		"plan_name", plan.Name,
 		"prices_count", len(prices))
+
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
 
 	// Step 1: Get or select the latest item family
 	itemFamily, err := s.itemFamilyService.GetLatestItemFamily(ctx)
@@ -756,9 +781,10 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 			tiers := make([]*types.PriceTier, len(p.Tiers))
 			for i := range p.Tiers {
 				tiers[i] = &types.PriceTier{
-					UpTo:       p.Tiers[i].UpTo,
-					UnitAmount: p.Tiers[i].UnitAmount,
-					FlatAmount: p.Tiers[i].FlatAmount,
+					UpTo:              p.Tiers[i].UpTo,
+					UnitAmount:        p.Tiers[i].UnitAmount,
+					FlatAmount:        p.Tiers[i].FlatAmount,
+					TransformQuantity: (*types.TransformQuantity)(p.Tiers[i].TransformQuantity),
 				}
 			}
 			itemPriceReq.Tiers = convertTiersForChargebee(tiers, p.Currency)
@@ -817,6 +843,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 			Metadata: map[string]interface{}{
 				"chargebee_charge_item_id": item.ID,
 			},
+			ConnectionID: lo.ToPtr(conn.ID),
 		}
 		// Override tenant_id from price (price has TenantID in BaseModel)
 		mapping.TenantID = p.TenantID

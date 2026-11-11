@@ -87,6 +87,7 @@ func (s *PortalWalletSuite) buildParams() ServiceParams {
 		MeterRepo:                    stores.MeterRepo,
 		CustomerRepo:                 stores.CustomerRepo,
 		InvoiceRepo:                  stores.InvoiceRepo,
+		HostedInvoiceTokenRepo:       stores.HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:          stores.InvoiceLineItemRepo,
 		EnvironmentRepo:              stores.EnvironmentRepo,
 		TenantRepo:                   stores.TenantRepo,

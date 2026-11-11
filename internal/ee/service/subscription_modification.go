@@ -7,6 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -15,8 +20,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 const (
@@ -38,13 +41,15 @@ type SubscriptionModificationService interface {
 }
 
 type subscriptionModificationService struct {
-	serviceParams ServiceParams
+	serviceParams       ServiceParams
+	subscriptionService *subscriptionService
 }
 
 // NewSubscriptionModificationService creates a new SubscriptionModificationService.
 func NewSubscriptionModificationService(serviceParams ServiceParams) SubscriptionModificationService {
 	return &subscriptionModificationService{
-		serviceParams: serviceParams,
+		serviceParams:       serviceParams,
+		subscriptionService: NewSubscriptionService(serviceParams).(*subscriptionService),
 	}
 }
 
@@ -62,9 +67,12 @@ func (s *subscriptionModificationService) Execute(ctx context.Context, subscript
 	case dto.SubscriptionModifyTypeLineItemChange:
 		return s.executeLineItemChange(ctx, subscriptionID, req.LineItemChangeParams, req.Checkout)
 	case dto.SubscriptionModifyTypeGroupedInvoicing:
+		if req.GroupedInvoicingParams.Action == dto.GroupedInvoicingActionModify {
+			return s.executeGroupedAddonChange(ctx, subscriptionID, req.GroupedInvoicingParams, req.Checkout)
+		}
 		return s.executeGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	case dto.SubscriptionModifyTypeTrialEnd:
-		return s.executeTrialEnd(ctx, subscriptionID, req.TrialEndParams)
+		return s.executeTrialEnd(ctx, subscriptionID, req.TrialEndParams, req.Checkout)
 	case dto.SubscriptionModifyTypeCoupon:
 		return s.executeCouponModification(ctx, subscriptionID, req.CouponParams)
 	case dto.SubscriptionModifyTypeTax:
@@ -96,6 +104,9 @@ func (s *subscriptionModificationService) Preview(ctx context.Context, subscript
 	case dto.SubscriptionModifyTypeLineItemChange:
 		return s.previewLineItemChange(ctx, subscriptionID, req.LineItemChangeParams)
 	case dto.SubscriptionModifyTypeGroupedInvoicing:
+		if req.GroupedInvoicingParams.Action == dto.GroupedInvoicingActionModify {
+			return s.previewGroupedAddonChange(ctx, subscriptionID, req.GroupedInvoicingParams)
+		}
 		return s.previewGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	case dto.SubscriptionModifyTypeTrialEnd:
 		return s.previewTrialEnd(ctx, subscriptionID, req.TrialEndParams)
@@ -888,7 +899,7 @@ func (s *subscriptionModificationService) publishSystemEvent(ctx context.Context
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeSubscription,
 		EntityID:      subscriptionID,

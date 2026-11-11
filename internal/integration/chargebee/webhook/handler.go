@@ -238,7 +238,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 	}
 
 	switch session.CheckoutStatus {
-	case types.CheckoutStatusPending:
+	case types.CheckoutStatusInitiated, types.CheckoutStatusPending:
 		err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: chargebeeTransactionID,
 			ProviderMetadata: map[string]string{

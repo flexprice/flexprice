@@ -221,6 +221,7 @@ func (s *SubscriptionTrialInvoicePaidSuite) SetupTest() {
 		MeterRepo:                  s.GetStores().MeterRepo,
 		CustomerRepo:               s.GetStores().CustomerRepo,
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo:     s.GetStores().HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,
 		EntitlementRepo:            s.GetStores().EntitlementRepo,
 		EnvironmentRepo:            s.GetStores().EnvironmentRepo,
@@ -409,7 +410,8 @@ func (s *SubscriptionTrialProrationSuite) SetupTest() {
 	s.params = ServiceParams{
 		Logger: s.GetLogger(), Config: s.GetConfig(), DB: s.GetDB(),
 		TaxAssociationRepo: st.TaxAssociationRepo, TaxRateRepo: st.TaxRateRepo, TaxAppliedRepo: st.TaxAppliedRepo,
-		SubRepo: st.SubscriptionRepo, SubscriptionLineItemRepo: st.SubscriptionLineItemRepo,
+		HostedInvoiceTokenRepo: st.HostedInvoiceTokenRepo,
+		SubRepo:                st.SubscriptionRepo, SubscriptionLineItemRepo: st.SubscriptionLineItemRepo,
 		SubscriptionPhaseRepo: st.SubscriptionPhaseRepo, SubScheduleRepo: st.SubscriptionScheduleRepo,
 		PlanRepo: st.PlanRepo, PriceRepo: st.PriceRepo, PriceUnitRepo: st.PriceUnitRepo, EventRepo: st.EventRepo,
 		MeterRepo: st.MeterRepo, CustomerRepo: st.CustomerRepo, InvoiceRepo: st.InvoiceRepo,
@@ -423,6 +425,7 @@ func (s *SubscriptionTrialProrationSuite) SetupTest() {
 		ConnectionRepo: st.ConnectionRepo, SettingsRepo: st.SettingsRepo, EventPublisher: s.GetPublisher(),
 		WebhookPublisher: s.GetWebhookPublisher(), ProrationCalculator: s.GetCalculator(), MeterUsageRepo: st.MeterUsageRepo,
 		IntegrationFactory: s.GetIntegrationFactory(), PlanPriceSyncRepo: st.PlanPriceSyncRepo,
+		AddonPriceSyncRepo:           st.AddonPriceSyncRepo,
 		EntityIntegrationMappingRepo: st.EntityIntegrationMappingRepo,
 	}
 	s.subSvc = NewSubscriptionService(s.params)

@@ -30,7 +30,19 @@ func NewPermissionMiddleware(rbacService *rbac.RBACService, logger *logger.Logge
 type PermissionOption func(*permissionRules)
 
 type permissionRules struct {
-	superAdminOnly bool
+	superAdminOnly     bool
+	allowWhenSuspended bool
+	shadow             bool
+}
+
+// Shadow logs an RBAC denial but lets the request through.
+func Shadow() PermissionOption {
+	return func(r *permissionRules) { r.shadow = true }
+}
+
+// AllowWhenSuspended lets a suspended tenant use a write route: event ingest, and paying its way back.
+func AllowWhenSuspended() PermissionOption {
+	return func(r *permissionRules) { r.allowWhenSuspended = true }
 }
 
 // SuperAdminOnly restricts a route to a person holding super_admin. Use it for
@@ -60,7 +72,7 @@ func (pm *PermissionMiddleware) RequirePermission(entity types.Entity, action ty
 		// Suspended tenants are blocked from all write operations. Checked first
 		// so a suspended tenant hears about the suspension rather than a narrower
 		// role problem it cannot act on until the account is restored.
-		if action == types.ActionWrite && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
+		if action == types.ActionWrite && !rules.allowWhenSuspended && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"message": "tenant account is suspended",
 			})
@@ -89,6 +101,24 @@ func (pm *PermissionMiddleware) RequirePermission(entity types.Entity, action ty
 
 		roles := types.GetRoles(ctx)
 		if !pm.rbacService.HasPermission(roles, string(entity), string(action)) {
+			if rules.shadow {
+				actor, _, _ := types.GetActor(ctx)
+				pm.logger.Info(ctx, "rbac shadow: request would be denied",
+					"user_id", types.GetUserID(ctx),
+					"actor_id", actor.ID,
+					"tenant_id", types.GetTenantID(ctx),
+					"environment_id", types.GetEnvironmentID(ctx),
+					"roles", roles,
+					"is_service_account", types.IsServiceAccount(ctx),
+					"entity", entity,
+					"action", action,
+					"method", c.Request.Method,
+					"route", c.FullPath(),
+				)
+				c.Next()
+				return
+			}
+
 			// A caller carrying no roles at all is refused every check, which
 			// looks identical to holding the wrong role. Call it out separately:
 			// it usually means the principal's roles column is null or empty

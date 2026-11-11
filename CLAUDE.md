@@ -254,6 +254,14 @@ An ent hook on the writer client records every write to a registered entity (`in
 7. **Writes:** convert any count-only bulk update or delete of the entity to `SaveReturning` / `ExecReturning`.
 8. **Tests:** add the entity to `entColumns` and `bareRow` in `internal/activity/registry_test.go`; the registry tests skip entities missing there.
 
+### Billing Entity Scope
+
+When billing entities are enabled, each connection belongs to one billing entity (`connections.billing_entity_id`). Connection lookups return only the connection of the entity in ctx; with no entity in ctx and any owned connection present, they return none (fail closed).
+
+**Scope before any connection or provider use.** Before `IntegrationFactory.Get*`, `connectionRepo.GetByProvider`, or anything that builds a provider client, put the owning entity in ctx with `BillingEntityService.ScopeToCustomer`, `ScopeToInvoice`, `ScopeToSubscription`, `ScopeToPayment` or `ScopeToConnection` (webhooks). Scope once at the service entry point and pass that ctx down. Never fall back to the default entity or the first connection.
+
+**Off mode hides a missing scope.** `ScopeTo*` returns ctx unchanged while billing entities are off, so give every new provider or connection path a test with billing entities enabled and an owned connection.
+
 ## Integration Journeys (API-level tests)
 
 YAML-defined customer workflows in `integration-testing-suite/journeys/` run

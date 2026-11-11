@@ -6,7 +6,7 @@
 # Builds npm's latest version. For a specific one: --build-arg MCP_VERSION=<version>
 
 # Fetch stage
-FROM --platform=$BUILDPLATFORM node:24-alpine AS fetch
+FROM --platform=$BUILDPLATFORM node:26-alpine AS fetch
 
 ARG MCP_VERSION=latest
 

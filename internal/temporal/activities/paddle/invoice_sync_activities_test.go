@@ -24,7 +24,7 @@ func TestPullAndUpdatePaddleInvoice_NoPaddleConnection(t *testing.T) {
 	subStore := testutil.NewInMemorySubscriptionStore()
 
 	factory := buildActivityFactory(connectionStore, mappingStore, invoiceStore, subStore)
-	act := paddleactivities.NewInvoiceSyncActivities(factory, nil, buildTestActivityLogger())
+	act := paddleactivities.NewInvoiceSyncActivities(factory, nil, nil, buildTestActivityLogger())
 
 	input := models.PaddleInvoicePullSyncWorkflowInput{
 		InvoiceID:     "inv_no_conn",

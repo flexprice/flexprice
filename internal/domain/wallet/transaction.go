@@ -198,6 +198,10 @@ type CreditTopupsExportData struct {
 	Credits             decimal.Decimal
 	Currency            string
 	InvoiceID           string
+	// The billing period of the linked invoice. Empty when there is no invoice or it has no period,
+	// as with one-off top-up invoices.
+	InvoicePeriodStart *time.Time
+	InvoicePeriodEnd   *time.Time
 	// AmountPaid is what the credits were bought for: the invoice after discount, before tax, for
 	// an invoiced purchase, and zero for free and bonus grants. Not set for other credits.
 	AmountPaid *decimal.Decimal
@@ -214,6 +218,8 @@ type WalletDebitsExportData struct {
 	Currency            string
 	TransactionReason   types.TransactionReason
 	InvoiceID           string
+	InvoicePeriodStart  *time.Time
+	InvoicePeriodEnd    *time.Time
 	CreditTransactionID string
 	Credits             decimal.Decimal
 	// The wallet balance around this row. A debit drawing from several credits steps down row by row.
@@ -239,6 +245,42 @@ type WalletDebitsExportData struct {
 type WalletDebitsExportCursor struct {
 	CreatedAt time.Time
 	DebitID   string
+}
+
+// WalletLedgerExportData is one row of a wallet's history: a credit, or one credit batch a debit
+// drew from. A debit with no recorded breakdown is a single row with no batch.
+type WalletLedgerExportData struct {
+	TransactionID       string
+	Type                types.TransactionType
+	TransactionReason   types.TransactionReason
+	ExternalID          string
+	CustomerName        string
+	WalletID            string
+	Currency            string
+	InvoiceID           string
+	InvoicePeriodStart  *time.Time
+	InvoicePeriodEnd    *time.Time
+	CreditTransactionID string
+	// Always positive; Type says which way the balance moved.
+	Credits             decimal.Decimal
+	CreditBalanceBefore decimal.Decimal
+	CreditBalanceAfter  decimal.Decimal
+	// The credit balance in the wallet currency: at the rate a debit used, and at the wallet's
+	// current rate for a credit.
+	WalletBalanceBefore decimal.Decimal
+	WalletBalanceAfter  decimal.Decimal
+	// What is left of what was paid for the wallet's credits around this row, unrounded.
+	TopUpAmountRemainingBefore decimal.Decimal
+	TopUpAmountRemainingAfter  decimal.Decimal
+	// For a credit: what it was bought for (see CreditTopupsExportData.AmountPaid).
+	AmountPaid *decimal.Decimal
+	// For a debit: the size and paid amount of the credit drawn from.
+	WalletTxnCredits    *decimal.Decimal
+	WalletTxnAmountPaid *decimal.Decimal
+	// When the row changed the balance: when the invoice was paid for an invoiced purchase that
+	// waited on payment, else CreatedAt.
+	EffectiveAt time.Time
+	CreatedAt   time.Time
 }
 
 // CreditUsageCSVHeaders represents the column header strings for the credit usage CSV export

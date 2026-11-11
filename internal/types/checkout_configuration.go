@@ -13,6 +13,7 @@ type CheckoutConfiguration struct {
 	ModifySubscriptionParams *ModifySubscriptionParams `json:"modify_subscription_params,omitempty"`
 	WalletTopupParams        *WalletTopupParams        `json:"wallet_topup_params,omitempty"`
 	AddAddonParams           *AddAddonParams           `json:"add_addon_params,omitempty"`
+	AddAddonBatchParams      []*AddAddonParams         `json:"add_addon_batch_params,omitempty"`
 	PayInvoiceParams         *PayInvoiceParams         `json:"pay_invoice_params,omitempty"`
 }
 
@@ -43,6 +44,14 @@ func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
 		}
 		return c.WalletTopupParams.Validate()
 	case CheckoutActionAddAddon:
+		if c.AddAddonParams != nil && len(c.AddAddonBatchParams) > 0 {
+			return ierr.NewError("add_addon_params and add_addon_batch_params are mutually exclusive").
+				WithHint("Provide either add_addon_params or add_addon_batch_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		if len(c.AddAddonBatchParams) > 0 {
+			return validateAddAddonBatch(c.AddAddonBatchParams)
+		}
 		if c.AddAddonParams == nil {
 			return ierr.NewError("add_addon_params is required for add_addon action").
 				WithHint("Provide add_addon_params in configuration").
@@ -56,6 +65,17 @@ func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.PayInvoiceParams.Validate()
+	}
+	return nil
+}
+
+// AddAddonEntries returns the batch entries, or the single entry when the session is not a batch.
+func (c *CheckoutConfiguration) AddAddonEntries() []*AddAddonParams {
+	if len(c.AddAddonBatchParams) > 0 {
+		return c.AddAddonBatchParams
+	}
+	if c.AddAddonParams != nil {
+		return []*AddAddonParams{c.AddAddonParams}
 	}
 	return nil
 }
@@ -121,6 +141,7 @@ type ModifySubscriptionType string
 const (
 	ModifySubscriptionTypeQuantityChange ModifySubscriptionType = "quantity_change"
 	ModifySubscriptionTypeLineItemChange ModifySubscriptionType = "line_item_change"
+	ModifySubscriptionTypeTrialEnd       ModifySubscriptionType = "trial_end"
 )
 
 // ModifySubscriptionParams is persisted on checkout sessions for payment-gated
@@ -129,6 +150,8 @@ type ModifySubscriptionParams struct {
 	SubscriptionID        string                       `json:"subscription_id"`
 	ModifyType            ModifySubscriptionType       `json:"modify_type,omitempty"`
 	LineItemModifications []ModifySubscriptionLineItem `json:"line_item_modifications"`
+	// TrialEndAt is where a trial_end checkout starts the first paid period.
+	TrialEndAt *time.Time `json:"trial_end_at,omitempty"`
 }
 
 // ModifySubscriptionLineItem is one close-and-replace intent for a line item.
@@ -158,6 +181,14 @@ func (p *ModifySubscriptionParams) Validate() error {
 		return ierr.NewError("subscription_id is required").
 			WithHint("Provide subscription_id in modify_subscription_params").
 			Mark(ierr.ErrValidation)
+	}
+	// A trial end changes no line items; it needs only the conversion start.
+	if p.ModifyType == ModifySubscriptionTypeTrialEnd {
+		if p.TrialEndAt == nil {
+			return ierr.NewError("trial_end_at is required for trial_end").
+				Mark(ierr.ErrValidation)
+		}
+		return nil
 	}
 	if len(p.LineItemModifications) == 0 {
 		return ierr.NewError("line_item_modifications is required").
@@ -208,6 +239,24 @@ type AddAddonRef struct {
 	ProrationBehavior ProrationBehavior `json:"proration_behavior,omitempty"`
 	StartDate         time.Time         `json:"start_date"`
 	Coupons           []CouponRef       `json:"coupons,omitempty"`
+	// Price overrides minted at execute time; completion repoints the line items instead of minting again.
+	PriceOverrides []AddonPriceOverrideRef `json:"price_overrides,omitempty"`
+}
+
+// AddonPriceOverrideRef maps an addon's plan price to the subscription-scoped price minted for it.
+type AddonPriceOverrideRef struct {
+	PriceID         string           `json:"price_id"`
+	OverridePriceID string           `json:"override_price_id"`
+	Quantity        *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+}
+
+// OverridePriceIDs returns the subscription-scoped prices minted for this attach.
+func (r AddAddonRef) OverridePriceIDs() []string {
+	ids := make([]string, 0, len(r.PriceOverrides))
+	for _, override := range r.PriceOverrides {
+		ids = append(ids, override.OverridePriceID)
+	}
+	return ids
 }
 
 // RemoveAddonRef is one removal riding along with a payment-gated attach. It persists nothing
@@ -234,7 +283,33 @@ func (p *AddAddonParams) Validate() error {
 			WithHint("add_addon_params must carry at least one addon").
 			Mark(ierr.ErrValidation)
 	}
+	return p.validateRefs()
+}
 
+// validateAddAddonBatch allows removal-only entries as long as the batch adds at least one addon.
+func validateAddAddonBatch(batch []*AddAddonParams) error {
+	hasAddon := false
+	for i, p := range batch {
+		if p == nil || p.SubscriptionID == "" {
+			return ierr.NewError("subscription_id is required").
+				WithHint("Each add_addon_batch_params entry must have a subscription_id").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := p.validateRefs(); err != nil {
+			return err
+		}
+		hasAddon = hasAddon || len(p.Addons) > 0
+	}
+	if !hasAddon {
+		return ierr.NewError("at least one addon is required").
+			WithHint("add_addon_batch_params must carry at least one addon").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func (p *AddAddonParams) validateRefs() error {
 	for i, ref := range p.Addons {
 		if ref.AssociationID == "" {
 			return ierr.NewError("association_id is required").

@@ -244,11 +244,63 @@ func TestEventExporter_PrepareData_BatchesAcrossPages(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	_, count, err := exporter.PrepareData(ctx, exportRequest(tenantID, envID, now))
+	csvBytes, count, err := exporter.PrepareData(ctx, exportRequest(tenantID, envID, now))
 	if err != nil {
 		t.Fatalf("PrepareData: %v", err)
 	}
 	if count != total {
 		t.Errorf("expected %d records across pages, got %d", total, count)
+	}
+	// Batches are written one at a time; the header must appear once, not per batch.
+	var parsed []*FeatureUsageCSV
+	if err := gocsv.UnmarshalBytes(csvBytes, &parsed); err != nil {
+		t.Fatalf("Unmarshal CSV: %v", err)
+	}
+	if len(parsed) != total {
+		t.Errorf("expected %d CSV rows, got %d", total, len(parsed))
+	}
+	for _, r := range parsed {
+		if r.ID == "id" {
+			t.Fatalf("header row repeated inside the CSV")
+		}
+	}
+}
+
+type countOverrideMeterUsageRepo struct {
+	events.MeterUsageRepository
+	count      int
+	fetchCalls int
+}
+
+func (r *countOverrideMeterUsageRepo) CountMeterUsageForExport(context.Context, time.Time, time.Time) (int, error) {
+	return r.count, nil
+}
+
+func (r *countOverrideMeterUsageRepo) GetMeterUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize, offset int) ([]*events.MeterUsage, error) {
+	r.fetchCalls++
+	return r.MeterUsageRepository.GetMeterUsageForExport(ctx, startTime, endTime, batchSize, offset)
+}
+
+// TestEventExporter_PrepareData_RejectsOverVolumeLimit verifies the cheap count
+// gate fails closed before any paged meter_usage fetch.
+func TestEventExporter_PrepareData_RejectsOverVolumeLimit(t *testing.T) {
+	tenantID := "tenant-volume"
+	envID := "env-volume"
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), tenantID), envID)
+	now := time.Now().UTC()
+
+	store := testutil.NewInMemoryMeterUsageStore()
+	repo := &countOverrideMeterUsageRepo{
+		MeterUsageRepository: store,
+		count:                maxExportRows + 1,
+	}
+	exporter := NewEventExporter(repo, testutil.NewInMemoryPriceStore(), nil, nil, logger.NewNoopLogger())
+
+	_, _, err := exporter.PrepareData(ctx, exportRequest(tenantID, envID, now))
+	if err == nil {
+		t.Fatal("expected volume limit error")
+	}
+	if repo.fetchCalls != 0 {
+		t.Fatalf("expected no paged fetches after volume rejection, got %d", repo.fetchCalls)
 	}
 }

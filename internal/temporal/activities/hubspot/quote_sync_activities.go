@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/integration"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -12,16 +14,19 @@ import (
 // QuoteSyncActivities contains all HubSpot quote sync activities
 type QuoteSyncActivities struct {
 	integrationFactory *integration.Factory
+	entityScope        interfaces.BillingEntityScope
 	logger             *logger.Logger
 }
 
 // NewQuoteSyncActivities creates a new instance of QuoteSyncActivities
 func NewQuoteSyncActivities(
 	integrationFactory *integration.Factory,
+	entityScope interfaces.BillingEntityScope,
 	logger *logger.Logger,
 ) *QuoteSyncActivities {
 	return &QuoteSyncActivities{
 		integrationFactory: integrationFactory,
+		entityScope:        entityScope,
 		logger:             logger,
 	}
 }
@@ -39,6 +44,11 @@ func (a *QuoteSyncActivities) CreateQuoteAndLineItems(
 	// Set context for operations
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, "", input.SubscriptionID)
+	if err != nil {
+		return err
+	}
 
 	// Get HubSpot integration with proper context
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)

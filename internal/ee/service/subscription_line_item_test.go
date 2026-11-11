@@ -152,6 +152,7 @@ func (s *SubscriptionLineItemServiceSuite) setupService() {
 		MeterRepo:                  s.GetStores().MeterRepo,
 		CustomerRepo:               s.GetStores().CustomerRepo,
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo:     s.GetStores().HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,
 		EntitlementRepo:            s.GetStores().EntitlementRepo,
 		EnvironmentRepo:            s.GetStores().EnvironmentRepo,
@@ -328,11 +329,11 @@ func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_Schedu
 
 	successor := s.scheduleVersion(s.testData.lineItem.ID, 75, futureStart)
 	s.NotEqual(s.testData.lineItem.ID, successor.ID)
-	s.Equal(s.testData.lineItem.ID, successor.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID])
+	s.Equal(s.testData.lineItem.ID, lo.FromPtr(successor.PredecessorLineItemID))
 
 	predecessor := s.reloadLineItem(s.testData.lineItem.ID)
 	s.assertEndDate(predecessor, futureStart, "versioning must terminate the predecessor where the successor starts")
-	s.Equal(successor.ID, predecessor.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID])
+	s.Equal(successor.ID, lo.FromPtr(predecessor.SuccessorLineItemID))
 
 	s.NoError(s.revertScheduledVersion(successor.ID))
 
@@ -340,7 +341,7 @@ func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_Schedu
 	restored := s.reloadLineItem(s.testData.lineItem.ID)
 	s.Equal(types.StatusPublished, restored.Status)
 	s.True(restored.EndDate.IsZero(), "reverting the scheduled version should reopen the prior line")
-	s.Empty(restored.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID])
+	s.Nil(restored.SuccessorLineItemID)
 }
 
 // Reverting restores exactly the referenced predecessor. A scheduled row with no pointer
@@ -428,8 +429,8 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Alread
 	// the pointer to the successor that was just deleted.
 	s.NoError(s.revertScheduledVersion(successor.ID))
 	replacement := s.scheduleVersion(s.testData.lineItem.ID, 90, futureStart)
-	s.Equal(s.testData.lineItem.ID, replacement.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID])
-	s.Empty(replacement.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID],
+	s.Equal(s.testData.lineItem.ID, lo.FromPtr(replacement.PredecessorLineItemID))
+	s.Nil(replacement.SuccessorLineItemID,
 		"a newly created version must not inherit the predecessor's successor pointer")
 }
 
@@ -446,7 +447,7 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Schedu
 
 	stillLinked := s.reloadLineItem(successor.ID)
 	s.Equal("renamed", stillLinked.Metadata["note"])
-	s.Equal(s.testData.lineItem.ID, stillLinked.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID])
+	s.Equal(s.testData.lineItem.ID, lo.FromPtr(stillLinked.PredecessorLineItemID))
 
 	s.NoError(s.revertScheduledVersion(successor.ID))
 	s.True(s.reloadLineItem(s.testData.lineItem.ID).EndDate.IsZero(),
@@ -474,8 +475,11 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Metada
 
 	stored := s.reloadLineItem(successor.ID)
 	s.Equal("kept", stored.Metadata["note"])
-	s.Equal(s.testData.lineItem.ID, stored.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID],
+	s.Equal(s.testData.lineItem.ID, lo.FromPtr(stored.PredecessorLineItemID),
 		"a caller must not be able to repoint the predecessor")
+	s.Empty(stored.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID],
+		"a caller must not be able to plant a predecessor for the metadata fallback")
+	s.Nil(stored.SuccessorLineItemID)
 	s.Empty(stored.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID],
 		"a caller must not be able to forge a successor")
 
@@ -510,6 +514,39 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_IgnoresCa
 
 	s.NoError(s.revertScheduledVersion(added.SubscriptionLineItem.ID))
 	s.assertEndDate(s.reloadLineItem(forgedTarget.ID), futureStart, "the forged target must be untouched")
+}
+
+// Line items versioned before the lineage columns existed hold their pointers only in
+// metadata. The delete guard and the revert must still follow them.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_LegacyMetadataLineage() {
+	futureStart := time.Now().UTC().Add(13 * 24 * time.Hour)
+	predecessorID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+	successorID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+
+	s.stageLineItem(func(li *subscription.SubscriptionLineItem) {
+		li.ID = predecessorID
+		li.EndDate = futureStart
+		li.Metadata = map[string]string{types.SubscriptionLineItemMetadataKeySuccessorID: successorID}
+	})
+	s.stageLineItem(func(li *subscription.SubscriptionLineItem) {
+		li.ID = successorID
+		li.StartDate = futureStart
+		li.EndDate = time.Time{}
+		li.Metadata = map[string]string{types.SubscriptionLineItemMetadataKeyPredecessorID: predecessorID}
+	})
+
+	_, err := s.service.DeleteSubscriptionLineItem(s.GetContext(), predecessorID, dto.DeleteSubscriptionLineItemRequest{})
+	s.Error(err)
+	s.Contains(err.Error(), "line item has a successor and cannot be deleted")
+
+	s.NoError(s.revertScheduledVersion(successorID))
+
+	s.Equal(types.StatusDeleted, s.reloadLineItem(successorID).Status)
+	restored := s.reloadLineItem(predecessorID)
+	s.True(restored.EndDate.IsZero(), "reverting must reopen the predecessor named in metadata")
+	s.Nil(restored.SuccessorLineItemID)
+	s.Empty(restored.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID],
+		"the metadata pointer must be cleared too, or the fallback would still see a successor")
 }
 
 // Amending a pending change goes through the scheduled version: it gets terminated and
@@ -598,6 +635,23 @@ func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_Effect
 	li, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.testData.lineItem.ID)
 	s.NoError(err)
 	s.Equal(existingEndDate.Truncate(time.Second).Unix(), li.EndDate.Truncate(time.Second).Unix(), "end date must remain unchanged")
+}
+
+// A date a fraction of a microsecond past a stored end is still after it: cutting it to microseconds before the
+// end-date check would pull it onto the end and let the delete through.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_EffectiveFromJustAfterExistingEndDate_Blocked() {
+	ctx := s.GetContext()
+
+	existingEndDate := s.testData.lineItem.StartDate.Add(5 * 24 * time.Hour).Truncate(time.Microsecond)
+	s.testData.lineItem.EndDate = existingEndDate
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, s.testData.lineItem))
+
+	justAfter := existingEndDate.Add(500 * time.Nanosecond)
+	_, err := s.service.DeleteSubscriptionLineItem(ctx, s.testData.lineItem.ID, dto.DeleteSubscriptionLineItemRequest{
+		EffectiveFrom: &justAfter,
+	})
+	s.Require().Error(err)
+	s.Contains(err.Error(), "already terminated")
 }
 
 // TestDeleteSubscriptionLineItem_EffectiveFromEqualsExistingEndDate_Allowed verifies a no-op re-set to the same end date succeeds.
@@ -768,6 +822,23 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Backda
 	oldLi, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.testData.lineItem.ID)
 	s.NoError(err)
 	s.Equal(newEffectiveFrom.Truncate(time.Second).Unix(), oldLi.EndDate.Truncate(time.Second).Unix())
+}
+
+// The update path checks the requested end too, not the one cut to microseconds.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_EffectiveFromJustAfterExistingEndDate_Blocked() {
+	ctx := s.GetContext()
+
+	oldEndDate := s.testData.lineItem.StartDate.Add(5 * 24 * time.Hour).Truncate(time.Microsecond)
+	s.testData.lineItem.EndDate = oldEndDate
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, s.testData.lineItem))
+
+	justAfter := oldEndDate.Add(500 * time.Nanosecond)
+	_, err := s.service.UpdateSubscriptionLineItem(ctx, s.testData.lineItem.ID, dto.UpdateSubscriptionLineItemRequest{
+		Amount:        lo.ToPtr(decimal.NewFromInt(300)),
+		EffectiveFrom: &justAfter,
+	})
+	s.Require().Error(err)
+	s.Contains(err.Error(), "already terminated")
 }
 
 // TestUpdateSubscriptionLineItem_EffectiveFromAfterExistingEndDate_Blocked verifies the out-of-scope "extend forward" case stays blocked.
@@ -2490,4 +2561,56 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_BucketsOn
 	s.Require().NotNil(resp.CommitmentOverageFactor)
 	s.True(decimal.NewFromInt(1).Equal(*resp.CommitmentOverageFactor),
 		"expected default overage factor 1 for buckets-only create, got %s", resp.CommitmentOverageFactor)
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestGetSubscriptionLineItemHistory() {
+	// Pointers only in metadata, as written before the lineage columns existed.
+	legacyB := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+	legacyA := s.stageLineItem(func(li *subscription.SubscriptionLineItem) {
+		li.Metadata = map[string]string{types.SubscriptionLineItemMetadataKeySuccessorID: legacyB}
+	})
+	s.stageLineItem(func(li *subscription.SubscriptionLineItem) {
+		li.ID = legacyB
+		li.StartDate = legacyA.StartDate.Add(24 * time.Hour)
+		li.Metadata = map[string]string{types.SubscriptionLineItemMetadataKeyPredecessorID: legacyA.ID}
+	})
+	solo := s.stageLineItem(func(*subscription.SubscriptionLineItem) {})
+
+	// Staged above first: stageLineItem clones the suite line item, which versioning gives a successor.
+	now := time.Now().UTC()
+	v1 := s.testData.lineItem
+	v2 := s.scheduleVersion(v1.ID, 75, now.Add(5*24*time.Hour))
+	v3 := s.scheduleVersion(v2.ID, 90, now.Add(10*24*time.Hour))
+	cancelled := s.scheduleVersion(v3.ID, 110, now.Add(15*24*time.Hour))
+	s.Require().NoError(s.revertScheduledVersion(cancelled.ID))
+
+	chain := []string{v1.ID, v2.ID, v3.ID}
+	tests := []struct {
+		name    string
+		id      string
+		wantIDs []string
+		wantErr bool
+	}{
+		{name: "from first version", id: v1.ID, wantIDs: chain},
+		{name: "from middle version", id: v2.ID, wantIDs: chain},
+		{name: "from latest version", id: v3.ID, wantIDs: chain},
+		{name: "cancelled version requested directly", id: cancelled.ID, wantIDs: append(chain, cancelled.ID)},
+		{name: "legacy metadata pointers", id: legacyB, wantIDs: []string{legacyA.ID, legacyB}},
+		{name: "no lineage", id: solo.ID, wantIDs: []string{solo.ID}},
+		{name: "not found", id: "subs_line_missing", wantErr: true},
+		{name: "empty id", id: "", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			resp, err := s.service.GetSubscriptionLineItemHistory(s.GetContext(), tt.id)
+			if tt.wantErr {
+				s.Error(err)
+				s.Nil(resp)
+				return
+			}
+			s.Require().NoError(err)
+			s.Equal(tt.wantIDs, lo.Map(resp.Items, func(r *dto.SubscriptionLineItemResponse, _ int) string { return r.ID }))
+		})
+	}
 }

@@ -5,12 +5,15 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // Credit expiry settlement: an expiring credit first pays the usage from before its expiry
@@ -26,7 +29,7 @@ const (
 )
 
 func (s *walletService) CreditExpiryCutoff() time.Time {
-	return time.Now().UTC().Add(-settlementGracePeriod)
+	return clock.Now().Add(-settlementGracePeriod)
 }
 
 // draftAllocation is a draft invoice and the most it may take from an expiring credit.
@@ -257,7 +260,7 @@ func (s *walletService) HasPendingExpiringCredit(ctx context.Context, customerID
 	if err != nil {
 		return false, err
 	}
-	now := time.Now().UTC()
+	now := clock.Now()
 	for _, w := range wallets {
 		if w.WalletStatus != types.WalletStatusActive || w.WalletType != types.WalletTypePrePaid ||
 			!types.IsMatchingCurrency(w.Currency, currency) {

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -77,6 +79,34 @@ func TestSplitSQL(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, c.want) {
 				t.Fatalf("splitSQL()\n got=%#v\nwant=%#v", got, c.want)
+			}
+		})
+	}
+}
+
+// TestSplitSQL_MigrationFiles keeps every shipped ClickHouse migration parseable by the runner.
+func TestSplitSQL_MigrationFiles(t *testing.T) {
+	files, err := filepath.Glob("../../migrations/clickhouse/*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatal("no clickhouse migration files found")
+	}
+
+	for _, f := range files {
+		t.Run(filepath.Base(f), func(t *testing.T) {
+			raw, err := os.ReadFile(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			stmts, err := splitSQL(string(raw))
+			if err != nil {
+				t.Fatalf("splitSQL: %v", err)
+			}
+			if len(stmts) == 0 {
+				t.Fatal("no statements")
 			}
 		})
 	}

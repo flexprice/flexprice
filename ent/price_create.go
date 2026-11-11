@@ -511,6 +511,20 @@ func (_c *PriceCreate) SetNillableGroupID(v *string) *PriceCreate {
 	return _c
 }
 
+// SetProductID sets the "product_id" field.
+func (_c *PriceCreate) SetProductID(v string) *PriceCreate {
+	_c.mutation.SetProductID(v)
+	return _c
+}
+
+// SetNillableProductID sets the "product_id" field if the given value is not nil.
+func (_c *PriceCreate) SetNillableProductID(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetProductID(*v)
+	}
+	return _c
+}
+
 // SetSequence sets the "sequence" field.
 func (_c *PriceCreate) SetSequence(v int64) *PriceCreate {
 	_c.mutation.SetSequence(v)
@@ -969,6 +983,10 @@ func (_c *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.GroupID(); ok {
 		_spec.SetField(price.FieldGroupID, field.TypeString, value)
 		_node.GroupID = &value
+	}
+	if value, ok := _c.mutation.ProductID(); ok {
+		_spec.SetField(price.FieldProductID, field.TypeString, value)
+		_node.ProductID = &value
 	}
 	if value, ok := _c.mutation.Sequence(); ok {
 		_spec.SetField(price.FieldSequence, field.TypeInt64, value)

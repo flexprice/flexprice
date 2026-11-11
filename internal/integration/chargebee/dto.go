@@ -57,9 +57,10 @@ type ItemResponse struct {
 
 // ChargebeeTier represents a pricing tier for Chargebee item prices
 type ChargebeeTier struct {
-	StartingUnit int64  `json:"starting_unit"`         // Starting quantity for this tier (1-based, Chargebee requirement)
-	EndingUnit   *int64 `json:"ending_unit,omitempty"` // Ending quantity (nil for last tier)
-	Price        int64  `json:"price"`                 // Price per unit in smallest currency unit
+	StartingUnit int64  `json:"starting_unit"`          // Starting quantity for this tier (1-based, Chargebee requirement)
+	EndingUnit   *int64 `json:"ending_unit,omitempty"`  // Ending quantity (nil for last tier)
+	Price        int64  `json:"price"`                  // Price per unit in smallest currency unit
+	PackageSize  *int64 `json:"package_size,omitempty"` // Units per package; Price is then per package
 }
 
 // ItemPriceCreateRequest represents the request to create an item price

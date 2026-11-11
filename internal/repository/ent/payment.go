@@ -3,7 +3,10 @@ package ent
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/payment"
@@ -17,7 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
 )
 
 type paymentRepository struct {
@@ -71,6 +73,7 @@ func (r *paymentRepository) Create(ctx context.Context, p *domainPayment.Payment
 							SetPaymentMethodID(p.PaymentMethodID).
 							SetNillablePaymentGateway(p.PaymentGateway).
 							SetNillableGatewayPaymentID(p.GatewayPaymentID).
+							SetNillableConnectionID(p.ConnectionID).
 							SetNillableGatewayTrackingID(p.GatewayTrackingID).
 							SetGatewayMetadata(p.GatewayMetadata).
 							SetAmount(p.Amount).
@@ -329,7 +332,7 @@ func (r *paymentRepository) update(ctx context.Context, p *domainPayment.Payment
 		predicates = append(predicates, payment.PaymentStatus(string(*expectedStatus)))
 	}
 
-	affected, err := client.Payment.Update().
+	update := client.Payment.Update().
 		Where(predicates...).
 		SetPaymentStatus(string(p.PaymentStatus)).
 		SetPaymentMethodID(p.PaymentMethodID).
@@ -340,14 +343,20 @@ func (r *paymentRepository) update(ctx context.Context, p *domainPayment.Payment
 		SetGatewayMetadata(p.GatewayMetadata).
 		SetTrackAttempts(p.TrackAttempts).
 		SetMetadata(p.Metadata).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetNillableRecordedAt(p.RecordedAt).
 		SetNillableSucceededAt(p.SucceededAt).
 		SetNillableFailedAt(p.FailedAt).
 		SetNillableRefundedAt(p.RefundedAt).
 		SetNillableVoidedAt(p.VoidedAt).
-		SetNillableErrorMessage(p.ErrorMessage).
-		SaveReturning(ctx)
+		SetNillableErrorMessage(p.ErrorMessage)
+	if p.ConnectionID != nil {
+		update.SetConnectionID(*p.ConnectionID)
+	} else {
+		update.ClearConnectionID()
+	}
+
+	affected, err := update.SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -434,7 +443,7 @@ func (r *paymentRepository) delete(ctx context.Context, id string, expectedStatu
 		Where(predicates...).
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SaveReturning(ctx)
 
 	if err != nil {
@@ -574,6 +583,7 @@ func (r *paymentRepository) CreateAttempt(ctx context.Context, a *domainPayment.
 	}
 
 	*a = *domainPayment.FromEntAttempt(attempt)
+	r.DeleteCache(ctx, a.PaymentID)
 	return nil
 }
 
@@ -647,7 +657,7 @@ func (r *paymentRepository) UpdateAttempt(ctx context.Context, a *domainPayment.
 		SetNillableGatewayAttemptID(a.GatewayAttemptID).
 		SetNillableErrorMessage(a.ErrorMessage).
 		SetMetadata(a.Metadata).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		Save(ctx)
 
 	if err != nil {
@@ -850,6 +860,10 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 		query = query.Where(payment.GatewayTrackingID(*f.GatewayTrackingID))
 	}
 
+	if f.UpdatedAtGTE != nil {
+		query = query.Where(payment.UpdatedAtGTE(*f.UpdatedAtGTE))
+	}
+
 	// Apply time range filters if specified
 	if f.TimeRangeFilter != nil {
 		if f.TimeRangeFilter.StartTime != nil {
@@ -903,7 +917,7 @@ func (r *paymentRepository) DeleteCache(ctx context.Context, paymentID string) {
 
 // GetLinkedCustomerID returns the paid invoice's customer, or the customer a payment is made for.
 func (r *paymentRepository) GetLinkedCustomerID(ctx context.Context, id string) (string, error) {
-	return linkedCustomerID(ctx, "payment", id, func() (string, error) {
+	return linkedCustomerID(ctx, "payment", id, func(ctx context.Context) (string, error) {
 		client := r.client.Reader(ctx)
 		p, err := client.Payment.Query().
 			Where(payment.ID(id), payment.TenantID(types.GetTenantID(ctx)), payment.EnvironmentID(types.GetEnvironmentID(ctx))).

@@ -215,6 +215,15 @@ func copySubscription(sub *subscription.Subscription) *subscription.Subscription
 	return &out
 }
 
+// GetTimezone returns the timezone of the scoped subscription.
+func (s *InMemorySubscriptionStore) GetTimezone(ctx context.Context, id string) (string, error) {
+	sub, err := s.Get(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return sub.Timezone, nil
+}
+
 // GetForUpdate matches Get; in-memory store has no row locks.
 func (s *InMemorySubscriptionStore) GetForUpdate(ctx context.Context, id string) (*subscription.Subscription, error) {
 	return s.Get(ctx, id)
@@ -236,6 +245,12 @@ func (s *InMemorySubscriptionStore) List(ctx context.Context, filter *types.Subs
 		// Same copy-on-read contract as Get; attaching line items below is a write.
 		sub = copySubscription(sub)
 		subs[i] = sub
+
+		// Like the ent repository, line items load only on request.
+		if filter == nil || !filter.WithLineItems {
+			sub.LineItems = nil
+			continue
+		}
 
 		if s.lineItemStore != nil {
 			liFilter := types.NewNoLimitSubscriptionLineItemFilter()
@@ -265,6 +280,7 @@ func (s *InMemorySubscriptionStore) ListByCustomerID(ctx context.Context, custom
 			types.SubscriptionStatusActive,
 			types.SubscriptionStatusTrialing,
 		},
+		WithLineItems: true,
 	}
 
 	// Use the existing List method
@@ -374,25 +390,15 @@ func (s *InMemorySubscriptionStore) Delete(ctx context.Context, id string) error
 }
 
 // ListAll returns all subscriptions without pagination
+// ListAll drops pagination and keeps every other field, matching the ent
+// repository. Copying fields by hand here silently ignored CustomerIDs,
+// SubscriptionIDs and WithLineItems.
 func (s *InMemorySubscriptionStore) ListAll(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
-	// Create an unlimited filter
-	unlimitedFilter := &types.SubscriptionFilter{
-		QueryFilter:             types.NewNoLimitQueryFilter(),
-		TimeRangeFilter:         filter.TimeRangeFilter,
-		CustomerID:              filter.CustomerID,
-		PlanID:                  filter.PlanID,
-		ParentSubscriptionIDs:   filter.ParentSubscriptionIDs,
-		SubscriptionTypes:       filter.SubscriptionTypes,
-		SubscriptionStatus:      filter.SubscriptionStatus,
-		BillingCadence:          filter.BillingCadence,
-		BillingPeriod:           filter.BillingPeriod,
-		SubscriptionStatusNotIn: filter.SubscriptionStatusNotIn,
-		ActiveAt:                filter.ActiveAt,
-		EffectiveDateForUpdate:  filter.EffectiveDateForUpdate,
-		TrialEndDueLTE:          filter.TrialEndDueLTE,
+	if filter == nil {
+		filter = &types.SubscriptionFilter{}
 	}
-
-	return s.List(ctx, unlimitedFilter)
+	filter.QueryFilter = types.NewNoLimitQueryFilter()
+	return s.List(ctx, filter)
 }
 
 // GetSubscriptionsForBillingPeriodUpdate returns subscriptions across all tenants for billing-period jobs.

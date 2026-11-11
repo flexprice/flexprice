@@ -137,7 +137,8 @@ func (s *subscriptionService) validateAddToGroupedInvoicing(
 			Mark(ierr.ErrValidation)
 	}
 
-	return nil
+	// 11. child and parent customers must share a billing entity
+	return requireSameBillingEntity(ctx, s.ServiceParams, child.CustomerID, parentSub.CustomerID)
 }
 
 // addToGroupedInvoicing fetches the child by ID, validates all constraints, then persists the
@@ -271,9 +272,30 @@ func getGroupedInvoicingChildren(
 		filter.SubscriptionStatus = append(filter.SubscriptionStatus, types.SubscriptionStatusDraft)
 	}
 
+	// A cancelled parent's final invoice still carries the children cancelled with it.
+	parentEnd := subscriptionEndDate(parent)
+	if parent.SubscriptionStatus == types.SubscriptionStatusCancelled && parentEnd != nil {
+		filter.SubscriptionStatus = append(filter.SubscriptionStatus, types.SubscriptionStatusCancelled)
+	}
+
 	filter.WithLineItems = withLineItems
 
-	return sp.SubRepo.List(ctx, filter)
+	children, err := sp.SubRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	return lo.Filter(children, func(child *subscription.Subscription, _ int) bool {
+		return child.SubscriptionStatus != types.SubscriptionStatusCancelled ||
+			(parentEnd != nil && child.EndDate != nil && child.EndDate.Equal(*parentEnd))
+	}), nil
+}
+
+// subscriptionEndDate is when a cancelled subscription stops: its end date, else its scheduled cancel date.
+func subscriptionEndDate(sub *subscription.Subscription) *time.Time {
+	if sub.EndDate != nil {
+		return sub.EndDate
+	}
+	return sub.CancelAt
 }
 
 // invoicingSubscription returns the subscription whose invoice carries sub's charges: the parent for a grouped child, else sub.
@@ -296,4 +318,42 @@ func checkoutPayerID(ctx context.Context, sp ServiceParams, sub *subscription.Su
 	}
 
 	return invoicingSub.GetInvoicingCustomerID(), nil
+}
+
+// validateGroupedChangeTarget checks that target is the parent itself or one of its live grouped children.
+func validateGroupedChangeTarget(parent, target *subscription.Subscription) error {
+	isLive := func(sub *subscription.Subscription) bool {
+		return sub.SubscriptionStatus == types.SubscriptionStatusActive ||
+			sub.SubscriptionStatus == types.SubscriptionStatusTrialing
+	}
+
+	if parent.SubscriptionType != types.SubscriptionTypeParent || !isLive(parent) {
+		return ierr.NewError("subscription must be an active or trialing parent").
+			WithHint("Grouped invoicing action 'modify' runs on the parent subscription").
+			WithReportableDetails(map[string]any{
+				"parent_subscription_id":     parent.ID,
+				"parent_subscription_type":   parent.SubscriptionType,
+				"parent_subscription_status": parent.SubscriptionStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if target.ID == parent.ID {
+		return nil
+	}
+
+	if target.SubscriptionType != types.SubscriptionTypeGroupedInvoicing ||
+		lo.FromPtr(target.ParentSubscriptionID) != parent.ID || !isLive(target) {
+		return ierr.NewError("subscription is not an active or trialing member of this group").
+			WithHint("Each change must target the parent or one of its grouped invoicing children").
+			WithReportableDetails(map[string]any{
+				"parent_subscription_id": parent.ID,
+				"subscription_id":        target.ID,
+				"subscription_type":      target.SubscriptionType,
+				"subscription_status":    target.SubscriptionStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }

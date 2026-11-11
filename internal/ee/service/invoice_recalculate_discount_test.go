@@ -59,6 +59,7 @@ func (s *RecalculateDiscountOnInvoiceSuite) setupService() {
 		CustomerRepo:               s.GetStores().CustomerRepo,
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
 		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,
+		BillingInstalmentRepo:      s.GetStores().BillingInstalmentRepo,
 		EntitlementRepo:            s.GetStores().EntitlementRepo,
 		EnvironmentRepo:            s.GetStores().EnvironmentRepo,
 		FeatureRepo:                s.GetStores().FeatureRepo,

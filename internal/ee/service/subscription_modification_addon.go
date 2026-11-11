@@ -80,11 +80,12 @@ func changedCreatedAssociation(
 	}
 
 	changed := dto.ChangedAddonAssociation{
-		ID:           id,
-		AddonID:      association.AddonID,
-		AddonStatus:  association.AddonStatus,
-		StartDate:    association.StartDate,
-		ChangeAction: dto.ChangedAddonAssociationActionCreated,
+		ID:             id,
+		SubscriptionID: association.EntityID,
+		AddonID:        association.AddonID,
+		AddonStatus:    association.AddonStatus,
+		StartDate:      association.StartDate,
+		ChangeAction:   dto.ChangedAddonAssociationActionCreated,
 	}
 	if association.EndDate != nil {
 		changed.EndDate = association.EndDate
@@ -98,12 +99,13 @@ func changedEndedAssociation(
 	endDate time.Time,
 ) dto.ChangedAddonAssociation {
 	return dto.ChangedAddonAssociation{
-		ID:           association.ID,
-		AddonID:      association.AddonID,
-		AddonStatus:  types.AddonStatusCancelled,
-		StartDate:    association.StartDate,
-		EndDate:      &endDate,
-		ChangeAction: dto.ChangedAddonAssociationActionEnded,
+		ID:             association.ID,
+		SubscriptionID: association.EntityID,
+		AddonID:        association.AddonID,
+		AddonStatus:    types.AddonStatusCancelled,
+		StartDate:      association.StartDate,
+		EndDate:        &endDate,
+		ChangeAction:   dto.ChangedAddonAssociationActionEnded,
 	}
 }
 
@@ -115,11 +117,12 @@ func changedCreatedLineItem(li *subscription.SubscriptionLineItem, isPreview boo
 
 	startDate := li.StartDate
 	changed := dto.ChangedLineItem{
-		ID:           id,
-		PriceID:      li.PriceID,
-		Quantity:     li.Quantity,
-		StartDate:    &startDate,
-		ChangeAction: dto.ChangedLineItemActionCreated,
+		ID:             id,
+		SubscriptionID: li.SubscriptionID,
+		PriceID:        li.PriceID,
+		Quantity:       li.Quantity,
+		StartDate:      &startDate,
+		ChangeAction:   dto.ChangedLineItemActionCreated,
 	}
 	if !li.EndDate.IsZero() {
 		endDate := li.EndDate
@@ -132,11 +135,12 @@ func changedCreatedLineItem(li *subscription.SubscriptionLineItem, isPreview boo
 func changedEndedLineItem(li *subscription.SubscriptionLineItem, endDate time.Time) dto.ChangedLineItem {
 	startDate := li.StartDate
 	return dto.ChangedLineItem{
-		ID:           li.ID,
-		PriceID:      li.PriceID,
-		Quantity:     li.Quantity,
-		StartDate:    &startDate,
-		EndDate:      &endDate,
-		ChangeAction: dto.ChangedLineItemActionEnded,
+		ID:             li.ID,
+		SubscriptionID: li.SubscriptionID,
+		PriceID:        li.PriceID,
+		Quantity:       li.Quantity,
+		StartDate:      &startDate,
+		EndDate:        &endDate,
+		ChangeAction:   dto.ChangedLineItemActionEnded,
 	}
 }

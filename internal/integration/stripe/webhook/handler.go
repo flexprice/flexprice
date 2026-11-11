@@ -4,9 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/flexprice/flexprice/internal/metrics"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/metrics"
+
+	stripeapi "github.com/stripe/stripe-go/v82"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -16,7 +21,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	stripeapi "github.com/stripe/stripe-go/v82"
 )
 
 // Handler handles Stripe webhook events
@@ -105,7 +109,6 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *stripeapi.Event
 		return h.handleSubscriptionCancellation(ctx, event, environmentID, services)
 
 	default:
-		h.logger.Info(ctx, "unhandled Stripe webhook event type", "type", event.Type)
 		metricEventType, handled = "other", false
 		return nil // Not an error, just unhandled
 	}
@@ -296,7 +299,7 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 
 	// Update payment status to failed
 	paymentStatus := string(types.PaymentStatusFailed)
-	now := time.Now()
+	now := clock.Now()
 	errorMsg := "Payment failed"
 	if paymentIntent.LastPaymentError != nil && paymentIntent.LastPaymentError.Msg != "" {
 		errorMsg = paymentIntent.LastPaymentError.Msg
@@ -555,6 +558,19 @@ func (h *Handler) handleInvoicePaymentFailed(ctx context.Context, event *stripea
 	}
 	if err != nil {
 		return err
+	}
+
+	// A failed Stripe charge on an invoice already paid elsewhere is not a failure of the invoice.
+	paid, err := h.paymentSvc.IsFlexPriceInvoicePaid(ctx, flexpriceInvoiceID)
+	if err != nil {
+		return err
+	}
+	if paid {
+		h.logger.Info(ctx, "Stripe payment failed on an invoice already paid in FlexPrice, skipping event",
+			"invoice_id", flexpriceInvoiceID,
+			"stripe_invoice_id", stripeInvoice.ID,
+			"event_id", event.ID)
+		return nil
 	}
 
 	// Both steps are idempotent, so errors are returned for Stripe to retry the event.
@@ -1043,7 +1059,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 	}
 
 	switch session.CheckoutStatus {
-	case types.CheckoutStatusPending:
+	case types.CheckoutStatusInitiated, types.CheckoutStatusPending:
 		providerResult := &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: stripePaymentIntentID,
 		}

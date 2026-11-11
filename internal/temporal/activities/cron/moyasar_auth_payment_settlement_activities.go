@@ -2,12 +2,14 @@ package cron
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	domainPayment "github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	"github.com/flexprice/flexprice/internal/integration/payments"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
@@ -17,6 +19,7 @@ import (
 type MoyasarAuthPaymentSettlementActivities struct {
 	integrationFactory *integration.Factory
 	paymentRepo        domainPayment.Repository
+	entityScope        interfaces.BillingEntityScope
 	logger             *logger.Logger
 }
 
@@ -24,11 +27,13 @@ type MoyasarAuthPaymentSettlementActivities struct {
 func NewMoyasarAuthPaymentSettlementActivities(
 	integrationFactory *integration.Factory,
 	paymentRepo domainPayment.Repository,
+	entityScope interfaces.BillingEntityScope,
 	log *logger.Logger,
 ) *MoyasarAuthPaymentSettlementActivities {
 	return &MoyasarAuthPaymentSettlementActivities{
 		integrationFactory: integrationFactory,
 		paymentRepo:        paymentRepo,
+		entityScope:        entityScope,
 		logger:             log,
 	}
 }
@@ -59,6 +64,18 @@ func (a *MoyasarAuthPaymentSettlementActivities) ReconcilePendingAuthPaymentsAct
 		// services resolve the correct connection and payment record.
 		scopedCtx := types.SetTenantID(ctx, p.TenantID)
 		scopedCtx = types.SetEnvironmentID(scopedCtx, p.EnvironmentID)
+
+		scopedCtx, err := a.scopeToPayment(scopedCtx, p.PaymentID)
+		if err != nil {
+			a.logger.Error(scopedCtx, "failed to scope payment to its connection, skipping payment",
+				"payment_id", p.PaymentID,
+				"tenant_id", p.TenantID,
+				"environment_id", p.EnvironmentID,
+				"error", err,
+			)
+			result.Errors++
+			continue
+		}
 
 		moyasarIntegration, err := a.integrationFactory.GetMoyasarIntegration(scopedCtx)
 		if err != nil {
@@ -110,7 +127,7 @@ func (a *MoyasarAuthPaymentSettlementActivities) reconcilePaymentStatus(
 		if err := moyasarIntegration.Lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
-			SucceededAt:        time.Now().UTC(),
+			SucceededAt:        clock.Now(),
 		}); err != nil {
 			a.logger.Error(ctx, "failed to record payment success",
 				"payment_id", flexpricePaymentID,
@@ -130,7 +147,7 @@ func (a *MoyasarAuthPaymentSettlementActivities) reconcilePaymentStatus(
 		if err := moyasarIntegration.Lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
-			FailedAt:           time.Now().UTC(),
+			FailedAt:           clock.Now(),
 			ErrorMessage:       "payment failed (reconciled by cron)",
 		}); err != nil {
 			a.logger.Error(ctx, "failed to record payment failure",
@@ -183,6 +200,18 @@ func (a *MoyasarAuthPaymentSettlementActivities) VoidOrRefundSucceededAuthPaymen
 		scopedCtx := types.SetTenantID(ctx, p.TenantID)
 		scopedCtx = types.SetEnvironmentID(scopedCtx, p.EnvironmentID)
 
+		scopedCtx, err := a.scopeToPayment(scopedCtx, p.PaymentID)
+		if err != nil {
+			a.logger.Error(scopedCtx, "failed to scope payment to its connection, skipping payment",
+				"payment_id", p.PaymentID,
+				"tenant_id", p.TenantID,
+				"environment_id", p.EnvironmentID,
+				"error", err,
+			)
+			result.Errors++
+			continue
+		}
+
 		moyasarIntegration, err := a.integrationFactory.GetMoyasarIntegration(scopedCtx)
 		if err != nil {
 			a.logger.Error(scopedCtx, "moyasar integration not found, skipping payment",
@@ -231,4 +260,13 @@ func (a *MoyasarAuthPaymentSettlementActivities) VoidOrRefundSucceededAuthPaymen
 		"errors", result.Errors,
 	)
 	return result, nil
+}
+
+// scopeToPayment puts the entity of the payment's connection, else of its customer, in ctx.
+func (a *MoyasarAuthPaymentSettlementActivities) scopeToPayment(ctx context.Context, paymentID string) (context.Context, error) {
+	p, err := a.paymentRepo.Get(ctx, paymentID)
+	if err != nil {
+		return ctx, err
+	}
+	return a.entityScope.ScopeToPayment(ctx, p)
 }

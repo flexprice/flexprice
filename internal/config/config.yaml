@@ -173,6 +173,23 @@ clickhouse:
   dial_timeout: 0s
   read_timeout: 0s
 
+reports:
+  # Empty database or username disables reports.
+  address: ""
+  # Login must allow setting changes.
+  database: ""
+  # Empty falls back to database.
+  usage_database: ""
+  # Read usage from the events clickhouse, not reports.
+  usage_on_events_clickhouse: false
+  username: ""
+  password: ""
+  max_execution_seconds: 10
+  max_result_rows: 10000
+  max_rows_to_read: 0
+  # Server query cache; 0 disables.
+  query_cache_ttl_seconds: 1800
+
 postgres:
   host: 127.0.0.1 # For local mode
   # Will be overridden by FLEXPRICE_POSTGRES_HOST env var in Docker
@@ -392,6 +409,16 @@ secrets:
 billing:
   tenant_id: ""
   environment_id: ""
+  enabled: false
+  region: ""
+  api_host: ""
+  api_key: ""
+  plan_id: ""
+  dashboard_url: ""
+  payment_provider: "stripe"
+  usage_lookback_hours: 6
+  # Zapier catch hook for self-billing Slack alerts (FLEXPRICE_BILLING_ZAPIER_WEBHOOK_URL)
+  zapier_webhook_url: ""
 
 s3:
   enabled: false
@@ -553,6 +580,7 @@ activity:
   topic_dlq: activity_logs_dlq
   consumer_group: "activity_log"
   rate_limit: 50
+  excluded_tenants: [] # "tenant_id:environment_id" or "tenant_id"; empty = log all.
   publisher:
     buffer_size: 10000
     workers: 4
@@ -643,6 +671,14 @@ onboarding_events:
 # Checkout base URL for the checkout page
 checkout:
   base_url: ""
+
+# Hosted invoice page base; links are this value, a slash and the token. Empty returns no Flexprice link.
+hosted_invoice:
+  base_url: ""
+
+# Off rejects enabling billing entities for any environment (FLEXPRICE_BILLING_ENTITIES_ENABLED).
+billing_entities:
+  enabled: false
 
 onboarding:
   default_tenant_name: "Flexprice"

@@ -6,13 +6,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
+	"github.com/samber/lo"
 )
 
 // MoyasarInvoiceSyncRequest represents a request to sync FlexPrice invoice to Moyasar
@@ -361,7 +365,12 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		"moyasar_payment_url": moyasarInvoice.URL,
 		"moyasar_status":      moyasarInvoice.Status,
 		"sync_source":         "flexprice",
-		"synced_at":           time.Now().UTC().Format(time.RFC3339),
+		"synced_at":           clock.Now().Format(time.RFC3339),
+	}
+
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
 	}
 
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
@@ -373,6 +382,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		Metadata:         metadata,
 		EnvironmentID:    environmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
@@ -396,10 +406,16 @@ func (s *InvoiceSyncService) GetExistingMoyasarMapping(
 	ctx context.Context,
 	flexInvoiceID string,
 ) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityType:    types.IntegrationEntityTypeInvoice,
 		EntityID:      flexInvoiceID,
 		ProviderTypes: []string{string(types.SecretProviderMoyasar)},
+		ConnectionID:  conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)

@@ -60,6 +60,7 @@ func buildZohoActivityFactory(
 		encSvc,
 		nil, // TemporalService — not needed in activity unit tests
 		testutil.NewInMemoryRedisLocker(nil),
+		nil,
 	)
 }
 
@@ -74,7 +75,7 @@ func TestMarkZohoBooksInvoicePaid_NoZohoConnection(t *testing.T) {
 	subStore := testutil.NewInMemorySubscriptionStore()
 
 	factory := buildZohoActivityFactory(connectionStore, mappingStore, invoiceStore, subStore)
-	act := zohoactivities.NewInvoiceSyncActivities(factory, logger.NewNoopLogger())
+	act := zohoactivities.NewInvoiceSyncActivities(factory, nil, logger.NewNoopLogger())
 
 	input := models.NewZohoBooksInvoiceMarkPaidWorkflowInput("inv_no_conn", types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
 

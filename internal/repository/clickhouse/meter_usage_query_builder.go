@@ -13,7 +13,7 @@ import (
 var validMeterUsageGroupByPattern = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 
 // maxMemoryUsageSetting mirrors the inline 90GB bound used by
-// GetEarliestUsageTimestamp/GetMeterUsageForExport/GetEventsByEventIDAndExternalCustomerID in
+// GetEarliestUsageTimestamp/GetMeterUsageForExport/CountMeterUsageForExport/GetEventsByEventIDAndExternalCustomerID in
 // meter_usage.go (AGENTS.md: every ClickHouse query bounded by 90GB).
 const maxMemoryUsageSetting = "max_memory_usage = 96636764160"
 
@@ -167,6 +167,13 @@ func (qb *MeterUsageQueryBuilder) BuildWhereClause(params *events.MeterUsageQuer
 		conditions = append(conditions, fmt.Sprintf("meter_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
 
+	// Event id filter. Bound as one list argument rather than a placeholder per
+	// id, so a large set stays a short statement.
+	if len(params.IDs) > 0 {
+		conditions = append(conditions, "id IN (?)")
+		args = append(args, params.IDs)
+	}
+
 	// Time range: multiple OR'd windows when TimeRanges is set (one query for
 	// disjoint ranges), else the single [StartTime, EndTime) pair.
 	if len(params.TimeRanges) > 0 {
@@ -258,6 +265,14 @@ func (qb *MeterUsageQueryBuilder) BuildFinalClause(useFinal bool) (finalClause s
 	return "", ""
 }
 
+// FINAL rows are unique; count suffices.
+func eventCountExpr(useFinal bool) string {
+	if useFinal {
+		return "count()"
+	}
+	return "COUNT(DISTINCT id)"
+}
+
 // BuildBucketedQuery constructs a windowed aggregation query for bucketed meters (MAX/SUM with bucket_size).
 // Mirrors the feature_usage getWindowedQuery logic but operates on the meter_usage table.
 //
@@ -311,7 +326,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 					%s as bucket_start,
 					%s,
 					%s(qty_total) as group_value,
-					COUNT(DISTINCT id) as group_event_count
+					%s as group_event_count
 				FROM %s
 				WHERE %s
 				GROUP BY bucket_start, %s
@@ -325,7 +340,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 			FROM per_group
 			ORDER BY bucket_start, %s
 			%s
-		`, bucketWindow, dimSelects, aggFunc, tableRef, where, dimGroupBy, dimGroupBy, settings)
+		`, bucketWindow, dimSelects, aggFunc, eventCountExpr(params.UseFinal), tableRef, where, dimGroupBy, dimGroupBy, settings)
 
 		return query, args
 	}
@@ -336,7 +351,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 			SELECT
 				%s as bucket_start,
 				%s(qty_total) as %s,
-				COUNT(DISTINCT id) as bucket_event_count
+				%s as bucket_event_count
 			FROM %s
 			WHERE %s
 			GROUP BY bucket_start
@@ -353,7 +368,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 		%s
 	`,
 		bucketTableName,
-		bucketWindow, aggFunc, bucketColumnName,
+		bucketWindow, aggFunc, bucketColumnName, eventCountExpr(params.UseFinal),
 		tableRef, where,
 		bucketColumnName, bucketTableName,
 		bucketTableName,
@@ -410,7 +425,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedAggregateQuery(params *events.Met
 				%s as bucket_start,
 				%s,
 				%s(qty_total) as bucket_value,
-				COUNT(DISTINCT id) as bucket_event_count
+				%s as bucket_event_count
 			FROM %s
 			WHERE %s
 			GROUP BY bucket_start, %s
@@ -424,7 +439,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedAggregateQuery(params *events.Met
 		ORDER BY %s
 		%s
 	`,
-		bucketWindow, dimSelects, aggFunc, tableRef, where, dimAliases,
+		bucketWindow, dimSelects, aggFunc, eventCountExpr(params.UseFinal), tableRef, where, dimAliases,
 		dimAliases, dimAliases, dimAliases, settings)
 
 	return query, args, dims
@@ -475,13 +490,13 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedPointsQuery(
 		SELECT
 			%s as bucket_start,
 			%s(qty_total) as bucket_value,
-			COUNT(DISTINCT id) as bucket_event_count
+			%s as bucket_event_count
 		FROM %s
 		WHERE %s
 		GROUP BY bucket_start
 		ORDER BY bucket_start
 		%s
-	`, bucketWindow, aggFunc, tableRef, extraWhere, settings)
+	`, bucketWindow, aggFunc, eventCountExpr(params.UseFinal), tableRef, extraWhere, settings)
 
 	return query, args
 }
@@ -598,10 +613,10 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedGroupByColumns(params *events.Met
 	return result, nil
 }
 
-// BuildDetailedPointsQuery constructs a time-series sub-query for a single group's analytics points.
+// BuildDetailedPointsQuery constructs one time-series query for every group's analytics points,
+// selecting the group-by columns ahead of window_start.
 func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 	params *events.MeterUsageDetailedAnalyticsParams,
-	result *events.MeterUsageDetailedResult,
 	groupByResult *DetailedGroupByResult,
 ) (string, []interface{}) {
 	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
@@ -609,54 +624,28 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 		return "", nil
 	}
 
-	aggColumns := buildMeterUsageAggregationColumns(params.AggregationTypes)
+	aggColumns := buildMeterUsageAggregationColumns(params.AggregationTypes, params.UseFinal)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
-
-	// Start with the base WHERE from the detailed params
 	where, args := qb.BuildDetailedWhereClause(params)
 
-	// Narrow to this specific group. A structural dimension is constrained
-	// whenever it was in the aggregate query's GROUP BY (keyed off
-	// groupByResult, not result.X != ""), so a group whose value is empty —
-	// e.g. events with no external_customer_id — still gets its predicate. Using
-	// result.X != "" would drop the predicate for an empty group, letting the
-	// points query sum every value while the aggregate row holds only the empty
-	// group.
-	grouped := func(field string) bool {
-		if groupByResult == nil {
-			return false
-		}
-		_, ok := groupByResult.FieldMapping[field]
-		return ok
+	var selectCols, groupCols []string
+	if groupByResult != nil {
+		selectCols = append(selectCols, groupByResult.Aliases...)
+		groupCols = append(groupCols, groupByResult.Columns...)
 	}
-	if grouped("meter_id") {
-		where += " AND meter_id = ?"
-		args = append(args, result.MeterID)
-	}
-	if grouped("source") {
-		where += " AND source = ?"
-		args = append(args, result.Source)
-	}
-	if grouped("external_customer_id") {
-		where += " AND external_customer_id = ?"
-		args = append(args, result.ExternalCustomerID)
-	}
-	for propName, propValue := range result.Properties {
-		where += " AND JSONExtractString(properties, ?) = ?"
-		args = append(args, propName, propValue)
-	}
-
-	selectCols := append([]string{fmt.Sprintf("%s AS window_start", windowExpr)}, aggColumns...)
+	selectCols = append(selectCols, fmt.Sprintf("%s AS window_start", windowExpr))
+	selectCols = append(selectCols, aggColumns...)
+	groupCols = append(groupCols, "window_start")
 
 	query := fmt.Sprintf(`
 		SELECT
 			%s
 		FROM meter_usage %s
 		WHERE %s
-		GROUP BY window_start
+		GROUP BY %s
 		ORDER BY window_start ASC
 		%s
-	`, strings.Join(selectCols, ",\n\t\t\t"), finalClause, where, settings)
+	`, strings.Join(selectCols, ",\n\t\t\t"), finalClause, where, strings.Join(groupCols, ", "), settings)
 
 	return query, args
 }

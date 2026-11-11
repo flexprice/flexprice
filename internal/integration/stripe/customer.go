@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/stripe/stripe-go/v82"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -13,8 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/stripe/stripe-go/v82"
 )
 
 const (
@@ -172,6 +175,11 @@ func (s *CustomerService) existingStripeLink(
 		return nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil
+	}
+
 	queryFilter := types.NewNoLimitPublishedQueryFilter()
 	queryFilter.Limit = lo.ToPtr(1)
 
@@ -180,6 +188,7 @@ func (s *CustomerService) existingStripeLink(
 		EntityID:      ourCustomer.ID,
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{string(types.SecretProviderStripe)},
+		ConnectionID:  conn.ID,
 	}
 
 	existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -246,8 +255,11 @@ func customerCreateIdempotencyKey(ctx context.Context, customerID string) string
 
 // CreateCustomerInStripe creates a customer in Stripe and updates our customer with Stripe ID
 func (s *CustomerService) CreateCustomerInStripe(ctx context.Context, ourCustomer *customer.Customer, customerService interfaces.CustomerService) (*dto.CustomerResponse, error) {
-	// Get Stripe client and config
-	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return dto.EmptyCustomerResponse(), err
+	}
+	stripeClient, _, err := s.client.buildStripeClient(conn)
 	if err != nil {
 		return dto.EmptyCustomerResponse(), err
 	}
@@ -272,15 +284,8 @@ func (s *CustomerService) CreateCustomerInStripe(ctx context.Context, ourCustome
 	params.SetIdempotencyKey(customerCreateIdempotencyKey(ctx, ourCustomer.ID))
 
 	// Add address if available
-	if ourCustomer.AddressLine1 != "" || ourCustomer.AddressCity != "" {
-		params.Address = &stripe.AddressParams{
-			Line1:      stripe.String(ourCustomer.AddressLine1),
-			Line2:      stripe.String(ourCustomer.AddressLine2),
-			City:       stripe.String(ourCustomer.AddressCity),
-			State:      stripe.String(ourCustomer.AddressState),
-			PostalCode: stripe.String(ourCustomer.AddressPostalCode),
-			Country:    stripe.String(ourCustomer.AddressCountry),
-		}
+	if hasAddress(ourCustomer) {
+		params.Address = stripeAddressParams(ourCustomer)
 	}
 
 	stripeCustomer, err := stripeClient.V1Customers.Create(ctx, params)
@@ -313,9 +318,10 @@ func (s *CustomerService) CreateCustomerInStripe(ctx context.Context, ourCustome
 				"created_via":           "flexprice_to_provider",
 				"stripe_customer_email": ourCustomer.Email,
 				"stripe_customer_name":  ourCustomer.Name,
-				"synced_at":             time.Now().UTC().Format(time.RFC3339),
+				"synced_at":             clock.Now().Format(time.RFC3339),
 			},
 			EnvironmentID: types.GetEnvironmentID(ctx),
+			ConnectionID:  lo.ToPtr(conn.ID),
 			BaseModel:     types.GetDefaultBaseModel(ctx),
 		}
 
@@ -352,6 +358,17 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 		externalID = lookupKey
 		existing, err := customerService.GetCustomerByLookupKey(ctx, lookupKey)
 		if err == nil && existing != nil {
+			if !existing.Customer.InBillingEntity(types.GetBillingEntityID(ctx)) {
+				s.logger.Info(ctx, "lookup key matches a customer of another billing entity, skipping link",
+					"flexprice_customer_id", existing.Customer.ID,
+					"stripe_customer_id", stripeCustomer.ID)
+				return nil
+			}
+			conn, err := s.client.GetConnection(ctx)
+			if err != nil {
+				return err
+			}
+
 			// Customer found, check for existing mapping
 			filter := &types.EntityIntegrationMappingFilter{
 				QueryFilter:       types.NewNoLimitPublishedQueryFilter(),
@@ -359,6 +376,7 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 				EntityType:        types.IntegrationEntityTypeCustomer,
 				ProviderTypes:     []string{string(types.SecretProviderStripe)},
 				ProviderEntityIDs: []string{stripeCustomer.ID},
+				ConnectionID:      conn.ID,
 			}
 
 			existingMapping, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -518,6 +536,11 @@ func (s *CustomerService) createEntityIntegrationMapping(ctx context.Context, cu
 		return nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         customerID,
@@ -528,13 +551,14 @@ func (s *CustomerService) createEntityIntegrationMapping(ctx context.Context, cu
 			"created_via":           "provider_to_flexprice",
 			"stripe_customer_email": stripeCustomer.Email,
 			"stripe_customer_name":  stripeCustomer.Name,
-			"synced_at":             time.Now().UTC().Format(time.RFC3339),
+			"synced_at":             clock.Now().Format(time.RFC3339),
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),
+		ConnectionID:  lo.ToPtr(conn.ID),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
 
-	err := s.entityIntegrationMappingRepo.Create(ctx, mapping)
+	err = s.entityIntegrationMappingRepo.Create(ctx, mapping)
 	if err != nil {
 		s.logger.Info(ctx, "failed to create entity mapping for customer",
 			"error", err,
@@ -610,7 +634,7 @@ func (s *CustomerService) SyncCustomerToStripe(ctx context.Context, customer *cu
 		"stripe_customer_name":  customer.Name,
 		"sync_direction":        "flexprice_to_provider",
 		"created_via":           "api",
-		"synced_at":             time.Now().UTC().Format(time.RFC3339),
+		"synced_at":             clock.Now().Format(time.RFC3339),
 	}, nil
 }
 
@@ -645,6 +669,71 @@ func (s *CustomerService) UpdateStripeCustomerMetadata(ctx context.Context, stri
 		"flexprice_customer_id", cust.ID)
 
 	return nil
+}
+
+// UpdateCustomerInStripe pushes the customer's name, email and address to its linked Stripe
+// customer. A customer never linked to Stripe is skipped.
+func (s *CustomerService) UpdateCustomerInStripe(ctx context.Context, cust *customer.Customer, customerService interfaces.CustomerService) error {
+	stripeCustomerID, err := s.GetStripeCustomerID(ctx, cust.ID, customerService)
+	if ierr.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = stripeClient.V1Customers.Update(ctx, stripeCustomerID, customerUpdateParams(cust))
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to update the customer in Stripe").
+			WithReportableDetails(map[string]any{
+				"customer_id":        cust.ID,
+				"stripe_customer_id": stripeCustomerID,
+			}).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return nil
+}
+
+// customerUpdateParams carries the address only when one is set, so a customer with none
+// does not have Stripe's cleared.
+func customerUpdateParams(cust *customer.Customer) *stripe.CustomerUpdateParams {
+	params := &stripe.CustomerUpdateParams{
+		Name:  stripe.String(cust.Name),
+		Email: stripe.String(cust.Email),
+	}
+
+	if hasAddress(cust) {
+		params.Address = stripeAddressParams(cust)
+	}
+
+	return params
+}
+
+func hasAddress(cust *customer.Customer) bool {
+	return cust.AddressLine1 != "" ||
+		cust.AddressLine2 != "" ||
+		cust.AddressCity != "" ||
+		cust.AddressState != "" ||
+		cust.AddressPostalCode != "" ||
+		cust.AddressCountry != ""
+}
+
+func stripeAddressParams(cust *customer.Customer) *stripe.AddressParams {
+	return &stripe.AddressParams{
+		Line1:      stripe.String(cust.AddressLine1),
+		Line2:      stripe.String(cust.AddressLine2),
+		City:       stripe.String(cust.AddressCity),
+		State:      stripe.String(cust.AddressState),
+		PostalCode: stripe.String(cust.AddressPostalCode),
+		Country:    stripe.String(cust.AddressCountry),
+	}
 }
 
 // defaultPaymentMethodID is a nil-safe read of a Stripe customer's default payment

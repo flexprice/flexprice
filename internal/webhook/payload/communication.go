@@ -48,6 +48,9 @@ func (b *CommunicationPayloadBuilder) BuildPayload(ctx context.Context, eventTyp
 	if err != nil {
 		return nil, err
 	}
+	if err := b.services.InvoiceService.WithHostedInvoiceURLs(ctx, invoice); err != nil {
+		return nil, err
+	}
 
 	// inject the invoice pdf url into the invoice response
 	pdfUrl, err := b.services.InvoiceService.GetInvoicePDFUrl(ctx, dto.InvoicePDFRequest{InvoiceID: invoiceID})

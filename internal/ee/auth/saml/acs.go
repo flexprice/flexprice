@@ -103,7 +103,7 @@ func extractEmail(assertion *saml.Assertion, cfg Config) (string, error) {
 								WithHint("The identity provider sent something other than an email address in the configured attribute").
 								Mark(ierr.ErrValidation)
 						}
-						return normaliseEmail(value), nil
+						return types.NormalizeEmail(value), nil
 					}
 				}
 			}
@@ -126,13 +126,7 @@ func extractEmail(assertion *saml.Assertion, cfg Config) (string, error) {
 			Mark(ierr.ErrValidation)
 	}
 
-	return normaliseEmail(value), nil
-}
-
-// normaliseEmail lowercases so identity-provider casing cannot create a second
-// account for a user who already exists.
-func normaliseEmail(email string) string {
-	return strings.ToLower(strings.TrimSpace(email))
+	return types.NormalizeEmail(value), nil
 }
 
 // resolveUser finds the user an assertion authenticates, provisioning one if the

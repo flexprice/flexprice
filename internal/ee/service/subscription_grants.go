@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // SubscriptionGrantService owns credit grants and entitlement grants for any subscription
@@ -134,7 +137,7 @@ func (s *subscriptionGrantService) Resolve(ctx context.Context, req GrantChangeR
 		return nil, err
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	cfg.entitlementChangeAt = entitlementChangeAt(req, now)
 
 	if err := s.validateChangeBoundary(ctx, cfg, now); err != nil {
@@ -406,15 +409,26 @@ func (s *subscriptionGrantService) resolveSurvivingGrantECs(
 		return byFeature, nil
 	}
 
-	removedIDs := lo.SliceToMap(removedECs, func(ec *entitlement.Entitlement) (string, bool) {
-		return ec.ID, true
-	})
+	// An addon attached twice lists its config twice, so a removal takes out one entry per
+	// leaving attachment, not every entry with that config ID.
+	leaving := make(map[string]int, len(removedECs))
+	for _, ec := range removedECs {
+		leaving[ec.ID]++
+	}
 
 	surviving := make(map[string][]*entitlement.Entitlement, len(byFeature))
 	for featureID, ecs := range byFeature {
-		kept := lo.Filter(ecs, func(ec *entitlement.Entitlement, _ int) bool {
-			return ec != nil && !removedIDs[ec.ID]
-		})
+		kept := make([]*entitlement.Entitlement, 0, len(ecs))
+		for _, ec := range ecs {
+			if ec == nil {
+				continue
+			}
+			if leaving[ec.ID] > 0 {
+				leaving[ec.ID]--
+				continue
+			}
+			kept = append(kept, ec)
+		}
 		if len(kept) > 0 {
 			surviving[featureID] = kept
 		}

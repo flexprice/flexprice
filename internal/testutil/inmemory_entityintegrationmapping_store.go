@@ -37,6 +37,7 @@ func copyEntityIntegrationMapping(m *entityintegrationmapping.EntityIntegrationM
 		ProviderEntityID: m.ProviderEntityID,
 		Metadata:         lo.Assign(map[string]interface{}{}, m.Metadata),
 		EnvironmentID:    m.EnvironmentID,
+		ConnectionID:     m.ConnectionID,
 		BaseModel: types.BaseModel{
 			TenantID:  m.TenantID,
 			Status:    m.Status,
@@ -257,6 +258,10 @@ func entityIntegrationMappingFilterFn(ctx context.Context, m *entityintegrationm
 
 	// Apply provider entity IDs filter (plural)
 	if len(f.ProviderEntityIDs) > 0 && !lo.Contains(f.ProviderEntityIDs, m.ProviderEntityID) {
+		return false
+	}
+
+	if f.ConnectionID != "" && m.ConnectionID != nil && *m.ConnectionID != f.ConnectionID {
 		return false
 	}
 

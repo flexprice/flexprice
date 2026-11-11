@@ -3,7 +3,11 @@ package ent
 import (
 	"context"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -15,8 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
-	"github.com/samber/lo"
 )
 
 type priceRepository struct {
@@ -106,6 +108,7 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 	if p.ParentPriceID != "" {
 		priceBuilder = priceBuilder.SetNillableParentPriceID(lo.EmptyableToPtr(p.ParentPriceID))
 	}
+	priceBuilder = priceBuilder.SetNillableProductID(lo.EmptyableToPtr(p.ProductID))
 
 	price, err := priceBuilder.Save(ctx)
 
@@ -300,7 +303,7 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price, bump
 		SetNillableEndDate(p.EndDate).
 		SetDescription(p.Description).
 		SetMetadata(map[string]string(p.Metadata)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	// Caller asserts a sync-relevant field is changing (i.e. end_date being
@@ -320,6 +323,9 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price, bump
 		update = update.ClearGroupID()
 	} else {
 		update = update.SetNillableGroupID(lo.ToPtr(p.GroupID))
+	}
+	if p.ProductID != "" {
+		update = update.SetProductID(p.ProductID)
 	}
 
 	_, err := update.SaveReturning(ctx)
@@ -406,7 +412,7 @@ func (r *priceRepository) Delete(ctx context.Context, id string) error {
 		).
 		SetSequence(nextSeq).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 
@@ -489,6 +495,7 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetCreatedBy(p.CreatedBy).
 			SetUpdatedBy(p.UpdatedBy).
 			SetNillableGroupID(lo.ToPtr(p.GroupID)).
+			SetNillableProductID(lo.EmptyableToPtr(p.ProductID)).
 			SetPriceUnitType(p.PriceUnitType).
 			SetNillablePriceUnitID(p.PriceUnitID).
 			SetNillablePriceUnit(p.PriceUnit).
@@ -631,6 +638,14 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		query = query.Where(price.EntityIDIn(f.EntityIDs...))
 	}
 
+	if f.ParentPriceID != nil {
+		query = query.Where(price.ParentPriceID(*f.ParentPriceID))
+	}
+
+	if len(f.ProductIDs) > 0 {
+		query = query.Where(price.ProductIDIn(f.ProductIDs...))
+	}
+
 	// meter id filter
 	if len(f.MeterIDs) > 0 {
 		query = query.Where(price.MeterIDIn(f.MeterIDs...))
@@ -657,7 +672,7 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 	}
 
 	if !f.AllowExpiredPrices {
-		now := time.Now().UTC()
+		now := clock.Now()
 
 		// Filter for active prices:
 		// - Start date should be before or equal to current time (or null)
@@ -697,23 +712,6 @@ func (o PriceQueryOptions) GetFieldResolver(field string) (string, error) {
 			Mark(ierr.ErrValidation)
 	}
 	return fieldName, nil
-}
-
-func (r *priceRepository) GetByPlanID(ctx context.Context, planID string) ([]*domainPrice.Price, error) {
-	client := r.client.Reader(ctx)
-
-	prices, err := client.Price.Query().
-		Where(price.EntityID(planID), price.Status(string(types.StatusPublished))).
-		All(ctx)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get prices by plan ID").
-			WithReportableDetails(map[string]interface{}{
-				"plan_id": planID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-	return domainPrice.FromEntList(prices), nil
 }
 
 func (r *priceRepository) SetCache(ctx context.Context, price *domainPrice.Price) {
@@ -760,7 +758,11 @@ func (r *priceRepository) GetByGroupIDs(ctx context.Context, groupIDs []string) 
 	client := r.client.Reader(ctx)
 
 	prices, err := client.Price.Query().
-		Where(price.GroupIDIn(groupIDs...)).
+		Where(
+			price.GroupIDIn(groupIDs...),
+			price.TenantID(types.GetTenantID(ctx)),
+			price.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		All(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -859,7 +861,7 @@ func (r *priceRepository) ClearByGroupID(ctx context.Context, groupID string) er
 			price.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		ClearGroupID().
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {
@@ -905,7 +907,7 @@ func (r *priceRepository) GetByLookupKey(ctx context.Context, lookupKey string) 
 
 // GetLinkedCustomerID returns the subscription's customer for a subscription price; "" for any other price.
 func (r *priceRepository) GetLinkedCustomerID(ctx context.Context, id string) (string, error) {
-	return linkedCustomerID(ctx, "price", id, func() (string, error) {
+	return linkedCustomerID(ctx, "price", id, func(ctx context.Context) (string, error) {
 		client := r.client.Reader(ctx)
 		p, err := client.Price.Query().
 			Where(price.ID(id), price.TenantID(types.GetTenantID(ctx)), price.EnvironmentID(types.GetEnvironmentID(ctx))).

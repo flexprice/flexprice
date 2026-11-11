@@ -211,6 +211,16 @@ func AddonAssociationID(v string) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldAddonAssociationID, v))
 }
 
+// PredecessorLineItemID applies equality check predicate on the "predecessor_line_item_id" field. It's identical to PredecessorLineItemIDEQ.
+func PredecessorLineItemID(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldPredecessorLineItemID, v))
+}
+
+// SuccessorLineItemID applies equality check predicate on the "successor_line_item_id" field. It's identical to SuccessorLineItemIDEQ.
+func SuccessorLineItemID(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldSuccessorLineItemID, v))
+}
+
 // CommitmentAmount applies equality check predicate on the "commitment_amount" field. It's identical to CommitmentAmountEQ.
 func CommitmentAmount(v decimal.Decimal) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldCommitmentAmount, v))
@@ -2151,6 +2161,156 @@ func AddonAssociationIDEqualFold(v string) predicate.SubscriptionLineItem {
 // AddonAssociationIDContainsFold applies the ContainsFold predicate on the "addon_association_id" field.
 func AddonAssociationIDContainsFold(v string) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldAddonAssociationID, v))
+}
+
+// PredecessorLineItemIDEQ applies the EQ predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldPredecessorLineItemID, v))
+}
+
+// PredecessorLineItemIDNEQ applies the NEQ predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDNEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNEQ(FieldPredecessorLineItemID, v))
+}
+
+// PredecessorLineItemIDIn applies the In predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIn(FieldPredecessorLineItemID, vs...))
+}
+
+// PredecessorLineItemIDNotIn applies the NotIn predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDNotIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotIn(FieldPredecessorLineItemID, vs...))
+}
+
+// PredecessorLineItemIDGT applies the GT predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDGT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGT(FieldPredecessorLineItemID, v))
+}
+
+// PredecessorLineItemIDGTE applies the GTE predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDGTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGTE(FieldPredecessorLineItemID, v))
+}
+
+// PredecessorLineItemIDLT applies the LT predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDLT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLT(FieldPredecessorLineItemID, v))
+}
+
+// PredecessorLineItemIDLTE applies the LTE predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDLTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLTE(FieldPredecessorLineItemID, v))
+}
+
+// PredecessorLineItemIDContains applies the Contains predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDContains(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContains(FieldPredecessorLineItemID, v))
+}
+
+// PredecessorLineItemIDHasPrefix applies the HasPrefix predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDHasPrefix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasPrefix(FieldPredecessorLineItemID, v))
+}
+
+// PredecessorLineItemIDHasSuffix applies the HasSuffix predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDHasSuffix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasSuffix(FieldPredecessorLineItemID, v))
+}
+
+// PredecessorLineItemIDIsNil applies the IsNil predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDIsNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIsNull(FieldPredecessorLineItemID))
+}
+
+// PredecessorLineItemIDNotNil applies the NotNil predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDNotNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotNull(FieldPredecessorLineItemID))
+}
+
+// PredecessorLineItemIDEqualFold applies the EqualFold predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDEqualFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEqualFold(FieldPredecessorLineItemID, v))
+}
+
+// PredecessorLineItemIDContainsFold applies the ContainsFold predicate on the "predecessor_line_item_id" field.
+func PredecessorLineItemIDContainsFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldPredecessorLineItemID, v))
+}
+
+// SuccessorLineItemIDEQ applies the EQ predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldSuccessorLineItemID, v))
+}
+
+// SuccessorLineItemIDNEQ applies the NEQ predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDNEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNEQ(FieldSuccessorLineItemID, v))
+}
+
+// SuccessorLineItemIDIn applies the In predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIn(FieldSuccessorLineItemID, vs...))
+}
+
+// SuccessorLineItemIDNotIn applies the NotIn predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDNotIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotIn(FieldSuccessorLineItemID, vs...))
+}
+
+// SuccessorLineItemIDGT applies the GT predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDGT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGT(FieldSuccessorLineItemID, v))
+}
+
+// SuccessorLineItemIDGTE applies the GTE predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDGTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGTE(FieldSuccessorLineItemID, v))
+}
+
+// SuccessorLineItemIDLT applies the LT predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDLT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLT(FieldSuccessorLineItemID, v))
+}
+
+// SuccessorLineItemIDLTE applies the LTE predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDLTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLTE(FieldSuccessorLineItemID, v))
+}
+
+// SuccessorLineItemIDContains applies the Contains predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDContains(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContains(FieldSuccessorLineItemID, v))
+}
+
+// SuccessorLineItemIDHasPrefix applies the HasPrefix predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDHasPrefix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasPrefix(FieldSuccessorLineItemID, v))
+}
+
+// SuccessorLineItemIDHasSuffix applies the HasSuffix predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDHasSuffix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasSuffix(FieldSuccessorLineItemID, v))
+}
+
+// SuccessorLineItemIDIsNil applies the IsNil predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDIsNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIsNull(FieldSuccessorLineItemID))
+}
+
+// SuccessorLineItemIDNotNil applies the NotNil predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDNotNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotNull(FieldSuccessorLineItemID))
+}
+
+// SuccessorLineItemIDEqualFold applies the EqualFold predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDEqualFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEqualFold(FieldSuccessorLineItemID, v))
+}
+
+// SuccessorLineItemIDContainsFold applies the ContainsFold predicate on the "successor_line_item_id" field.
+func SuccessorLineItemIDContainsFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldSuccessorLineItemID, v))
 }
 
 // MetadataIsNil applies the IsNil predicate on the "metadata" field.

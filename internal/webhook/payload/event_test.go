@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/stretchr/testify/assert"
@@ -54,4 +58,131 @@ func TestRejectedEventPayloadBuilder_BuildPayload_InvalidData(t *testing.T) {
 	})
 	_, err = b.BuildPayload(context.Background(), types.WebhookEventEventRejected, data)
 	assert.Error(t, err)
+}
+
+type attemptTestPaymentService struct {
+	interfaces.PaymentService
+	payments []*dto.PaymentResponse
+}
+
+func (s *attemptTestPaymentService) GetAttempt(_ context.Context, id string) (*dto.PaymentAttemptResponse, error) {
+	return &dto.PaymentAttemptResponse{ID: id, AttemptNumber: 2, TenantID: "tenant_01",
+		Metadata: types.Metadata{"error_reason": "incorrect_card_details"}}, nil
+}
+
+func (s *attemptTestPaymentService) ListPayments(_ context.Context, _ *types.PaymentFilter) (*dto.ListPaymentsResponse, error) {
+	return &dto.ListPaymentsResponse{Items: s.payments}, nil
+}
+
+type attemptTestCheckoutService struct {
+	interfaces.CheckoutSessionService
+	sessions []*dto.CheckoutSessionResponse
+}
+
+func (s *attemptTestCheckoutService) List(_ context.Context, _ *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error) {
+	return &dto.ListCheckoutSessionsResponse{Items: s.sessions}, nil
+}
+
+func TestPaymentAttemptPayloadBuilder_BuildPayload(t *testing.T) {
+	payment := &dto.PaymentResponse{ID: "pay_01", DestinationID: "inv_01"}
+	session := &dto.CheckoutSessionResponse{ID: "chk_01", CustomerID: "cust_01"}
+
+	tests := []struct {
+		name     string
+		payments []*dto.PaymentResponse
+		sessions []*dto.CheckoutSessionResponse
+		wantErr  bool
+	}{
+		{name: "includes the checkout session", payments: []*dto.PaymentResponse{payment}, sessions: []*dto.CheckoutSessionResponse{session}},
+		{name: "omits checkout for a standalone payment", payments: []*dto.PaymentResponse{payment}},
+		{name: "rejects a missing payment", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewPaymentAttemptPayloadBuilder(&Services{
+				PaymentService:         &attemptTestPaymentService{payments: tt.payments},
+				CheckoutSessionService: &attemptTestCheckoutService{sessions: tt.sessions},
+			})
+			raw, err := json.Marshal(webhookDto.InternalPaymentEvent{PaymentID: "pay_01", TenantID: "tenant_01", AttemptID: "attempt_02"})
+			require.NoError(t, err)
+
+			out, err := builder.BuildPayload(context.Background(), types.WebhookEventPaymentAttemptFailed, raw)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			var got map[string]any
+			require.NoError(t, json.Unmarshal(out, &got))
+			attempt := got["attempt"].(map[string]any)
+			assert.Equal(t, "inv_01", got["payment"].(map[string]any)["destination_id"])
+			assert.Equal(t, "attempt_02", attempt["id"])
+			assert.Equal(t, "incorrect_card_details", attempt["metadata"].(map[string]any)["error_reason"])
+			assert.NotContains(t, attempt, "tenant_id")
+			if tt.sessions != nil {
+				assert.Equal(t, "cust_01", got["checkout_session"].(map[string]any)["customer_id"])
+			} else {
+				assert.NotContains(t, got, "checkout_session")
+			}
+		})
+	}
+}
+
+type paymentFailedTestInvoiceService struct {
+	service.InvoiceService
+}
+
+func (paymentFailedTestInvoiceService) GetInvoice(_ context.Context, id string) (*dto.InvoiceResponse, error) {
+	return &dto.InvoiceResponse{Invoice: invoice.Invoice{ID: id}}, nil
+}
+
+func (paymentFailedTestInvoiceService) WithHostedInvoiceURLs(_ context.Context, _ ...*dto.InvoiceResponse) error {
+	return nil
+}
+
+func (paymentFailedTestInvoiceService) GetInvoicePDFUrl(_ context.Context, _ dto.InvoicePDFRequest) (string, error) {
+	return "https://pdf", nil
+}
+
+func TestInvoicePaymentFailedPayloadBuilder_BuildPayload(t *testing.T) {
+	tests := []struct {
+		name    string
+		event   webhookDto.InternalInvoicePaymentFailedEvent
+		wantErr bool
+	}{
+		{name: "builds the payload", event: webhookDto.InternalInvoicePaymentFailedEvent{
+			InvoiceID: "inv_01", TenantID: "tenant_01", Provider: types.SecretProviderRazorpay,
+			Reason: types.InvoicePaymentFailureReasonPaymentMethodUnavailable, IsAutoChargeAttempt: true,
+		}},
+		{name: "rejects a missing reason", event: webhookDto.InternalInvoicePaymentFailedEvent{
+			InvoiceID: "inv_01", TenantID: "tenant_01", Provider: types.SecretProviderRazorpay,
+		}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewInvoicePaymentFailedPayloadBuilder(&Services{InvoiceService: paymentFailedTestInvoiceService{}})
+			raw, err := json.Marshal(tt.event)
+			require.NoError(t, err)
+
+			out, err := builder.BuildPayload(context.Background(), types.WebhookEventInvoicePaymentFailed, raw)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			var got map[string]any
+			require.NoError(t, json.Unmarshal(out, &got))
+			assert.Equal(t, string(types.WebhookEventInvoicePaymentFailed), got["event_type"])
+			assert.Equal(t, "inv_01", got["invoice"].(map[string]any)["id"])
+			assert.Equal(t, "razorpay", got["provider"])
+			assert.Equal(t, "payment_method_unavailable", got["reason"])
+			assert.Equal(t, true, got["is_auto_charge_attempt"])
+			assert.Nil(t, got["payment_id"])
+			assert.Nil(t, got["error"])
+		})
+	}
 }

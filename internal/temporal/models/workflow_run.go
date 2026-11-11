@@ -63,6 +63,10 @@ type StartWorkflowOptions struct {
 
 	// WorkflowIDReusePolicy controls reuse of completed workflow IDs.
 	WorkflowIDReusePolicy enumspb.WorkflowIdReusePolicy
+
+	// WorkflowExecutionErrorWhenAlreadyStarted returns WorkflowExecutionAlreadyStarted when a run
+	// with this ID is still open. Without it the SDK silently hands back the running workflow.
+	WorkflowExecutionErrorWhenAlreadyStarted bool
 }
 
 // ToSDKOptions converts StartWorkflowOptions to Temporal SDK client.StartWorkflowOptions
@@ -74,6 +78,8 @@ func (o *StartWorkflowOptions) ToSDKOptions() client.StartWorkflowOptions {
 		WorkflowRunTimeout:       o.WorkflowRunTimeout,
 		WorkflowTaskTimeout:      o.WorkflowTaskTimeout,
 		WorkflowIDReusePolicy:    o.WorkflowIDReusePolicy,
+
+		WorkflowExecutionErrorWhenAlreadyStarted: o.WorkflowExecutionErrorWhenAlreadyStarted,
 	}
 
 	if o.StartDelay.Seconds() > 0 {
