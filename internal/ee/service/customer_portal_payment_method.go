@@ -109,6 +109,10 @@ func (s *customerPortalService) mutateSavedMethod(
 	if err != nil {
 		return nil, err
 	}
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
 
 	provider, resolvedGateway, err := s.methodProviderFor(ctx, customerID, capability, gateway)
 	if err != nil {

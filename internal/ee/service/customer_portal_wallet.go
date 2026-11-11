@@ -237,6 +237,11 @@ func (s *customerPortalService) validateSavedMethodForTopUp(
 	customerID string,
 	gateway types.PaymentGatewayType,
 ) error {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+	if err != nil {
+		return err
+	}
+
 	methodProvider, err := s.IntegrationFactory.GetPaymentMethodProvider(ctx, gateway, s.customerService)
 	if err != nil {
 		if ierr.IsNotImplemented(err) {
