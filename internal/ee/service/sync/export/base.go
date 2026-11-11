@@ -168,8 +168,10 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 	ctx = types.SetTenantID(ctx, request.TenantID)
 	ctx = types.SetEnvironmentID(ctx, request.EnvID)
 
+	var conn *connection.Connection
 	if !request.ManagedCopy {
-		conn, err := s.connectionRepo.Get(ctx, request.ConnectionID)
+		var err error
+		conn, err = s.connectionRepo.Get(ctx, request.ConnectionID)
 		if err != nil {
 			return nil, ierr.WithError(err).
 				WithHint("Failed to get connection for export").
@@ -185,7 +187,7 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 		}
 	}
 
-	store, err := s.resolveExportStore(ctx, request)
+	store, err := s.resolveExportStore(ctx, request, conn)
 	if err != nil {
 		if ierr.IsValidation(err) {
 			return nil, err
@@ -324,7 +326,7 @@ func (s *ExportService) exportResponse(ctx context.Context, request *dto.ExportR
 	}
 }
 
-func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.ExportRequest) (storage.Storage, error) {
+func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.ExportRequest, conn *connection.Connection) (storage.Storage, error) {
 	if request.JobConfig == nil {
 		return nil, ierr.NewError("job configuration is required").
 			WithHint("job configuration must be provided for storage uploads").
@@ -335,7 +337,32 @@ func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.Exp
 		return s.resolvePlatformExportStore(ctx, request)
 	}
 
+	if err := s.checkManagedDestination(ctx, conn, request.JobConfig); err != nil {
+		return nil, err
+	}
 	return s.storageResolver.ForConnectionExport(ctx, request.ConnectionID, request.JobConfig)
+}
+
+// checkManagedDestination pins managed connections to the platform bucket.
+func (s *ExportService) checkManagedDestination(ctx context.Context, conn *connection.Connection, cfg *types.S3JobConfig) error {
+	if conn == nil || conn.SyncConfig == nil || conn.SyncConfig.Storage == nil || !conn.SyncConfig.Storage.IsFlexpriceManaged {
+		return nil
+	}
+	if s.config == nil {
+		return ierr.NewError("managed export destination unavailable").Mark(ierr.ErrValidation)
+	}
+	bucket := s.config.FlexpriceS3Exports.Bucket
+	if conn.ProviderType == types.SecretProviderGCS {
+		bucket = s.config.FlexpriceGCSExports.Bucket
+	}
+	scope := fmt.Sprintf("%s/%s", types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
+	inScope := strings.HasPrefix(cfg.KeyPrefix, "exports/"+scope+"/") || cfg.KeyPrefix == scope || strings.HasPrefix(cfg.KeyPrefix, scope+"/")
+	if bucket == "" || cfg.Bucket != bucket || !inScope || strings.Contains(cfg.KeyPrefix, "..") {
+		return ierr.NewError("managed export destination mismatch").
+			WithHint("job config does not match the Flexprice export bucket or tenant prefix").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // Platform store, validated against job config.
