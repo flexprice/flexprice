@@ -35,6 +35,7 @@ type exportRepoFake struct {
 	created     *scheduledtask.ScheduledTask
 	settings    *scheduledtask.ScheduledTask
 	settingsErr error
+	wroteEmail  bool
 	// Committed by a concurrent writer on conflict.
 	winner *scheduledtask.ScheduledTask
 }
@@ -56,7 +57,8 @@ func (r *exportRepoFake) Get(context.Context, string) (*scheduledtask.ScheduledT
 
 var settingsStamp = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
-func (r *exportRepoFake) UpdateSettings(_ context.Context, t *scheduledtask.ScheduledTask) error {
+func (r *exportRepoFake) UpdateSettings(_ context.Context, t *scheduledtask.ScheduledTask, writeEmail bool) error {
+	r.wroteEmail = writeEmail
 	if r.winner != nil {
 		r.task = r.winner
 		return r.settingsErr

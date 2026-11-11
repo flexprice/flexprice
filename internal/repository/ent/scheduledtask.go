@@ -158,8 +158,8 @@ func (r *ScheduledTaskRepository) Update(ctx context.Context, task *domainst.Sch
 	return nil
 }
 
-// UpdateSettings writes settings if updated_at unchanged.
-func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask) error {
+// UpdateSettings compare-and-sets settings; email when writeEmail.
+func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask, writeEmail bool) error {
 	scope := []predicate.ScheduledTask{
 		scheduledtask.TenantID(types.GetTenantID(ctx)),
 		scheduledtask.EnvironmentID(types.GetEnvironmentID(ctx)),
@@ -180,10 +180,12 @@ func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *doma
 	} else {
 		update = update.ClearSchedule()
 	}
-	if task.EmailConfig != nil {
-		update = update.SetEmailConfig(task.EmailConfig)
-	} else {
-		update = update.ClearEmailConfig()
+	if writeEmail {
+		if task.EmailConfig != nil {
+			update = update.SetEmailConfig(task.EmailConfig)
+		} else {
+			update = update.ClearEmailConfig()
+		}
 	}
 
 	saved, err := update.Save(ctx)

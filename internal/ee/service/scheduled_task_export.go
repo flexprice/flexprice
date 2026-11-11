@@ -247,7 +247,7 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 		}
 	}
 
-	if err := s.repo.UpdateSettings(ctx, task); err != nil {
+	if err := s.repo.UpdateSettings(ctx, task, req.EmailConfig != nil); err != nil {
 		s.logger.Error(ctx, "failed to update scheduled task settings", "id", task.ID, "error", err)
 		if synced {
 			// Restore committed schedule; concurrent winner wins.
