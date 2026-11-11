@@ -93,7 +93,8 @@ type CheckoutProviderRequest struct {
 	LineItems  []CheckoutLineItem
 	// ExpiresAt is when the hosted object should stop accepting payments. Providers
 	// that cannot express this ignore it.
-	ExpiresAt *time.Time
+	ExpiresAt      *time.Time
+	NotifyCustomer bool
 }
 
 // CheckoutLineItem itemises what is being charged. Providers that can only carry a
@@ -134,6 +135,7 @@ type AuthorizationLinkRequest struct {
 	CancelURL       string
 	Metadata        map[string]string
 	LineItems       []CheckoutLineItem
+	NotifyCustomer  bool
 }
 
 // HasAutoChargeableMethodRequest is the input for checking if a customer has
