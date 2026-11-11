@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -116,5 +117,8 @@ func (Task) Indexes() []ent.Index {
 			StorageKey("idx_tasks_tenant_env_user"),
 		index.Fields("tenant_id", "environment_id", "task_status", "status").
 			StorageKey("idx_tasks_tenant_env_task_status"),
+		index.Fields("created_at").
+			StorageKey("idx_tasks_unfinished_exports").
+			Annotations(entsql.IndexWhere("task_type = 'EXPORT' AND task_status IN ('PENDING','PROCESSING') AND status = 'published'")),
 	}
 }
