@@ -60,6 +60,9 @@ type RedisCache interface {
 
 	// Incr increments counter, sets ttl.
 	Incr(ctx context.Context, key string, ttl time.Duration) (int64, error)
+
+	// TrySetNX sets key only if absent; reports whether it was set.
+	TrySetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error)
 }
 
 // Predefined cache key prefixes for different entity types
