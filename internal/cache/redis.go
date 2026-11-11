@@ -156,6 +156,23 @@ func (c *redisCacheImpl) GetBulk(ctx context.Context, keys []string) (map[string
 	return found, missing
 }
 
+func (c *redisCacheImpl) Incr(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	if c == nil || !c.IsEnabled() {
+		return 0, errors.New("redis cache disabled")
+	}
+	redisKey := c.GetRedisKey(key)
+	n, err := c.client.Incr(ctx, redisKey).Result()
+	if err != nil {
+		return 0, err
+	}
+	if n == 1 {
+		if err := c.client.Expire(ctx, redisKey, ttl).Err(); err != nil {
+			return n, err
+		}
+	}
+	return n, nil
+}
+
 // Set adds a value to the cache with the specified expiration
 func (c *redisCacheImpl) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) {
 	if c == nil || !c.IsEnabled() {
