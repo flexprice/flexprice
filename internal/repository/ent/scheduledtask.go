@@ -179,7 +179,8 @@ func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *doma
 		update = update.ClearTemporalScheduleID()
 	}
 
-	if _, err := update.Save(ctx); err != nil {
+	saved, err := update.Save(ctx)
+	if err != nil {
 		if ent.IsNotFound(err) {
 			return ierr.NewError("scheduled task not found").
 				WithHint("No rows matched ID + tenant + environment").
@@ -189,6 +190,7 @@ func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *doma
 			WithHint("Failed to update scheduled task settings").
 			Mark(ierr.ErrDatabase)
 	}
+	task.UpdatedAt = saved.UpdatedAt
 	return nil
 }
 
