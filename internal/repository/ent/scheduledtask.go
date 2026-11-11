@@ -242,6 +242,7 @@ func (r *ScheduledTaskRepository) List(ctx context.Context, filters *domainst.Li
 	query = query.Where(
 		scheduledtask.TenantID(tenantID),
 		scheduledtask.EnvironmentID(environmentID),
+		scheduledtask.Status(string(types.StatusPublished)),
 	)
 
 	// Apply optional filters
