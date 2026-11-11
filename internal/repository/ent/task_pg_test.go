@@ -84,7 +84,9 @@ func TestTaskRepository_FailStaleExportTasks(t *testing.T) {
 		require.Equal(t, want, got.TaskStatus)
 	}
 
-	again, err := repo.FailStaleExportTasks(context.Background(), clock.Now().Add(-2*time.Hour), "Run did not finish.", 1)
+	_, err = repo.FailStaleExportTasks(context.Background(), clock.Now().Add(-2*time.Hour), "Run did not finish.", 1)
 	require.NoError(t, err)
-	require.LessOrEqual(t, again, 1)
+	got, err := repo.Get(tenantA, staleA)
+	require.NoError(t, err)
+	require.Equal(t, types.TaskStatusFailed, got.TaskStatus)
 }
