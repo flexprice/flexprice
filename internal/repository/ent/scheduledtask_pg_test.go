@@ -101,6 +101,19 @@ func TestScheduledTaskRepository_NewColumns(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, srcCfg, gotReport.SourceConfig)
 
+	for _, status := range []types.Status{types.StatusDeleted, types.StatusArchived} {
+		hidden := &scheduledtask.ScheduledTask{
+			ID:          "st_" + runID + "_" + string(status),
+			EntityType:  types.ScheduledTaskEntityTypeReport,
+			Interval:    types.ScheduledTaskIntervalManual,
+			ManagedCopy: true,
+			Status:      status,
+		}
+		require.NoError(t, repo.Create(ctx, hidden))
+		_, err = repo.Get(ctx, hidden.ID)
+		require.NoError(t, err)
+	}
+
 	rows, err := repo.List(ctx, &scheduledtask.ListFilters{})
 	require.NoError(t, err)
 	ids := lo.Map(rows, func(r *scheduledtask.ScheduledTask, _ int) string { return r.ID })
