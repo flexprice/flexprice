@@ -3880,7 +3880,7 @@ definitions:
       email_config:
         allOf:
         - $ref: '#/definitions/types.ExportEmailConfig'
-        description: Users in this account who receive each run by email.
+        description: Run notification recipients.
       enabled:
         type: boolean
       entity_type:
@@ -11129,7 +11129,7 @@ definitions:
       email_config:
         allOf:
         - $ref: '#/definitions/types.ExportEmailConfig'
-        description: Absent keeps recipients; empty recipients clears them.
+        description: Absent keeps; empty clears.
       enabled:
         type: boolean
       name:

@@ -23828,7 +23828,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "email_config": {
-                    "description": "Users in this account who receive each run by email.",
+                    "description": "Run notification recipients.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ExportEmailConfig"
@@ -33845,7 +33845,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "email_config": {
-                    "description": "Absent keeps recipients; empty recipients clears them.",
+                    "description": "Absent keeps; empty clears.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ExportEmailConfig"
