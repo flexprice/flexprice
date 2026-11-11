@@ -1381,7 +1381,7 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(ctx context.Context, f *typ
 }
 
 // GetInvoicesForExport retrieves invoices for export purposes with pagination
-func (r *invoiceRepository) GetInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*domainInvoice.Invoice, error) {
+func (r *invoiceRepository) GetInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int, customerIDs []string) ([]*domainInvoice.Invoice, error) {
 	span := StartRepositorySpan(ctx, "invoice", "get_invoices_for_export", map[string]interface{}{
 		"tenant_id":  tenantID,
 		"env_id":     envID,
@@ -1400,14 +1400,18 @@ func (r *invoiceRepository) GetInvoicesForExport(ctx context.Context, tenantID, 
 		"limit", limit,
 		"offset", offset)
 
-	invoices, err := r.client.Reader(ctx).Invoice.Query().
+	query := r.client.Reader(ctx).Invoice.Query().
 		Where(
 			invoice.TenantID(tenantID),
 			invoice.EnvironmentID(envID),
 			invoice.StatusEQ(string(types.StatusPublished)),
 			invoice.CreatedAtGTE(startTime),
 			invoice.CreatedAtLTE(endTime),
-		).
+		)
+	if customerIDs != nil {
+		query = query.Where(invoice.CustomerIDIn(customerIDs...))
+	}
+	invoices, err := query.
 		Order(ent.Asc(invoice.FieldCreatedAt)).
 		Limit(limit).
 		Offset(offset).

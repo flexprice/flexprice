@@ -296,7 +296,7 @@ func (r *customerRepository) ListRefsByFilter(ctx context.Context, filter *types
 	return refs, nil
 }
 
-// keysetQuery applies tenant, env and filter options, ordered by id after afterID.
+// keysetQuery builds the id-ordered scoped query.
 func (r *customerRepository) keysetQuery(ctx context.Context, filter *types.CustomerFilter, afterID string, limit int) (CustomerQuery, error) {
 	f := types.NewNoLimitCustomerFilter()
 	if filter != nil {
