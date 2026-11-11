@@ -34,6 +34,18 @@ func ReconcileExportScheduleTimeouts(
 	scheduledTasks scheduledtask.Repository,
 	log *logger.Logger,
 ) {
+	reconcileExportScheduleTimeouts(ctx, tc, tenants, envs, scheduledTasks, log, reconcileEnvLimit, reconcilePageLimit)
+}
+
+func reconcileExportScheduleTimeouts(
+	ctx context.Context,
+	tc scheduleHandleGetter,
+	tenants tenant.Repository,
+	envs environment.Repository,
+	scheduledTasks scheduledtask.Repository,
+	log *logger.Logger,
+	envPageSize, taskPageSize int,
+) {
 	updated, current, failed := 0, 0, 0
 
 	allTenants, err := tenants.List(ctx)
@@ -44,19 +56,28 @@ func ReconcileExportScheduleTimeouts(
 
 	for _, t := range allTenants {
 		tenantCtx := types.SetTenantID(ctx, t.ID)
-		envFilter := types.GetDefaultFilter()
-		envFilter.Limit = reconcileEnvLimit
-		envList, err := envs.List(tenantCtx, envFilter)
-		if err != nil {
-			log.Error(ctx, "export schedule reconcile: list environments failed", "error", err, "tenant_id", t.ID)
-			failed++
-			continue
+		var envList []*environment.Environment
+		for offset := 0; ; offset += envPageSize {
+			envFilter := types.GetDefaultFilter()
+			envFilter.Limit = envPageSize
+			envFilter.Offset = offset
+			envPage, err := envs.List(tenantCtx, envFilter)
+			if err != nil {
+				log.Error(ctx, "export schedule reconcile: list environments failed", "error", err, "tenant_id", t.ID)
+				failed++
+				break
+			}
+			envList = append(envList, envPage...)
+			if len(envPage) < envPageSize {
+				break
+			}
 		}
 
 		for _, env := range envList {
 			envCtx := types.SetEnvironmentID(tenantCtx, env.ID)
-			for offset := 0; ; offset += reconcilePageLimit {
-				page, err := scheduledTasks.List(envCtx, &scheduledtask.ListFilters{Limit: reconcilePageLimit, Offset: offset})
+			afterID := ""
+			for {
+				page, err := scheduledTasks.List(envCtx, &scheduledtask.ListFilters{Limit: taskPageSize, KeysetByID: true, AfterID: afterID})
 				if err != nil {
 					log.Error(ctx, "export schedule reconcile: list scheduled tasks failed", "error", err, "tenant_id", t.ID, "env_id", env.ID)
 					failed++
@@ -77,9 +98,10 @@ func ReconcileExportScheduleTimeouts(
 						current++
 					}
 				}
-				if len(page) < reconcilePageLimit {
+				if len(page) < taskPageSize {
 					break
 				}
+				afterID = page[len(page)-1].ID
 			}
 		}
 	}

@@ -3197,6 +3197,14 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{TasksColumns[1], TasksColumns[7], TasksColumns[15], TasksColumns[2]},
 			},
+			{
+				Name:    "idx_tasks_unfinished_exports",
+				Unique:  false,
+				Columns: []*schema.Column{TasksColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "task_type = 'EXPORT' AND task_status IN ('PENDING','PROCESSING') AND status = 'published'",
+				},
+			},
 		},
 	}
 	// TaxAppliedsColumns holds the columns for the "tax_applieds" table.

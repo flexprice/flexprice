@@ -276,6 +276,13 @@ func (r *ScheduledTaskRepository) List(ctx context.Context, filters *domainst.Li
 		query = query.Where(scheduledtask.OriginNEQ(filters.ExcludeOrigin))
 	}
 
+	if filters.KeysetByID {
+		query = query.Order(ent.Asc(scheduledtask.FieldID))
+		if filters.AfterID != "" {
+			query = query.Where(scheduledtask.IDGT(filters.AfterID))
+		}
+	}
+
 	// Apply pagination
 	if filters.Limit > 0 {
 		query = query.Limit(filters.Limit)

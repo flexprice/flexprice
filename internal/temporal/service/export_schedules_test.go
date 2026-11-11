@@ -117,3 +117,52 @@ func TestReconcileExportScheduleTimeouts(t *testing.T) {
 	run()
 	require.Equal(t, 1, old.updates)
 }
+
+type pagedEnvs struct {
+	environment.Repository
+	ids []string
+}
+
+func (p pagedEnvs) List(_ context.Context, f types.Filter) ([]*environment.Environment, error) {
+	var out []*environment.Environment
+	for i := f.Offset; i < len(p.ids) && len(out) < f.Limit; i++ {
+		out = append(out, &environment.Environment{ID: p.ids[i]})
+	}
+	return out, nil
+}
+
+type keysetTasks struct {
+	scheduledtask.Repository
+	byEnv map[string][]*scheduledtask.ScheduledTask
+}
+
+func (k keysetTasks) List(ctx context.Context, f *scheduledtask.ListFilters) ([]*scheduledtask.ScheduledTask, error) {
+	if !f.KeysetByID {
+		return nil, errors.New("keyset required")
+	}
+	var out []*scheduledtask.ScheduledTask
+	for _, r := range k.byEnv[types.GetEnvironmentID(ctx)] {
+		if r.ID > f.AfterID && len(out) < f.Limit {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+func TestReconcileExportScheduleTimeouts_Paging(t *testing.T) {
+	handles := fakeHandles{}
+	byEnv := map[string][]*scheduledtask.ScheduledTask{}
+	for _, env := range []string{"e1", "e2", "e3"} {
+		for _, n := range []string{"1", "2", "3"} {
+			id := env + "-" + n
+			handles[id] = &fakeHandle{schedule: scheduleWithTimeout(60 * time.Minute)}
+			byEnv[env] = append(byEnv[env], &scheduledtask.ScheduledTask{ID: id, TemporalScheduleID: id, Interval: types.ScheduledTaskIntervalDaily})
+		}
+	}
+
+	reconcileExportScheduleTimeouts(context.Background(), handles, fakeTenants{}, pagedEnvs{ids: []string{"e1", "e2", "e3"}}, keysetTasks{byEnv: byEnv}, logger.NewNoopLogger(), 2, 2)
+
+	for id, h := range handles {
+		require.Equal(t, 1, h.updates, id)
+	}
+}
