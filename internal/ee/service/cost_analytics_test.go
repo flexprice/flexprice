@@ -343,6 +343,17 @@ func (s *CostAnalyticsSuite) TestChildSeesOnlyItsOwnEventsAtTheParentsPrices() {
 	s.Equal([]string{"plan_cost"}, resp.Items[0].PlanIDs)
 }
 
+func (s *CostAnalyticsSuite) TestPausedChildHasNoCostAsTheParentInvoiceSkipsIt() {
+	child := *s.child
+	child.SubscriptionStatus = types.SubscriptionStatusPaused
+	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), &child))
+
+	resp, err := s.query(func(r *dto.CostAnalyticsRequest) { r.ExternalCustomerID = "acme_child" })
+	s.NoError(err)
+	s.Empty(resp.Items)
+	s.Equal("0.00", resp.Totals.Cost)
+}
+
 func (s *CostAnalyticsSuite) TestColumnsMetricsAndPaging() {
 	resp, err := s.query(func(r *dto.CostAnalyticsRequest) {
 		r.GroupBy = []string{"meter_id"}

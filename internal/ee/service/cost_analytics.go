@@ -186,6 +186,14 @@ func (s *costAnalyticsService) subscriptionsInRange(ctx context.Context, cust *c
 			if parent == nil {
 				continue // the parent is not billed, so neither is the child
 			}
+			// The parent's invoice covers only the children billing lists (not paused or cancelled ones).
+			covered, err := subService.ExternalCustomerIDsForSubscription(ctx, parent)
+			if err != nil {
+				return nil, err
+			}
+			if !lo.Contains(covered, cust.ExternalID) {
+				continue
+			}
 			cs.owner = parent
 			cs.customerIDs = []string{cust.ExternalID}
 		} else {
