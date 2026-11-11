@@ -126,10 +126,51 @@ func (a *CheckoutAdapter) FetchPaymentState(
 	}
 }
 
+// ExpirePaymentLink implements interfaces.CheckoutProvider. If the cancel fails because
+// the link or invoice is already closed, that counts as success.
 func (a *CheckoutAdapter) ExpirePaymentLink(
 	ctx context.Context,
 	req interfaces.ExpirePaymentLinkRequest,
 ) error {
-	return ierr.NewError("razorpay payment link expiry is not implemented").
-		Mark(ierr.ErrNotImplemented)
+	if a == nil || a.Svc == nil {
+		return ierr.NewError("razorpay checkout adapter is not configured").
+			Mark(ierr.ErrNotImplemented)
+	}
+
+	handle := req.GatewayTrackingID
+	switch {
+	case strings.HasPrefix(handle, paymentLinkPrefix):
+		err := a.Svc.CancelPaymentLink(ctx, handle)
+		if err == nil {
+			return nil
+		}
+		if link, getErr := a.Svc.GetPaymentLinkStatus(ctx, handle); getErr == nil && isClosedStatus(link.Status) {
+			return nil
+		}
+		return err
+
+	case strings.HasPrefix(handle, invoicePrefix):
+		err := a.Svc.CancelInvoice(ctx, handle)
+		if err == nil {
+			return nil
+		}
+		if inv, getErr := a.Svc.GetInvoiceStatus(ctx, handle); getErr == nil && isClosedStatus(inv.Status) {
+			return nil
+		}
+		return err
+
+	default:
+		return ierr.NewError("razorpay checkout handle cannot be expired").
+			WithReportableDetails(map[string]interface{}{"gateway_tracking_id": handle}).
+			Mark(ierr.ErrNotImplemented)
+	}
+}
+
+// isClosedStatus reports whether a payment link or invoice can no longer be paid.
+func isClosedStatus(status string) bool {
+	switch status {
+	case "cancelled", "expired", "paid":
+		return true
+	}
+	return false
 }
