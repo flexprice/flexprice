@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
 
@@ -253,6 +254,55 @@ func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
 
 	SetSpanSuccess(span)
 	return nil
+}
+
+// System job: deliberately not scoped to the tenant or environment in ctx.
+func (r *taskRepository) FailStaleExportTasks(ctx context.Context, olderThan time.Time, reason string, limit int) (int, error) {
+	span := StartRepositorySpan(ctx, "task", "fail_stale_export", nil)
+	defer FinishSpan(span)
+
+	client := r.client.Writer(ctx)
+
+	ids, err := client.Task.Query().
+		Where(
+			task.TaskType(string(types.TaskTypeExport)),
+			task.TaskStatusIn(string(types.TaskStatusProcessing), string(types.TaskStatusPending)),
+			task.Status(string(types.StatusPublished)),
+			task.CreatedAtLT(olderThan),
+		).
+		Limit(limit).
+		IDs(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to list stale export tasks").
+			Mark(ierr.ErrDatabase)
+	}
+	if len(ids) == 0 {
+		SetSpanSuccess(span)
+		return 0, nil
+	}
+
+	now := clock.Now()
+	n, err := client.Task.Update().
+		Where(
+			task.IDIn(ids...),
+			task.TaskStatusIn(string(types.TaskStatusProcessing), string(types.TaskStatusPending)),
+		).
+		SetTaskStatus(string(types.TaskStatusFailed)).
+		SetErrorSummary(reason).
+		SetFailedAt(now).
+		SetUpdatedAt(now).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to fail stale export tasks").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return n, nil
 }
 
 func (r *taskRepository) Delete(ctx context.Context, id string) error {

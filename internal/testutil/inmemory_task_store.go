@@ -2,7 +2,9 @@ package testutil
 
 import (
 	"context"
+	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -95,6 +97,30 @@ func (s *InMemoryTaskStore) List(ctx context.Context, filter *types.TaskFilter) 
 
 func (s *InMemoryTaskStore) Count(ctx context.Context, filter *types.TaskFilter) (int, error) {
 	return s.InMemoryStore.Count(ctx, filter, taskFilterFn)
+}
+
+func (s *InMemoryTaskStore) FailStaleExportTasks(_ context.Context, olderThan time.Time, reason string, limit int) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := clock.Now()
+	n := 0
+	for _, t := range s.items {
+		if n >= limit {
+			break
+		}
+		unfinished := t.TaskStatus == types.TaskStatusPending || t.TaskStatus == types.TaskStatusProcessing
+		if t.TaskType != types.TaskTypeExport || !unfinished ||
+			t.Status != types.StatusPublished || !t.CreatedAt.Before(olderThan) {
+			continue
+		}
+		t.TaskStatus = types.TaskStatusFailed
+		t.ErrorSummary = &reason
+		t.FailedAt = &now
+		t.UpdatedAt = now
+		n++
+	}
+	return n, nil
 }
 
 // GetLastExportTask gets the last export task for a scheduled job (regardless of status)

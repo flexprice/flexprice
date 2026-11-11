@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -15,4 +16,7 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.TaskFilter) (int, error)
 	Update(ctx context.Context, task *Task) error
 	Delete(ctx context.Context, id string) error
+	// FailStaleExportTasks fails unfinished export runs created before olderThan, across all
+	// tenants. It returns the number updated, at most limit.
+	FailStaleExportTasks(ctx context.Context, olderThan time.Time, reason string, limit int) (int, error)
 }
