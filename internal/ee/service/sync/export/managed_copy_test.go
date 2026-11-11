@@ -202,3 +202,16 @@ func TestExport_ConnectionPathUnchanged(t *testing.T) {
 	require.Len(t, customer.keys, 1)
 	require.True(t, strings.HasPrefix(resp.FileURL, "s3://customer-bucket/mine/"), resp.FileURL)
 }
+
+func TestExportObjectKey_TaskIDMakesKeysDistinct(t *testing.T) {
+	cfg := platformCfg("exports/t1/e1/st_1")
+	first, second := managedRequest(true, cfg), managedRequest(true, cfg)
+	first.TaskID, second.TaskID = "export-wf/run:aaaa1111", "export-wf/run:bbbb2222"
+
+	k1, k2 := exportObjectKey(first, csvExporter{}), exportObjectKey(second, csvExporter{})
+
+	require.NotEqual(t, k1, k2)
+	require.NotContains(t, k1, ":")
+	require.Equal(t, exportObjectKey(managedRequest(true, cfg), csvExporter{}), exportObjectKey(managedRequest(true, cfg), csvExporter{}))
+	require.NotContains(t, exportObjectKey(managedRequest(true, cfg), csvExporter{}), "aaaa")
+}

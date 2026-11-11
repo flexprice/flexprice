@@ -292,7 +292,22 @@ func exportObjectKey(request *dto.ExportRequest, exporter Exporter) string {
 	if len(request.CustomerExternalIDs) > 0 {
 		filename += "-customers-" + customerFilterDigest(request.CustomerExternalIDs)
 	}
+	if suffix := runKeySuffix(request.TaskID); suffix != "" {
+		filename += "-" + suffix
+	}
 	return storage.ObjectKey(request.JobConfig.KeyPrefix, filenamePrefix, filename, "csv", request.JobConfig.Compression == types.S3CompressionTypeGzip)
+}
+
+func runKeySuffix(taskID string) string {
+	if len(taskID) > 12 {
+		taskID = taskID[len(taskID)-12:]
+	}
+	return strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-' {
+			return r
+		}
+		return '-'
+	}, taskID)
 }
 
 func (s *ExportService) exportResponse(ctx context.Context, request *dto.ExportRequest, recordCount int, uploadResponse *storage.UploadResponse) *dto.ExportResponse {
