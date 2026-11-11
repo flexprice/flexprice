@@ -19,6 +19,10 @@ type Repository interface {
 	List(ctx context.Context, filter *types.CustomerFilter) ([]*Customer, error)
 	Count(ctx context.Context, filter *types.CustomerFilter) (int, error)
 	ListAll(ctx context.Context, filter *types.CustomerFilter) ([]*Customer, error)
+	// ListByFilterPage returns up to limit matches with id greater than afterID, ordered by id.
+	ListByFilterPage(ctx context.Context, filter *types.CustomerFilter, afterID string, limit int) ([]*Customer, error)
+	// ListMetadataPageByFilter is ListByFilterPage with only ID and Metadata populated.
+	ListMetadataPageByFilter(ctx context.Context, filter *types.CustomerFilter, afterID string, limit int) ([]*Customer, error)
 	// ListRefsByFilter returns id and external id of matches; errors when more than max (no cap when max <= 0).
 	ListRefsByFilter(ctx context.Context, filter *types.CustomerFilter, max int) ([]Ref, error)
 	Update(ctx context.Context, customer *Customer) error

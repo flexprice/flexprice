@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -113,6 +114,26 @@ func (s *InMemoryCustomerStore) List(ctx context.Context, filter *types.Customer
 	return lo.Map(items, func(c *customer.Customer, _ int) *customer.Customer {
 		return copyCustomer(c)
 	}), nil
+}
+
+func (s *InMemoryCustomerStore) ListByFilterPage(ctx context.Context, filter *types.CustomerFilter, afterID string, limit int) ([]*customer.Customer, error) {
+	if filter == nil {
+		filter = types.NewNoLimitCustomerFilter()
+	}
+	items, err := s.ListAll(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	items = lo.Filter(items, func(c *customer.Customer, _ int) bool { return c.ID > afterID })
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func (s *InMemoryCustomerStore) ListMetadataPageByFilter(ctx context.Context, filter *types.CustomerFilter, afterID string, limit int) ([]*customer.Customer, error) {
+	return s.ListByFilterPage(ctx, filter, afterID, limit)
 }
 
 func (s *InMemoryCustomerStore) ListRefsByFilter(ctx context.Context, filter *types.CustomerFilter, max int) ([]customer.Ref, error) {
