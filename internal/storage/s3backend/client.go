@@ -20,6 +20,7 @@ import (
 	"github.com/cockroachdb/errors"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage/storagetypes"
 	"github.com/flexprice/flexprice/internal/utils"
@@ -27,14 +28,18 @@ import (
 
 const defaultPresignExpiry = 30 * time.Minute
 
+const publicOnlyTimeout = 10 * time.Minute
+
 // Config holds everything needed to construct an S3-backed storagetypes.Storage.
 type Config struct {
-	Bucket             string
-	Region             string
-	CompressionGzip    bool
-	ServerSideEncrypt  string // "", "AES256", "aws:kms", "aws:kms:dsse"
-	EndpointURL        string // custom endpoint (MinIO etc.)
-	UsePathStyle       bool
+	Bucket            string
+	Region            string
+	CompressionGzip   bool
+	ServerSideEncrypt string // "", "AES256", "aws:kms", "aws:kms:dsse"
+	EndpointURL       string // custom endpoint (MinIO etc.)
+	UsePathStyle      bool
+	// Refuses non-public addresses when dialing the endpoint.
+	PublicOnlyEndpoint bool
 	AWSAccessKeyID     string
 	AWSSecretAccessKey string
 	AWSSessionToken    string
@@ -164,6 +169,10 @@ func New(ctx context.Context, cfg *Config, log *logger.Logger) (storagetypes.Sto
 		log.Warn(ctx, "s3backend: federation_role_arn is set but no FederationTokenSource is configured — falling back to ambient AWS credential chain, which will not work on non-AWS compute", "role_arn", cfg.FederationRoleARN)
 	default:
 		log.Info(ctx, "s3backend: no explicit credentials configured, using ambient AWS default credential chain")
+	}
+
+	if cfg.PublicOnlyEndpoint {
+		opts = append(opts, awsConfig.WithHTTPClient(httpclient.NewPublicOnlyClient(publicOnlyTimeout)))
 	}
 
 	awsCfg, err := awsConfig.LoadDefaultConfig(ctx, opts...)

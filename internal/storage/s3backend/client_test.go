@@ -445,3 +445,19 @@ func TestClient_FileURL_MatchesProviderScheme(t *testing.T) {
 	want := storage.FileURL(storage.ProviderS3, "test-bucket", "exports/report.csv")
 	assert.Equal(t, want, got)
 }
+
+func TestClient_PublicOnlyEndpointRefusesLoopback(t *testing.T) {
+	hit := false
+	cfg, closeFn := newFakeS3Server(t, func(http.ResponseWriter, *http.Request) { hit = true })
+	defer closeFn()
+	cfg.PublicOnlyEndpoint = true
+
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.NoError(t, err)
+
+	_, err = s.Upload(context.Background(), &storage.UploadRequest{Key: "k", Data: []byte("d")})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "non-public address")
+	require.False(t, hit)
+}
