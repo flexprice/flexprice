@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"io"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -32,6 +33,15 @@ type CustomersExporter struct {
 	customerRepo customer.Repository
 }
 
+// neutralizeFormula quotes cells spreadsheets would run as formulas.
+func neutralizeFormula(cell string) string {
+	if cell != "" && strings.ContainsRune("=+-@\t\r", rune(cell[0])) {
+		return "'" + cell
+	}
+	return cell
+}
+
+// NewCustomersExporter builds the customers exporter.
 func NewCustomersExporter(customerRepo customer.Repository) *CustomersExporter {
 	return &CustomersExporter{customerRepo: customerRepo}
 }
@@ -100,6 +110,9 @@ func (e *CustomersExporter) WriteData(ctx context.Context, request *dto.ExportRe
 			}
 			for _, k := range metaKeys {
 				row = append(row, c.Metadata[k])
+			}
+			for i := range row {
+				row[i] = neutralizeFormula(row[i])
 			}
 			if err := cw.Write(row); err != nil {
 				return 0, ierr.WithError(err).WithHint("Failed to write CSV row").Mark(ierr.ErrInternal)

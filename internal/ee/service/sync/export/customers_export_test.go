@@ -52,6 +52,36 @@ func TestCustomersExporter_ZeroMatchesHeaderOnly(t *testing.T) {
 		strings.Join(h, ","))
 }
 
+func TestCustomersExporter_NeutralizesFormulaCells(t *testing.T) {
+	e, store, ctx := newCustomersEnv(t)
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	require.NoError(t, store.Create(ctx, &customer.Customer{
+		ID: "c1", ExternalID: "-1", Name: "=HYPERLINK(\"http://x\")", Email: "+a@x.io",
+		AddressCity: "@Pune", AddressState: "\tTab", AddressCountry: "\rCR", EnvironmentID: "e1",
+		Metadata:  map[string]string{"a": "=1+1", "b": "safe-text", "c": "-5"},
+		BaseModel: types.BaseModel{TenantID: "t1", Status: types.StatusPublished, CreatedAt: ts, UpdatedAt: ts},
+	}))
+
+	out, _, err := e.PrepareData(ctx, exportReq(nil))
+	require.NoError(t, err)
+	h, rows := parseCSVOutput(t, out)
+	require.Len(t, rows, 1)
+	col := map[string]string{}
+	for i, name := range h {
+		col[name] = rows[0][i]
+	}
+	require.Equal(t, "'-1", col["external_id"])
+	require.Equal(t, "'=HYPERLINK(\"http://x\")", col["name"])
+	require.Equal(t, "'+a@x.io", col["email"])
+	require.Equal(t, "'@Pune", col["city"])
+	require.Equal(t, "'\tTab", col["state"])
+	require.Equal(t, "'\rCR", col["country"])
+	require.Equal(t, "'=1+1", col["metadata_a"])
+	require.Equal(t, "safe-text", col["metadata_b"])
+	require.Equal(t, "'-5", col["metadata_c"])
+	require.Equal(t, "c1", col["customer_id"])
+}
+
 func TestCustomersExporter_StatusSemantics(t *testing.T) {
 	e, store, ctx := newCustomersEnv(t)
 	addCust(t, store, ctx, "pub", "t1", "e1", types.StatusPublished, nil)
