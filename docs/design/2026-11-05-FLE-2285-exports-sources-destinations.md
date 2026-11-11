@@ -242,6 +242,14 @@ Reuse `/tasks/scheduled`; extend its DTOs.
 - Handlers parse and delegate; services in `internal/ee/service/`; new deps in `cmd/server/main.go`.
 - Comments under seven words.
 
+### 9. Stuck runs (FLE-2309)
+
+Some runs stayed PROCESSING or PENDING forever. The 60-minute workflow timeout could expire while `ExportData` was still retrying (6h per attempt, 3 attempts), which kills the workflow before any final status is written; a failed final write was also ignored.
+
+- Time budget: workflow timeout 90m (`ExportWorkflowTimeout`). `ExportData` is 3 attempts x 15m plus 90s backoff, about 46.5m. The final status write (`CompleteTask` or `UpdateTaskStatus(Failed)`) is 10 attempts x 1m plus about 2.5m backoff, about 12.5m, and runs before deliveries. Worst case before a final status: 6m setup + 46.5m + 12.5m + 12.5m (fallback to Failed) = 77.5m, under 90m.
+- If `CompleteTask` still fails, the run is marked FAILED with "The file was written but the run could not be completed." (behind `GetVersion` `export-terminal-status`).
+- Sweeper: hourly `StaleExportSweepWorkflow` fails EXPORT runs still PENDING or PROCESSING more than 2h after creation with "Run did not finish." It is one cross-tenant update (500 per pass, at most 20 passes) via `FailStaleExportTasks`.
+
 ## Testing
 
 **Phase 1 checks (built):**

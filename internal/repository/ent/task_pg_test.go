@@ -1,0 +1,90 @@
+//go:build pgintegration
+
+package ent
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/flexprice/flexprice/internal/config"
+	domainTask "github.com/flexprice/flexprice/internal/domain/task"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/postgres"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/stretchr/testify/require"
+)
+
+// Needs the pgintegration build tag.
+func TestTaskRepository_FailStaleExportTasks(t *testing.T) {
+	cfg, err := config.NewConfig()
+	require.NoError(t, err)
+	log, err := logger.NewLogger(cfg)
+	require.NoError(t, err)
+	clients, err := postgres.NewEntClients(cfg, log)
+	require.NoError(t, err)
+	repo := NewTaskRepository(postgres.NewClient(clients, log, nil), log)
+
+	runID := types.GenerateUUID()
+	ctxFor := func(tenant, env string) context.Context {
+		return types.SetUserID(types.SetEnvironmentID(types.SetTenantID(context.Background(), tenant), env), "user_test")
+	}
+	tenantA := ctxFor(types.DefaultTenantID, "env_a_"+runID)
+	tenantB := ctxFor("tenant_b_"+runID, "env_b_"+runID)
+
+	create := func(ctx context.Context, suffix string, tt types.TaskType, status types.TaskStatus, age time.Duration) string {
+		row := &domainTask.Task{
+			ID:         "task_" + runID + "_" + suffix,
+			TaskType:   tt,
+			EntityType: types.EntityTypeEvents,
+			FileType:   types.FileTypeCSV,
+			TaskStatus: status,
+			Metadata:   map[string]interface{}{},
+			BaseModel: types.BaseModel{
+				TenantID:  types.GetTenantID(ctx),
+				Status:    types.StatusPublished,
+				CreatedAt: clock.Now().Add(-age),
+				UpdatedAt: clock.Now().Add(-age),
+				CreatedBy: "user_test",
+				UpdatedBy: "user_test",
+			},
+			EnvironmentID: types.GetEnvironmentID(ctx),
+		}
+		require.NoError(t, repo.Create(ctx, row))
+		return row.ID
+	}
+
+	staleA := create(tenantA, "a_processing", types.TaskTypeExport, types.TaskStatusProcessing, 3*time.Hour)
+	staleB := create(tenantB, "b_pending", types.TaskTypeExport, types.TaskStatusPending, 3*time.Hour)
+	done := create(tenantA, "a_completed", types.TaskTypeExport, types.TaskStatusCompleted, 3*time.Hour)
+	imp := create(tenantA, "a_import", types.TaskTypeImport, types.TaskStatusProcessing, 3*time.Hour)
+	recent := create(tenantA, "a_recent", types.TaskTypeExport, types.TaskStatusProcessing, time.Hour)
+
+	n, err := repo.FailStaleExportTasks(context.Background(), clock.Now().Add(-2*time.Hour), "Run did not finish.", 500)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, n, 2)
+
+	for _, id := range []string{staleA, staleB} {
+		ctx := tenantA
+		if id == staleB {
+			ctx = tenantB
+		}
+		got, err := repo.Get(ctx, id)
+		require.NoError(t, err)
+		require.Equal(t, types.TaskStatusFailed, got.TaskStatus)
+		require.Equal(t, "Run did not finish.", *got.ErrorSummary)
+		require.NotNil(t, got.FailedAt)
+	}
+	for id, want := range map[string]types.TaskStatus{
+		done: types.TaskStatusCompleted, imp: types.TaskStatusProcessing, recent: types.TaskStatusProcessing,
+	} {
+		got, err := repo.Get(tenantA, id)
+		require.NoError(t, err)
+		require.Equal(t, want, got.TaskStatus)
+	}
+
+	again, err := repo.FailStaleExportTasks(context.Background(), clock.Now().Add(-2*time.Hour), "Run did not finish.", 1)
+	require.NoError(t, err)
+	require.LessOrEqual(t, again, 1)
+}
