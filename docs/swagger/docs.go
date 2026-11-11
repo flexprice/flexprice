@@ -13123,7 +13123,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.\ninterval is hourly, daily, weekly, monthly or manual; exports with a connection also accept 15MIN and 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule. Weekly schedules require day_of_week and monthly schedules require day_of_month; each is rejected for other intervals.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.\nentity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config is rejected for other entity types and cannot be changed later. Clients should tolerate new entity_type values.\nReport sources allow interval daily, weekly, monthly or manual; schedule is required unless manual. Windows are the previous UTC period, and a custom run window must be whole UTC days. export_metadata_fields is not allowed. These exports also need analytics read access.",
+                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.\ninterval is hourly, daily, weekly, monthly or manual; exports with a connection also accept 15MIN and 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule. Weekly schedules require day_of_week and monthly schedules require day_of_month; each is rejected for other intervals.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.\nemail_config recipients are rejected for hourly exports.\nentity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config is rejected for other entity types and cannot be changed later. Clients should tolerate new entity_type values.\nReport sources allow interval daily, weekly, monthly or manual; schedule is required unless manual. Windows are the previous UTC period, and a custom run window must be whole UTC days. export_metadata_fields is not allowed. These exports also need analytics read access.",
                 "consumes": [
                     "application/json"
                 ],
@@ -22602,7 +22602,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "email_config": {
-                    "description": "Run notification recipients.",
+                    "description": "Run recipients; not allowed for hourly.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ExportEmailConfig"
@@ -32034,7 +32034,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "email_config": {
-                    "description": "Absent keeps; empty clears.",
+                    "description": "Absent keeps; empty clears. Hourly rejects recipients.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ExportEmailConfig"
