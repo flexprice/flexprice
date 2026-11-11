@@ -47,6 +47,6 @@ type ListFilters struct {
 	Enabled       *bool
 	Origin        types.ExportOrigin
 	ExcludeOrigin types.ExportOrigin
-	Limit        int
+	Limit         int
 	Offset        int
 }

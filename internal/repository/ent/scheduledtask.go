@@ -339,7 +339,7 @@ func (r *ScheduledTaskRepository) entToModel(entTask *ent.ScheduledTask) *domain
 		SourceConfig:       entTask.SourceConfig,
 		EmailConfig:        entTask.EmailConfig,
 		Origin:             entTask.Origin,
-		Status:            types.Status(entTask.Status),
+		Status:             types.Status(entTask.Status),
 		CreatedAt:          entTask.CreatedAt,
 		UpdatedAt:          entTask.UpdatedAt,
 		CreatedBy:          entTask.CreatedBy,
