@@ -314,6 +314,31 @@ func TestExecuteExportWorkflow_CompleteTaskFailureMarksRunFailed(t *testing.T) {
 	require.Equal(t, types.ExportDeliveryStatusFailed, r.recorded[0].Deliveries[0].Status)
 }
 
+func TestExecuteExportWorkflow_CompleteTaskFailureButRowCompletedDeliversCompleted(t *testing.T) {
+	r := newDeliveryRun(export.ScheduledTaskDetails{
+		Interval: types.ScheduledTaskIntervalDaily, EmailRecipients: []string{"a@x.com"},
+	}, nil, nil)
+	r.completeErr = errors.New("commit ack lost")
+	r.statusErr = func(in export.UpdateTaskStatusInput, _ int) error {
+		if in.Status == types.TaskStatusFailed {
+			return temporal.NewNonRetryableApplicationError("task already completed", export.TaskAlreadyCompletedErrType, nil)
+		}
+		return nil
+	}
+	r.run()
+
+	require.NoError(t, r.env.GetWorkflowError())
+	var out ExecuteExportWorkflowOutput
+	require.NoError(t, r.env.GetWorkflowResult(&out))
+	require.True(t, out.Success)
+	require.Equal(t, 3, out.RecordCount)
+	require.Len(t, r.emailIn, 1)
+	require.Equal(t, types.TaskStatusCompleted, r.emailIn[0].RunStatus)
+	require.Equal(t, 3, r.emailIn[0].RecordCount)
+	require.Len(t, r.recorded, 1)
+	require.Equal(t, types.ExportDeliveryStatusDelivered, r.recorded[0].Deliveries[0].Status)
+}
+
 func TestExecuteExportWorkflow_OldVersionSkipsCompleteFallback(t *testing.T) {
 	r := newDeliveryRun(export.ScheduledTaskDetails{Interval: types.ScheduledTaskIntervalDaily}, nil, nil)
 	r.env.OnGetVersion("export-terminal-status", workflow.DefaultVersion, 1).Return(workflow.DefaultVersion)
