@@ -2788,6 +2788,10 @@ func init() {
 	scheduledtaskDescEnabled := scheduledtaskFields[4].Descriptor()
 	// scheduledtask.DefaultEnabled holds the default value on creation for the enabled field.
 	scheduledtask.DefaultEnabled = scheduledtaskDescEnabled.Default.(bool)
+	// scheduledtaskDescOrigin is the schema descriptor for origin field.
+	scheduledtaskDescOrigin := scheduledtaskFields[11].Descriptor()
+	// scheduledtask.DefaultOrigin holds the default value on creation for the origin field.
+	scheduledtask.DefaultOrigin = types.ExportOrigin(scheduledtaskDescOrigin.Default.(string))
 	secretMixin := schema.Secret{}.Mixin()
 	secretMixinFields0 := secretMixin[0].Fields()
 	_ = secretMixinFields0

@@ -136,7 +136,7 @@ func (h *ScheduledTaskHandler) ListScheduledTasks(c *gin.Context) {
 		interval = types.ScheduledTaskInterval(intervalStr)
 	}
 
-	resp, err := h.service.ListScheduledTasks(c.Request.Context(), &filter, connectionID, entityType, interval, enabledStr)
+	resp, err := h.service.ListScheduledTasks(c.Request.Context(), &filter, connectionID, entityType, interval, enabledStr, "", "")
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "failed to list scheduled tasks", "error", err)
 		c.Error(err)
