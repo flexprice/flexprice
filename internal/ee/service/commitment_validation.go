@@ -379,6 +379,11 @@ func (s *commitmentService) validateOverlaps(
 		return li.ID
 	})
 	for _, other := range existing {
+		// A stored commitment whose term is moving is checked against the others only.
+		if other.ID == c.ID {
+			continue
+		}
+
 		otherBlockedUntil, err := blocksUntil(cc.Sub, other)
 		if err != nil {
 			return err

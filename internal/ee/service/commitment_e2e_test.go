@@ -1344,3 +1344,79 @@ func (s *CommitmentE2ESuite) TestFutureTermination_EndsWithAnEarlierPlanChange()
 	s.False(ended.TerminatedAt.After(clock.Now()), "got %s", ended.TerminatedAt)
 	s.Empty(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonCommitmentTermination), "no fee for the change")
 }
+
+// A termination recorded ahead with a $250 fee is moved later, then revoked: the arrears it cancelled come back, the
+// separate-invoice run bills the $300 upfront as if nothing happened, and the $250 fee stays billed. A new fee is
+// rejected until that invoice is voided, then billed once at $100.
+func (s *CommitmentE2ESuite) TestFutureTermination_MovedLaterThenRevoked() {
+	ctx := s.GetContext()
+	start := clock.Now().Truncate(24*time.Hour).AddDate(0, 0, -1)
+	tokens := s.planWith("revoked_termination", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, start)
+	req := termsRequest("Platform", tokens.ID, "100", start, start.AddDate(1, 0, 0),
+		dto.BillingTermInput{Kind: types.BillingTermKindOnce, ValueType: types.BillingTermValueFixed, Value: lo.ToPtr(dec("300"))},
+		dto.BillingTermInput{
+			Kind:           types.BillingTermKindRecurring,
+			ValueType:      types.BillingTermValueFixed,
+			Value:          lo.ToPtr(dec("75")),
+			InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear),
+		},
+	)
+	req.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
+	committed := s.commit(sub.ID, req)
+	s.Require().Len(committed.Instalments, 13)
+	upfront, arrears := committed.Instalments[0], committed.Instalments[1:]
+
+	cancelled := func() int {
+		return lo.CountBy(committed.Instalments, func(inst *billingterm.Instalment) bool {
+			return s.instalmentStatus(inst.ID).InstalmentStatus == types.InstalmentStatusCancelled
+		})
+	}
+
+	first := arrears[2].BillOn
+	terminated, err := s.commitments.Terminate(ctx, committed.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt:     &first,
+		CancellationFee: fixedFee("250"),
+	})
+	s.Require().NoError(err)
+	fee, err := s.GetStores().InvoiceRepo.Get(ctx, lo.FromPtr(terminated.TerminationInvoiceID))
+	s.Require().NoError(err)
+	s.requireBilled(fee, "250", wantLine{types.CommitmentLineCancellationFee, "Platform (cancellation fee)", "1", "250"})
+	s.Equal(9, cancelled(), "the arrears after the third")
+
+	later := arrears[5].BillOn
+	_, err = s.commitments.Terminate(ctx, committed.ID, dto.TerminateCommitmentRequest{EffectiveAt: &later})
+	s.Require().NoError(err)
+	s.Equal(6, cancelled(), "the arrears after the sixth")
+
+	revoked, err := s.commitments.CancelTermination(ctx, committed.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusActive, revoked.CommitmentStatus)
+	s.Nil(revoked.TerminatedAt)
+	s.Zero(cancelled(), "every arrear is back")
+
+	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
+	billed := s.instalmentStatus(upfront.ID)
+	s.Equal(types.InstalmentStatusInvoiced, billed.InstalmentStatus)
+	upfrontInvoice, err := s.GetStores().InvoiceRepo.Get(ctx, lo.FromPtr(billed.InvoiceID))
+	s.Require().NoError(err)
+	s.requireBilled(upfrontInvoice, "300", wantLine{types.CommitmentLineInstalment, "Platform - Instalment 1 of 13", "1", "300"})
+	for _, inst := range arrears {
+		s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(inst.ID).InstalmentStatus, "arrear due %s", inst.BillOn)
+	}
+
+	again := arrears[8].BillOn
+	_, err = s.commitments.Terminate(ctx, committed.ID, dto.TerminateCommitmentRequest{EffectiveAt: &again, CancellationFee: fixedFee("100")})
+	s.Require().Error(err)
+	s.Contains(err.Error(), fee.ID, "the fee is billed once")
+
+	_, err = NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite)).VoidInvoice(ctx, fee.ID, dto.InvoiceVoidRequest{})
+	s.Require().NoError(err)
+	refeed, err := s.commitments.Terminate(ctx, committed.ID, dto.TerminateCommitmentRequest{EffectiveAt: &again, CancellationFee: fixedFee("100")})
+	s.Require().NoError(err)
+	newFee, err := s.GetStores().InvoiceRepo.Get(ctx, lo.FromPtr(refeed.TerminationInvoiceID))
+	s.Require().NoError(err)
+	s.NotEqual(fee.ID, newFee.ID)
+	s.requireBilled(newFee, "100", wantLine{types.CommitmentLineCancellationFee, "Platform (cancellation fee)", "1", "100"})
+	s.Equal(3, cancelled(), "the arrears after the ninth")
+}

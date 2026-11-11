@@ -325,6 +325,45 @@ func (s *CommitmentServiceSuite) TestLineItemDetach_PendingTerminationGuardsUnti
 	}
 }
 
+// A pending termination frees its scope from terminated_at, so a covering line may end there. Moving the termination
+// later or revoking it would bill a minimum with no line from then, so both are rejected.
+func (s *CommitmentServiceSuite) TestTerminate_ExtendingRequiresScopeCoverage() {
+	now := clock.Now().Truncate(time.Second)
+	pendingAt := now.AddDate(0, 2, 0)
+	tests := []struct {
+		name   string
+		moveTo *time.Time // nil revokes
+	}{
+		{name: "later", moveTo: lo.ToPtr(now.AddDate(0, 3, 0))},
+		{name: "revoked"},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			req.EndDate = nil
+			created, err := s.svc.Create(ctx, req)
+			s.Require().NoError(err)
+			_, err = s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &pendingAt})
+			s.Require().NoError(err)
+
+			s.Require().NoError(s.detachCheck(s.fx.lineAPI.ID, pendingAt))
+			line, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.fx.lineAPI.ID)
+			s.Require().NoError(err)
+			line.EndDate = pendingAt
+			s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, line))
+
+			if tt.moveTo != nil {
+				_, err = s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: tt.moveTo})
+			} else {
+				_, err = s.svc.CancelTermination(ctx, created.ID)
+			}
+			s.requireValidation(err, created.ID, "no covering line from "+pendingAt.Format(time.RFC3339))
+		})
+	}
+}
+
 // quantityCommitmentOnAPIOnlyGroup creates a quantity commitment scoped to the group holding only the API meter.
 func (s *CommitmentServiceSuite) quantityCommitmentOnAPIOnlyGroup() {
 	req := validReq(s.fx.sub.ID, "")

@@ -895,23 +895,20 @@ func (s *CommitmentServiceSuite) TestTerminate_FutureEffectiveAt() {
 	}
 }
 
-// Until PR 2 adds rescheduling, a second terminate only moves a pending termination earlier, without a fee, and
-// publishes commitment.updated; a termination that has taken effect is final.
-func (s *CommitmentServiceSuite) TestTerminate_PendingTerminationMovesOnlyEarlier() {
+// A second terminate moves a pending termination earlier, into the past included, or later, and publishes
+// commitment.updated; a termination that has taken effect is final.
+func (s *CommitmentServiceSuite) TestTerminate_MovesAPendingTermination() {
 	now := clock.Now().Truncate(time.Second)
 	pendingAt := now.AddDate(0, 2, 0)
 	tests := []struct {
-		name      string
-		firstAt   time.Time
-		at        time.Time
-		fee       *dto.CancellationFeeInput
-		wantMoved bool
-		wantErr   func(error) bool
+		name    string
+		firstAt time.Time
+		at      time.Time
+		wantErr func(error) bool
 	}{
-		{name: "earlier, still ahead", firstAt: pendingAt, at: now.AddDate(0, 1, 0), wantMoved: true},
-		{name: "earlier, into the past", firstAt: pendingAt, at: now.AddDate(0, -1, 0), wantMoved: true},
-		{name: "later", firstAt: pendingAt, at: pendingAt.AddDate(0, 1, 0), wantErr: ierr.IsValidation},
-		{name: "earlier with a fee", firstAt: pendingAt, at: now.AddDate(0, 1, 0), fee: fixedFee("50"), wantErr: ierr.IsInvalidOperation},
+		{name: "earlier, still ahead", firstAt: pendingAt, at: now.AddDate(0, 1, 0)},
+		{name: "earlier, into the past", firstAt: pendingAt, at: now.AddDate(0, -1, 0)},
+		{name: "later", firstAt: pendingAt, at: pendingAt.AddDate(0, 1, 0)},
 		{name: "after it took effect", firstAt: now.AddDate(0, -1, 0), at: now.AddDate(0, -2, 0), wantErr: ierr.IsInvalidOperation},
 	}
 	for _, tt := range tests {
@@ -926,15 +923,12 @@ func (s *CommitmentServiceSuite) TestTerminate_PendingTerminationMovesOnlyEarlie
 
 			publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
 			publisher.Reset()
-			_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
-				EffectiveAt:     &tt.at,
-				CancellationFee: tt.fee,
-			})
+			_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &tt.at})
 
 			got, getErr := s.svc.Get(s.GetContext(), created.ID)
 			s.Require().NoError(getErr)
 			s.Equal(types.CommitmentStatusTerminated, got.CommitmentStatus)
-			if !tt.wantMoved {
+			if tt.wantErr != nil {
 				s.True(tt.wantErr(err), "got %v", err)
 				s.True(got.TerminatedAt.Equal(tt.firstAt), "kept %s, got %s", tt.firstAt, got.TerminatedAt)
 				s.Empty(publisher.Events())
@@ -946,6 +940,214 @@ func (s *CommitmentServiceSuite) TestTerminate_PendingTerminationMovesOnlyEarlie
 			events := publisher.Events()
 			s.Require().Len(events, 1)
 			s.Equal(types.WebhookEventCommitmentUpdated, events[0].EventName)
+		})
+	}
+}
+
+// Moving a termination later is bounded by the commitment's own end, not by the pending date.
+func (s *CommitmentServiceSuite) TestTerminate_MovesAPendingTerminationWithinTheTerm() {
+	now := clock.Now().Truncate(time.Second)
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.EndDate = lo.ToPtr(now.AddDate(0, 6, 0))
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+	pendingAt := now.AddDate(0, 2, 0)
+	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &pendingAt})
+	s.Require().NoError(err)
+
+	pastEnd := now.AddDate(0, 7, 0)
+	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &pastEnd})
+	s.requireValidation(err, "before the commitment end "+req.EndDate.Format(time.RFC3339))
+
+	beforeEnd := now.AddDate(0, 5, 0)
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &beforeEnd})
+	s.Require().NoError(err)
+	s.True(resp.TerminatedAt.Equal(beforeEnd), "got %s", resp.TerminatedAt)
+}
+
+// The cancellation fee is billed once. A terminate with a fee while an invoice billing an earlier one is live, after a
+// move or a revoke alike, is rejected with that invoice; once it is voided, a new fee is billed for the term from the
+// new date. A pending termination recorded without a fee takes one on a move.
+func (s *CommitmentServiceSuite) TestTerminate_BillsTheCancellationFeeOnce() {
+	now := clock.Now().Truncate(time.Second)
+	pendingAt := now.AddDate(0, 2, 0)
+	movedTo := now.AddDate(0, 3, 0)
+	periodEnd := time.Date(movedTo.Year(), movedTo.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name       string
+		firstFee   *dto.CancellationFeeInput
+		revoke     bool
+		voidFirst  bool
+		wantReject bool
+	}{
+		{name: "a move, no fee billed yet", firstFee: nil},
+		{name: "a move, a fee billed", firstFee: fixedFee("50"), wantReject: true},
+		{name: "a move, the fee voided", firstFee: fixedFee("50"), voidFirst: true},
+		{name: "after a revoke, a fee billed", firstFee: fixedFee("50"), revoke: true, wantReject: true},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			req.EndDate = nil
+			created, err := s.svc.Create(ctx, req)
+			s.Require().NoError(err)
+			first, err := s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &pendingAt, CancellationFee: tt.firstFee})
+			s.Require().NoError(err)
+
+			if tt.voidFirst {
+				_, err := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite)).VoidInvoice(ctx, *first.TerminationInvoiceID, dto.InvoiceVoidRequest{})
+				s.Require().NoError(err)
+			}
+			if tt.revoke {
+				_, err := s.svc.CancelTermination(ctx, created.ID)
+				s.Require().NoError(err)
+			}
+
+			resp, err := s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &movedTo, CancellationFee: fixedFee("75")})
+			if tt.wantReject {
+				s.True(ierr.IsInvalidOperation(err), "got %v", err)
+				s.Contains(err.Error(), *first.TerminationInvoiceID)
+				got, err := s.svc.Get(ctx, created.ID)
+				s.Require().NoError(err)
+				s.False(got.TerminatedAt != nil && got.TerminatedAt.Equal(movedTo), "a rejected move keeps the date")
+				return
+			}
+
+			s.Require().NoError(err)
+			s.Require().NotNil(resp.TerminationInvoiceID)
+			inv, err := s.GetStores().InvoiceRepo.Get(ctx, *resp.TerminationInvoiceID)
+			s.Require().NoError(err)
+			s.True(inv.AmountDue.Equal(dec("75")), "got %s", inv.AmountDue)
+			s.True(lo.FromPtr(inv.PeriodStart).Equal(movedTo) && lo.FromPtr(inv.PeriodEnd).Equal(periodEnd),
+				"the fee covers the period holding the new date, got %v to %v", inv.PeriodStart, inv.PeriodEnd)
+		})
+	}
+}
+
+// Cancelling a pending termination leaves the commitment active with no terminated_at and fires commitment.updated;
+// the fee invoice stays. A termination in effect, or none at all, can't be cancelled.
+func (s *CommitmentServiceSuite) TestCancelTermination() {
+	now := clock.Now().Truncate(time.Second)
+	tests := []struct {
+		name         string
+		terminatedAt *time.Time
+		wantErr      bool
+	}{
+		{name: "pending", terminatedAt: lo.ToPtr(now.AddDate(0, 2, 0))},
+		{name: "in effect", terminatedAt: lo.ToPtr(now.AddDate(0, -1, 0)), wantErr: true},
+		{name: "never terminated", wantErr: true},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			req.EndDate = nil
+			created, err := s.svc.Create(ctx, req)
+			s.Require().NoError(err)
+
+			var feeInvoiceID *string
+			if tt.terminatedAt != nil {
+				resp, err := s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{
+					EffectiveAt:     tt.terminatedAt,
+					CancellationFee: fixedFee("50"),
+				})
+				s.Require().NoError(err)
+				feeInvoiceID = resp.TerminationInvoiceID
+			}
+
+			publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+			publisher.Reset()
+			resp, err := s.svc.CancelTermination(ctx, created.ID)
+			if tt.wantErr {
+				s.True(ierr.IsInvalidOperation(err), "got %v", err)
+				s.Empty(publisher.Events())
+				return
+			}
+
+			s.Require().NoError(err)
+			s.Equal(types.CommitmentStatusActive, resp.CommitmentStatus)
+			s.Nil(resp.TerminatedAt)
+			got, err := s.svc.Get(ctx, created.ID)
+			s.Require().NoError(err)
+			s.Equal(types.CommitmentStatusActive, got.CommitmentStatus)
+			s.Nil(got.TerminatedAt)
+
+			events := publisher.Events()
+			s.Require().Len(events, 1)
+			s.Equal(types.WebhookEventCommitmentUpdated, events[0].EventName)
+
+			fee, err := s.GetStores().InvoiceRepo.Get(ctx, *feeInvoiceID)
+			s.Require().NoError(err)
+			s.Equal(types.InvoiceStatusFinalized, fee.InvoiceStatus, "the tenant voids the fee if they want")
+		})
+	}
+}
+
+func (s *CommitmentServiceSuite) TestCancelTermination_RejectedWhenDisabled() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.EndDate = nil
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+	at := clock.Now().AddDate(0, 2, 0)
+	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+	s.Require().NoError(err)
+
+	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
+	_, err = s.svc.CancelTermination(s.GetContext(), created.ID)
+	s.True(ierr.IsInvalidOperation(err), "got %v", err)
+}
+
+// A commitment created on the same price once a pending termination freed it may share its priority. Moving the
+// termination later into it, or revoking it, would make them allocate together, so both are rejected; a move that
+// stops short of it is not.
+func (s *CommitmentServiceSuite) TestTerminate_ExtendingRechecksOverlaps() {
+	now := clock.Now()
+	month := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	pendingAt, nextStart := month.AddDate(0, 2, 0), month.AddDate(0, 4, 0)
+	tests := []struct {
+		name    string
+		moveTo  *time.Time // nil revokes
+		wantErr bool
+	}{
+		{name: "later, short of the next commitment", moveTo: lo.ToPtr(month.AddDate(0, 3, 0))},
+		{name: "later, into the next commitment", moveTo: lo.ToPtr(month.AddDate(0, 5, 0)), wantErr: true},
+		{name: "revoked", wantErr: true},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			req.EndDate = nil
+			created, err := s.svc.Create(ctx, req)
+			s.Require().NoError(err)
+			_, err = s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &pendingAt})
+			s.Require().NoError(err)
+
+			next := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			next.StartDate, next.EndDate = nextStart, nil
+			following, err := s.svc.Create(ctx, next)
+			s.Require().NoError(err)
+
+			if tt.moveTo != nil {
+				_, err = s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: tt.moveTo})
+			} else {
+				_, err = s.svc.CancelTermination(ctx, created.ID)
+			}
+
+			got, getErr := s.svc.Get(ctx, created.ID)
+			s.Require().NoError(getErr)
+			if tt.wantErr {
+				s.requireValidation(err, following.ID)
+				s.True(got.TerminatedAt.Equal(pendingAt), "kept %s, got %s", pendingAt, got.TerminatedAt)
+				return
+			}
+
+			s.Require().NoError(err)
+			s.True(got.TerminatedAt.Equal(*tt.moveTo), "got %s", got.TerminatedAt)
 		})
 	}
 }

@@ -404,7 +404,7 @@ func (s *commitmentService) planReplacement(
 func requireActiveBillingTerms(c *commitment.Commitment) error {
 	if c.CommitmentStatus != types.CommitmentStatusActive {
 		return ierr.NewErrorf("commitment %s is %s", c.ID, c.CommitmentStatus).
-			WithHint("Only active commitments can have their billing terms changed").
+			WithHint("Only active commitments can have their billing terms changed; cancel a pending termination first").
 			Mark(ierr.ErrInvalidOperation)
 	}
 
@@ -482,6 +482,42 @@ func (s *commitmentService) settle(
 
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, created)
 	return created[0], nil
+}
+
+// reinstate schedules again the instalments a pending termination of c cancelled that c, its termination moved later or
+// revoked, owes again. Only a termination cancels an instalment of the current terms: an edit archives the terms of
+// those it cancels. It must run inside the transaction, under the commitment lock.
+func (s *commitmentService) reinstate(ctx context.Context, c *commitment.Commitment) error {
+	if lo.FromPtr(c.CollectionMethod) != types.CommitmentCollectionBillingTerms {
+		return nil
+	}
+
+	terms, err := s.BillingTermRepo.List(ctx, types.BillingTermOwnerCommitment, c.ID)
+	if err != nil {
+		return err
+	}
+
+	cancelled, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
+		OwnerType: types.BillingTermOwnerCommitment,
+		OwnerIDs:  []string{c.ID},
+		Statuses:  []types.InstalmentStatus{types.InstalmentStatusCancelled},
+	})
+	if err != nil {
+		return err
+	}
+
+	current := lo.SliceToMap(terms, func(t *billingterm.Term) (string, bool) { return t.ID, true })
+	ids := lo.FilterMap(cancelled, func(inst *billingterm.Instalment, _ int) (string, bool) {
+		return inst.ID, current[lo.FromPtr(inst.BillingTermID)] && !cancelledByTermination(c, inst)
+	})
+
+	reinstated, err := s.BillingInstalmentRepo.Reinstate(ctx, ids)
+	if err != nil {
+		return err
+	}
+
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentUpdated, reinstated)
+	return nil
 }
 
 // owedAtTermination reports whether a termination at terminatedAt still bills the instalment: it fell due by the

@@ -97,7 +97,7 @@ Do not use: rule, schedule item, occurrence, claim (as a noun), budget, principa
 | BT12 | Under `billing_terms`, usage within the commitment is billed at $0 and there is no true-up. Overage is billed as usual. | The commitment's money is collected only through instalments. Skipping only the true-up would collect twice. |
 | BT13 | Termination cancels the scheduled instalments it does not owe. An instalment is owed when it is due by `effective_at` and pays for time before it. Once the termination takes effect (an `effective_at` that is not in the future, or the subscription ending), the owed ones still scheduled are billed together as one settlement instalment; until then they keep billing on their own dates (BT15). Nothing is refunded. A cancellation fee is billed as it is today and covers anything more. | Instalments can cover any span, so value earned between them can't be compared fairly with what was billed. The tenant decides what an early end costs through the fee; refunds stay a deliberate tenant action. |
 | BT14 | `cancellation_fee` becomes `{type, value}`, with `type` `fixed` or `percentage`; `type` says how to read `value`, as on a term. Only `fixed` is accepted today. | Leaves room for percentage fees without another API change. |
-| BT15 | **Overridden 2026-11-11** (was: termination is immediate and a future `effective_at` is rejected). `effective_at` may be in the future, for every commitment. The commitment turns `terminated` when the request is made, with `terminated_at` ahead; usage bills until `terminated_at`, since every reader goes through `EffectiveEnd`. The cancellation fee is billed at once, as before. Instalments owed at `effective_at` keep billing on their own dates and the rest are cancelled at once. Another terminate call moves a pending termination (`terminated_at` after now) earlier; once it has taken effect it is final. A subscription that ends first ends the commitment with it: `terminated_at` is pulled back to the subscription end with no fee, the kept instalments not owed then are cancelled and the owed ones settled. | Contracts end with notice. Recording the cancellation when notice is given bills the fee then and shows the end date, while the commitment bills until that date. |
+| BT15 | **Overridden 2026-11-11** (was: termination is immediate and a future `effective_at` is rejected). `effective_at` may be in the future, for every commitment. The commitment turns `terminated` when the request is made, with `terminated_at` ahead; usage bills until `terminated_at`, since every reader goes through `EffectiveEnd`. The cancellation fee is billed at once, as before. Instalments owed at `effective_at` keep billing on their own dates and the rest are cancelled at once. A pending termination (`terminated_at` after now) can be moved earlier or later by another terminate call, or revoked through `POST /v1/commitments/{id}/terminate/cancel`; once it has taken effect it is final. Moving it later or revoking it schedules again the instalments it cancelled that are owed again, and re-checks the commitment against its subscription and the commitments it then overlaps. The fee is billed once: a terminate call with a fee is rejected while an invoice billing an earlier fee is not voided, and revoking leaves that invoice for the tenant to void. A subscription that ends first ends the commitment with it: `terminated_at` is pulled back to the subscription end with no fee, the kept instalments not owed then are cancelled and the owed ones settled. | Contracts end with notice. Recording the cancellation when notice is given bills the fee then and shows the end date, while the commitment bills until that date. |
 | BT16 | Instalments wait while the subscription is trialing or paused. They are billed on the first invoice after the trial or pause ends. | The trial-start invoice zeroes every amount, and paused periods are never invoiced. Billing commitment money in either would bill $0 or charge a customer who isn't being billed. |
 | BT17 | Billing terms and instalments publish their own webhook events (§11.1), one per entity change, after commit. The payload is built from the current row when the event is sent, as commitment events are today. | Tenants can mirror payment schedules in their CRM or ERP without diffing commitment payloads. |
 
@@ -278,13 +278,21 @@ Every operation locks the commitment row and runs in one transaction. All of the
 
 ## 9. Termination
 
-**When.** `effective_at` defaults to now and may be in the future (BT15, revised 2026-11-11). The shipped lower bounds on a past `effective_at` stay, and so do the fee's bounds. A future `effective_at` sets `commitment_status = terminated` at once with `terminated_at` ahead, fires `commitment.terminated` at once, and bills the fee at once; usage bills until `terminated_at`. Until then the termination is pending: another terminate call with an earlier `effective_at` moves it, firing `commitment.updated`; a fee on that call is rejected. Once `terminated_at` has passed, the termination is final. Subscription cancellation and plan change call `TerminateForSubscription` when the cancellation takes effect, which is never in the future. It pulls a pending termination back to that date with no fee and fires `commitment.updated`; a termination that has already taken effect keeps its date.
+**When.** `effective_at` defaults to now and may be in the future (BT15, revised 2026-11-11). The shipped lower bounds on a past `effective_at` stay, and so do the fee's bounds. A future `effective_at` sets `commitment_status = terminated` at once with `terminated_at` ahead, fires `commitment.terminated` at once, and bills the fee at once; usage bills until `terminated_at`. Until then the termination is pending: another terminate call moves it earlier or later, and `POST /v1/commitments/{id}/terminate/cancel` revokes it, leaving the commitment `active` with no `terminated_at`; both fire `commitment.updated`. Once `terminated_at` has passed, the termination is final.
+
+**Moving and revoking.**
+
+- Every timing rule stays: a past `effective_at` is allowed as before, the fee's bounds hold, and `effective_at` must be before the commitment's own `end_date`.
+- The fee is billed once. A terminate call with a fee looks up the live invoice keyed `commitment_termination_<id>`; while one exists the call is rejected and names it, so the tenant voids it first. A pending termination recorded without a fee can take one on a move. Revoking never touches the fee invoice.
+- Moving later or revoking gives the commitment back time it had given up. It is checked again as on create (`validateAgainstSubscription`, skipping itself), so a commitment created on the freed scope meanwhile must still agree with it, and a binding commitment needs its scope covered by lines from the old `terminated_at` through the new end.
+- Moving later or revoking schedules again (`cancelled` → `scheduled`, `billing_instalment.updated`) the cancelled instalments of the current terms that the commitment owes again: those owed at the new `terminated_at`, or all of them on a revoke. Only a termination cancels an instalment of the current terms, since an edit archives the terms of the instalments it cancels and can't run on a terminated commitment, so no instalment cancelled for another reason comes back. Settlements carry no term and never come back.
+- Moving earlier cancels the kept instalments no longer owed; into the past, it settles like a termination taking effect. Subscription cancellation and plan change call `TerminateForSubscription` when the cancellation takes effect, which is never in the future. It pulls a pending termination back to that date with no fee and fires `commitment.updated`; a termination that has already taken effect keeps its date.
 
 Status readers, now that `terminated` can precede `terminated_at`:
 
 - Usage billing, the usage breakdown, analytics, overlap checks and entitlement grants read `EffectiveEnd` and list active and terminated commitments, so they bill and show a pending commitment until `terminated_at`.
 - The line-detach guard lists terminated commitments too, so a pending one keeps its scope covered until `terminated_at`.
-- A milestone owed at `effective_at` stays scheduled and can still be triggered earlier while the termination is pending. Billing terms can't be replaced on a terminated commitment, pending or not.
+- A milestone owed at `effective_at` stays scheduled and can still be triggered earlier while the termination is pending. Billing terms can't be replaced on a terminated commitment, pending or not; revoke the termination first.
 - `cancelledByTermination` already compares each instalment with `terminated_at`, so a kept instalment bills and a cancelled one never does.
 - Filtering the list by `commitment_status = active` leaves pending terminations out; they are `terminated`, with `terminated_at` ahead.
 
@@ -330,7 +338,8 @@ A void after termination still returns the instalment to `scheduled` (BT11), so 
 | POST | `/v1/commitments/{id}/billing-terms/preview` | Preview an edit |
 | GET | `/v1/commitments/{id}/instalments` | Instalments, filterable by status |
 | POST | `/v1/commitments/{id}/instalments/{instalment_id}/trigger` | Trigger |
-| POST | `/v1/commitments/{id}/terminate` | `cancellation_fee` object (BT14); a future `effective_at` records the termination at once (BT15) |
+| POST | `/v1/commitments/{id}/terminate` | `cancellation_fee` object (BT14); a future `effective_at` records the termination at once, and a call on a pending termination moves it (BT15) |
+| POST | `/v1/commitments/{id}/terminate/cancel` | Revokes a pending termination (BT15) |
 
 Create request:
 
@@ -369,7 +378,7 @@ The second form is rejected until percentage fees are built. What the percentage
 | `billing_terms.created` | Terms are saved with a new commitment | Owner type and id, the current terms |
 | `billing_terms.updated` | An edit replaces the terms | Same |
 | `billing_instalment.created` | An instalment is added: expansion on create or edit, settlement | The instalment |
-| `billing_instalment.updated` | A trigger changes its date, or a void reschedules it | The instalment |
+| `billing_instalment.updated` | A trigger changes its date, a void reschedules it, or a termination moved later or revoked schedules it again | The instalment |
 | `billing_instalment.cancelled` | An edit or termination cancels it | The instalment |
 | `billing_instalment.invoiced` | The invoice carrying it is finalized | The instalment, with `invoice_id` |
 
@@ -423,7 +432,7 @@ A suggested stack of small PRs, each reviewable on its own:
 - **Expansion** (pure, table-driven): every example in §6.3 to the cent, plus every rule in §6.2.
 - **Delivery** (real database): advance and arrear landing, a mid-period once instalment, a past-dated instalment, a daily draft compute that claims nothing, a claim retried after commit, a void then recalculate, a stale draft that finalization recomputes, two catch-up drafts that share an instalment, a manually edited stale draft that fails.
 - **Plan changes:** an edit with and without invoiced instalments, an instalment claimed while an edit runs, a fully invoiced commitment, trigger.
-- **Termination:** each row of the §9 table, a void after termination, a percentage fee rejected, a subscription cancelled immediately, and a future `effective_at` with and without a fee, its kept instalments billing on their dates, a move earlier and a subscription cancel or plan change before it.
+- **Termination:** each row of the §9 table, a void after termination, a percentage fee rejected, a subscription cancelled immediately, and a future `effective_at` with and without a fee, its kept instalments billing on their dates, a move earlier, into the past and later, a revoke, a second fee rejected until the first is voided, the re-checks on moving later or revoking, and a subscription cancel or plan change before it.
 - **Trial and pause:** an upfront instalment on a trialing subscription lands on the trial-end invoice; an instalment due during a pause lands on the first invoice after resume; the separate-invoice job skips both.
 - **End to end**, extending `commitment_e2e_test.go`: A2, A3, A4, A6, A7 and B1 with exact invoice totals.
 - **Regression:** `per_period` commitments bill exactly as before.
@@ -473,7 +482,7 @@ These were not discussed explicitly. Review them first.
 | Cancellation fee | A fixed amount chosen by the tenant, the only charge for an early end beyond the instalments already due (BT13). |
 | Taking back an instalment billed before a termination | A credit note. A void bills it again (BT11). |
 | Part upfront cancelled early | Instalments due by the termination are billed; later ones, including an arrear for the days up to the end, are cancelled. The fee covers anything more. |
-| Cancellation with notice (revised 2026-11-11) | Terminate with a future `effective_at` (BT15). The commitment shows `terminated` at once with `terminated_at` ahead and bills until then; the fee is billed at once; instalments due by then keep billing on their dates. Another terminate call moves it earlier, and a subscription that ends first ends it. |
+| Cancellation with notice (revised 2026-11-11) | Terminate with a future `effective_at` (BT15). The commitment shows `terminated` at once with `terminated_at` ahead and bills until then; the fee is billed at once; instalments due by then keep billing on their dates. Another terminate call moves it earlier or later, `POST /v1/commitments/{id}/terminate/cancel` revokes it, and a subscription that ends first ends it. |
 
 **Pending, not needed yet (cancellation)**
 

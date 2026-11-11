@@ -63,6 +63,11 @@ func (s *stubCommitmentService) Terminate(_ context.Context, id string, req dto.
 	return &dto.CommitmentResponse{Commitment: &commitment.Commitment{}}, s.err
 }
 
+func (s *stubCommitmentService) CancelTermination(_ context.Context, id string) (*dto.CommitmentResponse, error) {
+	s.gotID = id
+	return &dto.CommitmentResponse{Commitment: &commitment.Commitment{}}, s.err
+}
+
 func (s *stubCommitmentService) GetBillingTerms(_ context.Context, id string) (*dto.BillingTermsResponse, error) {
 	s.gotID = id
 	return &dto.BillingTermsResponse{}, s.err
@@ -127,6 +132,7 @@ func setupCommitmentRouter(t *testing.T, svc *stubCommitmentService) *gin.Engine
 	router.GET("/v1/commitments/:id", h.GetCommitment)
 	router.PUT("/v1/commitments/:id", h.UpdateCommitment)
 	router.POST("/v1/commitments/:id/terminate", h.TerminateCommitment)
+	router.POST("/v1/commitments/:id/terminate/cancel", h.CancelTermination)
 	router.GET("/v1/commitments/:id/billing-terms", h.GetBillingTerms)
 	router.PUT("/v1/commitments/:id/billing-terms", h.ReplaceBillingTerms)
 	router.POST("/v1/commitments/:id/billing-terms/preview", h.PreviewBillingTerms)
@@ -165,6 +171,11 @@ func TestCommitmentHandler(t *testing.T) {
 		{"get not found", ierr.NewError("missing").
 			Mark(ierr.ErrNotFound), http.MethodGet, "/v1/commitments/cmt_1", ``, http.StatusNotFound, ""},
 		{"terminate empty body", nil, http.MethodPost, "/v1/commitments/cmt_1/terminate", ``, http.StatusOK, "cmt_1"},
+		{"cancel termination ok", nil, http.MethodPost, "/v1/commitments/cmt_5/terminate/cancel", ``, http.StatusOK, "cmt_5"},
+		{"cancel termination in effect", ierr.NewError("no pending termination").
+			Mark(ierr.ErrInvalidOperation), http.MethodPost, "/v1/commitments/cmt_5/terminate/cancel", ``, http.StatusBadRequest, ""},
+		{"cancel termination not found", ierr.NewError("missing").
+			Mark(ierr.ErrNotFound), http.MethodPost, "/v1/commitments/cmt_5/terminate/cancel", ``, http.StatusNotFound, ""},
 		{"get billing terms ok", nil, http.MethodGet, "/v1/commitments/cmt_1/billing-terms", ``, http.StatusOK, "cmt_1"},
 		{"get billing terms not found", ierr.NewError("missing").
 			Mark(ierr.ErrNotFound), http.MethodGet, "/v1/commitments/cmt_1/billing-terms", ``, http.StatusNotFound, ""},

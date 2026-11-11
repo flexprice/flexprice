@@ -198,7 +198,7 @@ func (h *CommitmentHandler) UpdateCommitment(c *gin.Context) {
 
 // @Summary Terminate commitment
 // @ID terminateCommitment
-// @Description Ends a commitment at effective_at, which defaults to now. A future effective_at records the termination at once: commitment_status turns terminated with terminated_at ahead, usage bills until then, and another call with an earlier date moves it. If the subscription ends first, the commitment ends with it. Under billing terms, scheduled instalments not owed at effective_at are cancelled and owed ones keep billing on their own dates; when effective_at is not in the future, or the subscription ends, the owed ones still scheduled are billed together as one settlement. Nothing is refunded. A fixed cancellation fee, when given, is billed at once on a one-off invoice, together with the settlement when there is one.
+// @Description Ends a commitment at effective_at, which defaults to now. A future effective_at records the termination at once: commitment_status turns terminated with terminated_at ahead and usage bills until then. Until terminated_at, another call moves the termination earlier or later, and the cancel endpoint revokes it; after that it is final. If the subscription ends first, the commitment ends with it. Under billing terms, scheduled instalments not owed at effective_at are cancelled and owed ones keep billing on their own dates; when effective_at is not in the future, or the subscription ends, the owed ones still scheduled are billed together as one settlement. Nothing is refunded. A fixed cancellation fee, when given, is billed at once on a one-off invoice, together with the settlement when there is one. The fee is billed once: a call with a fee is rejected while an invoice billing an earlier one is not voided.
 // @Tags Commitments
 // @Accept json
 // @Produce json
@@ -232,6 +232,37 @@ func (h *CommitmentHandler) TerminateCommitment(c *gin.Context) {
 	}
 
 	resp, err := h.commitmentService.Terminate(c.Request.Context(), id, req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Cancel commitment termination
+// @ID cancelCommitmentTermination
+// @Description Revokes a pending termination, one whose terminated_at is still ahead: the commitment is active again with no terminated_at, and under billing terms the instalments the termination cancelled are scheduled again. A termination in effect is final. An invoice already billing the cancellation fee is left as it is; void it to take the fee back.
+// @Tags Commitments
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "write"
+// @Param id path string true "Commitment ID"
+// @Success 200 {object} dto.CommitmentResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /commitments/{id}/terminate/cancel [post]
+func (h *CommitmentHandler) CancelTermination(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("commitment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.commitmentService.CancelTermination(c.Request.Context(), id)
 	if err != nil {
 		c.Error(err)
 		return

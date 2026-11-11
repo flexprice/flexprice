@@ -230,6 +230,32 @@ func TestInstalmentCancelScheduled_OnlyGivenScheduledRows(t *testing.T) {
 	require.Empty(t, none)
 }
 
+func TestInstalmentReinstate_OnlyGivenCancelledRows(t *testing.T) {
+	f := newBillingTermFixture(t)
+	owner := "cmt_" + f.runID
+	start := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	given := f.instalment(f.ctx, "a", owner, types.InstalmentStatusCancelled, start)
+	kept := f.instalment(f.ctx, "b", owner, types.InstalmentStatusCancelled, start.AddDate(0, 1, 0))
+	scheduled := f.instalment(f.ctx, "c", owner, types.InstalmentStatusScheduled, start.AddDate(0, 2, 0))
+	_, err := f.instalments.CreateMany(f.ctx, []*billingterm.Instalment{given, kept, scheduled})
+	require.NoError(t, err)
+
+	reinstated, err := f.instalments.Reinstate(f.ctx, []string{given.ID, scheduled.ID})
+	require.NoError(t, err)
+	require.Equal(t, []string{given.ID}, instalmentIDs(reinstated))
+	require.Equal(t, types.InstalmentStatusScheduled, reinstated[0].InstalmentStatus)
+	require.Nil(t, reinstated[0].InvoiceID)
+
+	stillCancelled, err := f.instalments.Get(f.ctx, kept.ID)
+	require.NoError(t, err)
+	require.Equal(t, types.InstalmentStatusCancelled, stillCancelled.InstalmentStatus)
+
+	none, err := f.instalments.Reinstate(f.ctx, nil)
+	require.NoError(t, err)
+	require.Empty(t, none)
+}
+
 func TestInstalmentListInvoiced_ByInvoicedDate(t *testing.T) {
 	f := newBillingTermFixture(t)
 	owner, otherOwner := "cmt_"+f.runID, "cmt_"+f.runID+"_2"

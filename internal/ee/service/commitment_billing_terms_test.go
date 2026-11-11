@@ -1364,6 +1364,87 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_AClaimRacingTheSettl
 	s.True(settlements[0].Amount.Equal(dec("200")), "the two other due instalments, got %s", settlements[0].Amount)
 }
 
+// Moving a pending termination later schedules again the instalments it owes again, moving it earlier cancels those it
+// no longer owes, into the past it settles, and revoking it schedules every instalment it cancelled again, so the live
+// instalments add up to the total once more. Reinstated ones fire billing_instalment.updated.
+func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_MovingAPendingTermination() {
+	_, month := s.termsAroundNowRequest()
+	tests := []struct {
+		name           string
+		moveTo         *time.Time // nil revokes
+		wantScheduled  int
+		wantCancelled  int
+		wantReinstated int
+		wantSettlement string
+	}{
+		{name: "later", moveTo: lo.ToPtr(month.AddDate(0, 4, 0)), wantScheduled: 7, wantCancelled: 5, wantReinstated: 2},
+		{name: "earlier, still ahead", moveTo: lo.ToPtr(month.AddDate(0, 1, 0)), wantScheduled: 4, wantCancelled: 8},
+		{name: "earlier, into the past", moveTo: lo.ToPtr(month.AddDate(0, -1, 0)), wantCancelled: 12, wantSettlement: "200"},
+		{name: "revoked", wantScheduled: 12, wantReinstated: 7},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			req, _ := s.termsAroundNowRequest()
+			created, err := s.svc.Create(ctx, req)
+			s.Require().NoError(err)
+			at := month.AddDate(0, 2, 0)
+			_, err = s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+			s.Require().NoError(err)
+
+			publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+			publisher.Reset()
+			if tt.moveTo != nil {
+				_, err = s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: tt.moveTo})
+			} else {
+				_, err = s.svc.CancelTermination(ctx, created.ID)
+			}
+			s.Require().NoError(err)
+
+			byStatus := s.instalmentsByStatus(created.ID)
+			s.Len(byStatus[types.InstalmentStatusScheduled], tt.wantScheduled)
+			s.Len(byStatus[types.InstalmentStatusCancelled], tt.wantCancelled)
+			s.Len(s.instalmentEventIDs(publisher.Events(), types.WebhookEventBillingInstalmentUpdated), tt.wantReinstated)
+
+			settlements := s.settlementsOf(created.ID)
+			if tt.wantSettlement == "" {
+				s.Empty(settlements)
+				return
+			}
+
+			s.Require().Len(settlements, 1)
+			s.True(settlements[0].Amount.Equal(dec(tt.wantSettlement)), "settlement %s", settlements[0].Amount)
+		})
+	}
+}
+
+// Only the instalments a termination cancelled come back when it is revoked: those an earlier edit replaced stay
+// cancelled, so nothing is billed twice and the live instalments add up to the total.
+func (s *CommitmentServiceSuite) TestCancelTermination_BillingTerms_KeepsReplacedInstalmentsCancelled() {
+	ctx := s.GetContext()
+	req, month := s.termsAroundNowRequest()
+	created, err := s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+	replaced := instalmentIDs(s.storedInstalments())
+
+	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, dto.ReplaceBillingTermsRequest{
+		BillingTerms: []dto.BillingTermInput{monthlyArrearsTerm()},
+	})
+	s.Require().NoError(err)
+
+	at := month.AddDate(0, 2, 0)
+	_, err = s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+	s.Require().NoError(err)
+	_, err = s.svc.CancelTermination(ctx, created.ID)
+	s.Require().NoError(err)
+
+	for _, id := range replaced {
+		s.Equal(types.InstalmentStatusCancelled, s.instalmentByID(id).InstalmentStatus, "a replaced instalment stays cancelled")
+	}
+	s.True(s.liveTotal().Equal(dec("1200")), "live instalments add up to the total, got %s", s.liveTotal())
+}
+
 // The instalments a pending termination keeps bill on their own dates: a run bills those already due on separate
 // invoices, leaves the later ones scheduled, and never bills those the termination cancelled.
 func (s *CommitmentServiceSuite) TestBillDueInstalments_BillsWhatAPendingTerminationKeeps() {

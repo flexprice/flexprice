@@ -9966,7 +9966,7 @@ definitions:
       effective_at:
         description: |-
           EffectiveAt defaults to now and may be in the future; within a second after a billing period edge it is taken as
-          that edge. On a pending termination, an earlier date moves it.
+          that edge. On a pending termination, it moves the termination earlier or later.
         type: string
     type: object
   TopUpCoupon:
@@ -19327,14 +19327,16 @@ paths:
       - application/json
       description: 'Ends a commitment at effective_at, which defaults to now. A future
         effective_at records the termination at once: commitment_status turns terminated
-        with terminated_at ahead, usage bills until then, and another call with an
-        earlier date moves it. If the subscription ends first, the commitment ends
-        with it. Under billing terms, scheduled instalments not owed at effective_at
+        with terminated_at ahead and usage bills until then. Until terminated_at,
+        another call moves the termination earlier or later, and the cancel endpoint
+        revokes it; after that it is final. If the subscription ends first, the commitment
+        ends with it. Under billing terms, scheduled instalments not owed at effective_at
         are cancelled and owed ones keep billing on their own dates; when effective_at
         is not in the future, or the subscription ends, the owed ones still scheduled
         are billed together as one settlement. Nothing is refunded. A fixed cancellation
         fee, when given, is billed at once on a one-off invoice, together with the
-        settlement when there is one.'
+        settlement when there is one. The fee is billed once: a call with a fee is
+        rejected while an invoice billing an earlier one is not voided.'
       operationId: terminateCommitment
       parameters:
       - description: Commitment ID
@@ -19372,6 +19374,45 @@ paths:
       tags:
       - Commitments
       x-scope: delete
+  /commitments/{id}/terminate/cancel:
+    post:
+      description: 'Revokes a pending termination, one whose terminated_at is still
+        ahead: the commitment is active again with no terminated_at, and under billing
+        terms the instalments the termination cancelled are scheduled again. A termination
+        in effect is final. An invoice already billing the cancellation fee is left
+        as it is; void it to take the fee back.'
+      operationId: cancelCommitmentTermination
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CommitmentResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Cancel commitment termination
+      tags:
+      - Commitments
+      x-scope: write
   /commitments/preview:
     post:
       consumes:
