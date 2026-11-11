@@ -233,6 +233,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 			FileURL:     exportOutput.FileURL,
 			RecordCount: exportOutput.RecordCount,
 			FileSize:    exportOutput.FileSizeBytes,
+			Metadata:    exportOutput.Metadata,
 		}
 
 		err = workflow.ExecuteActivity(ctx, taskActivity.CompleteTask, completeInput).Get(ctx, nil)
