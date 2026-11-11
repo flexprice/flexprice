@@ -45,6 +45,8 @@ type ListFilters struct {
 	EntityType    types.ScheduledTaskEntityType
 	Interval      types.ScheduledTaskInterval
 	Enabled       *bool
-	Limit         int
+	Origin        types.ExportOrigin
+	ExcludeOrigin types.ExportOrigin
+	Limit        int
 	Offset        int
 }

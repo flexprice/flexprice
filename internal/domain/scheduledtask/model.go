@@ -22,7 +22,8 @@ type ScheduledTask struct {
 	Schedule           *types.ExportSchedule
 	SourceConfig       *types.ExportSourceConfig
 	EmailConfig        *types.ExportEmailConfig
-	Status             types.Status
+	Origin             types.ExportOrigin
+	Status            types.Status
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	CreatedBy          string

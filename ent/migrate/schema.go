@@ -2646,6 +2646,7 @@ var (
 		{Name: "schedule", Type: field.TypeJSON, Nullable: true},
 		{Name: "source_config", Type: field.TypeJSON, Nullable: true},
 		{Name: "email_config", Type: field.TypeJSON, Nullable: true},
+		{Name: "origin", Type: field.TypeString, Default: "console", SchemaType: map[string]string{"postgres": "text"}},
 	}
 	// ScheduledTasksTable holds the schema information for the "scheduled_tasks" table.
 	ScheduledTasksTable = &schema.Table{

@@ -25,6 +25,18 @@ type CreateScheduledTaskRequest struct {
 	SourceConfig *types.ExportSourceConfig `json:"source_config,omitempty"`
 	// Run recipients; not allowed for hourly.
 	EmailConfig *types.ExportEmailConfig `json:"email_config,omitempty"`
+	// Defaults to console.
+	Origin types.ExportOrigin `json:"origin,omitempty" enums:"console,customers_page"`
+	// Manual exports only; starts a run right after creation.
+	RunNow bool `json:"run_now,omitempty"`
+	// Window for the run_now run.
+	RunWindow *ExportRunWindow `json:"run_window,omitempty"`
+}
+
+// ExportRunWindow is a custom run window.
+type ExportRunWindow struct {
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
 }
 
 const maxScheduledTaskNameLength = 120
@@ -64,6 +76,10 @@ func (r *CreateScheduledTaskRequest) Validate() error {
 		return err
 	}
 
+	if err := r.validateOriginAndRun(); err != nil {
+		return err
+	}
+
 	if r.EntityType.IsReportSource() {
 		if err := r.validateReportSource(); err != nil {
 			return err
@@ -99,6 +115,45 @@ func (r *CreateScheduledTaskRequest) Validate() error {
 	}
 
 	return nil
+}
+
+func (r *CreateScheduledTaskRequest) validateOriginAndRun() error {
+	if err := r.Origin.Validate(); err != nil {
+		return err
+	}
+	if cf := r.SourceConfig.GetCustomerFilter(); cf != nil {
+		if r.Origin != types.ExportOriginCustomersPage {
+			return ierr.NewError("customer_filter not allowed").
+				WithHint("customer_filter is only for exports created from the customers page").
+				Mark(ierr.ErrValidation)
+		}
+		if err := cf.Validate(); err != nil {
+			return err
+		}
+	}
+	if r.RunNow && r.Interval != types.ScheduledTaskIntervalManual {
+		return ierr.NewError("run_now requires a manual export").
+			WithHint("run_now is only for manual exports").
+			Mark(ierr.ErrValidation)
+	}
+	if r.RunWindow != nil {
+		if !r.RunNow {
+			return ierr.NewError("run_window requires run_now").
+				WithHint("run_window is only used together with run_now").
+				Mark(ierr.ErrValidation)
+		}
+		window := r.ForceRunRequest()
+		return window.Validate()
+	}
+	return nil
+}
+
+// ForceRunRequest is the run_now window as a force run request.
+func (r *CreateScheduledTaskRequest) ForceRunRequest() TriggerForceRunRequest {
+	if r.RunWindow == nil {
+		return TriggerForceRunRequest{}
+	}
+	return TriggerForceRunRequest{StartTime: &r.RunWindow.StartTime, EndTime: &r.RunWindow.EndTime}
 }
 
 func (r *CreateScheduledTaskRequest) validateReportSource() error {
@@ -174,9 +229,12 @@ type ScheduledTaskResponse struct {
 	Schedule     *types.ExportSchedule       `json:"schedule,omitempty"`
 	SourceConfig *types.ExportSourceConfig   `json:"source_config,omitempty"`
 	EmailConfig  *types.ExportEmailConfig    `json:"email_config,omitempty"`
+	Origin       types.ExportOrigin          `json:"origin" enums:"console,customers_page"`
 	Status       string                      `json:"status"`
 	CreatedAt    time.Time                   `json:"created_at"`
 	UpdatedAt    time.Time                   `json:"updated_at"`
+	// Set on create when run_now started a run.
+	Run *TriggerForceRunResponse `json:"run,omitempty"`
 }
 
 // ListScheduledTasksResponse represents a list of scheduled tasks
@@ -198,6 +256,7 @@ func ToScheduledTaskResponse(task *scheduledtask.ScheduledTask) *ScheduledTaskRe
 		Schedule:      task.Schedule,
 		SourceConfig:  task.SourceConfig,
 		EmailConfig:   task.EmailConfig,
+		Origin:        task.Origin,
 		Status:        string(task.Status),
 		CreatedAt:     task.CreatedAt,
 		UpdatedAt:     task.UpdatedAt,
