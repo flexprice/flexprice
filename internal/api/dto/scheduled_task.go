@@ -43,6 +43,12 @@ const maxScheduledTaskNameLength = 120
 
 // Validate validates the create request
 func (r *CreateScheduledTaskRequest) Validate() error {
+	if cf := r.SourceConfig.GetCustomerFilter(); cf != nil {
+		sourceConfig := *r.SourceConfig
+		sourceConfig.CustomerFilter = types.SanitizeExportCustomerFilter(cf)
+		r.SourceConfig = &sourceConfig
+	}
+
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
@@ -120,6 +126,11 @@ func (r *CreateScheduledTaskRequest) Validate() error {
 func (r *CreateScheduledTaskRequest) validateOriginAndRun() error {
 	if err := r.Origin.Validate(); err != nil {
 		return err
+	}
+	if r.EntityType == types.ScheduledTaskEntityTypeCustomers && r.Interval == types.ScheduledTaskIntervalHourly {
+		return ierr.NewError("customers exports can't run hourly").
+			WithHint("Customer list exports can't run hourly.").
+			Mark(ierr.ErrValidation)
 	}
 	if cf := r.SourceConfig.GetCustomerFilter(); cf != nil {
 		if r.Origin != types.ExportOriginCustomersPage {

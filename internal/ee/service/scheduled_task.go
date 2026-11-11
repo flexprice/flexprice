@@ -6,6 +6,7 @@ import (
 	"net/mail"
 	"time"
 
+	cockroachErrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"go.temporal.io/api/serviceerror"
@@ -176,8 +177,12 @@ func (s *scheduledTaskService) validateCustomerFilter(ctx context.Context, req d
 	}
 	if _, err := s.customerRepo.Count(ctx, cf); err != nil {
 		if ierr.IsValidation(err) {
-			return ierr.WithError(err).
-				WithHint("The customer filter is invalid").
+			hint := "The customer filter is invalid"
+			if hints := cockroachErrors.GetAllHints(err); len(hints) > 0 {
+				hint = hints[len(hints)-1]
+			}
+			return ierr.NewError("invalid customer filter").
+				WithHint(hint).
 				Mark(ierr.ErrValidation)
 		}
 		return err
@@ -240,6 +245,25 @@ func checkReportRange(key string, days int) error {
 		Mark(ierr.ErrValidation)
 }
 
+// checkRunWindow applies report window rules.
+func checkRunWindow(entity types.ScheduledTaskEntityType, source *types.ExportSourceConfig, start, end *time.Time) error {
+	if !entity.IsReportSource() {
+		return nil
+	}
+	for _, bound := range []*time.Time{start, end} {
+		if bound != nil && !bound.UTC().Equal(bound.UTC().Truncate(24*time.Hour)) {
+			return ierr.NewError("report window must be whole UTC days").
+				WithHint("start_time and end_time must be midnight UTC for report exports").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if start != nil && end != nil && source != nil {
+		days := int(end.Sub(*start).Hours()+23) / 24
+		return checkReportRange(source.ReportKey, days)
+	}
+	return nil
+}
+
 // CreateScheduledTask creates a new scheduled task
 func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.CreateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error) {
 	// Validate request
@@ -249,13 +273,14 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 	if err := requireAnalyticsRead(ctx, s.rbac, req.EntityType); err != nil {
 		return nil, err
 	}
-	if cf := req.SourceConfig.GetCustomerFilter(); cf != nil {
-		sourceConfig := *req.SourceConfig
-		sourceConfig.CustomerFilter = types.SanitizeExportCustomerFilter(cf)
-		req.SourceConfig = &sourceConfig
-	}
 	if req.Origin == "" {
 		req.Origin = types.ExportOriginConsole
+	}
+	if req.RunWindow != nil {
+		window := req.ForceRunRequest()
+		if err := checkRunWindow(req.EntityType, req.SourceConfig, window.StartTime, window.EndTime); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.validateSource(ctx, req); err != nil {
 		return nil, err
@@ -824,20 +849,8 @@ func (s *scheduledTaskService) startForceRun(ctx context.Context, task *schedule
 			Mark(ierr.ErrValidation)
 	}
 
-	if task.EntityType.IsReportSource() {
-		for _, bound := range []*time.Time{customStart, customEnd} {
-			if bound != nil && !bound.UTC().Equal(bound.UTC().Truncate(24*time.Hour)) {
-				return "", time.Time{}, time.Time{}, "", ierr.NewError("report window must be whole UTC days").
-					WithHint("start_time and end_time must be midnight UTC for report exports").
-					Mark(ierr.ErrValidation)
-			}
-		}
-		if customStart != nil && customEnd != nil && task.SourceConfig != nil {
-			days := int(customEnd.Sub(*customStart).Hours()+23) / 24
-			if err := checkReportRange(task.SourceConfig.ReportKey, days); err != nil {
-				return "", time.Time{}, time.Time{}, "", err
-			}
-		}
+	if err := checkRunWindow(task.EntityType, task.SourceConfig, customStart, customEnd); err != nil {
+		return "", time.Time{}, time.Time{}, "", err
 	}
 
 	// Determine time range and mode
