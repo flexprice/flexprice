@@ -271,6 +271,12 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 		}
 	}
 
+	if req.EmailConfig != nil {
+		if err := s.validateRecipients(ctx, task.Interval, req.EmailConfig); err != nil {
+			return err
+		}
+	}
+
 	previous := *task
 	scheduleChanged := req.Schedule != nil && !reflect.DeepEqual(task.Schedule, req.Schedule)
 	if req.Name != nil {
@@ -278,6 +284,9 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 	}
 	if scheduleChanged {
 		task.Schedule = req.Schedule
+	}
+	if req.EmailConfig != nil {
+		task.EmailConfig = emailConfigOrNil(req.EmailConfig)
 	}
 	task.UpdatedBy = types.GetUserID(ctx)
 

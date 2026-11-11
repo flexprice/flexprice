@@ -25481,6 +25481,9 @@
           "connection_id": {
             "type": "string"
           },
+          "email_config": {
+            "$ref": "#/components/schemas/types.ExportEmailConfig"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -31178,6 +31181,9 @@
             "type": "string",
             "format": "date-time"
           },
+          "email_config": {
+            "$ref": "#/components/schemas/types.ExportEmailConfig"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -34421,6 +34427,9 @@
       "UpdateScheduledTaskRequest": {
         "type": "object",
         "properties": {
+          "email_config": {
+            "$ref": "#/components/schemas/types.ExportEmailConfig"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -42339,6 +42348,18 @@
           "EntitlementGrantScopeGroup"
         ],
         "x-speakeasy-name-override": "EntitlementGrantScopeEntityType"
+      },
+      "types.ExportEmailConfig": {
+        "type": "object",
+        "properties": {
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "x-speakeasy-name-override": "ExportEmailConfig"
       },
       "types.ExportSchedule": {
         "type": "object",

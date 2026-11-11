@@ -1015,6 +1015,16 @@ func SourceConfigNotNil() predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldNotNull(FieldSourceConfig))
 }
 
+// EmailConfigIsNil applies the IsNil predicate on the "email_config" field.
+func EmailConfigIsNil() predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldIsNull(FieldEmailConfig))
+}
+
+// EmailConfigNotNil applies the NotNil predicate on the "email_config" field.
+func EmailConfigNotNil() predicate.ScheduledTask {
+	return predicate.ScheduledTask(sql.FieldNotNull(FieldEmailConfig))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.ScheduledTask) predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.AndPredicates(predicates...))

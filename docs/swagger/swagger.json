@@ -22337,6 +22337,10 @@
                 "connection_id": {
                     "type": "string"
                 },
+                "email_config": {
+                    "description": "Users in this account who receive each run by email.",
+                    "$ref": "#/definitions/types.ExportEmailConfig"
+                },
                 "enabled": {
                     "type": "boolean"
                 },
@@ -27994,6 +27998,9 @@
                 "created_at": {
                     "type": "string"
                 },
+                "email_config": {
+                    "$ref": "#/definitions/types.ExportEmailConfig"
+                },
                 "enabled": {
                     "type": "boolean"
                 },
@@ -31207,6 +31214,10 @@
         "UpdateScheduledTaskRequest": {
             "type": "object",
             "properties": {
+                "email_config": {
+                    "description": "Absent keeps recipients; empty recipients clears them.",
+                    "$ref": "#/definitions/types.ExportEmailConfig"
+                },
                 "enabled": {
                     "type": "boolean"
                 },
@@ -38832,6 +38843,17 @@
                 "EntitlementGrantScopeSubscription",
                 "EntitlementGrantScopeGroup"
             ]
+        },
+        "types.ExportEmailConfig": {
+            "type": "object",
+            "properties": {
+                "recipients": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
         },
         "types.ExportSchedule": {
             "type": "object",
