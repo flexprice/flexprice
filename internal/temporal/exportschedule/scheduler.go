@@ -22,7 +22,7 @@ const (
 	// CatchupWindow bounds missed-run replay.
 	CatchupWindow = 24 * time.Hour
 
-	workflowTimeout     = exportWorkflows.ExportWorkflowTimeout
+	workflowTimeout     = types.ExportWorkflowTimeout
 	workflowTaskTimeout = 60 * time.Minute
 )
 
