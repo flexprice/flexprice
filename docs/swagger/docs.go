@@ -40062,7 +40062,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "op": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "eq",
+                        "in"
+                    ]
                 },
                 "value": {
                     "type": "array",
@@ -40074,6 +40078,9 @@ const docTemplate = `{
         },
         "types.ReportParams": {
             "type": "object",
+            "required": [
+                "shape"
+            ],
             "properties": {
                 "currency": {
                     "type": "string"
@@ -40091,10 +40098,20 @@ const docTemplate = `{
                     }
                 },
                 "grain": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "day",
+                        "week",
+                        "month"
+                    ]
                 },
                 "shape": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "timeseries",
+                        "breakdown",
+                        "scalar"
+                    ]
                 }
             }
         },

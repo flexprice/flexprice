@@ -39030,7 +39030,11 @@
                     "type": "string"
                 },
                 "op": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "eq",
+                        "in"
+                    ]
                 },
                 "value": {
                     "type": "array",
@@ -39042,6 +39046,9 @@
         },
         "types.ReportParams": {
             "type": "object",
+            "required": [
+                "shape"
+            ],
             "properties": {
                 "currency": {
                     "type": "string"
@@ -39059,10 +39066,20 @@
                     }
                 },
                 "grain": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "day",
+                        "week",
+                        "month"
+                    ]
                 },
                 "shape": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "timeseries",
+                        "breakdown",
+                        "scalar"
+                    ]
                 }
             }
         },
