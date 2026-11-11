@@ -118,7 +118,7 @@ func (a *DeliveryActivity) SendExportEmails(ctx context.Context, in SendExportEm
 			if ierr.IsNotFound(err) {
 				record(addr, types.ExportDeliveryStatusSkipped, "not a tenant user")
 			} else {
-				a.logger.Error(ctx, "export email user lookup failed", "error", err, "task_id", in.TaskID, "recipient", email.MaskAddress(addr))
+				a.logger.Error(ctx, "export email user lookup failed", "error", "user lookup failed", "task_id", in.TaskID, "recipient", email.MaskAddress(addr))
 				record(addr, types.ExportDeliveryStatusFailed, "user lookup failed")
 			}
 			continue
