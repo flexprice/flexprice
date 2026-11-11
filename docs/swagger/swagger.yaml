@@ -3739,6 +3739,10 @@ definitions:
         type: string
       schedule:
         $ref: '#/definitions/types.ExportSchedule'
+      source_config:
+        allOf:
+        - $ref: '#/definitions/types.ExportSourceConfig'
+        description: Required for report and analytics_view exports.
     required:
     - entity_type
     - interval
@@ -8054,6 +8058,8 @@ definitions:
         type: string
       schedule:
         $ref: '#/definitions/types.ExportSchedule'
+      source_config:
+        $ref: '#/definitions/types.ExportSourceConfig'
       status:
         type: string
       tenant_id:
@@ -14240,6 +14246,8 @@ definitions:
     - credit_usage
     - usage_analytics
     - revenue_facts
+    - report
+    - analytics_view
     type: string
     x-enum-varnames:
     - ScheduledTaskEntityTypeEvents
@@ -14250,6 +14258,8 @@ definitions:
     - ScheduledTaskEntityTypeCreditUsage
     - ScheduledTaskEntityTypeUsageAnalytics
     - ScheduledTaskEntityTypeRevenueFacts
+    - ScheduledTaskEntityTypeReport
+    - ScheduledTaskEntityTypeAnalyticsView
   types.ScheduledTaskInterval:
     enum:
     - 15MIN
@@ -16381,6 +16391,15 @@ definitions:
       timezone:
         type: string
     type: object
+  types.ExportSourceConfig:
+    properties:
+      report_key:
+        type: string
+      report_params:
+        $ref: '#/definitions/types.ReportParams'
+      view_id:
+        type: string
+    type: object
   types.ImprovementDirection:
     enum:
     - higher
@@ -16541,6 +16560,34 @@ definitions:
     - ReportKindFlow
     - ReportKindRatio
     - ReportKindSnapshot
+  types.ReportParamFilter:
+    properties:
+      field:
+        type: string
+      op:
+        type: string
+      value:
+        items:
+          type: string
+        type: array
+    type: object
+  types.ReportParams:
+    properties:
+      currency:
+        type: string
+      dimensions:
+        items:
+          type: string
+        type: array
+      filters:
+        items:
+          $ref: '#/definitions/types.ReportParamFilter'
+        type: array
+      grain:
+        type: string
+      shape:
+        type: string
+    type: object
   types.ReportValueType:
     enum:
     - money
@@ -26501,6 +26548,8 @@ paths:
         connection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression.
         interval is hourly, daily, weekly, monthly or manual; clients should tolerate new values. schedule ({hour, minute, day_of_week, day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual.
         Window = the previous full period before the scheduled time, in the schedule's timezone; weekly = previous Monday-Sunday, monthly = previous calendar month; manual = previous UTC day unless a window is given.
+        entity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config is rejected for other entity types and cannot be changed later. Clients should tolerate new entity_type values.
+        Report sources allow interval daily, weekly, monthly or manual; schedule is required unless manual. Windows are the previous UTC period, and a custom run window must be whole UTC days. export_metadata_fields is not allowed. These exports also need analytics read access.
       operationId: createScheduledTask
       parameters:
       - description: Scheduled Task
