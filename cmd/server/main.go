@@ -916,15 +916,16 @@ func serviceParamsProviders() fx.Option {
 	return fx.Provide(
 		fx.Annotate(revenue.New, fx.ParamTags(`name:"base"`)),
 		fx.Annotate(selfbilling.New, fx.ParamTags(`name:"base"`)),
-		fx.Annotate(enrichServiceParams, fx.ParamTags(`name:"base"`, ``, ``)),
+		fx.Annotate(enrichServiceParams, fx.ParamTags(`name:"base"`, ``, ``, ``)),
 	)
 }
 
 // enrichServiceParams returns the ServiceParams the rest of the app consumes: the base params plus
 // the revenue-facts service the invoice hooks call and the self-billing hook.
-func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.RevenueService, selfBilling selfbilling.Service) service.ServiceParams {
+func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.RevenueService, selfBilling selfbilling.Service, rbacService *rbac.RBACService) service.ServiceParams {
 	base.RevenueFacts = revenueFacts
 	base.SelfBilling = selfBilling
+	base.RBAC = rbacService
 	return base
 }
 
