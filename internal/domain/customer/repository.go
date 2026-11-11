@@ -6,6 +6,12 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// Ref identifies a customer without loading the row.
+type Ref struct {
+	ID         string
+	ExternalID string
+}
+
 // Repository defines the interface for customer data access
 type Repository interface {
 	Create(ctx context.Context, customer *Customer) error
@@ -13,6 +19,8 @@ type Repository interface {
 	List(ctx context.Context, filter *types.CustomerFilter) ([]*Customer, error)
 	Count(ctx context.Context, filter *types.CustomerFilter) (int, error)
 	ListAll(ctx context.Context, filter *types.CustomerFilter) ([]*Customer, error)
+	// ListRefsByFilter returns id and external id of matches; errors when more than max (no cap when max <= 0).
+	ListRefsByFilter(ctx context.Context, filter *types.CustomerFilter, max int) ([]Ref, error)
 	Update(ctx context.Context, customer *Customer) error
 	Delete(ctx context.Context, customer *Customer) error
 	GetByLookupKey(ctx context.Context, lookupKey string) (*Customer, error)

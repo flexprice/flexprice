@@ -115,13 +115,35 @@ func (s *InMemoryCustomerStore) List(ctx context.Context, filter *types.Customer
 	}), nil
 }
 
+func (s *InMemoryCustomerStore) ListRefsByFilter(ctx context.Context, filter *types.CustomerFilter, max int) ([]customer.Ref, error) {
+	if filter == nil {
+		filter = types.NewNoLimitCustomerFilter()
+	}
+	items, err := s.ListAll(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if max > 0 && len(items) > max {
+		return nil, ierr.NewErrorf("Filter matches more than %d customers; narrow it", max).
+			WithHintf("Filter matches more than %d customers; narrow it", max).
+			Mark(ierr.ErrValidation)
+	}
+	return lo.Map(items, func(c *customer.Customer, _ int) customer.Ref {
+		return customer.Ref{ID: c.ID, ExternalID: c.ExternalID}
+	}), nil
+}
+
 func (s *InMemoryCustomerStore) Count(ctx context.Context, filter *types.CustomerFilter) (int, error) {
 	return s.InMemoryStore.Count(ctx, filter, customerFilterFn)
 }
 
 func (s *InMemoryCustomerStore) ListAll(ctx context.Context, filter *types.CustomerFilter) ([]*customer.Customer, error) {
 	f := *filter
-	f.QueryFilter = types.NewNoLimitQueryFilter()
+	qf := types.NewNoLimitQueryFilter()
+	if filter.QueryFilter != nil {
+		qf.Status = filter.QueryFilter.Status
+	}
+	f.QueryFilter = qf
 	return s.List(ctx, &f)
 }
 

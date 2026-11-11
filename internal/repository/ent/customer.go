@@ -247,6 +247,72 @@ func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFil
 	return domainCustomer.FromEntList(customers), nil
 }
 
+func (r *customerRepository) ListRefsByFilter(ctx context.Context, filter *types.CustomerFilter, max int) ([]domainCustomer.Ref, error) {
+	client := r.client.Reader(ctx)
+
+	span := StartRepositorySpan(ctx, "customer", "list_refs", map[string]interface{}{
+		"filter": filter,
+	})
+	defer FinishSpan(span)
+
+	f := types.NewNoLimitCustomerFilter()
+	if filter != nil {
+		copied := *filter
+		f = &copied
+		qf := types.NewNoLimitQueryFilter()
+		if filter.QueryFilter != nil {
+			*qf = *filter.QueryFilter
+		}
+		f.QueryFilter = qf
+	}
+
+	const batchSize = 1000
+	limit := batchSize
+	offset := 0
+	f.QueryFilter.Limit = &limit
+	f.QueryFilter.Offset = &offset
+
+	var refs []domainCustomer.Ref
+	for {
+		query := client.Customer.Query()
+		query, err := r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to list customers").
+				Mark(ierr.ErrDatabase)
+		}
+		query = ApplyQueryOptions(ctx, query, f, r.queryOpts)
+
+		var rows []struct {
+			ID         string `json:"id"`
+			ExternalID string `json:"external_id"`
+		}
+		if err := query.Select(customer.FieldID, customer.FieldExternalID).Scan(ctx, &rows); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to list customers").
+				Mark(ierr.ErrDatabase)
+		}
+		for _, row := range rows {
+			refs = append(refs, domainCustomer.Ref{ID: row.ID, ExternalID: row.ExternalID})
+		}
+		if max > 0 && len(refs) > max {
+			return nil, ierr.NewErrorf("Filter matches more than %d customers; narrow it", max).
+				WithHintf("Filter matches more than %d customers; narrow it", max).
+				Mark(ierr.ErrValidation)
+		}
+		if len(rows) < batchSize {
+			break
+		}
+		offset += batchSize
+		f.QueryFilter.Offset = &offset
+	}
+
+	SetSpanSuccess(span)
+	return refs, nil
+}
+
 func (r *customerRepository) Count(ctx context.Context, filter *types.CustomerFilter) (int, error) {
 	client := r.client.Reader(ctx)
 
