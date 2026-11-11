@@ -121,6 +121,14 @@ func (r *ReportsRepository) RunReport(ctx context.Context, rv *analytics.Resolve
 	return reportResult(q, rows, r.cfg.MaxResultRows)
 }
 
+func (r *ReportsRepository) ReportColumns(rv *analytics.ResolvedView, tenantID, environmentID string) ([]analytics.ReportColumn, error) {
+	q, err := r.buildReport(rv, tenantID, environmentID)
+	if err != nil {
+		return nil, err
+	}
+	return q.Columns, nil
+}
+
 // forReport targets the usage server for usage-backed metrics.
 func (r *ReportsRepository) forReport(rv *analytics.ResolvedView) *ReportsRepository {
 	if r.usageConn == nil || rv == nil || !slices.Contains(rv.Metrics, types.MetricEventsVolume) {

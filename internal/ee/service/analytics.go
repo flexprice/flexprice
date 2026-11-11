@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -30,6 +31,7 @@ type AnalyticsService interface {
 	ValidateViewSource(ctx context.Context, viewID string, windowDays int) error
 	RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error)
 	RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error)
+	ReportColumnsForExport(ctx context.Context, key string, params *types.ReportParams, rng string) ([]string, error)
 }
 
 const maxExportRows = 1_000_000
@@ -524,12 +526,46 @@ func (s *analyticsService) ListReports(_ context.Context) (*dto.ReportCatalogRes
 }
 
 func (s *analyticsService) RunReport(ctx context.Context, key string, req *dto.ReportQueryRequest) (*dto.AnalyticsQueryResult, error) {
-	if err := s.requireReports(); err != nil {
+	rv, entry, err := s.resolveReport(key, req)
+	if err != nil {
 		return nil, err
+	}
+	res, err := s.executeBilling(ctx, rv)
+	if err != nil {
+		return nil, err
+	}
+	if req.Compare != "" {
+		addChangePct(res, string(entry.Key))
+	}
+	return res, nil
+}
+
+// reportColumns returns run columns without querying.
+func (s *analyticsService) reportColumns(ctx context.Context, key string, req *dto.ReportQueryRequest) ([]string, error) {
+	rv, entry, err := s.resolveReport(key, req)
+	if err != nil {
+		return nil, err
+	}
+	cols, err := s.ReportsRepo.ReportColumns(rv, types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
+	if err != nil {
+		return nil, err
+	}
+	names := lo.Map(cols, func(c analytics.ReportColumn, _ int) string { return c.Name })
+	if req.Compare != "" {
+		if cur, prev := changePctIndexes(names, string(entry.Key)); cur >= 0 && prev >= 0 {
+			names = append(names, string(entry.Key)+"_change_pct")
+		}
+	}
+	return names, nil
+}
+
+func (s *analyticsService) resolveReport(key string, req *dto.ReportQueryRequest) (*analytics.ResolvedView, *analytics.ReportCatalogEntry, error) {
+	if err := s.requireReports(); err != nil {
+		return nil, nil, err
 	}
 	entry, err := req.ValidateForReport(key, s.ReportsRepo.MaxRows())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	grain, dims := req.Grain, req.Dimensions
@@ -560,30 +596,29 @@ func (s *analyticsService) RunReport(ctx context.Context, key string, req *dto.R
 
 	rv, err := analytics.ResolveVariables(&def, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	rv.Compare = req.Compare
 	rv.Offset = req.Offset
-	res, err := s.executeBilling(ctx, rv)
-	if err != nil {
-		return nil, err
-	}
-	if req.Compare != "" {
-		addChangePct(res, string(entry.Key))
-	}
-	return res, nil
+	return rv, entry, nil
 }
 
-func addChangePct(res *dto.AnalyticsQueryResult, key string) {
-	cur, prev := -1, -1
-	for i, c := range res.Columns {
-		switch c.Name {
+func changePctIndexes(names []string, key string) (cur, prev int) {
+	cur, prev = -1, -1
+	for i, n := range names {
+		switch n {
 		case key:
 			cur = i
 		case key + "_prev":
 			prev = i
 		}
 	}
+	return cur, prev
+}
+
+func addChangePct(res *dto.AnalyticsQueryResult, key string) {
+	names := lo.Map(res.Columns, func(c *dto.AnalyticsColumn, _ int) string { return c.Name })
+	cur, prev := changePctIndexes(names, key)
 	if cur < 0 || prev < 0 {
 		return
 	}
@@ -649,6 +684,10 @@ func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string
 
 func (s *analyticsService) RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error) {
 	return s.RunReport(ctx, key, reportRequestFromParams(params, rng))
+}
+
+func (s *analyticsService) ReportColumnsForExport(ctx context.Context, key string, params *types.ReportParams, rng string) ([]string, error) {
+	return s.reportColumns(ctx, key, reportRequestFromParams(params, rng))
 }
 
 func (s *analyticsService) RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error) {

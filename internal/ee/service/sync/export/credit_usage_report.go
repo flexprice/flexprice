@@ -93,7 +93,7 @@ func (e *CreditUsageExporter) PrepareData(ctx context.Context, request *dto.Expo
 	}
 	listFilter := &types.CustomerFilter{QueryFilter: types.NewNoLimitQueryFilter()}
 	if scoped {
-		listFilter.CustomerIDs = refIDs(refs)
+		listFilter = idListFilter(request.SourceConfig.GetCustomerFilter(), refIDs(refs))
 	}
 	var customers []*customer.Customer
 	if !scoped || len(refs) > 0 {
