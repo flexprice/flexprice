@@ -161,19 +161,19 @@ const (
 	ScheduledTaskEntityTypeAnalyticsView  ScheduledTaskEntityType = "analytics_view"
 )
 
-// IsReportSource reports whether the export reads a report or analytics view.
+// True for report-backed exports.
 func (e ScheduledTaskEntityType) IsReportSource() bool {
 	return e == ScheduledTaskEntityTypeReport || e == ScheduledTaskEntityTypeAnalyticsView
 }
 
-// ReportParamFilter is one filter on a report export.
+// One report filter.
 type ReportParamFilter struct {
 	Field string   `json:"field"`
 	Op    string   `json:"op"`
 	Value []string `json:"value,omitempty"`
 }
 
-// ReportParams selects the shape of a report export.
+// Report export parameters.
 type ReportParams struct {
 	Shape      string              `json:"shape"`
 	Dimensions []string            `json:"dimensions,omitempty"`
@@ -182,14 +182,14 @@ type ReportParams struct {
 	Filters    []ReportParamFilter `json:"filters,omitempty"`
 }
 
-// ExportSourceConfig names the report or view an export reads.
+// Report or view source.
 type ExportSourceConfig struct {
 	ReportKey    string        `json:"report_key,omitempty"`
 	ReportParams *ReportParams `json:"report_params,omitempty"`
 	ViewID       string        `json:"view_id,omitempty"`
 }
 
-// Validate checks the config matches the entity type.
+// Checks config fits entity.
 func (c *ExportSourceConfig) Validate(entity ScheduledTaskEntityType) error {
 	if !entity.IsReportSource() {
 		if c != nil {

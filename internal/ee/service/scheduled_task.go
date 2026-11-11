@@ -12,6 +12,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -75,7 +76,7 @@ func NewScheduledTaskService(
 	}
 }
 
-// requireAnalyticsRead denies report-backed exports to callers without analytics read.
+// Denies report exports without analytics read.
 func requireAnalyticsRead(ctx context.Context, rbacService *rbac.RBACService, entity types.ScheduledTaskEntityType) error {
 	if !entity.IsReportSource() {
 		return nil
@@ -98,7 +99,33 @@ func (s *scheduledTaskService) validateSource(ctx context.Context, req dto.Creat
 	if req.EntityType == types.ScheduledTaskEntityTypeAnalyticsView {
 		return s.analytics.ValidateViewSource(ctx, req.SourceConfig.ViewID)
 	}
-	return s.analytics.ValidateReportSource(ctx, req.SourceConfig.ReportKey, req.SourceConfig.ReportParams)
+	if err := s.analytics.ValidateReportSource(ctx, req.SourceConfig.ReportKey, req.SourceConfig.ReportParams); err != nil {
+		return err
+	}
+	return checkReportRange(req.SourceConfig.ReportKey, intervalWindowDays(req.Interval))
+}
+
+// Longest window per interval.
+func intervalWindowDays(interval types.ScheduledTaskInterval) int {
+	switch interval {
+	case types.ScheduledTaskIntervalDaily:
+		return 1
+	case types.ScheduledTaskIntervalWeekly:
+		return 7
+	case types.ScheduledTaskIntervalMonthly:
+		return 31
+	}
+	return 0
+}
+
+func checkReportRange(key string, days int) error {
+	entry, ok := analytics.LookupReport(key)
+	if !ok || entry.MaxRangeDays <= 0 || days <= entry.MaxRangeDays {
+		return nil
+	}
+	return ierr.NewErrorf("report covers at most %d days", entry.MaxRangeDays).
+		WithHintf("This report covers at most %d days; choose a shorter interval or window", entry.MaxRangeDays).
+		Mark(ierr.ErrValidation)
 }
 
 // CreateScheduledTask creates a new scheduled task
@@ -649,6 +676,12 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 				return "", time.Time{}, time.Time{}, "", ierr.NewError("report window must be whole UTC days").
 					WithHint("start_time and end_time must be midnight UTC for report exports").
 					Mark(ierr.ErrValidation)
+			}
+		}
+		if customStart != nil && customEnd != nil && task.SourceConfig != nil {
+			days := int(customEnd.Sub(*customStart).Hours()+23) / 24
+			if err := checkReportRange(task.SourceConfig.ReportKey, days); err != nil {
+				return "", time.Time{}, time.Time{}, "", err
 			}
 		}
 	}

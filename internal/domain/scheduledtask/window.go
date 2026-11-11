@@ -48,7 +48,7 @@ func Window(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule
 	return start.UTC(), end.UTC(), nil
 }
 
-// ReportWindow returns whole UTC day bounds for report exports.
+// Whole-day UTC bounds for reports.
 func ReportWindow(interval types.ScheduledTaskInterval, scheduledStart time.Time) (time.Time, time.Time, error) {
 	if interval == types.ScheduledTaskIntervalHourly {
 		return time.Time{}, time.Time{}, ierr.NewError("hourly report exports are not supported").
@@ -58,7 +58,7 @@ func ReportWindow(interval types.ScheduledTaskInterval, scheduledStart time.Time
 	return Window(interval, &types.ExportSchedule{Timezone: "UTC"}, scheduledStart)
 }
 
-// ReportRange formats a window as date..date.
+// Formats window as dates.
 func ReportRange(start, end time.Time) string {
 	return start.UTC().Format("2006-01-02") + ".." + end.UTC().Format("2006-01-02")
 }
