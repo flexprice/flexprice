@@ -298,16 +298,16 @@ type SubscriptionCreationConfig struct {
 
 	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
 
-	// Deprecated: legacy commitments are rejected; use commitments or POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
 
-	// Deprecated: legacy commitments are rejected; use commitments or POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 
-	// Deprecated: legacy commitments are rejected; use commitments or POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
 
-	// Deprecated: legacy commitments are rejected; use commitments or POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	EnableTrueUp bool `json:"enable_true_up"`
 
 	// CarryLegacyCommitment lets a plan change keep the replaced subscription's legacy commitment. Internal only.
@@ -325,7 +325,7 @@ type SubscriptionCreationConfig struct {
 	// Deprecated: use SubscriptionCoupons instead.
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 
-	// Deprecated: legacy commitments are rejected; use commitments or POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
 
 	// OverrideLineItems overrides specific plan prices for this subscription.
