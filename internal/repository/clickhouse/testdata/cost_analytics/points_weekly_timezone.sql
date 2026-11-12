@@ -1,0 +1,65 @@
+WITH
+lines AS (
+    SELECT
+        l.1 AS line_id,
+        l.2 AS meter_id,
+        l.3 AS feature_id,
+        l.4 AS customer_id,
+        toDateTime(l.5, 'UTC') AS w_start,
+        toDateTime(l.6, 'UTC') AS w_end,
+        toDecimal256(l.7, 20) AS unit_price
+    FROM (SELECT arrayJoin(arrayZip(@line_ids, @line_meter_ids, @line_feature_ids, @line_customer_ids, @line_starts, @line_ends, @line_unit_prices)) AS l)
+),
+priced AS (
+    SELECT
+        mu.qty_total AS qty,
+        l.line_id AS line_id,
+        toDecimal256(mu.qty_total, 15) * l.unit_price AS cost,
+        if(JSONType(mu.properties, 'user') = 'String', JSONExtractString(mu.properties, 'user'), JSONExtractRaw(mu.properties, 'user')) AS k0,
+        toString(mu.source) AS k1,
+        if(JSONType(mu.properties, 'app') = 'String', JSONExtractString(mu.properties, 'app'), JSONExtractRaw(mu.properties, 'app')) AS k2,
+        toStartOfWeek(toDate(mu.timestamp, 'Asia/Kolkata'), 0) AS w
+    FROM meter_usage AS mu FINAL
+    INNER JOIN lines AS l ON mu.meter_id = l.meter_id AND mu.external_customer_id = l.customer_id
+    WHERE mu.tenant_id = @tenant_id
+      AND mu.environment_id = @environment_id
+      AND mu.external_customer_id IN @customer_ids
+      AND mu.meter_id IN @meter_ids
+      AND mu.timestamp >= @min_start
+      AND mu.timestamp < @max_end
+      AND mu.timestamp >= l.w_start
+      AND mu.timestamp < l.w_end
+),
+filtered AS (
+    SELECT *
+    FROM priced
+    WHERE has(@filter_0, k2)
+      AND (positionCaseInsensitiveUTF8(k0, @search) > 0 OR positionCaseInsensitiveUTF8(k1, @search) > 0)
+)
+SELECT 0 AS is_total, k0, k1, toString(w), toString(sum(cost)), toString(sum(qty))
+FROM filtered
+WHERE has(@page_groups, [k0, k1])
+GROUP BY k0, k1, w
+UNION ALL
+SELECT 1 AS is_total, '' AS k0, '' AS k1, toString(w), toString(sum(cost)), toString(sum(qty))
+FROM filtered
+GROUP BY w
+SETTINGS max_memory_usage = 96636764160, do_not_merge_across_partitions_select_final = 1
+
+-- arguments
+-- @line_ids = [li_1]
+-- @line_meter_ids = [m_tokens]
+-- @line_feature_ids = [feat_m_tokens]
+-- @line_customer_ids = [cust_a]
+-- @line_starts = [1790812800]
+-- @line_ends = [1793491200]
+-- @line_unit_prices = [0.002]
+-- @tenant_id = tenant_1
+-- @environment_id = env_1
+-- @customer_ids = [cust_a]
+-- @meter_ids = [m_tokens]
+-- @min_start = 2026-10-01T00:00:00Z
+-- @max_end = 2026-11-01T00:00:00Z
+-- @filter_0 = [build]
+-- @search = ali
+-- @page_groups = [[alice api] [ sdk]]

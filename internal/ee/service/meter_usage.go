@@ -2413,55 +2413,57 @@ func (s *meterUsageService) resolveCustomerAndSubscriptions(ctx context.Context,
 		return nil, nil, err
 	}
 
-	subService := NewSubscriptionService(s.ServiceParams)
-	filter := types.NewSubscriptionFilter()
-	filter.CustomerID = cust.ID
-	filter.WithLineItems = true
-	filter.SubscriptionStatus = []types.SubscriptionStatus{
-		types.SubscriptionStatusActive,
-		types.SubscriptionStatusTrialing,
-		types.SubscriptionStatusPaused,
-		types.SubscriptionStatusCancelled,
-	}
-
-	subsList, err := subService.ListSubscriptions(ctx, filter)
+	subscriptions, err := customerSubscriptionsWithParents(ctx, s.SubRepo, cust.ID, true)
 	if err != nil {
 		return cust, nil, err
 	}
-
-	// when any child sub is SubscriptionTypeInherited, additionally load its parent
-	// so parent-scoped line items / commitments are visible to analytics.
-	parentSubIDs := make([]string, 0)
-	for _, subResp := range subsList.Items {
-		if subResp.Subscription.SubscriptionType == types.SubscriptionTypeInherited &&
-			subResp.Subscription.ParentSubscriptionID != nil {
-			parentSubIDs = append(parentSubIDs, lo.FromPtr(subResp.Subscription.ParentSubscriptionID))
-		}
-	}
-	if len(parentSubIDs) > 0 {
-		parentFilter := types.NewNoLimitSubscriptionFilter()
-		parentFilter.WithLineItems = true
-		parentFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeParent}
-		parentFilter.SubscriptionIDs = parentSubIDs
-		parentFilter.SubscriptionStatus = []types.SubscriptionStatus{
-			types.SubscriptionStatusActive,
-			types.SubscriptionStatusTrialing,
-			types.SubscriptionStatusPaused,
-			types.SubscriptionStatusCancelled,
-		}
-		parentsList, err := subService.ListSubscriptions(ctx, parentFilter)
-		if err != nil {
-			return cust, nil, err
-		}
-		subsList.Items = append(subsList.Items, parentsList.Items...)
-	}
-
-	subscriptions := make([]*subscription.Subscription, len(subsList.Items))
-	for i, subResp := range subsList.Items {
-		subscriptions[i] = subResp.Subscription
-	}
-
 	return cust, subscriptions, nil
+}
+
+// billableSubscriptionStatuses are the statuses whose usage analytics and cost breakdowns read.
+var billableSubscriptionStatuses = []types.SubscriptionStatus{
+	types.SubscriptionStatusActive,
+	types.SubscriptionStatusTrialing,
+	types.SubscriptionStatusPaused,
+	types.SubscriptionStatusCancelled,
+}
+
+// customerSubscriptionsWithParents lists a customer's subscriptions plus the parent of each inherited
+// child, since an inherited child owns no line items and is priced on its parent's.
+func customerSubscriptionsWithParents(ctx context.Context, subRepo subscription.Repository, customerID string, withLineItems bool) ([]*subscription.Subscription, error) {
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.CustomerID = customerID
+	filter.SubscriptionStatus = billableSubscriptionStatuses
+	filter.WithLineItems = withLineItems
+	filter.WithCouponAssociations = withLineItems
+	subs, err := subRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	known := lo.SliceToMap(subs, func(sub *subscription.Subscription) (string, bool) { return sub.ID, true })
+	var parentIDs []string
+	for _, sub := range subs {
+		parentID := lo.FromPtr(sub.ParentSubscriptionID)
+		if sub.SubscriptionType == types.SubscriptionTypeInherited && parentID != "" && !known[parentID] {
+			parentIDs = append(parentIDs, parentID)
+		}
+	}
+	if len(parentIDs) == 0 {
+		return subs, nil
+	}
+
+	parentFilter := types.NewNoLimitSubscriptionFilter()
+	parentFilter.SubscriptionIDs = lo.Uniq(parentIDs)
+	parentFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeParent}
+	parentFilter.SubscriptionStatus = billableSubscriptionStatuses
+	parentFilter.WithLineItems = withLineItems
+	parentFilter.WithCouponAssociations = withLineItems
+	parents, err := subRepo.List(ctx, parentFilter)
+	if err != nil {
+		return nil, err
+	}
+	return append(subs, parents...), nil
 }
 
 // ConvertToBillingCharges maps SubscriptionMeterUsage to billing charges.
