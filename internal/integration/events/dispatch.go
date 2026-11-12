@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
@@ -245,6 +246,31 @@ func DispatchInvoiceVendorSync(
 	}
 
 	return nil
+}
+
+// DispatchInvoiceAutoEmail emails a finalized invoice to the customer when the environment's
+// auto-send setting covers invoices. It is gated by email.enabled, not by integration events.
+func DispatchInvoiceAutoEmail(
+	ctx context.Context,
+	cfg *config.Configuration,
+	sender interfaces.InvoiceEmailSender,
+	log *logger.Logger,
+	event *types.WebhookEvent,
+	msgUUID string,
+) error {
+	if cfg == nil || !cfg.Email.Enabled {
+		return nil
+	}
+
+	var payload webhookDto.InternalInvoiceEvent
+	if err := json.Unmarshal(event.Payload, &payload); err != nil || payload.InvoiceID == "" {
+		log.Error(ctx, "integration_events: invalid invoice payload, dropping auto email",
+			"message_uuid", msgUUID,
+			"error", err,
+		)
+		return nil
+	}
+	return sender.SendAutoInvoiceEmail(ctx, payload.InvoiceID)
 }
 
 // DispatchCustomerVendorSync starts Temporal customer-sync workflows for each enabled provider.
