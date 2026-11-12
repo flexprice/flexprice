@@ -632,7 +632,7 @@ func (s *settingsService) requireReplyToForEmails(ctx context.Context, req *dto.
 	if err != nil {
 		return err
 	}
-	if !cfg.Enabled {
+	if !cfg.Enabled && !cfg.AutoSend.Enabled {
 		return nil
 	}
 	t, err := s.TenantRepo.GetByID(ctx, types.GetTenantID(ctx))
