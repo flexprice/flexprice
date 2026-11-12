@@ -108,7 +108,8 @@ func TestRecipientsAndSender(t *testing.T) {
 func TestFailIfPermanent(t *testing.T) {
 	ctx := testutil.SetupContext()
 	store := testutil.NewInMemoryEmailLogStore()
-	s := &emailNotificationService{ServiceParams: ServiceParams{EmailLogRepo: store, Logger: logger.NewNoopLogger()}}
+	log := logger.NewNoopLogger()
+	s := &emailNotificationService{ServiceParams: ServiceParams{EmailLogRepo: store, Logger: log, DB: testutil.NewMockPostgresClient(log)}}
 
 	queued := func(id string) *emaillog.EmailLog {
 		e := &emaillog.EmailLog{ID: id, EnvironmentID: types.GetEnvironmentID(ctx), DeliveryStatus: types.EmailDeliveryStatusQueued,
