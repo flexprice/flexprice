@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -13,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
 	razorpay "github.com/razorpay/razorpay-go"
+	rzperrors "github.com/razorpay/razorpay-go/errors"
 	"github.com/samber/lo"
 )
 
@@ -314,6 +316,17 @@ func (c *Client) CreatePaymentLink(ctx context.Context, paymentLinkData map[stri
 	// lets make a struct from here
 	if err != nil {
 		c.logger.Error(ctx, "failed to create payment link in Razorpay", "error", err)
+
+		var rejected *rzperrors.BadRequestError
+		if errors.As(err, &rejected) {
+			return nil, ierr.NewErrorf("razorpay rejected the payment link: %s", rejected.Message).
+				WithHintf("Razorpay rejected the payment link: %s", rejected.Message).
+				WithReportableDetails(map[string]interface{}{
+					"error": rejected.Message,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
 		return nil, ierr.NewError("failed to create payment link in Razorpay").
 			WithHint("Unable to create payment link in Razorpay").
 			WithReportableDetails(map[string]interface{}{
