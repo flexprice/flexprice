@@ -913,6 +913,13 @@ func NewRouter(
 		webhooks.POST("/whop/:tenant_id/:environment_id", handlers.Webhook.HandleWhopWebhook)
 	}
 
+	// Email delivery events: POST /v1/webhooks/email/{provider}. One URL per deployment serves every
+	// tenant, so it has no tenant in the path and skips WebhookLoggingMiddleware (bodies hold customer emails).
+	v1Public.POST("/webhooks/email/:provider",
+		middleware.WebhookBodyLimitMiddleware(middleware.MaxWebhookBodyBytes),
+		middleware.WebhookActorMiddleware,
+		handlers.EmailNotification.HandleDeliveryWebhook)
+
 	// Settings routes.
 	//
 	// Writes require a super admin: the route is shared by every settings key,
