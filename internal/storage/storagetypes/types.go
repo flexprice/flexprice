@@ -21,6 +21,8 @@ const (
 	UploadFormatJSON    UploadFormat = "json"
 	UploadFormatPDF     UploadFormat = "pdf"
 	UploadFormatParquet UploadFormat = "parquet"
+	UploadFormatPNG     UploadFormat = "png"
+	UploadFormatJPEG    UploadFormat = "jpg"
 )
 
 // UploadRequest describes an object to store. Key is the full object key
