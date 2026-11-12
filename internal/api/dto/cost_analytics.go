@@ -9,12 +9,12 @@ import (
 	"github.com/samber/lo"
 )
 
-// CostNoneValue is the row and column value shown for events without the key. Flexprice-prefixed so
-// it cannot pass for a real property value.
-const CostNoneValue = "__flexprice_none__"
+// CostNoneValue is the row and column value shown for events without the key. The $ prefix marks a
+// system value, so it does not pass for a real property value.
+const CostNoneValue = "$none"
 
 // CostOtherColumn collects the cost of column values beyond MaxCostColumns.
-const CostOtherColumn = "__flexprice_other__"
+const CostOtherColumn = "$other"
 
 // MaxCostColumns is how many column values a response lists; the rest go to CostOtherColumn.
 const MaxCostColumns = 50
