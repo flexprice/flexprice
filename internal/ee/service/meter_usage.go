@@ -2791,8 +2791,13 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 			total := share.ComputedCommitmentUtilizedAmount.Add(share.ComputedOverageAmount).Add(share.ComputedTrueUpAmount)
 			group.TotalCost = group.TotalCost.Add(total)
 
+			// A billing-terms commitment covers usage at $0, so a share can carry quantities without an amount.
+			carries := !total.IsZero() ||
+				!share.ComputedCommitmentUtilizedQuantity.IsZero() ||
+				!share.ComputedOverageQuantity.IsZero() ||
+				!share.ComputedTrueUpQuantity.IsZero()
 			at := pointsIn[gi]
-			if len(at) == 0 && !fill.IsZero() && !total.IsZero() {
+			if len(at) == 0 && !fill.IsZero() && carries {
 				group.Points = append(group.Points, events.UsageAnalyticPoint{Timestamp: fill, WindowStart: fill})
 				at = []int{len(group.Points) - 1}
 			}

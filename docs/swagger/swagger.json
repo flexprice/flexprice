@@ -33458,7 +33458,7 @@
             "type": "object",
             "properties": {
                 "amount": {
-                    "description": "Amount is the commitment amount (v1), or the utilized plus true-up share the commitments bill (v2).",
+                    "description": "Amount is the commitment amount (v1), or computed_commitment_utilized_amount + computed_true_up_amount (v2).",
                     "type": "string"
                 },
                 "computed_commitment_utilized_amount": {

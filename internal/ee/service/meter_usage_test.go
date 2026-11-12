@@ -7252,6 +7252,7 @@ func (s *MeterUsageServiceSuite) TestCommitments_RunningMeterBillsItsTotalEachPe
 		periods       []time.Time // each runs to the next, the last to rangeEnd
 		rangeEnd      time.Time
 		invoices      []string
+		prepaid       bool // a billing-terms commitment covering all usage, so each period bills $0
 	}{
 		{
 			name:          "a_period_without_new_events",
@@ -7277,6 +7278,15 @@ func (s *MeterUsageServiceSuite) TestCommitments_RunningMeterBillsItsTotalEachPe
 			rangeEnd:      march,
 			invoices:      []string{"200", "200"},
 		},
+		{
+			name:          "a_prepaid_period_without_new_events",
+			commitmentEnd: s.periodStart.AddDate(0, 6, 0),
+			usage:         map[time.Time]float64{januaryNoon(10): 200},
+			periods:       []time.Time{s.periodStart, february},
+			rangeEnd:      march,
+			invoices:      []string{"0", "0"},
+			prepaid:       true,
+		},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
@@ -7288,6 +7298,10 @@ func (s *MeterUsageServiceSuite) TestCommitments_RunningMeterBillsItsTotalEachPe
 			s.openLineItem("li_running_floor", m.ID, p.ID)
 			c := s.newCommitment("cmt_running_floor", types.CommitmentScopePrice, p.ID, "150")
 			c.EndDate = lo.ToPtr(tt.commitmentEnd)
+			if tt.prepaid {
+				c.Value = dec("300")
+				c.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
+			}
 			s.storeCommitment(c)
 			for at, quantity := range tt.usage {
 				s.insertMeterUsage(ctx, m.ID, s.customer.ExternalID, at, quantity)
@@ -7312,6 +7326,9 @@ func (s *MeterUsageServiceSuite) TestCommitments_RunningMeterBillsItsTotalEachPe
 				s.True(invoiced.Equal(dec(tt.invoices[i])), "invoice from %s bills %s, want %s", start, invoiced, tt.invoices[i])
 				s.True(points[i].Timestamp.Equal(start), "point %d starts %s", i, points[i].Timestamp)
 				s.True(points[i].Cost.Equal(invoiced), "point from %s costs %s, invoice %s", start, points[i].Cost, invoiced)
+				if tt.prepaid {
+					s.True(points[i].ComputedCommitmentUtilizedQuantity.Equal(dec("200")), "point from %s covers %s units", start, points[i].ComputedCommitmentUtilizedQuantity)
+				}
 				total = total.Add(invoiced)
 			}
 			s.True(resp.TotalCost.Equal(total), "total %s, invoices %s", resp.TotalCost, total)

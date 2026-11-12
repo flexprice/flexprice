@@ -181,7 +181,7 @@ func (b TimeOfDayBucket) Validate() error {
 // values are omitted: Quantity, Duration and OverageFactor are v1 line-item settings, the computed quantities are v2.
 type CommitmentInfo struct {
 	Type CommitmentType `json:"type"`
-	// Amount is the commitment amount (v1), or the utilized plus true-up share the commitments bill (v2).
+	// Amount is the commitment amount (v1), or computed_commitment_utilized_amount + computed_true_up_amount (v2).
 	Amount        decimal.Decimal  `json:"amount,omitzero" swaggertype:"string"`
 	Quantity      decimal.Decimal  `json:"quantity,omitzero" swaggertype:"string"` // Only used for quantity-based commitments
 	Duration      BillingPeriod    `json:"duration,omitempty"`
