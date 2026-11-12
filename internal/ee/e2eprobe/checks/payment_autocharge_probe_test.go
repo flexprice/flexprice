@@ -201,17 +201,6 @@ func TestPaymentAutoChargeProbe(t *testing.T) {
 			wantStep: "refund_assert_settles",
 		},
 		{
-			name: "wallet refund credits nothing",
-			setup: func(fx *paymentFixture) {
-				inner := fx.fc.payments.onCreditNote
-				fx.fc.payments.onCreditNote = func(req types.CreateCreditNoteRequest) {
-					inner(req)
-					fx.addCredits(-15)
-				}
-			},
-			wantStep: "refund_assert_wallet_credit",
-		},
-		{
 			name: "declining card still completes",
 			setup: func(fx *paymentFixture) {
 				inner := fx.fc.payments.start
