@@ -56,6 +56,9 @@ type outgoingEmail struct {
 	subject     string
 	to          []string
 	cc          []string
+	// senderName and replyTo fall back to the tenant's name and reply-to email when empty.
+	senderName string
+	replyTo    string
 }
 
 // composedEmail is an email type's rendered content for one email log.
@@ -106,6 +109,8 @@ func (s *emailNotificationService) SendInvoiceEmail(ctx context.Context, invoice
 		subject:     invoiceEmailSubject(inv, merchant.Name),
 		to:          to,
 		cc:          req.CC,
+		senderName:  merchant.Name,
+		replyTo:     merchant.BillingDetails.ReplyToEmail(),
 	})
 	if err != nil {
 		return nil, err
@@ -165,7 +170,7 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 	if err != nil {
 		return nil, err
 	}
-	replyTo := t.BillingDetails.ReplyToEmail()
+	replyTo := lo.CoalesceOrEmpty(out.replyTo, t.BillingDetails.ReplyToEmail())
 	if replyTo == "" {
 		return nil, ierr.NewError("tenant has no reply-to email").
 			WithHint("Add a billing or help email in your business settings so customers can reply").
@@ -180,7 +185,7 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 		CustomerID:     out.customerID,
 		TemplateKey:    out.templateKey,
 		Trigger:        out.trigger,
-		FromAddress:    senderAddress(s.Config.Email.SenderLocalPart, s.Config.Email.SenderDomain, t.ID, t.Name),
+		FromAddress:    senderAddress(s.Config.Email.SenderLocalPart, s.Config.Email.SenderDomain, t.ID, lo.CoalesceOrEmpty(out.senderName, t.Name)),
 		ReplyTo:        replyTo,
 		ToAddresses:    to,
 		CCAddresses:    normalizeRecipients(out.cc),
@@ -291,10 +296,10 @@ func (s *emailNotificationService) failIfPermanent(ctx context.Context, e *email
 	return ierr.WithError(err).WithHint(reason).Mark(ierr.ErrValidation)
 }
 
-// senderAddress is the tenant's From address on the shared sending domain.
-func senderAddress(localPart, domain, tenantID, tenantName string) string {
+// senderAddress is the tenant's From address on the shared sending domain, shown under senderName.
+func senderAddress(localPart, domain, tenantID, senderName string) string {
 	return (&mail.Address{
-		Name:    tenantName,
+		Name:    senderName,
 		Address: fmt.Sprintf("%s+%s@%s", localPart, strings.ToLower(tenantID), domain),
 	}).String()
 }
