@@ -11,6 +11,7 @@ import (
 	stripeapi "github.com/stripe/stripe-go/v82"
 )
 
+// RefundAdapter issues refund-ledger refunds through Stripe.
 type RefundAdapter struct {
 	Client *Client
 	Logger *logger.Logger

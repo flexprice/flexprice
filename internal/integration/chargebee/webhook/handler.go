@@ -150,6 +150,12 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 	paymentAmount := decimal.NewFromInt(transaction.Amount).
 		Shift(-types.GetCurrencyPrecision(transaction.CurrencyCode))
 
+	// A capture already recorded is left to ProcessChargebeePaymentFromWebhook.
+	if exists, err := services.PaymentService.PaymentExistsByGatewayPaymentID(ctx, transaction.ID); err == nil && !exists &&
+		services.RefundService.RefundUnrecordedCaptureOnVoidedInvoice(ctx, flexpriceInvoiceID, transaction.ID, paymentAmount) {
+		return nil
+	}
+
 	err = h.invoiceSvc.ProcessChargebeePaymentFromWebhook(ctx, chargebee.ChargebeeWebhookPaymentRequest{
 		FlexpriceInvoiceID:     flexpriceInvoiceID,
 		ChargebeeTransactionID: transaction.ID,

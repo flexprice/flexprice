@@ -519,6 +519,32 @@ func (s *RefundServiceSuite) TestRefundCaptureOnVoidedInvoiceFallsBackToWallet()
 	s.True(s.customerWalletBalance().Equal(decimal.NewFromInt(100)))
 }
 
+func (s *RefundServiceSuite) TestRefundCaptureOnVoidedInvoiceRecordsCaptureOnRedelivery() {
+	ctx := s.GetContext()
+	s.voidInvoice()
+	p := s.createPayment("pay_link", decimal.NewFromInt(100), types.PaymentMethodTypePaymentLink, lo.ToPtr("stripe"), s.testData.now)
+	p.PaymentStatus = types.PaymentStatusPending
+	p.GatewayPaymentID = nil
+	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, p))
+
+	// A delivery that wrote the refund row and stopped before recording the capture.
+	svc := s.service.(*refundService)
+	row := svc.newRow(ctx, s.testData.invoice, p.Amount, voidedCaptureAllocation("pay_link"), 0)
+	row.PaymentID = lo.ToPtr("pay_link")
+	_, err := svc.persist(ctx, []*refund.Refund{row})
+	s.Require().NoError(err)
+
+	s.True(s.service.RefundCaptureOnVoidedInvoice(ctx, "pay_link", "pi_late"))
+
+	captured, err := s.GetStores().PaymentRepo.Get(ctx, "pay_link")
+	s.Require().NoError(err)
+	s.Equal(types.PaymentStatusSucceeded, captured.PaymentStatus)
+	s.Equal("pi_late", lo.FromPtr(captured.GatewayPaymentID))
+	settled, err := s.GetStores().RefundRepo.Get(ctx, row.ID)
+	s.Require().NoError(err)
+	s.Equal(types.RefundStatusSucceeded, settled.RefundStatus)
+}
+
 func (s *RefundServiceSuite) TestRefundCaptureOnVoidedInvoiceLeavesOtherCapturesToSettle() {
 	ctx := s.GetContext()
 	s.createPayment("pay_settled", decimal.NewFromInt(100), types.PaymentMethodTypePaymentLink, lo.ToPtr("stripe"), s.testData.now)
@@ -538,6 +564,7 @@ func (s *RefundServiceSuite) TestRefundUnrecordedCaptureOnVoidedInvoiceCreditsWa
 	s.False(s.service.RefundUnrecordedCaptureOnVoidedInvoice(ctx, s.testData.invoice.ID, "moy_1", decimal.NewFromInt(100)))
 
 	s.voidInvoice()
+	s.True(s.service.RefundUnrecordedCaptureOnVoidedInvoice(ctx, s.testData.invoice.ID, "moy_refunded", decimal.Zero), "already refunded at the gateway")
 	s.True(s.service.RefundUnrecordedCaptureOnVoidedInvoice(ctx, s.testData.invoice.ID, "moy_1", decimal.NewFromInt(100)))
 	s.True(s.service.RefundUnrecordedCaptureOnVoidedInvoice(ctx, s.testData.invoice.ID, "moy_1", decimal.NewFromInt(100)))
 

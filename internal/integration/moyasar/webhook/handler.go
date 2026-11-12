@@ -388,7 +388,7 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment *moyasar.Moy
 
 	// A capture already recorded is left to ProcessExternalMoyasarPayment, which skips it.
 	if exists, err := services.PaymentService.PaymentExistsByGatewayPaymentID(ctx, payment.ID); err == nil && !exists {
-		amount := types.FromSmallestUnit(int64(payment.Amount), payment.Currency)
+		amount := types.FromSmallestUnit(int64(payment.Amount-payment.RefundedAmount), payment.Currency)
 		if services.RefundService.RefundUnrecordedCaptureOnVoidedInvoice(ctx, flexpriceInvoiceID, payment.ID, amount) {
 			return nil
 		}

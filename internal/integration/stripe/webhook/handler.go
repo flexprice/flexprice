@@ -979,7 +979,8 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
-	if services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, piID) {
+	paid := checkoutSession.PaymentStatus == stripeapi.CheckoutSessionPaymentStatusPaid
+	if paid && services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, piID) {
 		return nil
 	}
 
@@ -1004,7 +1005,9 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 			"flexprice_payment_id", flexpricePaymentID,
 			"event_id", event.ID)
 		// The invoice may have been voided after the check above.
-		services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, piID)
+		if paid {
+			services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, piID)
+		}
 		return nil
 	}
 

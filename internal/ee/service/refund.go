@@ -277,12 +277,21 @@ func (s *refundService) RefundCaptureOnVoidedInvoice(ctx context.Context, paymen
 		return false
 	}
 	inv, err := s.InvoiceRepo.Get(ctx, p.DestinationID)
-	if err != nil || inv.InvoiceStatus != types.InvoiceStatusVoided {
+	if err != nil {
+		s.Logger.Error(ctx, "failed to read invoice for a captured payment, not settling it, manual reconciliation required",
+			"error", err, "payment_id", p.ID, "invoice_id", p.DestinationID)
+		return true
+	}
+	if inv.InvoiceStatus != types.InvoiceStatusVoided {
 		return false
 	}
 
 	row := s.newRow(ctx, inv, p.Amount, voidedCaptureAllocation(paymentID), 0)
-	if s.redriveVoidedCaptureRefund(ctx, row.IdempotencyKey) {
+	if existing, found := s.lookupVoidedCaptureRefund(ctx, row.IdempotencyKey); found {
+		if existing != nil {
+			s.recordVoidedCapture(ctx, p, gatewayPaymentID)
+			s.dispatchVoidedCaptureRefund(ctx, existing.ID)
+		}
 		return true
 	}
 
@@ -297,31 +306,24 @@ func (s *refundService) RefundCaptureOnVoidedInvoice(ctx context.Context, paymen
 	s.Logger.Info(ctx, "payment captured on voided invoice, refunding",
 		"payment_id", paymentID, "invoice_id", inv.ID, "gateway_payment_id", gatewayPaymentID)
 
-	update := dto.UpdatePaymentRequest{}
+	// The refund row is written before the payment changes, so a redelivery always finds it.
+	captured := *p
 	if gatewayPaymentID != "" {
-		update.GatewayPaymentID = lo.ToPtr(gatewayPaymentID)
-		p.GatewayPaymentID = update.GatewayPaymentID
+		captured.GatewayPaymentID = lo.ToPtr(gatewayPaymentID)
 	}
-	switch p.PaymentStatus {
-	case types.PaymentStatusInitiated, types.PaymentStatusPending, types.PaymentStatusProcessing:
-		update.PaymentStatus = lo.ToPtr(string(types.PaymentStatusSucceeded))
-		update.SucceededAt = lo.ToPtr(clock.Now())
-	}
-	if update.GatewayPaymentID != nil || update.PaymentStatus != nil {
-		if _, err := NewPaymentService(s.ServiceParams).UpdatePayment(ctx, p.ID, update); err != nil {
-			s.Logger.Error(ctx, "failed to record capture on voided invoice, manual reconciliation required",
-				"error", err, "payment_id", p.ID, "invoice_id", inv.ID)
-			return true
-		}
-	}
-
 	row.PaymentID = lo.ToPtr(p.ID)
-	if isGatewayRefundable(p) {
+	if isGatewayRefundable(&captured) {
 		row.RefundDestination = types.RefundDestinationGateway
 		row.PaymentGateway = p.PaymentGateway
 		row.GatewayIdempotencyToken = lo.ToPtr(row.IdempotencyKey)
 	}
-	s.startVoidedCaptureRefund(ctx, row)
+	if _, err := s.persist(ctx, []*refund.Refund{row}); err != nil {
+		s.Logger.Error(ctx, "failed to create refund for capture on voided invoice, manual reconciliation required",
+			"error", err, "invoice_id", inv.ID, "payment_id", p.ID)
+		return true
+	}
+	s.recordVoidedCapture(ctx, p, gatewayPaymentID)
+	s.dispatchVoidedCaptureRefund(ctx, row.ID)
 	return true
 }
 
@@ -330,15 +332,28 @@ func (s *refundService) RefundUnrecordedCaptureOnVoidedInvoice(ctx context.Conte
 	if err != nil || inv.InvoiceStatus != types.InvoiceStatusVoided {
 		return false
 	}
+	if !amount.IsPositive() {
+		s.Logger.Info(ctx, "capture on voided invoice has nothing left to refund",
+			"invoice_id", inv.ID, "gateway_payment_id", gatewayPaymentID)
+		return true
+	}
 
 	row := s.newRow(ctx, inv, amount, voidedCaptureAllocation(gatewayPaymentID), 0)
-	if s.redriveVoidedCaptureRefund(ctx, row.IdempotencyKey) {
+	if existing, found := s.lookupVoidedCaptureRefund(ctx, row.IdempotencyKey); found {
+		if existing != nil {
+			s.dispatchVoidedCaptureRefund(ctx, existing.ID)
+		}
 		return true
 	}
 
 	s.Logger.Info(ctx, "unrecorded capture on voided invoice, crediting the wallet",
 		"invoice_id", inv.ID, "gateway_payment_id", gatewayPaymentID, "amount", amount.String())
-	s.startVoidedCaptureRefund(ctx, row)
+	if _, err := s.persist(ctx, []*refund.Refund{row}); err != nil {
+		s.Logger.Error(ctx, "failed to create refund for capture on voided invoice, manual reconciliation required",
+			"error", err, "invoice_id", inv.ID, "gateway_payment_id", gatewayPaymentID)
+		return true
+	}
+	s.dispatchVoidedCaptureRefund(ctx, row.ID)
 	return true
 }
 
@@ -350,30 +365,39 @@ func voidedCaptureAllocation(captureID string) allocationContext {
 	}
 }
 
-// redriveVoidedCaptureRefund dispatches the refund an earlier delivery already planned for
-// this capture, reporting whether one exists. A failed lookup counts as existing so the
-// capture is never settled onto the voided invoice.
-func (s *refundService) redriveVoidedCaptureRefund(ctx context.Context, idempotencyKey string) bool {
+// lookupVoidedCaptureRefund returns the refund an earlier delivery planned for this capture.
+// A failed lookup counts as found, with no row, so the capture is never settled onto the voided invoice.
+func (s *refundService) lookupVoidedCaptureRefund(ctx context.Context, idempotencyKey string) (*refund.Refund, bool) {
 	existing, err := s.RefundRepo.GetByIdempotencyKey(ctx, idempotencyKey)
 	if err == nil {
-		s.dispatchVoidedCaptureRefund(ctx, existing.ID)
-		return true
+		return existing, true
 	}
 	if !ierr.IsNotFound(err) {
 		s.Logger.Error(ctx, "failed to look up refund for capture on voided invoice, manual reconciliation required",
 			"error", err, "idempotency_key", idempotencyKey)
-		return true
+		return nil, true
 	}
-	return false
+	return nil, false
 }
 
-func (s *refundService) startVoidedCaptureRefund(ctx context.Context, row *refund.Refund) {
-	if _, err := s.persist(ctx, []*refund.Refund{row}); err != nil {
-		s.Logger.Error(ctx, "failed to create refund for capture on voided invoice, manual reconciliation required",
-			"error", err, "invoice_id", row.InvoiceID, "payment_id", lo.FromPtr(row.PaymentID))
+// recordVoidedCapture stores the gateway payment id and marks an unsettled payment succeeded.
+func (s *refundService) recordVoidedCapture(ctx context.Context, p *payment.Payment, gatewayPaymentID string) {
+	update := dto.UpdatePaymentRequest{}
+	if gatewayPaymentID != "" && lo.FromPtr(p.GatewayPaymentID) != gatewayPaymentID {
+		update.GatewayPaymentID = lo.ToPtr(gatewayPaymentID)
+	}
+	switch p.PaymentStatus {
+	case types.PaymentStatusInitiated, types.PaymentStatusPending, types.PaymentStatusProcessing:
+		update.PaymentStatus = lo.ToPtr(string(types.PaymentStatusSucceeded))
+		update.SucceededAt = lo.ToPtr(clock.Now())
+	}
+	if update.GatewayPaymentID == nil && update.PaymentStatus == nil {
 		return
 	}
-	s.dispatchVoidedCaptureRefund(ctx, row.ID)
+	if _, err := NewPaymentService(s.ServiceParams).UpdatePayment(ctx, p.ID, update); err != nil {
+		s.Logger.Error(ctx, "failed to record capture on voided invoice, manual reconciliation required",
+			"error", err, "payment_id", p.ID)
+	}
 }
 
 func (s *refundService) dispatchVoidedCaptureRefund(ctx context.Context, refundID string) {
