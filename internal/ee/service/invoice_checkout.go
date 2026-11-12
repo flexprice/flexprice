@@ -107,6 +107,14 @@ func (s *invoiceService) isInvoiceGatedOnCheckout(ctx context.Context, inv *invo
 	return gatedSession, gatedSession.ID == callerSessionID, nil
 }
 
+// errInvoiceChargeInFlight refuses to void an invoice while a saved-method debit on it may still land.
+func errInvoiceChargeInFlight(invoiceID string) error {
+	return ierr.NewError("a payment is in progress for this invoice").
+		WithHint("A payment is in progress for this invoice. Wait for it to settle (up to 2 working days) before voiding.").
+		WithReportableDetails(map[string]any{"invoice_id": invoiceID}).
+		Mark(ierr.ErrValidation)
+}
+
 func errInvoiceCheckoutGated(invoiceID, operation string) error {
 	return ierr.NewError("invoice is gated by an active checkout session").
 		WithHintf("Cancel the checkout session before you %s this invoice", operation).

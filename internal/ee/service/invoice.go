@@ -28,6 +28,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
@@ -1885,6 +1886,14 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 		}
 		if gatedSession != nil && !ownedByCaller {
 			return errInvoiceCheckoutGated(id, "void")
+		}
+
+		inFlight, err := payments.ChargeInFlight(tx, s.PaymentRepo, id, "")
+		if err != nil {
+			return err
+		}
+		if inFlight {
+			return errInvoiceChargeInFlight(id)
 		}
 
 		if err := validateInvoiceVoidable(inv); err != nil {

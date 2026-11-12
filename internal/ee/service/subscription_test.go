@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/proration"
@@ -11132,7 +11133,10 @@ func (s *SubscriptionServiceSuite) TestProcessAutoCancellationSubscriptions() {
 		{"cancelled by tenant", types.SubscriptionStatusCancelled, types.InvoiceBillingReasonSubscriptionCycle, now.AddDate(0, 0, -10),
 			types.SubscriptionStatusCancelled, "customer churned", types.InvoiceStatusFinalized,
 			types.Metadata{"cancellation_reason": "customer churned"}},
+		{"renewal past grace with debit in flight", types.SubscriptionStatusActive, types.InvoiceBillingReasonSubscriptionCycle, now.AddDate(0, 0, -10),
+			types.SubscriptionStatusActive, "", types.InvoiceStatusFinalized, nil},
 	}
+	debitInFlight := map[string]bool{"renewal past grace with debit in flight": true}
 
 	subIDs := make(map[string]string, len(tests))
 	invIDs := make(map[string]string, len(tests))
@@ -11175,6 +11179,21 @@ func (s *SubscriptionServiceSuite) TestProcessAutoCancellationSubscriptions() {
 		}
 		s.Require().NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
 		invIDs[tt.name] = inv.ID
+
+		if debitInFlight[tt.name] {
+			s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, &payment.Payment{
+				ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
+				IdempotencyKey:    "autocharge:" + inv.ID,
+				DestinationType:   types.PaymentDestinationTypeInvoice,
+				DestinationID:     inv.ID,
+				PaymentMethodType: types.PaymentMethodTypeENACH,
+				PaymentStatus:     types.PaymentStatusProcessing,
+				Amount:            inv.AmountRemaining,
+				Currency:          inv.Currency,
+				EnvironmentID:     types.GetEnvironmentID(ctx),
+				BaseModel:         types.GetDefaultBaseModel(ctx),
+			}))
+		}
 	}
 
 	s.Require().NoError(s.service.ProcessAutoCancellationSubscriptions(ctx))

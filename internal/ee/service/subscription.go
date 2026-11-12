@@ -27,6 +27,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	paddleint "github.com/flexprice/flexprice/internal/integration/paddle"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	invoiceTemporalModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
@@ -6183,8 +6184,20 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 					"amount_remaining", inv.AmountRemaining,
 					"current_time", now)
 			}
+			if !isPastGracePeriod {
+				return false
+			}
 
-			return isPastGracePeriod
+			// A saved-method debit may still land; the next run picks the invoice up once it settles.
+			inFlight, err := payments.ChargeInFlight(tenantCtx, s.PaymentRepo, inv.ID, "")
+			if err != nil {
+				s.Logger.Error(ctx, "failed to check in-flight payments, skipping invoice", "invoice_id", inv.ID, "error", err)
+				return false
+			}
+			if inFlight {
+				s.Logger.Info(ctx, "payment in progress, skipping overdue invoice", "invoice_id", inv.ID)
+			}
+			return !inFlight
 		})
 
 		overdueInvoicesBySub := lo.GroupBy(eligibleInvoices, func(inv *invoice.Invoice) string {
