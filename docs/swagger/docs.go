@@ -32486,10 +32486,20 @@ const docTemplate = `{
                     "description": "Commitment breakdown (only populated for windowed commitments)",
                     "type": "string"
                 },
+                "computed_commitment_utilized_quantity": {
+                    "description": "Usage units behind the commitment breakdown, for v2 commitments",
+                    "type": "string"
+                },
                 "computed_overage_amount": {
                     "type": "string"
                 },
+                "computed_overage_quantity": {
+                    "type": "string"
+                },
                 "computed_true_up_amount": {
+                    "type": "string"
+                },
+                "computed_true_up_quantity": {
                     "type": "string"
                 },
                 "cost": {
@@ -34344,16 +34354,27 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
+                    "description": "Amount is the commitment amount (v1), or computed_commitment_utilized_amount + computed_true_up_amount (v2).",
                     "type": "string"
                 },
                 "computed_commitment_utilized_amount": {
                     "type": "string"
                 },
+                "computed_commitment_utilized_quantity": {
+                    "description": "Usage units behind the computed amounts: usage a billing-terms commitment covers counts as utilized at no\ncharge, and a quantity commitment's true-up counts its unused units.",
+                    "type": "string"
+                },
                 "computed_overage_amount": {
+                    "type": "string"
+                },
+                "computed_overage_quantity": {
                     "type": "string"
                 },
                 "computed_true_up_amount": {
                     "description": "total_cost = computed_commitment_utilized_amount + computed_overage_amount + computed_true_up_amount",
+                    "type": "string"
+                },
+                "computed_true_up_quantity": {
                     "type": "string"
                 },
                 "duration": {
