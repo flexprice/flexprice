@@ -334,6 +334,15 @@ func (o EmailLogQueryOptions) applyEntityQueryOptions(f *types.EmailLogFilter, q
 	if len(f.EntityIDs) > 0 {
 		query = query.Where(emaillog.EntityIDIn(f.EntityIDs...))
 	}
+	if len(f.CustomerIDs) > 0 {
+		query = query.Where(emaillog.CustomerIDIn(f.CustomerIDs...))
+	}
+	if len(f.DeliveryStatuses) > 0 {
+		query = query.Where(emaillog.DeliveryStatusIn(f.DeliveryStatuses...))
+	}
+	if len(f.Triggers) > 0 {
+		query = query.Where(emaillog.TriggerIn(f.Triggers...))
+	}
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil {
 			query = query.Where(emaillog.CreatedAtGTE(*f.StartTime))

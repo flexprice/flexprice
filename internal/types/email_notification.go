@@ -98,8 +98,11 @@ type EmailLogFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	EntityType SystemEntityType `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
-	EntityIDs  []string         `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
+	EntityType       SystemEntityType      `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
+	EntityIDs        []string              `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
+	CustomerIDs      []string              `json:"customer_ids,omitempty" form:"customer_ids" validate:"omitempty"`
+	DeliveryStatuses []EmailDeliveryStatus `json:"delivery_statuses,omitempty" form:"delivery_statuses" validate:"omitempty"`
+	Triggers         []EmailTrigger        `json:"triggers,omitempty" form:"triggers" validate:"omitempty"`
 }
 
 func NewEmailLogFilter() *EmailLogFilter {
@@ -114,6 +117,16 @@ func (f *EmailLogFilter) Validate() error {
 	}
 	if f.TimeRangeFilter != nil {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, s := range f.DeliveryStatuses {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, t := range f.Triggers {
+		if err := t.Validate(); err != nil {
 			return err
 		}
 	}

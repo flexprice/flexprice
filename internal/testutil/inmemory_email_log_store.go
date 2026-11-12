@@ -106,6 +106,15 @@ func emailLogFilterFn(ctx context.Context, e *emaillog.EmailLog, filter interfac
 	if f.EntityType != "" && e.EntityType != f.EntityType {
 		return false
 	}
+	if len(f.CustomerIDs) > 0 && !lo.Contains(f.CustomerIDs, e.CustomerID) {
+		return false
+	}
+	if len(f.DeliveryStatuses) > 0 && !lo.Contains(f.DeliveryStatuses, e.DeliveryStatus) {
+		return false
+	}
+	if len(f.Triggers) > 0 && !lo.Contains(f.Triggers, e.Trigger) {
+		return false
+	}
 	return len(f.EntityIDs) == 0 || lo.Contains(f.EntityIDs, e.EntityID)
 }
 

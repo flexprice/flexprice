@@ -31,6 +31,9 @@ type EmailNotificationService interface {
 	// ListInvoiceEmails returns the emails sent for an invoice, newest first.
 	ListInvoiceEmails(ctx context.Context, invoiceID string) (*dto.ListEmailLogsResponse, error)
 
+	// ListEmails returns the emails matching filter, newest first unless it sorts otherwise.
+	ListEmails(ctx context.Context, filter *types.EmailLogFilter) (*dto.ListEmailLogsResponse, error)
+
 	// DeliverEmail renders a queued email and hands it to the provider. With allowMissingAttachments
 	// it sends without attachments it cannot produce; otherwise those are retryable errors.
 	// Errors marked ierr.ErrValidation are permanent: the email is already marked failed.
@@ -191,6 +194,16 @@ func (s *emailNotificationService) ListInvoiceEmails(ctx context.Context, invoic
 	filter := types.NewEmailLogFilter()
 	filter.EntityType = types.SystemEntityTypeInvoice
 	filter.EntityIDs = []string{invoiceID}
+	return s.ListEmails(ctx, filter)
+}
+
+func (s *emailNotificationService) ListEmails(ctx context.Context, filter *types.EmailLogFilter) (*dto.ListEmailLogsResponse, error) {
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
 
 	items, err := s.EmailLogRepo.List(ctx, filter)
 	if err != nil {
