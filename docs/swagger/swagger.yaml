@@ -10998,9 +10998,16 @@ definitions:
       computed_commitment_utilized_amount:
         description: Commitment breakdown (only populated for windowed commitments)
         type: string
+      computed_commitment_utilized_quantity:
+        description: Usage units behind the commitment breakdown, for v2 commitments
+        type: string
       computed_overage_amount:
         type: string
+      computed_overage_quantity:
+        type: string
       computed_true_up_amount:
+        type: string
+      computed_true_up_quantity:
         type: string
       cost:
         description: Cost is the final cost after discount (Subtotal - Discount)
@@ -12343,14 +12350,25 @@ definitions:
   types.CommitmentInfo:
     properties:
       amount:
+        description: Amount is the commitment amount (v1), or computed_commitment_utilized_amount
+          + computed_true_up_amount (v2).
         type: string
       computed_commitment_utilized_amount:
         type: string
+      computed_commitment_utilized_quantity:
+        description: |-
+          Usage units behind the computed amounts: usage a billing-terms commitment covers counts as utilized at no
+          charge, and a quantity commitment's true-up counts its unused units.
+        type: string
       computed_overage_amount:
+        type: string
+      computed_overage_quantity:
         type: string
       computed_true_up_amount:
         description: total_cost = computed_commitment_utilized_amount + computed_overage_amount
           + computed_true_up_amount
+        type: string
+      computed_true_up_quantity:
         type: string
       duration:
         $ref: '#/definitions/types.BillingPeriod'
@@ -26726,68 +26744,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Trigger force run
-      tags:
-      - Scheduled Tasks
-  /tasks/scheduled/schedule-draft-finalization:
-    post:
-      consumes:
-      - application/json
-      description: Triggers the draft invoice finalization workflow that scans computed
-        draft invoices whose finalization delay has elapsed and finalizes them (assign
-        invoice number, sync to vendors, attempt payment).
-      operationId: scheduleDraftFinalization
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: object
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Schedule draft finalization
-      tags:
-      - Scheduled Tasks
-  /tasks/scheduled/schedule-update-billing-period:
-    post:
-      consumes:
-      - application/json
-      description: Use when you need to trigger a billing-period update workflow (e.g.
-        to recalculate or sync billing windows).
-      operationId: scheduleUpdateBillingPeriod
-      parameters:
-      - description: Schedule Update Billing Period Request
-        in: body
-        name: request
-        required: true
-        schema:
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: object
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Schedule update billing period
       tags:
       - Scheduled Tasks
   /taxes/associations:

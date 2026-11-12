@@ -882,7 +882,7 @@ func (s *CommitmentE2ESuite) TestAnalytics_TrueUpSharedByWithinAcrossScopedLines
 		s.Require().NotNil(info, lineID)
 		s.True(info.ComputedCommitmentUtilizedAmount.Equal(dec(within)), "%s within %s", lineID, info.ComputedCommitmentUtilizedAmount)
 		share := dec("77.5").Mul(dec(within)).Div(dec("122.5"))
-		s.True(info.ComputedTrueUpAmount.Sub(share).Abs().LessThan(dec("0.000001")), "%s true-up %s, want %s", lineID, info.ComputedTrueUpAmount, share)
+		s.True(info.ComputedTrueUpAmount.Sub(share).Abs().LessThan(dec("0.01")), "%s true-up %s, want %s to the cent", lineID, info.ComputedTrueUpAmount, share)
 	}
 }
 
