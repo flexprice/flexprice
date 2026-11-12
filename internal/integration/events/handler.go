@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/ent"
@@ -29,6 +30,7 @@ type Deps struct {
 	ConnectionRepo connection.Repository
 	EIMRepo        entityintegrationmapping.Repository
 	EntityScope    interfaces.BillingEntityScope
+	InvoiceEmails  interfaces.InvoiceEmailSender
 	Logger         *logger.Logger
 	Config         *config.Configuration
 	PubSub         pubsub.PubSub
@@ -58,15 +60,19 @@ func NewHandler(deps Deps) Handler {
 			)
 		},
 		types.WebhookEventInvoiceUpdateFinalized: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
-			return DispatchInvoiceVendorSync(
-				ctx,
-				h.deps.Config,
-				h.deps.ConnectionRepo,
-				h.deps.EIMRepo,
-				h.deps.Logger,
-				event,
-				msg.UUID,
-				false,
+			// Both steps are idempotent, so a retry after either fails is safe.
+			return errors.Join(
+				DispatchInvoiceVendorSync(
+					ctx,
+					h.deps.Config,
+					h.deps.ConnectionRepo,
+					h.deps.EIMRepo,
+					h.deps.Logger,
+					event,
+					msg.UUID,
+					false,
+				),
+				DispatchInvoiceAutoEmail(ctx, h.deps.Config, h.deps.InvoiceEmails, h.deps.Logger, event, msg.UUID),
 			)
 		},
 		types.WebhookEventInvoiceUpdate: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
@@ -111,7 +117,8 @@ func NewHandler(deps Deps) Handler {
 // the system_events topic under the integration-events consumer group.
 func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 	cfg := h.deps.Config.IntegrationEvents
-	if !cfg.Enabled {
+	// Customer emails ride this consumer too; each vendor-sync dispatch checks IntegrationEvents.Enabled itself.
+	if !cfg.Enabled && !h.deps.Config.Email.Enabled {
 		h.deps.Logger.Info(context.Background(), "integration_events: handler disabled by configuration, skipping registration")
 		return
 	}
