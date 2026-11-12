@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/samber/lo"
@@ -55,6 +56,7 @@ type InvoiceSyncService struct {
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
 	locker                       cache.Locker
 	paymentSvc                   *PaymentService // nil disables auto-charge
+	lifecycle                    *payments.PaymentLifecycle
 	logger                       *logger.Logger
 }
 
@@ -69,6 +71,7 @@ func NewInvoiceSyncService(
 	locker cache.Locker,
 	logger *logger.Logger,
 	paymentSvc *PaymentService,
+	lifecycle *payments.PaymentLifecycle,
 ) *InvoiceSyncService {
 	return &InvoiceSyncService{
 		client:                       client,
@@ -79,6 +82,7 @@ func NewInvoiceSyncService(
 		locker:                       locker,
 		logger:                       logger,
 		paymentSvc:                   paymentSvc,
+		lifecycle:                    lifecycle,
 	}
 }
 
@@ -328,6 +332,10 @@ func (s *InvoiceSyncService) executeAutoCharge(
 	if err != nil {
 		s.logger.Error(ctx, "Razorpay auto-charge submission failed",
 			"invoice_id", inv.ID, "payment_id", pymnt.ID, "error", err)
+		// A timeout or 5xx may still have reached Razorpay, so only a clear rejection is final.
+		if errors.Is(err, errOrderNotCreated) || ierr.IsValidation(err) {
+			s.failAutoChargePayment(ctx, pymnt.ID, err)
+		}
 		return err
 	}
 
@@ -358,6 +366,19 @@ func (s *InvoiceSyncService) executeAutoCharge(
 		"already_submitted", result.AlreadySubmitted)
 
 	return nil
+}
+
+func (s *InvoiceSyncService) failAutoChargePayment(ctx context.Context, paymentID string, cause error) {
+	if s.lifecycle == nil {
+		return
+	}
+	
+	if err := s.lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
+		FlexpricePaymentID: paymentID,
+		ErrorMessage:       cause.Error(),
+	}); err != nil {
+		s.logger.Error(ctx, "failed to mark auto-charge payment as failed", "payment_id", paymentID, "error", err)
+	}
 }
 
 // createAutoChargeMappings persists two EntityIntegrationMapping records after a

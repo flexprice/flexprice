@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/samber/lo"
@@ -886,12 +887,11 @@ func (s *PaymentService) ChargeSavedToken(
 	return result, true, nil
 }
 
-// AutoCharge submits a server-initiated (off-session) recurring charge against an
-// existing Razorpay UPI mandate token. It uses receipt=invoiceID as a Razorpay-native
-// idempotency key so retries are safe.
-//
-// Returns AlreadySubmitted=true when a prior attempt already reached Razorpay — in
-// that case the webhook (payment.captured / payment.failed) will reconcile state.
+// errOrderNotCreated marks an AutoCharge failure before any debit could be sent.
+var errOrderNotCreated = errors.New("razorpay order not created")
+
+// AutoCharge charges a saved mandate token off-session. Razorpay doesn't dedupe order receipts,
+// so callers hold LockInvoiceCharge to keep an invoice from being charged twice.
 func (s *PaymentService) AutoCharge(ctx context.Context, req AutoChargeRequest) (*AutoChargeResult, error) {
 	s.logger.Info(ctx, "initiating Razorpay auto-charge",
 		"invoice_id", req.InvoiceID,
@@ -905,7 +905,7 @@ func (s *PaymentService) AutoCharge(ctx context.Context, req AutoChargeRequest) 
 		"amount":          amountPaise,
 		"currency":        strings.ToUpper(req.Currency),
 		"payment_capture": true,
-		"receipt":         req.InvoiceID, // Razorpay-native idempotency key
+		"receipt":         req.FlexPricePaymentID,
 		"notes": map[string]interface{}{
 			"flexprice_invoice_id": req.InvoiceID,
 			"flexprice_payment_id": req.FlexPricePaymentID,
@@ -914,11 +914,7 @@ func (s *PaymentService) AutoCharge(ctx context.Context, req AutoChargeRequest) 
 
 	order, err := s.client.CreateOrder(ctx, orderData)
 	if err != nil {
-		// Razorpay returns BAD_REQUEST_ERROR when an order with the same receipt already exists.
-		if isReceiptDuplicateError(err) {
-			return s.handleExistingOrder(ctx, req)
-		}
-		return nil, err
+		return nil, ierr.WithError(err).Mark(errOrderNotCreated)
 	}
 
 	orderID, ok := order["id"].(string)
@@ -929,52 +925,6 @@ func (s *PaymentService) AutoCharge(ctx context.Context, req AutoChargeRequest) 
 		return nil, ierr.NewError("razorpay order ID missing in response").Mark(ierr.ErrInternal)
 	}
 	return s.submitRecurringPayment(ctx, req, orderID)
-}
-
-// isReceiptDuplicateError reports whether err is Razorpay's "duplicate receipt" error
-// ("An order with the same receipt value has already been created").
-// We match a narrow phrase to avoid false-positives on other receipt-related messages.
-func isReceiptDuplicateError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "same receipt") || strings.Contains(msg, "receipt already")
-}
-
-// handleExistingOrder fetches the existing Razorpay order (matched by receipt) and
-// decides how to proceed based on its status.
-func (s *PaymentService) handleExistingOrder(ctx context.Context, req AutoChargeRequest) (*AutoChargeResult, error) {
-	order, err := s.client.FetchOrdersByReceipt(ctx, req.InvoiceID)
-	if err != nil {
-		return nil, err
-	}
-
-	status, _ := order["status"].(string)
-	orderID, ok := order["id"].(string)
-	if !ok || orderID == "" {
-		return nil, ierr.NewError("Razorpay order missing ID in FetchOrdersByReceipt response").Mark(ierr.ErrInternal)
-	}
-
-	switch status {
-	case "created":
-		// Order exists but payment was never submitted — submit now using the same order.
-		return s.submitRecurringPayment(ctx, req, orderID)
-	case "attempted", "paid":
-		// Payment was already submitted or fully captured. Return AlreadySubmitted so the
-		// caller marks the FlexPrice payment as PROCESSING and lets the webhook reconcile.
-		s.logger.Info(ctx, "razorpay order already attempted/paid, returning AlreadySubmitted",
-			"invoice_id", req.InvoiceID,
-			"order_id", orderID,
-			"status", status)
-		return &AutoChargeResult{
-			AlreadySubmitted: true,
-			RazorpayOrderID:  orderID,
-		}, nil
-	default:
-		return nil, ierr.NewErrorf("unexpected Razorpay order status %q for receipt %s", status, req.InvoiceID).
-			Mark(ierr.ErrInternal)
-	}
 }
 
 // submitRecurringPayment calls Razorpay's recurring payment API against orderID.

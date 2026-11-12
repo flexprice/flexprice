@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -14,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
 	razorpay "github.com/razorpay/razorpay-go"
+	rzperrors "github.com/razorpay/razorpay-go/errors"
 	"github.com/samber/lo"
 )
 
@@ -35,9 +37,6 @@ type RazorpayClient interface {
 	CancelInvoice(ctx context.Context, invoiceID string) (*AuthorizationLinkResponse, error)
 	CreateOrder(ctx context.Context, orderData map[string]interface{}) (map[string]interface{}, error)
 	CreateRecurringPayment(ctx context.Context, paymentData map[string]interface{}) (map[string]interface{}, error)
-	// FetchOrdersByReceipt looks up Razorpay orders by receipt field (= FlexPrice invoiceID).
-	// Returns the first matching order or ierr.ErrNotFound if none exist.
-	FetchOrdersByReceipt(ctx context.Context, receipt string) (map[string]interface{}, error)
 	// FetchOrder retrieves an order by ID; the response has no payment id.
 	FetchOrder(ctx context.Context, orderID string) (map[string]interface{}, error)
 	// FetchOrderPayments retrieves the payments made against an order.
@@ -538,14 +537,26 @@ func (c *Client) CreateOrder(ctx context.Context, orderData map[string]interface
 	result, err := rc.Order.Create(orderData, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create Razorpay order", "error", err)
-		return nil, ierr.NewError("failed to create Razorpay order").
-			WithHint("Unable to create order in Razorpay").
-			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
-			Mark(ierr.ErrInternal)
+		return nil, requestError(err, "failed to create Razorpay order", "Unable to create order in Razorpay")
 	}
 
 	c.logger.Info(ctx, "successfully created Razorpay order", "order_id", result["id"])
 	return result, nil
+}
+
+// requestError keeps Razorpay's reason on a described 4xx and marks it a validation error;
+// anything else, including an undescribed 4xx that may be an unparsed 5xx, is internal.
+func requestError(err error, msg, hint string) error {
+	var badRequest *rzperrors.BadRequestError
+	if errors.As(err, &badRequest) && badRequest.Message != "" {
+		return ierr.NewError(msg + ": " + badRequest.Message).
+			WithHint(badRequest.Message).
+			Mark(ierr.ErrValidation)
+	}
+	return ierr.NewError(msg).
+		WithHint(hint).
+		WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+		Mark(ierr.ErrInternal)
 }
 
 // CreateRecurringPayment charges a stored token against an Order.
@@ -559,52 +570,10 @@ func (c *Client) CreateRecurringPayment(ctx context.Context, paymentData map[str
 	result, err := rc.Payment.CreateRecurringPayment(paymentData, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create Razorpay recurring payment", "error", err)
-		return nil, ierr.NewError("failed to create Razorpay recurring payment").
-			WithHint("Unable to charge the stored token in Razorpay").
-			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
-			Mark(ierr.ErrInternal)
+		return nil, requestError(err, "failed to create Razorpay recurring payment", "Unable to charge the stored token in Razorpay")
 	}
 
 	return result, nil
-}
-
-// FetchOrdersByReceipt fetches the first Razorpay order whose receipt matches the given string.
-func (c *Client) FetchOrdersByReceipt(ctx context.Context, receipt string) (map[string]interface{}, error) {
-	rc, err := c.sdkClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	queryParams := map[string]interface{}{
-		"receipt": receipt,
-		"count":   1,
-	}
-	result, err := rc.Order.All(queryParams, nil)
-	if err != nil {
-		c.logger.Error(ctx, "failed to fetch Razorpay orders by receipt",
-			"error", err,
-			"receipt", receipt)
-		return nil, ierr.NewError("failed to fetch orders by receipt").
-			WithHint("Unable to query Razorpay orders").
-			WithReportableDetails(map[string]interface{}{"receipt": receipt, "error": err.Error()}).
-			Mark(ierr.ErrInternal)
-	}
-
-	items, _ := result["items"].([]interface{})
-	if len(items) == 0 {
-		return nil, ierr.NewError("no order found with receipt").
-			WithHint("No Razorpay order matches this receipt").
-			WithReportableDetails(map[string]interface{}{"receipt": receipt}).
-			Mark(ierr.ErrNotFound)
-	}
-
-	order, ok := items[0].(map[string]interface{})
-	if !ok {
-		return nil, ierr.NewError("invalid order response from Razorpay").
-			Mark(ierr.ErrInternal)
-	}
-
-	return order, nil
 }
 
 // FetchOrder retrieves an order by ID. The response carries its status

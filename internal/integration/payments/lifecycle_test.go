@@ -1,17 +1,21 @@
 package payments_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -601,4 +605,50 @@ func (s *PaymentLifecycleSuite) TestFullLifecycle_Invoice() {
 	payment, err = s.GetStores().PaymentRepo.Get(ctx, id)
 	s.NoError(err)
 	s.Equal(types.PaymentStatusSucceeded, payment.PaymentStatus)
+}
+
+func TestChargeInFlight(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "tenant_1"), "env_1")
+	pymnt := func(id string, method types.PaymentMethodType, status types.PaymentStatus) *payment.Payment {
+		return &payment.Payment{
+			ID:                id,
+			IdempotencyKey:    id,
+			DestinationType:   types.PaymentDestinationTypeInvoice,
+			DestinationID:     "inv_1",
+			PaymentMethodType: method,
+			PaymentStatus:     status,
+			EnvironmentID:     "env_1",
+			BaseModel:         types.GetDefaultBaseModel(ctx),
+		}
+	}
+
+	tests := []struct {
+		name      string
+		payments  []*payment.Payment
+		excludeID string
+		want      bool
+	}{
+		{name: "no payments"},
+		{name: "failed only", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusFailed)}},
+		{name: "initiated mandate charge", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusInitiated)}, want: true},
+		{name: "pending upi charge", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeUPI, types.PaymentStatusPending)}, want: true},
+		{name: "processing card charge", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeCard, types.PaymentStatusProcessing)}, want: true},
+		{name: "pending payment link", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypePaymentLink, types.PaymentStatusInitiated)}},
+		{name: "excluded payment", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusInitiated)}, excludeID: "pay_1"},
+		{name: "succeeded charge", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusSucceeded)}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := testutil.NewInMemoryPaymentStore()
+			for _, p := range tt.payments {
+				require.NoError(t, repo.Create(ctx, p))
+			}
+
+			got, err := payments.ChargeInFlight(ctx, repo, "inv_1", tt.excludeID)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

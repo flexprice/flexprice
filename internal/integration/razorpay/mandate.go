@@ -277,7 +277,7 @@ func (a *CheckoutAdapter) TryAutoChargingSavedMethod(
 		return nil, false, nil
 	}
 
-	lock, err := payments.LockInvoiceCharge(ctx, a.Svc.locker, a.Svc.invoiceSyncSvc.paymentRepo, custResp.Customer.EnvironmentID, req.InvoiceID, "")
+	lock, err := payments.LockInvoiceCharge(ctx, a.Svc.locker, a.Svc.invoiceSyncSvc.paymentRepo, custResp.Customer.EnvironmentID, req.InvoiceID, req.PaymentID)
 	if err != nil {
 		return nil, false, err
 	}

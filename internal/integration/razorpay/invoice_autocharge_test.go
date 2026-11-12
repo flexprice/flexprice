@@ -15,11 +15,15 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/payments"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
@@ -93,8 +97,16 @@ func (s *inlinePaymentStore) Delete(_ context.Context, _ string) error { return 
 func (s *inlinePaymentStore) DeleteWithExpectedStatus(_ context.Context, _ string, _ types.PaymentStatus) error {
 	return nil
 }
-func (s *inlinePaymentStore) List(_ context.Context, _ *types.PaymentFilter) ([]*payment.Payment, error) {
-	return nil, nil
+func (s *inlinePaymentStore) List(_ context.Context, f *types.PaymentFilter) ([]*payment.Payment, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*payment.Payment
+	for _, p := range s.byID {
+		if f == nil || f.DestinationID == nil || p.DestinationID == *f.DestinationID {
+			out = append(out, p)
+		}
+	}
+	return out, nil
 }
 func (s *inlinePaymentStore) Count(_ context.Context, _ *types.PaymentFilter) (int, error) {
 	return 0, nil
@@ -276,4 +288,115 @@ func (s *AutoChargePaymentSuite) TestNoExistingRecord_UsesGivenPaymentMethodType
 
 func (s *inlinePaymentStore) GetLinkedCustomerID(_ context.Context, _ string) (string, error) {
 	return "", ierr.NewError("not implemented").Mark(ierr.ErrSystem)
+}
+
+// ── executeAutoCharge ────────────────────────────────────────────────────────
+
+type autoChargeClient struct {
+	stubCustomerClient
+	orderErr     error
+	recurringErr error
+	orders       int
+}
+
+func (c *autoChargeClient) CreateOrder(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
+	c.orders++
+	if c.orderErr != nil {
+		return nil, c.orderErr
+	}
+	return map[string]interface{}{"id": "order_1"}, nil
+}
+
+func (c *autoChargeClient) CreateRecurringPayment(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
+	if c.recurringErr != nil {
+		return nil, c.recurringErr
+	}
+	return map[string]interface{}{"razorpay_payment_id": "pay_1"}, nil
+}
+
+type stubInvoiceRepo struct {
+	invoice.Repository
+	inv *invoice.Invoice
+}
+
+func (r *stubInvoiceRepo) Get(_ context.Context, _ string) (*invoice.Invoice, error) {
+	return r.inv, nil
+}
+
+// lifecyclePaymentSvc lets the real PaymentLifecycle mark payments FAILED in the inline store.
+type lifecyclePaymentSvc struct {
+	interfaces.PaymentService
+	store *inlinePaymentStore
+}
+
+func (p *lifecyclePaymentSvc) GetPayment(ctx context.Context, id string) (*dto.PaymentResponse, error) {
+	pymnt, err := p.store.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.PaymentResponse{ID: pymnt.ID, PaymentStatus: pymnt.PaymentStatus}, nil
+}
+
+func (p *lifecyclePaymentSvc) UpdatePayment(ctx context.Context, id string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error) {
+	pymnt, err := p.store.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	pymnt.PaymentStatus = types.PaymentStatus(lo.FromPtr(req.PaymentStatus))
+	pymnt.ErrorMessage = req.ErrorMessage
+	return &dto.PaymentResponse{ID: pymnt.ID, PaymentStatus: pymnt.PaymentStatus}, nil
+}
+
+func (s *AutoChargePaymentSuite) autoChargeService(client *autoChargeClient) *InvoiceSyncService {
+	log := logger.NewNoopLogger()
+	return &InvoiceSyncService{
+		client:      client,
+		paymentRepo: s.paymentRepo,
+		invoiceRepo: &stubInvoiceRepo{inv: s.inv},
+		locker:      grantingLocker{},
+		paymentSvc:  &PaymentService{client: client, locker: grantingLocker{}, logger: log},
+		lifecycle:   payments.NewPaymentLifecycle(&lifecyclePaymentSvc{store: s.paymentRepo}, nil, log),
+		logger:      log,
+	}
+}
+
+func (s *AutoChargePaymentSuite) TestExecuteAutoCharge_OpenPaymentIsNotSentAgain() {
+	existing := s.makePayment(types.PaymentStatusInitiated)
+	existing.PaymentMethodType = types.PaymentMethodTypeENACH
+	s.Require().NoError(s.paymentRepo.Create(s.ctx, existing))
+	client := &autoChargeClient{}
+
+	err := s.autoChargeService(client).executeAutoCharge(s.ctx, s.inv, "cust_rp", "token_1", types.PaymentMethodTypeENACH, "9000090000", "a@example.com")
+
+	s.NoError(err)
+	s.Zero(client.orders)
+	s.Equal(types.PaymentStatusInitiated, existing.PaymentStatus)
+}
+
+func (s *AutoChargePaymentSuite) TestExecuteAutoCharge_FailureHandling() {
+	rejected := ierr.NewError("rejected").Mark(ierr.ErrValidation)
+	unknown := ierr.NewError("timeout").Mark(ierr.ErrInternal)
+
+	tests := []struct {
+		name       string
+		client     *autoChargeClient
+		wantStatus types.PaymentStatus
+	}{
+		{name: "order not created fails the payment", client: &autoChargeClient{orderErr: unknown}, wantStatus: types.PaymentStatusFailed},
+		{name: "rejected debit fails the payment", client: &autoChargeClient{recurringErr: rejected}, wantStatus: types.PaymentStatusFailed},
+		{name: "unclear debit error leaves the payment open", client: &autoChargeClient{recurringErr: unknown}, wantStatus: types.PaymentStatusInitiated},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+
+			err := s.autoChargeService(tt.client).executeAutoCharge(s.ctx, s.inv, "cust_rp", "token_1", types.PaymentMethodTypeENACH, "9000090000", "a@example.com")
+
+			s.Error(err)
+			pymnt, getErr := s.paymentRepo.GetByIdempotencyKey(s.ctx, "autocharge:"+s.inv.ID)
+			s.Require().NoError(getErr)
+			s.Equal(tt.wantStatus, pymnt.PaymentStatus)
+		})
+	}
 }
