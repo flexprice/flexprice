@@ -105,6 +105,11 @@ type UsageAnalyticPoint struct {
 	ComputedOverageAmount            decimal.Decimal `swaggertype:"string"` // Overage charge amount
 	ComputedTrueUpAmount             decimal.Decimal `swaggertype:"string"` // True-up amount charged
 
+	// Usage units behind the commitment breakdown, for v2 commitments
+	ComputedCommitmentUtilizedQuantity decimal.Decimal `swaggertype:"string"`
+	ComputedOverageQuantity            decimal.Decimal `swaggertype:"string"`
+	ComputedTrueUpQuantity             decimal.Decimal `swaggertype:"string"`
+
 	// BilledUsage is what billing prices in the window when it merges a bucketed meter's buckets: their sum, where
 	// Usage holds the peak for MAX. It is zero for points read straight from meter_usage.
 	BilledUsage decimal.Decimal `swaggertype:"string"`

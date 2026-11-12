@@ -13168,99 +13168,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/tasks/scheduled/schedule-draft-finalization": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Triggers the draft invoice finalization workflow that scans computed draft invoices whose finalization delay has elapsed and finalizes them (assign invoice number, sync to vendors, attempt payment).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Scheduled Tasks"
-                ],
-                "summary": "Schedule draft finalization",
-                "operationId": "scheduleDraftFinalization",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/tasks/scheduled/schedule-update-billing-period": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when you need to trigger a billing-period update workflow (e.g. to recalculate or sync billing windows).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Scheduled Tasks"
-                ],
-                "summary": "Schedule update billing period",
-                "operationId": "scheduleUpdateBillingPeriod",
-                "parameters": [
-                    {
-                        "description": "Schedule Update Billing Period Request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/tasks/scheduled/{id}": {
             "get": {
                 "security": [
@@ -27426,6 +27333,13 @@ const docTemplate = `{
                 },
                 "updated_by": {
                     "type": "string"
+                },
+                "warnings": {
+                    "description": "Warnings lists defaults applied on create that the caller may want to set explicitly.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -32572,10 +32486,20 @@ const docTemplate = `{
                     "description": "Commitment breakdown (only populated for windowed commitments)",
                     "type": "string"
                 },
+                "computed_commitment_utilized_quantity": {
+                    "description": "Usage units behind the commitment breakdown, for v2 commitments",
+                    "type": "string"
+                },
                 "computed_overage_amount": {
                     "type": "string"
                 },
+                "computed_overage_quantity": {
+                    "type": "string"
+                },
                 "computed_true_up_amount": {
+                    "type": "string"
+                },
+                "computed_true_up_quantity": {
                     "type": "string"
                 },
                 "cost": {
@@ -34430,16 +34354,27 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
+                    "description": "Amount is the commitment amount (v1), or computed_commitment_utilized_amount + computed_true_up_amount (v2).",
                     "type": "string"
                 },
                 "computed_commitment_utilized_amount": {
                     "type": "string"
                 },
+                "computed_commitment_utilized_quantity": {
+                    "description": "Usage units behind the computed amounts: usage a billing-terms commitment covers counts as utilized at no\ncharge, and a quantity commitment's true-up counts its unused units.",
+                    "type": "string"
+                },
                 "computed_overage_amount": {
+                    "type": "string"
+                },
+                "computed_overage_quantity": {
                     "type": "string"
                 },
                 "computed_true_up_amount": {
                     "description": "total_cost = computed_commitment_utilized_amount + computed_overage_amount + computed_true_up_amount",
+                    "type": "string"
+                },
+                "computed_true_up_quantity": {
                     "type": "string"
                 },
                 "duration": {
