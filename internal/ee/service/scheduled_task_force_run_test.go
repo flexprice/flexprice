@@ -150,3 +150,33 @@ func TestTriggerForceRun_ReportWindowCappedByMaxRangeDays(t *testing.T) {
 	})
 	require.NoError(t, err)
 }
+
+func TestTriggerForceRun_ViewWindowValidatedAgainstView(t *testing.T) {
+	task := &scheduledtask.ScheduledTask{
+		ID:           "st_1",
+		EntityType:   types.ScheduledTaskEntityTypeAnalyticsView,
+		Interval:     types.ScheduledTaskIntervalManual,
+		SourceConfig: &types.ExportSourceConfig{ViewID: "view_1"},
+	}
+	at := func(s string) *time.Time {
+		v, err := time.Parse(time.RFC3339, s)
+		require.NoError(t, err)
+		return &v
+	}
+	req := dto.TriggerForceRunRequest{StartTime: at("2026-11-01T00:00:00Z"), EndTime: at("2026-11-11T00:00:00Z")}
+	ctx := withRoles(context.Background(), roleWithAnalytics)
+
+	starter := &workflowStarter{}
+	fake := &sourceValidatorFake{viewErr: ierr.NewError("too wide").Mark(ierr.ErrValidation)}
+	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, temporalClient: starter, analytics: fake, logger: logger.NewNoopLogger(), rbac: testRBAC(t)}
+	_, _, _, _, err := s.triggerForceRun(ctx, task.ID, req)
+	require.True(t, ierr.IsValidation(err), "got %v", err)
+	require.Equal(t, "view_1", fake.viewID)
+	require.Equal(t, 10, fake.viewDays)
+	require.Nil(t, starter.args)
+
+	fake.viewErr = nil
+	_, _, _, _, err = s.triggerForceRun(ctx, task.ID, req)
+	require.NoError(t, err)
+	require.NotNil(t, starter.args)
+}

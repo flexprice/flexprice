@@ -36,6 +36,7 @@ type sourceValidatorFake struct {
 	reportErr, viewErr error
 	reportKey, viewID  string
 	calls              int
+	viewDays           int
 }
 
 func (f *sourceValidatorFake) ValidateReportSource(_ context.Context, key string, _ *types.ReportParams) error {
@@ -44,9 +45,10 @@ func (f *sourceValidatorFake) ValidateReportSource(_ context.Context, key string
 	return f.reportErr
 }
 
-func (f *sourceValidatorFake) ValidateViewSource(_ context.Context, id string, _ int) error {
+func (f *sourceValidatorFake) ValidateViewSource(_ context.Context, id string, days int) error {
 	f.calls++
 	f.viewID = id
+	f.viewDays = days
 	return f.viewErr
 }
 

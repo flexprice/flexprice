@@ -109,6 +109,16 @@ func intervalWindowDays(interval types.ScheduledTaskInterval) int {
 	return 0
 }
 
+func (s *scheduledTaskService) checkWindowRange(ctx context.Context, task *scheduledtask.ScheduledTask, days int) error {
+	if task.EntityType != types.ScheduledTaskEntityTypeAnalyticsView {
+		return checkReportRange(task.SourceConfig.ReportKey, days)
+	}
+	if s.analytics == nil {
+		return ierr.NewError("analytics service not configured").Mark(ierr.ErrInternal)
+	}
+	return s.analytics.ValidateViewSource(ctx, task.SourceConfig.ViewID, days)
+}
+
 func checkReportRange(key string, days int) error {
 	entry, ok := analytics.LookupReport(key)
 	if !ok || entry.MaxRangeDays <= 0 || days <= entry.MaxRangeDays {
@@ -540,7 +550,7 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 		}
 		if customStart != nil && customEnd != nil && task.SourceConfig != nil {
 			days := int(customEnd.Sub(*customStart).Hours()+23) / 24
-			if err := checkReportRange(task.SourceConfig.ReportKey, days); err != nil {
+			if err := s.checkWindowRange(ctx, task, days); err != nil {
 				return "", time.Time{}, time.Time{}, "", err
 			}
 		}
