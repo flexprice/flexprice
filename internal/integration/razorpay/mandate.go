@@ -11,6 +11,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/payments"
@@ -204,6 +205,11 @@ func razorpaySubscriptionMethod(pm types.PaymentMethodType) (string, error) {
 	}
 }
 
+// linkCustomer is the customer block of a registration link; Razorpay matches its customer on these details.
+func linkCustomer(c *customer.Customer) *CustomerInfo {
+	return &CustomerInfo{Name: c.Name, Email: c.Email, Contact: lo.FromPtr(c.Contact)}
+}
+
 // CreateAuthorizationLink registers a UPI Autopay or card recurring-payment
 // mandate combined with the first invoice payment.
 func (a *CheckoutAdapter) CreateAuthorizationLink(
@@ -220,66 +226,37 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		return nil, err
 	}
 
-	customerInfo := map[string]interface{}{
-		"name": c.Name,
-	}
-	if c.Email != "" {
-		customerInfo["email"] = c.Email
-	}
-	// Razorpay requires a contact number for recurring/subscription-registration links.
-	if c.Contact != nil && *c.Contact != "" {
-		customerInfo["contact"] = *c.Contact
-	}
-
-	data := map[string]interface{}{
-		"customer":     customerInfo,
-		"type":         "link",
-		"amount":       toPaise(req.Amount),
-		"currency":     strings.ToUpper(req.Currency),
-		"description":  "Subscription authorization",
-		"receipt":      req.InvoiceID,
-		"email_notify": true,
-		"sms_notify":   true,
-		"notes": map[string]interface{}{
+	linkReq := AuthorizationLinkRequest{
+		Customer:    linkCustomer(c),
+		Amount:      toPaise(req.Amount),
+		Currency:    strings.ToUpper(req.Currency),
+		Description: "Subscription authorization",
+		Receipt:     req.InvoiceID,
+		EmailNotify: true,
+		SMSNotify:   true,
+		Notes: map[string]interface{}{
 			"flexprice_customer_id": req.CustomerID,
 			"flexprice_payment_id":  req.PaymentID,
 		},
+		// as_presented allows another debit in the same period, still capped by max_amount.
+		// A fixed frequency rejects a second charge until that window ends.
+		SubscriptionRegistration: SubscriptionRegistration{Method: method, Frequency: "as_presented"},
 	}
 	if req.ExpiresAt != nil {
-		data["expire_by"] = req.ExpiresAt.Unix()
-	}
-
-	// as_presented allows another debit in the same period, still capped by max_amount.
-	// A fixed frequency rejects a second charge until that window ends.
-	subReg := map[string]interface{}{
-		"method":    method,
-		"frequency": "as_presented",
+		linkReq.ExpireBy = req.ExpiresAt.Unix()
 	}
 	if req.MaxAmount != nil {
-		subReg["max_amount"] = toPaise(*req.MaxAmount)
+		linkReq.SubscriptionRegistration.MaxAmount = toPaise(*req.MaxAmount)
 	}
-	data["subscription_registration"] = subReg
 
-	result, err := a.Svc.client.CreateAuthorizationLink(ctx, data)
+	link, err := a.Svc.client.CreateAuthorizationLink(ctx, linkReq)
 	if err != nil {
 		return nil, err
 	}
 
-	shortURL, _ := result["short_url"].(string)
-	id, _ := result["id"].(string)
-	if shortURL == "" || id == "" {
-		return nil, ierr.NewError("razorpay authorization link response missing short_url or id").
-			WithHint("Razorpay returned an unexpected response for the mandate registration link").
-			WithReportableDetails(map[string]interface{}{
-				"has_short_url": shortURL != "",
-				"has_id":        id != "",
-			}).
-			Mark(ierr.ErrInternal)
-	}
-
 	return &interfaces.CheckoutProviderResponse{
-		ProviderSessionID: id,
-		NextAction:        types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: shortURL},
+		ProviderSessionID: link.ID,
+		NextAction:        types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: link.ShortURL},
 	}, nil
 }
 

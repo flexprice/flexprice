@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	razorpay "github.com/razorpay/razorpay-go"
 	"github.com/samber/lo"
 )
@@ -30,7 +31,8 @@ type RazorpayClient interface {
 	GetInvoice(ctx context.Context, invoiceID string) (map[string]interface{}, error)
 	VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error
 	GetCustomerTokens(ctx context.Context, razorpayCustomerID string) ([]map[string]interface{}, error)
-	CreateAuthorizationLink(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error)
+	CreateAuthorizationLink(ctx context.Context, req AuthorizationLinkRequest) (*AuthorizationLinkResponse, error)
+	CancelInvoice(ctx context.Context, invoiceID string) (*AuthorizationLinkResponse, error)
 	CreateOrder(ctx context.Context, orderData map[string]interface{}) (map[string]interface{}, error)
 	CreateRecurringPayment(ctx context.Context, paymentData map[string]interface{}) (map[string]interface{}, error)
 	// FetchOrdersByReceipt looks up Razorpay orders by receipt field (= FlexPrice invoiceID).
@@ -466,11 +468,18 @@ func (c *Client) GetCustomerTokens(ctx context.Context, razorpayCustomerID strin
 // CreateAuthorizationLink registers a UPI Autopay mandate combined with the
 // first invoice payment. POST /v1/subscription_registration/auth_links — no
 // SDK helper exists for this endpoint, so this goes through the raw request client.
-func (c *Client) CreateAuthorizationLink(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
+func (c *Client) CreateAuthorizationLink(ctx context.Context, req AuthorizationLinkRequest) (*AuthorizationLinkResponse, error) {
 	rc, err := c.sdkClient(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	data, err := utils.ToMap(req)
+	if err != nil {
+		return nil, err
+	}
+	// "link" makes Razorpay create a registration link instead of an invoice that needs line items.
+	data["type"] = "link"
 
 	result, err := rc.Post("/v1/subscription_registration/auth_links", data, nil)
 	if err != nil {
@@ -481,8 +490,42 @@ func (c *Client) CreateAuthorizationLink(ctx context.Context, data map[string]in
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Info(ctx, "successfully created Razorpay authorization link", "id", result["id"])
-	return result, nil
+	resp, err := utils.ToStruct[AuthorizationLinkResponse](result)
+	if err != nil {
+		return nil, err
+	}
+	if resp.ID == "" || resp.ShortURL == "" {
+		return nil, ierr.NewError("razorpay authorization link response missing short_url or id").
+			WithHint("Razorpay returned an unexpected response for the mandate registration link").
+			WithReportableDetails(map[string]interface{}{"has_short_url": resp.ShortURL != "", "has_id": resp.ID != ""}).
+			Mark(ierr.ErrInternal)
+	}
+
+	c.logger.Info(ctx, "successfully created Razorpay authorization link", "id", resp.ID)
+	return &resp, nil
+}
+
+// CancelInvoice cancels an issued invoice or registration link; the SDK has no cancel call.
+func (c *Client) CancelInvoice(ctx context.Context, invoiceID string) (*AuthorizationLinkResponse, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Post("/v1/invoices/"+invoiceID+"/cancel", map[string]interface{}{}, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to cancel Razorpay invoice", "error", err, "invoice_id", invoiceID)
+		return nil, ierr.NewError("failed to cancel Razorpay invoice").
+			WithHint("Only a link that hasn't been completed, expired or cancelled can be cancelled").
+			WithReportableDetails(map[string]interface{}{"invoice_id": invoiceID, "error": err.Error()}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	resp, err := utils.ToStruct[AuthorizationLinkResponse](result)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // CreateOrder creates a Razorpay Order for a subsequent recurring charge. POST /v1/orders.

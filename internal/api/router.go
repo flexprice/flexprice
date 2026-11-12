@@ -594,6 +594,8 @@ func NewRouter(
 			{
 				custPaymentsGroup.GET("/:id/methods", observe(types.EntityPayment), handlers.SetupIntent.ListCustomerPaymentMethods)
 				custPaymentsGroup.POST("/:id/setup/intent", write(types.EntityPayment, types.ActionWrite), handlers.SetupIntent.CreateSetupIntentSession)
+				custPaymentsGroup.GET("/:id/setup/intent", observe(types.EntityPayment), handlers.SetupIntent.GetSetupIntent)
+				custPaymentsGroup.POST("/:id/setup/intent/cancel", write(types.EntityPayment, types.ActionWrite), handlers.SetupIntent.CancelSetupIntent)
 			}
 		}
 

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/interfaces"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -174,6 +176,43 @@ type TokenBankDetails struct {
 	AccountNumber   string `json:"account_number"`
 	IFSC            string `json:"ifsc"`
 	AccountType     string `json:"account_type"`
+}
+
+// AuthorizationLinkRequest is the body of a mandate registration link.
+type AuthorizationLinkRequest struct {
+	Customer                 *CustomerInfo            `json:"customer"`
+	Amount                   int64                    `json:"amount"`
+	Currency                 string                   `json:"currency"`
+	Description              string                   `json:"description"`
+	Receipt                  string                   `json:"receipt,omitempty"`
+	ExpireBy                 int64                    `json:"expire_by,omitempty"`
+	EmailNotify              bool                     `json:"email_notify"`
+	SMSNotify                bool                     `json:"sms_notify"`
+	Notes                    map[string]interface{}   `json:"notes,omitempty"`
+	SubscriptionRegistration SubscriptionRegistration `json:"subscription_registration"`
+}
+
+type SubscriptionRegistration struct {
+	Method    string `json:"method"`
+	Frequency string `json:"frequency,omitempty"`
+	MaxAmount int64  `json:"max_amount,omitempty"`
+}
+
+// AuthorizationLinkResponse is the invoice Razorpay creates for a registration link.
+type AuthorizationLinkResponse struct {
+	ID        string `json:"id"`
+	ShortURL  string `json:"short_url"`
+	Status    string `json:"status"`
+	ExpireBy  int64  `json:"expire_by"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+func (l AuthorizationLinkResponse) toSetupLink() *interfaces.SetupLinkResponse {
+	out := &interfaces.SetupLinkResponse{URL: l.ShortURL, ProviderSessionID: l.ID, Status: l.Status, CreatedAt: time.Unix(l.CreatedAt, 0).UTC()}
+	if l.ExpireBy > 0 {
+		out.ExpiresAt = lo.ToPtr(time.Unix(l.ExpireBy, 0).UTC())
+	}
+	return out
 }
 
 type TokenVPA struct {

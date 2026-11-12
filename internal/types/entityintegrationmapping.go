@@ -25,6 +25,8 @@ const (
 	// IntegrationEntityTypeSubscriptionLineItem maps a flexprice subscription line item to a
 	// provider-side line item (e.g. a HubSpot deal line item), making per-line-item sync idempotent.
 	IntegrationEntityTypeSubscriptionLineItem IntegrationEntityType = "subscription_line_item"
+	// IntegrationEntityTypePaymentMethodSetup maps a customer to their latest provider setup link (e.g. a Razorpay eNACH link).
+	IntegrationEntityTypePaymentMethodSetup IntegrationEntityType = "payment_method_setup"
 )
 
 func (e IntegrationEntityType) String() string {
@@ -45,10 +47,11 @@ func (e IntegrationEntityType) Validate() error {
 		IntegrationEntityTypePrice,
 		IntegrationEntityTypeInvoiceLineItem,
 		IntegrationEntityTypeSubscriptionLineItem,
+		IntegrationEntityTypePaymentMethodSetup,
 	}
 	if !lo.Contains(allowed, e) {
 		return ierr.NewError("invalid entity type").
-			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note, addon, item, item_price, price, invoice_line_item").
+			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note, addon, item, item_price, price, invoice_line_item, subscription_line_item, payment_method_setup").
 			Mark(ierr.ErrValidation)
 	}
 	return nil

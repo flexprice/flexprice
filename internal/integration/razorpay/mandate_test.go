@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,12 +44,27 @@ func TestRazorpaySubscriptionMethod(t *testing.T) {
 }
 
 type stubRazorpayCustomerSvc struct {
-	tokens []*interfaces.ProviderPaymentMethod
-	err    error
+	tokens    []*interfaces.ProviderPaymentMethod
+	err       error
+	customer  *customer.Customer
+	savedLink string
+}
+
+func (s *stubRazorpayCustomerSvc) SaveSetupLink(ctx context.Context, customerID, linkID string) error {
+	s.savedLink = linkID
+	return nil
+}
+
+func (s *stubRazorpayCustomerSvc) GetSetupLink(ctx context.Context, customerID string) (*interfaces.SetupLinkResponse, error) {
+	return nil, nil
+}
+
+func (s *stubRazorpayCustomerSvc) CancelSetupLink(ctx context.Context, customerID string) (*interfaces.SetupLinkResponse, error) {
+	return nil, nil
 }
 
 func (s *stubRazorpayCustomerSvc) EnsureCustomerSyncedToRazorpay(ctx context.Context, customerID string, customerService interfaces.CustomerService) (*customer.Customer, error) {
-	return nil, nil
+	return s.customer, nil
 }
 func (s *stubRazorpayCustomerSvc) SyncCustomerToRazorpay(ctx context.Context, flexpriceCustomer *customer.Customer) (string, error) {
 	return "", nil
@@ -418,6 +434,59 @@ func TestPaymentMethodAdapterRejectsManagement(t *testing.T) {
 
 	assert.True(t, ierr.IsValidation(a.DeleteSavedMethod(ctx, "cust_1", "token_1")))
 	assert.True(t, ierr.IsValidation(a.SetDefaultSavedMethod(ctx, "cust_1", "token_1")))
-	_, err := a.CreateSetupLink(ctx, interfaces.SetupLinkRequest{CustomerID: "cust_1"})
-	assert.True(t, ierr.IsValidation(err))
+}
+
+type setupLinkClient struct {
+	RazorpayClient
+	req *AuthorizationLinkRequest
+}
+
+func (c *setupLinkClient) CreateAuthorizationLink(_ context.Context, req AuthorizationLinkRequest) (*AuthorizationLinkResponse, error) {
+	c.req = &req
+	return &AuthorizationLinkResponse{ID: "inv_link", ShortURL: "https://rzp.io/x", Status: "issued", ExpireBy: req.ExpireBy}, nil
+}
+
+func TestPaymentMethodAdapterCreateSetupLink(t *testing.T) {
+	maxAmount := decimal.NewFromInt(500000)
+	full := &customer.Customer{Name: "Asha", Email: "asha@example.com", Contact: lo.ToPtr("9000090000")}
+
+	tests := []struct {
+		name          string
+		customer      *customer.Customer
+		maxAmount     *decimal.Decimal
+		wantErr       bool
+		wantMaxAmount int64
+	}{
+		{name: "default max amount is left to razorpay", customer: full},
+		{name: "max amount is sent in paise", customer: full, maxAmount: &maxAmount, wantMaxAmount: 50000000},
+		{name: "missing phone is refused", customer: &customer.Customer{Name: "Asha", Email: "asha@example.com"}, wantErr: true},
+		{name: "missing email is refused", customer: &customer.Customer{Name: "Asha", Contact: lo.ToPtr("9000090000")}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &setupLinkClient{}
+			customerSvc := &stubRazorpayCustomerSvc{customer: tt.customer}
+			a := &PaymentMethodAdapter{Client: client, CustomerSvc: customerSvc}
+
+			resp, err := a.CreateSetupLink(context.Background(), interfaces.SetupLinkRequest{CustomerID: "cust_1", MaxAmount: tt.maxAmount})
+			if tt.wantErr {
+				assert.True(t, ierr.IsValidation(err))
+				assert.Nil(t, client.req)
+				assert.Empty(t, customerSvc.savedLink)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, "https://rzp.io/x", resp.URL)
+			assert.Equal(t, "inv_link", resp.ProviderSessionID)
+			assert.Equal(t, "issued", resp.Status)
+			assert.Equal(t, "inv_link", customerSvc.savedLink)
+			require.NotNil(t, resp.ExpiresAt)
+
+			assert.Zero(t, client.req.Amount)
+			assert.Nil(t, client.req.Notes)
+			assert.Equal(t, resp.ExpiresAt.Unix(), client.req.ExpireBy)
+			assert.Equal(t, SubscriptionRegistration{Method: "emandate", MaxAmount: tt.wantMaxAmount}, client.req.SubscriptionRegistration)
+		})
+	}
 }

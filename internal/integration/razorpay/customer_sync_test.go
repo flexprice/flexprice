@@ -106,3 +106,76 @@ func TestSyncCustomerToRazorpay_PropagatesCreateError(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, ierr.IsInternal(err))
 }
+
+type setupLinkStore struct {
+	inlineMappingStore
+	mapping *entityintegrationmapping.EntityIntegrationMapping
+	saveErr error
+}
+
+func (s *setupLinkStore) List(_ context.Context, _ *types.EntityIntegrationMappingFilter) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
+	if s.mapping == nil {
+		return nil, nil
+	}
+	return []*entityintegrationmapping.EntityIntegrationMapping{s.mapping}, nil
+}
+
+func (s *setupLinkStore) Create(_ context.Context, m *entityintegrationmapping.EntityIntegrationMapping) error {
+	if s.saveErr != nil {
+		return s.saveErr
+	}
+	s.mapping = m
+	return nil
+}
+
+func (s *setupLinkStore) Update(_ context.Context, m *entityintegrationmapping.EntityIntegrationMapping) error {
+	return s.saveErr
+}
+
+type cancelRecordingClient struct {
+	stubCustomerClient
+	cancelled []string
+}
+
+func (c *cancelRecordingClient) CancelInvoice(_ context.Context, invoiceID string) (*AuthorizationLinkResponse, error) {
+	c.cancelled = append(c.cancelled, invoiceID)
+	return &AuthorizationLinkResponse{ID: invoiceID, Status: "cancelled"}, nil
+}
+
+func TestSaveSetupLink(t *testing.T) {
+	saveErr := ierr.NewError("db down").Mark(ierr.ErrDatabase)
+	existing := func() *entityintegrationmapping.EntityIntegrationMapping {
+		return &entityintegrationmapping.EntityIntegrationMapping{ID: "map_1", EntityID: "cust_1", ProviderEntityID: "inv_old"}
+	}
+
+	tests := []struct {
+		name          string
+		mapping       *entityintegrationmapping.EntityIntegrationMapping
+		saveErr       error
+		wantLinkID    string
+		wantCancelled []string
+	}{
+		{name: "first link is stored", wantLinkID: "inv_new"},
+		{name: "new link replaces and cancels the old one", mapping: existing(), wantLinkID: "inv_new", wantCancelled: []string{"inv_old"}},
+		{name: "failed first save cancels the new link", saveErr: saveErr, wantCancelled: []string{"inv_new"}},
+		{name: "failed replace cancels only the new link", mapping: existing(), saveErr: saveErr, wantCancelled: []string{"inv_new"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &cancelRecordingClient{}
+			store := &setupLinkStore{mapping: tt.mapping, saveErr: tt.saveErr}
+			svc := newSyncService(client, store)
+
+			err := svc.SaveSetupLink(context.Background(), "cust_1", "inv_new")
+			assert.Equal(t, tt.wantCancelled, client.cancelled)
+			if tt.saveErr != nil {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, store.mapping)
+			assert.Equal(t, tt.wantLinkID, store.mapping.ProviderEntityID)
+		})
+	}
+}

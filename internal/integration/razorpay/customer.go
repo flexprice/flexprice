@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 )
 
 // RazorpayCustomerService defines the interface for Razorpay customer operations
@@ -24,6 +25,9 @@ type RazorpayCustomerService interface {
 	GetRazorpayCustomerID(ctx context.Context, customerID string) (string, error)
 	UpdateRazorpayCustomerNotes(ctx context.Context, razorpayCustomerID string, notes map[string]interface{}) error
 	ListCustomerTokens(ctx context.Context, customerID string) (razorpayCustomerID string, tokens []*interfaces.ProviderPaymentMethod, err error)
+	SaveSetupLink(ctx context.Context, customerID, linkID string) error
+	GetSetupLink(ctx context.Context, customerID string) (*interfaces.SetupLinkResponse, error)
+	CancelSetupLink(ctx context.Context, customerID string) (*interfaces.SetupLinkResponse, error)
 }
 
 // CustomerService handles Razorpay customer operations
@@ -339,4 +343,113 @@ func (s *CustomerService) UpdateRazorpayCustomerNotes(ctx context.Context, razor
 		"notes": notes,
 	})
 	return err
+}
+
+// SaveSetupLink records the customer's new registration link and cancels the one it replaces.
+// If the record can't be saved, the new link is cancelled so no untracked link stays open.
+func (s *CustomerService) SaveSetupLink(ctx context.Context, customerID, linkID string) error {
+	mapping, err := s.setupLinkMapping(ctx, customerID)
+	if err != nil && !ierr.IsNotFound(err) {
+		s.cancelSetupLink(ctx, linkID)
+		return err
+	}
+
+	previousLinkID := ""
+	if mapping != nil {
+		previousLinkID = mapping.ProviderEntityID
+		mapping.ProviderEntityID = linkID
+		err = s.entityIntegrationMappingRepo.Update(ctx, mapping)
+	} else {
+		err = s.createSetupLinkMapping(ctx, customerID, linkID)
+	}
+	if err != nil {
+		s.cancelSetupLink(ctx, linkID)
+		return err
+	}
+
+	if previousLinkID != "" {
+		s.cancelSetupLink(ctx, previousLinkID)
+	}
+	return nil
+}
+
+func (s *CustomerService) createSetupLinkMapping(ctx context.Context, customerID, linkID string) error {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
+	return s.entityIntegrationMappingRepo.Create(ctx, &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         customerID,
+		EntityType:       types.IntegrationEntityTypePaymentMethodSetup,
+		ProviderType:     string(types.SecretProviderRazorpay),
+		ProviderEntityID: linkID,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ConnectionID:     lo.ToPtr(conn.ID),
+	})
+}
+
+// cancelSetupLink is best effort: a link that was already completed, expired or cancelled can't be cancelled.
+func (s *CustomerService) cancelSetupLink(ctx context.Context, linkID string) {
+	if _, err := s.client.CancelInvoice(ctx, linkID); err != nil {
+		s.logger.Info(ctx, "razorpay setup link not cancelled", "link_id", linkID, "error", err)
+	}
+}
+
+// GetSetupLink returns the live state of the customer's latest registration link.
+func (s *CustomerService) GetSetupLink(ctx context.Context, customerID string) (*interfaces.SetupLinkResponse, error) {
+	mapping, err := s.setupLinkMapping(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := s.client.GetInvoice(ctx, mapping.ProviderEntityID)
+	if err != nil {
+		return nil, err
+	}
+	link, err := utils.ToStruct[AuthorizationLinkResponse](raw)
+	if err != nil {
+		return nil, err
+	}
+	return link.toSetupLink(), nil
+}
+
+// CancelSetupLink cancels the customer's latest registration link.
+func (s *CustomerService) CancelSetupLink(ctx context.Context, customerID string) (*interfaces.SetupLinkResponse, error) {
+	mapping, err := s.setupLinkMapping(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+
+	link, err := s.client.CancelInvoice(ctx, mapping.ProviderEntityID)
+	if err != nil {
+		return nil, err
+	}
+	return link.toSetupLink(), nil
+}
+
+func (s *CustomerService) setupLinkMapping(ctx context.Context, customerID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	mappings, err := s.entityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
+		EntityID:      customerID,
+		EntityType:    types.IntegrationEntityTypePaymentMethodSetup,
+		ProviderTypes: []string{string(types.SecretProviderRazorpay)},
+		ConnectionID:  conn.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(mappings) == 0 {
+		return nil, ierr.NewError("no mandate setup link for this customer").
+			WithHint("Create a setup intent for the customer first").
+			WithReportableDetails(map[string]interface{}{"customer_id": customerID}).
+			Mark(ierr.ErrNotFound)
+	}
+	return mappings[0], nil
 }

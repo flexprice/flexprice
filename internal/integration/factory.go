@@ -1635,7 +1635,7 @@ func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.Pa
 		if err != nil {
 			return nil, err
 		}
-		return &razorpay.PaymentMethodAdapter{CustomerSvc: i.CustomerSvc}, nil
+		return &razorpay.PaymentMethodAdapter{Client: i.Client, CustomerSvc: i.CustomerSvc, FlexCustomerSvc: customerSvc}, nil
 	default:
 		return nil, ierr.NewError("saved payment methods are not supported for this provider").
 			WithHintf("%s cannot manage saved payment methods", gateway).

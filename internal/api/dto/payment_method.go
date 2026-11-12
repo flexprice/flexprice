@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -118,6 +119,7 @@ type CreateSetupIntentRequest struct {
 	CancelURL          string               `json:"cancel_url,omitempty"`           // User-configurable cancel redirect URL
 	SetDefault         bool                 `json:"set_default,omitempty"`          // Whether to set the payment method as default when setup succeeds
 	Metadata           types.Metadata       `json:"metadata,omitempty"`
+	MaxAmount          *decimal.Decimal     `json:"max_amount,omitempty" swaggertype:"string"` // Razorpay eNACH per-debit ceiling in INR; defaults to ₹99,999
 }
 
 // SetupIntentResponse represents a response from creating a Setup Intent session
@@ -179,6 +181,16 @@ type ListPaymentMethodsRequest struct {
 	EndingBefore  string `json:"ending_before,omitempty"`     // Pagination cursor
 }
 
+// setupIntentMethodTypes lists the payment_method_types each provider can set up.
+func setupIntentMethodTypes(provider types.SecretProvider) []string {
+	switch provider {
+	case types.SecretProviderRazorpay:
+		return []string{"enach"}
+	default:
+		return []string{"card", "us_bank_account", "sepa_debit"}
+	}
+}
+
 // Validate validates the create Setup Intent request
 func (r *CreateSetupIntentRequest) Validate() error {
 	if r.Provider == "" {
@@ -188,10 +200,10 @@ func (r *CreateSetupIntentRequest) Validate() error {
 	}
 
 	switch r.Provider {
-	case types.SecretProviderStripe, types.SecretProviderMoyasar:
+	case types.SecretProviderStripe, types.SecretProviderMoyasar, types.SecretProviderRazorpay:
 	default:
 		return errors.NewError("unsupported payment provider").
-			WithHint("Supported providers: stripe, moyasar").
+			WithHint("Supported providers: stripe, moyasar, razorpay").
 			WithReportableDetails(map[string]interface{}{
 				"provider": r.Provider,
 			}).
@@ -205,17 +217,22 @@ func (r *CreateSetupIntentRequest) Validate() error {
 			Mark(errors.ErrValidation)
 	}
 
-	// Validate payment method types
-	if len(r.PaymentMethodTypes) > 0 {
-		for _, paymentMethodType := range r.PaymentMethodTypes {
-			if paymentMethodType != "card" && paymentMethodType != "us_bank_account" && paymentMethodType != "sepa_debit" {
-				return errors.NewError("unsupported payment method type").
-					WithHint("Supported payment method types: card, us_bank_account, sepa_debit").
-					WithReportableDetails(map[string]interface{}{
-						"payment_method_type": paymentMethodType,
-					}).
-					Mark(errors.ErrValidation)
-			}
+	if r.MaxAmount != nil && !r.MaxAmount.IsPositive() {
+		return errors.NewError("max_amount must be greater than zero").
+			WithHint("Omit max_amount to use the provider default").
+			Mark(errors.ErrValidation)
+	}
+
+	allowedTypes := setupIntentMethodTypes(r.Provider)
+	for _, paymentMethodType := range r.PaymentMethodTypes {
+		if !lo.Contains(allowedTypes, paymentMethodType) {
+			return errors.NewError("unsupported payment method type").
+				WithHint("Supported payment method types: " + strings.Join(allowedTypes, ", ")).
+				WithReportableDetails(map[string]interface{}{
+					"provider":            r.Provider,
+					"payment_method_type": paymentMethodType,
+				}).
+				Mark(errors.ErrValidation)
 		}
 	}
 
