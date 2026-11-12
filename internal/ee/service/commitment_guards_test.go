@@ -375,6 +375,13 @@ func (s *CommitmentServiceSuite) TestLineItemUpdate_RejectsNewLegacyCommitment()
 	s.False(stored.HasAnyCommitment())
 }
 
+// An incomplete legacy commitment on a line without one gets the deprecation error, not a legacy field rule.
+func (s *CommitmentServiceSuite) TestLineItemUpdate_RejectsIncompleteNewLegacyCommitmentAsDeprecated() {
+	_, err := NewSubscriptionService(fullServiceParams(&s.BaseServiceTestSuite)).UpdateSubscriptionLineItem(s.GetContext(), s.fx.lineAPI.ID,
+		dto.UpdateSubscriptionLineItemRequest{CommitmentAmount: lo.ToPtr(dec("100"))})
+	s.requireValidation(err, "commitment_amount is deprecated")
+}
+
 // plainUpdateOfLegacyLine edits the metadata of an API line that carries legacy commitment fields, with a
 // commitment on the given meter, and returns the recorded events.
 func (s *CommitmentServiceSuite) plainUpdateOfLegacyLine(meterID string) ([]string, error) {

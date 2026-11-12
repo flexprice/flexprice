@@ -880,7 +880,9 @@ func (s *subscriptionChangeService) createNewSubscription(
 		Inheritance:        inheritance,
 		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
 			CommitmentAmount:      currentSub.CommitmentAmount,
+			CommitmentDuration:    currentSub.CommitmentDuration,
 			OverageFactor:         currentSub.OverageFactor,
+			EnableTrueUp:          currentSub.EnableTrueUp,
 			CarryLegacyCommitment: true,
 			TrialPeriodDays:       lo.ToPtr(0), // THIS IS IMPORTANT: we don't want to inherit the trial period days from the old subscription
 		},

@@ -693,18 +693,19 @@ func replaceMetadataPreservingLineage(item *subscription.SubscriptionLineItem, m
 // UpdateSubscriptionLineItem updates a subscription line item by terminating the existing one and creating a new one
 // This method reuses existing service methods for creating and deleting line items
 func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.UpdateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
 	// Get the existing line item
 	existingLineItem, err := s.SubscriptionLineItemRepo.Get(ctx, lineItemID)
 	if err != nil {
 		return nil, err
 	}
 
+	// Checked before Validate so the legacy field rules don't hide the deprecation error.
 	if field := req.LegacyCommitmentField(); field != "" && !existingLineItem.HasAnyCommitment() {
 		return nil, dto.LegacyCommitmentError(field)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, err
 	}
 
 	// Check if line item is already terminated
