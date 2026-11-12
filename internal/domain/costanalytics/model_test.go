@@ -17,6 +17,7 @@ func TestParseKey(t *testing.T) {
 	}{
 		{in: "properties.user_id", want: Key{Kind: KeyProperty, Property: "user_id"}},
 		{in: "properties.model name", want: Key{Kind: KeyProperty, Property: "model name"}},
+		{in: "properties.http.status", want: Key{Kind: KeyProperty, Property: "http.status"}},
 		{in: "source", want: Key{Kind: KeySource}},
 		{in: "meter_id", want: Key{Kind: KeyMeterID}},
 		{in: "feature_id", want: Key{Kind: KeyFeatureID}},
@@ -76,6 +77,11 @@ func TestQueryValidate(t *testing.T) {
 		{name: "zero limit", mutate: func(q *Query) { q.Limit = 0 }},
 		{name: "negative offset", mutate: func(q *Query) { q.Offset = -1 }},
 		{name: "no timezone", mutate: func(q *Query) { q.Timezone = nil }},
+		{name: "too many filters", mutate: func(q *Query) {
+			for i := 0; i <= MaxFilters; i++ {
+				q.Filters = append(q.Filters, Filter{Key: user, Op: FilterIn, Values: []string{"a"}})
+			}
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -119,6 +125,10 @@ func TestWindows(t *testing.T) {
 	require.NoError(t, err)
 	la, err := time.LoadLocation("America/Los_Angeles")
 	require.NoError(t, err)
+	scl, err := time.LoadLocation("America/Santiago")
+	require.NoError(t, err)
+	// Santiago skips midnight on 2026-09-06: the day starts at 01:00 -03.
+	sep6 := time.Date(2026, 9, 6, 1, 0, 0, 0, scl)
 	day := func(tz *time.Location, y int, m time.Month, d int) time.Time {
 		return time.Date(y, m, d, 0, 0, 0, 0, tz)
 	}
@@ -148,6 +158,17 @@ func TestWindows(t *testing.T) {
 			name: "days across a DST change", start: day(la, 2026, 10, 31), end: day(la, 2026, 11, 3),
 			size: types.WindowSizeDay, tz: la,
 			want: []time.Time{day(la, 2026, 10, 31), day(la, 2026, 11, 1), day(la, 2026, 11, 2)},
+		},
+		{
+			name: "days across a skipped midnight", start: day(scl, 2026, 9, 5), end: day(scl, 2026, 9, 8),
+			size: types.WindowSizeDay, tz: scl,
+			want: []time.Time{day(scl, 2026, 9, 5), sep6, day(scl, 2026, 9, 7)},
+		},
+		{
+			// Sunday 2026-09-06 starts at the skipped midnight; the next week is back on 00:00.
+			name: "weeks across a skipped midnight", start: day(scl, 2026, 9, 2), end: day(scl, 2026, 9, 14),
+			size: types.WindowSizeWeek, tz: scl,
+			want: []time.Time{day(scl, 2026, 8, 30), sep6, day(scl, 2026, 9, 13)},
 		},
 	}
 	for _, tt := range tests {

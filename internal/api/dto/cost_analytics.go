@@ -9,11 +9,12 @@ import (
 	"github.com/samber/lo"
 )
 
-// CostNoneValue is the row and column value shown for events without the key.
-const CostNoneValue = "(none)"
+// CostNoneValue is the row and column value shown for events without the key. Flexprice-prefixed so
+// it cannot pass for a real property value.
+const CostNoneValue = "__flexprice_none__"
 
 // CostOtherColumn collects the cost of column values beyond MaxCostColumns.
-const CostOtherColumn = "(other)"
+const CostOtherColumn = "__flexprice_other__"
 
 // MaxCostColumns is how many column values a response lists; the rest go to CostOtherColumn.
 const MaxCostColumns = 50
@@ -56,7 +57,7 @@ type CostAnalyticsRequest struct {
 	Offset         int  `json:"offset,omitempty"`
 }
 
-// CostAnalyticsFilter keeps (in) or drops (not_in) events by a key's values; "(none)" matches events without the key.
+// CostAnalyticsFilter keeps (in) or drops (not_in) events by a key's values; CostNoneValue matches events without the key.
 type CostAnalyticsFilter struct {
 	Key    string   `json:"key"`
 	Op     string   `json:"op"`

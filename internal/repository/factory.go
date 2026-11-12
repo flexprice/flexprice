@@ -359,6 +359,7 @@ func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
 	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
 }
 
+// NewCostAnalyticsRepository returns the ClickHouse repository that prices meter_usage events for cost analytics.
 func NewCostAnalyticsRepository(p RepositoryParams) costanalytics.Repository {
 	return clickhouseRepo.NewCostAnalyticsRepository(p.ClickHouseDB, p.Logger)
 }

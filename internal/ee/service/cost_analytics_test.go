@@ -278,7 +278,7 @@ func (s *CostAnalyticsSuite) TestUnsupportedMeterIsExcludedNotApproximated() {
 	s.Equal([]dto.CostExcludedMeter{{MeterID: "m_tiered", Reason: excludedNotFlatPrice}}, resp.ExcludedMeters)
 	// 13,000 tokens + 4 calls × 0.01 + 40 scaled × 0.5; the tiered $ never appears.
 	s.Equal("13020.04", resp.Totals.Cost)
-	s.Equal(map[string]string{"alice": "7020.00", "bob": "6000.00", "123": "0.03", "(none)": "0.01"}, costByGroup(resp, "properties.user"))
+	s.Equal(map[string]string{"alice": "7020.00", "bob": "6000.00", "123": "0.03", dto.CostNoneValue: "0.01"}, costByGroup(resp, "properties.user"))
 }
 
 func (s *CostAnalyticsSuite) TestEntitlementsAndGrantsExcludeTheirMeters() {
@@ -340,7 +340,7 @@ func (s *CostAnalyticsSuite) TestChildSeesOnlyItsOwnEventsAtTheParentsPrices() {
 		r.Expand = []dto.CostExpand{dto.CostExpandSubscription, dto.CostExpandPlan}
 	})
 	s.NoError(err)
-	s.Equal(map[string]string{"bob": "6000.00", "(none)": "0.01"}, costByGroup(resp, "properties.user"))
+	s.Equal(map[string]string{"bob": "6000.00", dto.CostNoneValue: "0.01"}, costByGroup(resp, "properties.user"))
 	s.Equal([]string{"sub_parent"}, resp.Items[0].SubscriptionIDs, "priced on the parent's lines")
 	s.Equal([]string{"plan_cost"}, resp.Items[0].PlanIDs)
 }
@@ -465,7 +465,7 @@ func (s *CostAnalyticsSuite) TestColumnsMetricsAndPaging() {
 	s.NoError(err)
 	s.EqualValues(3, resp.TotalCount)
 	s.Len(resp.Items, 1)
-	s.Equal([]string{"alice", "bob", "123", "(none)"}, resp.ColumnValues, "ordered by total cost")
+	s.Equal([]string{"alice", "bob", "123", dto.CostNoneValue}, resp.ColumnValues, "ordered by total cost")
 	s.Equal("13020.04", resp.Totals.Cost, "totals cover every row, not the page")
 
 	row := resp.Items[0]
@@ -523,11 +523,11 @@ func (s *CostAnalyticsSuite) TestRejectedRequests() {
 func (s *CostAnalyticsSuite) TestFilterOnMissingValueAndSingleMeterUsageSort() {
 	resp, err := s.query(func(r *dto.CostAnalyticsRequest) {
 		r.MeterIDs = []string{"m_calls"}
-		r.Filters = []dto.CostAnalyticsFilter{{Key: "properties.user", Op: "in", Values: []string{"(none)"}}}
+		r.Filters = []dto.CostAnalyticsFilter{{Key: "properties.user", Op: "in", Values: []string{dto.CostNoneValue}}}
 		r.Sort = &dto.CostAnalyticsSort{Field: "usage"}
 	})
 	s.NoError(err)
-	s.Equal(map[string]string{"(none)": "0.01"}, costByGroup(resp, "properties.user"))
+	s.Equal(map[string]string{dto.CostNoneValue: "0.01"}, costByGroup(resp, "properties.user"))
 }
 
 func TestSplitByBillingPeriod(t *testing.T) {

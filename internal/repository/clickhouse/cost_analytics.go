@@ -2,8 +2,8 @@ package clickhouse
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clickhouse"
@@ -188,7 +188,7 @@ func (r *costAnalyticsRepository) run(ctx context.Context, params *costanalytics
 // addPoints reads cost per window for the page rows and the totals.
 func (r *costAnalyticsRepository) addPoints(ctx context.Context, params *costanalytics.QueryParams, result *costanalytics.Result) error {
 	q := params.Query
-	groupID := func(group []string) string { return strings.Join(group, "\x00") }
+	groupID := func(group []string) string { b, _ := json.Marshal(group); return string(b) } // injective, unlike a separator
 	rowByGroup := make(map[string]*costanalytics.Row, len(result.Items))
 	pageGroups := make([][]string, 0, len(result.Items))
 	for i := range result.Items {
@@ -222,10 +222,11 @@ func (r *costAnalyticsRepository) addPoints(ctx context.Context, params *costana
 				Mark(ierr.ErrDatabase)
 		}
 
-		start, err := time.ParseInLocation(time.DateOnly, window, q.Timezone)
+		day, err := time.Parse(time.DateOnly, window)
 		if err != nil {
 			return ierr.WithError(err).WithHint("Failed to parse cost window").Mark(ierr.ErrDatabase)
 		}
+		start := costanalytics.DateStart(day.Year(), day.Month(), day.Day(), q.Timezone)
 		c, err := decimal.NewFromString(cost)
 		if err != nil {
 			return ierr.WithError(err).WithHint("Failed to parse cost over time").Mark(ierr.ErrDatabase)

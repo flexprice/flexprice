@@ -523,7 +523,7 @@ func singleCurrency(windows []costanalytics.LineWindow) (string, error) {
 }
 
 // toCostAnalyticsResponse rounds money once per row and once for totals, names missing values
-// "(none)" and keeps the top column values by total cost.
+// CostNoneValue and keeps the top column values by total cost.
 func toCostAnalyticsResponse(
 	q *costanalytics.Query,
 	currency string,
@@ -620,7 +620,7 @@ func topColumnValues(totals map[string]decimal.Decimal) ([]string, map[string]bo
 	return lo.Map(values, func(v string, _ int) string { return lo.Ternary(v == "", dto.CostNoneValue, v) }), shown
 }
 
-// costColumns keeps the shown column values and sums the rest into "(other)", so columns add up to the row.
+// costColumns keeps the shown column values and sums the rest into CostOtherColumn, so columns add up to the row.
 func costColumns(costs map[string]decimal.Decimal, shown map[string]bool, money func(decimal.Decimal) string, none func(string) string) map[string]dto.CostColumn {
 	out := make(map[string]dto.CostColumn, len(costs))
 	other, hasOther := decimal.Zero, false

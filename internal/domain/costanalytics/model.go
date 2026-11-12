@@ -18,6 +18,7 @@ const (
 	MaxGroupByKeys  = 3
 	MaxLimit        = 100
 	DefaultLimit    = 25
+	MaxFilters      = 20
 	MaxFilterValues = 100
 	MaxMetrics      = 5
 	MaxSearchLength = 200
@@ -38,8 +39,9 @@ const (
 
 const propertyPrefix = "properties."
 
-// propertyNamePattern keeps property names safe to inline as SQL string literals.
-var propertyNamePattern = regexp.MustCompile(`^[A-Za-z0-9_\-:/@$ ]{1,128}$`)
+// propertyNamePattern keeps property names safe to inline as SQL string literals. A dot is part of
+// the name (JSON key "http.status"), not a path.
+var propertyNamePattern = regexp.MustCompile(`^[A-Za-z0-9_\-:/@$ .]{1,128}$`)
 
 // Key is a parsed key such as "properties.user_id" or "source".
 type Key struct {
@@ -52,7 +54,7 @@ func ParseKey(s string) (Key, error) {
 	if name, ok := strings.CutPrefix(s, propertyPrefix); ok {
 		if !propertyNamePattern.MatchString(name) {
 			return Key{}, ierr.NewErrorf("invalid property key %q", s).
-				WithHint("Property names may use letters, digits, spaces and _ - : / @ $, up to 128 characters").
+				WithHint("Property names may use letters, digits, spaces, dots and _ - : / @ $, up to 128 characters").
 				Mark(ierr.ErrValidation)
 		}
 		return Key{Kind: KeyProperty, Property: name}, nil
@@ -194,6 +196,9 @@ func (q *Query) Validate() error {
 		}
 		seen[k] = true
 	}
+	if len(q.Filters) > MaxFilters {
+		return validationErr("at most %d filters", MaxFilters)
+	}
 	for _, f := range q.Filters {
 		if f.Key.Kind == KeyMonth {
 			return validationErr("month cannot be filtered")
@@ -254,33 +259,47 @@ func (q *Query) Validate() error {
 // after MaxWindows+1.
 func (q *Query) Windows() []time.Time {
 	var out []time.Time
-	for w := WindowStart(q.Start, q.WindowSize, q.Timezone); w.Before(q.End) && len(out) <= MaxWindows; w = nextWindow(w, q.WindowSize) {
+	for w := WindowStart(q.Start, q.WindowSize, q.Timezone); w.Before(q.End) && len(out) <= MaxWindows; w = nextWindow(w, q.WindowSize, q.Timezone) {
 		out = append(out, w)
 	}
 	return out
 }
 
-// WindowStart is local midnight in tz of the day, week or month containing t. Weeks start on
+// WindowStart is the start of the local day, week or month in tz containing t. Weeks start on
 // Sunday, as in usage analytics.
 func WindowStart(t time.Time, size types.WindowSize, tz *time.Location) time.Time {
 	l := t.In(tz)
 	switch size {
 	case types.WindowSizeMonth:
-		return time.Date(l.Year(), l.Month(), 1, 0, 0, 0, 0, tz)
+		return DateStart(l.Year(), l.Month(), 1, tz)
 	case types.WindowSizeWeek:
-		return time.Date(l.Year(), l.Month(), l.Day()-int(l.Weekday()), 0, 0, 0, 0, tz)
+		return DateStart(l.Year(), l.Month(), l.Day()-int(l.Weekday()), tz)
 	}
-	return time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, tz)
+	return DateStart(l.Year(), l.Month(), l.Day(), tz)
 }
 
-func nextWindow(w time.Time, size types.WindowSize) time.Time {
+// nextWindow steps by calendar date, not from w's instant, so a skipped midnight does not shift
+// later windows.
+func nextWindow(w time.Time, size types.WindowSize, tz *time.Location) time.Time {
+	l := w.In(tz)
 	switch size {
 	case types.WindowSizeMonth:
-		return w.AddDate(0, 1, 0)
+		return DateStart(l.Year(), l.Month()+1, 1, tz)
 	case types.WindowSizeWeek:
-		return w.AddDate(0, 0, 7)
+		return DateStart(l.Year(), l.Month(), l.Day()+7, tz)
 	}
-	return w.AddDate(0, 0, 1)
+	return DateStart(l.Year(), l.Month(), l.Day()+1, tz)
+}
+
+// DateStart is the first instant of a calendar date in tz. Where DST skips midnight (e.g.
+// America/Santiago), time.Date lands on the previous day, so step forward into the date.
+func DateStart(year int, month time.Month, day int, tz *time.Location) time.Time {
+	t := time.Date(year, month, day, 0, 0, 0, 0, tz)
+	want := time.Date(year, month, day, 0, 0, 0, 0, time.UTC) // normalized date
+	for t.In(tz).Day() != want.Day() {
+		t = t.Add(15 * time.Minute)
+	}
+	return t
 }
 
 func validationErr(format string, args ...any) error {

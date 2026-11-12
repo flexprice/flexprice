@@ -2421,11 +2421,13 @@ func (s *meterUsageService) resolveCustomerAndSubscriptions(ctx context.Context,
 }
 
 // billableSubscriptionStatuses are the statuses whose usage analytics and cost breakdowns read.
-var billableSubscriptionStatuses = []types.SubscriptionStatus{
-	types.SubscriptionStatusActive,
-	types.SubscriptionStatusTrialing,
-	types.SubscriptionStatusPaused,
-	types.SubscriptionStatusCancelled,
+func billableSubscriptionStatuses() []types.SubscriptionStatus {
+	return []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+		types.SubscriptionStatusPaused,
+		types.SubscriptionStatusCancelled,
+	}
 }
 
 // customerSubscriptionsWithParents lists a customer's subscriptions plus the parent of each inherited
@@ -2433,7 +2435,7 @@ var billableSubscriptionStatuses = []types.SubscriptionStatus{
 func customerSubscriptionsWithParents(ctx context.Context, subRepo subscription.Repository, customerID string, withLineItems bool) ([]*subscription.Subscription, error) {
 	filter := types.NewNoLimitSubscriptionFilter()
 	filter.CustomerID = customerID
-	filter.SubscriptionStatus = billableSubscriptionStatuses
+	filter.SubscriptionStatus = billableSubscriptionStatuses()
 	filter.WithLineItems = withLineItems
 	filter.WithCouponAssociations = withLineItems
 	subs, err := subRepo.List(ctx, filter)
@@ -2456,7 +2458,7 @@ func customerSubscriptionsWithParents(ctx context.Context, subRepo subscription.
 	parentFilter := types.NewNoLimitSubscriptionFilter()
 	parentFilter.SubscriptionIDs = lo.Uniq(parentIDs)
 	parentFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeParent}
-	parentFilter.SubscriptionStatus = billableSubscriptionStatuses
+	parentFilter.SubscriptionStatus = billableSubscriptionStatuses()
 	parentFilter.WithLineItems = withLineItems
 	parentFilter.WithCouponAssociations = withLineItems
 	parents, err := subRepo.List(ctx, parentFilter)
