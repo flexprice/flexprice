@@ -30,6 +30,8 @@ type BrandingService interface {
 	StoreImage(ctx context.Context, environmentID string, asset types.BrandingAsset, data []byte) (string, error)
 	// GetImage returns a stored image for the public endpoint; a malformed path is not found without a storage call.
 	GetImage(ctx context.Context, req dto.BrandingImageRequest) (*dto.BrandingImage, error)
+	// ReadImage downloads a stored image by its image key.
+	ReadImage(ctx context.Context, key string) ([]byte, error)
 	// ForInvoice returns the invoice issuer's name and image keys, read live.
 	ForInvoice(ctx context.Context, inv *invoice.Invoice) (*IssuerBranding, error)
 	// ForCustomer returns the name and image keys of the issuer that bills the customer.
@@ -115,15 +117,27 @@ func (s *brandingService) GetImage(ctx context.Context, req dto.BrandingImageReq
 		return nil, ierr.NewError("image not found").WithHint("Image not found").Mark(ierr.ErrNotFound)
 	}
 
-	image := &dto.BrandingImage{ContentType: "image/png", ETag: `"` + hash + `"`}
+	img := &dto.BrandingImage{ContentType: "image/png", ETag: `"` + hash + `"`}
 	if ext == "jpg" {
-		image.ContentType = "image/jpeg"
+		img.ContentType = "image/jpeg"
 	}
-	if req.IfNoneMatch == image.ETag {
-		image.NotModified = true
-		return image, nil
+	if req.IfNoneMatch == img.ETag {
+		img.NotModified = true
+		return img, nil
 	}
 
+	var err error
+	img.Data, err = s.ReadImage(ctx, key)
+	if err != nil {
+		if !ierr.IsNotFound(err) {
+			s.Logger.Error(ctx, "branding image read failed", "error", err, "tenant_id", req.TenantID, "environment_id", req.EnvironmentID, "key", key)
+		}
+		return nil, err
+	}
+	return img, nil
+}
+
+func (s *brandingService) ReadImage(ctx context.Context, key string) ([]byte, error) {
 	store, err := s.StorageResolver.ForPlatform(ctx, storage.PurposeBranding)
 	if err != nil {
 		return nil, err
@@ -132,15 +146,7 @@ func (s *brandingService) GetImage(ctx context.Context, req dto.BrandingImageReq
 	if err != nil {
 		return nil, err
 	}
-
-	image.Data, err = store.Download(ctx, brandingObjectKey(bc.KeyPrefix, key))
-	if err != nil {
-		if !ierr.IsNotFound(err) {
-			s.Logger.Error(ctx, "branding image read failed", "error", err, "tenant_id", req.TenantID, "environment_id", req.EnvironmentID, "key", key)
-		}
-		return nil, err
-	}
-	return image, nil
+	return store.Download(ctx, brandingObjectKey(bc.KeyPrefix, key))
 }
 
 func (s *brandingService) ForInvoice(ctx context.Context, inv *invoice.Invoice) (*IssuerBranding, error) {

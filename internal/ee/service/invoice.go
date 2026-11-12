@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -3935,6 +3936,37 @@ func (s *invoiceService) GetInvoicePDF(ctx context.Context, req dto.InvoicePDFRe
 
 }
 
+// brandingImagesForPDF returns the issuer's logo, else its icon. A failure is logged and the
+// PDF renders without branding, since a stored PDF must not depend on an image read.
+func (s *invoiceService) brandingImagesForPDF(ctx context.Context, inv *invoice.Invoice) (logo, icon *pdf.Image) {
+	branding := NewBrandingService(s.ServiceParams)
+	brand, err := branding.ForInvoice(ctx, inv)
+	if err != nil {
+		s.Logger.Error(ctx, "branding lookup failed, rendering invoice without it", "error", err, "invoice_id", inv.ID)
+		return nil, nil
+	}
+
+	key := brand.LogoKey()
+	if key == nil {
+		key = brand.IconKey()
+	}
+	if key == nil {
+		return nil, nil
+	}
+
+	data, err := branding.ReadImage(ctx, *key)
+	if err != nil {
+		s.Logger.Error(ctx, "branding image read failed, rendering invoice without it", "error", err, "invoice_id", inv.ID, "key", *key)
+		return nil, nil
+	}
+
+	image := &pdf.Image{Data: data, Ext: strings.TrimPrefix(path.Ext(*key), ".")}
+	if brand.LogoKey() != nil {
+		return image, nil
+	}
+	return nil, image
+}
+
 func (s *invoiceService) getInvoiceDataForPDFGen(
 	ctx context.Context,
 	inv *dto.InvoiceResponse,
@@ -4002,6 +4034,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		PaymentStatus:              string(inv.PaymentStatus),
 		InvoiceType:                string(inv.InvoiceType),
 	}
+	data.Logo, data.Icon = s.brandingImagesForPDF(ctx, &inv.Invoice)
 
 	// Convert dates
 	if inv.DueDate != nil {
