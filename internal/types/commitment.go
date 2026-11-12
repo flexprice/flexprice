@@ -190,6 +190,11 @@ type CommitmentInfo struct {
 	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount" swaggertype:"string"`
 	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount" swaggertype:"string"`
 	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount" swaggertype:"string"`
+	// Usage units behind the computed amounts, for v2 commitments: usage a billing-terms commitment covers counts as
+	// utilized at no charge, and a quantity commitment's true-up counts its unused units.
+	ComputedCommitmentUtilizedQuantity decimal.Decimal `json:"computed_commitment_utilized_quantity,omitzero" swaggertype:"string"`
+	ComputedOverageQuantity            decimal.Decimal `json:"computed_overage_quantity,omitzero" swaggertype:"string"`
+	ComputedTrueUpQuantity             decimal.Decimal `json:"computed_true_up_quantity,omitzero" swaggertype:"string"`
 }
 
 // DefaultOverageFactor returns the overage factor applied when a commitment is

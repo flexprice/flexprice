@@ -34813,10 +34813,20 @@
             "type": "string",
             "description": "Commitment breakdown (only populated for windowed commitments)"
           },
+          "computed_commitment_utilized_quantity": {
+            "type": "string",
+            "description": "Usage units behind the commitment breakdown, for v2 commitments"
+          },
           "computed_overage_amount": {
             "type": "string"
           },
+          "computed_overage_quantity": {
+            "type": "string"
+          },
           "computed_true_up_amount": {
+            "type": "string"
+          },
+          "computed_true_up_quantity": {
             "type": "string"
           },
           "cost": {
@@ -36713,12 +36723,22 @@
           "computed_commitment_utilized_amount": {
             "type": "string"
           },
+          "computed_commitment_utilized_quantity": {
+            "type": "string",
+            "description": "Usage units behind the computed amounts, for v2 commitments: usage a billing-terms commitment covers counts as\nutilized at no charge, and a quantity commitment's true-up counts its unused units."
+          },
           "computed_overage_amount": {
+            "type": "string"
+          },
+          "computed_overage_quantity": {
             "type": "string"
           },
           "computed_true_up_amount": {
             "type": "string",
             "description": "total_cost = computed_commitment_utilized_amount + computed_overage_amount + computed_true_up_amount"
+          },
+          "computed_true_up_quantity": {
+            "type": "string"
           },
           "duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"

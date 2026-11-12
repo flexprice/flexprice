@@ -476,6 +476,11 @@ type UsageAnalyticPoint struct {
 	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount,omitempty" swaggertype:"string"`
 	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount,omitempty" swaggertype:"string"`
 
+	// Usage units behind the commitment breakdown, for v2 commitments
+	ComputedCommitmentUtilizedQuantity decimal.Decimal `json:"computed_commitment_utilized_quantity,omitzero" swaggertype:"string"`
+	ComputedOverageQuantity            decimal.Decimal `json:"computed_overage_quantity,omitzero" swaggertype:"string"`
+	ComputedTrueUpQuantity             decimal.Decimal `json:"computed_true_up_quantity,omitzero" swaggertype:"string"`
+
 	// Buckets lists every commitment bucket this (possibly rolled-up) window
 	// overlaps — only populated when BreakdownBucket=true and the line item has
 	// CommitmentTimeBuckets. A coarse window can overlap more than one bucket, and
