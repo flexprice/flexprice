@@ -119,4 +119,22 @@ func TestTaskRepository_StaleExportTasks(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, want, row.TaskStatus)
 	}
+
+	// Deliveries write touches only metadata.
+	require.NoError(t, repo.SetTaskMetadataKey(tenantA, done, "deliveries", []map[string]string{{"type": "flexprice", "status": "delivered"}}))
+	row, err = repo.Get(tenantA, done)
+	require.NoError(t, err)
+	require.Equal(t, types.TaskStatusCompleted, row.TaskStatus)
+	require.Len(t, row.Metadata["deliveries"], 1)
+	require.Error(t, repo.SetTaskMetadataKey(tenantB, done, "deliveries", []string{}))
+
+	// Guarded update never reopens a completed run.
+	row.TaskStatus = types.TaskStatusFailed
+	changedRow, err := repo.UpdateUnlessCompleted(tenantA, row)
+	require.NoError(t, err)
+	require.False(t, changedRow)
+	row, err = repo.Get(tenantA, done)
+	require.NoError(t, err)
+	require.Equal(t, types.TaskStatusCompleted, row.TaskStatus)
+	require.Len(t, row.Metadata["deliveries"], 1)
 }
