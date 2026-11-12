@@ -1,5 +1,7 @@
 package types
 
+import "github.com/samber/lo"
+
 // EmailDeliveryStatus is where one sent email stands, from queued to its final outcome.
 type EmailDeliveryStatus string
 
@@ -27,6 +29,33 @@ func (s EmailDeliveryStatus) Validate() error {
 		EmailDeliveryStatusSuppressed,
 		EmailDeliveryStatusSkipped,
 	})
+}
+
+// emailDeliveryProgress orders the statuses an email moves through on its way to the inbox.
+var emailDeliveryProgress = []EmailDeliveryStatus{
+	EmailDeliveryStatusQueued,
+	EmailDeliveryStatusSent,
+	EmailDeliveryStatusDeliveryDelayed,
+	EmailDeliveryStatusDelivered,
+	EmailDeliveryStatusComplained,
+}
+
+// IsFinal reports a status that never changes again.
+func (s EmailDeliveryStatus) IsFinal() bool {
+	return s == EmailDeliveryStatusBounced || s == EmailDeliveryStatusFailed ||
+		s == EmailDeliveryStatusSuppressed || s == EmailDeliveryStatusSkipped
+}
+
+// CanMoveTo reports whether next may replace s: statuses only move forward, any non-final status
+// may end as bounced, failed or suppressed, and final statuses never change.
+func (s EmailDeliveryStatus) CanMoveTo(next EmailDeliveryStatus) bool {
+	if s.IsFinal() || next == EmailDeliveryStatusSkipped {
+		return false
+	}
+	if next.IsFinal() {
+		return true
+	}
+	return lo.IndexOf(emailDeliveryProgress, next) > lo.IndexOf(emailDeliveryProgress, s)
 }
 
 // EmailTrigger says whether an email was sent automatically or by a user.

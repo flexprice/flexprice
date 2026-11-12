@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	cerrors "github.com/cockroachdb/errors"
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
@@ -239,14 +240,24 @@ func (s *emailNotificationService) DeliverEmail(ctx context.Context, emailLogID 
 		return s.failIfPermanent(ctx, e, err)
 	}
 
-	b := emaillog.NewEmailLogBuilder(e).
-		WithProviderMessageID(res.ProviderMessageID).
-		WithDeliveryStatus(types.EmailDeliveryStatusSent).
-		WithSentAt(clock.Now())
-	for k, v := range composed.metadata {
-		b = b.WithMetadata(k, v)
-	}
-	if err := s.EmailLogRepo.Update(ctx, b.Build()); err != nil {
+	sentAt := clock.Now()
+	err = s.transition(ctx, e.ID, func(cur *emaillog.EmailLog) *emaillog.EmailLog {
+		b := emaillog.NewEmailLogBuilder(cur)
+		if cur.ProviderMessageID == nil {
+			b = b.WithProviderMessageID(res.ProviderMessageID)
+		}
+		if cur.SentAt == nil {
+			b = b.WithSentAt(sentAt)
+		}
+		if cur.DeliveryStatus.CanMoveTo(types.EmailDeliveryStatusSent) {
+			b = b.WithDeliveryStatus(types.EmailDeliveryStatusSent)
+		}
+		for k, v := range composed.metadata {
+			b = b.WithMetadata(k, v)
+		}
+		return b.Build()
+	})
+	if err != nil {
 		return err
 	}
 
@@ -255,17 +266,54 @@ func (s *emailNotificationService) DeliverEmail(ctx context.Context, emailLogID 
 }
 
 func (s *emailNotificationService) MarkEmailFailed(ctx context.Context, emailLogID string, reason string) error {
-	e, err := s.EmailLogRepo.Get(ctx, emailLogID)
-	if err != nil {
-		return err
+	return s.transition(ctx, emailLogID, func(cur *emaillog.EmailLog) *emaillog.EmailLog {
+		if cur.DeliveryStatus != types.EmailDeliveryStatusQueued {
+			return nil
+		}
+		return emaillog.NewEmailLogBuilder(cur).
+			WithDeliveryStatus(types.EmailDeliveryStatusFailed).
+			WithStatusReason(reason).
+			Build()
+	})
+}
+
+// transition changes an email log under a row lock, so the delivery workflow and delivery events
+// cannot overwrite each other. change returns nil to leave the email as it is.
+func (s *emailNotificationService) transition(ctx context.Context, id string, change func(*emaillog.EmailLog) *emaillog.EmailLog) error {
+	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		cur, err := s.EmailLogRepo.GetForUpdate(txCtx, id)
+		if err != nil {
+			return err
+		}
+		next := change(cur)
+		if next == nil {
+			return nil
+		}
+		if action, ok := deliveryAction(next.DeliveryStatus); ok && next.DeliveryStatus != cur.DeliveryStatus {
+			txCtx = activity.WithAction(txCtx, cur.ID, action)
+		}
+		return s.EmailLogRepo.Update(txCtx, next)
+	})
+}
+
+// deliveryAction names the activity-log entry for an email reaching a delivery status.
+func deliveryAction(status types.EmailDeliveryStatus) (activity.Action, bool) {
+	switch status {
+	case types.EmailDeliveryStatusSent:
+		return activity.EmailLogSent, true
+	case types.EmailDeliveryStatusDelivered:
+		return activity.EmailLogDelivered, true
+	case types.EmailDeliveryStatusBounced:
+		return activity.EmailLogBounced, true
+	case types.EmailDeliveryStatusComplained:
+		return activity.EmailLogComplained, true
+	case types.EmailDeliveryStatusFailed:
+		return activity.EmailLogFailed, true
+	case types.EmailDeliveryStatusSuppressed:
+		return activity.EmailLogSuppressed, true
+	default:
+		return "", false
 	}
-	if e.DeliveryStatus != types.EmailDeliveryStatusQueued {
-		return nil
-	}
-	return s.EmailLogRepo.Update(ctx, emaillog.NewEmailLogBuilder(e).
-		WithDeliveryStatus(types.EmailDeliveryStatusFailed).
-		WithStatusReason(reason).
-		Build())
 }
 
 // compose renders an email log with its email type's composer.
