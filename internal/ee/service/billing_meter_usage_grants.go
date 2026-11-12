@@ -256,7 +256,7 @@ func (s *billingService) grantOverageInWindow(
 ) (decimal.Decimal, error) {
 	start := types.LatestOf(g.ValidFrom, window.Start)
 	end := types.EarliestOf(g.ValidTo, window.End)
-	if !end.After(start) {
+	if g.Unlimited || !end.After(start) {
 		return decimal.Zero, nil
 	}
 

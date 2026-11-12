@@ -1061,15 +1061,25 @@ func TestLineUsageByMeter(t *testing.T) {
 	} {
 		t.Run(tt.measure.String(), func(t *testing.T) {
 			grants := map[string][]*entitlementgrant.EntitlementGrant{"meter_x": {makeGrant(1, 0, tt.measure)}}
-			got := lineUsageByMeter(items, charges, grants, splitT0, splitT2, splitT2)
+			asOf := splitT2.Add(-24 * time.Hour)
+			got := lineUsageByMeter(items, charges, grants, splitT0, splitT2, asOf)
 			require.NotContains(t, got, "meter_y", "meters without grants are skipped")
 			lines := got["meter_x"]
 			require.Len(t, lines, 2)
 			require.Equal(t, splitT0, lines[0].start, "lines ordered by start")
 			require.True(t, lines[0].usage.Equal(decimal.NewFromInt(tt.wantA)), "line a usage %s", lines[0].usage)
 			require.Equal(t, splitChange, lines[1].start)
-			require.Equal(t, splitT2, lines[1].end)
+			require.Equal(t, asOf, lines[1].end, "an open line is clipped at asOf")
 			require.True(t, lines[1].usage.Equal(decimal.NewFromInt(tt.wantB)), "line b usage %s", lines[1].usage)
 		})
 	}
+}
+
+func TestAdjustMeterUsageGrants_UnlimitedGrantNeverMeasured(t *testing.T) {
+	// A straddling unlimited grant would need a ClickHouse cut; nil meter proves none is read.
+	day := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
+	g := windowedGrant(0, 500, day, day.Add(24*time.Hour), types.EntitlementGrantMeasureQuantity)
+	g.Unlimited = true
+	got := billSplit(t, newTestBillingService(), nil, []*entitlementgrant.EntitlementGrant{g}, splitLines(300, 200))
+	require.True(t, got[0].IsZero() && got[1].IsZero(), "overage %v, want zero on both lines", got)
 }
