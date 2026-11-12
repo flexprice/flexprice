@@ -23,9 +23,11 @@ func FromEnt(e *ent.Environment) *Environment {
 	}
 
 	return &Environment{
-		ID:   e.ID,
-		Name: e.Name,
-		Type: types.EnvironmentType(e.Type),
+		ID:      e.ID,
+		Name:    e.Name,
+		Type:    types.EnvironmentType(e.Type),
+		LogoKey: e.LogoKey,
+		IconKey: e.IconKey,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

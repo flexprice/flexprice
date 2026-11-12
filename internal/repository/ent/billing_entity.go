@@ -203,7 +203,7 @@ func (r *billingEntityRepository) Update(ctx context.Context, e *domain.BillingE
 	})
 	defer FinishSpan(span)
 
-	updated, err := r.client.Writer(ctx).BillingEntity.UpdateOneID(e.ID).
+	update := r.client.Writer(ctx).BillingEntity.UpdateOneID(e.ID).
 		Where(
 			entbillingentity.TenantID(types.GetTenantID(ctx)),
 			entbillingentity.EnvironmentID(types.GetEnvironmentID(ctx)),
@@ -213,8 +213,18 @@ func (r *billingEntityRepository) Update(ctx context.Context, e *domain.BillingE
 		SetBillingDetails(e.BillingDetails).
 		SetMetadata(e.Metadata).
 		SetUpdatedAt(clock.Now()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx))
+	if e.LogoKey != nil {
+		update.SetLogoKey(*e.LogoKey)
+	} else {
+		update.ClearLogoKey()
+	}
+	if e.IconKey != nil {
+		update.SetIconKey(*e.IconKey)
+	} else {
+		update.ClearIconKey()
+	}
+	updated, err := update.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
@@ -272,6 +282,8 @@ func billingEntityFromEnt(e *ent.BillingEntity) *domain.BillingEntity {
 		BillingDetails:      e.BillingDetails,
 		Metadata:            e.Metadata,
 		EnvironmentID:       e.EnvironmentID,
+		LogoKey:             e.LogoKey,
+		IconKey:             e.IconKey,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

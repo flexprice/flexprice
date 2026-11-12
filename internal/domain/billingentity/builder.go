@@ -41,6 +41,16 @@ func (b *billingEntityBuilder) WithMetadata(v map[string]string) *billingEntityB
 	return b
 }
 
+func (b *billingEntityBuilder) WithLogoKey(v *string) *billingEntityBuilder {
+	b.e.LogoKey = v
+	return b
+}
+
+func (b *billingEntityBuilder) WithIconKey(v *string) *billingEntityBuilder {
+	b.e.IconKey = v
+	return b
+}
+
 func (b *billingEntityBuilder) Build() *BillingEntity {
 	return b.e
 }

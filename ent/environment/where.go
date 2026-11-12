@@ -104,6 +104,16 @@ func Type(v string) predicate.Environment {
 	return predicate.Environment(sql.FieldEQ(FieldType, v))
 }
 
+// LogoKey applies equality check predicate on the "logo_key" field. It's identical to LogoKeyEQ.
+func LogoKey(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldEQ(FieldLogoKey, v))
+}
+
+// IconKey applies equality check predicate on the "icon_key" field. It's identical to IconKeyEQ.
+func IconKey(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldEQ(FieldIconKey, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Environment {
 	return predicate.Environment(sql.FieldEQ(FieldTenantID, v))
@@ -592,6 +602,156 @@ func TypeEqualFold(v string) predicate.Environment {
 // TypeContainsFold applies the ContainsFold predicate on the "type" field.
 func TypeContainsFold(v string) predicate.Environment {
 	return predicate.Environment(sql.FieldContainsFold(FieldType, v))
+}
+
+// LogoKeyEQ applies the EQ predicate on the "logo_key" field.
+func LogoKeyEQ(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldEQ(FieldLogoKey, v))
+}
+
+// LogoKeyNEQ applies the NEQ predicate on the "logo_key" field.
+func LogoKeyNEQ(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldNEQ(FieldLogoKey, v))
+}
+
+// LogoKeyIn applies the In predicate on the "logo_key" field.
+func LogoKeyIn(vs ...string) predicate.Environment {
+	return predicate.Environment(sql.FieldIn(FieldLogoKey, vs...))
+}
+
+// LogoKeyNotIn applies the NotIn predicate on the "logo_key" field.
+func LogoKeyNotIn(vs ...string) predicate.Environment {
+	return predicate.Environment(sql.FieldNotIn(FieldLogoKey, vs...))
+}
+
+// LogoKeyGT applies the GT predicate on the "logo_key" field.
+func LogoKeyGT(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldGT(FieldLogoKey, v))
+}
+
+// LogoKeyGTE applies the GTE predicate on the "logo_key" field.
+func LogoKeyGTE(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldGTE(FieldLogoKey, v))
+}
+
+// LogoKeyLT applies the LT predicate on the "logo_key" field.
+func LogoKeyLT(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldLT(FieldLogoKey, v))
+}
+
+// LogoKeyLTE applies the LTE predicate on the "logo_key" field.
+func LogoKeyLTE(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldLTE(FieldLogoKey, v))
+}
+
+// LogoKeyContains applies the Contains predicate on the "logo_key" field.
+func LogoKeyContains(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldContains(FieldLogoKey, v))
+}
+
+// LogoKeyHasPrefix applies the HasPrefix predicate on the "logo_key" field.
+func LogoKeyHasPrefix(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldHasPrefix(FieldLogoKey, v))
+}
+
+// LogoKeyHasSuffix applies the HasSuffix predicate on the "logo_key" field.
+func LogoKeyHasSuffix(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldHasSuffix(FieldLogoKey, v))
+}
+
+// LogoKeyIsNil applies the IsNil predicate on the "logo_key" field.
+func LogoKeyIsNil() predicate.Environment {
+	return predicate.Environment(sql.FieldIsNull(FieldLogoKey))
+}
+
+// LogoKeyNotNil applies the NotNil predicate on the "logo_key" field.
+func LogoKeyNotNil() predicate.Environment {
+	return predicate.Environment(sql.FieldNotNull(FieldLogoKey))
+}
+
+// LogoKeyEqualFold applies the EqualFold predicate on the "logo_key" field.
+func LogoKeyEqualFold(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldEqualFold(FieldLogoKey, v))
+}
+
+// LogoKeyContainsFold applies the ContainsFold predicate on the "logo_key" field.
+func LogoKeyContainsFold(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldContainsFold(FieldLogoKey, v))
+}
+
+// IconKeyEQ applies the EQ predicate on the "icon_key" field.
+func IconKeyEQ(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldEQ(FieldIconKey, v))
+}
+
+// IconKeyNEQ applies the NEQ predicate on the "icon_key" field.
+func IconKeyNEQ(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldNEQ(FieldIconKey, v))
+}
+
+// IconKeyIn applies the In predicate on the "icon_key" field.
+func IconKeyIn(vs ...string) predicate.Environment {
+	return predicate.Environment(sql.FieldIn(FieldIconKey, vs...))
+}
+
+// IconKeyNotIn applies the NotIn predicate on the "icon_key" field.
+func IconKeyNotIn(vs ...string) predicate.Environment {
+	return predicate.Environment(sql.FieldNotIn(FieldIconKey, vs...))
+}
+
+// IconKeyGT applies the GT predicate on the "icon_key" field.
+func IconKeyGT(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldGT(FieldIconKey, v))
+}
+
+// IconKeyGTE applies the GTE predicate on the "icon_key" field.
+func IconKeyGTE(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldGTE(FieldIconKey, v))
+}
+
+// IconKeyLT applies the LT predicate on the "icon_key" field.
+func IconKeyLT(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldLT(FieldIconKey, v))
+}
+
+// IconKeyLTE applies the LTE predicate on the "icon_key" field.
+func IconKeyLTE(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldLTE(FieldIconKey, v))
+}
+
+// IconKeyContains applies the Contains predicate on the "icon_key" field.
+func IconKeyContains(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldContains(FieldIconKey, v))
+}
+
+// IconKeyHasPrefix applies the HasPrefix predicate on the "icon_key" field.
+func IconKeyHasPrefix(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldHasPrefix(FieldIconKey, v))
+}
+
+// IconKeyHasSuffix applies the HasSuffix predicate on the "icon_key" field.
+func IconKeyHasSuffix(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldHasSuffix(FieldIconKey, v))
+}
+
+// IconKeyIsNil applies the IsNil predicate on the "icon_key" field.
+func IconKeyIsNil() predicate.Environment {
+	return predicate.Environment(sql.FieldIsNull(FieldIconKey))
+}
+
+// IconKeyNotNil applies the NotNil predicate on the "icon_key" field.
+func IconKeyNotNil() predicate.Environment {
+	return predicate.Environment(sql.FieldNotNull(FieldIconKey))
+}
+
+// IconKeyEqualFold applies the EqualFold predicate on the "icon_key" field.
+func IconKeyEqualFold(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldEqualFold(FieldIconKey, v))
+}
+
+// IconKeyContainsFold applies the ContainsFold predicate on the "icon_key" field.
+func IconKeyContainsFold(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldContainsFold(FieldIconKey, v))
 }
 
 // And groups predicates with the AND operator between them.

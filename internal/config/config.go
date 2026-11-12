@@ -71,6 +71,7 @@ type Configuration struct {
 	CustomerPortal         CustomerPortalConfig         `mapstructure:"customer_portal" validate:"required"`
 	Checkout               CheckoutConfig               `mapstructure:"checkout" validate:"omitempty"`
 	HostedInvoice          HostedInvoiceConfig          `mapstructure:"hosted_invoice" validate:"omitempty"`
+	Branding               BrandingConfig               `mapstructure:"branding" validate:"omitempty"`
 	BillingEntities        BillingEntitiesConfig        `mapstructure:"billing_entities" validate:"omitempty"`
 	Redis                  RedisConfig                  `mapstructure:"redis" validate:"required"`
 	RawEventsReprocessing  RawEventsReprocessingConfig  `mapstructure:"raw_events_reprocessing" validate:"required"`
@@ -1194,6 +1195,11 @@ type BillingEntitiesConfig struct {
 
 // HostedInvoiceConfig holds the hosted invoice page base; empty returns no Flexprice hosted links.
 type HostedInvoiceConfig struct {
+	BaseURL string `mapstructure:"base_url" validate:"omitempty,url"`
+}
+
+// BrandingConfig holds the public API origin used to build branding image URLs; empty returns no URLs.
+type BrandingConfig struct {
 	BaseURL string `mapstructure:"base_url" validate:"omitempty,url"`
 }
 

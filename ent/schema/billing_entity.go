@@ -55,6 +55,16 @@ func (BillingEntity) Fields() []ent.Field {
 		field.JSON("metadata", map[string]string{}).
 			SchemaType(jsonb).
 			Optional(),
+
+		field.String("logo_key").
+			SchemaType(varchar("255")).
+			Optional().
+			Nillable(),
+
+		field.String("icon_key").
+			SchemaType(varchar("255")).
+			Optional().
+			Nillable(),
 	}
 }
 

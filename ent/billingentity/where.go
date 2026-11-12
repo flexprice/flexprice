@@ -114,6 +114,16 @@ func InvoiceNumberPrefix(v string) predicate.BillingEntity {
 	return predicate.BillingEntity(sql.FieldEQ(FieldInvoiceNumberPrefix, v))
 }
 
+// LogoKey applies equality check predicate on the "logo_key" field. It's identical to LogoKeyEQ.
+func LogoKey(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldEQ(FieldLogoKey, v))
+}
+
+// IconKey applies equality check predicate on the "icon_key" field. It's identical to IconKeyEQ.
+func IconKey(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldEQ(FieldIconKey, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.BillingEntity {
 	return predicate.BillingEntity(sql.FieldEQ(FieldTenantID, v))
@@ -697,6 +707,156 @@ func MetadataIsNil() predicate.BillingEntity {
 // MetadataNotNil applies the NotNil predicate on the "metadata" field.
 func MetadataNotNil() predicate.BillingEntity {
 	return predicate.BillingEntity(sql.FieldNotNull(FieldMetadata))
+}
+
+// LogoKeyEQ applies the EQ predicate on the "logo_key" field.
+func LogoKeyEQ(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldEQ(FieldLogoKey, v))
+}
+
+// LogoKeyNEQ applies the NEQ predicate on the "logo_key" field.
+func LogoKeyNEQ(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldNEQ(FieldLogoKey, v))
+}
+
+// LogoKeyIn applies the In predicate on the "logo_key" field.
+func LogoKeyIn(vs ...string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldIn(FieldLogoKey, vs...))
+}
+
+// LogoKeyNotIn applies the NotIn predicate on the "logo_key" field.
+func LogoKeyNotIn(vs ...string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldNotIn(FieldLogoKey, vs...))
+}
+
+// LogoKeyGT applies the GT predicate on the "logo_key" field.
+func LogoKeyGT(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldGT(FieldLogoKey, v))
+}
+
+// LogoKeyGTE applies the GTE predicate on the "logo_key" field.
+func LogoKeyGTE(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldGTE(FieldLogoKey, v))
+}
+
+// LogoKeyLT applies the LT predicate on the "logo_key" field.
+func LogoKeyLT(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldLT(FieldLogoKey, v))
+}
+
+// LogoKeyLTE applies the LTE predicate on the "logo_key" field.
+func LogoKeyLTE(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldLTE(FieldLogoKey, v))
+}
+
+// LogoKeyContains applies the Contains predicate on the "logo_key" field.
+func LogoKeyContains(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldContains(FieldLogoKey, v))
+}
+
+// LogoKeyHasPrefix applies the HasPrefix predicate on the "logo_key" field.
+func LogoKeyHasPrefix(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldHasPrefix(FieldLogoKey, v))
+}
+
+// LogoKeyHasSuffix applies the HasSuffix predicate on the "logo_key" field.
+func LogoKeyHasSuffix(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldHasSuffix(FieldLogoKey, v))
+}
+
+// LogoKeyIsNil applies the IsNil predicate on the "logo_key" field.
+func LogoKeyIsNil() predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldIsNull(FieldLogoKey))
+}
+
+// LogoKeyNotNil applies the NotNil predicate on the "logo_key" field.
+func LogoKeyNotNil() predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldNotNull(FieldLogoKey))
+}
+
+// LogoKeyEqualFold applies the EqualFold predicate on the "logo_key" field.
+func LogoKeyEqualFold(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldEqualFold(FieldLogoKey, v))
+}
+
+// LogoKeyContainsFold applies the ContainsFold predicate on the "logo_key" field.
+func LogoKeyContainsFold(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldContainsFold(FieldLogoKey, v))
+}
+
+// IconKeyEQ applies the EQ predicate on the "icon_key" field.
+func IconKeyEQ(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldEQ(FieldIconKey, v))
+}
+
+// IconKeyNEQ applies the NEQ predicate on the "icon_key" field.
+func IconKeyNEQ(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldNEQ(FieldIconKey, v))
+}
+
+// IconKeyIn applies the In predicate on the "icon_key" field.
+func IconKeyIn(vs ...string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldIn(FieldIconKey, vs...))
+}
+
+// IconKeyNotIn applies the NotIn predicate on the "icon_key" field.
+func IconKeyNotIn(vs ...string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldNotIn(FieldIconKey, vs...))
+}
+
+// IconKeyGT applies the GT predicate on the "icon_key" field.
+func IconKeyGT(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldGT(FieldIconKey, v))
+}
+
+// IconKeyGTE applies the GTE predicate on the "icon_key" field.
+func IconKeyGTE(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldGTE(FieldIconKey, v))
+}
+
+// IconKeyLT applies the LT predicate on the "icon_key" field.
+func IconKeyLT(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldLT(FieldIconKey, v))
+}
+
+// IconKeyLTE applies the LTE predicate on the "icon_key" field.
+func IconKeyLTE(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldLTE(FieldIconKey, v))
+}
+
+// IconKeyContains applies the Contains predicate on the "icon_key" field.
+func IconKeyContains(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldContains(FieldIconKey, v))
+}
+
+// IconKeyHasPrefix applies the HasPrefix predicate on the "icon_key" field.
+func IconKeyHasPrefix(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldHasPrefix(FieldIconKey, v))
+}
+
+// IconKeyHasSuffix applies the HasSuffix predicate on the "icon_key" field.
+func IconKeyHasSuffix(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldHasSuffix(FieldIconKey, v))
+}
+
+// IconKeyIsNil applies the IsNil predicate on the "icon_key" field.
+func IconKeyIsNil() predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldIsNull(FieldIconKey))
+}
+
+// IconKeyNotNil applies the NotNil predicate on the "icon_key" field.
+func IconKeyNotNil() predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldNotNull(FieldIconKey))
+}
+
+// IconKeyEqualFold applies the EqualFold predicate on the "icon_key" field.
+func IconKeyEqualFold(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldEqualFold(FieldIconKey, v))
+}
+
+// IconKeyContainsFold applies the ContainsFold predicate on the "icon_key" field.
+func IconKeyContainsFold(v string) predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldContainsFold(FieldIconKey, v))
 }
 
 // And groups predicates with the AND operator between them.

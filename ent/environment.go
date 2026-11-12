@@ -32,7 +32,11 @@ type Environment struct {
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Type holds the value of the "type" field.
-	Type         string `json:"type,omitempty"`
+	Type string `json:"type,omitempty"`
+	// LogoKey holds the value of the "logo_key" field.
+	LogoKey *string `json:"logo_key,omitempty"`
+	// IconKey holds the value of the "icon_key" field.
+	IconKey      *string `json:"icon_key,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -41,7 +45,7 @@ func (*Environment) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case environment.FieldID, environment.FieldTenantID, environment.FieldStatus, environment.FieldCreatedBy, environment.FieldUpdatedBy, environment.FieldName, environment.FieldType:
+		case environment.FieldID, environment.FieldTenantID, environment.FieldStatus, environment.FieldCreatedBy, environment.FieldUpdatedBy, environment.FieldName, environment.FieldType, environment.FieldLogoKey, environment.FieldIconKey:
 			values[i] = new(sql.NullString)
 		case environment.FieldCreatedAt, environment.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -114,6 +118,20 @@ func (_m *Environment) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Type = value.String
 			}
+		case environment.FieldLogoKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field logo_key", values[i])
+			} else if value.Valid {
+				_m.LogoKey = new(string)
+				*_m.LogoKey = value.String
+			}
+		case environment.FieldIconKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field icon_key", values[i])
+			} else if value.Valid {
+				_m.IconKey = new(string)
+				*_m.IconKey = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -173,6 +191,16 @@ func (_m *Environment) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(_m.Type)
+	builder.WriteString(", ")
+	if v := _m.LogoKey; v != nil {
+		builder.WriteString("logo_key=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.IconKey; v != nil {
+		builder.WriteString("icon_key=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }
