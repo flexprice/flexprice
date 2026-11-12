@@ -125,6 +125,10 @@ func (s *webhookTestPaymentService) failedAttempts() []dto.RecordAttemptRequest 
 
 // ── fake interfaces.InvoiceService — used only by handlePaymentCaptured's standalone fallback ──
 
+func (s *webhookTestPaymentService) RequiresRefundForVoidedInvoice(context.Context, string) bool {
+	return false
+}
+
 type webhookTestInvoiceService struct {
 	interfaces.InvoiceService
 	published *[]webhookDto.InternalInvoicePaymentFailedEvent

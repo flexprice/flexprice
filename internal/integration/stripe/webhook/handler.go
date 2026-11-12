@@ -17,7 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -980,15 +979,7 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
-	refundParams := payments.RefundIfInvoiceVoidedParams{
-		PaymentService:     services.PaymentService,
-		InvoiceService:     services.InvoiceService,
-		Refunder:           h.paymentSvc,
-		FlexpricePaymentID: flexpricePaymentID,
-		GatewayPaymentID:   piID,
-		Logger:             h.logger,
-	}
-	if payments.RefundIfInvoiceVoided(ctx, refundParams) {
+	if h.refundIfInvoiceVoided(ctx, services, flexpricePaymentID, piID) {
 		return nil
 	}
 
@@ -1013,11 +1004,25 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 			"flexprice_payment_id", flexpricePaymentID,
 			"event_id", event.ID)
 		// The invoice may have been voided after the check above.
-		payments.RefundIfInvoiceVoided(ctx, refundParams)
+		h.refundIfInvoiceVoided(ctx, services, flexpricePaymentID, piID)
 		return nil
 	}
 
 	return nil
+}
+
+// refundIfInvoiceVoided refunds a capture whose invoice was voided; true means the caller must not settle it.
+func (h *Handler) refundIfInvoiceVoided(ctx context.Context, services *ServiceDependencies, flexpricePaymentID, stripePaymentIntentID string) bool {
+	if !services.PaymentService.RequiresRefundForVoidedInvoice(ctx, flexpricePaymentID) {
+		return false
+	}
+	if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, stripePaymentIntentID, services.PaymentService); err != nil {
+		h.logger.Error(ctx, "failed to refund payment on voided invoice, manual reconciliation required",
+			"error", err,
+			"flexprice_payment_id", flexpricePaymentID,
+			"stripe_payment_intent_id", stripePaymentIntentID)
+	}
+	return true
 }
 
 // refundLateCapturedPayment gives back a payment that landed after its checkout session

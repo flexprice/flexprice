@@ -1341,6 +1341,27 @@ func errInvoiceVoided(invoiceID string) error {
 		Mark(ierr.ErrValidation)
 }
 
+func (s *paymentService) RequiresRefundForVoidedInvoice(ctx context.Context, paymentID string) bool {
+	p, err := s.PaymentRepo.Get(ctx, paymentID)
+	if err != nil || p.DestinationType != types.PaymentDestinationTypeInvoice {
+		return false
+	}
+
+	switch p.PaymentStatus {
+	case types.PaymentStatusSucceeded, types.PaymentStatusOverpaid, types.PaymentStatusPartiallyRefunded:
+		return false
+	}
+
+	inv, err := s.InvoiceRepo.Get(ctx, p.DestinationID)
+	if err != nil || inv.InvoiceStatus != types.InvoiceStatusVoided {
+		return false
+	}
+
+	s.Logger.Info(ctx, "payment captured on voided invoice, refunding",
+		"payment_id", paymentID, "invoice_id", inv.ID)
+	return true
+}
+
 // VoidOpenPaymentLinks closes every unpaid payment link on a voided invoice.
 // Links owned by a checkout session are left to that session.
 func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID string) error {

@@ -65,6 +65,10 @@ type PaymentService interface {
 	// TODO: migrate to full payment lifecycle method when payment lifecycle service is released
 	CreatePaymentForCheckout(ctx context.Context, req *dto.CreateCheckoutPaymentRequest) (*dto.PaymentResponse, error)
 	ListPaymentMethods(ctx context.Context, customerID string, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error)
+	// RequiresRefundForVoidedInvoice reports whether a captured payment belongs to a voided
+	// invoice and must be refunded instead of settled. A payment settled before the void
+	// returns false: the void already credited it back to the customer.
+	RequiresRefundForVoidedInvoice(ctx context.Context, paymentID string) bool
 }
 
 // InvoiceService defines the interface for invoice operations
