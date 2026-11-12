@@ -29,7 +29,7 @@ const (
 	excludedUnsupportedMeter = "unsupported_meter"
 	excludedCommitment       = "commitment"
 	excludedEntitlement      = "entitlement"
-	excludedBillingAdjusted  = "billing_adjusted"
+	excludedUnmatchedCharge  = "unmatched_charge"
 )
 
 // CostAnalyticsService attributes billed cost to the events, and their properties, that caused it.
@@ -363,20 +363,19 @@ func (s *costAnalyticsService) addBilledLines(
 	}
 
 	itemByID := lo.KeyBy(items, func(li *subscription.SubscriptionLineItem) string { return li.ID })
-	precision := types.GetCurrencyPrecision(cs.owner.Currency)
 	for _, c := range charges {
 		li := itemByID[lo.FromPtr(c.SubscriptionLineItemID)]
 		if li == nil {
 			// A charge billing could not tie to a line still hides that meter's usage.
 			if meterID := lo.FromPtr(c.MeterID); requested(meterID) {
-				excludeMeter(in, meterID, excludedBillingAdjusted)
+				excludeMeter(in, meterID, excludedUnmatchedCharge)
 			}
 			continue
 		}
 		if li.PriceType != types.PRICE_TYPE_USAGE || !requested(li.MeterID) {
 			continue
 		}
-		if reason := flatExclusion(cs.owner, li, in.meterByID[li.MeterID], c, precision); reason != "" {
+		if reason := flatExclusion(cs.owner, li, in.meterByID[li.MeterID], c); reason != "" {
 			excludeMeter(in, li.MeterID, reason)
 			continue
 		}
@@ -437,9 +436,8 @@ func (s *costAnalyticsService) periodDiscounts(ctx context.Context, owner *subsc
 }
 
 // flatExclusion returns why a billed line cannot be spread over its events at its unit price, or "".
-// The last check compares billing's amount with quantity × unit price, so any rule billing applied
-// that changed the money (grants, adjustments) excludes the line.
-func flatExclusion(owner *subscription.Subscription, li *subscription.SubscriptionLineItem, m *meter.Meter, c dto.CreateInvoiceLineItemRequest, precision int32) string {
+// Each billing rule that changes a line's money has its own check here; add one with any new rule.
+func flatExclusion(owner *subscription.Subscription, li *subscription.SubscriptionLineItem, m *meter.Meter, c dto.CreateInvoiceLineItemRequest) string {
 	p := li.Price
 	switch {
 	case p == nil || p.BillingModel != types.BILLING_MODEL_FLAT_FEE:
@@ -450,10 +448,8 @@ func flatExclusion(owner *subscription.Subscription, li *subscription.Subscripti
 		return excludedUnsupportedMeter
 	case owner.HasCommitment() || c.CommitmentID != nil || c.CommitmentInfo != nil || c.Metadata[types.MetadataKeyIsOverage] == types.MetadataValueTrue:
 		return excludedCommitment
-	case lo.FromPtr(c.AdjustedEntitlementQuantity).IsPositive():
+	case lo.FromPtr(c.AdjustedEntitlementQuantity).IsPositive(), c.Metadata[metadataKeySubscriptionEntitlementGrantAllowance] != "":
 		return excludedEntitlement
-	case !c.Amount.Equal(c.Quantity.Mul(p.Amount).Round(precision)):
-		return excludedBillingAdjusted
 	}
 	return ""
 }

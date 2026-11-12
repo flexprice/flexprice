@@ -327,8 +327,8 @@ func (s *CostAnalyticsSuite) TestSubscriptionGrantExcludesTheLinesBillingLowered
 	s.NoError(err)
 	// Billing spreads the $10 over the tokens and scaled lines; calls stay at their flat price.
 	s.Equal([]dto.CostExcludedMeter{
-		{MeterID: "m_scaled", Reason: excludedBillingAdjusted},
-		{MeterID: "m_tokens", Reason: excludedBillingAdjusted},
+		{MeterID: "m_scaled", Reason: excludedEntitlement},
+		{MeterID: "m_tokens", Reason: excludedEntitlement},
 	}, resp.ExcludedMeters)
 	s.Equal("0.04", resp.Totals.Cost)
 	s.Equal(1, s.assertLinesEqualInvoice(), "only the calls line remains, equal to its invoice line")
