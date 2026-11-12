@@ -87,6 +87,10 @@ type MeterUsageService interface {
 	// billing path, so a mid-window price change is priced per line-item segment.
 	GetMeterWindowCost(ctx context.Context, sub *subscription.Subscription, meterID string, from, to time.Time) (decimal.Decimal, error)
 
+	// GetGrantUsage is the meter's usage across ranges in an entitlement grant's measure:
+	// billed cost for the amount measure, units otherwise.
+	GetGrantUsage(ctx context.Context, sub *subscription.Subscription, m *meter.Meter, extCustomerIDs []string, measure types.EntitlementGrantMeasure, ranges []events.TimeRange) (decimal.Decimal, error)
+
 	// GetSubscriptionWindowSpend prices every usage line on the subscription over [from, to),
 	// returning the total and the amount per subscription line item.
 	GetSubscriptionWindowSpend(ctx context.Context, sub *subscription.Subscription, from, to time.Time) (decimal.Decimal, map[string]decimal.Decimal, error)
@@ -143,6 +147,38 @@ func (s *meterUsageService) GetMeterWindowCost(ctx context.Context, sub *subscri
 		}
 	}
 	return total, nil
+}
+
+func (s *meterUsageService) GetGrantUsage(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	m *meter.Meter,
+	extCustomerIDs []string,
+	measure types.EntitlementGrantMeasure,
+	ranges []events.TimeRange,
+) (decimal.Decimal, error) {
+	if m == nil {
+		return decimal.Zero, errGrantDepsMissing
+	}
+	if measure == types.EntitlementGrantMeasureAmount {
+		total := decimal.Zero
+		for _, r := range ranges {
+			cost, err := s.GetMeterWindowCost(ctx, sub, m.ID, r.Start, r.End)
+			if err != nil {
+				return decimal.Zero, err
+			}
+			total = total.Add(cost)
+		}
+		return total, nil
+	}
+	return s.GetUsageTotal(ctx, &dto.UsageTotalRequest{
+		TenantID:            types.GetTenantID(ctx),
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		ExternalCustomerIDs: extCustomerIDs,
+		MeterID:             m.ID,
+		AggregationType:     m.Aggregation.Type,
+		TimeRanges:          ranges,
+	})
 }
 
 func (s *meterUsageService) GetSubscriptionWindowSpend(ctx context.Context, sub *subscription.Subscription, from, to time.Time) (decimal.Decimal, map[string]decimal.Decimal, error) {

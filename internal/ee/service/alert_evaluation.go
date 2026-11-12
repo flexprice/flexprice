@@ -14,6 +14,7 @@ import (
 	domainAlert "github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
@@ -363,42 +364,22 @@ func (s *alertService) refreshEntitlementGrantUsage(
 	}
 
 	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
-	if g.Measure == types.EntitlementGrantMeasureQuantity {
-		if keepsRunningAggregate(m) {
-			return meterUsageSvc.GetCheckpointedUsage(ctx, CheckpointedUsageRequest{
-				CustomerID: sub.CustomerID, ExternalCustomerIDs: extCustomerIDs,
-				MeterID: m.ID, AggregationType: m.Aggregation.Type, Until: end,
-				IgnoreCheckpoints: !usesCheckpoints(sub),
-			})
-		}
-		usage, err := meterUsageSvc.GetUsageTotal(ctx, &dto.UsageTotalRequest{
-			TenantID:            g.TenantID,
-			EnvironmentID:       g.EnvironmentID,
-			ExternalCustomerIDs: extCustomerIDs,
-			MeterID:             m.ID,
-			AggregationType:     m.Aggregation.Type,
-			StartTime:           g.ValidFrom,
-			EndTime:             end,
+	if g.Measure == types.EntitlementGrantMeasureQuantity && keepsRunningAggregate(m) {
+		return meterUsageSvc.GetCheckpointedUsage(ctx, CheckpointedUsageRequest{
+			CustomerID: sub.CustomerID, ExternalCustomerIDs: extCustomerIDs,
+			MeterID: m.ID, AggregationType: m.Aggregation.Type, Until: end,
+			IgnoreCheckpoints: !usesCheckpoints(sub),
 		})
-		if err != nil {
-			return decimal.Zero, err
-		}
-
-		s.Logger.Debug(ctx, "quantity measure: entitlement grant evaluation: usage refreshed",
-			"grant_id", g.ID, "usage", usage,
-		)
-		return usage, nil
 	}
-
-	total, err := meterUsageSvc.GetMeterWindowCost(ctx, sub, m.ID, g.ValidFrom, end)
+	usage, err := meterUsageSvc.GetGrantUsage(ctx, sub, m, extCustomerIDs, g.Measure, []events.TimeRange{{Start: g.ValidFrom, End: end}})
 	if err != nil {
 		return decimal.Zero, err
 	}
 
-	s.Logger.Debug(ctx, "amount measure: entitlement grant evaluation: usage refreshed",
-		"grant_id", g.ID, "usage", total,
+	s.Logger.Debug(ctx, "entitlement grant evaluation: usage refreshed",
+		"grant_id", g.ID, "measure", g.Measure, "usage", usage,
 	)
-	return total, nil
+	return usage, nil
 }
 
 // transitionEntitlementGrantAlert emits an alert-log row on state change.

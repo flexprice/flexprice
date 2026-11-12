@@ -911,8 +911,8 @@ var (
 
 func splitLines(qtyA, qtyB int64) []lineUsage {
 	return []lineUsage{
-		{start: splitT0, end: splitChange, quantity: decimal.NewFromInt(qtyA), amount: decimal.NewFromInt(qtyA)},
-		{start: splitChange, end: splitT2, quantity: decimal.NewFromInt(qtyB), amount: decimal.NewFromInt(qtyB)},
+		{start: splitT0, end: splitChange, usage: decimal.NewFromInt(qtyA)},
+		{start: splitChange, end: splitT2, usage: decimal.NewFromInt(qtyB)},
 	}
 }
 
@@ -1041,21 +1041,35 @@ func TestAdjustMeterUsageGrants_ZeroLengthLineBillsNothing(t *testing.T) {
 }
 
 func TestLineUsageByMeter(t *testing.T) {
-	asOf := splitT2
 	items := []*subscription.SubscriptionLineItem{
 		{ID: "b", MeterID: "meter_x", PriceType: types.PRICE_TYPE_USAGE, StartDate: splitChange},
 		{ID: "a", MeterID: "meter_x", PriceType: types.PRICE_TYPE_USAGE, StartDate: splitT0, EndDate: splitChange},
-		{ID: "fixed", MeterID: "", PriceType: types.PRICE_TYPE_FIXED, StartDate: splitT0},
+		{ID: "no_grants", MeterID: "meter_y", PriceType: types.PRICE_TYPE_USAGE, StartDate: splitT0},
+		{ID: "fixed", PriceType: types.PRICE_TYPE_FIXED, StartDate: splitT0},
 	}
 	charges := map[string][]*dto.SubscriptionUsageByMetersResponse{
-		"a": {{Quantity: 600, Amount: 6}, {Quantity: 100, Amount: 2, IsOverage: true}},
-		"b": {{Quantity: 500, Amount: 5}},
+		"a":         {{Quantity: 600, Amount: 6}, {Quantity: 100, Amount: 2, IsOverage: true}},
+		"b":         {{Quantity: 500, Amount: 5}},
+		"no_grants": {{Quantity: 900, Amount: 9}},
 	}
-	got := lineUsageByMeter(items, charges, splitT0, splitT2, asOf)["meter_x"]
-	require.Len(t, got, 2)
-	require.Equal(t, splitT0, got[0].start, "lines ordered by start")
-	require.True(t, got[0].quantity.Equal(decimal.NewFromInt(700)), "a line's usage sums all its charges")
-	require.True(t, got[0].amount.Equal(decimal.NewFromInt(8)))
-	require.Equal(t, splitChange, got[1].start)
-	require.Equal(t, splitT2, got[1].end)
+	for _, tt := range []struct {
+		measure      types.EntitlementGrantMeasure
+		wantA, wantB int64
+	}{
+		{types.EntitlementGrantMeasureQuantity, 700, 500},
+		{types.EntitlementGrantMeasureAmount, 8, 5},
+	} {
+		t.Run(tt.measure.String(), func(t *testing.T) {
+			grants := map[string][]*entitlementgrant.EntitlementGrant{"meter_x": {makeGrant(1, 0, tt.measure)}}
+			got := lineUsageByMeter(items, charges, grants, splitT0, splitT2, splitT2)
+			require.NotContains(t, got, "meter_y", "meters without grants are skipped")
+			lines := got["meter_x"]
+			require.Len(t, lines, 2)
+			require.Equal(t, splitT0, lines[0].start, "lines ordered by start")
+			require.True(t, lines[0].usage.Equal(decimal.NewFromInt(tt.wantA)), "line a usage %s", lines[0].usage)
+			require.Equal(t, splitChange, lines[1].start)
+			require.Equal(t, splitT2, lines[1].end)
+			require.True(t, lines[1].usage.Equal(decimal.NewFromInt(tt.wantB)), "line b usage %s", lines[1].usage)
+		})
+	}
 }

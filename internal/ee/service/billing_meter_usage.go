@@ -207,7 +207,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 		return nil, decimal.Zero, err
 	}
 
-	usageByMeter := lineUsageByMeter(sub.LineItems, chargesByLineItemID, periodStart, periodEnd, asOf)
+	usageByMeter := lineUsageByMeter(sub.LineItems, chargesByLineItemID, grantsByMeterID, periodStart, periodEnd, asOf)
 
 	// --- Per-line-item processing ---
 

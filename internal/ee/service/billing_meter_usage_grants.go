@@ -233,45 +233,13 @@ func (s *billingService) mergedOverage(
 	if len(overageIntervals) == 0 {
 		return decimal.Zero, nil
 	}
-	if m == nil {
-		return decimal.Zero, errGrantDepsMissing
-	}
 
 	overageWindows := MergeIntervals(overageIntervals)
 	billableRanges := make([]events.TimeRange, 0, len(overageWindows))
 	for _, w := range overageWindows {
 		billableRanges = append(billableRanges, events.TimeRange{Start: w.Start, End: w.End})
 	}
-
-	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
-	total := decimal.Zero
-	switch measure {
-	case types.EntitlementGrantMeasureQuantity:
-		usage, err := meterUsageSvc.GetUsageTotal(ctx, &dto.UsageTotalRequest{
-			TenantID:            types.GetTenantID(ctx),
-			EnvironmentID:       types.GetEnvironmentID(ctx),
-			ExternalCustomerIDs: extCustomerIDs,
-			MeterID:             m.ID,
-			AggregationType:     m.Aggregation.Type,
-			TimeRanges:          billableRanges,
-		})
-		if err != nil {
-			return decimal.Zero, err
-		}
-		total = usage
-	case types.EntitlementGrantMeasureAmount:
-		if sub == nil {
-			return decimal.Zero, errGrantDepsMissing
-		}
-		for _, r := range billableRanges {
-			cost, err := meterUsageSvc.GetMeterWindowCost(ctx, sub, m.ID, r.Start, r.End)
-			if err != nil {
-				return decimal.Zero, err
-			}
-			total = total.Add(cost)
-		}
-	}
-	return total, nil
+	return NewMeterUsageService(s.ServiceParams).GetGrantUsage(ctx, sub, m, extCustomerIDs, measure, billableRanges)
 }
 
 // grantOverageInWindow is the part of the grant's overage reached inside window:
@@ -322,56 +290,33 @@ func (s *billingService) grantUsageUntil(
 	if len(lines) > 0 && lines[0].start.Equal(g.ValidFrom) {
 		total := decimal.Zero
 		for _, l := range lines {
-			if l.end.After(t) {
-				continue
-			}
-			if measure == types.EntitlementGrantMeasureAmount {
-				total = total.Add(l.amount)
-			} else {
-				total = total.Add(l.quantity)
+			if !l.end.After(t) {
+				total = total.Add(l.usage)
 			}
 		}
 		return total, nil
 	}
-
-	if m == nil {
-		return decimal.Zero, errGrantDepsMissing
-	}
-	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
-	if measure == types.EntitlementGrantMeasureAmount {
-		if sub == nil {
-			return decimal.Zero, errGrantDepsMissing
-		}
-		return meterUsageSvc.GetMeterWindowCost(ctx, sub, m.ID, g.ValidFrom, t)
-	}
-	return meterUsageSvc.GetUsageTotal(ctx, &dto.UsageTotalRequest{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerIDs: extCustomerIDs,
-		MeterID:             m.ID,
-		AggregationType:     m.Aggregation.Type,
-		StartTime:           g.ValidFrom,
-		EndTime:             t,
-	})
+	return NewMeterUsageService(s.ServiceParams).GetGrantUsage(ctx, sub, m, extCustomerIDs, measure, []events.TimeRange{{Start: g.ValidFrom, End: t}})
 }
 
-// lineUsage is a usage line's elapsed window with the usage already fetched for it.
+// lineUsage is a usage line's elapsed window with the usage already fetched for it, in its grants' measure.
 type lineUsage struct {
 	start, end time.Time
-	quantity   decimal.Decimal
-	amount     decimal.Decimal
+	usage      decimal.Decimal
 }
 
-// lineUsageByMeter collects each meter's elapsed usage lines. A line's usage is the sum of its
-// charges, since commitment pricing splits it into base and overage.
+// lineUsageByMeter collects the elapsed usage lines of each meter that has grants: units for the
+// quantity measure, billed amount for the amount measure.
 func lineUsageByMeter(
 	items []*subscription.SubscriptionLineItem,
 	chargesByLineItemID map[string][]*dto.SubscriptionUsageByMetersResponse,
+	grantsByMeterID map[string][]*entitlementgrant.EntitlementGrant,
 	periodStart, periodEnd, asOf time.Time,
 ) map[string][]lineUsage {
 	out := make(map[string][]lineUsage)
 	for _, item := range items {
-		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
+		grants := grantsByMeterID[item.MeterID]
+		if item.PriceType != types.PRICE_TYPE_USAGE || len(grants) == 0 {
 			continue
 		}
 		start, end, active := elapsedLineItemWindow(item, periodStart, periodEnd, asOf)
@@ -380,8 +325,11 @@ func lineUsageByMeter(
 		}
 		line := lineUsage{start: start, end: end}
 		for _, c := range chargesByLineItemID[item.ID] {
-			line.quantity = line.quantity.Add(c.QuantityDecimal())
-			line.amount = line.amount.Add(c.AmountDecimal())
+			if grants[0].Measure == types.EntitlementGrantMeasureAmount {
+				line.usage = line.usage.Add(c.AmountDecimal())
+			} else {
+				line.usage = line.usage.Add(c.QuantityDecimal())
+			}
 		}
 		out[item.MeterID] = append(out[item.MeterID], line)
 	}
