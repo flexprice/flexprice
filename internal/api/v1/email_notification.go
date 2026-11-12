@@ -1,12 +1,14 @@
 package v1
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -83,4 +85,21 @@ func (h *EmailNotificationHandler) ListInvoiceEmails(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// HandleDeliveryWebhook receives delivery events from the email provider. One URL serves every
+// tenant: the tenant comes from the signed event, and request bodies are never stored.
+func (h *EmailNotificationHandler) HandleDeliveryWebhook(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.Error(ierr.WithError(err).WithHint("Failed to read request body").Mark(ierr.ErrValidation))
+		return
+	}
+
+	provider := types.EmailProvider(c.Param("provider"))
+	if err := h.emailNotificationService.HandleDeliveryWebhook(c.Request.Context(), provider, body, c.Request.Header); err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Webhook processed successfully"})
 }

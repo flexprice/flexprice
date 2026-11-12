@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/mail"
 	"strings"
 
@@ -37,6 +38,10 @@ type EmailNotificationService interface {
 
 	// DispatchEmails sends queued emails from every environment at the deployment's send rate.
 	DispatchEmails(ctx context.Context) (*EmailDispatchResult, error)
+
+	// HandleDeliveryWebhook verifies a provider's delivery webhook and records each event on its email.
+	// Events for another region, events without tenant tags and events for unknown emails are dropped.
+	HandleDeliveryWebhook(ctx context.Context, provider types.EmailProvider, body []byte, header http.Header) error
 }
 
 type emailNotificationService struct {
@@ -275,6 +280,83 @@ func (s *emailNotificationService) MarkEmailFailed(ctx context.Context, emailLog
 			WithStatusReason(reason).
 			Build()
 	})
+}
+
+func (s *emailNotificationService) HandleDeliveryWebhook(ctx context.Context, provider types.EmailProvider, body []byte, header http.Header) error {
+	if provider != s.EmailProvider.Name() {
+		return ierr.NewErrorf("email provider %s is not configured", provider).
+			WithHint("This deployment does not accept delivery events from this provider").
+			Mark(ierr.ErrNotFound)
+	}
+	events, err := s.EmailProvider.ParseEvents(ctx, body, header)
+	if err != nil {
+		return err
+	}
+	for _, ev := range events {
+		if err := s.recordDeliveryEvent(ctx, ev); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// recordDeliveryEvent applies one delivery event to its email, scoped to the tenant in its tags.
+func (s *emailNotificationService) recordDeliveryEvent(ctx context.Context, ev email.DeliveryEvent) error {
+	if ev.Region != s.Config.Email.RegionTag {
+		s.Logger.Info(ctx, "email delivery event dropped", "reason", "other_region", "region", ev.Region, "provider_message_id", ev.ProviderMessageID)
+		return nil
+	}
+	if ev.TenantID == "" || ev.EnvironmentID == "" || ev.EmailLogID == "" {
+		s.Logger.Info(ctx, "email delivery event dropped", "reason", "missing_tags", "provider_message_id", ev.ProviderMessageID)
+		return nil
+	}
+	if ev.OccurredAt.IsZero() {
+		ev.OccurredAt = clock.Now()
+	}
+
+	ctx = types.SetTenantID(ctx, ev.TenantID)
+	ctx = types.SetEnvironmentID(ctx, ev.EnvironmentID)
+	err := s.transition(ctx, ev.EmailLogID, func(cur *emaillog.EmailLog) *emaillog.EmailLog {
+		return applyDeliveryEvent(cur, ev)
+	})
+	if ierr.IsNotFound(err) {
+		s.Logger.Info(ctx, "email delivery event dropped", "reason", "unknown_email", "email_log_id", ev.EmailLogID, "provider_message_id", ev.ProviderMessageID)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Info(ctx, "email delivery event recorded", "email_log_id", ev.EmailLogID, "status", ev.Status)
+	return nil
+}
+
+// applyDeliveryEvent is the email after a delivery event, or nil when the event changes nothing:
+// a stale or repeated status, or an event for a different provider message.
+func applyDeliveryEvent(cur *emaillog.EmailLog, ev email.DeliveryEvent) *emaillog.EmailLog {
+	if cur.ProviderMessageID != nil && *cur.ProviderMessageID != ev.ProviderMessageID {
+		return nil
+	}
+	if !cur.DeliveryStatus.CanMoveTo(ev.Status) {
+		return nil
+	}
+
+	b := emaillog.NewEmailLogBuilder(cur).WithDeliveryStatus(ev.Status)
+	if cur.ProviderMessageID == nil {
+		b = b.WithProviderMessageID(ev.ProviderMessageID)
+	}
+	if ev.Reason != "" {
+		b = b.WithStatusReason(ev.Reason)
+	}
+	switch ev.Status {
+	case types.EmailDeliveryStatusSent:
+		if cur.SentAt == nil {
+			b = b.WithSentAt(ev.OccurredAt)
+		}
+	case types.EmailDeliveryStatusDelivered:
+		b = b.WithDeliveredAt(ev.OccurredAt)
+	}
+	return b.Build()
 }
 
 // transition changes an email log under a row lock, so the delivery workflow and delivery events
