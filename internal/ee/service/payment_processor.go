@@ -250,14 +250,17 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		}
 	}
 
-	if processErr != nil {
-		return paymentObj, processErr
+	// Checked even when saving the link failed: the link exists at the gateway either way.
+	if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink &&
+		paymentObj.DestinationType == types.PaymentDestinationTypeInvoice &&
+		lo.FromPtr(paymentObj.GatewayTrackingID) != "" {
+		if closed, err := p.closeLinkIfInvoiceVoided(ctx, paymentObj); err != nil {
+			return closed, err
+		}
 	}
 
-	if paymentObj.PaymentStatus == types.PaymentStatusPending &&
-		paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink &&
-		paymentObj.DestinationType == types.PaymentDestinationTypeInvoice {
-		return p.closeLinkIfInvoiceVoided(ctx, paymentObj)
+	if processErr != nil {
+		return paymentObj, processErr
 	}
 
 	return paymentObj, nil
