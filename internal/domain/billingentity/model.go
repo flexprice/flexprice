@@ -19,6 +19,9 @@ type BillingEntity struct {
 	BillingDetails      types.BillingDetails `json:"billing_details"`
 	Metadata            map[string]string    `json:"metadata,omitempty"`
 	EnvironmentID       string               `json:"environment_id"`
+	// LogoKey and IconKey are branding image keys; nil means the entity has none.
+	LogoKey *string `json:"-"`
+	IconKey *string `json:"-"`
 	types.BaseModel
 }
 

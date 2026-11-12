@@ -9,6 +9,9 @@ type Environment struct {
 	ID   string                `db:"id" json:"id"`
 	Name string                `db:"name" json:"name"`
 	Type types.EnvironmentType `db:"type" json:"type"`
+	// LogoKey and IconKey are branding image keys; nil means not uploaded.
+	LogoKey *string `db:"logo_key" json:"-"`
+	IconKey *string `db:"icon_key" json:"-"`
 
 	types.BaseModel
 }

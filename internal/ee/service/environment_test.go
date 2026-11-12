@@ -1,15 +1,25 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
+	"hash/crc32"
+	"image"
+	"image/gif"
+	"image/jpeg"
+	"image/png"
+	"strings"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -163,4 +173,140 @@ func (s *EnvironmentServiceSuite) TestUpdateEnvironmentDeniesUnauthorisedTarget(
 	unchanged, err := s.environmentRepo.Get(ctx, "env_prod")
 	s.NoError(err)
 	s.Equal("Production", unchanged.Name)
+}
+
+func brandingPNG(s *EnvironmentServiceSuite, w, h int) []byte {
+	var buf bytes.Buffer
+	s.Require().NoError(png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, w, h))))
+	return buf.Bytes()
+}
+
+func brandingJPEG(s *EnvironmentServiceSuite, w, h int) []byte {
+	var buf bytes.Buffer
+	s.Require().NoError(jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, w, h)), nil))
+	return buf.Bytes()
+}
+
+// brandingPNGDeclaring returns a tiny PNG whose header claims w x h pixels.
+func brandingPNGDeclaring(s *EnvironmentServiceSuite, w, h uint32) []byte {
+	data := brandingPNG(s, 1, 1)
+	binary.BigEndian.PutUint32(data[16:20], w)
+	binary.BigEndian.PutUint32(data[20:24], h)
+	binary.BigEndian.PutUint32(data[29:33], crc32.ChecksumIEEE(data[12:29]))
+	return data
+}
+
+func (s *EnvironmentServiceSuite) TestProcessBrandingImage() {
+	exifSegment := append([]byte{0xFF, 0xE1, 0x00, 0x10}, []byte("Exif\x00\x00GPS-LOCATION")...)
+	jpegWithExif := append([]byte{0xFF, 0xD8}, append(exifSegment, brandingJPEG(s, 200, 200)[2:]...)...)
+	var gif89 bytes.Buffer
+	s.Require().NoError(gif.Encode(&gif89, image.NewRGBA(image.Rect(0, 0, 200, 200)), nil))
+
+	tests := []struct {
+		name    string
+		data    []byte
+		asset   types.BrandingAsset
+		wantErr string
+		wantExt string
+	}{
+		{name: "wide logo at minimum height", data: brandingPNG(s, 600, 128), asset: types.BrandingAssetLogo, wantExt: "png"},
+		{name: "square icon", data: brandingPNG(s, 128, 128), asset: types.BrandingAssetIcon, wantExt: "png"},
+		{name: "jpeg stays jpeg", data: brandingJPEG(s, 300, 200), asset: types.BrandingAssetLogo, wantExt: "jpg"},
+		{name: "non-square icon", data: brandingPNG(s, 200, 100), asset: types.BrandingAssetIcon, wantErr: "Icon must be square"},
+		{name: "small icon", data: brandingPNG(s, 100, 100), asset: types.BrandingAssetIcon, wantErr: "Icon must be at least 128 x 128 px"},
+		{name: "short logo", data: brandingPNG(s, 600, 100), asset: types.BrandingAssetLogo, wantErr: "Logo must be at least 128 px on each side"},
+		{name: "gif", data: gif89.Bytes(), asset: types.BrandingAssetLogo, wantErr: "Only PNG and JPEG images are allowed"},
+		{name: "over 512 KB", data: make([]byte, 513*1024), asset: types.BrandingAssetLogo, wantErr: "Image must be 512 KB or smaller"},
+		{name: "declares too many pixels", data: brandingPNGDeclaring(s, 20000, 20000), asset: types.BrandingAssetLogo, wantErr: "Image must be 4 megapixels or smaller"},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			img, err := processBrandingImage(tt.data, tt.asset)
+			if tt.wantErr != "" {
+				s.Require().Error(err)
+				s.True(ierr.IsValidation(err))
+				s.Contains(err.Error(), tt.wantErr)
+				return
+			}
+			s.Require().NoError(err)
+			s.Equal(tt.wantExt, img.Ext())
+			s.Len(img.Hash(), 64)
+		})
+	}
+
+	s.Run("re-encode keeps size and drops metadata", func() {
+		img, err := processBrandingImage(jpegWithExif, types.BrandingAssetIcon)
+		s.Require().NoError(err)
+		s.NotContains(string(img.Data()), "Exif")
+		cfg, _, err := image.DecodeConfig(bytes.NewReader(img.Data()))
+		s.Require().NoError(err)
+		s.Equal(200, cfg.Width)
+		s.Equal(200, cfg.Height)
+	})
+
+	s.Run("same input gives same hash", func() {
+		data := brandingPNG(s, 300, 150)
+		a, err := processBrandingImage(data, types.BrandingAssetLogo)
+		s.Require().NoError(err)
+		b, err := processBrandingImage(data, types.BrandingAssetLogo)
+		s.Require().NoError(err)
+		s.Equal(a.Hash(), b.Hash())
+		s.Equal("tenant_1/env_1/"+a.Hash()+".png", brandingImageKey("tenant_1", "env_1", a))
+	})
+}
+
+func (s *EnvironmentServiceSuite) TestParseBrandingImageKey() {
+	hash := strings.Repeat("ab", 32)
+	tests := []struct {
+		name, tenant, env, file string
+		ok                      bool
+	}{
+		{name: "prefixed ids", tenant: "tenant_01M77", env: "env_01M77", file: hash + ".png", ok: true},
+		{name: "jpg", tenant: "tenant_1", env: "env_1", file: hash + ".jpg", ok: true},
+		{name: "self-hosted default tenant", tenant: "00000000-0000-0000-0000-000000000000", env: "00000000-0000-0000-0000-000000000000", file: hash + ".png", ok: true},
+		{name: "path traversal", tenant: "..", env: "env_1", file: hash + ".png"},
+		{name: "short hash", tenant: "tenant_1", env: "env_1", file: hash[:63] + ".png"},
+		{name: "uppercase hash", tenant: "tenant_1", env: "env_1", file: strings.ToUpper(hash) + ".png"},
+		{name: "gif extension", tenant: "tenant_1", env: "env_1", file: hash + ".gif"},
+		{name: "id over 50 chars", tenant: strings.Repeat("t", 51), env: "env_1", file: hash + ".png"},
+		{name: "empty env", tenant: "tenant_1", env: "", file: hash + ".png"},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			key, ext, gotHash, ok := parseBrandingImageKey(tt.tenant, tt.env, tt.file)
+			s.Equal(tt.ok, ok)
+			if tt.ok {
+				s.Equal(tt.tenant+"/"+tt.env+"/"+tt.file, key)
+				s.Equal(tt.file[65:], ext)
+				s.Equal(hash, gotHash)
+			}
+		})
+	}
+}
+
+func (s *EnvironmentServiceSuite) TestSelectBrandingKeys() {
+	envLogo, envIcon := lo.ToPtr("t/e/envlogo.png"), lo.ToPtr("t/e/envicon.png")
+	entLogo, entIcon := lo.ToPtr("t/e/entlogo.png"), lo.ToPtr("t/e/enticon.png")
+	env := &environment.Environment{LogoKey: envLogo, IconKey: envIcon}
+
+	tests := []struct {
+		name               string
+		entity             *billingentity.BillingEntity
+		env                *environment.Environment
+		wantLogo, wantIcon *string
+	}{
+		{name: "entity icon only never mixes in env logo", entity: &billingentity.BillingEntity{IconKey: entIcon}, env: env, wantIcon: entIcon},
+		{name: "entity with both", entity: &billingentity.BillingEntity{LogoKey: entLogo, IconKey: entIcon}, env: env, wantLogo: entLogo, wantIcon: entIcon},
+		{name: "entity with none uses env", entity: &billingentity.BillingEntity{}, env: env, wantLogo: envLogo, wantIcon: envIcon},
+		{name: "no entity uses env", env: env, wantLogo: envLogo, wantIcon: envIcon},
+		{name: "nothing anywhere", env: &environment.Environment{}},
+		{name: "no env row", entity: &billingentity.BillingEntity{}},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			logo, icon := selectBrandingKeys(tt.entity, tt.env)
+			s.Equal(tt.wantLogo, logo)
+			s.Equal(tt.wantIcon, icon)
+		})
+	}
 }
