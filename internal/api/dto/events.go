@@ -472,9 +472,9 @@ type UsageAnalyticPoint struct {
 	EventCount uint64          `json:"event_count"`               // Number of events in this time window
 
 	// Commitment breakdown (only populated for windowed commitments)
-	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount,omitempty" swaggertype:"string"`
-	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount,omitempty" swaggertype:"string"`
-	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount,omitempty" swaggertype:"string"`
+	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount,omitzero" swaggertype:"string"`
+	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount,omitzero" swaggertype:"string"`
+	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount,omitzero" swaggertype:"string"`
 
 	// Usage units behind the commitment breakdown, for v2 commitments
 	ComputedCommitmentUtilizedQuantity decimal.Decimal `json:"computed_commitment_utilized_quantity,omitzero" swaggertype:"string"`

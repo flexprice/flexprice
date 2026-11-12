@@ -33458,13 +33458,14 @@
             "type": "object",
             "properties": {
                 "amount": {
+                    "description": "Amount is the commitment amount (v1), or the utilized plus true-up share the commitments bill (v2).",
                     "type": "string"
                 },
                 "computed_commitment_utilized_amount": {
                     "type": "string"
                 },
                 "computed_commitment_utilized_quantity": {
-                    "description": "Usage units behind the computed amounts, for v2 commitments: usage a billing-terms commitment covers counts as\nutilized at no charge, and a quantity commitment's true-up counts its unused units.",
+                    "description": "Usage units behind the computed amounts: usage a billing-terms commitment covers counts as utilized at no\ncharge, and a quantity commitment's true-up counts its unused units.",
                     "type": "string"
                 },
                 "computed_overage_amount": {

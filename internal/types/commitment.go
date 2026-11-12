@@ -177,21 +177,23 @@ func (b TimeOfDayBucket) Validate() error {
 	return nil
 }
 
-// CommitmentInfo holds information about a commitment
+// CommitmentInfo holds information about a commitment. Each commitment version fills only its own fields and zero
+// values are omitted: Quantity, Duration and OverageFactor are v1 line-item settings, the computed quantities are v2.
 type CommitmentInfo struct {
-	Type          CommitmentType   `json:"type"`
-	Amount        decimal.Decimal  `json:"amount" swaggertype:"string"`
-	Quantity      decimal.Decimal  `json:"quantity,omitempty" swaggertype:"string"` // Only used for quantity-based commitments
+	Type CommitmentType `json:"type"`
+	// Amount is the commitment amount (v1), or the utilized plus true-up share the commitments bill (v2).
+	Amount        decimal.Decimal  `json:"amount,omitzero" swaggertype:"string"`
+	Quantity      decimal.Decimal  `json:"quantity,omitzero" swaggertype:"string"` // Only used for quantity-based commitments
 	Duration      BillingPeriod    `json:"duration,omitempty"`
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
 	TrueUpEnabled bool             `json:"true_up_enabled"`
 	IsWindowed    bool             `json:"is_windowed"`
 	// total_cost = computed_commitment_utilized_amount + computed_overage_amount + computed_true_up_amount
-	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount" swaggertype:"string"`
-	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount" swaggertype:"string"`
-	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount" swaggertype:"string"`
-	// Usage units behind the computed amounts, for v2 commitments: usage a billing-terms commitment covers counts as
-	// utilized at no charge, and a quantity commitment's true-up counts its unused units.
+	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount,omitzero" swaggertype:"string"`
+	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount,omitzero" swaggertype:"string"`
+	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount,omitzero" swaggertype:"string"`
+	// Usage units behind the computed amounts: usage a billing-terms commitment covers counts as utilized at no
+	// charge, and a quantity commitment's true-up counts its unused units.
 	ComputedCommitmentUtilizedQuantity decimal.Decimal `json:"computed_commitment_utilized_quantity,omitzero" swaggertype:"string"`
 	ComputedOverageQuantity            decimal.Decimal `json:"computed_overage_quantity,omitzero" swaggertype:"string"`
 	ComputedTrueUpQuantity             decimal.Decimal `json:"computed_true_up_quantity,omitzero" swaggertype:"string"`
