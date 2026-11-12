@@ -68,7 +68,7 @@ func (h *CustomerPortalHandler) GetCustomer(c *gin.Context) {
 }
 
 func (h *CustomerPortalHandler) UpdateCustomer(c *gin.Context) {
-	var req dto.UpdateCustomerRequest
+	var req dto.PortalUpdateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(ierr.WithError(err).Mark(ierr.ErrValidation))
 		return
