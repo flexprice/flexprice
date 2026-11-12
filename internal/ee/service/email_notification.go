@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/email/emailtypes"
 	"github.com/flexprice/flexprice/internal/email/render"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -23,6 +24,8 @@ import (
 type EmailNotificationService interface {
 	// SendInvoiceEmail queues the email for a finalized invoice; DispatchEmails sends it.
 	SendInvoiceEmail(ctx context.Context, invoiceID string, req *dto.SendInvoiceEmailRequest) (*dto.EmailLogResponse, error)
+
+	interfaces.InvoiceEmailSender
 
 	// ListInvoiceEmails returns the emails sent for an invoice, newest first.
 	ListInvoiceEmails(ctx context.Context, invoiceID string) (*dto.ListEmailLogsResponse, error)
@@ -65,6 +68,8 @@ type outgoingEmail struct {
 	senderName     string
 	replyTo        string
 	idempotencyKey *string
+	// skipReason records the email as skipped instead of sending it.
+	skipReason string
 }
 
 // composedEmail is an email type's rendered content for one email log.
@@ -164,6 +169,60 @@ func (s *emailNotificationService) findInvoiceEmailReplay(ctx context.Context, i
 	return existing, nil
 }
 
+func (s *emailNotificationService) SendAutoInvoiceEmail(ctx context.Context, invoiceID string) error {
+	if !s.Config.Email.Enabled {
+		return nil
+	}
+	cfg, err := s.settings(ctx)
+	if err != nil {
+		return err
+	}
+	if !cfg.AutoSends(types.SystemEntityTypeInvoice) {
+		return nil
+	}
+
+	// The invoice was finalized moments ago; read it from the primary, not a lagging replica.
+	ctx = types.WithForceWriter(ctx)
+	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+	if inv.InvoiceStatus != types.InvoiceStatusFinalized {
+		s.Logger.Info(ctx, "automatic invoice email not sent: invoice is not finalized", "invoice_id", invoiceID, "invoice_status", inv.InvoiceStatus)
+		return nil
+	}
+	cust, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
+	if err != nil {
+		return err
+	}
+	merchant, err := invoiceMerchant(ctx, s.ServiceParams, inv)
+	if err != nil {
+		return err
+	}
+
+	out := outgoingEmail{
+		entityType:  types.SystemEntityTypeInvoice,
+		entityID:    inv.ID,
+		customerID:  inv.CustomerID,
+		templateKey: types.EmailTemplateInvoiceFinalized,
+		trigger:     types.EmailTriggerAuto,
+		subject:     invoiceEmailSubject(inv, merchant.Name),
+		to:          lo.Compact([]string{cust.Email}),
+		senderName:  merchant.Name,
+		replyTo:     merchant.BillingDetails.ReplyToEmail(),
+	}
+	if inv.Total.IsZero() {
+		out.skipReason = "Invoice total is zero"
+	}
+
+	_, err = s.queue(ctx, out)
+	if ierr.IsAlreadyExists(err) {
+		s.Logger.Info(ctx, "automatic invoice email already recorded", "invoice_id", invoiceID)
+		return nil
+	}
+	return err
+}
+
 func (s *emailNotificationService) ListInvoiceEmails(ctx context.Context, invoiceID string) (*dto.ListEmailLogsResponse, error) {
 	if _, err := s.InvoiceRepo.Get(ctx, invoiceID); err != nil {
 		return nil, err
@@ -189,6 +248,7 @@ func (s *emailNotificationService) ListInvoiceEmails(ctx context.Context, invoic
 }
 
 // queue checks the sender and recipients and records the email as queued for DispatchEmails.
+// An automatic email that cannot be sent is recorded as skipped, with the reason.
 func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail) (*emaillog.EmailLog, error) {
 	if !s.Config.Email.IsProviderConfigured() {
 		return nil, ierr.NewError("customer emails are disabled").
@@ -205,19 +265,25 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	to := normalizeRecipients(out.to)
-	if len(to) == 0 {
-		return nil, ierr.NewError("no email recipient").
-			WithHint("Add an email address to the customer, or enter one to send to").
-			Mark(ierr.ErrValidation)
-	}
-
 	t, err := s.TenantRepo.GetByID(ctx, types.GetTenantID(ctx))
 	if err != nil {
 		return nil, err
 	}
+	to := normalizeRecipients(out.to)
 	replyTo := lo.CoalesceOrEmpty(out.replyTo, t.BillingDetails.ReplyToEmail())
-	if replyTo == "" {
+	auto := out.trigger == types.EmailTriggerAuto
+
+	switch {
+	case out.skipReason != "":
+	case len(to) == 0 && auto:
+		out.skipReason = "Customer has no email address"
+	case len(to) == 0:
+		return nil, ierr.NewError("no email recipient").
+			WithHint("Add an email address to the customer, or enter one to send to").
+			Mark(ierr.ErrValidation)
+	case replyTo == "" && auto:
+		out.skipReason = "No billing or help email for customers to reply to"
+	case replyTo == "":
 		return nil, ierr.NewError("tenant has no reply-to email").
 			WithHint("Add a billing or help email in your business settings so customers can reply").
 			Mark(ierr.ErrInvalidOperation)
@@ -241,6 +307,15 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 		IdempotencyKey: out.idempotencyKey,
 		Metadata:       types.Metadata{},
 		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	if out.skipReason != "" {
+		e.DeliveryStatus = types.EmailDeliveryStatusSkipped
+		e.StatusReason = lo.ToPtr(out.skipReason)
+		if err := s.EmailLogRepo.Create(ctx, e); err != nil {
+			return nil, err
+		}
+		s.Logger.Info(ctx, "email skipped", "email_log_id", e.ID, "entity_id", e.EntityID, "reason", out.skipReason)
+		return e, nil
 	}
 	if err := s.EmailLogRepo.Create(ctx, e); err != nil {
 		return nil, err
@@ -414,6 +489,10 @@ func (s *emailNotificationService) transition(ctx context.Context, id string, ch
 		}
 		return s.EmailLogRepo.Update(txCtx, next)
 	})
+}
+
+func (s *emailNotificationService) settings(ctx context.Context) (types.EmailNotificationConfig, error) {
+	return GetSetting[types.EmailNotificationConfig](NewSettingsService(s.ServiceParams).(*settingsService), ctx, types.SettingKeyEmailNotificationConfig)
 }
 
 // compose renders an email log with its email type's composer.
