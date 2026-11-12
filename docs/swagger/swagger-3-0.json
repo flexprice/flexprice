@@ -6312,6 +6312,66 @@
         ]
       }
     },
+    "/email-messages/search": {
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Search emails",
+        "description": "Use when reviewing emails sent to customers, for example every bounced email this month or every email to one customer. Filter by delivery status, trigger, customer, document and date. Newest first; paginated.",
+        "operationId": "queryEmailMessage",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/types.EmailLogFilter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEmailLogsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
     "/entitlements": {
       "post": {
         "tags": [
@@ -42508,6 +42568,72 @@
         ],
         "x-speakeasy-name-override": "EmailDeliveryStatus"
       },
+      "types.EmailLogFilter": {
+        "type": "object",
+        "properties": {
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "delivery_statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.EmailDeliveryStatus"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.SystemEntityType"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "sort": {
+            "type": "string"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "triggers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.EmailTrigger"
+            }
+          }
+        },
+        "x-speakeasy-name-override": "EmailLogFilter"
+      },
       "types.EmailProvider": {
         "type": "string",
         "enum": [
@@ -42884,7 +43010,8 @@
           "event",
           "commitment",
           "billing_term",
-          "billing_instalment"
+          "billing_instalment",
+          "email_log"
         ],
         "x-enum-varnames": [
           "SystemEntityTypeFeature",
@@ -42903,7 +43030,8 @@
           "SystemEntityTypeEvent",
           "SystemEntityTypeCommitment",
           "SystemEntityTypeBillingTerm",
-          "SystemEntityTypeBillingInstalment"
+          "SystemEntityTypeBillingInstalment",
+          "SystemEntityTypeEmailLog"
         ],
         "x-speakeasy-name-override": "SystemEntityType"
       },

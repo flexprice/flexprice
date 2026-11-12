@@ -535,6 +535,11 @@ func NewRouter(
 			invoices.POST("/:id/webhook/trigger", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.TriggerWebhook)
 		}
 
+		emailMessages := v1Private.Group("/email-messages")
+		{
+			emailMessages.POST("/search", observe(types.EntityInvoice), handlers.EmailNotification.QueryEmailMessages)
+		}
+
 		feature := v1Private.Group("/features")
 		{
 			feature.POST("", write(types.EntityFeature, types.ActionWrite), handlers.Feature.CreateFeature)
