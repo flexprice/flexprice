@@ -124,6 +124,59 @@ func (h *BillingEntityHandler) UpdateBillingEntity(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Upload a billing entity logo or icon
+// @ID uploadBillingEntityBrandingAsset
+// @Description Upload the billing entity's logo or icon as a PNG or JPEG of at most 512 KB. An icon must be square and at least 128 x 128 px; a logo at least 128 px on each side. An entity with either asset uses only its own; one with none uses its environment's.
+// @Tags Billing Entities
+// @x-scope "write"
+// @Accept multipart/form-data
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Billing entity ID"
+// @Param asset path string true "Asset" Enums(logo, icon)
+// @Param file formData file true "PNG or JPEG image"
+// @Success 200 {object} dto.BillingEntityResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid image or billing entities not enabled"
+// @Failure 404 {object} ierr.ErrorResponse "Not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /billing-entities/{id}/branding/{asset} [put]
+func (h *BillingEntityHandler) UploadBrandingAsset(c *gin.Context) {
+	req, err := readBrandingUpload(c)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	resp, err := h.service.UploadBrandingAsset(c.Request.Context(), c.Param("id"), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Remove a billing entity logo or icon
+// @ID removeBillingEntityBrandingAsset
+// @Description Remove the billing entity's logo or icon. Image URLs handed out earlier keep working.
+// @Tags Billing Entities
+// @x-scope "delete"
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Billing entity ID"
+// @Param asset path string true "Asset" Enums(logo, icon)
+// @Success 200 {object} dto.BillingEntityResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid asset or billing entities not enabled"
+// @Failure 404 {object} ierr.ErrorResponse "Not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /billing-entities/{id}/branding/{asset} [delete]
+func (h *BillingEntityHandler) RemoveBrandingAsset(c *gin.Context) {
+	resp, err := h.service.RemoveBrandingAsset(c.Request.Context(), c.Param("id"), types.BrandingAsset(c.Param("asset")))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Enable billing entities
 // @ID enableBillingEntities
 // @Description Start enabling billing entities in the environment. The environment gets a default entity and its existing customers are assigned to it. Irreversible.

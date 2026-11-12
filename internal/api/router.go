@@ -218,6 +218,8 @@ func NewRouter(
 			user.POST("/chat/verify", handlers.User.CreateSupportChatToken)
 		}
 
+		brandingBodyLimit := middleware.BodyLimitMiddleware(middleware.MaxBrandingUploadBodyBytes)
+
 		environment := v1Private.Group("/environments")
 		{
 			environment.POST("", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.CreateEnvironment)
@@ -225,6 +227,8 @@ func NewRouter(
 			environment.GET("/:id", read(types.EntityEnvironment, types.ActionRead), handlers.Environment.GetEnvironment)
 			environment.PUT("/:id", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.UpdateEnvironment)
 			environment.POST("/:id/clone", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.CloneEnvironment)
+			environment.PUT("/:id/branding/:asset", brandingBodyLimit, write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.UploadBrandingAsset)
+			environment.DELETE("/:id/branding/:asset", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.RemoveBrandingAsset)
 		}
 
 		// Events routes
@@ -646,6 +650,8 @@ func NewRouter(
 			billingEntities.POST("", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.CreateBillingEntity)
 			billingEntities.GET("/:id", observe(types.EntityBillingEntity), handlers.BillingEntity.GetBillingEntity)
 			billingEntities.PUT("/:id", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.UpdateBillingEntity)
+			billingEntities.PUT("/:id/branding/:asset", brandingBodyLimit, write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.UploadBrandingAsset)
+			billingEntities.DELETE("/:id/branding/:asset", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.RemoveBrandingAsset)
 		}
 
 		taxAssociations := tax.Group("/associations")

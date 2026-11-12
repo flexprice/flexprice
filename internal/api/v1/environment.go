@@ -90,6 +90,64 @@ func (h *EnvironmentHandler) UpdateEnvironment(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Upload an environment logo or icon
+// @ID uploadEnvironmentBrandingAsset
+// @Description Upload the environment's logo or icon as a PNG or JPEG of at most 512 KB. An icon must be square and at least 128 x 128 px; a logo at least 128 px on each side. Replaces the current asset.
+// @Tags Environments
+// @x-scope "write"
+// @Accept multipart/form-data
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Environment ID"
+// @Param asset path string true "Asset" Enums(logo, icon)
+// @Param file formData file true "PNG or JPEG image"
+// @Success 200 {object} dto.EnvironmentResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 403 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /environments/{id}/branding/{asset} [put]
+func (h *EnvironmentHandler) UploadBrandingAsset(c *gin.Context) {
+	req, err := readBrandingUpload(c)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	resp, err := h.service.UploadBrandingAsset(c.Request.Context(), c.Param("id"), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Remove an environment logo or icon
+// @ID removeEnvironmentBrandingAsset
+// @Description Remove the environment's logo or icon. Image URLs handed out earlier keep working.
+// @Tags Environments
+// @x-scope "delete"
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Environment ID"
+// @Param asset path string true "Asset" Enums(logo, icon)
+// @Success 200 {object} dto.EnvironmentResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 403 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /environments/{id}/branding/{asset} [delete]
+func (h *EnvironmentHandler) RemoveBrandingAsset(c *gin.Context) {
+	resp, err := h.service.RemoveBrandingAsset(c.Request.Context(), c.Param("id"), types.BrandingAsset(c.Param("asset")))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Clone an environment
 // @ID cloneEnvironment
 // @Description Clone all published features and plans from the source environment into a target environment. If target_environment_id is provided, entities are cloned into that existing environment. Otherwise a new environment is created from name and type first.

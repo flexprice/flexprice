@@ -2,19 +2,89 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
+	"path"
 	"regexp"
+	"strings"
 
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/types"
 )
+
+// BrandingService stores branding images and resolves an issuer's logo and icon.
+type BrandingService interface {
+	// StoreImage checks and re-encodes an upload, stores it under the tenant in ctx and the given environment, and returns its image key.
+	StoreImage(ctx context.Context, environmentID string, asset types.BrandingAsset, data []byte) (string, error)
+}
+
+type brandingService struct {
+	ServiceParams
+}
+
+func NewBrandingService(params ServiceParams) BrandingService {
+	return &brandingService{ServiceParams: params}
+}
+
+func (s *brandingService) StoreImage(ctx context.Context, environmentID string, asset types.BrandingAsset, data []byte) (string, error) {
+	img, err := processBrandingImage(data, asset)
+	if err != nil {
+		return "", err
+	}
+
+	store, err := s.StorageResolver.ForPlatform(ctx, storage.PurposeBranding)
+	if err != nil {
+		return "", err
+	}
+	bc, err := s.StorageResolver.BucketConfigFor(storage.PurposeBranding)
+	if err != nil {
+		return "", err
+	}
+
+	key := brandingImageKey(types.GetTenantID(ctx), environmentID, img)
+	objectKey := brandingObjectKey(bc.KeyPrefix, key)
+	exists, err := store.Exists(ctx, objectKey)
+	if err != nil {
+		s.Logger.Error(ctx, "branding image existence check failed", "error", err, "environment_id", environmentID, "key", key)
+		return "", err
+	}
+	if exists {
+		return key, nil
+	}
+
+	format := storage.UploadFormatPNG
+	if img.Ext() == "jpg" {
+		format = storage.UploadFormatJPEG
+	}
+	if _, err := store.Upload(ctx, &storage.UploadRequest{Key: objectKey, Data: img.Data(), Format: format}); err != nil {
+		s.Logger.Error(ctx, "branding image upload failed", "error", err, "environment_id", environmentID, "key", key)
+		return "", err
+	}
+	return key, nil
+}
+
+// brandingObjectKey is the storage object for an image key: <prefix>/branding/<key>.
+func brandingObjectKey(prefix, key string) string {
+	ext := path.Ext(key)
+	return storage.ObjectKey(prefix, "branding", strings.TrimSuffix(key, ext), strings.TrimPrefix(ext, "."), false)
+}
+
+// brandingImageURL is the public URL of an image key, or "" when unset or no public origin is configured.
+func brandingImageURL(cfg *config.Configuration, key *string) string {
+	if key == nil || cfg == nil || cfg.Branding.BaseURL == "" {
+		return ""
+	}
+	return strings.TrimRight(cfg.Branding.BaseURL, "/") + "/v1/branding/images/" + *key
+}
 
 const (
 	brandingMaxUploadBytes = 512 * 1024

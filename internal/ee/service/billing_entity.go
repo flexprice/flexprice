@@ -36,6 +36,10 @@ type BillingEntityService interface {
 	Get(ctx context.Context, id string) (*dto.BillingEntityResponse, error)
 	List(ctx context.Context, filter *types.BillingEntityFilter) (*dto.ListBillingEntitiesResponse, error)
 	Update(ctx context.Context, id string, req dto.UpdateBillingEntityRequest) (*dto.BillingEntityResponse, error)
+	// UploadBrandingAsset stores the entity's logo or icon.
+	UploadBrandingAsset(ctx context.Context, id string, req dto.UploadBrandingAssetRequest) (*dto.BillingEntityResponse, error)
+	// RemoveBrandingAsset clears the entity's logo or icon; the stored image stays.
+	RemoveBrandingAsset(ctx context.Context, id string, asset types.BrandingAsset) (*dto.BillingEntityResponse, error)
 }
 
 type billingEntityService struct {
@@ -391,7 +395,7 @@ func (s *billingEntityService) Create(ctx context.Context, req dto.CreateBilling
 	if err := s.BillingEntityRepo.Create(ctx, entity); err != nil {
 		return nil, err
 	}
-	return &dto.BillingEntityResponse{BillingEntity: entity}, nil
+	return s.entityResponse(entity), nil
 }
 
 func (s *billingEntityService) Get(ctx context.Context, id string) (*dto.BillingEntityResponse, error) {
@@ -402,7 +406,7 @@ func (s *billingEntityService) Get(ctx context.Context, id string) (*dto.Billing
 	if err != nil {
 		return nil, err
 	}
-	return &dto.BillingEntityResponse{BillingEntity: entity}, nil
+	return s.entityResponse(entity), nil
 }
 
 func (s *billingEntityService) List(ctx context.Context, filter *types.BillingEntityFilter) (*dto.ListBillingEntitiesResponse, error) {
@@ -426,7 +430,7 @@ func (s *billingEntityService) List(ctx context.Context, filter *types.BillingEn
 	}
 
 	items := lo.Map(entities, func(e *billingentity.BillingEntity, _ int) *dto.BillingEntityResponse {
-		return &dto.BillingEntityResponse{BillingEntity: e}
+		return s.entityResponse(e)
 	})
 	resp := types.NewListResponse(items, total, filter.GetLimit(), filter.GetOffset())
 	return &resp, nil
@@ -463,7 +467,63 @@ func (s *billingEntityService) Update(ctx context.Context, id string, req dto.Up
 	if err := s.BillingEntityRepo.Update(ctx, updated); err != nil {
 		return nil, err
 	}
-	return &dto.BillingEntityResponse{BillingEntity: updated}, nil
+	return s.entityResponse(updated), nil
+}
+
+func (s *billingEntityService) UploadBrandingAsset(ctx context.Context, id string, req dto.UploadBrandingAssetRequest) (*dto.BillingEntityResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.requireEnabled(ctx); err != nil {
+		return nil, err
+	}
+	existing, err := s.BillingEntityRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := NewBrandingService(s.ServiceParams).StoreImage(ctx, existing.EnvironmentID, req.Asset, req.Data)
+	if err != nil {
+		return nil, err
+	}
+	return s.saveBrandingKey(ctx, existing, req.Asset, &key)
+}
+
+func (s *billingEntityService) RemoveBrandingAsset(ctx context.Context, id string, asset types.BrandingAsset) (*dto.BillingEntityResponse, error) {
+	if err := asset.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.requireEnabled(ctx); err != nil {
+		return nil, err
+	}
+	existing, err := s.BillingEntityRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.saveBrandingKey(ctx, existing, asset, nil)
+}
+
+func (s *billingEntityService) saveBrandingKey(ctx context.Context, existing *billingentity.BillingEntity, asset types.BrandingAsset, key *string) (*dto.BillingEntityResponse, error) {
+	builder := billingentity.NewBillingEntityBuilder(existing)
+	if asset == types.BrandingAssetLogo {
+		builder.WithLogoKey(key)
+	} else {
+		builder.WithIconKey(key)
+	}
+
+	updated := builder.Build()
+	if err := s.BillingEntityRepo.Update(ctx, updated); err != nil {
+		return nil, err
+	}
+	return s.entityResponse(updated), nil
+}
+
+func (s *billingEntityService) entityResponse(e *billingentity.BillingEntity) *dto.BillingEntityResponse {
+	return &dto.BillingEntityResponse{
+		BillingEntity: e,
+		LogoURL:       brandingImageURL(s.Config, e.LogoKey),
+		IconURL:       brandingImageURL(s.Config, e.IconKey),
+	}
 }
 
 // providerConnected reports whether the billing entity in ctx has a connection for the provider; without one in ctx it is true.

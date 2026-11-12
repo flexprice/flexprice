@@ -46,6 +46,8 @@ func (r *UpdateBillingEntityRequest) Validate() error {
 
 type BillingEntityResponse struct {
 	*billingentity.BillingEntity
+	LogoURL string `json:"logo_url,omitempty"`
+	IconURL string `json:"icon_url,omitempty"`
 }
 
 type ListBillingEntitiesResponse = types.ListResponse[*BillingEntityResponse]
