@@ -13990,6 +13990,26 @@ const docTemplate = `{
                         "description": "Filter by enabled status",
                         "name": "enabled",
                         "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "console",
+                            "customers_page"
+                        ],
+                        "type": "string",
+                        "description": "Only exports created from this origin",
+                        "name": "origin",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "console",
+                            "customers_page"
+                        ],
+                        "type": "string",
+                        "description": "Hide exports created from this origin",
+                        "name": "exclude_origin",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -14019,7 +14039,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.\ninterval is hourly, daily, weekly, monthly or manual; exports run hourly at most, so 15MIN and 30MIN are rejected. Existing exports may still report 15MIN or 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule. Weekly schedules require day_of_week and monthly schedules require day_of_month; each is rejected for other intervals. A schedule time that daylight saving skips in its timezone (for example 02:30 America/Los_Angeles) is rejected for daily, weekly and monthly exports.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = the previous full ISO week (Monday 00:00 to the following Monday 00:00) whatever day_of_week is, so a Sunday run covers the week that ended six days earlier; monthly = previous calendar month; manual = previous UTC day unless a window is given.\nemail_config recipients are allowed only for daily, weekly, monthly and manual exports; hourly, 15MIN and 30MIN reject them.\nentity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config is rejected for other entity types and cannot be changed later. Clients should tolerate new entity_type values.\nReport sources allow interval daily, weekly, monthly or manual; schedule is required unless manual. The window is the period before the scheduled time's date in the schedule's timezone, as whole UTC days (a Dec 1 00:30 Asia/Kolkata monthly run covers November UTC), and a custom run window must be whole UTC days and its end is exclusive (Nov 1 to Nov 10 excludes Nov 10). A timeseries report grain (or the report's default grain) may not be coarser than the interval: week or month on daily and month on weekly are rejected. export_metadata_fields is not allowed. These exports also need analytics read access.",
+                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.\ninterval is hourly, daily, weekly, monthly or manual; exports run hourly at most, so 15MIN and 30MIN are rejected. Existing exports may still report 15MIN or 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule. Weekly schedules require day_of_week and monthly schedules require day_of_month; each is rejected for other intervals. A schedule time that daylight saving skips in its timezone (for example 02:30 America/Los_Angeles) is rejected for daily, weekly and monthly exports.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = the previous full ISO week (Monday 00:00 to the following Monday 00:00) whatever day_of_week is, so a Sunday run covers the week that ended six days earlier; monthly = previous calendar month; manual = previous UTC day unless a window is given.\nemail_config recipients are allowed only for daily, weekly, monthly and manual exports; hourly, 15MIN and 30MIN reject them.\nentity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config cannot be changed later. Clients should tolerate new entity_type values.\norigin is console (default) or customers_page. customer_filter inside source_config limits the export to matching customers, needs origin customers_page, and is allowed for customers, wallet_ledger, invoice, credit_topups, credit_usage and usage_analytics exports and for reports with a customer dimension; entity_type customers requires it.\nAn empty customer_filter exports published customers only; add a status filter to include archived ones. Supported customer_filter fields are filters, metadata, email, billing_entity_id and status; unknown fields and customer id lists are rejected, and limit, offset and sort are ignored.\nA customers export is a snapshot of the customer list at run time and ignores the run window.\nrun_now (manual exports only) starts a run right after creation, optionally over run_window; the response then carries run.workflow_id. If the run cannot start the export is still created and run is absent.\nsource_config is required for report and analytics_view exports and for customers exports; other entity types accept only customer_filter in it, and only when it is allowed for them. run_window needs both start_time and end_time.\nReport sources allow interval daily, weekly, monthly or manual; schedule is required unless manual. The window is the period before the scheduled time's date in the schedule's timezone, as whole UTC days (a Dec 1 00:30 Asia/Kolkata monthly run covers November UTC), and a custom run window must be whole UTC days and its end is exclusive (Nov 1 to Nov 10 excludes Nov 10). A timeseries report grain (or the report's default grain) may not be coarser than the interval: week or month on daily and month on weekly are rejected. export_metadata_fields is not allowed. These exports also need analytics read access.",
                 "consumes": [
                     "application/json"
                 ],
@@ -14280,7 +14300,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.\nWithout a requested time range, manual exports and exports with a schedule omit start_time and end_time from the response; other exports return the calculated range.\nReturns 400 when the export is paused (enabled is false); turn it on first.\nA custom window's end_time is exclusive: a window from Nov 1 to Nov 10 excludes Nov 10.",
+                "description": "Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.\nWithout a requested time range, manual exports and exports with a schedule omit start_time and end_time from the response; other exports return the calculated range.\nReturns 400 when the export is paused (enabled is false); turn it on first.\nA custom window's end_time is exclusive: a window from Nov 1 to Nov 10 excludes Nov 10. A customers export is a snapshot of the customer list and ignores the window.",
                 "consumes": [
                     "application/json"
                 ],
@@ -23862,11 +23882,35 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "origin": {
+                    "description": "Defaults to console.",
+                    "enum": [
+                        "console",
+                        "customers_page"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ExportOrigin"
+                        }
+                    ]
+                },
+                "run_now": {
+                    "description": "Manual exports only; starts a run right after creation.",
+                    "type": "boolean"
+                },
+                "run_window": {
+                    "description": "Window for the run_now run.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ExportRunWindow"
+                        }
+                    ]
+                },
                 "schedule": {
                     "$ref": "#/definitions/types.ExportSchedule"
                 },
                 "source_config": {
-                    "description": "Required for report and analytics_view exports.",
+                    "description": "Report and analytics_view sources; customer_filter for allowed entity types.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ExportSourceConfig"
@@ -25710,6 +25754,21 @@ const docTemplate = `{
                 },
                 "max_recipients": {
                     "type": "integer"
+                }
+            }
+        },
+        "ExportRunWindow": {
+            "type": "object",
+            "required": [
+                "end_time",
+                "start_time"
+            ],
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
                 }
             }
         },
@@ -30258,6 +30317,25 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "origin": {
+                    "enum": [
+                        "console",
+                        "customers_page"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ExportOrigin"
+                        }
+                    ]
+                },
+                "run": {
+                    "description": "Set on create when run_now started a run.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/TriggerForceRunResponse"
+                        }
+                    ]
                 },
                 "schedule": {
                     "$ref": "#/definitions/types.ExportSchedule"
@@ -39673,7 +39751,8 @@ const docTemplate = `{
                 "usage_analytics",
                 "revenue_facts",
                 "report",
-                "analytics_view"
+                "analytics_view",
+                "customers"
             ],
             "x-enum-varnames": [
                 "ScheduledTaskEntityTypeEvents",
@@ -39685,7 +39764,8 @@ const docTemplate = `{
                 "ScheduledTaskEntityTypeUsageAnalytics",
                 "ScheduledTaskEntityTypeRevenueFacts",
                 "ScheduledTaskEntityTypeReport",
-                "ScheduledTaskEntityTypeAnalyticsView"
+                "ScheduledTaskEntityTypeAnalyticsView",
+                "ScheduledTaskEntityTypeCustomers"
             ]
         },
         "types.ScheduledTaskInterval": {
@@ -42547,6 +42627,17 @@ const docTemplate = `{
                 }
             }
         },
+        "types.ExportOrigin": {
+            "type": "string",
+            "enum": [
+                "console",
+                "customers_page"
+            ],
+            "x-enum-varnames": [
+                "ExportOriginConsole",
+                "ExportOriginCustomersPage"
+            ]
+        },
         "types.ExportSchedule": {
             "type": "object",
             "required": [
@@ -42583,6 +42674,14 @@ const docTemplate = `{
         "types.ExportSourceConfig": {
             "type": "object",
             "properties": {
+                "customer_filter": {
+                    "description": "Limits the export to matching customers.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CustomerFilter"
+                        }
+                    ]
+                },
                 "report_key": {
                     "type": "string"
                 },

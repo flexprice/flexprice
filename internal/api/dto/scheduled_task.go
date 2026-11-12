@@ -21,7 +21,7 @@ type CreateScheduledTaskRequest struct {
 	Enabled   bool                        `json:"enabled"`
 	JobConfig *types.S3JobConfig          `json:"job_config,omitempty"`
 	Schedule  *types.ExportSchedule       `json:"schedule,omitempty"`
-	// Required for report and analytics_view exports.
+	// Report and analytics_view sources; customer_filter for allowed entity types.
 	SourceConfig *types.ExportSourceConfig `json:"source_config,omitempty"`
 	// Run recipients; daily, weekly, monthly, manual only.
 	EmailConfig *types.ExportEmailConfig `json:"email_config,omitempty"`
@@ -35,8 +35,8 @@ type CreateScheduledTaskRequest struct {
 
 // ExportRunWindow is a custom run window.
 type ExportRunWindow struct {
-	StartTime time.Time `json:"start_time"`
-	EndTime   time.Time `json:"end_time"`
+	StartTime time.Time `json:"start_time" validate:"required"`
+	EndTime   time.Time `json:"end_time" validate:"required"`
 }
 
 const maxScheduledTaskNameLength = 120

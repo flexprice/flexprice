@@ -15,11 +15,13 @@ import (
 	"github.com/samber/lo"
 )
 
-var customersCSVHeaders = []string{
-	"customer_id", "external_id", "name", "email", "status",
-	"billing_currency", "billing_entity_id",
-	"address_line1", "address_line2", "city", "state", "postal_code", "country",
-	"timezone", "created_at", "updated_at",
+func customersCSVHeaders() []string {
+	return []string{
+		"customer_id", "external_id", "name", "email", "status",
+		"billing_currency", "billing_entity_id",
+		"address_line1", "address_line2", "city", "state", "postal_code", "country",
+		"timezone", "created_at", "updated_at",
+	}
 }
 
 const (
@@ -76,7 +78,7 @@ func (e *CustomersExporter) WriteData(ctx context.Context, request *dto.ExportRe
 	metaKeys := lo.Keys(keys)
 	sort.Strings(metaKeys)
 
-	header := append([]string{}, customersCSVHeaders...)
+	header := customersCSVHeaders()
 	for _, k := range metaKeys {
 		header = append(header, customersMetadataPrefix+k)
 	}

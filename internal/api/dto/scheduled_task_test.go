@@ -48,3 +48,29 @@ func TestUpdateScheduledTaskRequest_EmailConfigOnly(t *testing.T) {
 	var empty UpdateScheduledTaskRequest
 	require.Error(t, empty.Validate())
 }
+
+func TestCreateScheduledTaskRequest_RunWindowNeedsBothBounds(t *testing.T) {
+	base := `{"entity_type":"analytics_view","interval":"manual","enabled":true,"run_now":true,"source_config":{"view_id":"v"},`
+	tests := []struct {
+		name    string
+		window  string
+		wantErr bool
+	}{
+		{"both", `"run_window":{"start_time":"2026-11-01T00:00:00Z","end_time":"2026-11-02T00:00:00Z"}}`, false},
+		{"start only", `"run_window":{"start_time":"2026-11-01T00:00:00Z"}}`, true},
+		{"end only", `"run_window":{"end_time":"2026-11-02T00:00:00Z"}}`, true},
+		{"empty", `"run_window":{}}`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var req CreateScheduledTaskRequest
+			require.NoError(t, json.Unmarshal([]byte(base+tt.window), &req))
+			err := req.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}

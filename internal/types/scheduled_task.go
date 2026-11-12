@@ -1,6 +1,9 @@
 package types
 
 import (
+	"bytes"
+	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -286,6 +289,35 @@ type ExportSourceConfig struct {
 	ViewID       string        `json:"view_id,omitempty"`
 	// Limits the export to matching customers.
 	CustomerFilter *CustomerFilter `json:"customer_filter,omitempty"`
+}
+
+// UnmarshalJSON rejects unknown customer_filter fields.
+func (c *ExportSourceConfig) UnmarshalJSON(data []byte) error {
+	type plain ExportSourceConfig
+	aux := struct {
+		*plain
+		CustomerFilter json.RawMessage `json:"customer_filter"`
+	}{plain: (*plain)(c)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	c.CustomerFilter = nil
+	if len(aux.CustomerFilter) == 0 || string(aux.CustomerFilter) == "null" {
+		return nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(aux.CustomerFilter))
+	dec.DisallowUnknownFields()
+	filter := &CustomerFilter{}
+	if err := dec.Decode(filter); err != nil {
+		if name, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
+			return ierr.NewErrorf("unknown customer filter field %s", name).
+				WithHintf("Unknown customer filter field: %s", strings.Trim(name, `"`)).
+				Mark(ierr.ErrValidation)
+		}
+		return err
+	}
+	c.CustomerFilter = filter
+	return nil
 }
 
 // GetCustomerFilter is nil-safe.

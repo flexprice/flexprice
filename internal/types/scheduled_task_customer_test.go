@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 )
@@ -93,4 +94,25 @@ func TestExportSourceConfig_ValidateCustomerFilter(t *testing.T) {
 	require.NoError(t, ExportOriginConsole.Validate())
 	require.NoError(t, ExportOriginCustomersPage.Validate())
 	require.Error(t, ExportOrigin("x").Validate())
+}
+
+func TestExportSourceConfig_UnmarshalStrictCustomerFilter(t *testing.T) {
+	var cfg ExportSourceConfig
+	require.NoError(t, json.Unmarshal([]byte(`{"customer_filter":{}}`), &cfg))
+	require.NotNil(t, cfg.CustomerFilter)
+
+	cfg = ExportSourceConfig{}
+	require.NoError(t, json.Unmarshal([]byte(`{"view_id":"v","customer_filter":null}`), &cfg))
+	require.Nil(t, cfg.CustomerFilter)
+	require.Equal(t, "v", cfg.ViewID)
+
+	cfg = ExportSourceConfig{}
+	full := `{"customer_filter":{"limit":5,"offset":1,"status":"archived","sort":[],"order":"asc","expand":"x","start_time":"2026-01-01T00:00:00Z","end_time":"2026-01-02T00:00:00Z","metadata":{"k":"v"},"filters":[],"email":"a@b.co","billing_entity_id":"be"}}`
+	require.NoError(t, json.Unmarshal([]byte(full), &cfg))
+	require.Equal(t, "be", cfg.CustomerFilter.BillingEntityID)
+
+	cfg = ExportSourceConfig{}
+	err := json.Unmarshal([]byte(`{"customer_filter":{"emial":"a@b.co"}}`), &cfg)
+	require.Error(t, err)
+	require.Equal(t, "Unknown customer filter field: emial", errors.GetAllHints(err)[0])
 }
