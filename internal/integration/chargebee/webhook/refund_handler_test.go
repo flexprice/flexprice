@@ -25,6 +25,14 @@ type fakeRefundService struct {
 	appliedFail   int
 }
 
+func (f *fakeRefundService) RefundCaptureOnVoidedInvoice(context.Context, string, string) bool {
+	return false
+}
+
+func (f *fakeRefundService) RefundUnrecordedCaptureOnVoidedInvoice(context.Context, string, string, decimal.Decimal) bool {
+	return false
+}
+
 func (f *fakeRefundService) GetRefundByGatewayRefundID(_ context.Context, _, gatewayRefundID string) (*dto.RefundResponse, error) {
 	if f.row == nil || f.row.GatewayRefundID == nil || *f.row.GatewayRefundID != gatewayRefundID {
 		return nil, ierr.NewError("refund not found").Mark(ierr.ErrNotFound)

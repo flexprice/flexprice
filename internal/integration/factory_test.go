@@ -896,6 +896,7 @@ func TestFactory_GetRefundProvider(t *testing.T) {
 	supported := []types.PaymentGatewayType{
 		types.PaymentGatewayTypeRazorpay,
 		types.PaymentGatewayTypeChargebee,
+		types.PaymentGatewayTypeStripe,
 	}
 	for _, gateway := range supported {
 		provider, err := factory.GetRefundProvider(ctx, gateway)
@@ -906,7 +907,6 @@ func TestFactory_GetRefundProvider(t *testing.T) {
 	// Moyasar refunds only in full, so it has no v1 adapter.
 	unsupported := []types.PaymentGatewayType{
 		types.PaymentGatewayTypeMoyasar,
-		types.PaymentGatewayTypeStripe,
 		types.PaymentGatewayTypeNomod,
 		types.PaymentGatewayTypePaddle,
 		types.PaymentGatewayTypeWhop,

@@ -1103,26 +1103,6 @@ func (s *PaymentService) RefundLateCapturedPayment(
 			Mark(ierr.ErrInternal)
 	}
 
-	if existingPayment.PaymentStatus == types.PaymentStatusFailed || existingPayment.PaymentStatus == types.PaymentStatusVoided {
-		s.logger.Info(ctx, "late-captured payment is in a final status, recording refund reference only",
-			"payment_id", flexpricePaymentID, "status", existingPayment.PaymentStatus)
-		finalReq := dto.UpdatePaymentRequest{GatewayPaymentID: lo.ToPtr(razorpayPaymentID)}
-		if refundID != "" {
-			metadata := lo.Assign(existingPayment.Metadata, types.Metadata{"razorpay_refund_id": refundID})
-			finalReq.Metadata = &metadata
-		}
-		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, finalReq); err != nil {
-			return ierr.WithError(err).
-				WithMessage("refund confirmed at Razorpay but failed to record the refund reference on the FlexPrice payment").
-				WithReportableDetails(map[string]interface{}{
-					"payment_id":         flexpricePaymentID,
-					"razorpay_refund_id": refundID,
-				}).
-				Mark(ierr.ErrInternal)
-		}
-		return nil
-	}
-
 	if existingPayment.PaymentStatus != types.PaymentStatusSucceeded && existingPayment.PaymentStatus != types.PaymentStatusOverpaid {
 		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, dto.UpdatePaymentRequest{
 			PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),

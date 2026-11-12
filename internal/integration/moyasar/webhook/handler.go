@@ -176,6 +176,10 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 		return nil
 	}
 
+	if services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, payment.ID) {
+		return nil
+	}
+
 	now := clock.Now()
 
 	if err := h.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
@@ -188,6 +192,8 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 			"moyasar_payment_id", payment.ID,
 			"error", err,
 		)
+		// The invoice may have been voided after the check above.
+		services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, payment.ID)
 		return nil
 	}
 
@@ -379,6 +385,14 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment *moyasar.Moy
 	h.logger.Info(ctx, "found FlexPrice invoice for Moyasar invoice",
 		"flexprice_invoice_id", flexpriceInvoiceID,
 		"moyasar_invoice_id", moyasarInvoiceID)
+
+	// A capture already recorded is left to ProcessExternalMoyasarPayment, which skips it.
+	if exists, err := services.PaymentService.PaymentExistsByGatewayPaymentID(ctx, payment.ID); err == nil && !exists {
+		amount := types.FromSmallestUnit(int64(payment.Amount), payment.Currency)
+		if services.RefundService.RefundUnrecordedCaptureOnVoidedInvoice(ctx, flexpriceInvoiceID, payment.ID, amount) {
+			return nil
+		}
+	}
 
 	if err := h.paymentSvc.ProcessExternalMoyasarPayment(ctx, payment, flexpriceInvoiceID, services.PaymentService, services.InvoiceService); err != nil {
 		h.logger.Error(ctx, "failed to process external Moyasar payment",

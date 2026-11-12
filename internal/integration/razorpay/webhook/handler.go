@@ -184,7 +184,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
-	if h.refundIfInvoiceVoided(ctx, services, flexpricePaymentID, payment.ID) {
+	if services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, payment.ID) {
 		return nil
 	}
 
@@ -233,7 +233,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
 		// The invoice may have been voided after the check above.
-		h.refundIfInvoiceVoided(ctx, services, flexpricePaymentID, payment.ID)
+		services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, payment.ID)
 		return nil // Don't return error - webhook should always succeed
 	}
 
@@ -685,18 +685,4 @@ func (h *Handler) resolveRefund(ctx context.Context, razorpayRefundID string, se
 		return nil
 	}
 	return row
-}
-
-// refundIfInvoiceVoided refunds a capture whose invoice was voided; true means the caller must not settle it.
-func (h *Handler) refundIfInvoiceVoided(ctx context.Context, services *ServiceDependencies, flexpricePaymentID, razorpayPaymentID string) bool {
-	if !services.PaymentService.RequiresRefundForVoidedInvoice(ctx, flexpricePaymentID) {
-		return false
-	}
-	if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService); err != nil {
-		h.logger.Error(ctx, "failed to refund payment on voided invoice, manual reconciliation required",
-			"error", err,
-			"flexprice_payment_id", flexpricePaymentID,
-			"razorpay_payment_id", razorpayPaymentID)
-	}
-	return true
 }

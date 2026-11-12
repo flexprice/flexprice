@@ -157,10 +157,6 @@ func (s *fakePaymentService) UpdatePayment(_ context.Context, _ string, req dto.
 
 // ── cache.Locker fake: always grants the lock ────────────────────────────────
 
-func (s *fakePaymentService) RequiresRefundForVoidedInvoice(context.Context, string) bool {
-	return false
-}
-
 type grantingLocker struct{}
 
 func (grantingLocker) AcquireLock(_ context.Context, _ string, _ time.Duration) (cache.Lock, error) {
@@ -215,7 +211,7 @@ func (s *ChargebeeWebhookCheckoutSuite) SetupTest() {
 		Currency:      "USD",
 		PaymentStatus: types.PaymentStatusSucceeded,
 	}}
-	s.services = &ServiceDependencies{CheckoutSessionService: s.checkoutSvc, PaymentService: s.paymentSvc}
+	s.services = &ServiceDependencies{CheckoutSessionService: s.checkoutSvc, PaymentService: s.paymentSvc, RefundService: &fakeRefundService{}}
 }
 
 func (s *ChargebeeWebhookCheckoutSuite) seedSession(status types.CheckoutStatus) *dto.CheckoutSessionResponse {

@@ -65,10 +65,6 @@ type PaymentService interface {
 	// TODO: migrate to full payment lifecycle method when payment lifecycle service is released
 	CreatePaymentForCheckout(ctx context.Context, req *dto.CreateCheckoutPaymentRequest) (*dto.PaymentResponse, error)
 	ListPaymentMethods(ctx context.Context, customerID string, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error)
-	// RequiresRefundForVoidedInvoice reports whether a captured payment belongs to a voided
-	// invoice and must be refunded instead of settled. A payment settled before the void
-	// returns false: the void already credited it back to the customer.
-	RequiresRefundForVoidedInvoice(ctx context.Context, paymentID string) bool
 }
 
 // InvoiceService defines the interface for invoice operations
@@ -348,6 +344,13 @@ type RefundService interface {
 	GetRefundByGatewayRefundID(ctx context.Context, gateway, gatewayRefundID string) (*dto.RefundResponse, error)
 	Settle(ctx context.Context, req *dto.SettleRefundRequest) error
 	Fail(ctx context.Context, refundID, reason string) error
+	// RefundCaptureOnVoidedInvoice sends money captured for a voided invoice back to the
+	// customer: to the gateway when the payment allows it, otherwise or on failure to the
+	// wallet. It returns false when the capture should be settled as usual.
+	RefundCaptureOnVoidedInvoice(ctx context.Context, paymentID, gatewayPaymentID string) bool
+	// RefundUnrecordedCaptureOnVoidedInvoice credits the wallet for money captured against a
+	// voided invoice with no Flexprice payment behind it. It returns false when the invoice is not voided.
+	RefundUnrecordedCaptureOnVoidedInvoice(ctx context.Context, invoiceID, gatewayPaymentID string, amount decimal.Decimal) bool
 }
 
 type ServiceDependencies struct {

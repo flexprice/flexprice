@@ -38,9 +38,16 @@ type CheckoutProvider interface {
 	FetchPaymentState(ctx context.Context, req PaymentStateRequest) (*PaymentState, error)
 
 	// ExpirePaymentLink stops a hosted link from accepting payment. A link that is
-	// already closed (expired, cancelled or paid) is not an error. Providers that
-	// cannot close links return ierr.ErrNotImplemented.
-	ExpirePaymentLink(ctx context.Context, req ExpirePaymentLinkRequest) error
+	// already closed is not an error; one the customer already paid is reported in the
+	// response. Providers that cannot close links return ierr.ErrNotImplemented.
+	ExpirePaymentLink(ctx context.Context, req ExpirePaymentLinkRequest) (*ExpirePaymentLinkResponse, error)
+}
+
+// ExpirePaymentLinkResponse reports a link the customer paid before it could be closed.
+type ExpirePaymentLinkResponse struct {
+	AlreadyPaid bool
+	// GatewayPaymentID is the captured payment, when the gateway reports one.
+	GatewayPaymentID string
 }
 
 // ExpirePaymentLinkRequest identifies the hosted link to close.

@@ -323,7 +323,7 @@ func (h *Handler) settleLinkedPayment(
 		return false, nil
 	}
 
-	if h.refundIfInvoiceVoided(ctx, services, flexpricePaymentID, chargebeeTransactionID) {
+	if services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, chargebeeTransactionID) {
 		return true, nil
 	}
 
@@ -452,18 +452,4 @@ func (h *Handler) handleRefund(ctx context.Context, event *ChargebeeWebhookEvent
 
 func refundTransactionFailed(status string) bool {
 	return status == "failure" || status == "timeout"
-}
-
-// refundIfInvoiceVoided refunds a capture whose invoice was voided; true means the caller must not settle it.
-func (h *Handler) refundIfInvoiceVoided(ctx context.Context, services *ServiceDependencies, flexpricePaymentID, chargebeeTransactionID string) bool {
-	if !services.PaymentService.RequiresRefundForVoidedInvoice(ctx, flexpricePaymentID) {
-		return false
-	}
-	if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, chargebeeTransactionID, services.PaymentService); err != nil {
-		h.logger.Error(ctx, "failed to refund payment on voided invoice, manual reconciliation required",
-			"error", err,
-			"flexprice_payment_id", flexpricePaymentID,
-			"chargebee_transaction_id", chargebeeTransactionID)
-	}
-	return true
 }

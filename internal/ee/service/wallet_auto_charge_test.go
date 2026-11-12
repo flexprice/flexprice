@@ -164,8 +164,8 @@ func (p *stubAutoChargeCheckoutProvider) FetchPaymentState(context.Context, inte
 	return nil, nil
 }
 
-func (p *stubAutoChargeCheckoutProvider) ExpirePaymentLink(context.Context, interfaces.ExpirePaymentLinkRequest) error {
-	return nil
+func (p *stubAutoChargeCheckoutProvider) ExpirePaymentLink(context.Context, interfaces.ExpirePaymentLinkRequest) (*interfaces.ExpirePaymentLinkResponse, error) {
+	return &interfaces.ExpirePaymentLinkResponse{}, nil
 }
 
 func (s *WalletAutoChargeSuite) TestFetchGatewayWithAutoChargeSupport_Success() {

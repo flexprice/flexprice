@@ -131,9 +131,9 @@ func (a *CheckoutAdapter) FetchPaymentState(
 func (a *CheckoutAdapter) ExpirePaymentLink(
 	ctx context.Context,
 	req interfaces.ExpirePaymentLinkRequest,
-) error {
+) (*interfaces.ExpirePaymentLinkResponse, error) {
 	if a == nil || a.Svc == nil {
-		return ierr.NewError("razorpay checkout adapter is not configured").
+		return nil, ierr.NewError("razorpay checkout adapter is not configured").
 			Mark(ierr.ErrNotImplemented)
 	}
 
@@ -142,28 +142,36 @@ func (a *CheckoutAdapter) ExpirePaymentLink(
 	case strings.HasPrefix(handle, paymentLinkPrefix):
 		err := a.Svc.CancelPaymentLink(ctx, handle)
 		if err == nil {
-			return nil
+			return &interfaces.ExpirePaymentLinkResponse{}, nil
 		}
 		if link, getErr := a.Svc.GetPaymentLinkStatus(ctx, handle); getErr == nil && isClosedStatus(link.Status) {
-			return nil
+			return closedLink(link.Status, link.RazorpayPaymentID), nil
 		}
-		return err
+		return nil, err
 
 	case strings.HasPrefix(handle, invoicePrefix):
 		err := a.Svc.CancelInvoice(ctx, handle)
 		if err == nil {
-			return nil
+			return &interfaces.ExpirePaymentLinkResponse{}, nil
 		}
 		if inv, getErr := a.Svc.GetInvoiceStatus(ctx, handle); getErr == nil && isClosedStatus(inv.Status) {
-			return nil
+			return closedLink(inv.Status, inv.RazorpayPaymentID), nil
 		}
-		return err
+		return nil, err
 
 	default:
-		return ierr.NewError("razorpay checkout handle cannot be expired").
+		return nil, ierr.NewError("razorpay checkout handle cannot be expired").
 			WithReportableDetails(map[string]interface{}{"gateway_tracking_id": handle}).
 			Mark(ierr.ErrNotImplemented)
 	}
+}
+
+// closedLink describes a link that can no longer be paid; a paid one carries its payment.
+func closedLink(status, razorpayPaymentID string) *interfaces.ExpirePaymentLinkResponse {
+	if status != "paid" {
+		return &interfaces.ExpirePaymentLinkResponse{}
+	}
+	return &interfaces.ExpirePaymentLinkResponse{AlreadyPaid: true, GatewayPaymentID: razorpayPaymentID}
 }
 
 // isClosedStatus reports whether a payment link or invoice can no longer be paid.

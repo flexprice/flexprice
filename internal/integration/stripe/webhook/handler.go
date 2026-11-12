@@ -979,7 +979,7 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
-	if h.refundIfInvoiceVoided(ctx, services, flexpricePaymentID, piID) {
+	if services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, piID) {
 		return nil
 	}
 
@@ -1004,25 +1004,11 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 			"flexprice_payment_id", flexpricePaymentID,
 			"event_id", event.ID)
 		// The invoice may have been voided after the check above.
-		h.refundIfInvoiceVoided(ctx, services, flexpricePaymentID, piID)
+		services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, piID)
 		return nil
 	}
 
 	return nil
-}
-
-// refundIfInvoiceVoided refunds a capture whose invoice was voided; true means the caller must not settle it.
-func (h *Handler) refundIfInvoiceVoided(ctx context.Context, services *ServiceDependencies, flexpricePaymentID, stripePaymentIntentID string) bool {
-	if !services.PaymentService.RequiresRefundForVoidedInvoice(ctx, flexpricePaymentID) {
-		return false
-	}
-	if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, stripePaymentIntentID, services.PaymentService); err != nil {
-		h.logger.Error(ctx, "failed to refund payment on voided invoice, manual reconciliation required",
-			"error", err,
-			"flexprice_payment_id", flexpricePaymentID,
-			"stripe_payment_intent_id", stripePaymentIntentID)
-	}
-	return true
 }
 
 // refundLateCapturedPayment gives back a payment that landed after its checkout session

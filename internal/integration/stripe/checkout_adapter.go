@@ -240,30 +240,40 @@ func (a *CheckoutAdapter) checkoutSessionPaymentState(ctx context.Context, strip
 	}, nil
 }
 
-func (a *CheckoutAdapter) ExpirePaymentLink(ctx context.Context, req interfaces.ExpirePaymentLinkRequest) error {
+func (a *CheckoutAdapter) ExpirePaymentLink(ctx context.Context, req interfaces.ExpirePaymentLinkRequest) (*interfaces.ExpirePaymentLinkResponse, error) {
 	if a == nil || a.Client == nil {
-		return ierr.NewError("stripe checkout adapter is not configured").
+		return nil, ierr.NewError("stripe checkout adapter is not configured").
 			Mark(ierr.ErrNotImplemented)
 	}
 	if req.GatewayTrackingID == "" {
-		return ierr.NewError("gateway tracking id is required to expire a stripe checkout session").
+		return nil, ierr.NewError("gateway tracking id is required to expire a stripe checkout session").
 			Mark(ierr.ErrValidation)
 	}
 
 	stripeClient, _, err := a.Client.GetStripeClient(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, expireErr := stripeClient.V1CheckoutSessions.Expire(ctx, req.GatewayTrackingID, nil)
 	if expireErr == nil {
-		return nil
+		return &interfaces.ExpirePaymentLinkResponse{}, nil
 	}
 
 	session, err := stripeClient.V1CheckoutSessions.Retrieve(ctx, req.GatewayTrackingID, nil)
-	if err == nil && (session.Status == stripeapi.CheckoutSessionStatusExpired ||
-		session.Status == stripeapi.CheckoutSessionStatusComplete) {
-		return nil
+	if err != nil {
+		return nil, expireErr
 	}
-	return expireErr
+	switch session.Status {
+	case stripeapi.CheckoutSessionStatusExpired:
+		return &interfaces.ExpirePaymentLinkResponse{}, nil
+	case stripeapi.CheckoutSessionStatusComplete:
+		resp := &interfaces.ExpirePaymentLinkResponse{}
+		if session.PaymentStatus == stripeapi.CheckoutSessionPaymentStatusPaid && session.PaymentIntent != nil {
+			resp.AlreadyPaid = true
+			resp.GatewayPaymentID = session.PaymentIntent.ID
+		}
+		return resp, nil
+	}
+	return nil, expireErr
 }

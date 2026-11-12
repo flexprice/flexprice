@@ -4061,6 +4061,8 @@ func (s *VoidPaymentLinksSuite) SetupTest() {
 		TenantRepo:                 stores.TenantRepo,
 		UserRepo:                   stores.UserRepo,
 		AuthRepo:                   stores.AuthRepo,
+		// The wallet fallback for a refund logs a balance alert.
+		AlertLogsRepo: stores.AlertLogsRepo,
 	}
 	s.svc = NewInvoiceService(s.params)
 }
@@ -4163,6 +4165,32 @@ func (s *VoidPaymentLinksSuite) TestVoid_VoidsInitiatedLink() {
 	s.void(dto.InvoiceVoidRequest{})
 
 	s.Equal(types.PaymentStatusVoided, s.payment("pay_1").PaymentStatus)
+}
+
+func (s *VoidPaymentLinksSuite) TestVoid_LinkNeverCreatedSkipsGateway() {
+	s.seedInvoice()
+	s.seedPayment("pay_1", types.PaymentStatusInitiated, types.PaymentMethodTypePaymentLink, "")
+
+	s.void(dto.InvoiceVoidRequest{})
+
+	s.Equal(types.PaymentStatusVoided, s.payment("pay_1").PaymentStatus)
+	s.Empty(s.provider.expired)
+}
+
+func (s *VoidPaymentLinksSuite) TestVoid_RefundsLinkPaidBeforeVoid() {
+	s.seedInvoice()
+	s.seedPayment("pay_1", types.PaymentStatusPending, types.PaymentMethodTypePaymentLink, "cs_1")
+	s.provider.paidWith = "pi_paid"
+
+	s.void(dto.InvoiceVoidRequest{})
+
+	p := s.payment("pay_1")
+	s.Equal(types.PaymentStatusSucceeded, p.PaymentStatus)
+	s.Equal("pi_paid", lo.FromPtr(p.GatewayPaymentID))
+	rows, err := s.GetStores().RefundRepo.ListByInvoice(s.GetContext(), "inv_vpl")
+	s.Require().NoError(err)
+	s.Require().NotEmpty(rows)
+	s.Equal("pay_1", lo.FromPtr(rows[0].PaymentID))
 }
 
 func (s *VoidPaymentLinksSuite) TestVoid_LeavesNonLinkAndSettledPaymentsAlone() {

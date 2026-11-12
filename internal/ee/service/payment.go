@@ -1341,29 +1341,8 @@ func errInvoiceVoided(invoiceID string) error {
 		Mark(ierr.ErrValidation)
 }
 
-func (s *paymentService) RequiresRefundForVoidedInvoice(ctx context.Context, paymentID string) bool {
-	p, err := s.PaymentRepo.Get(ctx, paymentID)
-	if err != nil || p.DestinationType != types.PaymentDestinationTypeInvoice {
-		return false
-	}
-
-	switch p.PaymentStatus {
-	case types.PaymentStatusSucceeded, types.PaymentStatusOverpaid, types.PaymentStatusPartiallyRefunded:
-		return false
-	}
-
-	inv, err := s.InvoiceRepo.Get(ctx, p.DestinationID)
-	if err != nil || inv.InvoiceStatus != types.InvoiceStatusVoided {
-		return false
-	}
-
-	s.Logger.Info(ctx, "payment captured on voided invoice, refunding",
-		"payment_id", paymentID, "invoice_id", inv.ID)
-	return true
-}
-
-// VoidOpenPaymentLinks closes every unpaid payment link on a voided invoice.
-// Links owned by a checkout session are left to that session.
+// VoidOpenPaymentLinks closes every unpaid payment link on a voided invoice; a link the
+// customer already paid is refunded instead. Links owned by a checkout session are left to that session.
 func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID string) error {
 	var open []*payment.Payment
 	for _, status := range []types.PaymentStatus{types.PaymentStatusInitiated, types.PaymentStatusPending} {
@@ -1390,31 +1369,40 @@ func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID str
 		if session != nil {
 			continue
 		}
+		if paid := s.closeProviderLink(ctx, invoiceID, p); paid != nil {
+			NewRefundService(s.ServiceParams).RefundCaptureOnVoidedInvoice(ctx, p.ID, paid.GatewayPaymentID)
+			continue
+		}
 		if _, err := s.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{
 			PaymentStatus: lo.ToPtr(string(types.PaymentStatusVoided)),
 			VoidedAt:      lo.ToPtr(clock.Now()),
 		}); err != nil {
 			s.Logger.Error(ctx, "failed to void payment link on invoice void",
 				"error", err, "invoice_id", invoiceID, "payment_id", p.ID)
-			continue
 		}
-		s.expireProviderLink(ctx, invoiceID, p)
 	}
 	return nil
 }
 
-// expireProviderLink closes the gateway-hosted link; failures are logged, never returned.
-func (s *paymentService) expireProviderLink(ctx context.Context, invoiceID string, p *payment.Payment) {
+// closeProviderLink closes the gateway-hosted link and returns the gateway's report when the
+// customer already paid it. Failures are logged, never returned.
+func (s *paymentService) closeProviderLink(ctx context.Context, invoiceID string, p *payment.Payment) *interfaces.ExpirePaymentLinkResponse {
+	if lo.FromPtr(p.GatewayTrackingID) == "" {
+		return nil
+	}
 	gateway := lo.FromPtr(p.PaymentGateway)
 	checkoutProvider, ok := types.CheckoutProviderFromGateway(types.PaymentGatewayType(gateway))
 	if !ok {
 		s.Logger.Info(ctx, "payment link cannot be expired on this gateway",
 			"invoice_id", invoiceID, "payment_id", p.ID, "gateway", gateway)
-		return
+		return nil
 	}
-	err := s.expireOnGateway(ctx, invoiceID, p, checkoutProvider)
+	resp, err := s.expireOnGateway(ctx, invoiceID, p, checkoutProvider)
 	switch {
 	case err == nil:
+		if resp != nil && resp.AlreadyPaid {
+			return resp
+		}
 	case ierr.IsNotImplemented(err):
 		s.Logger.Info(ctx, "gateway cannot expire payment links",
 			"invoice_id", invoiceID, "payment_id", p.ID, "gateway", gateway)
@@ -1422,17 +1410,18 @@ func (s *paymentService) expireProviderLink(ctx context.Context, invoiceID strin
 		s.Logger.Error(ctx, "failed to expire payment link on gateway",
 			"error", err, "invoice_id", invoiceID, "payment_id", p.ID, "gateway", gateway)
 	}
+	return nil
 }
 
-func (s *paymentService) expireOnGateway(ctx context.Context, invoiceID string, p *payment.Payment, checkoutProvider types.CheckoutPaymentProvider) error {
+func (s *paymentService) expireOnGateway(ctx context.Context, invoiceID string, p *payment.Payment, checkoutProvider types.CheckoutPaymentProvider) (*interfaces.ExpirePaymentLinkResponse, error) {
 	gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	provider, err := s.IntegrationFactory.GetCheckoutProvider(
 		gatewayCtx, checkoutProvider, NewCustomerService(s.ServiceParams), NewInvoiceService(s.ServiceParams))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return provider.ExpirePaymentLink(gatewayCtx, interfaces.ExpirePaymentLinkRequest{
 		GatewayTrackingID: lo.FromPtr(p.GatewayTrackingID),
