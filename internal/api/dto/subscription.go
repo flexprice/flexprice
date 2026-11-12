@@ -78,7 +78,7 @@ func (r *SubscriptionPhaseCreateRequest) ToSubscriptionPhase(ctx context.Context
 
 // LineItemCommitmentConfig is a legacy line-item commitment.
 //
-// Deprecated: use the commitments API instead.
+// Deprecated: rejected on input; use the commitments API instead.
 type LineItemCommitmentConfig struct {
 	CommitmentAmount   *decimal.Decimal     `json:"commitment_amount,omitempty"`
 	CommitmentQuantity *decimal.Decimal     `json:"commitment_quantity,omitempty"`
@@ -110,42 +110,10 @@ func (c *LineItemCommitmentConfig) ApplyDefaults() {
 	}
 }
 
-func applyLineItemCommitmentDefaults(commitments map[string]*LineItemCommitmentConfig) {
-	for _, c := range commitments {
-		c.ApplyDefaults()
-	}
-}
-
+// validateLineItemCommitments rejects legacy line-item commitments, which the commitments API replaces.
 func validateLineItemCommitments(commitments map[string]*LineItemCommitmentConfig) error {
-	if len(commitments) == 0 {
-		return nil
-	}
-
-	for priceID, commitmentConfig := range commitments {
-		if priceID == "" {
-			return ierr.NewError("price_id cannot be empty in line_item_commitments").
-				WithHint("Each entry in line_item_commitments must have a valid price_id as the key").
-				Mark(ierr.ErrValidation)
-		}
-
-		if commitmentConfig == nil {
-			return ierr.NewError("commitment config cannot be nil").
-				WithHint(fmt.Sprintf("Commitment configuration for price_id %s cannot be nil", priceID)).
-				WithReportableDetails(map[string]interface{}{
-					"price_id": priceID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		if err := commitmentConfig.Validate(); err != nil {
-			return ierr.NewError(fmt.Sprintf("invalid commitment config for price_id %s", priceID)).
-				WithHint("Line item commitment validation failed").
-				WithReportableDetails(map[string]interface{}{
-					"price_id": priceID,
-					"error":    err.Error(),
-				}).
-				Mark(ierr.ErrValidation)
-		}
+	if len(commitments) > 0 {
+		return LegacyCommitmentError("line_item_commitments")
 	}
 
 	return nil
@@ -165,111 +133,6 @@ func validateNoDuplicateOverridePriceIDs(overrides []OverrideLineItemRequest) er
 		}
 		priceIDsSeen[override.PriceID] = true
 	}
-	return nil
-}
-
-func (c *LineItemCommitmentConfig) Validate() error {
-	hasAmountCommitment := c.CommitmentAmount != nil && c.CommitmentAmount.GreaterThan(decimal.Zero)
-	hasQuantityCommitment := c.CommitmentQuantity != nil && c.CommitmentQuantity.GreaterThan(decimal.Zero)
-	hasCommitment := hasAmountCommitment || hasQuantityCommitment
-
-	if !hasCommitment {
-		if c.OverageFactor != nil && c.OverageFactor.LessThan(decimal.NewFromInt(1)) {
-			return ierr.NewError("overage_factor must be at least 1.0").
-				WithHint("Overage factor determines the multiplier for usage beyond commitment").
-				WithReportableDetails(map[string]interface{}{
-					"overage_factor": c.OverageFactor,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-		return nil
-	}
-
-	if hasAmountCommitment && hasQuantityCommitment {
-		return ierr.NewError("cannot set both commitment_amount and commitment_quantity").
-			WithHint("Specify either commitment_amount or commitment_quantity, not both").
-			WithReportableDetails(map[string]interface{}{
-				"commitment_amount":   c.CommitmentAmount,
-				"commitment_quantity": c.CommitmentQuantity,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if c.CommitmentType != "" && !c.CommitmentType.Validate() {
-		return ierr.NewError("invalid commitment_type").
-			WithHint("Commitment type must be either 'amount' or 'quantity'").
-			WithReportableDetails(map[string]interface{}{
-				"commitment_type": c.CommitmentType,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if c.CommitmentType == "" {
-		if hasAmountCommitment {
-			c.CommitmentType = types.COMMITMENT_TYPE_AMOUNT
-		} else if hasQuantityCommitment {
-			c.CommitmentType = types.COMMITMENT_TYPE_QUANTITY
-		}
-	} else {
-		if hasAmountCommitment && c.CommitmentType != types.COMMITMENT_TYPE_AMOUNT {
-			return ierr.NewError("commitment_type mismatch").
-				WithHint("When commitment_amount is set, commitment_type must be 'amount'").
-				WithReportableDetails(map[string]interface{}{
-					"commitment_type":   c.CommitmentType,
-					"commitment_amount": c.CommitmentAmount,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		if hasQuantityCommitment && c.CommitmentType != types.COMMITMENT_TYPE_QUANTITY {
-			return ierr.NewError("commitment_type mismatch").
-				WithHint("When commitment_quantity is set, commitment_type must be 'quantity'").
-				WithReportableDetails(map[string]interface{}{
-					"commitment_type":     c.CommitmentType,
-					"commitment_quantity": c.CommitmentQuantity,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	if c.OverageFactor != nil && c.OverageFactor.LessThan(decimal.NewFromInt(1)) {
-		return ierr.NewError("overage_factor must be at least 1.0").
-			WithHint("Overage factor determines the multiplier for usage beyond commitment").
-			WithReportableDetails(map[string]interface{}{
-				"overage_factor": c.OverageFactor,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if hasAmountCommitment && c.CommitmentAmount.IsNegative() {
-		return ierr.NewError("commitment_amount must be non-negative").
-			WithHint("Commitment amount cannot be negative").
-			WithReportableDetails(map[string]interface{}{
-				"commitment_amount": c.CommitmentAmount,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if hasQuantityCommitment && c.CommitmentQuantity.IsNegative() {
-		return ierr.NewError("commitment_quantity must be non-negative").
-			WithHint("Commitment quantity cannot be negative").
-			WithReportableDetails(map[string]interface{}{
-				"commitment_quantity": c.CommitmentQuantity,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if len(c.CommitmentTimeBuckets) > 0 {
-		if c.IsWindowCommitment == nil || !*c.IsWindowCommitment {
-			return ierr.NewError("commitment_time_buckets requires is_window_commitment=true").
-				WithHint("Set is_window_commitment=true to apply commitment only during the configured hours").
-				Mark(ierr.ErrValidation)
-		}
-		if err := validateTimeOfDayBuckets(c.CommitmentTimeBuckets); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -435,17 +298,20 @@ type SubscriptionCreationConfig struct {
 
 	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
 
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
 
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
 
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	EnableTrueUp bool `json:"enable_true_up"`
+
+	// CarryLegacyCommitment lets a plan change keep the replaced subscription's legacy commitment. Internal only.
+	CarryLegacyCommitment bool `json:"-"`
 
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 
@@ -459,7 +325,7 @@ type SubscriptionCreationConfig struct {
 	// Deprecated: use SubscriptionCoupons instead.
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
 
 	// OverrideLineItems overrides specific plan prices for this subscription.
@@ -473,16 +339,19 @@ type SubscriptionCreationConfig struct {
 	Phases    []SubscriptionPhaseCreateRequest    `json:"phases,omitempty" validate:"omitempty,dive"`
 }
 
-func (c *SubscriptionCreationConfig) ApplyDefaults() {
-	if c == nil {
-		return
-	}
-	applyLineItemCommitmentDefaults(c.LineItemCommitments)
-	for i := range c.Addons {
-		c.Addons[i].ApplyDefaults()
-	}
-	for i := range c.LineItems {
-		c.LineItems[i].ApplyDefaults()
+// legacyCommitmentField names the first subscription-level legacy commitment field set to a non-default value.
+func (c *SubscriptionCreationConfig) legacyCommitmentField() string {
+	switch {
+	case c.CommitmentAmount != nil && !c.CommitmentAmount.IsZero():
+		return "commitment_amount"
+	case c.CommitmentDuration != nil:
+		return "commitment_duration"
+	case c.OverageFactor != nil && !c.OverageFactor.Equal(decimal.NewFromInt(1)):
+		return "overage_factor"
+	case c.EnableTrueUp:
+		return "enable_true_up"
+	default:
+		return ""
 	}
 }
 
@@ -493,22 +362,8 @@ func (c *SubscriptionCreationConfig) Validate() error {
 		}
 	}
 
-	if c.CommitmentAmount != nil && c.CommitmentAmount.LessThan(decimal.Zero) {
-		return ierr.NewError("commitment_amount must be non-negative").
-			WithHint("Commitment amount must be greater than or equal to 0").
-			WithReportableDetails(map[string]interface{}{
-				"commitment_amount": *c.CommitmentAmount,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if c.OverageFactor != nil && c.OverageFactor.LessThan(decimal.NewFromInt(1)) {
-		return ierr.NewError("overage_factor must be at least 1.0").
-			WithHint("Overage factor must be greater than or equal to 1.0").
-			WithReportableDetails(map[string]interface{}{
-				"overage_factor": *c.OverageFactor,
-			}).
-			Mark(ierr.ErrValidation)
+	if field := c.legacyCommitmentField(); field != "" && !c.CarryLegacyCommitment {
+		return LegacyCommitmentError(field)
 	}
 
 	if len(c.CreditGrants) > 0 {
@@ -703,19 +558,7 @@ func (r *AddAddonRequest) Validate() error {
 		return err
 	}
 
-	if err := r.Checkout.Validate(); err != nil {
-		return err
-	}
-
-	if r.Checkout != nil {
-		if len(r.LineItemCommitments) > 0 {
-			return ierr.NewError("line_item_commitments is not supported with checkout").
-				WithHint("Remove checkout to use line_item_commitments, or remove line_item_commitments to gate this addon behind payment").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	return nil
+	return r.Checkout.Validate()
 }
 
 type RemoveAddonRequest struct {
@@ -1017,8 +860,6 @@ type SubscriptionResponseV2 struct {
 // ApplyDefaults fills the creation config's defaults, starts the subscription now unless given a start, and puts its
 // dates on whole seconds like every billing period edge.
 func (r *CreateSubscriptionRequest) ApplyDefaults() {
-	r.SubscriptionCreationConfig.ApplyDefaults()
-
 	r.StartDate = types.WholeSecondPtr(lo.CoalesceOrEmpty(r.StartDate, lo.ToPtr(clock.Now())))
 	r.EndDate = types.WholeSecondPtr(r.EndDate)
 	r.BillingAnchor = types.WholeSecondPtr(r.BillingAnchor)

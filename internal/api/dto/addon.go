@@ -91,7 +91,7 @@ type AddAddonToSubscriptionRequest struct {
 	ChangeAt *types.ScheduleType    `json:"change_at,omitempty"`
 	Metadata map[string]interface{} `json:"metadata"`
 
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
 
 	// OverrideLineItems allows overriding price/quantity/billing model for specific addon prices
@@ -126,13 +126,6 @@ func (a *AddAddonToSubscriptionRequest) ToAddonAssociation(ctx context.Context, 
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
-}
-
-func (r *AddAddonToSubscriptionRequest) ApplyDefaults() {
-	if r == nil {
-		return
-	}
-	applyLineItemCommitmentDefaults(r.LineItemCommitments)
 }
 
 func (r *AddAddonToSubscriptionRequest) Validate() error {

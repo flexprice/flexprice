@@ -5149,7 +5149,6 @@ func (s *subscriptionService) AddAddonToSubscription(
 	ctx context.Context,
 	req *dto.AddAddonRequest,
 ) (*dto.AddAddonToSubscriptionResponse, error) {
-	req.ApplyDefaults()
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -5201,7 +5200,6 @@ func (s *subscriptionService) createAddonAttachParams(
 	req *dto.AddAddonToSubscriptionRequest,
 	existing *addonassociation.AddonAssociation,
 ) (*addonAttachParams, error) {
-	req.ApplyDefaults()
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
