@@ -404,8 +404,11 @@ func (s *emailNotificationService) recordDeliveryEvent(ctx context.Context, ev e
 
 	ctx = types.SetTenantID(ctx, ev.TenantID)
 	ctx = types.SetEnvironmentID(ctx, ev.EnvironmentID)
+	applied := false
 	err := s.transition(ctx, ev.EmailLogID, func(cur *emaillog.EmailLog) *emaillog.EmailLog {
-		return applyDeliveryEvent(cur, ev)
+		next := applyDeliveryEvent(cur, ev)
+		applied = next != nil
+		return next
 	})
 	if ierr.IsNotFound(err) {
 		s.Logger.Info(ctx, "email delivery event dropped", "reason", "unknown_email", "email_log_id", ev.EmailLogID, "provider_message_id", ev.ProviderMessageID)
@@ -413,6 +416,10 @@ func (s *emailNotificationService) recordDeliveryEvent(ctx context.Context, ev e
 	}
 	if err != nil {
 		return err
+	}
+	if !applied {
+		s.Logger.Info(ctx, "email delivery event dropped", "reason", "stale_or_other_message", "email_log_id", ev.EmailLogID, "status", ev.Status)
+		return nil
 	}
 
 	s.Logger.Info(ctx, "email delivery event recorded", "email_log_id", ev.EmailLogID, "status", ev.Status)
