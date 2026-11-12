@@ -1467,12 +1467,16 @@ definitions:
         type: string
       environment_id:
         type: string
+      icon_url:
+        type: string
       id:
         type: string
       invoice_number_prefix:
         type: string
       is_default:
         type: boolean
+      logo_url:
+        type: string
       metadata:
         additionalProperties:
           type: string
@@ -4931,6 +4935,23 @@ definitions:
       updated_at:
         type: string
       updated_by:
+        type: string
+    type: object
+  EnvironmentResponse:
+    properties:
+      created_at:
+        type: string
+      icon_url:
+        type: string
+      id:
+        type: string
+      logo_url:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
+      updated_at:
         type: string
     type: object
   Event:
@@ -18904,6 +18925,102 @@ paths:
       summary: Update a billing entity
       tags:
       - Billing Entities
+  /billing-entities/{id}/branding/{asset}:
+    delete:
+      description: Remove the billing entity's logo or icon. Image URLs handed out
+        earlier keep working.
+      operationId: removeBillingEntityBrandingAsset
+      parameters:
+      - description: Billing entity ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Asset
+        enum:
+        - logo
+        - icon
+        in: path
+        name: asset
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/BillingEntityResponse'
+        "400":
+          description: Invalid asset or billing entities not enabled
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Remove a billing entity logo or icon
+      tags:
+      - Billing Entities
+      x-scope: delete
+    put:
+      consumes:
+      - multipart/form-data
+      description: Upload the billing entity's logo or icon as a PNG or JPEG of at
+        most 512 KB. An icon must be square and at least 128 x 128 px; a logo at least
+        128 px on each side. An entity with either asset uses only its own; one with
+        none uses its environment's.
+      operationId: uploadBillingEntityBrandingAsset
+      parameters:
+      - description: Billing entity ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Asset
+        enum:
+        - logo
+        - icon
+        in: path
+        name: asset
+        required: true
+        type: string
+      - description: PNG or JPEG image
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/BillingEntityResponse'
+        "400":
+          description: Invalid image or billing entities not enabled
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Upload a billing entity logo or icon
+      tags:
+      - Billing Entities
+      x-scope: write
   /billing-entities/enable:
     post:
       consumes:
@@ -21335,6 +21452,109 @@ paths:
       summary: Query entitlements
       tags:
       - Entitlements
+  /environments/{id}/branding/{asset}:
+    delete:
+      description: Remove the environment's logo or icon. Image URLs handed out earlier
+        keep working.
+      operationId: removeEnvironmentBrandingAsset
+      parameters:
+      - description: Environment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Asset
+        enum:
+        - logo
+        - icon
+        in: path
+        name: asset
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/EnvironmentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Remove an environment logo or icon
+      tags:
+      - Environments
+      x-scope: delete
+    put:
+      consumes:
+      - multipart/form-data
+      description: Upload the environment's logo or icon as a PNG or JPEG of at most
+        512 KB. An icon must be square and at least 128 x 128 px; a logo at least
+        128 px on each side. Replaces the current asset.
+      operationId: uploadEnvironmentBrandingAsset
+      parameters:
+      - description: Environment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Asset
+        enum:
+        - logo
+        - icon
+        in: path
+        name: asset
+        required: true
+        type: string
+      - description: PNG or JPEG image
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/EnvironmentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Upload an environment logo or icon
+      tags:
+      - Environments
+      x-scope: write
   /environments/{id}/clone:
     post:
       consumes:

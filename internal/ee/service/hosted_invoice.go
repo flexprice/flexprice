@@ -103,6 +103,10 @@ func (s *hostedInvoiceService) GetInvoice(ctx context.Context) (*dto.HostedInvoi
 	if billingEntity != nil {
 		t = billingEntityAsTenant(t, billingEntity)
 	}
+	brand, err := NewBrandingService(s.ServiceParams).ForInvoice(ctx, &inv.Invoice)
+	if err != nil {
+		return nil, err
+	}
 
 	filter := types.NewNoLimitPaymentFilter()
 	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
@@ -118,7 +122,12 @@ func (s *hostedInvoiceService) GetInvoice(ctx context.Context) (*dto.HostedInvoi
 	}
 
 	return &dto.HostedInvoiceResponse{
-		Tenant:  dto.HostedInvoiceTenant{Name: t.Name, BillingDetails: t.BillingDetails},
+		Tenant: dto.HostedInvoiceTenant{
+			Name:           t.Name,
+			BillingDetails: t.BillingDetails,
+			LogoURL:        brandingImageURL(s.Config, brand.LogoKey()),
+			IconURL:        brandingImageURL(s.Config, brand.IconKey()),
+		},
 		Invoice: dto.NewHostedInvoice(inv),
 		Payments: lo.Map(payments.Items, func(p *dto.PaymentResponse, _ int) *dto.HostedInvoicePayment {
 			return &dto.HostedInvoicePayment{

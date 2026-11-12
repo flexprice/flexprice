@@ -16,7 +16,9 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/environment"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/types"
@@ -28,6 +30,38 @@ type BrandingService interface {
 	StoreImage(ctx context.Context, environmentID string, asset types.BrandingAsset, data []byte) (string, error)
 	// GetImage returns a stored image for the public endpoint; a malformed path is not found without a storage call.
 	GetImage(ctx context.Context, req dto.BrandingImageRequest) (*dto.BrandingImage, error)
+	// ForInvoice returns the invoice issuer's name and image keys, read live.
+	ForInvoice(ctx context.Context, inv *invoice.Invoice) (*IssuerBranding, error)
+	// ForCustomer returns the name and image keys of the issuer that bills the customer.
+	ForCustomer(ctx context.Context, cust *customer.Customer) (*IssuerBranding, error)
+}
+
+// IssuerBranding is an issuer's name and branding image keys.
+type IssuerBranding struct {
+	name    string
+	logoKey *string
+	iconKey *string
+}
+
+func (b *IssuerBranding) Name() string {
+	if b == nil {
+		return ""
+	}
+	return b.name
+}
+
+func (b *IssuerBranding) LogoKey() *string {
+	if b == nil {
+		return nil
+	}
+	return b.logoKey
+}
+
+func (b *IssuerBranding) IconKey() *string {
+	if b == nil {
+		return nil
+	}
+	return b.iconKey
 }
 
 type brandingService struct {
@@ -107,6 +141,63 @@ func (s *brandingService) GetImage(ctx context.Context, req dto.BrandingImageReq
 		return nil, err
 	}
 	return image, nil
+}
+
+func (s *brandingService) ForInvoice(ctx context.Context, inv *invoice.Invoice) (*IssuerBranding, error) {
+	ctx = types.SetEnvironmentID(ctx, inv.EnvironmentID)
+
+	issuer, err := NewInvoiceService(s.ServiceParams).GetInvoiceBillingEntity(ctx, inv)
+	if err != nil {
+		return nil, err
+	}
+	if issuer == nil {
+		return s.tenantBranding(ctx, inv.EnvironmentID)
+	}
+
+	entity, err := s.publishedEntity(ctx, issuer.BillingEntityID)
+	if err != nil {
+		return nil, err
+	}
+	return s.issuerBranding(ctx, issuer.Name, entity, inv.EnvironmentID)
+}
+
+func (s *brandingService) ForCustomer(ctx context.Context, cust *customer.Customer) (*IssuerBranding, error) {
+	ctx = types.SetEnvironmentID(ctx, cust.EnvironmentID)
+
+	entity, err := NewBillingEntityService(s.ServiceParams).EffectiveEntity(ctx, cust)
+	if err != nil && !ierr.IsNotFound(err) {
+		return nil, err
+	}
+	if entity == nil {
+		return s.tenantBranding(ctx, cust.EnvironmentID)
+	}
+	return s.issuerBranding(ctx, entity.Name, entity, cust.EnvironmentID)
+}
+
+func (s *brandingService) tenantBranding(ctx context.Context, environmentID string) (*IssuerBranding, error) {
+	t, err := s.TenantRepo.GetByID(ctx, types.GetTenantID(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return s.issuerBranding(ctx, t.Name, nil, environmentID)
+}
+
+func (s *brandingService) issuerBranding(ctx context.Context, name string, entity *billingentity.BillingEntity, environmentID string) (*IssuerBranding, error) {
+	env, err := s.EnvironmentRepo.Get(ctx, environmentID)
+	if err != nil && !ierr.IsNotFound(err) {
+		return nil, err
+	}
+	logoKey, iconKey := selectBrandingKeys(entity, env)
+	return &IssuerBranding{name: name, logoKey: logoKey, iconKey: iconKey}, nil
+}
+
+// publishedEntity loads a billing entity; one no longer published reads as none.
+func (s *brandingService) publishedEntity(ctx context.Context, id string) (*billingentity.BillingEntity, error) {
+	entity, err := s.BillingEntityRepo.Get(ctx, id)
+	if ierr.IsNotFound(err) {
+		return nil, nil
+	}
+	return entity, err
 }
 
 // brandingObjectKey is the storage object for an image key: <prefix>/branding/<key>.

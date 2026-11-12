@@ -884,6 +884,7 @@ func NewRouter(
 
 		// Payment integrations — server-derived from the tenant's connections
 		customerPortalAPI.GET("/integrations", handlers.CustomerPortal.GetIntegrations)
+		customerPortalAPI.GET("/branding", handlers.CustomerPortal.GetBranding)
 
 		// Analytics
 		customerPortalAPI.POST("/analytics/revenue", handlers.CustomerPortal.GetAnalytics)

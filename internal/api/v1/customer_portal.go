@@ -290,6 +290,16 @@ func (h *CustomerPortalHandler) GetIntegrations(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+func (h *CustomerPortalHandler) GetBranding(c *gin.Context) {
+	resp, err := h.portalService.GetBranding(c.Request.Context())
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 func (h *CustomerPortalHandler) GetWalletTransactions(c *gin.Context) {
 	walletID := c.Param("id")
 	if walletID == "" {

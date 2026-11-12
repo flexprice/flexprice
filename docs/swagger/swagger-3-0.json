@@ -2288,6 +2288,188 @@
         "x-codegen-request-body-name": "billing_entity"
       }
     },
+    "/billing-entities/{id}/branding/{asset}": {
+      "put": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Upload a billing entity logo or icon",
+        "description": "Upload the billing entity's logo or icon as a PNG or JPEG of at most 512 KB. An icon must be square and at least 128 x 128 px; a logo at least 128 px on each side. An entity with either asset uses only its own; one with none uses its environment's.",
+        "operationId": "uploadBillingEntityBrandingAsset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Billing entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "asset",
+            "in": "path",
+            "description": "Asset",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "logo",
+                "icon"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "description": "PNG or JPEG image",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid image or billing entities not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write"
+      },
+      "delete": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Remove a billing entity logo or icon",
+        "description": "Remove the billing entity's logo or icon. Image URLs handed out earlier keep working.",
+        "operationId": "removeBillingEntityBrandingAsset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Billing entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "asset",
+            "in": "path",
+            "description": "Asset",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "logo",
+                "icon"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingEntityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid asset or billing entities not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "delete"
+      }
+    },
     "/checkout/sessions": {
       "post": {
         "tags": [
@@ -6669,6 +6851,208 @@
             "ApiKeyAuth": []
           }
         ]
+      }
+    },
+    "/environments/{id}/branding/{asset}": {
+      "put": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "Upload an environment logo or icon",
+        "description": "Upload the environment's logo or icon as a PNG or JPEG of at most 512 KB. An icon must be square and at least 128 x 128 px; a logo at least 128 px on each side. Replaces the current asset.",
+        "operationId": "uploadEnvironmentBrandingAsset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "asset",
+            "in": "path",
+            "description": "Asset",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "logo",
+                "icon"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "description": "PNG or JPEG image",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write"
+      },
+      "delete": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "Remove an environment logo or icon",
+        "description": "Remove the environment's logo or icon. Image URLs handed out earlier keep working.",
+        "operationId": "removeEnvironmentBrandingAsset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "asset",
+            "in": "path",
+            "description": "Asset",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "logo",
+                "icon"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "delete"
       }
     },
     "/environments/{id}/clone": {
@@ -22464,6 +22848,9 @@
           "environment_id": {
             "type": "string"
           },
+          "icon_url": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -22472,6 +22859,9 @@
           },
           "is_default": {
             "type": "boolean"
+          },
+          "logo_url": {
+            "type": "string"
           },
           "metadata": {
             "type": "object",
@@ -26886,6 +27276,34 @@
           },
           "updated_by": {
             "type": "string"
+          }
+        }
+      },
+      "EnvironmentResponse": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "icon_url": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "logo_url": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
