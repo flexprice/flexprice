@@ -57,6 +57,8 @@ type fakeCheckoutProvider struct {
 	// linkRequests records what callCheckoutProvider asked for, so a test can assert on
 	// the expiry we send rather than recomputing it.
 	linkRequests []interfaces.CheckoutProviderRequest
+	// onCreateLink runs inside CreatePaymentLink, standing in for a void that lands mid-call.
+	onCreateLink func()
 
 	// charged makes TryAutoChargingSavedMethod report a submitted saved-method charge.
 	charged bool
@@ -100,6 +102,9 @@ func (f *fakeCheckoutProvider) CreatePaymentLink(_ context.Context, req interfac
 	f.mu.Lock()
 	f.linkRequests = append(f.linkRequests, req)
 	f.mu.Unlock()
+	if f.onCreateLink != nil {
+		f.onCreateLink()
+	}
 	return &interfaces.CheckoutProviderResponse{
 		ProviderSessionID: "plink_created",
 		NextAction: types.PaymentAction{

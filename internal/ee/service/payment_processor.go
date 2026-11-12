@@ -254,7 +254,34 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		return paymentObj, processErr
 	}
 
+	if paymentObj.PaymentStatus == types.PaymentStatusPending &&
+		paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink &&
+		paymentObj.DestinationType == types.PaymentDestinationTypeInvoice {
+		return p.closeLinkIfInvoiceVoided(ctx, paymentObj)
+	}
+
 	return paymentObj, nil
+}
+
+// closeLinkIfInvoiceVoided closes a link whose invoice was voided while the link was being created.
+func (p *paymentProcessor) closeLinkIfInvoiceVoided(ctx context.Context, paymentObj *payment.Payment) (*payment.Payment, error) {
+	inv, err := p.InvoiceRepo.Get(ctx, paymentObj.DestinationID)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to recheck invoice after creating payment link",
+			"error", err, "payment_id", paymentObj.ID, "invoice_id", paymentObj.DestinationID)
+		return paymentObj, nil
+	}
+	if inv.InvoiceStatus != types.InvoiceStatusVoided {
+		return paymentObj, nil
+	}
+	if err := NewPaymentService(p.ServiceParams).(*paymentService).VoidOpenPaymentLinks(ctx, inv.ID); err != nil {
+		p.Logger.Error(ctx, "failed to close payment link created on a voided invoice",
+			"error", err, "payment_id", paymentObj.ID, "invoice_id", inv.ID)
+	}
+	if refreshed, err := p.PaymentRepo.Get(ctx, paymentObj.ID); err == nil {
+		paymentObj = refreshed
+	}
+	return paymentObj, errInvoiceVoided(inv.ID)
 }
 
 func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment) error {
