@@ -289,6 +289,42 @@ func (s *CommitmentServiceSuite) TestLineItemDetach_RejectsEndingOpenEndedCommit
 	s.requireValidation(err, created.ID, "terminate the commitment first")
 }
 
+// A pending termination still bills its minimum until terminated_at, so its scope must stay covered until then; once
+// a termination has taken effect, the scope is free.
+func (s *CommitmentServiceSuite) TestLineItemDetach_PendingTerminationGuardsUntilTerminatedAt() {
+	now := clock.Now().Truncate(time.Second)
+	tests := []struct {
+		name         string
+		terminatedAt time.Time
+		endLineAt    time.Time
+		wantErr      bool
+	}{
+		{name: "before a pending termination", terminatedAt: now.AddDate(0, 2, 0), endLineAt: now.AddDate(0, 1, 0), wantErr: true},
+		{name: "at a pending termination", terminatedAt: now.AddDate(0, 2, 0), endLineAt: now.AddDate(0, 2, 0)},
+		{name: "after a pending termination", terminatedAt: now.AddDate(0, 2, 0), endLineAt: now.AddDate(0, 3, 0)},
+		{name: "after a termination in effect", terminatedAt: now.AddDate(0, -1, 0), endLineAt: now.AddDate(0, 1, 0)},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			req.EndDate = nil
+			created, err := s.svc.Create(s.GetContext(), req)
+			s.Require().NoError(err)
+			_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &tt.terminatedAt})
+			s.Require().NoError(err)
+
+			err = s.detachCheck(s.fx.lineAPI.ID, tt.endLineAt)
+			if tt.wantErr {
+				s.requireValidation(err, created.ID, "terminate the commitment first")
+				return
+			}
+
+			s.Require().NoError(err)
+		})
+	}
+}
+
 // quantityCommitmentOnAPIOnlyGroup creates a quantity commitment scoped to the group holding only the API meter.
 func (s *CommitmentServiceSuite) quantityCommitmentOnAPIOnlyGroup() {
 	req := validReq(s.fx.sub.ID, "")

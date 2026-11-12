@@ -68,6 +68,7 @@ Billing-terms and termination items are in the [billing terms ERD](./2026-11-02-
 | End dates | Exclusive: a term "through 31 Aug" ends at `2026-09-01T00:00:00Z`. |
 | Several commitments on one price | Different `priority` values; the lowest fills first. Overlapping commitments share the type, measurement, bucket and overage price. |
 | Backdated create or termination | The drafts and skipped period invoices carrying the subscription's later periods (its parent's for a grouped child) are recomputed after the change, and a draft that still predates it is recomputed when finalized. Finalized invoices are untouched; they are recalculated on request. |
+| Termination with notice (2026-11-11) | `POST /commitments/{id}/terminate` with a future `effective_at`. `commitment_status` is `terminated` at once with `terminated_at` ahead, `commitment.terminated` fires at once and the fee is billed at once; usage bills until `terminated_at`. Another terminate call moves it earlier (`commitment.updated`). A subscription cancelled or changed first ends the commitment with it, with no extra fee. A termination is final once `terminated_at` has passed. |
 
 **Pending**
 

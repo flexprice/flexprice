@@ -399,15 +399,20 @@ func (s *commitmentService) planReplacement(
 	return terms, instalments, nil
 }
 
-// requireActiveBillingTerms rejects a commitment whose plan cannot change: one that is not active or does not collect
-// through billing terms.
+// requireActiveBillingTerms rejects a commitment whose plan cannot change: one that is not active, a pending
+// termination included, or does not collect through billing terms.
 func requireActiveBillingTerms(c *commitment.Commitment) error {
 	if c.CommitmentStatus != types.CommitmentStatusActive {
 		return ierr.NewErrorf("commitment %s is %s", c.ID, c.CommitmentStatus).
-			WithHint("Only active commitments can have their billing terms or instalments changed").
+			WithHint("Only active commitments can have their billing terms changed").
 			Mark(ierr.ErrInvalidOperation)
 	}
 
+	return requireBillingTerms(c)
+}
+
+// requireBillingTerms rejects a commitment that does not collect through billing terms.
+func requireBillingTerms(c *commitment.Commitment) error {
 	if lo.FromPtr(c.CollectionMethod) != types.CommitmentCollectionBillingTerms {
 		return ierr.NewErrorf("commitment %s does not collect through billing terms", c.ID).
 			WithHint("Only commitments with collection_method billing_terms have billing terms or instalments").
@@ -420,17 +425,31 @@ func requireActiveBillingTerms(c *commitment.Commitment) error {
 // settlementLabel is the invoice label of the instalment that settles a terminated commitment.
 const settlementLabel = "Settlement"
 
-// settle cancels the commitment's scheduled instalments and returns a settlement instalment billing those already due
-// by effectiveAt, or nil when none were. Later instalments are not billed and nothing is refunded; anything more is the
-// cancellation fee. It must run inside the terminate transaction, under the commitment lock.
+// settle cancels the commitment's scheduled instalments that a termination at effectiveAt does not owe. Once the
+// termination takes effect, at or before now, it cancels the owed ones too and returns a settlement instalment billing
+// them, or nil when none were owed; until then they stay scheduled and bill on their own dates. Nothing is refunded;
+// anything more is the cancellation fee. It must run inside the terminate transaction, under the commitment lock.
 func (s *commitmentService) settle(
 	ctx context.Context,
 	c *commitment.Commitment,
 	effectiveAt time.Time,
 ) (*billingterm.Instalment, error) {
+	scheduled, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
+		OwnerType: types.BillingTermOwnerCommitment,
+		OwnerIDs:  []string{c.ID},
+		Statuses:  []types.InstalmentStatus{types.InstalmentStatusScheduled},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	takesEffect := !effectiveAt.After(clock.Now())
+	ids := lo.FilterMap(scheduled, func(inst *billingterm.Instalment, _ int) (string, bool) {
+		return inst.ID, takesEffect || !owedAtTermination(inst, effectiveAt)
+	})
+
 	// Cancelling first fixes what is invoiced: a finalize cannot claim a cancelled instalment.
-	scheduled := []types.InstalmentStatus{types.InstalmentStatusScheduled}
-	cancelled, err := s.BillingInstalmentRepo.Cancel(ctx, types.BillingTermOwnerCommitment, c.ID, scheduled)
+	cancelled, err := s.BillingInstalmentRepo.CancelScheduled(ctx, ids)
 	if err != nil {
 		return nil, err
 	}

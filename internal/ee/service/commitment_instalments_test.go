@@ -87,7 +87,7 @@ func (s *CommitmentServiceSuite) inactiveCommitments() map[string]string {
 	return map[string]string{"per_period": perPeriod.ID, "terminated": terminated.ID}
 }
 
-// racingInstalmentRepo runs a hook before the next Cancel or Update, standing in for an invoice that finalizes and
+// racingInstalmentRepo runs a hook before the next Cancel, CancelScheduled or Update, standing in for an invoice that finalizes and
 // claims an instalment at that moment.
 type racingInstalmentRepo struct {
 	billingterm.InstalmentRepository
@@ -110,6 +110,11 @@ func (r *racingInstalmentRepo) Cancel(
 ) ([]*billingterm.Instalment, error) {
 	r.fire(ctx)
 	return r.InstalmentRepository.Cancel(ctx, ownerType, ownerID, statuses)
+}
+
+func (r *racingInstalmentRepo) CancelScheduled(ctx context.Context, ids []string) ([]*billingterm.Instalment, error) {
+	r.fire(ctx)
+	return r.InstalmentRepository.CancelScheduled(ctx, ids)
 }
 
 func (r *racingInstalmentRepo) Update(ctx context.Context, instalment *billingterm.Instalment) (*billingterm.Instalment, error) {
@@ -306,6 +311,52 @@ func (s *CommitmentServiceSuite) TestTriggerInstalment_RejectsInactiveOrPerPerio
 	s.Require().Error(err)
 	s.True(ierr.IsInvalidOperation(err), "got %v", err)
 	s.Equal(before, s.storedInstalments())
+}
+
+// A pending termination keeps a milestone triggered by its date, which can still move earlier, and cancels an
+// untriggered one, which waits at the term end. Billing terms can't be replaced while it is pending.
+func (s *CommitmentServiceSuite) TestTriggerInstalment_PendingTermination() {
+	_, month := s.termsAroundNowRequest()
+	tests := []struct {
+		name          string
+		triggerOn     *time.Time // triggers the milestone here before the termination
+		wantScheduled bool
+	}{
+		{name: "triggered before the termination", triggerOn: lo.ToPtr(month), wantScheduled: true},
+		{name: "untriggered"},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			req, _ := s.termsAroundNowRequest()
+			req.BillingTerms = s.milestoneRequest().BillingTerms
+			created, milestone := s.milestoneOf(req)
+			if tt.triggerOn != nil {
+				_, err := s.svc.TriggerInstalment(ctx, created.ID, milestone.ID, dto.TriggerInstalmentRequest{BillOn: tt.triggerOn})
+				s.Require().NoError(err)
+			}
+
+			at := month.AddDate(0, 2, 0)
+			_, err := s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+			s.Require().NoError(err)
+
+			_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
+			s.True(ierr.IsInvalidOperation(err), "got %v", err)
+
+			earlier := month.AddDate(0, -1, 0)
+			triggered, err := s.svc.TriggerInstalment(ctx, created.ID, milestone.ID, dto.TriggerInstalmentRequest{BillOn: &earlier})
+			if !tt.wantScheduled {
+				s.True(ierr.IsInvalidOperation(err), "got %v", err)
+				s.Equal(types.InstalmentStatusCancelled, s.instalmentByID(milestone.ID).InstalmentStatus)
+				return
+			}
+
+			s.Require().NoError(err)
+			s.True(triggered.BillOn.Equal(earlier), "got %s", triggered.BillOn)
+			s.Equal(types.InstalmentStatusScheduled, triggered.InstalmentStatus)
+		})
+	}
 }
 
 // milestoneCommitment commits 100 a month from 1 Jan 2026 to end, billed as half at signing and half at go-live, a

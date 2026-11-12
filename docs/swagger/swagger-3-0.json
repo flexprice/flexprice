@@ -3270,7 +3270,7 @@
           "Commitments"
         ],
         "summary": "Terminate commitment",
-        "description": "Ends a commitment immediately. effective_at defaults to now and cannot be in the future. Under billing terms, its scheduled instalments are cancelled, and those already due by effective_at are billed together as one settlement; later instalments are not billed and nothing is refunded. The settlement and a fixed cancellation fee, when given, are billed together on one one-off invoice.",
+        "description": "Ends a commitment at effective_at, which defaults to now. A future effective_at records the termination at once: commitment_status turns terminated with terminated_at ahead, usage bills until then, and another call with an earlier date moves it. If the subscription ends first, the commitment ends with it. Under billing terms, scheduled instalments not owed at effective_at are cancelled and owed ones keep billing on their own dates; when effective_at is not in the future, or the subscription ends, the owed ones still scheduled are billed together as one settlement. Nothing is refunded. A fixed cancellation fee, when given, is billed at once on a one-off invoice, together with the settlement when there is one.",
         "operationId": "terminateCommitment",
         "parameters": [
           {
@@ -33557,7 +33557,7 @@
           },
           "effective_at": {
             "type": "string",
-            "description": "EffectiveAt defaults to now; within a second after a billing period edge it is taken as that edge.",
+            "description": "EffectiveAt defaults to now and may be in the future; within a second after a billing period edge it is taken as\nthat edge. On a pending termination, an earlier date moves it.",
             "format": "date-time"
           }
         }
