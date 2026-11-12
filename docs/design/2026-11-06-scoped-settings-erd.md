@@ -99,14 +99,14 @@ On `PUT`, an omitted `settings` keeps the stored overrides, an object replaces t
 
 Grace is applied when the cron runs, not stored on the invoice. Extending it covers invoices that
 are already outstanding; shortening it can cancel a subscription on the next run. An override may set
-a grace of 0: the subscription skips the incomplete state and is cancelled on the first run after the
-due date (the environment setting still requires at least 1).
+a grace of 0: the subscription skips the incomplete state and, when auto-cancellation is enabled, is
+eligible for cancellation right after the due date (the environment setting still requires at least 1).
 
 **Auto-cancellation**
 
-1. Pick environments where auto-cancellation is on at environment level, or where any customer or
-  subscription has a `subscription_config` override (read from the partial indexes).
-2. In each environment, list unpaid finalized subscription invoices.
+1. One query picks environments where auto-cancellation is on in the environment setting or in any
+  customer or subscription override (the overrides are read from the partial indexes).
+2. In each environment, list unpaid finalized subscription invoices that are past their due date.
 3. Load those invoices' subscriptions and customers, which carry their `settings`.
 4. For each subscription, resolve the effective config. Cancel when it is enabled and
   `now > due_date + grace_period_days`.

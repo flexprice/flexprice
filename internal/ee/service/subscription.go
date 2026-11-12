@@ -6003,22 +6003,11 @@ func (s *subscriptionService) processPendingCreditGrantsForSubscription(ctx cont
 func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.Context) error {
 	s.Logger.Info(ctx, "starting auto-cancellation processing")
 
-	// Get all tenant x environment combinations that have auto-cancellation enabled
-	enabledConfigs, err := s.SettingsRepo.GetAllTenantEnvSubscriptionSettings(ctx)
+	envs, err := s.SubRepo.ListEnvironmentsForAutoCancellation(ctx)
 	if err != nil {
-		s.Logger.Error(ctx, "failed to list subscription configs", "error", err)
+		s.Logger.Error(ctx, "failed to list environments for auto-cancellation", "error", err)
 		return err
 	}
-
-	// Customer or subscription overrides can enable auto-cancellation where the environment has it off.
-	overrideEnvs, err := s.SubRepo.ListEnvironmentsWithSubscriptionConfigOverrides(ctx)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to list environments with subscription config overrides", "error", err)
-		return err
-	}
-	envs := lo.Uniq(append(lo.Map(enabledConfigs, func(c *types.TenantEnvSubscriptionConfig, _ int) types.TenantEnvironment {
-		return types.TenantEnvironment{TenantID: c.TenantID, EnvironmentID: c.EnvironmentID}
-	}), overrideEnvs...))
 
 	if len(envs) == 0 {
 		s.Logger.Info(ctx, "no tenants have auto-cancellation enabled, skipping processing")
@@ -6093,7 +6082,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 				return false
 			}
 
-			return true
+			return !inv.DueDate.After(now)
 		})
 
 		unpaidInvoicesBySub := lo.GroupBy(eligibleInvoices, func(inv *invoice.Invoice) string {
@@ -6118,6 +6107,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 		filter := &types.SubscriptionFilter{
 			SubscriptionIDs:    subscriptionIDs,
 			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusIncomplete, types.SubscriptionStatusCancelled},
+			QueryFilter:        types.NewNoLimitQueryFilter(),
 		}
 
 		subscriptions, err := s.SubRepo.List(tenantCtx, filter)

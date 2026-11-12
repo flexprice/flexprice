@@ -46,9 +46,9 @@ type Repository interface {
 	// holding an active subscription whose payment behavior gates it on invoice payment.
 	ListEnvironmentsWithGatedActiveSubscriptions(ctx context.Context) ([]types.TenantEnvironment, error)
 
-	// ListEnvironmentsWithSubscriptionConfigOverrides returns, across all tenants, every environment
-	// with a customer or subscription that overrides subscription_config.
-	ListEnvironmentsWithSubscriptionConfigOverrides(ctx context.Context) ([]types.TenantEnvironment, error)
+	// ListEnvironmentsForAutoCancellation returns, across all tenants, every environment where
+	// auto-cancellation is enabled by the environment setting or a customer or subscription override.
+	ListEnvironmentsForAutoCancellation(ctx context.Context) ([]types.TenantEnvironment, error)
 
 	// MarkOverdueGatedSubscriptionsIncomplete moves active payment-gated subscriptions with an unpaid
 	// renewal invoice due within their grace period before asOf to incomplete and returns their IDs.

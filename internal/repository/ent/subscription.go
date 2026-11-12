@@ -1405,23 +1405,30 @@ func (r *subscriptionRepository) ListEnvironmentsWithGatedActiveSubscriptions(ct
 	return envs, nil
 }
 
-// listEnvironmentsWithSubscriptionConfigOverridesQuery reads only the settings_override partial indexes.
-const listEnvironmentsWithSubscriptionConfigOverridesQuery = `
+// listEnvironmentsForAutoCancellationQuery finds environments where auto-cancellation is on at any level;
+// the customer and subscription branches read only the settings_override partial indexes.
+const listEnvironmentsForAutoCancellationQuery = `
+	SELECT tenant_id, environment_id FROM settings
+	WHERE key = 'subscription_config' AND status = 'published'
+		AND (value ->> 'auto_cancellation_enabled')::boolean
+	UNION
 	SELECT tenant_id, environment_id FROM subscriptions
-	WHERE settings IS NOT NULL AND status = 'published' AND settings -> 'subscription_config' IS NOT NULL
+	WHERE settings IS NOT NULL AND status = 'published'
+		AND (settings -> 'subscription_config' ->> 'auto_cancellation_enabled')::boolean
 	UNION
 	SELECT tenant_id, environment_id FROM customers
-	WHERE settings IS NOT NULL AND status = 'published' AND settings -> 'subscription_config' IS NOT NULL`
+	WHERE settings IS NOT NULL AND status = 'published'
+		AND (settings -> 'subscription_config' ->> 'auto_cancellation_enabled')::boolean`
 
-func (r *subscriptionRepository) ListEnvironmentsWithSubscriptionConfigOverrides(ctx context.Context) ([]types.TenantEnvironment, error) {
-	span := StartRepositorySpan(ctx, "subscription", "list_environments_with_subscription_config_overrides", nil)
+func (r *subscriptionRepository) ListEnvironmentsForAutoCancellation(ctx context.Context) ([]types.TenantEnvironment, error) {
+	span := StartRepositorySpan(ctx, "subscription", "list_environments_for_auto_cancellation", nil)
 	defer FinishSpan(span)
 
-	rows, err := r.client.Reader(ctx).QueryContext(ctx, listEnvironmentsWithSubscriptionConfigOverridesQuery)
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, listEnvironmentsForAutoCancellationQuery)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
-			WithHint("Failed to list environments with subscription config overrides").
+			WithHint("Failed to list environments for auto-cancellation").
 			Mark(ierr.ErrDatabase)
 	}
 	defer rows.Close()
@@ -1432,7 +1439,7 @@ func (r *subscriptionRepository) ListEnvironmentsWithSubscriptionConfigOverrides
 		if err := rows.Scan(&env.TenantID, &env.EnvironmentID); err != nil {
 			SetSpanError(span, err)
 			return nil, ierr.WithError(err).
-				WithHint("Failed to read environment with subscription config overrides").
+				WithHint("Failed to read environment for auto-cancellation").
 				Mark(ierr.ErrDatabase)
 		}
 		envs = append(envs, env)
@@ -1440,7 +1447,7 @@ func (r *subscriptionRepository) ListEnvironmentsWithSubscriptionConfigOverrides
 	if err := rows.Err(); err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
-			WithHint("Failed to read environments with subscription config overrides").
+			WithHint("Failed to read environments for auto-cancellation").
 			Mark(ierr.ErrDatabase)
 	}
 

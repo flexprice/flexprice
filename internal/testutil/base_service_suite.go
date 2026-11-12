@@ -241,6 +241,8 @@ func (s *BaseServiceTestSuite) setupStores() {
 	subStore.SetInvoiceStore(invoiceStore)
 	customerStore := NewInMemoryCustomerStore()
 	subStore.SetCustomerStore(customerStore)
+	settingsStore := NewInMemorySettingsStore()
+	subStore.SetSettingsStore(settingsStore)
 	priceStore := NewInMemoryPriceStore()
 	planPriceSyncStore := NewInMemoryPlanPriceSyncStore(priceStore, subStore, lineItemStore)
 	addonAssociationStore := NewInMemoryAddonAssociationStore()
@@ -288,7 +290,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		AddonAssociationRepo:         addonAssociationStore,
 		ConnectionRepo:               NewInMemoryConnectionStore(),
 		EntityIntegrationMappingRepo: NewInMemoryEntityIntegrationMappingStore(),
-		SettingsRepo:                 NewInMemorySettingsStore(),
+		SettingsRepo:                 settingsStore,
 		AlertLogsRepo:                NewInMemoryAlertLogsStore(),
 		AlertRepo:                    NewInMemoryAlertSettingsStore(),
 		GroupRepo:                    NewInMemoryGroupStore(),

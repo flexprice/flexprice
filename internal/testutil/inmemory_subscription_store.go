@@ -19,6 +19,7 @@ type InMemorySubscriptionStore struct {
 	lineItemStore *InMemorySubscriptionLineItemStore              // optional: when set, GetWithLineItems merges in line items created via SubscriptionLineItemRepo.Create
 	invoiceStore  *InMemoryInvoiceStore                           // optional: when set, MarkOverdueGatedSubscriptionsIncomplete checks invoices
 	customerStore *InMemoryCustomerStore                          // optional: when set, MarkOverdueGatedSubscriptionsIncomplete reads customer grace overrides
+	settingsStore *InMemorySettingsStore                          // optional: when set, ListEnvironmentsForAutoCancellation reads environment settings
 	pauses        map[string][]*subscription.SubscriptionPause    // map[subscriptionID][]pauses
 	pauseByID     map[string]*subscription.SubscriptionPause      // map[pauseID]pause
 }
@@ -669,6 +670,11 @@ func (s *InMemorySubscriptionStore) SetCustomerStore(store *InMemoryCustomerStor
 	s.customerStore = store
 }
 
+// SetSettingsStore lets ListEnvironmentsForAutoCancellation read environment settings.
+func (s *InMemorySubscriptionStore) SetSettingsStore(store *InMemorySettingsStore) {
+	s.settingsStore = store
+}
+
 func (s *InMemorySubscriptionStore) ListEnvironmentsWithGatedActiveSubscriptions(ctx context.Context) ([]types.TenantEnvironment, error) {
 	subs, err := s.InMemoryStore.List(ctx, nil, nil, nil)
 	if err != nil {
@@ -681,15 +687,28 @@ func (s *InMemorySubscriptionStore) ListEnvironmentsWithGatedActiveSubscriptions
 	return lo.Uniq(envs), nil
 }
 
-func (s *InMemorySubscriptionStore) ListEnvironmentsWithSubscriptionConfigOverrides(ctx context.Context) ([]types.TenantEnvironment, error) {
+func (s *InMemorySubscriptionStore) ListEnvironmentsForAutoCancellation(ctx context.Context) ([]types.TenantEnvironment, error) {
+	autoCancels := func(o *types.SettingsOverride) bool {
+		return o != nil && o.SubscriptionConfig != nil && lo.FromPtr(o.SubscriptionConfig.AutoCancellationEnabled)
+	}
 	subs, err := s.InMemoryStore.List(ctx, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 	envs := lo.FilterMap(subs, func(sub *subscription.Subscription, _ int) (types.TenantEnvironment, bool) {
 		return types.TenantEnvironment{TenantID: sub.TenantID, EnvironmentID: sub.EnvironmentID},
-			sub.Status == types.StatusPublished && sub.Settings != nil && sub.Settings.SubscriptionConfig != nil
+			sub.Status == types.StatusPublished && autoCancels(sub.Settings)
 	})
+	if s.settingsStore != nil {
+		configs, err := s.settingsStore.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig)
+		if err != nil {
+			return nil, err
+		}
+		envs = append(envs, lo.FilterMap(configs, func(c *types.TenantEnvConfig, _ int) (types.TenantEnvironment, bool) {
+			enabled, _ := c.Config["auto_cancellation_enabled"].(bool)
+			return types.TenantEnvironment{TenantID: c.TenantID, EnvironmentID: c.EnvironmentID}, enabled
+		})...)
+	}
 	if s.customerStore != nil {
 		customers, err := s.customerStore.InMemoryStore.List(ctx, nil, nil, nil)
 		if err != nil {
@@ -697,7 +716,7 @@ func (s *InMemorySubscriptionStore) ListEnvironmentsWithSubscriptionConfigOverri
 		}
 		envs = append(envs, lo.FilterMap(customers, func(c *customer.Customer, _ int) (types.TenantEnvironment, bool) {
 			return types.TenantEnvironment{TenantID: c.TenantID, EnvironmentID: c.EnvironmentID},
-				c.Status == types.StatusPublished && c.Settings != nil && c.Settings.SubscriptionConfig != nil
+				c.Status == types.StatusPublished && autoCancels(c.Settings)
 		})...)
 	}
 	return lo.Uniq(envs), nil
