@@ -118,13 +118,15 @@ Usage analytics prices a range one billing period at a time, as each period's in
 cuts gets its floor prorated to the part in range, apart from the projected open period. For each period it builds the
 projected loader and reads usage only for the lines that run in the period and that a commitment covering a queried
 line can draw on, directly or through a line it shares with another commitment (`LinesAffecting`). It sums
-`BillingLines` per line into utilized, overage and true-up, so billing-terms commitments cost $0 and take no true-up. A
-running SUM meter is read at its total at the period's end, as invoices bill it. A covered line's periods without a
-commitment bill at its own price.
+`BillingLines` per line into utilized, overage and true-up, so billing-terms commitments cost $0 and take no true-up. The
+lines' quantities go to `computed_*_quantity` the same way: usage a billing-terms commitment covers counts as utilized at
+$0, and only a quantity commitment's true-up counts its unused units. A running SUM meter is read at its total at the
+period's end, as invoices bill it. A covered line's periods without a commitment bill at its own price.
 
 Each period's charges stay on that period's groups and points, shared by the usage billing priced: a bucketed price's
-summed buckets, not a window's peak. A point belongs to the period holding the middle of its window (`pointWindows`,
-with each window's real length, in UTC as the usage queries cut them), so windows cut on other edges or in another
+summed buckets, not a window's peak. Amounts are rounded to the currency on their running total (`roundShares`), so
+shares sum to what was billed; quantities share by the same weights unrounded. A point belongs to the period holding
+the middle of its window (`pointWindows`, with each window's real length, in UTC as the usage queries cut them), so windows cut on other edges or in another
 timezone land on the period they mostly cover. A period without a point of its own takes the first window whose middle it holds or, when
 it is shorter than a window, the window holding its own middle, reusing a point already there. A range no commitment
 overlaps is not cut into periods; one a commitment overlaps can span at most 366 billing periods.

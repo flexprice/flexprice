@@ -87,6 +87,10 @@ type MeterUsageService interface {
 	// billing path, so a mid-window price change is priced per line-item segment.
 	GetMeterWindowCost(ctx context.Context, sub *subscription.Subscription, meterID string, from, to time.Time) (decimal.Decimal, error)
 
+	// GetGrantUsage is the meter's usage across ranges in an entitlement grant's measure:
+	// billed cost for the amount measure, units otherwise.
+	GetGrantUsage(ctx context.Context, sub *subscription.Subscription, m *meter.Meter, extCustomerIDs []string, measure types.EntitlementGrantMeasure, ranges []events.TimeRange) (decimal.Decimal, error)
+
 	// GetSubscriptionWindowSpend prices every usage line on the subscription over [from, to),
 	// returning the total and the amount per subscription line item.
 	GetSubscriptionWindowSpend(ctx context.Context, sub *subscription.Subscription, from, to time.Time) (decimal.Decimal, map[string]decimal.Decimal, error)
@@ -143,6 +147,38 @@ func (s *meterUsageService) GetMeterWindowCost(ctx context.Context, sub *subscri
 		}
 	}
 	return total, nil
+}
+
+func (s *meterUsageService) GetGrantUsage(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	m *meter.Meter,
+	extCustomerIDs []string,
+	measure types.EntitlementGrantMeasure,
+	ranges []events.TimeRange,
+) (decimal.Decimal, error) {
+	if m == nil {
+		return decimal.Zero, errGrantDepsMissing
+	}
+	if measure == types.EntitlementGrantMeasureAmount {
+		total := decimal.Zero
+		for _, r := range ranges {
+			cost, err := s.GetMeterWindowCost(ctx, sub, m.ID, r.Start, r.End)
+			if err != nil {
+				return decimal.Zero, err
+			}
+			total = total.Add(cost)
+		}
+		return total, nil
+	}
+	return s.GetUsageTotal(ctx, &dto.UsageTotalRequest{
+		TenantID:            types.GetTenantID(ctx),
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		ExternalCustomerIDs: extCustomerIDs,
+		MeterID:             m.ID,
+		AggregationType:     m.Aggregation.Type,
+		TimeRanges:          ranges,
+	})
 }
 
 func (s *meterUsageService) GetSubscriptionWindowSpend(ctx context.Context, sub *subscription.Subscription, from, to time.Time) (decimal.Decimal, map[string]decimal.Decimal, error) {
@@ -2186,6 +2222,10 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
 					ComputedOverageAmount:            point.ComputedOverageAmount,
 					ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
+
+					ComputedCommitmentUtilizedQuantity: point.ComputedCommitmentUtilizedQuantity,
+					ComputedOverageQuantity:            point.ComputedOverageQuantity,
+					ComputedTrueUpQuantity:             point.ComputedTrueUpQuantity,
 				}
 				// Per-point bucket identity: every bucket the rolled-up window
 				// overlaps (informational hint only — see dto.UsageAnalyticPoint).
@@ -2681,7 +2721,7 @@ func allocateLineItemCosts(data *AnalyticsData) []*events.DetailedUsageAnalytic 
 
 		groupUsage := lo.Map(groups, func(group *events.DetailedUsageAnalytic, _ int) decimal.Decimal { return group.TotalUsage })
 		// Group cost = selected line cost × group usage / total grouped usage.
-		groupCosts := allocateUsageCost(data.LineTotals[lineID], groupUsage, groups[0].AggregationType)
+		groupCosts := roundShares(allocateUsageCost(data.LineTotals[lineID], groupUsage, groups[0].AggregationType), groups[0].Currency)
 		for i, group := range groups {
 			// Keep existing correction points when a zero-net group's charge is unchanged.
 			if group.TotalUsage.IsZero() && group.TotalCost.Equal(groupCosts[i]) {
@@ -2694,7 +2734,7 @@ func allocateLineItemCosts(data *AnalyticsData) []*events.DetailedUsageAnalytic 
 					pointUsage[j] = point.Billed()
 				}
 
-				for j, cost := range allocateUsageCost(group.TotalCost, pointUsage, group.AggregationType) {
+				for j, cost := range roundShares(allocateUsageCost(group.TotalCost, pointUsage, group.AggregationType), group.Currency) {
 					points[j].Cost = cost
 				}
 			}
@@ -2730,6 +2770,8 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 			point := &group.Points[j]
 			point.Cost, point.ComputedCommitmentUtilizedAmount = decimal.Zero, decimal.Zero
 			point.ComputedOverageAmount, point.ComputedTrueUpAmount = decimal.Zero, decimal.Zero
+			point.ComputedCommitmentUtilizedQuantity, point.ComputedOverageQuantity = decimal.Zero, decimal.Zero
+			point.ComputedTrueUpQuantity = decimal.Zero
 		}
 	}
 
@@ -2771,19 +2813,27 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 			weights = rangeUsage
 		}
 
-		for gi, share := range splitBilled(bp.billed, weights, groups[0].AggregationType) {
+		for gi, share := range splitBilled(bp.billed, weights, groups[0].AggregationType, groups[0].Currency) {
 			group := groups[gi]
 			info := group.CommitmentInfo
 			info.ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount.Add(share.ComputedCommitmentUtilizedAmount)
 			info.ComputedOverageAmount = info.ComputedOverageAmount.Add(share.ComputedOverageAmount)
 			info.ComputedTrueUpAmount = info.ComputedTrueUpAmount.Add(share.ComputedTrueUpAmount)
+			info.ComputedCommitmentUtilizedQuantity = info.ComputedCommitmentUtilizedQuantity.Add(share.ComputedCommitmentUtilizedQuantity)
+			info.ComputedOverageQuantity = info.ComputedOverageQuantity.Add(share.ComputedOverageQuantity)
+			info.ComputedTrueUpQuantity = info.ComputedTrueUpQuantity.Add(share.ComputedTrueUpQuantity)
 			// Utilized plus true-up: what the commitment itself bills; overage is billed outside it.
 			info.Amount = info.ComputedCommitmentUtilizedAmount.Add(info.ComputedTrueUpAmount)
 			total := share.ComputedCommitmentUtilizedAmount.Add(share.ComputedOverageAmount).Add(share.ComputedTrueUpAmount)
 			group.TotalCost = group.TotalCost.Add(total)
 
+			// A billing-terms commitment covers usage at $0, so a share can carry quantities without an amount.
+			carries := !total.IsZero() ||
+				!share.ComputedCommitmentUtilizedQuantity.IsZero() ||
+				!share.ComputedOverageQuantity.IsZero() ||
+				!share.ComputedTrueUpQuantity.IsZero()
 			at := pointsIn[gi]
-			if len(at) == 0 && !fill.IsZero() && !total.IsZero() {
+			if len(at) == 0 && !fill.IsZero() && carries {
 				group.Points = append(group.Points, events.UsageAnalyticPoint{Timestamp: fill, WindowStart: fill})
 				at = []int{len(group.Points) - 1}
 			}
@@ -2793,11 +2843,14 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 				usage[k] = group.Points[j].Billed()
 			}
 
-			for k, part := range splitBilled(&share, usage, group.AggregationType) {
+			for k, part := range splitBilled(&share, usage, group.AggregationType, group.Currency) {
 				point := &group.Points[at[k]]
 				point.ComputedCommitmentUtilizedAmount = point.ComputedCommitmentUtilizedAmount.Add(part.ComputedCommitmentUtilizedAmount)
 				point.ComputedOverageAmount = point.ComputedOverageAmount.Add(part.ComputedOverageAmount)
 				point.ComputedTrueUpAmount = point.ComputedTrueUpAmount.Add(part.ComputedTrueUpAmount)
+				point.ComputedCommitmentUtilizedQuantity = point.ComputedCommitmentUtilizedQuantity.Add(part.ComputedCommitmentUtilizedQuantity)
+				point.ComputedOverageQuantity = point.ComputedOverageQuantity.Add(part.ComputedOverageQuantity)
+				point.ComputedTrueUpQuantity = point.ComputedTrueUpQuantity.Add(part.ComputedTrueUpQuantity)
 				point.Cost = point.Cost.Add(part.ComputedCommitmentUtilizedAmount).
 					Add(part.ComputedOverageAmount).
 					Add(part.ComputedTrueUpAmount)
@@ -2889,19 +2942,43 @@ func (w pointWindows) periodPoints(points []events.UsageAnalyticPoint, bounds ty
 	return in
 }
 
-// splitBilled shares billed amounts by weight. Utilized and overage follow usage, keeping signed SUM corrections; a
-// true-up is no usage, so it follows positive weights only.
-func splitBilled(billed *types.CommitmentInfo, weights []decimal.Decimal, aggregation types.AggregationType) []types.CommitmentInfo {
-	utilized := allocateUsageCost(billed.ComputedCommitmentUtilizedAmount, weights, aggregation)
-	overage := allocateUsageCost(billed.ComputedOverageAmount, weights, aggregation)
-	trueUp := allocateCostByWeight(billed.ComputedTrueUpAmount, weights)
+// splitBilled shares billed amounts, rounded to currency, and their quantities by weight. Utilized and overage follow
+// usage, keeping signed SUM corrections; a true-up is no usage, so it follows positive weights only.
+func splitBilled(
+	billed *types.CommitmentInfo,
+	weights []decimal.Decimal,
+	aggregation types.AggregationType,
+	currency string,
+) []types.CommitmentInfo {
+	utilized := roundShares(allocateUsageCost(billed.ComputedCommitmentUtilizedAmount, weights, aggregation), currency)
+	overage := roundShares(allocateUsageCost(billed.ComputedOverageAmount, weights, aggregation), currency)
+	trueUp := roundShares(allocateCostByWeight(billed.ComputedTrueUpAmount, weights), currency)
+	utilizedQuantity := allocateUsageCost(billed.ComputedCommitmentUtilizedQuantity, weights, aggregation)
+	overageQuantity := allocateUsageCost(billed.ComputedOverageQuantity, weights, aggregation)
+	trueUpQuantity := allocateCostByWeight(billed.ComputedTrueUpQuantity, weights)
 	shares := make([]types.CommitmentInfo, len(weights))
 	for i := range shares {
 		shares[i] = types.CommitmentInfo{
-			ComputedCommitmentUtilizedAmount: utilized[i],
-			ComputedOverageAmount:            overage[i],
-			ComputedTrueUpAmount:             trueUp[i],
+			ComputedCommitmentUtilizedAmount:   utilized[i],
+			ComputedOverageAmount:              overage[i],
+			ComputedTrueUpAmount:               trueUp[i],
+			ComputedCommitmentUtilizedQuantity: utilizedQuantity[i],
+			ComputedOverageQuantity:            overageQuantity[i],
+			ComputedTrueUpQuantity:             trueUpQuantity[i],
 		}
+	}
+
+	return shares
+}
+
+// roundShares rounds shares to the currency on their running total, so each moves by less than one unit and together
+// they keep their rounded sum.
+func roundShares(shares []decimal.Decimal, currency string) []decimal.Decimal {
+	running, given := decimal.Zero, decimal.Zero
+	for i, share := range shares {
+		running = running.Add(share)
+		upTo := types.RoundToCurrencyPrecision(running, currency)
+		shares[i], given = upTo.Sub(given), upTo
 	}
 
 	return shares
@@ -3245,7 +3322,8 @@ func (s *meterUsageService) calculateLineItemCommitments(
 		for lineID, charge := range charges {
 			cost := chargeCost(ctx, priceService, charge, usage.MeterMap[charge.MeterID])
 			breakdownsByPeriod[i][lineID] = &types.CommitmentInfo{
-				ComputedOverageAmount: types.RoundToCurrencyPrecision(cost, charge.Currency),
+				ComputedOverageAmount:   types.RoundToCurrencyPrecision(cost, charge.Currency),
+				ComputedOverageQuantity: charge.QuantityDecimal(),
 			}
 		}
 	}
@@ -3431,6 +3509,7 @@ func (s *meterUsageService) periodCommitments(
 		// Overage and plain usage both bill outside any commitment's capacity.
 		if kind == types.CommitmentLineOverage || kind == types.CommitmentLinePlain {
 			lineBreakdown.ComputedOverageAmount = lineBreakdown.ComputedOverageAmount.Add(line.Amount)
+			lineBreakdown.ComputedOverageQuantity = lineBreakdown.ComputedOverageQuantity.Add(line.Quantity)
 			continue
 		}
 
@@ -3441,6 +3520,8 @@ func (s *meterUsageService) periodCommitments(
 
 		utilizedByCommitment[commitmentID][lineID] = utilizedByCommitment[commitmentID][lineID].Add(line.Amount)
 		lineBreakdown.ComputedCommitmentUtilizedAmount = lineBreakdown.ComputedCommitmentUtilizedAmount.Add(line.Amount)
+		// Usage a billing-terms commitment covers bills nothing, but its quantity still counts as utilized.
+		lineBreakdown.ComputedCommitmentUtilizedQuantity = lineBreakdown.ComputedCommitmentUtilizedQuantity.Add(line.Quantity)
 	}
 
 	// A shared true-up is split across the commitment's whole scope by utilized value.
@@ -3452,9 +3533,20 @@ func (s *meterUsageService) periodCommitments(
 			utilized[i] = utilizedByCommitment[commitmentID][item.ID]
 		}
 
-		for i, share := range allocateCostByWeight(line.Amount, utilized) {
-			lineBreakdown := breakdownByLine[scope[i].ID]
-			lineBreakdown.ComputedTrueUpAmount = lineBreakdown.ComputedTrueUpAmount.Add(share)
+		// An amount commitment's true-up row bills one unit of money, not unused usage, so only a quantity one counts.
+		unused := decimal.Zero
+		if lo.ContainsBy(loader.commitments, func(sc *stackedCommitment) bool {
+			return sc.ID == commitmentID && sc.Type == types.COMMITMENT_TYPE_QUANTITY
+		}) {
+			unused = line.Quantity
+		}
+
+		amounts := roundShares(allocateCostByWeight(line.Amount, utilized), usage.Subscription.Currency)
+		quantities := allocateCostByWeight(unused, utilized)
+		for i, item := range scope {
+			lineBreakdown := breakdownByLine[item.ID]
+			lineBreakdown.ComputedTrueUpAmount = lineBreakdown.ComputedTrueUpAmount.Add(amounts[i])
+			lineBreakdown.ComputedTrueUpQuantity = lineBreakdown.ComputedTrueUpQuantity.Add(quantities[i])
 		}
 	}
 
