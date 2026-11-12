@@ -13,81 +13,54 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCreateSubscriptionRequestValidate_RejectsLegacyCommitment(t *testing.T) {
-	tests := []struct {
-		name      string
-		set       func(r *CreateSubscriptionRequest)
-		wantField string
-	}{
-		{name: "none", set: func(*CreateSubscriptionRequest) {}},
-		{name: "defaults", set: func(r *CreateSubscriptionRequest) {
-			r.CommitmentAmount = lo.ToPtr(decimal.Zero)
-			r.OverageFactor = lo.ToPtr(decimal.NewFromInt(1))
-		}},
-		{
-			name:      "commitment amount",
-			set:       func(r *CreateSubscriptionRequest) { r.CommitmentAmount = lo.ToPtr(decimal.NewFromInt(100)) },
-			wantField: "commitment_amount",
-		},
-		{
-			name:      "commitment duration",
-			set:       func(r *CreateSubscriptionRequest) { r.CommitmentDuration = lo.ToPtr(types.BILLING_PERIOD_ANNUAL) },
-			wantField: "commitment_duration",
-		},
-		{
-			name:      "overage factor",
-			set:       func(r *CreateSubscriptionRequest) { r.OverageFactor = lo.ToPtr(decimal.NewFromFloat(1.5)) },
-			wantField: "overage_factor",
-		},
-		{
-			name:      "true-up",
-			set:       func(r *CreateSubscriptionRequest) { r.EnableTrueUp = true },
-			wantField: "enable_true_up",
-		},
-		{
-			name: "line item commitments",
-			set: func(r *CreateSubscriptionRequest) {
-				r.LineItemCommitments = map[string]*LineItemCommitmentConfig{"price_123": {}}
-			},
-			wantField: "line_item_commitments",
-		},
-		{
-			name: "line item fields",
-			set: func(r *CreateSubscriptionRequest) {
-				r.LineItems = []CreateSubscriptionLineItemRequest{{
-					PriceID:          "price_123",
-					CommitmentAmount: lo.ToPtr(decimal.NewFromInt(100)),
-				}}
-			},
-			wantField: "commitment_amount",
-		},
-	}
+func TestLineItemCommitmentConfig_Validate_OverageFactor(t *testing.T) {
+	amount := decimal.NewFromInt(100)
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			req := baseCreateSubscriptionRequest()
-			tc.set(&req)
+	t.Run("accepts overage factor of exactly 1.0", func(t *testing.T) {
+		c := &LineItemCommitmentConfig{
+			CommitmentAmount: &amount,
+			CommitmentType:   types.COMMITMENT_TYPE_AMOUNT,
+			OverageFactor:    lo.ToPtr(decimal.NewFromInt(1)),
+		}
+		if err := c.Validate(); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+	})
 
-			err := req.Validate()
-			if tc.wantField == "" {
-				require.NoError(t, err)
-				return
-			}
+	t.Run("rejects overage factor below 1.0", func(t *testing.T) {
+		c := &LineItemCommitmentConfig{
+			CommitmentAmount: &amount,
+			CommitmentType:   types.COMMITMENT_TYPE_AMOUNT,
+			OverageFactor:    lo.ToPtr(decimal.NewFromFloat(0.5)),
+		}
+		err := c.Validate()
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+		if !strings.Contains(err.Error(), "overage_factor must be at least 1.0") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 
-			require.Error(t, err)
-			require.True(t, ierr.IsValidation(err))
-			require.Contains(t, err.Error(), tc.wantField+" is deprecated")
-		})
-	}
-}
-
-// A plan change carries the replaced subscription's legacy commitment; callers cannot set one.
-func TestCreateSubscriptionRequestValidate_CarriesLegacyCommitment(t *testing.T) {
-	req := baseCreateSubscriptionRequest()
-	req.CommitmentAmount = lo.ToPtr(decimal.NewFromInt(100))
-	req.OverageFactor = lo.ToPtr(decimal.NewFromFloat(1.5))
-	req.CarryLegacyCommitment = true
-	require.NoError(t, req.Validate())
+	t.Run("defaults overage factor when only time buckets are set", func(t *testing.T) {
+		c := &LineItemCommitmentConfig{
+			IsWindowCommitment: lo.ToPtr(true),
+			CommitmentTimeBuckets: []CommitmentBucketRequest{{
+				ID:              "bkt_existing",
+				Start:           types.Bucket{Hour: 8},
+				End:             types.Bucket{Hour: 20},
+				CommitmentType:  types.COMMITMENT_TYPE_QUANTITY,
+				CommitmentValue: decimal.NewFromInt(10),
+			}},
+		}
+		c.ApplyDefaults()
+		if err := c.Validate(); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if c.OverageFactor == nil || !c.OverageFactor.Equal(decimal.NewFromInt(1)) {
+			t.Fatalf("expected default overage factor 1, got: %v", c.OverageFactor)
+		}
+	})
 }
 
 func baseCreateSubscriptionRequest() CreateSubscriptionRequest {
@@ -592,7 +565,7 @@ func TestAddAddonRequestValidate_CheckoutAllowsOverridesNotCommitments(t *testin
 	withCommitment := request(func(r *AddAddonRequest) {
 		r.LineItemCommitments = map[string]*LineItemCommitmentConfig{"price_123": {}}
 	})
-	err := withCommitment.Validate()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "line_item_commitments is deprecated")
+	if err := withCommitment.Validate(); err == nil {
+		t.Fatal("line_item_commitments with checkout must still be rejected")
+	}
 }

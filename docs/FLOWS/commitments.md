@@ -55,13 +55,13 @@ usage within it is shown at $0 and no true-up is billed.
 
 ## 4. Legacy commitments
 
-Commitments are on in every environment; the former `commitments_v2` setting is gone. Legacy (v1) commitments are no
-longer accepted on input: a populated `commitment_amount`, `commitment_duration`, `overage_factor` or `enable_true_up`
-on a subscription, `line_item_commitments`, or a `commitment_*` field of a new line item fails with
-`dto.LegacyCommitmentError`. Default values (a zero amount, an overage factor of 1, `false`, empty) are still accepted,
-so existing clients that always send them keep working. A line-item update may still edit or remove a line's existing
-legacy commitment, and a plan change carries the replaced subscription's legacy commitment (`CarryLegacyCommitment`).
-Existing legacy commitments keep billing through the legacy path, next to v2 commitments on other lines.
+Commitments are on in every environment; the former `commitments_v2` setting is gone. Legacy (v1) commitment fields
+(`commitment_amount`, `commitment_duration`, `overage_factor` and `enable_true_up` on a subscription,
+`line_item_commitments`, and a line item's `commitment_*` fields) are deprecated but still accepted, so older clients
+keep working. They bill through the legacy path, next to v2 commitments on other lines. The two never price the same
+usage: legacy fields are refused on a line a commitment covers (`checkLegacyLineFields`), and a commitment is refused
+over a line with legacy fields (`validateTermLines`) or on a subscription with a legacy subscription-level commitment
+(`validateAgainstSubscription`).
 
 ## 5. Creating a commitment
 

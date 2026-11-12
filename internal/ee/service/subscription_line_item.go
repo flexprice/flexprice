@@ -37,6 +37,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 		return nil, err
 	}
 
+	req.ApplyDefaults()
 	// 2. Validate request (including date bounds when sub is passed)
 	if err := req.Validate(nil, sub); err != nil {
 		return nil, err
@@ -281,14 +282,22 @@ func (s *subscriptionService) resolvePriceAndLineItemParams(ctx context.Context,
 			EntityType:   types.SubscriptionLineItemEntityTypeSubscription,
 		}
 		resolvedReq = dto.CreateSubscriptionLineItemRequest{
-			PriceID:              "", // set to createdPrice.ID inside tx
-			Quantity:             req.Quantity,
-			StartDate:            req.StartDate,
-			EndDate:              req.EndDate,
-			Metadata:             req.Metadata,
-			DisplayName:          req.DisplayName,
-			SubscriptionPhaseID:  req.SubscriptionPhaseID,
-			SkipEntitlementCheck: true,
+			PriceID:                 "", // set to createdPrice.ID inside tx
+			Quantity:                req.Quantity,
+			StartDate:               req.StartDate,
+			EndDate:                 req.EndDate,
+			Metadata:                req.Metadata,
+			DisplayName:             req.DisplayName,
+			SubscriptionPhaseID:     req.SubscriptionPhaseID,
+			SkipEntitlementCheck:    true,
+			CommitmentAmount:        req.CommitmentAmount,
+			CommitmentQuantity:      req.CommitmentQuantity,
+			CommitmentType:          req.CommitmentType,
+			CommitmentOverageFactor: req.CommitmentOverageFactor,
+			CommitmentTrueUpEnabled: req.CommitmentTrueUpEnabled,
+			CommitmentWindowed:      req.CommitmentWindowed,
+			CommitmentDuration:      req.CommitmentDuration,
+			CommitmentTimeBuckets:   req.CommitmentTimeBuckets,
 		}
 		return nil, params, resolvedReq, true, &createPriceReq, nil
 	}
@@ -703,10 +712,6 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 		return nil, err
 	}
 
-	if field := req.LegacyCommitmentField(); field != "" && !existingLineItem.HasAnyCommitment() {
-		return nil, dto.LegacyCommitmentError(field)
-	}
-
 	// Check if line item is already terminated
 	if existingLineItem.Status != types.StatusPublished {
 		return nil, ierr.NewError("line item is not active").
@@ -772,9 +777,6 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return findErr
 			} else if successor != nil {
 				return alreadyScheduledVersionError(lineItemID, successor.ID)
-			}
-			if field := req.LegacyCommitmentField(); field != "" && !locked.HasAnyCommitment() {
-				return dto.LegacyCommitmentError(field)
 			}
 
 			// Effective date must not be before the line item's start date (avoids end_date < start_date).

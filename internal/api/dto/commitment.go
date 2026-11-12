@@ -15,16 +15,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// LegacyCommitmentError rejects a legacy commitment field, which the commitments API replaces.
-func LegacyCommitmentError(field string) error {
-	return ierr.NewErrorf("%s is deprecated: legacy commitments are no longer supported", field).
-		WithHintf("%s is deprecated and no longer supported. Create commitments with POST /commitments, or inline under commitments when creating a subscription", field).
-		WithReportableDetails(map[string]any{
-			"field": field,
-		}).
-		Mark(ierr.ErrValidation)
-}
-
 type CommitmentScopeInput struct {
 	EntityType types.CommitmentScopeType `json:"entity_type" validate:"required"`
 	// EntityID may be omitted on an inline subscription-scoped commitment; the new subscription's ID is used.

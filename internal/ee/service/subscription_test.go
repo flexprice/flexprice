@@ -636,51 +636,156 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_BackdatedAttachIsA
 	s.True(addonItem.StartDate.Equal(backdated), "the line item keeps the requested start date")
 }
 
-// Legacy line_item_commitments on an addon attach are rejected and attach nothing.
-func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_RejectsLineItemCommitments() {
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments() {
 	ctx := s.GetContext()
-	addonID, priceID := "addon_legacy_commitment", "price_addon_legacy_commitment"
-	s.NoError(s.GetStores().AddonRepo.Create(ctx, &addon.Addon{
-		ID:        addonID,
-		LookupKey: addonID,
-		Name:      "Legacy Commitment Addon",
-		BaseModel: types.GetDefaultBaseModel(ctx),
-	}))
-	s.NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
-		ID:                 priceID,
-		Amount:             decimal.Zero,
-		Currency:           "usd",
-		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
-		EntityID:           addonID,
-		Type:               types.PRICE_TYPE_USAGE,
-		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount: 1,
-		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-		InvoiceCadence:     types.InvoiceCadenceArrear,
-		MeterID:            s.testData.meters.apiCalls.ID,
-		BaseModel:          types.GetDefaultBaseModel(ctx),
-	}))
 
-	now := time.Now().UTC()
-	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
-		SubscriptionID: s.testData.subscription.ID,
-		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
-			LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
-				priceID: {CommitmentAmount: lo.ToPtr(decimal.NewFromInt(25))},
+	createAddonWithUsagePrice := func(addonID, priceID, meterID string) {
+		subService := s.service.(*subscriptionService)
+		a := &addon.Addon{
+			ID:          addonID,
+			LookupKey:   addonID,
+			Name:        "Test Addon",
+			Description: "Test Addon Description",
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(subService.AddonRepo.Create(ctx, a))
+
+		p := &price.Price{
+			ID:                 priceID,
+			Amount:             decimal.Zero,
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+			EntityID:           addonID,
+			Type:               types.PRICE_TYPE_USAGE,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			InvoiceCadence:     types.InvoiceCadenceArrear,
+			MeterID:            meterID,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	}
+
+	s.Run("applies_commitment_to_addon_line_item", func() {
+		addonID := "addon_commitment_ok"
+		priceID := "price_addon_commitment_ok"
+		createAddonWithUsagePrice(addonID, priceID, s.testData.meters.apiCalls.ID)
+
+		now := time.Now().UTC()
+		commitmentAmount := decimal.NewFromFloat(25)
+		overageFactor := decimal.NewFromFloat(2)
+		enableTrueUp := true
+
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
+					priceID: {
+						CommitmentAmount: &commitmentAmount,
+						OverageFactor:    &overageFactor,
+						EnableTrueUp:     &enableTrueUp,
+					},
+				},
 			},
-		},
-	})
-	s.Require().Error(err)
-	s.True(ierr.IsValidation(err))
-	s.Contains(err.Error(), "line_item_commitments is deprecated")
+		})
+		s.NoError(err)
 
-	filter := types.NewNoLimitSubscriptionLineItemFilter()
-	filter.SubscriptionIDs = []string{s.testData.subscription.ID}
-	items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, filter)
-	s.Require().NoError(err)
-	s.False(lo.SomeBy(items, func(it *subscription.SubscriptionLineItem) bool { return it.PriceID == priceID }))
+		filter := types.NewNoLimitSubscriptionLineItemFilter()
+		filter.SubscriptionIDs = []string{s.testData.subscription.ID}
+
+		items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, filter)
+		s.NoError(err)
+		s.NotEmpty(items)
+
+		var matched *subscription.SubscriptionLineItem
+		for _, it := range items {
+			if it.EntityType == types.SubscriptionLineItemEntityTypeAddon && it.EntityID == addonID && it.PriceID == priceID {
+				matched = it
+				break
+			}
+		}
+		s.NotNil(matched)
+		if matched == nil {
+			return
+		}
+		s.NotNil(matched.CommitmentAmount)
+		s.True(matched.CommitmentAmount.Equal(commitmentAmount))
+		s.Equal(types.COMMITMENT_TYPE_AMOUNT, matched.CommitmentType)
+		s.NotNil(matched.CommitmentOverageFactor)
+		s.True(matched.CommitmentOverageFactor.Equal(overageFactor))
+		s.Equal(enableTrueUp, matched.CommitmentTrueUpEnabled)
+		s.False(matched.CommitmentWindowed)
+	})
+
+	s.Run("defaults_overage_factor_when_omitted", func() {
+		addonID := "addon_commitment_missing_overage"
+		priceID := "price_addon_commitment_missing_overage"
+		createAddonWithUsagePrice(addonID, priceID, s.testData.meters.apiCalls.ID)
+
+		now := time.Now().UTC()
+		commitmentAmount := decimal.NewFromFloat(25)
+
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
+					priceID: {
+						CommitmentAmount: &commitmentAmount,
+					},
+				},
+			},
+		})
+		s.NoError(err)
+
+		filter := types.NewNoLimitSubscriptionLineItemFilter()
+		filter.SubscriptionIDs = []string{s.testData.subscription.ID}
+		items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, filter)
+		s.NoError(err)
+
+		var matched *subscription.SubscriptionLineItem
+		for _, it := range items {
+			if it.EntityType == types.SubscriptionLineItemEntityTypeAddon && it.EntityID == addonID && it.PriceID == priceID {
+				matched = it
+				break
+			}
+		}
+		s.Require().NotNil(matched)
+		s.Require().NotNil(matched.CommitmentOverageFactor)
+		s.True(decimal.NewFromInt(1).Equal(*matched.CommitmentOverageFactor),
+			"expected default overage factor 1, got %s", matched.CommitmentOverageFactor)
+	})
+
+	s.Run("rejects_window_commitment_when_meter_has_no_bucket_size", func() {
+		addonID := "addon_commitment_window_no_bucket"
+		priceID := "price_addon_commitment_window_no_bucket"
+		createAddonWithUsagePrice(addonID, priceID, s.testData.meters.apiCalls.ID)
+
+		now := time.Now().UTC()
+		commitmentAmount := decimal.NewFromFloat(25)
+		overageFactor := decimal.NewFromFloat(2)
+		isWindow := true
+
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
+					priceID: {
+						CommitmentAmount:   &commitmentAmount,
+						OverageFactor:      &overageFactor,
+						IsWindowCommitment: &isWindow,
+					},
+				},
+			},
+		})
+		s.Error(err)
+	})
 }
 
 func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionPriceOverrides() {
@@ -919,6 +1024,54 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionPriceOverrides() {
 		s.Equal(priceID, li.PriceID, "line item should still reference the original addon price when no overrides are given")
 	})
 
+	s.Run("commitment_and_override_on_same_price_both_apply", func() {
+		addonID := "addon_override_with_commitment"
+		priceID := "price_addon_override_with_commitment"
+		createUsagePriceAddon(addonID, priceID, s.testData.meters.apiCalls.ID)
+
+		now := time.Now().UTC()
+		commitmentAmount := decimal.NewFromFloat(25)
+		overageFactor := decimal.NewFromFloat(2)
+
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
+					priceID: {
+						CommitmentAmount: &commitmentAmount,
+						OverageFactor:    &overageFactor,
+					},
+				},
+				OverrideLineItems: []dto.OverrideLineItemRequest{
+					{
+						PriceID:      priceID,
+						TierMode:     types.BILLING_TIER_SLAB,
+						BillingModel: types.BILLING_MODEL_TIERED,
+						Tiers: []dto.CreatePriceTier{
+							{UpTo: lo.ToPtr(uint64(1000)), UnitAmount: decimal.RequireFromString("0.02")},
+							{UpTo: nil, UnitAmount: decimal.RequireFromString("0.01")},
+						},
+					},
+				},
+			},
+		})
+		s.NoError(err)
+
+		li := findLineItemByEntity(s.testData.subscription.ID, addonID)
+		s.NotNil(li)
+		if li == nil {
+			return
+		}
+		s.NotEqual(priceID, li.PriceID, "commitment line item should still get its price overridden")
+		s.NotNil(li.CommitmentAmount)
+		s.True(li.CommitmentAmount.Equal(commitmentAmount), "commitment config must survive the price override")
+
+		overriddenPrice, err := s.GetStores().PriceRepo.Get(ctx, li.PriceID)
+		s.NoError(err)
+		s.Equal(types.BILLING_MODEL_TIERED, overriddenPrice.BillingModel)
+	})
 }
 
 func (s *SubscriptionServiceSuite) SetupTest() {
@@ -2858,6 +3011,140 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_Validatio
 			s.Contains(err.Error(), tt.wantErrCont)
 		})
 	}
+}
+
+// TestCreateSubscription_LineItemWithBuckets_MaterializesPrices verifies that when
+// CreateSubscription is called with a LineItems entry that carries CommitmentTimeBuckets,
+// the bucket prices are materialized (PriceID and ID populated) on the resulting
+// subscription line item. This exercises the path:
+//
+//	CreateSubscription → AddSubscriptionLineItem → resolveBucketPrices
+func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemWithBuckets_MaterializesPrices() {
+	ctx := s.GetContext()
+
+	// Create a meter with BucketSize set; CommitmentWindowed=true requires it.
+	bucketMeter := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Bucket Meter For Sub Create",
+		EventName: "bucket_sub_event",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "value",
+			BucketSize: types.WindowSizeHour,
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketMeter))
+
+	// Create a SUBSCRIPTION-scoped usage price that will be used as the line item's base price.
+	// The line item must reference an existing price_id when CommitmentWindowed=true so that
+	// the service can derive MeterID from it.
+	// NOTE: We create it as PLAN-scoped under s.testData.plan so the plan price lookup works.
+	usagePriceForBucketSub := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            bucketMeter.ID,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePriceForBucketSub))
+
+	overageFactor := decimal.NewFromFloat(1.5)
+	commitmentAmount := decimal.NewFromInt(500)
+	bucketPriceAmount := decimal.NewFromInt(20)
+
+	start := s.testData.now
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          &start,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+			// Add a line item with CommitmentTimeBuckets — this goes through AddSubscriptionLineItem
+			// which calls resolveBucketPrices inside the transaction.
+			LineItems: []dto.CreateSubscriptionLineItemRequest{
+				{
+					PriceID:                 usagePriceForBucketSub.ID,
+					SkipEntitlementCheck:    true,
+					CommitmentAmount:        &commitmentAmount,
+					CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+					CommitmentOverageFactor: &overageFactor,
+					CommitmentWindowed:      true,
+					CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
+						{
+							Start: types.Bucket{Hour: 9, Minute: 0},
+							End:   types.Bucket{Hour: 17, Minute: 0},
+							Price: &dto.CreatePriceRequest{
+								Amount:               lo.ToPtr(bucketPriceAmount),
+								Currency:             "usd",
+								EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+								Type:                 types.PRICE_TYPE_FIXED,
+								PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+								BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+								BillingPeriodCount:   1,
+								BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+								InvoiceCadence:       types.InvoiceCadenceAdvance,
+								LookupKey:            "sub_create_bucket_price",
+								SkipEntityValidation: true,
+							},
+							CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+							CommitmentValue: decimal.NewFromInt(300),
+							OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
+							TrueUpEnabled:   true,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.Require().NotNil(resp)
+	s.NotEmpty(resp.ID)
+
+	// Fetch the subscription with line items expanded.
+	got, err := s.service.GetSubscription(ctx, resp.ID)
+	s.NoError(err)
+	s.Require().NotNil(got)
+
+	// Find the line item that has CommitmentTimeBuckets (the one added via req.LineItems,
+	// not the plan-scoped line item for the same price which has no buckets).
+	var bucketLineItem *subscription.SubscriptionLineItem
+	for _, li := range got.Subscription.LineItems {
+		if li.PriceID == usagePriceForBucketSub.ID && len(li.CommitmentTimeBuckets) > 0 {
+			bucketLineItem = li
+			break
+		}
+	}
+	s.Require().NotNil(bucketLineItem, "line item with CommitmentTimeBuckets must exist after CreateSubscription")
+
+	// The line item must carry exactly one materialized bucket.
+	s.Require().Len(bucketLineItem.CommitmentTimeBuckets, 1, "expected 1 materialized bucket on the line item")
+
+	bucket := bucketLineItem.CommitmentTimeBuckets[0]
+
+	// PriceID and ID must be non-empty after resolveBucketPrices ran.
+	s.NotEmpty(bucket.PriceID, "bucket.PriceID must be set by resolveBucketPrices")
+	s.NotEmpty(bucket.ID, "bucket.ID must be set by resolveBucketPrices")
+
+	// The created price must be stored and scoped to the subscription.
+	createdPrice, getErr := s.GetStores().PriceRepo.Get(ctx, bucket.PriceID)
+	s.NoError(getErr)
+	s.Equal(types.PRICE_ENTITY_TYPE_SUBSCRIPTION, createdPrice.EntityType)
+	s.Equal(resp.ID, createdPrice.EntityID, "bucket price must be scoped to the new subscription")
+	s.True(createdPrice.Amount.Equal(bucketPriceAmount), "bucket price amount must match request")
 }
 
 // Helper function to create invoice service for testing
@@ -9879,8 +10166,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 	}
 }
 
-// A grouped invoicing child cannot carry a legacy subscription-level commitment.
-func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_RejectsLegacyCommitment() {
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_Commitment() {
 	ctx := s.GetContext()
 	seatPlan := s.setupSeatFeePlan()
 
@@ -9921,10 +10207,25 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 		},
 	}
 
-	_, err := s.service.CreateSubscription(ctx, req)
-	s.Require().Error(err)
-	s.True(ierr.IsValidation(err))
-	s.Contains(err.Error(), "commitment_amount is deprecated")
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{resp.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+	children, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Require().Len(children, 1)
+
+	child, err := s.GetStores().SubscriptionRepo.Get(ctx, children[0].ID)
+	s.NoError(err)
+	s.Require().NotNil(child.CommitmentAmount)
+	s.True(commitmentAmount.Equal(*child.CommitmentAmount))
+	s.Require().NotNil(child.CommitmentDuration)
+	s.Equal(types.BILLING_PERIOD_ANNUAL, *child.CommitmentDuration)
+	s.Require().NotNil(child.OverageFactor)
+	s.True(overageFactor.Equal(*child.OverageFactor))
+	s.True(child.EnableTrueUp)
 }
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_TrialPeriodDays() {
