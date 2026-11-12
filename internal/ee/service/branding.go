@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/environment"
@@ -25,6 +26,8 @@ import (
 type BrandingService interface {
 	// StoreImage checks and re-encodes an upload, stores it under the tenant in ctx and the given environment, and returns its image key.
 	StoreImage(ctx context.Context, environmentID string, asset types.BrandingAsset, data []byte) (string, error)
+	// GetImage returns a stored image for the public endpoint; a malformed path is not found without a storage call.
+	GetImage(ctx context.Context, req dto.BrandingImageRequest) (*dto.BrandingImage, error)
 }
 
 type brandingService struct {
@@ -70,6 +73,40 @@ func (s *brandingService) StoreImage(ctx context.Context, environmentID string, 
 		return "", err
 	}
 	return key, nil
+}
+
+func (s *brandingService) GetImage(ctx context.Context, req dto.BrandingImageRequest) (*dto.BrandingImage, error) {
+	key, ext, hash, ok := parseBrandingImageKey(req.TenantID, req.EnvironmentID, req.File)
+	if !ok {
+		return nil, ierr.NewError("image not found").WithHint("Image not found").Mark(ierr.ErrNotFound)
+	}
+
+	image := &dto.BrandingImage{ContentType: "image/png", ETag: `"` + hash + `"`}
+	if ext == "jpg" {
+		image.ContentType = "image/jpeg"
+	}
+	if req.IfNoneMatch == image.ETag {
+		image.NotModified = true
+		return image, nil
+	}
+
+	store, err := s.StorageResolver.ForPlatform(ctx, storage.PurposeBranding)
+	if err != nil {
+		return nil, err
+	}
+	bc, err := s.StorageResolver.BucketConfigFor(storage.PurposeBranding)
+	if err != nil {
+		return nil, err
+	}
+
+	image.Data, err = store.Download(ctx, brandingObjectKey(bc.KeyPrefix, key))
+	if err != nil {
+		if !ierr.IsNotFound(err) {
+			s.Logger.Error(ctx, "branding image read failed", "error", err, "tenant_id", req.TenantID, "environment_id", req.EnvironmentID, "key", key)
+		}
+		return nil, err
+	}
+	return image, nil
 }
 
 // brandingObjectKey is the storage object for an image key: <prefix>/branding/<key>.
