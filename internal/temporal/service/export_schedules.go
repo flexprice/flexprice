@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
@@ -19,6 +20,8 @@ import (
 const (
 	reconcileEnvLimit  = 1000
 	reconcilePageLimit = 500
+	reconcileAttempts  = 3
+	reconcileBackoff   = 5 * time.Second
 )
 
 type scheduleHandleGetter interface {
@@ -26,7 +29,7 @@ type scheduleHandleGetter interface {
 }
 
 // ReconcileExportScheduleTimeouts raises older export schedules to the current workflow timeout.
-// Failures are logged per schedule and never returned.
+// Failures are logged and never returned.
 func ReconcileExportScheduleTimeouts(
 	ctx context.Context,
 	tc scheduleHandleGetter,
@@ -35,7 +38,7 @@ func ReconcileExportScheduleTimeouts(
 	scheduledTasks scheduledtask.Repository,
 	log *logger.Logger,
 ) {
-	reconcileExportScheduleTimeouts(ctx, tc, tenants, envs, scheduledTasks, log, reconcileEnvLimit, reconcilePageLimit)
+	reconcileExportScheduleTimeouts(ctx, tc, tenants, envs, scheduledTasks, log, reconcileEnvLimit, reconcilePageLimit, reconcileBackoff)
 }
 
 func reconcileExportScheduleTimeouts(
@@ -46,17 +49,45 @@ func reconcileExportScheduleTimeouts(
 	scheduledTasks scheduledtask.Repository,
 	log *logger.Logger,
 	envPageSize, taskPageSize int,
+	backoff time.Duration,
 ) {
-	updated, current, failed := 0, 0, 0
+	for attempt := 1; attempt <= reconcileAttempts; attempt++ {
+		err := reconcilePass(ctx, tc, tenants, envs, scheduledTasks, log, envPageSize, taskPageSize)
+		if err == nil {
+			return
+		}
+		log.Error(ctx, "export schedule reconcile pass failed", "error", err, "attempt", attempt)
+		if attempt == reconcileAttempts {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff << (attempt - 1)):
+		}
+	}
+}
 
-	allTenants, err := tenants.List(ctx)
+// reconcilePass returns an error when any listing failed so the caller can retry.
+func reconcilePass(
+	ctx context.Context,
+	tc scheduleHandleGetter,
+	tenants tenant.Repository,
+	envs environment.Repository,
+	scheduledTasks scheduledtask.Repository,
+	log *logger.Logger,
+	envPageSize, taskPageSize int,
+) error {
+	updated, current, failed := 0, 0, 0
+	var listErr error
+
+	tenantIDs, err := tenants.ListIDs(ctx)
 	if err != nil {
-		log.Error(ctx, "export schedule reconcile: list tenants failed", "error", err)
-		return
+		return fmt.Errorf("list tenant ids: %w", err)
 	}
 
-	for _, t := range allTenants {
-		tenantCtx := types.SetTenantID(ctx, t.ID)
+	for _, tenantID := range tenantIDs {
+		tenantCtx := types.SetTenantID(ctx, tenantID)
 		var envList []*environment.Environment
 		for offset := 0; ; offset += envPageSize {
 			envFilter := types.GetDefaultFilter()
@@ -64,8 +95,8 @@ func reconcileExportScheduleTimeouts(
 			envFilter.Offset = offset
 			envPage, err := envs.List(tenantCtx, envFilter)
 			if err != nil {
-				log.Error(ctx, "export schedule reconcile: list environments failed", "error", err, "tenant_id", t.ID)
-				failed++
+				log.Error(ctx, "export schedule reconcile: list environments failed", "error", err, "tenant_id", tenantID)
+				listErr = err
 				break
 			}
 			envList = append(envList, envPage...)
@@ -80,8 +111,8 @@ func reconcileExportScheduleTimeouts(
 			for {
 				page, err := scheduledTasks.List(envCtx, &scheduledtask.ListFilters{Limit: taskPageSize, KeysetByID: true, AfterID: afterID})
 				if err != nil {
-					log.Error(ctx, "export schedule reconcile: list scheduled tasks failed", "error", err, "tenant_id", t.ID, "env_id", env.ID)
-					failed++
+					log.Error(ctx, "export schedule reconcile: list scheduled tasks failed", "error", err, "tenant_id", tenantID, "env_id", env.ID)
+					listErr = err
 					break
 				}
 				for _, st := range page {
@@ -108,6 +139,10 @@ func reconcileExportScheduleTimeouts(
 	}
 
 	log.Info(ctx, "export schedule timeouts reconciled", "updated", updated, "already_current", current, "failed", failed)
+	if listErr != nil {
+		return fmt.Errorf("listing failed: %w", listErr)
+	}
+	return nil
 }
 
 func reconcileExportSchedule(ctx context.Context, tc scheduleHandleGetter, scheduleID string) (bool, error) {

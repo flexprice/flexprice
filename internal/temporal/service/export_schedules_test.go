@@ -57,8 +57,22 @@ func (f fakeHandles) GetScheduleHandle(_ context.Context, id string) models.Sche
 
 type fakeTenants struct{ tenant.Repository }
 
-func (fakeTenants) List(context.Context) ([]*tenant.Tenant, error) {
-	return []*tenant.Tenant{{ID: "t1"}}, nil
+func (fakeTenants) ListIDs(context.Context) ([]string, error) {
+	return []string{"t1"}, nil
+}
+
+type flakyTenants struct {
+	tenant.Repository
+	failures int
+	calls    *int
+}
+
+func (f flakyTenants) ListIDs(context.Context) ([]string, error) {
+	*f.calls++
+	if *f.calls <= f.failures {
+		return nil, errors.New("db down")
+	}
+	return []string{"t1"}, nil
 }
 
 type fakeEnvs struct{ environment.Repository }
@@ -189,9 +203,32 @@ func TestReconcileExportScheduleTimeouts_Paging(t *testing.T) {
 		}
 	}
 
-	reconcileExportScheduleTimeouts(context.Background(), handles, fakeTenants{}, pagedEnvs{ids: []string{"e1", "e2", "e3"}}, keysetTasks{byEnv: byEnv}, logger.NewNoopLogger(), 2, 2)
+	reconcileExportScheduleTimeouts(context.Background(), handles, fakeTenants{}, pagedEnvs{ids: []string{"e1", "e2", "e3"}}, keysetTasks{byEnv: byEnv}, logger.NewNoopLogger(), 2, 2, time.Millisecond)
 
 	for id, h := range handles {
 		require.Equal(t, 1, h.updates, id)
+	}
+}
+
+func TestReconcileExportScheduleTimeouts_RetriesEarlyFailure(t *testing.T) {
+	tests := []struct {
+		name      string
+		failures  int
+		wantCalls int
+		wantFixed bool
+	}{
+		{"recovers on retry", 2, 3, true},
+		{"gives up after three", 5, 3, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &fakeHandle{schedule: scheduleWithTimeout(60 * time.Minute)}
+			rows := []*scheduledtask.ScheduledTask{{ID: "a", TemporalScheduleID: "s", Interval: types.ScheduledTaskIntervalDaily}}
+			calls := 0
+			reconcileExportScheduleTimeouts(context.Background(), fakeHandles{"s": h}, flakyTenants{failures: tt.failures, calls: &calls},
+				fakeEnvs{}, fakeScheduledTasks{rows: rows}, logger.NewNoopLogger(), 10, 10, time.Millisecond)
+			require.Equal(t, tt.wantCalls, calls)
+			require.Equal(t, tt.wantFixed, h.updates == 1)
+		})
 	}
 }

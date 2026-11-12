@@ -12,6 +12,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 type tenantRepository struct {
@@ -157,6 +158,27 @@ func (r *tenantRepository) List(ctx context.Context) ([]*domainTenant.Tenant, er
 
 	SetSpanSuccess(span)
 	return domainTenant.FromEntList(tenants), nil
+}
+
+// ListIDs implements tenant.Repository.
+func (r *tenantRepository) ListIDs(ctx context.Context) ([]string, error) {
+	span := StartRepositorySpan(ctx, "tenant", "list_ids", map[string]interface{}{})
+	defer FinishSpan(span)
+
+	ids, err := r.client.Reader(ctx).Tenant.
+		Query().
+		Where(entTenant.Status(string(types.StatusPublished))).
+		Order(ent.Asc(entTenant.FieldID)).
+		IDs(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list tenant ids").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return ids, nil
 }
 
 // Update implements tenant.Repository.
