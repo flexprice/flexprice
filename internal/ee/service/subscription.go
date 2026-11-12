@@ -124,11 +124,6 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	}
 
 	commitmentSvc := newCommitmentService(s.ServiceParams)
-	if len(req.Commitments) > 0 {
-		if err := commitmentSvc.requireEnabled(ctx); err != nil {
-			return nil, err
-		}
-	}
 
 	// Get and validate customer
 	var customer *customer.Customer

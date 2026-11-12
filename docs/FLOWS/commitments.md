@@ -53,12 +53,15 @@ usage within it is shown at $0 and no true-up is billed.
 | `internal/domain/billingterm` | Term and instalment models, `Expand` (terms → instalments), `NumberLabels` |
 | `internal/api/v1/commitment.go`, `internal/api/dto/commitment.go`, `internal/api/dto/billing_term.go` | HTTP handlers and request / response types |
 
-## 4. The gate
+## 4. Legacy commitments
 
-Everything v2 is behind the `commitments_v2` environment setting. `IsEnabled` ([commitment.go:71](../../internal/ee/service/commitment.go#L71))
-reads it, `requireEnabled` refuses API writes when it is off, and the billing loader returns an empty loader when it is
-off, so billing behaves exactly as before. Turning the flag off after v2 commitments exist silently stops their pricing,
-so it must not be flipped back.
+Commitments are on in every environment; the former `commitments_v2` setting is gone. Legacy (v1) commitment fields
+(`commitment_amount`, `commitment_duration`, `overage_factor` and `enable_true_up` on a subscription,
+`line_item_commitments`, and a line item's `commitment_*` fields) are deprecated but still accepted, so older clients
+keep working. They bill through the legacy path, next to v2 commitments on other lines. The two never price the same
+usage: legacy fields are refused on a line a commitment covers (`checkLegacyLineFields`), and a commitment is refused
+over a line with legacy fields (`validateTermLines`) or on a subscription with a legacy subscription-level commitment
+(`validateAgainstSubscription`).
 
 ## 5. Creating a commitment
 

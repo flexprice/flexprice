@@ -29,18 +29,12 @@ func checkLineAttach(
 		return err
 	}
 
-	svc := newCommitmentService(params)
-	enabled, err := svc.IsEnabled(ctx)
-	if err != nil || !enabled {
-		return err
-	}
-
 	p, err := params.PriceRepo.Get(ctx, li.PriceID)
 	if err != nil {
 		return err
 	}
 
-	return svc.CheckPriceAttach(ctx, sub, p, li.StartDate, lineEnd(li))
+	return newCommitmentService(params).CheckPriceAttach(ctx, sub, p, li.StartDate, lineEnd(li))
 }
 
 // lineEnd returns the line's end date, or nil while it runs open-ended.
@@ -66,10 +60,6 @@ func checkLegacyLineFields(
 	}
 
 	svc := newCommitmentService(params)
-	enabled, err := svc.IsEnabled(ctx)
-	if err != nil || !enabled {
-		return err
-	}
 
 	// Serialise with commitment creation, which validates against committed legacy fields.
 	if err := svc.lockSubscriptionCommitments(ctx, sub.ID); err != nil {
@@ -145,11 +135,6 @@ func (s *commitmentService) checkPriceAttach(
 ) (brokenID string, err error) {
 	if p == nil || p.Type != types.PRICE_TYPE_USAGE {
 		return "", nil
-	}
-
-	enabled, err := s.IsEnabled(ctx)
-	if err != nil || !enabled {
-		return "", err
 	}
 
 	// Serialise with create before reading, so a concurrent create is seen.
@@ -426,10 +411,6 @@ func checkLineDetach(
 	}
 
 	svc := newCommitmentService(params)
-	enabled, err := svc.IsEnabled(ctx)
-	if err != nil || !enabled {
-		return err
-	}
 
 	// Serialise with other scope changes, so two removals cannot each see the other's line as cover.
 	if err := svc.lockSubscriptionCommitments(ctx, sub.ID); err != nil {

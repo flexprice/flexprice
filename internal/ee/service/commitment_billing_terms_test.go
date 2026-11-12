@@ -14,7 +14,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -237,14 +236,6 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_Validation() {
 			s.Empty(s.storedInstalments())
 		})
 	}
-}
-
-func (s *CommitmentServiceSuite) TestCreate_BillingTerms_RejectedWhenDisabled() {
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
-
-	_, err := s.svc.Create(s.GetContext(), s.billingTermsRequest())
-	s.Require().Error(err)
-	s.True(ierr.IsInvalidOperation(err), "got %v", err)
 }
 
 func (s *CommitmentServiceSuite) TestCreate_BillingTerms_SeparateInvoiceDelivery() {
@@ -758,11 +749,6 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsInactiveOrPerPer
 	_, err = s.svc.ReplaceBillingTerms(ctx, "cmt_missing", req)
 	s.Require().Error(err)
 	s.True(ierr.IsNotFound(err), "got %v", err)
-
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)
-	_, err = s.svc.ReplaceBillingTerms(ctx, terminated.ID, req)
-	s.Require().Error(err)
-	s.True(ierr.IsInvalidOperation(err), "got %v", err)
 }
 
 func (s *CommitmentServiceSuite) TestGetBillingTerms_And_ListInstalments() {
@@ -852,12 +838,10 @@ func (s *CommitmentServiceSuite) TestListInstalments_FiltersByStatus() {
 	}
 }
 
-func (s *CommitmentServiceSuite) TestGetBillingTerms_ReadsWhenDisabledAndEmptyForPerPeriod() {
+func (s *CommitmentServiceSuite) TestGetBillingTerms_EmptyForPerPeriod() {
 	ctx := s.GetContext()
 	perPeriod, err := s.svc.Create(ctx, validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
-
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)
 
 	got, err := s.svc.GetBillingTerms(ctx, perPeriod.ID)
 	s.Require().NoError(err)
@@ -1285,23 +1269,6 @@ func (s *CommitmentE2ESuite) instalmentStatus(id string) *billingterm.Instalment
 	return inst
 }
 
-// An environment whose commitments_v2 setting cannot be read fails the run, and the other environments are still billed.
-func (s *CommitmentE2ESuite) TestBillDueInstalments_ReportsAnUnreadableSetting() {
-	sub, _ := s.separateInvoiceCommitment("unreadable")
-	other := types.SetEnvironmentID(s.GetContext(), "env_unreadable")
-	s.Require().NoError(s.GetStores().SettingsRepo.Create(other, &settings.Setting{
-		ID:            types.GenerateUUIDWithPrefix("setting"),
-		Key:           types.SettingKeyCommitmentsV2,
-		Value:         map[string]interface{}{"enabled": "yes"},
-		EnvironmentID: "env_unreadable",
-		BaseModel:     types.GetDefaultBaseModel(other),
-	}))
-
-	err := s.commitments.BillDueInstalments(s.GetContext())
-	s.Require().ErrorContains(err, "env_unreadable")
-	s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), 1)
-}
-
 // B1: the upfront instalment is due, so one run bills it on a finalized one-off invoice and claims it; the milestone
 // waits for its trigger and a second run issues nothing.
 func (s *CommitmentE2ESuite) TestBillDueInstalments_IssuesOneOffInvoices() {
@@ -1396,20 +1363,6 @@ func (s *CommitmentE2ESuite) TestBillDueInstalments_RebillsAfterVoid() {
 	rebilled := s.instalmentStatus(upfront.ID)
 	s.Equal(types.InstalmentStatusInvoiced, rebilled.InstalmentStatus)
 	s.Equal(second[0].ID, lo.FromPtr(rebilled.InvoiceID))
-}
-
-func (s *CommitmentE2ESuite) TestBillDueInstalments_IgnoresDisabledEnvironments() {
-	ctx := s.GetContext()
-	sub, committed := s.separateInvoiceCommitment("disabled")
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)
-
-	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
-	s.Empty(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms))
-	s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(committed.Instalments[0].ID).InstalmentStatus)
-
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
-	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
-	s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), 1)
 }
 
 // unreadableCommitmentRepo fails every read of one commitment.

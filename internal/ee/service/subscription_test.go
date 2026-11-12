@@ -2137,7 +2137,6 @@ func (s *SubscriptionServiceSuite) inlineCommitmentRequest() dto.CreateSubscript
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitment() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 
 	resp, err := s.service.CreateSubscription(ctx, s.inlineCommitmentRequest())
 	s.Require().NoError(err)
@@ -2163,7 +2162,6 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitment() {
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentOnIncompleteSubscription() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 
 	req := s.inlineCommitmentRequest()
 	req.CollectionMethod = lo.ToPtr(types.CollectionMethodSendInvoice)
@@ -2178,28 +2176,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentOnInco
 	s.Equal(resp.ID, items[0].SubscriptionID)
 }
 
-func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentRejectedWhenDisabled() {
-	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)
-
-	before, err := s.GetStores().SubscriptionRepo.List(ctx, types.NewSubscriptionFilter())
-	s.Require().NoError(err)
-
-	_, err = s.service.CreateSubscription(ctx, s.inlineCommitmentRequest())
-	s.Require().Error(err)
-	s.True(ierr.IsInvalidOperation(err))
-
-	items, listErr := s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
-	s.Require().NoError(listErr)
-	s.Empty(items)
-	subs, listErr := s.GetStores().SubscriptionRepo.List(ctx, types.NewSubscriptionFilter())
-	s.Require().NoError(listErr)
-	s.Len(subs, len(before))
-}
-
 func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineSubscriptionScopeTakesTheNewSubscriptionID() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 
 	req := s.inlineCommitmentRequest()
 	req.Commitments[0].Type, req.Commitments[0].CommittedPrice = types.COMMITMENT_TYPE_AMOUNT, nil
@@ -2216,7 +2194,6 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineSubscriptionScop
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_InlinePriceScopeFollowsThePriceOverride() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 
 	req := s.inlineCommitmentRequest()
 	req.OverrideLineItems = []dto.OverrideLineItemRequest{{
@@ -2239,7 +2216,6 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_InlinePriceScopeFollow
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentScopesAFirstPhaseLineItem() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 
 	extrasPlan := &plan.Plan{ID: "plan_phase_extras", Name: "Phase extras", BaseModel: types.GetDefaultBaseModel(ctx)}
 	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, extrasPlan))
@@ -2277,7 +2253,6 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentScopes
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineIdempotencyKeyFromAnotherSubscriptionIsRejected() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 
 	req := s.inlineCommitmentRequest()
 	req.Commitments[0].IdempotencyKey = lo.ToPtr("contract-inline")
@@ -3180,6 +3155,9 @@ func (s *SubscriptionServiceSuite) createInvoiceService() InvoiceService {
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),
 		SubRepo:                    s.GetStores().SubscriptionRepo,
+		CommitmentRepo:             s.GetStores().CommitmentRepo,
+		BillingTermRepo:            s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:      s.GetStores().BillingInstalmentRepo,
 		SubscriptionLineItemRepo:   s.GetStores().SubscriptionLineItemRepo,
 		PlanRepo:                   s.GetStores().PlanRepo,
 		PriceRepo:                  s.GetStores().PriceRepo,
@@ -7189,6 +7167,9 @@ func (s *SubscriptionServiceSuite) TestFilterLineItemsWithEndDate() {
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
 		SubRepo:                  s.GetStores().SubscriptionRepo,
+		CommitmentRepo:           s.GetStores().CommitmentRepo,
+		BillingTermRepo:          s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:    s.GetStores().BillingInstalmentRepo,
 		SubscriptionLineItemRepo: s.GetStores().SubscriptionLineItemRepo,
 		PlanRepo:                 s.GetStores().PlanRepo,
 		PriceRepo:                s.GetStores().PriceRepo,

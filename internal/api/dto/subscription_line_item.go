@@ -100,15 +100,22 @@ type CreateSubscriptionLineItemRequest struct {
 	// ProrationBehavior controls mid-period charge creation. Defaults to none.
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
-	// Commitment fields
-	CommitmentAmount        *decimal.Decimal          `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal          `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType      `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal          `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled bool                      `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      bool                      `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod      `json:"commitment_duration,omitempty"`
-	CommitmentTimeBuckets   []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentType types.CommitmentType `json:"commitment_type,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentTrueUpEnabled bool `json:"commitment_true_up_enabled,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentWindowed bool `json:"commitment_windowed,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentTimeBuckets []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
@@ -150,15 +157,23 @@ type UpdateSubscriptionLineItemRequest struct {
 	// Metadata for the new line item
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal     `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled *bool                `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      *bool                `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentType types.CommitmentType `json:"commitment_type,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentTrueUpEnabled *bool `json:"commitment_true_up_enabled,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentWindowed *bool `json:"commitment_windowed,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 	// Pointer so an explicit empty array can clear existing buckets (omission keeps them).
+	//
+	// Deprecated: use POST /commitments instead.
 	CommitmentTimeBuckets *[]CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 

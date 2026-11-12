@@ -3263,10 +3263,6 @@ func (s *meterUsageService) calculateLineItemCommitments(
 ) (map[string][]billedPeriod, error) {
 	// Only a range some v2 commitment overlaps is priced period by period, so a long range without one stays valid.
 	svc := newCommitmentService(s.ServiceParams)
-	enabled, err := svc.IsEnabled(ctx)
-	if err != nil || !enabled {
-		return nil, err
-	}
 
 	// The open period's loader prices through the period end, so the lookup reaches it too.
 	sub := usage.Subscription
