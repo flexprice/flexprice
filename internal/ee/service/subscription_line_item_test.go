@@ -142,6 +142,9 @@ func (s *SubscriptionLineItemServiceSuite) setupService() {
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
+		CommitmentRepo:             s.GetStores().CommitmentRepo,
+		BillingTermRepo:            s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:      s.GetStores().BillingInstalmentRepo,
 		SubscriptionLineItemRepo:   s.GetStores().SubscriptionLineItemRepo,
 		SubscriptionPhaseRepo:      s.GetStores().SubscriptionPhaseRepo,
 		SubScheduleRepo:            s.GetStores().SubscriptionScheduleRepo,
@@ -1532,110 +1535,6 @@ func (s *SubscriptionLineItemServiceSuite) TestListSubscriptionLineItems_ExpandP
 	s.Equal(s.testData.price.ID, target.Price.ID)
 }
 
-// TestAddSubscriptionLineItem_WithBuckets_MaterializesPrices verifies that when a
-// CreateSubscriptionLineItemRequest includes CommitmentTimeBuckets, the service
-// calls resolveBucketPrices and the persisted line item's CommitmentTimeBuckets
-// carries materialized bucket prices (non-empty PriceID and ID).
-func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_WithBuckets_MaterializesPrices() {
-	ctx := s.GetContext()
-
-	// 1. Create a meter with BucketSize (required for CommitmentWindowed=true validation).
-	meterWithBucket := &meter.Meter{
-		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
-		Name:      "Bucket Meter",
-		EventName: "bucket_event",
-		Aggregation: meter.Aggregation{
-			Type:       types.AggregationMax,
-			Field:      "value",
-			BucketSize: types.WindowSizeHour,
-		},
-		ResetUsage: types.ResetUsageBillingPeriod,
-		BaseModel:  types.GetDefaultBaseModel(ctx),
-	}
-	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, meterWithBucket))
-
-	// 2. Create a SUBSCRIPTION-scoped usage price referencing the meter.
-	usagePriceForBucket := &price.Price{
-		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-		Amount:             decimal.Zero,
-		Currency:           "usd",
-		EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
-		EntityID:           s.testData.subscription.ID,
-		Type:               types.PRICE_TYPE_USAGE,
-		MeterID:            meterWithBucket.ID,
-		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount: 1,
-		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-		InvoiceCadence:     types.InvoiceCadenceArrear,
-		BaseModel:          types.GetDefaultBaseModel(ctx),
-	}
-	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePriceForBucket))
-
-	// 3. Build the request with one CommitmentTimeBuckets entry.
-	overageFactor := decimal.NewFromFloat(1.5)
-	commitmentAmount := decimal.NewFromInt(500)
-	req := dto.CreateSubscriptionLineItemRequest{
-		PriceID:                 usagePriceForBucket.ID,
-		SkipEntitlementCheck:    true,
-		CommitmentAmount:        &commitmentAmount,
-		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
-		CommitmentOverageFactor: &overageFactor,
-		CommitmentWindowed:      true,
-		CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
-			{
-				Start: types.Bucket{Hour: 9, Minute: 0},
-				End:   types.Bucket{Hour: 17, Minute: 0},
-				Price: &dto.CreatePriceRequest{
-					Amount:               lo.ToPtr(decimal.NewFromInt(15)),
-					Currency:             "usd",
-					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
-					EntityID:             s.testData.subscription.ID,
-					Type:                 types.PRICE_TYPE_FIXED,
-					PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
-					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
-					BillingPeriodCount:   1,
-					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
-					InvoiceCadence:       types.InvoiceCadenceAdvance,
-					LookupKey:            "bucket_test_price",
-					SkipEntityValidation: true,
-				},
-				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
-				CommitmentValue: decimal.NewFromInt(200),
-				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
-				TrueUpEnabled:   true,
-			},
-		},
-	}
-
-	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
-	s.NoError(err)
-	s.Require().NotNil(resp)
-
-	li := resp.SubscriptionLineItem
-
-	// The persisted line item must have exactly one materialized bucket.
-	s.Require().Len(li.CommitmentTimeBuckets, 1, "expected 1 materialized bucket on the line item")
-
-	bucket := li.CommitmentTimeBuckets[0]
-
-	// PriceID must be non-empty (set by resolveBucketPrices).
-	s.NotEmpty(bucket.PriceID, "bucket.PriceID must be set after materialization")
-
-	// ID must be a non-empty UUID (assigned by resolveBucketPrices).
-	s.NotEmpty(bucket.ID, "bucket.ID must be set after materialization")
-
-	// The created price must exist in the repo as SUBSCRIPTION-scoped.
-	createdPrice, getErr := s.GetStores().PriceRepo.Get(ctx, bucket.PriceID)
-	s.NoError(getErr)
-	s.Equal(types.PRICE_ENTITY_TYPE_SUBSCRIPTION, createdPrice.EntityType)
-
-	// Verify the line item is persisted correctly.
-	persisted, getErr := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
-	s.NoError(getErr)
-	s.Require().Len(persisted.CommitmentTimeBuckets, 1, "persisted line item must have 1 bucket")
-	s.Equal(bucket.PriceID, persisted.CommitmentTimeBuckets[0].PriceID)
-}
-
 // TestCreateBucketPrices_CreatesSubscriptionPriceAndAssignsID verifies that
 // createBucketPrices creates a SUBSCRIPTION-scoped Price for each bucket and
 // fills in the created price's ID on the (DTO-built) domain buckets.
@@ -1798,45 +1697,47 @@ func (s *SubscriptionLineItemServiceSuite) makeBucketLineItem(subID string, mete
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePr))
 
-	overage := decimal.NewFromFloat(1.5)
-	commitment := decimal.NewFromInt(300)
-	req := dto.CreateSubscriptionLineItemRequest{
-		PriceID:                 usagePr.ID,
-		SkipEntitlementCheck:    true,
-		CommitmentAmount:        &commitment,
-		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
-		CommitmentOverageFactor: &overage,
-		CommitmentWindowed:      true,
-		CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
-			{
-				Start: types.Bucket{Hour: 9, Minute: 0},
-				End:   types.Bucket{Hour: 17, Minute: 0},
-				Price: &dto.CreatePriceRequest{
-					Amount:               lo.ToPtr(decimal.NewFromInt(20)),
-					Currency:             "usd",
-					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
-					EntityID:             subID,
-					Type:                 types.PRICE_TYPE_FIXED,
-					PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
-					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
-					BillingPeriodCount:   1,
-					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
-					InvoiceCadence:       types.InvoiceCadenceAdvance,
-					LookupKey:            lookupKey,
-					SkipEntityValidation: true,
-				},
-				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
-				CommitmentValue: decimal.NewFromInt(150),
-				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
-				TrueUpEnabled:   true,
-			},
-		},
-	}
-
-	resp, err := s.service.AddSubscriptionLineItem(ctx, subID, req)
+	resp, err := s.service.AddSubscriptionLineItem(ctx, subID, dto.CreateSubscriptionLineItemRequest{
+		PriceID:              usagePr.ID,
+		SkipEntitlementCheck: true,
+	})
 	s.Require().NoError(err)
-	s.Require().Len(resp.CommitmentTimeBuckets, 1)
-	return resp.SubscriptionLineItem
+
+	// The API no longer creates legacy commitments, so the line gets its bucket the way it used to, directly.
+	bucketReq := dto.CommitmentBucketRequest{
+		Start: types.Bucket{Hour: 9, Minute: 0},
+		End:   types.Bucket{Hour: 17, Minute: 0},
+		Price: &dto.CreatePriceRequest{
+			Amount:               lo.ToPtr(decimal.NewFromInt(20)),
+			Currency:             "usd",
+			EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+			EntityID:             subID,
+			Type:                 types.PRICE_TYPE_FIXED,
+			PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+			BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount:   1,
+			BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+			InvoiceCadence:       types.InvoiceCadenceAdvance,
+			LookupKey:            lookupKey,
+			SkipEntityValidation: true,
+		},
+		CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentValue: decimal.NewFromInt(150),
+		OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
+		TrueUpEnabled:   true,
+	}
+	line := resp.SubscriptionLineItem
+	buckets := types.TimeOfDayBuckets{bucketReq.ToTimeOfDayBucket()}
+	svc := s.service.(*subscriptionService)
+	s.Require().NoError(svc.createBucketPrices(ctx, line.ID, subID, []dto.CommitmentBucketRequest{bucketReq}, buckets, nil))
+
+	line.CommitmentAmount = lo.ToPtr(decimal.NewFromInt(300))
+	line.CommitmentType = types.COMMITMENT_TYPE_AMOUNT
+	line.CommitmentOverageFactor = lo.ToPtr(decimal.NewFromFloat(1.5))
+	line.CommitmentWindowed = true
+	line.CommitmentTimeBuckets = buckets
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, line))
+	return line
 }
 
 // TestUpdateSubscriptionLineItem_ReplaceAllBuckets verifies that when
@@ -2206,139 +2107,6 @@ func (s *SubscriptionLineItemServiceSuite) bucketReqForTests(subID string, start
 	}
 }
 
-// TestAddSubscriptionLineItem_BucketValidationErrors covers the array-level
-// bucket validation failures in one table: overlapping buckets, grid
-// misalignment, a missing bucket size, and conflict with a cumulative
-// subscription commitment.
-func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_BucketValidationErrors() {
-	ctx := s.GetContext()
-
-	overage := decimal.NewFromFloat(1.5)
-	commitment := decimal.NewFromInt(500)
-	withTopCommitment := func(req *dto.CreateSubscriptionLineItemRequest) {
-		req.CommitmentAmount = &commitment
-		req.CommitmentType = types.COMMITMENT_TYPE_AMOUNT
-		req.CommitmentOverageFactor = &overage
-	}
-
-	cases := []struct {
-		name    string
-		setup   func() (subID string, req dto.CreateSubscriptionLineItemRequest)
-		wantErr string
-	}{
-		{
-			// Two buckets whose time ranges overlap (09:00-12:00 and 11:00-14:00).
-			name: "overlapping buckets",
-			setup: func() (string, dto.CreateSubscriptionLineItemRequest) {
-				subID := s.testData.subscription.ID
-				m := s.createMeterForBucketTests("overlap_val_event", types.AggregationMax, types.WindowSizeHour)
-				p := s.createUsagePriceForSubscription(subID, m.ID)
-				req := dto.CreateSubscriptionLineItemRequest{
-					PriceID:              p.ID,
-					SkipEntitlementCheck: true,
-					CommitmentWindowed:   true,
-					CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
-						s.bucketReqForTests(subID, types.Bucket{Hour: 9}, types.Bucket{Hour: 12}, "overlap_bucket_a"),
-						s.bucketReqForTests(subID, types.Bucket{Hour: 11}, types.Bucket{Hour: 14}, "overlap_bucket_b"),
-					},
-				}
-				withTopCommitment(&req)
-				return subID, req
-			},
-			wantErr: "overlap",
-		},
-		{
-			// Start 09:30 is not on the meter's 60-minute grid.
-			name: "misaligned bucket start",
-			setup: func() (string, dto.CreateSubscriptionLineItemRequest) {
-				subID := s.testData.subscription.ID
-				m := s.createMeterForBucketTests("align_val_event", types.AggregationMax, types.WindowSizeHour)
-				p := s.createUsagePriceForSubscription(subID, m.ID)
-				req := dto.CreateSubscriptionLineItemRequest{
-					PriceID:              p.ID,
-					SkipEntitlementCheck: true,
-					CommitmentWindowed:   true,
-					CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
-						s.bucketReqForTests(subID, types.Bucket{Hour: 9, Minute: 30}, types.Bucket{Hour: 10, Minute: 30}, "misalign_bucket"),
-					},
-				}
-				withTopCommitment(&req)
-				return subID, req
-			},
-			wantErr: "alignment",
-		},
-		{
-			// Meter without BucketSize — ValidateWindowAlignment rejects it.
-			name: "no bucket size",
-			setup: func() (string, dto.CreateSubscriptionLineItemRequest) {
-				subID := s.testData.subscription.ID
-				m := s.createMeterForBucketTests("non_windowed_event", types.AggregationSum, "")
-				p := s.createUsagePriceForSubscription(subID, m.ID)
-				req := dto.CreateSubscriptionLineItemRequest{
-					PriceID:              p.ID,
-					SkipEntitlementCheck: true,
-					CommitmentWindowed:   true,
-					CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
-						s.bucketReqForTests(subID, types.Bucket{Hour: 9}, types.Bucket{Hour: 17}, "non_windowed_bucket"),
-					},
-				}
-				withTopCommitment(&req)
-				return subID, req
-			},
-			wantErr: "bucket size",
-		},
-		{
-			// Per-bucket commitment conflicts with a cumulative subscription
-			// commitment (ANNUAL window on MONTHLY billing). The price has no
-			// meter, so the alignment check is skipped and the cumulative guard
-			// fires.
-			name: "cumulative subscription commitment",
-			setup: func() (string, dto.CreateSubscriptionLineItemRequest) {
-				now := time.Now().UTC()
-				annualDuration := types.BILLING_PERIOD_ANNUAL
-				commitmentAmount := decimal.NewFromInt(12000)
-				cumulativeSub := &subscription.Subscription{
-					ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
-					PlanID:             s.testData.plan.ID,
-					CustomerID:         s.testData.customer.ID,
-					StartDate:          now.Add(-30 * 24 * time.Hour),
-					CurrentPeriodStart: now.Add(-24 * time.Hour),
-					CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
-					BillingAnchor:      now.Add(-30 * 24 * time.Hour),
-					Currency:           "usd",
-					BillingCycle:       types.BillingCycleAnniversary,
-					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-					BillingPeriodCount: 1,
-					SubscriptionStatus: types.SubscriptionStatusActive,
-					CommitmentDuration: &annualDuration,
-					CommitmentAmount:   &commitmentAmount,
-					BaseModel:          types.GetDefaultBaseModel(ctx),
-				}
-				s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, cumulativeSub))
-				p := s.createUsagePriceForSubscription(cumulativeSub.ID, "")
-				return cumulativeSub.ID, dto.CreateSubscriptionLineItemRequest{
-					PriceID:              p.ID,
-					SkipEntitlementCheck: true,
-					CommitmentWindowed:   true,
-					CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
-						s.bucketReqForTests(cumulativeSub.ID, types.Bucket{Hour: 9}, types.Bucket{Hour: 17}, "cumulative_bucket"),
-					},
-				}
-			},
-			wantErr: "cumulative",
-		},
-	}
-
-	for _, tc := range cases {
-		s.Run(tc.name, func() {
-			subID, req := tc.setup()
-			_, err := s.service.AddSubscriptionLineItem(ctx, subID, req)
-			s.Require().Error(err)
-			s.Contains(err.Error(), tc.wantErr, "error should mention %q", tc.wantErr)
-		})
-	}
-}
-
 func (s *SubscriptionLineItemServiceSuite) resetWebhooks() {
 	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
 }
@@ -2442,125 +2210,6 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_ResponseC
 	s.Equal(resp.PriceID, resp.Price.ID)
 	s.True(decimal.NewFromInt(42).Equal(resp.Price.Amount), "expected amount 42, got %s", resp.Price.Amount)
 	s.Equal(s.testData.subscription.Currency, resp.Price.Currency)
-}
-
-// TestAddSubscriptionLineItem_CommitmentOverageFactorDefaultsToOne asserts a
-// commitment without commitment_overage_factor is accepted and stored as 1.0,
-// matching the field being optional in the OpenAPI spec.
-func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_CommitmentOverageFactorDefaultsToOne() {
-	ctx := s.GetContext()
-
-	m := &meter.Meter{
-		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
-		Name:      "Commitment Default Meter",
-		EventName: "commitment_default_event",
-		Aggregation: meter.Aggregation{
-			Type:  types.AggregationSum,
-			Field: "value",
-		},
-		ResetUsage: types.ResetUsageBillingPeriod,
-		BaseModel:  types.GetDefaultBaseModel(ctx),
-	}
-	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
-
-	usagePrice := &price.Price{
-		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-		Amount:             decimal.NewFromInt(2),
-		Currency:           "usd",
-		EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
-		EntityID:           s.testData.subscription.ID,
-		Type:               types.PRICE_TYPE_USAGE,
-		MeterID:            m.ID,
-		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount: 1,
-		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-		InvoiceCadence:     types.InvoiceCadenceArrear,
-		BaseModel:          types.GetDefaultBaseModel(ctx),
-	}
-	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
-
-	req := dto.CreateSubscriptionLineItemRequest{
-		PriceID:              usagePrice.ID,
-		SkipEntitlementCheck: true,
-		CommitmentAmount:     lo.ToPtr(decimal.NewFromInt(100)),
-	}
-
-	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
-	s.Require().NoError(err, "commitment without an overage factor must be accepted")
-	s.Require().NotNil(resp.CommitmentOverageFactor)
-	s.True(decimal.NewFromInt(1).Equal(*resp.CommitmentOverageFactor),
-		"expected default overage factor 1, got %s", resp.CommitmentOverageFactor)
-	s.Equal(types.COMMITMENT_TYPE_AMOUNT, resp.CommitmentType)
-
-	// The create response also carries the meter for usage line items.
-	s.Require().NotNil(resp.Meter, "usage line item response must embed its meter")
-	s.Equal(m.ID, resp.Meter.ID)
-}
-
-func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_BucketsOnlyDefaultsOverageFactor() {
-	ctx := s.GetContext()
-
-	m := &meter.Meter{
-		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
-		Name:      "Bucket Default Meter",
-		EventName: "bucket_default_event",
-		Aggregation: meter.Aggregation{
-			Type:       types.AggregationSum,
-			Field:      "value",
-			BucketSize: types.WindowSizeHour,
-		},
-		ResetUsage: types.ResetUsageBillingPeriod,
-		BaseModel:  types.GetDefaultBaseModel(ctx),
-	}
-	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
-
-	usagePrice := &price.Price{
-		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-		Amount:             decimal.NewFromInt(2),
-		Currency:           "usd",
-		EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
-		EntityID:           s.testData.subscription.ID,
-		Type:               types.PRICE_TYPE_USAGE,
-		MeterID:            m.ID,
-		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount: 1,
-		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-		InvoiceCadence:     types.InvoiceCadenceArrear,
-		BaseModel:          types.GetDefaultBaseModel(ctx),
-	}
-	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
-
-	req := dto.CreateSubscriptionLineItemRequest{
-		PriceID:              usagePrice.ID,
-		SkipEntitlementCheck: true,
-		CommitmentWindowed:   true,
-		CommitmentTimeBuckets: []dto.CommitmentBucketRequest{{
-			Start: types.Bucket{Hour: 8},
-			End:   types.Bucket{Hour: 20},
-			Price: &dto.CreatePriceRequest{
-				Amount:               lo.ToPtr(decimal.NewFromInt(2)),
-				Currency:             "usd",
-				EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
-				EntityID:             s.testData.subscription.ID,
-				Type:                 types.PRICE_TYPE_USAGE,
-				PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
-				BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
-				BillingPeriodCount:   1,
-				BillingModel:         types.BILLING_MODEL_FLAT_FEE,
-				InvoiceCadence:       types.InvoiceCadenceArrear,
-				MeterID:              m.ID,
-				SkipEntityValidation: true,
-			},
-			CommitmentType:  types.COMMITMENT_TYPE_QUANTITY,
-			CommitmentValue: decimal.NewFromInt(10),
-		}},
-	}
-
-	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
-	s.Require().NoError(err)
-	s.Require().NotNil(resp.CommitmentOverageFactor)
-	s.True(decimal.NewFromInt(1).Equal(*resp.CommitmentOverageFactor),
-		"expected default overage factor 1 for buckets-only create, got %s", resp.CommitmentOverageFactor)
 }
 
 func (s *SubscriptionLineItemServiceSuite) TestGetSubscriptionLineItemHistory() {

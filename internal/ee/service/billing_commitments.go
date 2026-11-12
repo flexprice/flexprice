@@ -77,15 +77,6 @@ func (s *billingService) newCommitmentLoader(
 	}
 
 	svc := newCommitmentService(s.ServiceParams)
-	enabled, err := svc.IsEnabled(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if !enabled {
-		return l, nil
-	}
-
 	active, err := svc.ListOverlapping(ctx, sub.ID, periodStart, periodEnd)
 	if err != nil {
 		return nil, err

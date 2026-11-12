@@ -1206,7 +1206,6 @@ func (s *MeterUsageServiceSuite) requireCombosSplitTheInvoice(combos []dto.Usage
 // true-up whether B is in the query or not, and B gets no rows.
 func (s *MeterUsageServiceSuite) TestCommitment_FilterPricesTheWholeScope() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	meterA := s.createMeterWithAggregation(ctx, "meter_scope_a", "api_call", types.AggregationSum)
 	meterB := s.createMeterWithAggregation(ctx, "meter_scope_b", "api_call", types.AggregationSum)
 	priceA := s.createPriceForMeter(ctx, "price_scope_a", meterA.ID, dec("1"))
@@ -1257,7 +1256,6 @@ func (s *MeterUsageServiceSuite) TestCommitment_FilterPricesTheWholeScope() {
 // commitment that covers only left-out lines.
 func (s *MeterUsageServiceSuite) TestCommitment_FilterReadsOnlyTheSharedScope() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	meterA := s.createMeterWithAggregation(ctx, "meter_reads_a", "api_call", types.AggregationSum)
 	meterB := s.createMeterWithAggregation(ctx, "meter_reads_b", "api_call", types.AggregationSum)
 	priceA := s.createPriceForMeter(ctx, "price_reads_a", meterA.ID, dec("1"))
@@ -1332,7 +1330,6 @@ func (s *MeterUsageServiceSuite) TestGroupBy_WholeLineReadUsesTheRequestAnchor()
 // unused, $314 in all. The trainer reported 21 GPU-days and inference 7, so they split it 3:1.
 func (s *MeterUsageServiceSuite) TestGroupBy_StackedWindowCommitmentsSplitTheInvoiceByUsage() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	gpus := &meter.Meter{
 		ID:          "meter_stacked_gpus",
 		Name:        "GPUs",
@@ -1389,7 +1386,6 @@ func (s *MeterUsageServiceSuite) TestGroupBy_StackedWindowCommitmentsSplitTheInv
 // shares sum to the invoice's.
 func (s *MeterUsageServiceSuite) TestGroupBy_DailyPointsAmortizeEveryCommitmentField() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	daily := &meter.Meter{
 		ID:          "meter_daily_units",
 		Name:        "Units",
@@ -6029,7 +6025,6 @@ func (s *MeterUsageServiceSuite) TestRegularMeter_UnequalWindowShares() {
 
 func (s *MeterUsageServiceSuite) TestFilteredGroups_ShareWholeLineCost() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	for _, mode := range []types.BillingTier{types.BILLING_TIER_SLAB, types.BILLING_TIER_VOLUME} {
 		for _, tt := range []struct {
 			name          string
@@ -6998,7 +6993,6 @@ func (s *MeterUsageServiceSuite) openLineItem(id, meterID, priceID string) *subs
 // and 4 on 6 Jan (6 unused). January bills $14 utilized, $8 overage and $296 unused: $318.
 func (s *MeterUsageServiceSuite) reserveTenADay() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	daily := s.dailyMeter("meter_reserved_units", types.AggregationSum)
 	p := s.createPriceForMeter(ctx, "price_reserved_units", daily.ID, dec("2"))
 	s.createLineItemForMeter(ctx, "li_reserved_units", daily.ID, p.ID)
@@ -7055,7 +7049,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_WindowCommitmentBillsWhatTheInv
 // true-up, February's usage runs $50 past it, and the range shows both invoices' $350.
 func (s *MeterUsageServiceSuite) TestCommitments_RangeAcrossBillingPeriodsPricesEachPeriod() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	m := s.createMeterWithAggregation(ctx, "meter_two_months", "api_call", types.AggregationSum)
 	p := s.createPriceForMeter(ctx, "price_two_months", m.ID, dec("1"))
 	s.openLineItem("li_two_months", m.ID, p.ID)
@@ -7083,7 +7076,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_RangeAcrossBillingPeriodsPrices
 // February's overage on February, and March's floor, with no usage to carry it, on a point at the period's start.
 func (s *MeterUsageServiceSuite) TestCommitments_EachPeriodKeepsItsChargesOnItsPoints() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	m := s.createMeterWithAggregation(ctx, "meter_three_months", "api_call", types.AggregationSum)
 	p := s.createPriceForMeter(ctx, "price_three_months", m.ID, dec("1"))
 	s.openLineItem("li_three_months", m.ID, p.ID)
@@ -7169,7 +7161,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_RunningMeterBillsItsTotalEachPe
 		s.Run(tt.name, func() {
 			s.SetupTest()
 			ctx := s.GetContext()
-			setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 			m := s.runningSumMeter(ctx, "meter_running_floor", types.ResetUsageNever)
 			p := s.createPriceForMeter(ctx, "price_running_floor", m.ID, dec("1"))
 			s.openLineItem("li_running_floor", m.ID, p.ID)
@@ -7225,7 +7216,6 @@ func (r *recordingUsageStore) GetUsageMultiMeter(ctx context.Context, params *ev
 // A covered line that starts inside the range is read only from its start: the period before it reads nothing for it.
 func (s *MeterUsageServiceSuite) TestCommitments_LinesAreReadOnlyWhileTheyRun() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	m := s.createMeterWithAggregation(ctx, "meter_late_line", "api_call", types.AggregationSum)
 	p := s.createPriceForMeter(ctx, "price_late_line", m.ID, dec("1"))
 	li := s.openLineItem("li_late_line", m.ID, p.ID)
@@ -7254,7 +7244,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_LinesAreReadOnlyWhileTheyRun() 
 // line bills nothing the request shows, so its line is never read.
 func (s *MeterUsageServiceSuite) TestCommitments_ReadsOnlyTheLinesOfCommitmentsItApplies() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	queried := s.createMeterWithAggregation(ctx, "meter_queried", "api_call", types.AggregationSum)
 	other := s.createMeterWithAggregation(ctx, "meter_other", "api_call", types.AggregationSum)
 	queriedPrice := s.createPriceForMeter(ctx, "price_queried", queried.ID, dec("1"))
@@ -7287,7 +7276,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_ReadsOnlyTheLinesOfCommitmentsI
 // commitment covers $150 of it at no charge and the invoice bills the $50 above it.
 func (s *MeterUsageServiceSuite) prepayFloor() *meter.Meter {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	m := s.createMeterWithAggregation(ctx, "meter_prepaid", "api_call", types.AggregationSum)
 	p := s.createPriceForMeter(ctx, "price_prepaid", m.ID, dec("1"))
 	s.createLineItemForMeter(ctx, "li_prepaid", m.ID, p.ID)
@@ -7447,7 +7435,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInsta
 // $100, and February's 200 fill its $150 floor and run $50 over.
 func (s *MeterUsageServiceSuite) TestCommitments_PeriodsWithoutACommitmentBillAtTheLinePrice() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	m := s.createMeterWithAggregation(ctx, "meter_late_floor", "api_call", types.AggregationSum)
 	p := s.createPriceForMeter(ctx, "price_late_floor", m.ID, dec("1"))
 	s.openLineItem("li_late_floor", m.ID, p.ID)
@@ -7470,7 +7457,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_PeriodsWithoutACommitmentBillAt
 // A range starting before the subscription keeps its first period's commitment: nothing bills before the start.
 func (s *MeterUsageServiceSuite) TestCommitments_RangeBeforeTheSubscriptionBillsFromItsStart() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	m := s.createMeterWithAggregation(ctx, "meter_early_range", "api_call", types.AggregationSum)
 	p := s.createPriceForMeter(ctx, "price_early_range", m.ID, dec("1"))
 	s.createLineItemForMeter(ctx, "li_early_range", m.ID, p.ID)
@@ -7487,7 +7473,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_RangeBeforeTheSubscriptionBills
 // floor once for each month up to the current one. January's 100 units leave a $50 true-up; later months are idle.
 func (s *MeterUsageServiceSuite) TestCommitments_FuturePeriodsBillNothing() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	m := s.createMeterWithAggregation(ctx, "meter_future_floor", "api_call", types.AggregationSum)
 	p := s.createPriceForMeter(ctx, "price_future_floor", m.ID, dec("1"))
 	s.openLineItem("li_future_floor", m.ID, p.ID)
@@ -7508,7 +7493,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_FuturePeriodsBillNothing() {
 // floor and the next month's point carries no charge.
 func (s *MeterUsageServiceSuite) TestCommitments_FutureUsageTakesNoCharges() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	m := s.createMeterWithAggregation(ctx, "meter_future_usage", "api_call", types.AggregationSum)
 	p := s.createPriceForMeter(ctx, "price_future_usage", m.ID, dec("1"))
 	s.openLineItem("li_future_usage", m.ID, p.ID)
@@ -7609,7 +7593,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_InstalmentsListWithoutUsageInRa
 // January lists its instalment for its own meter, not for a meter whose line started after it ended.
 func (s *MeterUsageServiceSuite) TestCommitments_InstalmentsSkipMetersJoiningAfterTheTerm() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	early := s.createMeterWithAggregation(ctx, "meter_early", "api_call", types.AggregationSum)
 	late := s.createMeterWithAggregation(ctx, "meter_late", "api_call", types.AggregationSum)
 	s.createLineItemForMeter(ctx, "li_early", early.ID, s.createPriceForMeter(ctx, "price_early", early.ID, dec("1")).ID)
@@ -7637,7 +7620,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_InstalmentsSkipMetersJoiningAft
 // line price, and fail once a commitment overlaps them.
 func (s *MeterUsageServiceSuite) TestCommitments_PeriodLimitAppliesOnlyWithACommitment() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	start := s.periodStart.AddDate(-2, 0, 0)
 	s.sub.StartDate, s.sub.BillingAnchor, s.sub.BillingPeriod = start, start, types.BILLING_PERIOD_DAILY
 	s.sub.CurrentPeriodStart, s.sub.CurrentPeriodEnd = s.periodEnd.AddDate(0, 0, -1), s.periodEnd
@@ -7666,7 +7648,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_PeriodLimitAppliesOnlyWithAComm
 // response uses. The trainer peaks at 10 GPUs on 5 Jan; inference runs 4 GPUs every day of that week.
 func (s *MeterUsageServiceSuite) TestCommitments_GroupCostsDoNotDependOnTheWindow() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	gpus := s.dailyMeter("meter_gpus", types.AggregationMax)
 	p := s.createPriceForMeter(ctx, "price_gpus", gpus.ID, dec("2"))
 	s.createLineItemForMeter(ctx, "li_gpus", gpus.ID, p.ID)

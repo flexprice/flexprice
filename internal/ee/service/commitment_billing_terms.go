@@ -14,7 +14,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -237,10 +236,6 @@ func (s *commitmentService) PreviewBillingTerms(
 	id string,
 	req dto.ReplaceBillingTermsRequest,
 ) (*dto.BillingTermsResponse, error) {
-	if err := s.requireEnabled(ctx); err != nil {
-		return nil, err
-	}
-
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -277,10 +272,6 @@ func (s *commitmentService) ReplaceBillingTerms(
 	id string,
 	req dto.ReplaceBillingTermsRequest,
 ) (*dto.BillingTermsResponse, error) {
-	if err := s.requireEnabled(ctx); err != nil {
-		return nil, err
-	}
-
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -514,39 +505,32 @@ func (s *commitmentService) settleEnded(ctx context.Context, c *commitment.Commi
 }
 
 func (s *commitmentService) BillDueInstalments(ctx context.Context) error {
-	configs, err := s.SettingsRepo.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeyCommitmentsV2)
+	dueBy := clock.Now()
+	due := &billingterm.InstalmentFilter{
+		OwnerType:      types.BillingTermOwnerCommitment,
+		Statuses:       []types.InstalmentStatus{types.InstalmentStatusScheduled},
+		Deliveries:     []types.InstalmentDelivery{types.InstalmentDeliverySeparateInvoice},
+		BillOnOrBefore: &dueBy,
+	}
+
+	envs, err := s.BillingInstalmentRepo.ListEnvironments(ctx, due)
 	if err != nil {
 		return err
 	}
 
 	var errs []error
-	for _, env := range configs {
-		cfg, err := utils.ToStruct[types.CommitmentsV2Config](env.Config)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("decoding commitments_v2 setting for environment %s: %w", env.EnvironmentID, err))
-			continue
-		}
-		if !cfg.Enabled {
-			continue
-		}
-
+	for _, env := range envs {
 		envCtx := types.SetEnvironmentID(types.SetTenantID(ctx, env.TenantID), env.EnvironmentID)
-		errs = append(errs, s.billEnvironmentInstalments(envCtx))
+		errs = append(errs, s.billEnvironmentInstalments(envCtx, due))
 	}
 
 	return errors.Join(errs...)
 }
 
-// billEnvironmentInstalments bills the environment's due separate-invoice instalments one at a time, so a failure
+// billEnvironmentInstalments bills the environment's instalments the filter selects one at a time, so a failure
 // leaves the others billed and its own instalment scheduled for the next run.
-func (s *commitmentService) billEnvironmentInstalments(ctx context.Context) error {
-	dueBy := clock.Now()
-	due, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
-		OwnerType:      types.BillingTermOwnerCommitment,
-		Statuses:       []types.InstalmentStatus{types.InstalmentStatusScheduled},
-		Deliveries:     []types.InstalmentDelivery{types.InstalmentDeliverySeparateInvoice},
-		BillOnOrBefore: &dueBy,
-	})
+func (s *commitmentService) billEnvironmentInstalments(ctx context.Context, filter *billingterm.InstalmentFilter) error {
+	due, err := s.BillingInstalmentRepo.List(ctx, filter)
 	if err != nil {
 		return err
 	}

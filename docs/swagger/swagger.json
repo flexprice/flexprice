@@ -18686,7 +18686,7 @@
                     }
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -18738,7 +18738,7 @@
                     }
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -22383,31 +22383,38 @@
             "type": "object",
             "properties": {
                 "commitment_amount": {
-                    "description": "Commitment fields",
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "number"
                 },
                 "commitment_duration": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
                 "commitment_overage_factor": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "number"
                 },
                 "commitment_quantity": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "number"
                 },
                 "commitment_time_buckets": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "boolean"
                 },
                 "commitment_type": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "$ref": "#/definitions/types.CommitmentType"
                 },
                 "commitment_windowed": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "boolean"
                 },
                 "display_name": {
@@ -22485,10 +22492,11 @@
                     "$ref": "#/definitions/types.CollectionMethod"
                 },
                 "commitment_amount": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "string"
                 },
                 "commitment_duration": {
-                    "description": "CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).",
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
                 "commitments": {
@@ -22519,6 +22527,7 @@
                     "type": "string"
                 },
                 "enable_true_up": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "boolean"
                 },
                 "end_date": {
@@ -22549,7 +22558,7 @@
                     "$ref": "#/definitions/SubscriptionInheritanceConfig"
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id.",
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -22586,6 +22595,7 @@
                     }
                 },
                 "overage_factor": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "string"
                 },
                 "override_entitlements": {
@@ -24908,10 +24918,11 @@
                     }
                 },
                 "commitment_amount": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "string"
                 },
                 "commitment_duration": {
-                    "description": "CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).",
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
                 "coupons": {
@@ -24928,13 +24939,14 @@
                     }
                 },
                 "enable_true_up": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "boolean"
                 },
                 "external_customer_id": {
                     "type": "string"
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id.",
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -24958,6 +24970,7 @@
                     }
                 },
                 "overage_factor": {
+                    "description": "Deprecated: legacy commitments are rejected; use commitments instead.",
                     "type": "string"
                 },
                 "override_entitlements": {
@@ -31226,32 +31239,38 @@
                     "$ref": "#/definitions/types.WindowSize"
                 },
                 "commitment_amount": {
-                    "description": "Commitment fields",
+                    "description": "Commitment fields edit or remove a line's existing legacy commitment.\n\nDeprecated: rejected on a line without one; use commitments instead.",
                     "type": "number"
                 },
                 "commitment_duration": {
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use commitments instead.",
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
                 "commitment_overage_factor": {
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use commitments instead.",
                     "type": "number"
                 },
                 "commitment_quantity": {
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use commitments instead.",
                     "type": "number"
                 },
                 "commitment_time_buckets": {
-                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).",
+                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).\n\nDeprecated: rejected on a line without a legacy commitment; use commitments instead.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use commitments instead.",
                     "type": "boolean"
                 },
                 "commitment_type": {
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use commitments instead.",
                     "$ref": "#/definitions/types.CommitmentType"
                 },
                 "commitment_windowed": {
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use commitments instead.",
                     "type": "boolean"
                 },
                 "effective_from": {
