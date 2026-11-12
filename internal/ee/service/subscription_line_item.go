@@ -773,6 +773,9 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			} else if successor != nil {
 				return alreadyScheduledVersionError(lineItemID, successor.ID)
 			}
+			if field := req.LegacyCommitmentField(); field != "" && !locked.HasAnyCommitment() {
+				return dto.LegacyCommitmentError(field)
+			}
 
 			// Effective date must not be before the line item's start date (avoids end_date < start_date).
 			// Only the versioning path terminates the line item, so an in-place edit of a line

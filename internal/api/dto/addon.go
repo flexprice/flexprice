@@ -91,7 +91,7 @@ type AddAddonToSubscriptionRequest struct {
 	ChangeAt *types.ScheduleType    `json:"change_at,omitempty"`
 	Metadata map[string]interface{} `json:"metadata"`
 
-	// Deprecated: legacy commitments are rejected; use commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
 
 	// OverrideLineItems allows overriding price/quantity/billing model for specific addon prices

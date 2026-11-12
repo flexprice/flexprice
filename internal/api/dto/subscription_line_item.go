@@ -100,21 +100,21 @@ type CreateSubscriptionLineItemRequest struct {
 	// ProrationBehavior controls mid-period charge creation. Defaults to none.
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
-	// Deprecated: legacy commitments are rejected; use commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
-	// Deprecated: legacy commitments are rejected; use commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty"`
-	// Deprecated: legacy commitments are rejected; use commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentType types.CommitmentType `json:"commitment_type,omitempty"`
-	// Deprecated: legacy commitments are rejected; use commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty"`
-	// Deprecated: legacy commitments are rejected; use commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentTrueUpEnabled bool `json:"commitment_true_up_enabled,omitempty"`
-	// Deprecated: legacy commitments are rejected; use commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentWindowed bool `json:"commitment_windowed,omitempty"`
-	// Deprecated: legacy commitments are rejected; use commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
-	// Deprecated: legacy commitments are rejected; use commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentTimeBuckets []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
@@ -159,23 +159,23 @@ type UpdateSubscriptionLineItemRequest struct {
 
 	// Commitment fields edit or remove a line's existing legacy commitment.
 	//
-	// Deprecated: rejected on a line without one; use commitments instead.
+	// Deprecated: rejected on a line without one; use POST /commitments instead.
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
-	// Deprecated: rejected on a line without a legacy commitment; use commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty"`
-	// Deprecated: rejected on a line without a legacy commitment; use commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentType types.CommitmentType `json:"commitment_type,omitempty"`
-	// Deprecated: rejected on a line without a legacy commitment; use commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty"`
-	// Deprecated: rejected on a line without a legacy commitment; use commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentTrueUpEnabled *bool `json:"commitment_true_up_enabled,omitempty"`
-	// Deprecated: rejected on a line without a legacy commitment; use commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentWindowed *bool `json:"commitment_windowed,omitempty"`
-	// Deprecated: rejected on a line without a legacy commitment; use commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 	// Pointer so an explicit empty array can clear existing buckets (omission keeps them).
 	//
-	// Deprecated: rejected on a line without a legacy commitment; use commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentTimeBuckets *[]CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
