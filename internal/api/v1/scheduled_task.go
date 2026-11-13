@@ -210,6 +210,7 @@ func (h *ScheduledTaskHandler) DeleteScheduledTask(c *gin.Context) {
 // @ID triggerScheduledTaskRun
 // @Description Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.
 // @Description Without a requested time range, manual exports and exports with a schedule omit start_time and end_time from the response; other exports return the calculated range.
+// @Description Returns 400 when the export is paused (enabled is false); turn it on first.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json

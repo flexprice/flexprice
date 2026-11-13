@@ -380,6 +380,21 @@ func TestRun_ScheduledRowNoBodyPassesNoWindow(t *testing.T) {
 	require.Nil(t, input.CustomEndTime)
 }
 
+func TestRun_RejectsPausedExport(t *testing.T) {
+	for _, interval := range []types.ScheduledTaskInterval{types.ScheduledTaskIntervalDaily, types.ScheduledTaskIntervalManual} {
+		tc := &exportTemporalFake{}
+		row := scheduledRow(nil)
+		row.Interval = interval
+		row.Enabled = false
+		s := newExportService(&exportRepoFake{task: row}, tc)
+
+		_, err := s.TriggerForceRun(exportCtx(), "st_1", dto.TriggerForceRunRequest{})
+		require.Error(t, err, interval)
+		require.True(t, ierr.IsValidation(err))
+		require.Nil(t, tc.args)
+	}
+}
+
 func TestRun_OldRowUnchanged(t *testing.T) {
 	tc := &exportTemporalFake{}
 	repo := &exportRepoFake{task: scheduledRow(nil)}

@@ -583,6 +583,13 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 			Mark(ierr.ErrDatabase)
 	}
 
+	if !task.Enabled {
+		return "", time.Time{}, time.Time{}, "", ierr.NewError("export is paused").
+			WithHint("Turn the export on to run it.").
+			WithReportableDetails(map[string]interface{}{"task_id": taskID}).
+			Mark(ierr.ErrValidation)
+	}
+
 	if len(req.CustomerExternalIDs) > 0 && task.EntityType != types.ScheduledTaskEntityTypeWalletLedger {
 		return "", time.Time{}, time.Time{}, "", ierr.NewError("customer filter is not supported for this export").
 			WithHintf("customer_external_ids can only be used with %s exports", types.ScheduledTaskEntityTypeWalletLedger).
