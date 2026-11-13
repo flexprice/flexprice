@@ -5,12 +5,9 @@ package razorpay
 
 import (
 	"context"
-	"errors"
 	"testing"
 
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	rzperrors "github.com/razorpay/razorpay-go/errors"
 )
 
 // fakePaymentLinkClient stubs only FetchPaymentLink; other RazorpayClient methods
@@ -81,30 +78,6 @@ func TestGetPaymentLinkStatus(t *testing.T) {
 			}
 			if got.Status != tt.wantStatus || got.RazorpayPaymentID != tt.wantPayment {
 				t.Fatalf("got %+v, want status=%s payment_id=%s", got, tt.wantStatus, tt.wantPayment)
-			}
-		})
-	}
-}
-
-func TestPaymentLinkCreateError(t *testing.T) {
-	tests := []struct {
-		name   string
-		status int
-		err    error
-		is     func(error) bool
-	}{
-		{"rejection is invalid operation", 400, &rzperrors.BadRequestError{Message: "amount too small"}, ierr.IsInvalidOperation},
-		{"auth failure is invalid operation", 401, &rzperrors.BadRequestError{Message: "Authentication failed"}, ierr.IsInvalidOperation},
-		{"rate limit is too many requests", 429, &rzperrors.BadRequestError{}, ierr.IsTooManyRequests},
-		{"proxy 502 is internal", 502, &rzperrors.BadRequestError{}, ierr.IsInternal},
-		{"server error is internal", 500, &rzperrors.ServerError{Message: "down"}, ierr.IsInternal},
-		{"no response is internal", 0, errors.New("dial tcp: timeout"), ierr.IsInternal},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := paymentLinkCreateError(tt.status, tt.err); !tt.is(got) {
-				t.Fatalf("got %v", got)
 			}
 		})
 	}

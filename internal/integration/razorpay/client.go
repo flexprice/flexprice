@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"net/http"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -312,61 +311,33 @@ func (c *Client) CreatePaymentLink(ctx context.Context, paymentLinkData map[stri
 			Mark(ierr.ErrInternal)
 	}
 
-	recorder := &statusRecorder{}
-	if razorpayClient.Request != nil && razorpayClient.Request.HTTPClient != nil {
-		recorder.base = razorpayClient.Request.HTTPClient.Transport
-		razorpayClient.Request.HTTPClient.Transport = recorder
-	}
-
 	razorpayPaymentLink, err := razorpayClient.PaymentLink.Create(paymentLinkData, nil)
 	// todo
 	// lets make a struct from here
 	if err != nil {
-		c.logger.Error(ctx, "failed to create payment link in Razorpay", "error", err, "status", recorder.status)
-		return nil, paymentLinkCreateError(recorder.status, err)
-	}
+		c.logger.Error(ctx, "failed to create payment link in Razorpay", "error", err)
 
-	c.logger.Info(ctx, "successfully created payment link in Razorpay", "payment_link_id", razorpayPaymentLink["id"])
-	return razorpayPaymentLink, nil
-}
+		var rejected *rzperrors.BadRequestError
+		// Proxy 5xx pages and other non-JSON bodies arrive as BadRequestError with no message.
+		if errors.As(err, &rejected) && rejected.Message != "" {
+			return nil, ierr.NewErrorf("razorpay rejected the payment link: %s", rejected.Message).
+				WithHintf("Razorpay rejected the payment link: %s", rejected.Message).
+				WithReportableDetails(map[string]interface{}{
+					"error": rejected.Message,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
 
-// statusRecorder keeps the HTTP status that razorpay-go drops when it builds its errors.
-type statusRecorder struct {
-	base   http.RoundTripper
-	status int
-}
-
-func (t *statusRecorder) RoundTrip(req *http.Request) (*http.Response, error) {
-	resp, err := t.base.RoundTrip(req)
-	if resp != nil {
-		t.status = resp.StatusCode
-	}
-	return resp, err
-}
-
-// paymentLinkCreateError maps by HTTP status: razorpay-go reports 429 and most 5xx as BadRequestError.
-func paymentLinkCreateError(status int, err error) error {
-	var rejected *rzperrors.BadRequestError
-	switch {
-	case status == http.StatusTooManyRequests:
-		return ierr.NewError("razorpay rate limited the payment link request").
-			WithHint("Razorpay is rate limiting requests. Please try again shortly").
-			Mark(ierr.ErrTooManyRequests)
-	case status >= 400 && status < 500 && errors.As(err, &rejected):
-		return ierr.NewErrorf("razorpay rejected the payment link: %s", rejected.Message).
-			WithHintf("Razorpay rejected the payment link: %s", rejected.Message).
-			WithReportableDetails(map[string]interface{}{
-				"error": rejected.Message,
-			}).
-			Mark(ierr.ErrInvalidOperation)
-	default:
-		return ierr.NewError("failed to create payment link in Razorpay").
+		return nil, ierr.NewError("failed to create payment link in Razorpay").
 			WithHint("Unable to create payment link in Razorpay").
 			WithReportableDetails(map[string]interface{}{
 				"error": err.Error(),
 			}).
 			Mark(ierr.ErrInternal)
 	}
+
+	c.logger.Info(ctx, "successfully created payment link in Razorpay", "payment_link_id", razorpayPaymentLink["id"])
+	return razorpayPaymentLink, nil
 }
 
 func webhookSignature(payload []byte, secret string) string {
