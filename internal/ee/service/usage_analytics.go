@@ -123,9 +123,10 @@ func (s *usageAnalyticsService) GetBreakdown(ctx context.Context, req *dto.Usage
 	if err != nil {
 		return nil, err
 	}
-	if q.Sort.Field == usageanalytics.SortUsage && meterCount(in.windows) > 1 {
+	meterIDs := lo.Uniq(lo.Map(in.windows, func(w usageanalytics.LineWindow, _ int) string { return w.MeterID }))
+	if q.Sort.Field == usageanalytics.SortUsage && len(meterIDs) > 1 {
 		return nil, ierr.NewError("sort by usage needs a single meter").
-			WithHint("Quantities of different meters cannot be compared; pass one meter_id or sort by total").
+			WithHint("Quantities of different meters cannot be compared; pass one meter_id or sort by amount").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -343,7 +344,10 @@ func (s *usageAnalyticsService) addBilledLines(
 	if err != nil {
 		return err
 	}
-	if !hasUsageLine(items, meters) {
+	hasUsageLine := lo.ContainsBy(items, func(li *subscription.SubscriptionLineItem) bool {
+		return li.PriceType == types.PRICE_TYPE_USAGE && meters.includes(li.MeterID)
+	})
+	if !hasUsageLine {
 		return nil
 	}
 
@@ -403,16 +407,6 @@ func (s *usageAnalyticsService) addBilledLines(
 	return nil
 }
 
-// hasUsageLine reports whether any usage line is on a requested meter.
-func hasUsageLine(items []*subscription.SubscriptionLineItem, meters meterSet) bool {
-	for _, li := range items {
-		if li.PriceType == types.PRICE_TYPE_USAGE && meters.includes(li.MeterID) {
-			return true
-		}
-	}
-	return false
-}
-
 // lineDiscounts is each line's price multiplier from its percentage coupons; nil applies none.
 type lineDiscounts struct {
 	lineCoupons map[string][]*ca.CouponAssociation
@@ -435,7 +429,10 @@ func (s *usageAnalyticsService) periodDiscounts(ctx context.Context, owner *subs
 			if !c.IsValid() {
 				return false
 			}
-			if !isSpreadableCoupon(c) {
+			// Only a recurring percentage can be spread over events; others are reported as not applied.
+			spreadable := c.Type == types.CouponTypePercentage && c.PercentageOff != nil &&
+				(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated)
+			if !spreadable {
 				in.unappliedCoupons[c.ID] = true
 				return false
 			}
@@ -446,12 +443,6 @@ func (s *usageAnalyticsService) periodDiscounts(ctx context.Context, owner *subs
 	}
 
 	return &lineDiscounts{lineCoupons: sel.LineLevel, subFactor: couponFactor(sel.SubLevel[owner.ID])}, nil
-}
-
-// isSpreadableCoupon reports whether a coupon is a recurring percentage, the only kind that can be spread over events.
-func isSpreadableCoupon(c *coupon.Coupon) bool {
-	return c.Type == types.CouponTypePercentage && c.PercentageOff != nil &&
-		(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated)
 }
 
 // couponFactor is the price multiplier of percentage coupons applied one after another.
@@ -543,15 +534,6 @@ func isSupportedMeter(m *meter.Meter) bool {
 	return false
 }
 
-// meterCount is the number of distinct meters across the line windows.
-func meterCount(windows []usageanalytics.LineWindow) int {
-	seen := map[string]bool{}
-	for _, w := range windows {
-		seen[w.MeterID] = true
-	}
-	return len(seen)
-}
-
 func singleCurrency(windows []usageanalytics.LineWindow) (string, error) {
 	currencies := lo.Uniq(lo.Map(windows, func(w usageanalytics.LineWindow, _ int) string { return strings.ToLower(w.Currency) }))
 	switch len(currencies) {
@@ -574,13 +556,13 @@ func toUsageAnalyticsResponse(
 	result *usageanalytics.Result,
 	lineByID map[string]*subscription.SubscriptionLineItem,
 ) *dto.UsageAnalyticsResponse {
-	f := moneyFormat{precision: types.GetCurrencyPrecision(currency)}
+	precision := types.GetCurrencyPrecision(currency)
 	resp := &dto.UsageAnalyticsResponse{
 		Currency:   currency,
 		Pagination: types.PaginationResponse{Total: int(result.TotalCount), Limit: q.Limit, Offset: q.Offset},
 		Items:      make([]dto.UsageAnalyticsItem, 0, len(result.Items)),
 		Totals: dto.UsageAnalyticsTotals{
-			UsageAmounts: f.amounts(result.Totals.Subtotal, result.Totals.Amount),
+			UsageAmounts: usageAmounts(result.Totals.Subtotal, result.Totals.Amount, precision),
 			Usage:        result.Totals.Quantity.String(),
 			EventCount:   result.Totals.EventCount,
 		},
@@ -594,13 +576,13 @@ func toUsageAnalyticsResponse(
 	var shown map[string]bool
 	if q.Columns != nil {
 		resp.ColumnValues, shown = topColumnValues(result.Totals.Columns)
-		resp.Totals.Columns = amountColumns(result.Totals.Columns, shown, f)
+		resp.Totals.Columns = amountColumns(result.Totals.Columns, shown, precision)
 	}
 
 	for _, row := range result.Items {
 		item := dto.UsageAnalyticsItem{
 			Group:        make(map[string]string, len(q.GroupBy)),
-			UsageAmounts: f.amounts(row.Subtotal, row.Amount),
+			UsageAmounts: usageAmounts(row.Subtotal, row.Amount, precision),
 			Usage:        row.Quantity.String(),
 			EventCount:   row.EventCount,
 		}
@@ -608,7 +590,7 @@ func toUsageAnalyticsResponse(
 			item.Group[k.String()] = noneIfEmpty(row.Group[i])
 		}
 		if q.Columns != nil {
-			item.Columns = amountColumns(row.Columns, shown, f)
+			item.Columns = amountColumns(row.Columns, shown, precision)
 		}
 		if len(row.Metrics) > 0 {
 			item.Metrics = make(map[string]dto.UsageAnalyticsValue, len(row.Metrics))
@@ -617,7 +599,7 @@ func toUsageAnalyticsResponse(
 			}
 		}
 		if q.WindowSize != "" {
-			item.Points = usagePoints(row.Points, windows, f)
+			item.Points = usagePoints(row.Points, windows, precision)
 		}
 		usageItemIDs(&item, row.LineItemIDs, lineByID)
 		resp.Items = append(resp.Items, item)
@@ -625,22 +607,13 @@ func toUsageAnalyticsResponse(
 	return resp
 }
 
-// moneyFormat rounds money to the currency's precision.
-type moneyFormat struct {
-	precision int32
-}
-
-func (f moneyFormat) money(d decimal.Decimal) string {
-	return d.Round(f.precision).StringFixed(f.precision)
-}
-
-// amounts rounds subtotal and amount, and takes the discount as their difference so the three agree.
-func (f moneyFormat) amounts(subtotal, amount decimal.Decimal) dto.UsageAmounts {
-	sub, amt := subtotal.Round(f.precision), amount.Round(f.precision)
+// usageAmounts rounds subtotal and amount, and takes the discount as their difference so the three agree.
+func usageAmounts(subtotal, amount decimal.Decimal, precision int32) dto.UsageAmounts {
+	sub, amt := subtotal.Round(precision), amount.Round(precision)
 	return dto.UsageAmounts{
-		Subtotal: sub.StringFixed(f.precision),
-		Discount: sub.Sub(amt).StringFixed(f.precision),
-		Amount:   amt.StringFixed(f.precision),
+		Subtotal: sub.StringFixed(precision),
+		Discount: sub.Sub(amt).StringFixed(precision),
+		Amount:   amt.StringFixed(precision),
 	}
 }
 
@@ -653,14 +626,14 @@ func noneIfEmpty(v string) string {
 }
 
 // usagePoints lists every window in the range, at zero where the row had no events.
-func usagePoints(points []usageanalytics.Point, windows []time.Time, f moneyFormat) []dto.UsagePoint {
+func usagePoints(points []usageanalytics.Point, windows []time.Time, precision int32) []dto.UsagePoint {
 	byStart := lo.KeyBy(points, func(p usageanalytics.Point) int64 { return p.WindowStart.Unix() })
 	return lo.Map(windows, func(w time.Time, _ int) dto.UsagePoint {
 		p, ok := byStart[w.Unix()]
 		if !ok {
-			return dto.UsagePoint{Timestamp: w, UsageAmounts: f.amounts(decimal.Zero, decimal.Zero), Usage: "0"}
+			return dto.UsagePoint{Timestamp: w, UsageAmounts: usageAmounts(decimal.Zero, decimal.Zero, precision), Usage: "0"}
 		}
-		return dto.UsagePoint{Timestamp: w, UsageAmounts: f.amounts(p.Subtotal, p.Amount), Usage: p.Quantity.String()}
+		return dto.UsagePoint{Timestamp: w, UsageAmounts: usageAmounts(p.Subtotal, p.Amount, precision), Usage: p.Quantity.String()}
 	})
 }
 
@@ -685,18 +658,18 @@ func topColumnValues(totals map[string]decimal.Decimal) ([]string, map[string]bo
 }
 
 // amountColumns keeps the shown column values and sums the rest into UsageOtherColumn, so columns add up to the row.
-func amountColumns(amounts map[string]decimal.Decimal, shown map[string]bool, f moneyFormat) map[string]dto.UsageColumn {
+func amountColumns(amounts map[string]decimal.Decimal, shown map[string]bool, precision int32) map[string]dto.UsageColumn {
 	out := make(map[string]dto.UsageColumn, len(amounts))
 	other, hasOther := decimal.Zero, false
 	for v, c := range amounts {
 		if shown[v] {
-			out[noneIfEmpty(v)] = dto.UsageColumn{Amount: f.money(c)}
+			out[noneIfEmpty(v)] = dto.UsageColumn{Amount: c.StringFixed(precision)}
 			continue
 		}
 		other, hasOther = other.Add(c), true
 	}
 	if hasOther {
-		out[dto.UsageOtherColumn] = dto.UsageColumn{Amount: f.money(other)}
+		out[dto.UsageOtherColumn] = dto.UsageColumn{Amount: other.StringFixed(precision)}
 	}
 	return out
 }
@@ -727,35 +700,13 @@ func sortedIDs(ids []string) []string {
 	return ids
 }
 
-// rowIDs are the distinct IDs on a page's rows, sorted.
-type rowIDs struct {
-	prices, plans, addons, subscriptions []string
-}
-
-func collectRowIDs(items []dto.UsageAnalyticsItem) rowIDs {
-	var ids rowIDs
-	for _, it := range items {
-		ids.prices = append(ids.prices, it.PriceIDs...)
-		ids.plans = append(ids.plans, it.PlanIDs...)
-		ids.addons = append(ids.addons, it.AddonIDs...)
-		ids.subscriptions = append(ids.subscriptions, it.SubscriptionIDs...)
-	}
-	return rowIDs{
-		prices:        sortedIDs(ids.prices),
-		plans:         sortedIDs(ids.plans),
-		addons:        sortedIDs(ids.addons),
-		subscriptions: sortedIDs(ids.subscriptions),
-	}
-}
-
 // expandObjects fills the object maps requested in expand, for the IDs on the page's rows.
 func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []types.ExpandableField, resp *dto.UsageAnalyticsResponse, in *queryInputs) error {
 	want := lo.SliceToMap(expand, func(e types.ExpandableField) (types.ExpandableField, bool) { return e, true })
 	if len(want) == 0 {
 		return nil
 	}
-	ids := collectRowIDs(resp.Items)
-	priceIDs := ids.prices
+	priceIDs := sortedIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.PriceIDs }))
 	priceByID := map[string]*price.Price{}
 	for _, li := range in.lineByID {
 		if li.Price != nil {
@@ -777,7 +728,8 @@ func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []type
 	}
 	if want[types.ExpandSubscription] {
 		resp.Subscriptions = map[string]*dto.SubscriptionResponse{}
-		for _, id := range ids.subscriptions {
+		subIDs := sortedIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.SubscriptionIDs }))
+		for _, id := range subIDs {
 			if sub := in.subByID[id]; sub != nil {
 				resp.Subscriptions[id] = &dto.SubscriptionResponse{Subscription: sub}
 			}
@@ -785,8 +737,9 @@ func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []type
 	}
 	if want[types.ExpandPlans] {
 		resp.Plans = map[string]*dto.PlanResponse{}
-		if len(ids.plans) > 0 {
-			plans, err := s.PlanRepo.ListByIDs(ctx, ids.plans)
+		planIDs := sortedIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.PlanIDs }))
+		if len(planIDs) > 0 {
+			plans, err := s.PlanRepo.ListByIDs(ctx, planIDs)
 			if err != nil {
 				return err
 			}
@@ -797,9 +750,10 @@ func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []type
 	}
 	if want[types.ExpandAddons] {
 		resp.Addons = map[string]*dto.AddonResponse{}
-		if len(ids.addons) > 0 {
+		addonIDs := sortedIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.AddonIDs }))
+		if len(addonIDs) > 0 {
 			filter := types.NewNoLimitAddonFilter()
-			filter.AddonIDs = ids.addons
+			filter.AddonIDs = addonIDs
 			addons, err := s.AddonRepo.List(ctx, filter)
 			if err != nil {
 				return err
