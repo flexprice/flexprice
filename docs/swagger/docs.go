@@ -20011,6 +20011,12 @@ const docTemplate = `{
         "CheckoutPaymentBlock": {
             "type": "object",
             "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
                 "gateway": {
                     "type": "string"
                 },
@@ -40250,6 +40256,9 @@ const docTemplate = `{
                 "action": {
                     "$ref": "#/definitions/types.CheckoutAction"
                 },
+                "amount": {
+                    "type": "string"
+                },
                 "cancelled_at": {
                     "type": "string"
                 },
@@ -40265,6 +40274,12 @@ const docTemplate = `{
                 "completed_at": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
                 "customer_id": {
                     "type": "string"
                 },
@@ -40277,11 +40292,17 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
                 "payment_action": {
                     "$ref": "#/definitions/types.PaymentAction"
                 },
                 "payment_provider": {
                     "$ref": "#/definitions/types.CheckoutPaymentProvider"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -40916,6 +40937,9 @@ const docTemplate = `{
                 "connection_id": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
                 "currency": {
                     "type": "string"
                 },
@@ -40931,13 +40955,25 @@ const docTemplate = `{
                 "failed_at": {
                     "type": "string"
                 },
+                "gateway_payment_id": {
+                    "type": "string"
+                },
+                "gateway_tracking_id": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
                 "invoice_number": {
                     "type": "string"
                 },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
                 "payment_gateway": {
+                    "type": "string"
+                },
+                "payment_method_id": {
                     "type": "string"
                 },
                 "payment_method_type": {
@@ -40950,6 +40986,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "succeeded_at": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 },
                 "voided_at": {
