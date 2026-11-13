@@ -65,7 +65,7 @@ The tenant sends one API call per customer and gets back a request id. Personal 
 
 - Programmatic deletion request per customer, idempotent across repeated and concurrent calls.
 - Written instructions recorded through the same flow, with who entered them and what instruction they came from.
-- Customer personal data suppressed from every read path, and customer ingestion/replay blocked, as soon as the request is accepted. Dissociated financial reads remain permitted.
+- Customer personal data suppressed from every read path and every outbound disclosure as soon as the request is accepted. Ingestion is not blocked; the request's scope is bounded by its cutoff instead. Dissociated financial reads remain permitted.
 - Off by default. Flexprice enables it per tenant, only for tenants whose contract covers it.
 - Callable only by the tenant's super admins.
 - A per-tenant cooldown, with cancellation allowed while it runs.
@@ -136,7 +136,7 @@ After an erasure, the same person signs up again under the same `external_id`. T
 
 **R6.** `POST /v1/privacy/deletion-requests/{id}/retry` resumes a `failed` request. Before irreversible work it reruns the eligibility gate; afterwards it resumes unfinished idempotent cleanup without restoring access or allowing cancellation. For `completed` requests, retry is allowed only for failed retained-document cleanup and resumes that category alone. It is refused otherwise.
 
-**R7.** Creation records state `pending_suppression`; partial application never reports `suppressed`. The transition to `suppressed` and setting `suppressed_at` commit together only after every suppression step is effective. Cancellation from `pending_suppression` rolls back every applied suppression step idempotently through the service-owned cancellation path; it must not depend on `suppressed_at` being set. `suppressed_at` is set only once customer archival, read-path suppression, access revocation and ingestion/consumer/replay suppression are effective. Archival alone is insufficient. Postgres owns durable suppression state; caches are rebuildable projections. Cache propagation and in-flight writer draining must finish before acceptance. `202` is returned only after that. If the suppression write fails, the request stays `pending_suppression` without `suppressed_at`, the call returns `503` with the request id, and the workflow retries the write as its first step. A repeated `POST` returns the same request.
+**R7.** Creation records state `pending_suppression`; partial application never reports `suppressed`. The transition to `suppressed` and setting `suppressed_at` commit together only after every suppression step is effective. Cancellation from `pending_suppression` rolls back every applied suppression step idempotently through the service-owned cancellation path; it must not depend on `suppressed_at` being set. `suppressed_at` is set only once customer archival, read-path suppression, access revocation and outbound-disclosure suppression are effective. Archival alone is insufficient. Ingestion is not part of this set and is never suppressed. Postgres owns durable suppression state; caches are rebuildable projections. Cache invalidation must be confirmed across every serving path before acceptance. `202` is returned only after that. If the suppression write fails, the request stays `pending_suppression` without `suppressed_at`, the call returns `503` with the request id, and the workflow retries the write as its first step. A repeated `POST` returns the same request.
 
 **R8.** Personal data and usage data are redacted within 30 calendar days of `instruction_received_at`, apart from the categories retained under BR1. For API requests this is receipt of the valid API instruction; for written requests it is the original receipt time of the tenant instruction, not operator entry time. Persist `redaction_due_at = instruction_received_at + 30 days` and `cooldown_ends_at = instruction_received_at + cooldown_days`. Late entry never resets either clock: elapsed cooldowns run immediately; overdue instructions are flagged and escalated for immediate execution. The cooldown plus redaction must fit the original deadline.
 
@@ -260,7 +260,7 @@ on unique-index conflict:
 EnsureWorkflowDispatched(request.id) // fast path; outbox dispatcher retries durably
 
 EnsureReadSuppressionAndAccessRevocation(request.id)
-EnsureWriterSuppressionAndDrain(request.id)          // failure: 503 with request id; workflow retries
+EnsureOutboundDisclosureSuppressed(request.id)       // outbox, webhooks, alerts; failure: 503, workflow retries
 if not DeletionRequestRepo.MarkSuppressed(request.id, now): // pending_suppression -> suppressed
     current = DeletionRequestRepo.GetFromWriter(request.id)
     if current.state == cancelled: return 409 current
@@ -410,12 +410,12 @@ Every row below needs an implemented treatment or an approved retention exceptio
 | Postgres | Payment methods, checkout sessions, hosted invoice tokens | Revoke access and erase personal payloads; resolve provider detachment |
 | Postgres | Integration mappings, system-event outbox, incoming webhooks, alerts/settings, tasks, workflow index | Stop future disclosure/writes; clean personal payloads or enforce approved bounded retention |
 | Postgres | Event correction request records | Remove original external customer identifiers and personal failure details |
-| ClickHouse | `events`, `meter_usage`, `raw_events`, `deleted_events_logs` | Delete all customer history; verify customer-wide zero rows |
+| ClickHouse | `events`, `meter_usage`, `raw_events`, `deleted_events_logs` | Delete customer history ingested before the cutoff; verify zero in-scope rows. Derived tables with no trustworthy ingest timestamp need their own rule (§9.15, open) |
 | ClickHouse | `activity_logs` labels, external IDs and state snapshots | Redact/delete identifying data; explicitly define minimal retained audit |
 | File storage | Invoice PDFs | Revoke access immediately; delete after configured dispute/legal document retention |
 | File storage | Managed exports/imports and mixed-customer files | Delete, regenerate without subject or enforce approved expiry; prove artifact coverage |
-| Redis / memory | Customer, lookup, wallet and related caches/dedup keys | Invalidate personal copies; preserve suppression and prevent replay |
-| Kafka / pipeline | All writers, retry/dead-letter topics and raw replay | Enforce suppression; verify expiry within the commitment or report an approved exception |
+| Redis / memory | Customer, lookup, wallet and related caches/dedup keys | Invalidate personal copies across every serving path; confirm invalidation before acceptance |
+| Kafka / pipeline | All writers, retry/dead-letter topics and raw replay | Verify expiry within the commitment or report an approved exception. Internal replay of pre-cutoff events is not tenant re-submission and needs its own rule (open) |
 | Temporal | Existing histories and activity payloads | Verify retention; keep new deletion history free of PII |
 | Operations / providers | Logs, traces, backups, remote payment/CRM copies | Verify ownership/retention, document external boundary and reapply erasure after restore |
 | Outside scope | Tenant users/auth and shared catalog | Preserve; whole-tenant termination is separate |
@@ -584,15 +584,7 @@ Not part of the tenant API and not in the public spec. Same body plus required `
 
 ### Bulk ingestion
 
-The bulk ingest response gains a `rejected` array. Accepted events are published as normal.
-
-```json
-{
-  "rejected": [
-    { "index": 3, "event_id": "evt_123", "reason": "customer_suppressed" }
-  ]
-}
-```
+Unchanged by this feature. Suppression adds no rejection path, so the response shape gains nothing and the hot path pays no lookup.
 
 ### Errors
 
@@ -721,7 +713,7 @@ Product behavior is finalized. The following evidence/design prerequisites gate 
 | Secondary-copy retention and ownership | Deployed Kafka/retry, Temporal, logs, files, backups and provider evidence; cleanup follow-ups resolved: FLE-1845 |
 | Written instructions | Admin-only route using deployment.mode=admin; instruction reference storage/access agreed: FLE-1847 |
 | Read coverage | Suppress PII across APIs, UI, exports and hosted links; permit only dissociated financial reads: FLE-1840 / FLE-1844 / FLE-1847 |
-| Ingestion responsibility | Tenants acknowledge that accepted erasure refuses usage even without an active subscription: FLE-1847 |
+| Ingestion responsibility | Tenants acknowledge that erasure does not stop their emitters, and that data they submit after a request falls outside its scope: FLE-1847 |
 
 ### Incremental delivery
 
@@ -753,7 +745,7 @@ Implementation parent: [FLE-1836](https://linear.app/flexprice/issue/FLE-1836).
 | Request stored in Postgres with our own id | Mutable state, a unique index for idempotency, and written in the same transaction as the archive. |
 | Conditional state transitions | Cancel and irreversible work cannot both win; failures after destructive work never restore cancellation. |
 | `failed` is recoverable | A temporary blocker or failure must not suppress a customer forever. |
-| `202` only once suppression is in effect | The response must mean new events are already refused. |
+| `202` only once suppression is in effect | The response must mean the personal data is already unreadable and undisclosed, not that ingestion stopped. |
 | Hashed `subject_ref`, permanent pseudonymised record | Proves the deletion happened (Art. 5(2)). Treated as personal data, with the salt access-restricted. |
 | `external_id` captured at request time | The purge needs it after the customer row is redacted. |
 | `external_id` reuse needs explicit confirmation | Prevents both permanent blocking of a new customer and silent re-attachment to an erased one. |
@@ -780,7 +772,7 @@ Proposed clause 7.2 for the data processing agreement, added after the existing 
 >
 > (a) Where enabled for Customer under the Agreement, Flexprice shall provide an authenticated programmatic endpoint through which Customer may instruct the deletion of the Customer Personal Data relating to an individual end customer, including end customers whose accounts are inactive or closed. Flexprice shall also act on equivalent written instructions received from Customer. Requests received by Flexprice directly from Data Subjects are handled under Section 3.4.
 >
-> (b) Upon receipt of a valid instruction, Flexprice shall without undue delay render the relevant Customer Personal Data inaccessible through the Services, and shall refuse further usage data submitted for that end customer.
+> (b) Upon receipt of a valid instruction, Flexprice shall without undue delay render the relevant Customer Personal Data inaccessible through the Services. Flexprice does not refuse usage data that Customer continues to submit for that end customer, and Customer acknowledges that data it submits after the instruction is processed on its own instruction and falls outside the scope of that deletion. Each instruction covers the Customer Personal Data held by Flexprice at the time the instruction is received; data submitted afterwards requires a further instruction.
 >
 > (c) Following a cooldown period agreed in the Order Form, not exceeding fourteen (14) days, during which Customer may withdraw the instruction, Flexprice shall permanently delete the relevant Customer Personal Data, or irreversibly anonymise it so that it can no longer be attributed to the Data Subject, and in any event within thirty (30) days of receipt of the instruction.
 >
@@ -795,7 +787,7 @@ Proposed clause 7.2 for the data processing agreement, added after the existing 
 | Clause | PRD source |
 |---|---|
 | 7.2(a) | R1, R4, UC2, R13 |
-| 7.2(b) | R7, R9 |
+| 7.2(b) | R7 |
 | 7.2(c) | R5, R8, V3 |
 | 7.2(d) | BR1, BR2, BR9, BR1a |
 | 7.2(e) | BR3 |
