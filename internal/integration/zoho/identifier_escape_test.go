@@ -94,3 +94,44 @@ func TestGetOrganizationBaseCurrency_EscapesOrgID(t *testing.T) {
 		t.Fatalf("urls=%v want prefix %s", rt.urls, want)
 	}
 }
+
+func TestResourceIDsArePathEscaped(t *testing.T) {
+	const id = "../x?y=z"
+	const base = "https://www.zohoapis.com/books/v3/"
+	tests := []struct {
+		name string
+		call func(*Client) error
+		want string
+	}{
+		{"update contact", func(c *Client) error {
+			_, err := c.UpdateContact(context.Background(), id, &ContactUpdateRequest{})
+			return err
+		}, base + "contacts/..%2Fx%3Fy=z?"},
+		{"get contact", func(c *Client) error {
+			_, err := c.GetContact(context.Background(), id)
+			return err
+		}, base + "contacts/..%2Fx%3Fy=z?"},
+		{"update invoice", func(c *Client) error {
+			_, err := c.UpdateInvoice(context.Background(), id, &InvoiceCreateRequest{})
+			return err
+		}, base + "invoices/..%2Fx%3Fy=z?"},
+		{"get invoice", func(c *Client) error {
+			_, err := c.GetInvoice(context.Background(), id)
+			return err
+		}, base + "invoices/..%2Fx%3Fy=z?"},
+		{"submit invoice", func(c *Client) error {
+			return c.SubmitInvoiceForApproval(context.Background(), id)
+		}, base + "invoices/..%2Fx%3Fy=z/submit?"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, rt := newIDClient("https://www.zohoapis.com", "123")
+			if err := tt.call(c); err != nil {
+				t.Fatal(err)
+			}
+			if len(rt.urls) != 1 || !strings.HasPrefix(rt.urls[0], tt.want) {
+				t.Fatalf("urls=%v want prefix %s", rt.urls, tt.want)
+			}
+		})
+	}
+}

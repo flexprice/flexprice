@@ -8,7 +8,6 @@ func TestValidateZohoEndpoint(t *testing.T) {
 		url     string
 		wantErr bool
 	}{
-		{"empty is allowed before oauth completes", "", false},
 		{"zoho com accounts", "https://accounts.zoho.com", false},
 		{"zoho eu accounts", "https://accounts.zoho.eu", false},
 		{"zoho api domain default", "https://www.zohoapis.com", false},
@@ -35,7 +34,7 @@ func TestValidateZohoEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateZohoEndpoint(tt.url, "accounts_server")
+			err := ValidateZohoEndpoint(tt.url, "accounts_server")
 			if tt.wantErr && err == nil {
 				t.Fatalf("expected %q to be rejected, got nil error", tt.url)
 			}

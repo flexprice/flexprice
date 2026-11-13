@@ -72,25 +72,34 @@ func TestGetValidAccessToken_RejectsAccountsServerBeforeSend(t *testing.T) {
 	}
 }
 
-func TestGetValidAccessToken_RejectsRefreshedAPIDomainBeforeStore(t *testing.T) {
-	c, rt, repo, conn := newRefreshClient("https://accounts.zoho.com", `{"access_token":"a","api_domain":"https://evil.example.com","expires_in":3600}`)
-	if _, err := c.getValidAccessToken(context.Background(), conn); err == nil {
-		t.Fatal("evil api_domain accepted")
+func TestGetValidAccessToken_RefreshedAPIDomain(t *testing.T) {
+	const stored = "https://www.zohoapis.com"
+	tests := []struct {
+		name       string
+		apiDomain  string
+		wantDomain string
+	}{
+		{"valid domain stored without slash", "https://www.zohoapis.ca/", "https://www.zohoapis.ca"},
+		{"absent domain keeps stored", "", stored},
+		{"non-zoho domain keeps stored", "https://evil.example.com", stored},
+		{"http domain keeps stored", "http://www.zohoapis.ca", stored},
+		{"domain with path keeps stored", "https://www.zohoapis.ca/x", stored},
 	}
-	if len(rt.urls) != 1 {
-		t.Fatalf("urls=%v", rt.urls)
-	}
-	if repo.updates != 0 || conn.EncryptedSecretData.ZohoBooks.APIDomain != "https://www.zohoapis.com" {
-		t.Fatal("api_domain stored")
-	}
-}
-
-func TestGetValidAccessToken_StoresValidRefreshedAPIDomain(t *testing.T) {
-	c, _, repo, conn := newRefreshClient("https://accounts.zoho.com", `{"access_token":"a","api_domain":"https://www.zohoapis.ca/","expires_in":3600}`)
-	if _, err := c.getValidAccessToken(context.Background(), conn); err != nil {
-		t.Fatal(err)
-	}
-	if repo.updates != 1 || conn.EncryptedSecretData.ZohoBooks.APIDomain != "https://www.zohoapis.ca" {
-		t.Fatalf("updates=%d domain=%q", repo.updates, conn.EncryptedSecretData.ZohoBooks.APIDomain)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := `{"access_token":"new","api_domain":"` + tt.apiDomain + `","expires_in":3600}`
+			c, rt, repo, conn := newRefreshClient("https://accounts.zoho.com", body)
+			token, err := c.getValidAccessToken(context.Background(), conn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if token != "new" || len(rt.urls) != 1 || repo.updates != 1 {
+				t.Fatalf("token=%q urls=%v updates=%d", token, rt.urls, repo.updates)
+			}
+			md := conn.EncryptedSecretData.ZohoBooks
+			if md.APIDomain != tt.wantDomain || md.AccessToken != "new" {
+				t.Fatalf("domain=%q access=%q", md.APIDomain, md.AccessToken)
+			}
+		})
 	}
 }

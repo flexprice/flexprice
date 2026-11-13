@@ -70,3 +70,34 @@ func TestZohoMetadataValidate_OrganizationID(t *testing.T) {
 		t.Fatal("non-zoho api_domain accepted")
 	}
 }
+
+func TestZohoMetadataValidate_Endpoints(t *testing.T) {
+	tests := []struct {
+		name     string
+		accounts string
+		api      string
+		wantErr  bool
+	}{
+		{"empty before oauth", "", "", false},
+		{"bare origins", "https://accounts.zoho.com", "https://www.zohoapis.com", false},
+		{"trailing slash tolerated", "https://accounts.zoho.eu/", "https://www.zohoapis.eu/", false},
+		{"accounts path rejected", "https://accounts.zoho.com/oauth", "", true},
+		{"accounts query rejected", "https://accounts.zoho.com?x=1", "", true},
+		{"accounts userinfo rejected", "https://u:p@accounts.zoho.com", "", true},
+		{"api fragment rejected", "", "https://www.zohoapis.com#f", true},
+		{"api path rejected", "", "https://www.zohoapis.com/books", true},
+		{"api non-zoho rejected", "", "https://evil.example.com", true},
+		{"accounts http rejected", "http://accounts.zoho.com", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := ZohoBooksConnectionMetadata{
+				ClientID: "id", ClientSecret: "s", RefreshToken: "r", OrganizationID: "1",
+				AccountsURL: tt.accounts, APIDomain: tt.api,
+			}
+			if err := m.Validate(); (err != nil) != tt.wantErr {
+				t.Fatalf("err=%v wantErr=%v", err, tt.wantErr)
+			}
+		})
+	}
+}

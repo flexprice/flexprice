@@ -2,6 +2,7 @@ package dto
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/types"
@@ -166,7 +167,7 @@ func ConvertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 			qbMetadata.RealmID = realmID
 		}
 		if environment, ok := flatMetadata["environment"].(string); ok {
-			qbMetadata.Environment = environment
+			qbMetadata.Environment = strings.ToLower(strings.TrimSpace(environment))
 		}
 
 		// Required for initial token exchange (captured from OAuth redirect)

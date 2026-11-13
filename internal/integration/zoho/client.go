@@ -131,7 +131,7 @@ func (c *Client) UpdateContact(ctx context.Context, contactID string, req *Conta
 	var resp struct {
 		Contact ContactResponse `json:"contact"`
 	}
-	path := fmt.Sprintf("/books/v3/contacts/%s", contactID)
+	path := fmt.Sprintf("/books/v3/contacts/%s", url.PathEscape(contactID))
 	if err := c.doBooksRequest(ctx, http.MethodPut, path, nil, req, &resp); err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (c *Client) GetContact(ctx context.Context, contactID string) (*ContactResp
 	var resp struct {
 		Contact ContactResponse `json:"contact"`
 	}
-	path := fmt.Sprintf("/books/v3/contacts/%s", contactID)
+	path := fmt.Sprintf("/books/v3/contacts/%s", url.PathEscape(contactID))
 	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (c *Client) UpdateInvoice(ctx context.Context, zohoInvoiceID string, req *I
 	var resp struct {
 		Invoice InvoiceResponse `json:"invoice"`
 	}
-	path := fmt.Sprintf("/books/v3/invoices/%s", zohoInvoiceID)
+	path := fmt.Sprintf("/books/v3/invoices/%s", url.PathEscape(zohoInvoiceID))
 	if err := c.doBooksRequest(ctx, http.MethodPut, path, nil, req, &resp); err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func (c *Client) GetInvoice(ctx context.Context, zohoInvoiceID string) (*Invoice
 	var resp struct {
 		Invoice InvoiceResponse `json:"invoice"`
 	}
-	path := fmt.Sprintf("/books/v3/invoices/%s", zohoInvoiceID)
+	path := fmt.Sprintf("/books/v3/invoices/%s", url.PathEscape(zohoInvoiceID))
 	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func (c *Client) GetInvoice(ctx context.Context, zohoInvoiceID string) (*Invoice
 }
 
 func (c *Client) SubmitInvoiceForApproval(ctx context.Context, zohoInvoiceID string) error {
-	path := fmt.Sprintf("/books/v3/invoices/%s/submit", zohoInvoiceID)
+	path := fmt.Sprintf("/books/v3/invoices/%s/submit", url.PathEscape(zohoInvoiceID))
 	return c.doBooksRequest(ctx, http.MethodPost, path, nil, nil, nil)
 }
 
@@ -503,7 +503,10 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 	newAPIDomain := strings.TrimRight(tokenResp.APIDomain, "/")
 	if newAPIDomain != "" {
 		if err := types.ValidateZohoEndpoint(newAPIDomain, "api_domain"); err != nil {
-			return "", err
+			c.logger.Info(ctx, "ignoring invalid Zoho api_domain from token refresh",
+				"connection_id", conn.ID,
+				"error", err)
+			newAPIDomain = ""
 		}
 	}
 
