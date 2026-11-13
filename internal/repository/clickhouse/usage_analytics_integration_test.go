@@ -131,7 +131,7 @@ func insertWithIngestedAt(repo *MeterUsageRepository, records []*events.MeterUsa
 	return batch.Send()
 }
 
-func randomUsageQuery(rng *rand.Rand, dedupe bool) *usageanalytics.Query {
+func randomUsageAnalyticsQuery(rng *rand.Rand, dedupe bool) *usageanalytics.Query {
 	allKeys := []usageanalytics.Key{keyUser, keyApp, keySource, keyLine, keyFeature,
 		{Kind: usageanalytics.KeyMeterID}}
 	pick := func(n int) []usageanalytics.Key {
@@ -217,21 +217,21 @@ func TestUsageBreakdown_MatchesReference_Integration(t *testing.T) {
 	for i := 0; i < 150; i++ {
 		// The clean tenant has no duplicates, so both dedupe modes must agree with the reference;
 		// the duplicate tenant is only deterministic with deduplication on.
-		q := randomUsageQuery(rng, i%2 == 0)
+		q := randomUsageAnalyticsQuery(rng, i%2 == 0)
 		t.Run(fmt.Sprintf("clean_%d", i), func(t *testing.T) { run(t, clean, q) })
-		dq := randomUsageQuery(rng, true)
+		dq := randomUsageAnalyticsQuery(rng, true)
 		t.Run(fmt.Sprintf("dedupe_%d", i), func(t *testing.T) { run(t, dupes, dq) })
 	}
 
 	t.Run("page past the end keeps totals", func(t *testing.T) {
-		q := randomUsageQuery(rng, false)
+		q := randomUsageAnalyticsQuery(rng, false)
 		q.Offset = 10_000
 		run(t, clean, q)
 	})
 
 	t.Run("no lines returns empty without querying", func(t *testing.T) {
 		got, err := queryRepo.GetBreakdown(context.Background(), &usageanalytics.QueryParams{
-			TenantID: clean.tenantID, EnvironmentID: clean.envID, Query: randomUsageQuery(rng, false),
+			TenantID: clean.tenantID, EnvironmentID: clean.envID, Query: randomUsageAnalyticsQuery(rng, false),
 		})
 		require.NoError(t, err)
 		require.Empty(t, got.Items)

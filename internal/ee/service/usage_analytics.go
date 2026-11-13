@@ -35,7 +35,7 @@ const (
 
 // UsageAnalyticsService attributes billed amount to the events, and their properties, that caused it.
 type UsageAnalyticsService interface {
-	GetBreakdown(ctx context.Context, req *dto.UsageQueryRequest) (*dto.UsageQueryResponse, error)
+	GetBreakdown(ctx context.Context, req *dto.UsageAnalyticsRequest) (*dto.UsageAnalyticsResponse, error)
 }
 
 type usageAnalyticsService struct {
@@ -69,7 +69,7 @@ type queryInputs struct {
 	unappliedCoupons map[string]bool
 }
 
-func (s *usageAnalyticsService) GetBreakdown(ctx context.Context, req *dto.UsageQueryRequest) (*dto.UsageQueryResponse, error) {
+func (s *usageAnalyticsService) GetBreakdown(ctx context.Context, req *dto.UsageAnalyticsRequest) (*dto.UsageAnalyticsResponse, error) {
 	if req.ExternalCustomerID == "" {
 		return nil, ierr.NewError("external_customer_id is required").Mark(ierr.ErrValidation)
 	}
@@ -144,7 +144,7 @@ func (s *usageAnalyticsService) GetBreakdown(ctx context.Context, req *dto.Usage
 	for _, cs := range subs {
 		in.subByID[cs.owner.ID] = cs.owner
 	}
-	resp := toUsageQueryResponse(q, currency, result, in.lineByID)
+	resp := toUsageAnalyticsResponse(q, currency, result, in.lineByID)
 	if err := s.expandObjects(ctx, req.Expand, resp, in); err != nil {
 		return nil, err
 	}
@@ -531,14 +531,14 @@ func singleCurrency(windows []usageanalytics.LineWindow) (string, error) {
 		Mark(ierr.ErrValidation)
 }
 
-// toUsageQueryResponse rounds money once per row and once for totals, names missing values
+// toUsageAnalyticsResponse rounds money once per row and once for totals, names missing values
 // UsageNoneValue and keeps the top column values by total amount.
-func toUsageQueryResponse(
+func toUsageAnalyticsResponse(
 	q *usageanalytics.Query,
 	currency string,
 	result *usageanalytics.Result,
 	lineByID map[string]*subscription.SubscriptionLineItem,
-) *dto.UsageQueryResponse {
+) *dto.UsageAnalyticsResponse {
 	precision := types.GetCurrencyPrecision(currency)
 	money := func(d decimal.Decimal) string { return d.Round(precision).StringFixed(precision) }
 	amounts := func(subtotal, amount decimal.Decimal) dto.UsageAmounts {
@@ -547,11 +547,11 @@ func toUsageQueryResponse(
 	}
 	none := func(v string) string { return lo.Ternary(v == "", dto.UsageNoneValue, v) }
 
-	resp := &dto.UsageQueryResponse{
+	resp := &dto.UsageAnalyticsResponse{
 		Currency:   currency,
 		Pagination: types.PaginationResponse{Total: int(result.TotalCount), Limit: q.Limit, Offset: q.Offset},
-		Items:      make([]dto.UsageQueryItem, 0, len(result.Items)),
-		Totals: dto.UsageQueryTotals{
+		Items:      make([]dto.UsageAnalyticsItem, 0, len(result.Items)),
+		Totals: dto.UsageAnalyticsTotals{
 			UsageAmounts: amounts(result.Totals.Subtotal, result.Totals.Amount),
 			Usage:        result.Totals.Quantity.String(),
 			EventCount:   result.Totals.EventCount,
@@ -570,7 +570,7 @@ func toUsageQueryResponse(
 	}
 
 	for _, row := range result.Items {
-		item := dto.UsageQueryItem{
+		item := dto.UsageAnalyticsItem{
 			Group:        make(map[string]string, len(q.GroupBy)),
 			UsageAmounts: amounts(row.Subtotal, row.Amount),
 			Usage:        row.Quantity.String(),
@@ -583,9 +583,9 @@ func toUsageQueryResponse(
 			item.Columns = amountColumns(row.Columns, shown, money, none)
 		}
 		if len(row.Metrics) > 0 {
-			item.Metrics = make(map[string]dto.UsageQueryValue, len(row.Metrics))
+			item.Metrics = make(map[string]dto.UsageAnalyticsValue, len(row.Metrics))
 			for name, v := range row.Metrics {
-				item.Metrics[name] = dto.UsageQueryValue{Count: v.Count, Values: v.Values}
+				item.Metrics[name] = dto.UsageAnalyticsValue{Count: v.Count, Values: v.Values}
 			}
 		}
 		if q.WindowSize != "" {
@@ -643,7 +643,7 @@ func amountColumns(amounts map[string]decimal.Decimal, shown map[string]bool, mo
 }
 
 // usageItemIDs sets the prices, plans, add-ons and subscriptions of the lines behind a row.
-func usageItemIDs(item *dto.UsageQueryItem, lineIDs []string, lineByID map[string]*subscription.SubscriptionLineItem) {
+func usageItemIDs(item *dto.UsageAnalyticsItem, lineIDs []string, lineByID map[string]*subscription.SubscriptionLineItem) {
 	var prices, plans, addons, subs []string
 	for _, id := range lineIDs {
 		li := lineByID[id]
@@ -669,15 +669,15 @@ func sortedIDs(ids []string) []string {
 }
 
 // expandObjects fills the object maps requested in expand, for the IDs on the page's rows.
-func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []dto.UsageExpand, resp *dto.UsageQueryResponse, in *queryInputs) error {
+func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []dto.UsageExpand, resp *dto.UsageAnalyticsResponse, in *queryInputs) error {
 	want := lo.SliceToMap(expand, func(e dto.UsageExpand) (dto.UsageExpand, bool) { return e, true })
 	if len(want) == 0 {
 		return nil
 	}
-	ids := func(pick func(dto.UsageQueryItem) []string) []string {
-		return sortedIDs(lo.FlatMap(resp.Items, func(it dto.UsageQueryItem, _ int) []string { return pick(it) }))
+	ids := func(pick func(dto.UsageAnalyticsItem) []string) []string {
+		return sortedIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return pick(it) }))
 	}
-	priceIDs := ids(func(it dto.UsageQueryItem) []string { return it.PriceIDs })
+	priceIDs := ids(func(it dto.UsageAnalyticsItem) []string { return it.PriceIDs })
 	priceByID := map[string]*price.Price{}
 	for _, li := range in.lineByID {
 		if li.Price != nil {
@@ -699,7 +699,7 @@ func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []dto.
 	}
 	if want[dto.UsageExpandSubscription] {
 		resp.Subscriptions = map[string]*dto.SubscriptionResponse{}
-		for _, id := range ids(func(it dto.UsageQueryItem) []string { return it.SubscriptionIDs }) {
+		for _, id := range ids(func(it dto.UsageAnalyticsItem) []string { return it.SubscriptionIDs }) {
 			if sub := in.subByID[id]; sub != nil {
 				resp.Subscriptions[id] = &dto.SubscriptionResponse{Subscription: sub}
 			}
@@ -707,7 +707,7 @@ func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []dto.
 	}
 	if want[dto.UsageExpandPlan] {
 		resp.Plans = map[string]*dto.PlanResponse{}
-		if planIDs := ids(func(it dto.UsageQueryItem) []string { return it.PlanIDs }); len(planIDs) > 0 {
+		if planIDs := ids(func(it dto.UsageAnalyticsItem) []string { return it.PlanIDs }); len(planIDs) > 0 {
 			plans, err := s.PlanRepo.ListByIDs(ctx, planIDs)
 			if err != nil {
 				return err
@@ -719,7 +719,7 @@ func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []dto.
 	}
 	if want[dto.UsageExpandAddon] {
 		resp.Addons = map[string]*dto.AddonResponse{}
-		if addonIDs := ids(func(it dto.UsageQueryItem) []string { return it.AddonIDs }); len(addonIDs) > 0 {
+		if addonIDs := ids(func(it dto.UsageAnalyticsItem) []string { return it.AddonIDs }); len(addonIDs) > 0 {
 			filter := types.NewNoLimitAddonFilter()
 			filter.AddonIDs = addonIDs
 			addons, err := s.AddonRepo.List(ctx, filter)

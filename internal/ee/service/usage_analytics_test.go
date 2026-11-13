@@ -215,8 +215,8 @@ func (s *UsageAnalyticsSuite) usage(meterID, customerID string, ts time.Time, qt
 // supportedMeters are the fixture's flat-priced meters; m_tiered makes an unfiltered request fail.
 var supportedMeters = []string{"m_tokens", "m_calls", "m_scaled"}
 
-func (s *UsageAnalyticsSuite) query(mutate func(r *dto.UsageQueryRequest)) (*dto.UsageQueryResponse, error) {
-	req := &dto.UsageQueryRequest{
+func (s *UsageAnalyticsSuite) query(mutate func(r *dto.UsageAnalyticsRequest)) (*dto.UsageAnalyticsResponse, error) {
+	req := &dto.UsageAnalyticsRequest{
 		ExternalCustomerID: "acme",
 		StartTime:          lo.ToPtr(queryOct1),
 		EndTime:            lo.ToPtr(queryNov1),
@@ -231,12 +231,12 @@ func (s *UsageAnalyticsSuite) query(mutate func(r *dto.UsageQueryRequest)) (*dto
 	return s.svc.GetBreakdown(s.GetContext(), req)
 }
 
-func amountByGroup(resp *dto.UsageQueryResponse, key string) map[string]string {
-	return lo.SliceToMap(resp.Items, func(i dto.UsageQueryItem) (string, string) { return i.Group[key], i.Amount })
+func amountByGroup(resp *dto.UsageAnalyticsResponse, key string) map[string]string {
+	return lo.SliceToMap(resp.Items, func(i dto.UsageAnalyticsItem) (string, string) { return i.Group[key], i.Amount })
 }
 
 func (s *UsageAnalyticsSuite) TestPriceChangeAttributesEachEventAtItsOwnPrice() {
-	resp, err := s.query(func(r *dto.UsageQueryRequest) { r.MeterIDs = []string{"m_tokens"} })
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.MeterIDs = []string{"m_tokens"} })
 	s.NoError(err)
 	s.Equal(map[string]string{"alice": "7000.00", "bob": "6000.00"}, amountByGroup(resp, "properties.user"))
 	s.Equal("13000.00", resp.Totals.Amount)
@@ -260,7 +260,7 @@ func (s *UsageAnalyticsSuite) assertLinesEqualInvoice(meterIDs ...string) int {
 		}
 	}
 
-	resp, err := s.query(func(r *dto.UsageQueryRequest) {
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
 		r.GroupBy = []string{"sub_line_item_id"}
 		r.Expand = []dto.UsageExpand{dto.UsageExpandPrice}
 		if len(meterIDs) > 0 {
@@ -292,14 +292,14 @@ func (s *UsageAnalyticsSuite) assertUnsupported(err error, want map[string]strin
 }
 
 func (s *UsageAnalyticsSuite) TestGroupByDefaultsToMeter() {
-	resp, err := s.query(func(r *dto.UsageQueryRequest) { r.GroupBy = nil })
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.GroupBy = nil })
 	s.NoError(err)
 	// 13,000 tokens, 4 calls × 0.01, 40 scaled × 0.5.
 	s.Equal(map[string]string{"m_tokens": "13000.00", "m_calls": "0.04", "m_scaled": "20.00"}, amountByGroup(resp, "meter_id"))
 }
 
 func (s *UsageAnalyticsSuite) TestUnsupportedMeterRejectsTheRequest() {
-	_, err := s.query(func(r *dto.UsageQueryRequest) { r.MeterIDs = nil })
+	_, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.MeterIDs = nil })
 	s.assertUnsupported(err, map[string]string{"m_tiered": excludedNotFlatPrice})
 
 	resp, err := s.query(nil)
@@ -328,7 +328,7 @@ func (s *UsageAnalyticsSuite) TestEntitlementsAndGrantsExcludeTheirMeters() {
 	_, err = s.query(nil)
 	s.assertUnsupported(err, map[string]string{"m_calls": excludedEntitlement, "m_scaled": excludedEntitlement})
 
-	resp, err := s.query(func(r *dto.UsageQueryRequest) { r.MeterIDs = []string{"m_tokens"} })
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.MeterIDs = []string{"m_tokens"} })
 	s.NoError(err)
 	s.Equal("13000.00", resp.Totals.Amount)
 }
@@ -359,14 +359,14 @@ func (s *UsageAnalyticsSuite) TestSubscriptionGrantExcludesTheLinesBillingLowere
 	_, err = s.query(nil)
 	s.assertUnsupported(err, map[string]string{"m_scaled": excludedEntitlement, "m_tokens": excludedEntitlement})
 
-	resp, err := s.query(func(r *dto.UsageQueryRequest) { r.MeterIDs = []string{"m_calls"} })
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.MeterIDs = []string{"m_calls"} })
 	s.NoError(err)
 	s.Equal("0.04", resp.Totals.Amount)
 	s.Equal(1, s.assertLinesEqualInvoice("m_calls"), "the calls line equals its invoice line")
 }
 
 func (s *UsageAnalyticsSuite) TestChildSeesOnlyItsOwnEventsAtTheParentsPrices() {
-	resp, err := s.query(func(r *dto.UsageQueryRequest) {
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
 		r.ExternalCustomerID = "acme_child"
 		r.Expand = []dto.UsageExpand{dto.UsageExpandSubscription, dto.UsageExpandPlan}
 	})
@@ -381,7 +381,7 @@ func (s *UsageAnalyticsSuite) TestPausedChildHasNoAmountAsTheParentInvoiceSkipsI
 	child.SubscriptionStatus = types.SubscriptionStatusPaused
 	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), &child))
 
-	resp, err := s.query(func(r *dto.UsageQueryRequest) { r.ExternalCustomerID = "acme_child" })
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.ExternalCustomerID = "acme_child" })
 	s.NoError(err)
 	s.Empty(resp.Items)
 	s.Equal("0.00", resp.Totals.Amount)
@@ -407,8 +407,8 @@ func (s *UsageAnalyticsSuite) TestPercentageCouponsDiscountEachLineAsTheInvoiceD
 	addCoupon("c_sub10", types.CouponTypePercentage, types.CouponCadenceRepeated, "10", nil)
 	addCoupon("c_fixed5", types.CouponTypeFixed, types.CouponCadenceForever, "5", nil)
 
-	tokens := func(apply bool) *dto.UsageQueryResponse {
-		resp, err := s.query(func(r *dto.UsageQueryRequest) {
+	tokens := func(apply bool) *dto.UsageAnalyticsResponse {
+		resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
 			r.MeterIDs = []string{"m_tokens"}
 			r.ApplyDiscounts = apply
 		})
@@ -455,13 +455,13 @@ func (s *UsageAnalyticsSuite) TestOverlappingSubscriptionsCountEachEventOnce() {
 	}}))
 
 	// 15 days inside both subscriptions.
-	window := func(r *dto.UsageQueryRequest) {
+	window := func(r *dto.UsageAnalyticsRequest) {
 		r.MeterIDs = []string{"m_calls"}
 		r.StartTime, r.EndTime = lo.ToPtr(queryOct1), lo.ToPtr(queryOct15)
 	}
 
 	// Monthly: acme's 3 calls + the child's 1 at $0.01; quarterly: acme's 3 calls at $0.02.
-	resp, err := s.query(func(r *dto.UsageQueryRequest) { window(r); r.GroupBy = []string{"meter_id"} })
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { window(r); r.GroupBy = []string{"meter_id"} })
 	s.NoError(err)
 	s.Require().Len(resp.Items, 1)
 	row := resp.Items[0]
@@ -471,18 +471,18 @@ func (s *UsageAnalyticsSuite) TestOverlappingSubscriptionsCountEachEventOnce() {
 	s.Equal([]string{"sub_parent", "sub_quarterly"}, row.SubscriptionIDs)
 	s.Equal("4", resp.Totals.Usage)
 
-	resp, err = s.query(func(r *dto.UsageQueryRequest) { window(r); r.GroupBy = []string{"sub_line_item_id"} })
+	resp, err = s.query(func(r *dto.UsageAnalyticsRequest) { window(r); r.GroupBy = []string{"sub_line_item_id"} })
 	s.NoError(err)
-	byLine := lo.SliceToMap(resp.Items, func(i dto.UsageQueryItem) (string, [2]string) {
+	byLine := lo.SliceToMap(resp.Items, func(i dto.UsageAnalyticsItem) (string, [2]string) {
 		return i.Group["sub_line_item_id"], [2]string{i.Amount, i.Usage}
 	})
 	s.Equal(map[string][2]string{"li_calls": {"0.04", "4"}, "li_calls_q": {"0.06", "3"}}, byLine, "split by line, each line counts its own events")
 	s.Equal("7", resp.Totals.Usage, "totals add up the lines")
 
-	resp, err = s.query(func(r *dto.UsageQueryRequest) {
+	resp, err = s.query(func(r *dto.UsageAnalyticsRequest) {
 		window(r)
 		r.GroupBy = []string{"meter_id"}
-		r.Filters = []dto.UsageQueryFilter{{Key: "sub_line_item_id", Op: "in", Values: []string{"li_calls_q"}}}
+		r.Filters = []dto.UsageAnalyticsFilter{{Key: "sub_line_item_id", Op: "in", Values: []string{"li_calls_q"}}}
 	})
 	s.NoError(err)
 	s.Require().Len(resp.Items, 1)
@@ -490,18 +490,18 @@ func (s *UsageAnalyticsSuite) TestOverlappingSubscriptionsCountEachEventOnce() {
 }
 
 func (s *UsageAnalyticsSuite) TestSourcesKeepOnlyTheirEvents() {
-	resp, err := s.query(func(r *dto.UsageQueryRequest) { r.Sources = []string{"api"} })
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.Sources = []string{"api"} })
 	s.NoError(err)
 	s.Equal("13020.04", resp.Totals.Amount, "every fixture event comes from api")
 
-	resp, err = s.query(func(r *dto.UsageQueryRequest) { r.Sources = []string{"sdk"} })
+	resp, err = s.query(func(r *dto.UsageAnalyticsRequest) { r.Sources = []string{"sdk"} })
 	s.NoError(err)
 	s.Equal("0.00", resp.Totals.Amount)
 	s.Empty(resp.Items)
 }
 
 func (s *UsageAnalyticsSuite) TestRowsAlwaysCarryIDsAndExpandAddsObjectMaps() {
-	resp, err := s.query(func(r *dto.UsageQueryRequest) {
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
 		r.MeterIDs = []string{"m_tokens"}
 		r.GroupBy = []string{"meter_id"}
 	})
@@ -514,7 +514,7 @@ func (s *UsageAnalyticsSuite) TestRowsAlwaysCarryIDsAndExpandAddsObjectMaps() {
 	s.Nil(resp.Prices)
 	s.Nil(resp.Plans)
 
-	resp, err = s.query(func(r *dto.UsageQueryRequest) {
+	resp, err = s.query(func(r *dto.UsageAnalyticsRequest) {
 		r.MeterIDs = []string{"m_tokens"}
 		r.GroupBy = []string{"meter_id"}
 		r.Expand = []dto.UsageExpand{dto.UsageExpandPrice, dto.UsageExpandPlan, dto.UsageExpandAddon,
@@ -538,7 +538,7 @@ func (s *UsageAnalyticsSuite) TestCancelledChildKeepsTheAmountOfPeriodsItsParent
 		s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), &child))
 	}
 	tokens := func(customer string) map[string]string {
-		resp, err := s.query(func(r *dto.UsageQueryRequest) {
+		resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
 			r.ExternalCustomerID = customer
 			r.MeterIDs = []string{"m_tokens"}
 		})
@@ -559,10 +559,10 @@ func (s *UsageAnalyticsSuite) TestCancelledChildKeepsTheAmountOfPeriodsItsParent
 }
 
 func (s *UsageAnalyticsSuite) TestColumnsMetricsAndPaging() {
-	resp, err := s.query(func(r *dto.UsageQueryRequest) {
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
 		r.GroupBy = []string{"meter_id"}
 		r.Columns = "properties.user"
-		r.Metrics = []dto.UsageQueryMetric{{Type: "distinct", Key: "properties.user"}}
+		r.Metrics = []dto.UsageAnalyticsMetric{{Type: "distinct", Key: "properties.user"}}
 		r.Limit = 1
 		r.Offset = 1
 	})
@@ -575,11 +575,11 @@ func (s *UsageAnalyticsSuite) TestColumnsMetricsAndPaging() {
 	row := resp.Items[0]
 	s.Equal("m_scaled", row.Group["meter_id"])
 	s.Equal(map[string]dto.UsageColumn{"alice": {Amount: "20.00"}}, row.Columns)
-	s.Equal(dto.UsageQueryValue{Count: 1, Values: []string{"alice"}}, row.Metrics["distinct:properties.user"])
+	s.Equal(dto.UsageAnalyticsValue{Count: 1, Values: []string{"alice"}}, row.Metrics["distinct:properties.user"])
 }
 
 func (s *UsageAnalyticsSuite) TestWeeklyPointsListEveryWindow() {
-	resp, err := s.query(func(r *dto.UsageQueryRequest) {
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
 		r.MeterIDs = []string{"m_tokens"}
 		r.WindowSize = types.WindowSizeWeek
 	})
@@ -590,7 +590,7 @@ func (s *UsageAnalyticsSuite) TestWeeklyPointsListEveryWindow() {
 		return lo.Map(ps, func(p dto.UsagePoint, _ int) point { return point{p.Timestamp.Format(time.DateOnly), p.Amount} })
 	}
 	// Weeks start on Sunday; Oct 1 2026 is a Thursday, so the first window starts Sep 27.
-	byUser := lo.SliceToMap(resp.Items, func(i dto.UsageQueryItem) (string, []point) { return i.Group["properties.user"], points(i.Points) })
+	byUser := lo.SliceToMap(resp.Items, func(i dto.UsageAnalyticsItem) (string, []point) { return i.Group["properties.user"], points(i.Points) })
 	s.Equal([]point{{"2026-09-27", "0.00"}, {"2026-10-04", "2000.00"}, {"2026-10-11", "0.00"}, {"2026-10-18", "5000.00"}, {"2026-10-25", "0.00"}}, byUser["alice"])
 	s.Equal([]point{{"2026-09-27", "0.00"}, {"2026-10-04", "0.00"}, {"2026-10-11", "6000.00"}, {"2026-10-18", "0.00"}, {"2026-10-25", "0.00"}}, byUser["bob"])
 }
@@ -598,19 +598,19 @@ func (s *UsageAnalyticsSuite) TestWeeklyPointsListEveryWindow() {
 func (s *UsageAnalyticsSuite) TestRejectedRequests() {
 	tests := []struct {
 		name   string
-		mutate func(r *dto.UsageQueryRequest)
+		mutate func(r *dto.UsageAnalyticsRequest)
 	}{
-		{"usage sort across meters", func(r *dto.UsageQueryRequest) { r.Sort = &dto.UsageQuerySort{Field: "usage"} }},
-		{"unknown metric", func(r *dto.UsageQueryRequest) {
-			r.Metrics = []dto.UsageQueryMetric{{Type: "percentile", Key: "properties.user"}}
+		{"usage sort across meters", func(r *dto.UsageAnalyticsRequest) { r.Sort = &dto.UsageAnalyticsSort{Field: "usage"} }},
+		{"unknown metric", func(r *dto.UsageAnalyticsRequest) {
+			r.Metrics = []dto.UsageAnalyticsMetric{{Type: "percentile", Key: "properties.user"}}
 		}},
-		{"unknown key", func(r *dto.UsageQueryRequest) { r.GroupBy = []string{"customer"} }},
-		{"only start_time", func(r *dto.UsageQueryRequest) { r.EndTime = nil }},
-		{"unknown timezone", func(r *dto.UsageQueryRequest) { r.Timezone = "Mars/Base" }},
-		{"unknown expand", func(r *dto.UsageQueryRequest) { r.Expand = []dto.UsageExpand{"wallet"} }},
-		{"line item columns", func(r *dto.UsageQueryRequest) { r.Columns = "sub_line_item_id" }},
-		{"hourly windows", func(r *dto.UsageQueryRequest) { r.WindowSize = types.WindowSizeHour }},
-		{"more than 400 daily windows", func(r *dto.UsageQueryRequest) {
+		{"unknown key", func(r *dto.UsageAnalyticsRequest) { r.GroupBy = []string{"customer"} }},
+		{"only start_time", func(r *dto.UsageAnalyticsRequest) { r.EndTime = nil }},
+		{"unknown timezone", func(r *dto.UsageAnalyticsRequest) { r.Timezone = "Mars/Base" }},
+		{"unknown expand", func(r *dto.UsageAnalyticsRequest) { r.Expand = []dto.UsageExpand{"wallet"} }},
+		{"line item columns", func(r *dto.UsageAnalyticsRequest) { r.Columns = "sub_line_item_id" }},
+		{"hourly windows", func(r *dto.UsageAnalyticsRequest) { r.WindowSize = types.WindowSizeHour }},
+		{"more than 400 daily windows", func(r *dto.UsageAnalyticsRequest) {
 			r.WindowSize = types.WindowSizeDay
 			r.StartTime = lo.ToPtr(queryOct1.AddDate(-2, 0, 0))
 		}},
@@ -626,17 +626,17 @@ func (s *UsageAnalyticsSuite) TestRejectedRequests() {
 func (s *UsageAnalyticsSuite) TestUnsupportedKeyNamesTheSupportedOnes() {
 	tests := []struct {
 		name   string
-		mutate func(r *dto.UsageQueryRequest)
+		mutate func(r *dto.UsageAnalyticsRequest)
 		want   string
 	}{
-		{"group_by", func(r *dto.UsageQueryRequest) { r.GroupBy = []string{"customer"} },
+		{"group_by", func(r *dto.UsageAnalyticsRequest) { r.GroupBy = []string{"customer"} },
 			`unsupported group_by "customer"; supported: properties.<name>, source, meter_id, feature_id, sub_line_item_id`},
-		{"month in group_by", func(r *dto.UsageQueryRequest) { r.GroupBy = []string{"month"} },
+		{"month in group_by", func(r *dto.UsageAnalyticsRequest) { r.GroupBy = []string{"month"} },
 			`unsupported group_by "month"; supported: properties.<name>, source, meter_id, feature_id, sub_line_item_id`},
-		{"columns", func(r *dto.UsageQueryRequest) { r.Columns = "feature_id" },
+		{"columns", func(r *dto.UsageAnalyticsRequest) { r.Columns = "feature_id" },
 			`unsupported columns "feature_id"; supported: properties.<name>, source, meter_id, month`},
-		{"filters", func(r *dto.UsageQueryRequest) {
-			r.Filters = []dto.UsageQueryFilter{{Key: "month", Op: "in", Values: []string{"2026-10"}}}
+		{"filters", func(r *dto.UsageAnalyticsRequest) {
+			r.Filters = []dto.UsageAnalyticsFilter{{Key: "month", Op: "in", Values: []string{"2026-10"}}}
 		}, `unsupported filters "month"; supported: properties.<name>, source, meter_id, feature_id, sub_line_item_id`},
 	}
 	for _, tt := range tests {
@@ -649,10 +649,10 @@ func (s *UsageAnalyticsSuite) TestUnsupportedKeyNamesTheSupportedOnes() {
 }
 
 func (s *UsageAnalyticsSuite) TestFilterOnMissingValueAndSingleMeterUsageSort() {
-	resp, err := s.query(func(r *dto.UsageQueryRequest) {
+	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
 		r.MeterIDs = []string{"m_calls"}
-		r.Filters = []dto.UsageQueryFilter{{Key: "properties.user", Op: "in", Values: []string{dto.UsageNoneValue}}}
-		r.Sort = &dto.UsageQuerySort{Field: "usage"}
+		r.Filters = []dto.UsageAnalyticsFilter{{Key: "properties.user", Op: "in", Values: []string{dto.UsageNoneValue}}}
+		r.Sort = &dto.UsageAnalyticsSort{Field: "usage"}
 	})
 	s.NoError(err)
 	s.Equal(map[string]string{dto.UsageNoneValue: "0.01"}, amountByGroup(resp, "properties.user"))

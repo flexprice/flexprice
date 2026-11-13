@@ -30,7 +30,7 @@ func NewAnalyticsHandler(svc service.AnalyticsService, revenueSvc interfaces.Rev
 func (h *AnalyticsHandler) QueryUsage(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	var req dto.UsageQueryRequest
+	var req dto.UsageAnalyticsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(ierr.WithError(err).
 			WithHint("Please check the request payload").

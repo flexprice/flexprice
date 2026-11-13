@@ -36,52 +36,52 @@ const (
 	UsageExpandFeature      UsageExpand = "feature"
 )
 
-// UsageQueryRequest is the body of POST /usage/analytics.
-type UsageQueryRequest struct {
-	ExternalCustomerID string             `json:"external_customer_id" binding:"required"`
-	StartTime          *time.Time         `json:"start_time,omitempty"`
-	EndTime            *time.Time         `json:"end_time,omitempty"`
-	Timezone           string             `json:"timezone,omitempty"`
-	MeterIDs           []string           `json:"meter_ids,omitempty"`
-	FeatureIDs         []string           `json:"feature_ids,omitempty"`
-	Sources            []string           `json:"sources,omitempty"`  // event sources to keep; same as a source "in" filter
-	GroupBy            []string           `json:"group_by,omitempty"` // defaults to meter_id
-	Columns            string             `json:"columns,omitempty"`
-	Filters            []UsageQueryFilter `json:"filters,omitempty"`
-	Search             string             `json:"search,omitempty"`
-	Sort               *UsageQuerySort    `json:"sort,omitempty"`
-	Metrics            []UsageQueryMetric `json:"metrics,omitempty"`
-	Expand             []UsageExpand      `json:"expand,omitempty"`
-	Deduplicate        bool               `json:"deduplicate,omitempty"`
-	WindowSize         types.WindowSize   `json:"window_size,omitempty"`
+// UsageAnalyticsRequest is the body of POST /usage/analytics.
+type UsageAnalyticsRequest struct {
+	ExternalCustomerID string                 `json:"external_customer_id" binding:"required"`
+	StartTime          *time.Time             `json:"start_time,omitempty"`
+	EndTime            *time.Time             `json:"end_time,omitempty"`
+	Timezone           string                 `json:"timezone,omitempty"`
+	MeterIDs           []string               `json:"meter_ids,omitempty"`
+	FeatureIDs         []string               `json:"feature_ids,omitempty"`
+	Sources            []string               `json:"sources,omitempty"`  // event sources to keep; same as a source "in" filter
+	GroupBy            []string               `json:"group_by,omitempty"` // defaults to meter_id
+	Columns            string                 `json:"columns,omitempty"`
+	Filters            []UsageAnalyticsFilter `json:"filters,omitempty"`
+	Search             string                 `json:"search,omitempty"`
+	Sort               *UsageAnalyticsSort    `json:"sort,omitempty"`
+	Metrics            []UsageAnalyticsMetric `json:"metrics,omitempty"`
+	Expand             []UsageExpand          `json:"expand,omitempty"`
+	Deduplicate        bool                   `json:"deduplicate,omitempty"`
+	WindowSize         types.WindowSize       `json:"window_size,omitempty"`
 	// ApplyDiscounts prices each line after its percentage coupons (forever or repeated), as the invoice does.
 	ApplyDiscounts bool `json:"apply_discounts,omitempty"`
 	Limit          int  `json:"limit,omitempty"`
 	Offset         int  `json:"offset,omitempty"`
 }
 
-// UsageQueryFilter keeps (in) or drops (not_in) events by a key's values; UsageNoneValue matches events without the key.
-type UsageQueryFilter struct {
+// UsageAnalyticsFilter keeps (in) or drops (not_in) events by a key's values; UsageNoneValue matches events without the key.
+type UsageAnalyticsFilter struct {
 	Key    string   `json:"key"`
 	Op     string   `json:"op"`
 	Values []string `json:"values"`
 }
 
-// UsageQuerySort orders rows. Order is "desc" (default) or "asc"; Column is the column value for field "column".
-type UsageQuerySort struct {
+// UsageAnalyticsSort orders rows. Order is "desc" (default) or "asc"; Column is the column value for field "column".
+type UsageAnalyticsSort struct {
 	Field  string `json:"field"`
 	Column string `json:"column,omitempty"`
 	Order  string `json:"order,omitempty"`
 }
 
-// UsageQueryMetric is an extra per-row aggregate from a fixed list, e.g. {"type": "distinct", "key": "properties.owner"}.
-type UsageQueryMetric struct {
+// UsageAnalyticsMetric is an extra per-row aggregate from a fixed list, e.g. {"type": "distinct", "key": "properties.owner"}.
+type UsageAnalyticsMetric struct {
 	Type string `json:"type"`
 	Key  string `json:"key"`
 }
 
 // ToQuery validates the request and converts it to a query; now fills the default range.
-func (r *UsageQueryRequest) ToQuery(now time.Time) (*usageanalytics.Query, error) {
+func (r *UsageAnalyticsRequest) ToQuery(now time.Time) (*usageanalytics.Query, error) {
 	q := &usageanalytics.Query{
 		ExternalCustomerIDs: []string{r.ExternalCustomerID},
 		MeterIDs:            lo.Uniq(r.MeterIDs),
@@ -205,12 +205,12 @@ func usageValidationErr(format string, args ...any) error {
 	return ierr.NewErrorf(format, args...).Mark(ierr.ErrValidation)
 }
 
-// UsageQueryResponse is one page of usage rows.
-type UsageQueryResponse struct {
-	Currency     string           `json:"currency"`
-	ColumnValues []string         `json:"column_values,omitempty"`
-	Totals       UsageQueryTotals `json:"totals"`
-	Items        []UsageQueryItem `json:"items"`
+// UsageAnalyticsResponse is one page of usage rows.
+type UsageAnalyticsResponse struct {
+	Currency     string               `json:"currency"`
+	ColumnValues []string             `json:"column_values,omitempty"`
+	Totals       UsageAnalyticsTotals `json:"totals"`
+	Items        []UsageAnalyticsItem `json:"items"`
 	// Pagination.Total counts rows across all pages; Offset echoes the request.
 	Pagination types.PaginationResponse `json:"pagination"`
 	// UnappliedCouponIDs are coupons active in the range that apply_discounts cannot spread over events
@@ -233,27 +233,27 @@ type UsageAmounts struct {
 	Amount   string `json:"amount"`
 }
 
-// UsageQueryTotals are summed over every row, not just the page.
-type UsageQueryTotals struct {
+// UsageAnalyticsTotals are summed over every row, not just the page.
+type UsageAnalyticsTotals struct {
 	UsageAmounts
 	Usage      string                 `json:"usage"`
 	EventCount uint64                 `json:"event_count"`
 	Columns    map[string]UsageColumn `json:"columns,omitempty"`
 }
 
-// UsageQueryItem is one row.
-type UsageQueryItem struct {
+// UsageAnalyticsItem is one row.
+type UsageAnalyticsItem struct {
 	Group map[string]string `json:"group"`
 	UsageAmounts
-	Usage           string                     `json:"usage"`
-	EventCount      uint64                     `json:"event_count"`
-	Columns         map[string]UsageColumn     `json:"columns,omitempty"`
-	Metrics         map[string]UsageQueryValue `json:"metrics,omitempty"`
-	PriceIDs        []string                   `json:"price_ids,omitempty"`
-	PlanIDs         []string                   `json:"plan_ids,omitempty"`
-	AddonIDs        []string                   `json:"addon_ids,omitempty"`
-	SubscriptionIDs []string                   `json:"subscription_ids,omitempty"`
-	Points          []UsagePoint               `json:"points,omitempty"`
+	Usage           string                         `json:"usage"`
+	EventCount      uint64                         `json:"event_count"`
+	Columns         map[string]UsageColumn         `json:"columns,omitempty"`
+	Metrics         map[string]UsageAnalyticsValue `json:"metrics,omitempty"`
+	PriceIDs        []string                       `json:"price_ids,omitempty"`
+	PlanIDs         []string                       `json:"plan_ids,omitempty"`
+	AddonIDs        []string                       `json:"addon_ids,omitempty"`
+	SubscriptionIDs []string                       `json:"subscription_ids,omitempty"`
+	Points          []UsagePoint                   `json:"points,omitempty"`
 }
 
 // UsagePoint is one time window, starting at Timestamp; every window in the range is listed, empty ones at zero.
@@ -268,8 +268,8 @@ type UsageColumn struct {
 	Amount string `json:"amount"`
 }
 
-// UsageQueryValue is one metric of a row; Values is set when there are at most five.
-type UsageQueryValue struct {
+// UsageAnalyticsValue is one metric of a row; Values is set when there are at most five.
+type UsageAnalyticsValue struct {
 	Count  uint64   `json:"count"`
 	Values []string `json:"values,omitempty"`
 }
