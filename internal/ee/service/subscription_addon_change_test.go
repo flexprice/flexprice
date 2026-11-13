@@ -264,6 +264,31 @@ func (s *SubscriptionServiceSuite) TestAddonAttach_PriceOverride_BillsTheOverrid
 		invoices[0].AmountDue, listQuote)
 }
 
+func (s *SubscriptionServiceSuite) TestAddonAttach_PriceOverride_PreviewQuotesTheOverriddenAmount() {
+	ctx := s.GetContext()
+	sub := s.monthlyPeriodSubscription()
+
+	s.seedFixedPriceAddon("addon_override_preview", decimal.NewFromInt(60), types.InvoiceCadenceAdvance)
+
+	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	add := s.addEntry("addon_override_preview", at)
+	add.Request.OverrideLineItems = []dto.OverrideLineItemRequest{{
+		PriceID: "price_addon_override_preview",
+		Amount:  lo.ToPtr(decimal.NewFromInt(10)),
+	}}
+
+	previewed, _, err := s.addonChangeService().Preview(ctx, AddonChangeRequest{Subscription: sub, Adds: []AddonAdd{add}})
+	s.Require().NoError(err)
+
+	_, err = s.attachOne(sub, add.Request, nil)
+	s.Require().NoError(err)
+
+	invoices := s.oneOffInvoicesFor(sub.ID)
+	s.Require().Len(invoices, 1)
+	s.True(invoices[0].AmountDue.Equal(previewed.getQuote().NetAmount()),
+		"preview quoted %s, execute billed %s", previewed.getQuote().NetAmount(), invoices[0].AmountDue)
+}
+
 // -----------------------------------------------------------------------------
 // grant windows — what a per-addon pass got wrong
 // -----------------------------------------------------------------------------
