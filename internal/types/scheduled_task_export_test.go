@@ -2,6 +2,7 @@ package types
 
 import (
 	"testing"
+	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
@@ -28,6 +29,11 @@ func TestExportScheduleValidate(t *testing.T) {
 		{"bad tz", ScheduledTaskIntervalDaily, ExportSchedule{Timezone: "Mars/Base"}, true},
 		{"empty tz", ScheduledTaskIntervalDaily, ExportSchedule{}, true},
 		{"local tz", ScheduledTaskIntervalDaily, ExportSchedule{Timezone: "Local"}, true},
+		{"daily in dst gap", ScheduledTaskIntervalDaily, ExportSchedule{Hour: 2, Minute: 30, Timezone: "America/Los_Angeles"}, true},
+		{"weekly in dst gap", ScheduledTaskIntervalWeekly, ExportSchedule{Hour: 2, DayOfWeek: intPtr(0), Timezone: "America/Los_Angeles"}, true},
+		{"daily outside dst gap", ScheduledTaskIntervalDaily, ExportSchedule{Hour: 3, Timezone: "America/Los_Angeles"}, false},
+		{"daily repeated hour ok", ScheduledTaskIntervalDaily, ExportSchedule{Hour: 1, Minute: 30, Timezone: "America/Los_Angeles"}, false},
+		{"hourly ignores dst gap", ScheduledTaskIntervalHourly, ExportSchedule{Hour: 2, Minute: 30, Timezone: "America/Los_Angeles"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -62,6 +68,39 @@ func TestValidateExportSchedule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := ValidateExportSchedule(tt.interval, tt.s); (err != nil) != tt.wantErr {
 				t.Fatalf("err=%v wantErr=%v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSkippedByDST(t *testing.T) {
+	la, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kolkata, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name   string
+		loc    *time.Location
+		hour   int
+		minute int
+		want   bool
+	}{
+		{"la 02:00 spring forward", la, 2, 0, true},
+		{"la 02:59 spring forward", la, 2, 59, true},
+		{"la 03:00", la, 3, 0, false},
+		{"la 01:59", la, 1, 59, false},
+		{"kolkata no dst", kolkata, 2, 30, false},
+		{"utc", time.UTC, 2, 30, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := skippedByDST(tt.loc, tt.hour, tt.minute, from); got != tt.want {
+				t.Fatalf("got %v want %v", got, tt.want)
 			}
 		})
 	}

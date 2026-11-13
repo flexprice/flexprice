@@ -3,6 +3,7 @@ package types
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/validator"
 )
@@ -71,9 +72,15 @@ func (s *ExportSchedule) Validate(interval ScheduledTaskInterval) error {
 			WithHint("Minute must be between 0 and 59").
 			Mark(ierr.ErrValidation)
 	}
-	if _, err := s.Location(); err != nil {
+	loc, err := s.Location()
+	if err != nil {
 		return ierr.NewError("invalid schedule timezone").
 			WithHint("Timezone must be a valid IANA name such as Asia/Kolkata").
+			Mark(ierr.ErrValidation)
+	}
+	if interval != ScheduledTaskIntervalHourly && skippedByDST(loc, s.Hour, s.Minute, clock.Now()) {
+		return ierr.NewError("schedule time is skipped by daylight saving").
+			WithHintf("%02d:%02d does not exist on some days in %s. Pick a time outside the clock change.", s.Hour, s.Minute, s.Timezone).
 			Mark(ierr.ErrValidation)
 	}
 	if interval == ScheduledTaskIntervalWeekly {
@@ -99,6 +106,18 @@ func (s *ExportSchedule) Validate(interval ScheduledTaskInterval) error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// skippedByDST reports a local time missing within two years.
+func skippedByDST(loc *time.Location, hour, minute int, from time.Time) bool {
+	day := from.In(loc)
+	for i := 0; i < 2*366; i++ {
+		t := time.Date(day.Year(), day.Month(), day.Day()+i, hour, minute, 0, 0, loc)
+		if t.Hour() != hour || t.Minute() != minute {
+			return true
+		}
+	}
+	return false
 }
 
 // Location resolves the timezone.
