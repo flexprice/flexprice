@@ -399,7 +399,7 @@ func (s *PortalWalletSuite) TestAutoTopupRequiresWalletOwnership() {
 
 	_, err := s.svc.UpdateAutoTopup(other, s.walletID, &dto.PortalUpdateAutoTopupRequest{})
 	s.Error(err)
-	s.True(ierr.IsPermissionDenied(err))
+	s.True(ierr.IsNotFound(err))
 }
 
 // A customer-initiated top-up must never grant credits before the invoice is paid,
@@ -437,4 +437,44 @@ func (s *PortalWalletSuite) enableAutoCompletePurchasedCredit() {
 	}
 	setting.Status = types.StatusPublished
 	s.Require().NoError(s.GetStores().SettingsRepo.Create(s.ctx, setting))
+}
+
+func (s *PortalWalletSuite) TestWalletReadsAuthorizeBeforeCompute() {
+	other := &wallet.Wallet{
+		ID:                  "wallet_other",
+		CustomerID:          "cust_other",
+		Currency:            "usd",
+		Balance:             decimal.NewFromInt(5),
+		CreditBalance:       decimal.NewFromInt(5),
+		ConversionRate:      decimal.NewFromInt(1),
+		TopupConversionRate: decimal.NewFromInt(1),
+		WalletStatus:        types.WalletStatusActive,
+		BaseModel:           types.GetDefaultBaseModel(s.ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.ctx, other))
+
+	tests := []struct {
+		name     string
+		walletID string
+		wantErr  bool
+	}{
+		{"own wallet", s.walletID, false},
+		{"other customer's wallet", "wallet_other", true},
+		{"missing wallet", "wallet_missing", true},
+	}
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			bal, err := s.svc.GetWallet(s.ctx, tc.walletID)
+			txs, txErr := s.svc.GetWalletTransactions(s.ctx, tc.walletID, types.NewWalletTransactionFilter())
+			if tc.wantErr {
+				s.True(ierr.IsNotFound(err), "got %v", err)
+				s.Nil(bal)
+				s.True(ierr.IsNotFound(txErr), "got %v", txErr)
+				s.Nil(txs)
+				return
+			}
+			s.NoError(err)
+			s.NoError(txErr)
+		})
+	}
 }
