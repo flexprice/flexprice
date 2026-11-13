@@ -532,7 +532,6 @@ func (s *UsageQuerySuite) TestWeeklyPointsListEveryWindow() {
 	byUser := lo.SliceToMap(resp.Items, func(i dto.UsageQueryItem) (string, []point) { return i.Group["properties.user"], points(i.Points) })
 	s.Equal([]point{{"2026-09-27", "0.00"}, {"2026-10-04", "2000.00"}, {"2026-10-11", "0.00"}, {"2026-10-18", "5000.00"}, {"2026-10-25", "0.00"}}, byUser["alice"])
 	s.Equal([]point{{"2026-09-27", "0.00"}, {"2026-10-04", "0.00"}, {"2026-10-11", "6000.00"}, {"2026-10-18", "0.00"}, {"2026-10-25", "0.00"}}, byUser["bob"])
-	s.Equal([]point{{"2026-09-27", "0.00"}, {"2026-10-04", "2000.00"}, {"2026-10-11", "6000.00"}, {"2026-10-18", "5000.00"}, {"2026-10-25", "0.00"}}, points(resp.Totals.Points))
 }
 
 func (s *UsageQuerySuite) TestRejectedRequests() {

@@ -244,8 +244,9 @@ func TestUsageBreakdown_MatchesReference_Integration(t *testing.T) {
 			TenantID: clean.tenantID, EnvironmentID: clean.envID, Query: q, Lines: clean.lines,
 		})
 		require.NoError(t, err)
-		require.NotEmpty(t, got.Totals.Points)
-		for _, row := range append(got.Items, got.Totals) {
+		require.NotEmpty(t, got.Items)
+		for _, row := range got.Items {
+			require.NotEmpty(t, row.Points)
 			sum := decimal.Zero
 			for _, p := range row.Points {
 				require.Equal(t, time.Sunday, p.WindowStart.Weekday(), "window %s", p.WindowStart)

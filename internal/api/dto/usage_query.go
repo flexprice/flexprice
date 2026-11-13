@@ -216,7 +216,6 @@ type UsageQueryTotals struct {
 	Usage      string                 `json:"usage"`
 	EventCount uint64                 `json:"event_count"`
 	Columns    map[string]UsageColumn `json:"columns,omitempty"`
-	Points     []UsagePoint           `json:"points,omitempty"`
 }
 
 // UsageQueryItem is one row.

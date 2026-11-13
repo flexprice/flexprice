@@ -70,7 +70,6 @@ func (s *InMemoryUsageQueryStore) GetBreakdown(_ context.Context, params *usagea
 	}
 
 	groups := map[string]*usageGroup{}
-	totalPoints := map[int64]*usageanalytics.Point{}
 	for _, ev := range s.pricedEvents(params) {
 		if !matchesUsageFilters(q, ev) {
 			continue
@@ -100,7 +99,6 @@ func (s *InMemoryUsageQueryStore) GetBreakdown(_ context.Context, params *usagea
 		g.lines[ev.lineID] = true
 		if q.WindowSize != "" {
 			addPoint(g.points, q, ev)
-			addPoint(totalPoints, q, ev)
 		}
 		if q.Columns != nil {
 			c := ev.keys[*q.Columns]
@@ -147,7 +145,6 @@ func (s *InMemoryUsageQueryStore) GetBreakdown(_ context.Context, params *usagea
 	sortUsageRows(rows, q.Sort)
 
 	result.TotalCount = uint64(len(rows))
-	totals.Points = sortedPoints(totalPoints)
 	result.Totals = totals
 	if q.Offset < len(rows) {
 		result.Items = rows[q.Offset:min(q.Offset+q.Limit, len(rows))]

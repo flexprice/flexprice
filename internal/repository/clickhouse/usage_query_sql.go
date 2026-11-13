@@ -54,8 +54,7 @@ func buildBreakdownSQL(params *usageanalytics.QueryParams) *breakdownSQL {
 	return b.result(sb.String())
 }
 
-// buildPointsSQL returns amount per window for each page row (pageGroups, in GroupBy order) and,
-// marked is_total, per window over every row that passes the filters.
+// buildPointsSQL returns amount per window for each page row (pageGroups, in GroupBy order).
 func buildPointsSQL(params *usageanalytics.QueryParams, pageGroups [][]string) *breakdownSQL {
 	b := &breakdownSQLBuilder{params: params, query: params.Query, window: true}
 	b.collectKeys()
@@ -68,19 +67,10 @@ func buildPointsSQL(params *usageanalytics.QueryParams, pageGroups [][]string) *
 	sb.WriteString(b.pricedCTE())
 	sb.WriteString(",\n")
 	sb.WriteString(fmt.Sprintf("filtered AS (\n    SELECT *\n    FROM priced%s\n)\n", b.filterWhere(groupCols)))
-
-	var parts []string
-	if len(pageGroups) > 0 {
-		parts = append(parts, fmt.Sprintf(`SELECT 0 AS is_total, %[1]s, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sum(qty))
+	sb.WriteString(fmt.Sprintf(`SELECT %[1]s, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sum(qty))
 FROM filtered
 WHERE has(%[2]s, [%[1]s])
 GROUP BY %[1]s, w`, strings.Join(groupCols, ", "), b.bind("page_groups", pageGroups)))
-	}
-	blanks := strings.Join(lo.Map(groupCols, func(a string, _ int) string { return "'' AS " + a }), ", ")
-	parts = append(parts, fmt.Sprintf(`SELECT 1 AS is_total, %s, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sum(qty))
-FROM filtered
-GROUP BY w`, blanks))
-	sb.WriteString(strings.Join(parts, "\nUNION ALL\n"))
 	sb.WriteString(b.settings())
 	return b.result(sb.String())
 }

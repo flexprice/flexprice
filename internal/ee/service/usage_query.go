@@ -566,7 +566,6 @@ func toUsageQueryResponse(
 	var windows []time.Time
 	if q.WindowSize != "" {
 		windows = q.Windows()
-		resp.Totals.Points = usagePoints(result.Totals.Points, windows, amounts)
 	}
 
 	var shown map[string]bool

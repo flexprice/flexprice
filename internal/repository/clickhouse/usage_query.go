@@ -61,7 +61,7 @@ func (r *usageQueryRepository) GetBreakdown(ctx context.Context, params *usagean
 		result.Totals, result.TotalCount = first.Totals, first.TotalCount
 	}
 
-	if params.Query.WindowSize != "" && result.TotalCount > 0 {
+	if params.Query.WindowSize != "" && len(result.Items) > 0 {
 		if err := r.addPoints(ctx, params, result); err != nil {
 			SetSpanError(span, err)
 			return nil, err
@@ -187,7 +187,7 @@ func (r *usageQueryRepository) run(ctx context.Context, params *usageanalytics.Q
 	return result, nil
 }
 
-// addPoints reads amount per window for the page rows and the totals.
+// addPoints reads amount per window for the page rows.
 func (r *usageQueryRepository) addPoints(ctx context.Context, params *usageanalytics.QueryParams, result *usageanalytics.Result) error {
 	q := params.Query
 	groupID := func(group []string) string { b, _ := json.Marshal(group); return string(b) } // injective, unlike a separator
@@ -209,11 +209,10 @@ func (r *usageQueryRepository) addPoints(ctx context.Context, params *usageanaly
 
 	for rows.Next() {
 		var (
-			isTotal                       uint8
 			group                         = make([]string, len(q.GroupBy))
 			window, amount, subtotal, qty string
 		)
-		targets := []any{&isTotal}
+		targets := make([]any, 0, len(group)+4)
 		for i := range group {
 			targets = append(targets, &group[i])
 		}
@@ -242,11 +241,9 @@ func (r *usageQueryRepository) addPoints(ctx context.Context, params *usageanaly
 			return ierr.WithError(err).WithHint("Failed to parse usage over time").Mark(ierr.ErrDatabase)
 		}
 
-		target := &result.Totals
-		if isTotal == 0 {
-			if target = rowByGroup[groupID(group)]; target == nil {
-				continue
-			}
+		target := rowByGroup[groupID(group)]
+		if target == nil {
+			continue
 		}
 		target.Points = append(target.Points, usageanalytics.Point{WindowStart: start, Amount: c, Subtotal: sub, Quantity: n})
 	}
@@ -256,7 +253,6 @@ func (r *usageQueryRepository) addPoints(ctx context.Context, params *usageanaly
 			Mark(ierr.ErrDatabase)
 	}
 
-	sortPoints(result.Totals.Points)
 	for i := range result.Items {
 		sortPoints(result.Items[i].Points)
 	}

@@ -38,14 +38,10 @@ filtered AS (
     WHERE has(@filter_0, k2)
       AND (positionCaseInsensitiveUTF8(k0, @search) > 0 OR positionCaseInsensitiveUTF8(k1, @search) > 0)
 )
-SELECT 0 AS is_total, k0, k1, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sum(qty))
+SELECT k0, k1, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sum(qty))
 FROM filtered
 WHERE has(@page_groups, [k0, k1])
 GROUP BY k0, k1, w
-UNION ALL
-SELECT 1 AS is_total, '' AS k0, '' AS k1, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sum(qty))
-FROM filtered
-GROUP BY w
 SETTINGS max_memory_usage = 96636764160, do_not_merge_across_partitions_select_final = 1
 
 -- arguments

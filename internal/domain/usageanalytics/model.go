@@ -156,7 +156,7 @@ type Query struct {
 	Sort                Sort
 	Metrics             []Metric
 	Deduplicate         bool
-	// WindowSize (DAY, WEEK or MONTH) adds amount per time window to each row and to the totals.
+	// WindowSize (DAY, WEEK or MONTH) adds amount per time window to each row.
 	WindowSize types.WindowSize
 	// WithLineItemIDs adds the line items behind each row, for expanding rows to prices and plans.
 	WithLineItemIDs bool
@@ -359,6 +359,6 @@ type MetricValue struct {
 // Result is one page of rows plus totals over all rows that matched.
 type Result struct {
 	Items      []Row
-	Totals     Row // Group and Metrics are empty
+	Totals     Row // Group, Metrics and Points are empty
 	TotalCount uint64
 }
