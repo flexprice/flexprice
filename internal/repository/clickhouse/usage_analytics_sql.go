@@ -188,7 +188,7 @@ func lineSlices(q *usageanalytics.Query, lines []usageanalytics.LineWindow) []li
 	var out []lineSlice
 	for _, key := range keys {
 		windows := groups[key]
-		// Sorted so that, where windows overlap, the earlier one counts the event.
+		// Sorted by line ID: where windows overlap, the lower line counts the event.
 		sort.SliceStable(windows, func(a, b int) bool {
 			if windows[a].line.LineItemID != windows[b].line.LineItemID {
 				return windows[a].line.LineItemID < windows[b].line.LineItemID
@@ -204,8 +204,8 @@ func lineSlices(q *usageanalytics.Query, lines []usageanalytics.LineWindow) []li
 				if from < w.start || to > w.end {
 					continue
 				}
-				wonByEarlier := lo.ContainsBy(windows[:i], func(e lineSlice) bool { return e.start <= from && e.end >= to })
-				primary := q.CountsPerLine() || !wonByEarlier
+				coveredByLowerLine := lo.ContainsBy(windows[:i], func(e lineSlice) bool { return e.start <= from && e.end >= to })
+				primary := q.CountsPerLine() || !coveredByLowerLine
 				out = append(out, lineSlice{line: w.line, customer: w.customer, start: from, end: to, primary: primary})
 			}
 		}
