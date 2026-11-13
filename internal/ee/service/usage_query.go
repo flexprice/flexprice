@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -466,8 +467,9 @@ func unsupportedMetersErr(excluded map[string]string) error {
 	meterIDs := lo.Keys(excluded)
 	sort.Strings(meterIDs)
 	named := lo.Map(meterIDs, func(id string, _ int) string { return id + " (" + excluded[id] + ")" })
-	return ierr.NewErrorf("usage analytics does not support meters %s yet", strings.Join(named, ", ")).
-		WithHint("Only flat-priced usage without commitments or entitlements is supported; pass meter_ids or feature_ids to leave these meters out").
+	msg := fmt.Sprintf("usage analytics does not support meters %s yet; pass meter_ids or feature_ids to leave them out", strings.Join(named, ", "))
+	return ierr.NewError(msg).
+		WithHint(msg).
 		WithReportableDetails(map[string]any{"unsupported_meters": excluded}).
 		Mark(ierr.ErrValidation)
 }

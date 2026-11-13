@@ -623,6 +623,31 @@ func (s *UsageQuerySuite) TestRejectedRequests() {
 	}
 }
 
+func (s *UsageQuerySuite) TestUnsupportedKeyNamesTheSupportedOnes() {
+	tests := []struct {
+		name   string
+		mutate func(r *dto.UsageQueryRequest)
+		want   string
+	}{
+		{"group_by", func(r *dto.UsageQueryRequest) { r.GroupBy = []string{"customer"} },
+			`unsupported group_by "customer"; supported: properties.<name>, source, meter_id, feature_id, sub_line_item_id`},
+		{"month in group_by", func(r *dto.UsageQueryRequest) { r.GroupBy = []string{"month"} },
+			`unsupported group_by "month"; supported: properties.<name>, source, meter_id, feature_id, sub_line_item_id`},
+		{"columns", func(r *dto.UsageQueryRequest) { r.Columns = "feature_id" },
+			`unsupported columns "feature_id"; supported: properties.<name>, source, meter_id, month`},
+		{"filters", func(r *dto.UsageQueryRequest) {
+			r.Filters = []dto.UsageQueryFilter{{Key: "month", Op: "in", Values: []string{"2026-10"}}}
+		}, `unsupported filters "month"; supported: properties.<name>, source, meter_id, feature_id, sub_line_item_id`},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			_, err := s.query(tt.mutate)
+			s.True(ierr.IsValidation(err), "want validation error, got %v", err)
+			s.ErrorContains(err, tt.want)
+		})
+	}
+}
+
 func (s *UsageQuerySuite) TestFilterOnMissingValueAndSingleMeterUsageSort() {
 	resp, err := s.query(func(r *dto.UsageQueryRequest) {
 		r.MeterIDs = []string{"m_calls"}

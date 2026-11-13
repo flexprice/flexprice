@@ -1,6 +1,8 @@
 package dto
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/usageanalytics"
@@ -113,19 +115,16 @@ func (r *UsageQueryRequest) ToQuery(now time.Time) (*usageanalytics.Query, error
 		groupBy = []string{string(usageanalytics.KeyMeterID)}
 	}
 	for _, s := range groupBy {
-		k, err := usageanalytics.ParseKey(s)
+		k, err := parseFieldKey("group_by", s, groupByKeys)
 		if err != nil {
 			return nil, err
 		}
 		q.GroupBy = append(q.GroupBy, k)
 	}
 	if r.Columns != "" {
-		k, err := usageanalytics.ParseKey(r.Columns)
+		k, err := parseFieldKey("columns", r.Columns, columnKeys)
 		if err != nil {
 			return nil, err
-		}
-		if k.Kind == usageanalytics.KeyFeatureID || k.Kind == usageanalytics.KeySubLineItemID {
-			return nil, usageValidationErr("columns supports properties.*, source, meter_id and month")
 		}
 		q.Columns = &k
 	}
@@ -136,7 +135,7 @@ func (r *UsageQueryRequest) ToQuery(now time.Time) (*usageanalytics.Query, error
 		})
 	}
 	for _, f := range r.Filters {
-		k, err := usageanalytics.ParseKey(f.Key)
+		k, err := parseFieldKey("filters", f.Key, filterKeys)
 		if err != nil {
 			return nil, err
 		}
@@ -145,7 +144,7 @@ func (r *UsageQueryRequest) ToQuery(now time.Time) (*usageanalytics.Query, error
 	}
 
 	for _, m := range r.Metrics {
-		k, err := usageanalytics.ParseKey(m.Key)
+		k, err := parseFieldKey("metrics", m.Key, filterKeys)
 		if err != nil {
 			return nil, err
 		}
@@ -176,6 +175,30 @@ func (r *UsageQueryRequest) ToQuery(now time.Time) (*usageanalytics.Query, error
 		return nil, err
 	}
 	return q, nil
+}
+
+// Keys each request field accepts, besides properties.<name>.
+var (
+	groupByKeys = []usageanalytics.KeyKind{usageanalytics.KeySource, usageanalytics.KeyMeterID, usageanalytics.KeyFeatureID, usageanalytics.KeySubLineItemID}
+	columnKeys  = []usageanalytics.KeyKind{usageanalytics.KeySource, usageanalytics.KeyMeterID, usageanalytics.KeyMonth}
+	filterKeys  = groupByKeys
+)
+
+// parseFieldKey parses a key for one request field and, when the field does not accept it, names the keys it does.
+func parseFieldKey(field, s string, allowed []usageanalytics.KeyKind) (usageanalytics.Key, error) {
+	k, err := usageanalytics.ParseKey(s)
+	if err == nil && (k.Kind == usageanalytics.KeyProperty || lo.Contains(allowed, k.Kind)) {
+		return k, nil
+	}
+	if err != nil && strings.HasPrefix(s, "properties.") {
+		return usageanalytics.Key{}, err // a malformed property name has its own hint
+	}
+	supported := append([]string{"properties.<name>"}, lo.Map(allowed, func(k usageanalytics.KeyKind, _ int) string { return string(k) })...)
+	msg := fmt.Sprintf("unsupported %s %q; supported: %s", field, s, strings.Join(supported, ", "))
+	return usageanalytics.Key{}, ierr.NewError(msg).
+		WithHint(msg).
+		WithReportableDetails(map[string]any{"field": field, "value": s, "supported": supported}).
+		Mark(ierr.ErrValidation)
 }
 
 func usageValidationErr(format string, args ...any) error {
