@@ -428,6 +428,67 @@ func (s *UsageQuerySuite) TestPercentageCouponsDiscountEachLineAsTheInvoiceDoes(
 	s.Empty(resp.UnappliedCouponIDs)
 }
 
+// A second, quarterly subscription on m_calls overlaps the monthly one: both charge the same events,
+// but the events and their usage count once unless rows are split by line.
+func (s *UsageQuerySuite) TestOverlappingSubscriptionsCountEachEventOnce() {
+	ctx := s.GetContext()
+	st := s.GetStores()
+	base := types.GetDefaultBaseModel(ctx)
+	s.NoError(st.PriceRepo.Create(ctx, &price.Price{
+		ID: "p_calls_q", Amount: decimal.RequireFromString("0.02"), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_usage", Type: types.PRICE_TYPE_USAGE,
+		BillingPeriod: types.BILLING_PERIOD_QUARTER, BillingPeriodCount: 1, BillingModel: types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence: types.BILLING_CADENCE_RECURRING, InvoiceCadence: types.InvoiceCadenceArrear,
+		MeterID: "m_calls", BaseModel: base,
+	}))
+	quarterly := &subscription.Subscription{
+		ID: "sub_quarterly", PlanID: "plan_usage", CustomerID: "cust_parent", StartDate: queryOct1,
+		BillingAnchor: queryOct1, CurrentPeriodStart: queryOct1, CurrentPeriodEnd: queryOct1.AddDate(0, 3, 0), Currency: "usd",
+		BillingPeriod: types.BILLING_PERIOD_QUARTER, BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive, SubscriptionType: types.SubscriptionTypeStandalone, BaseModel: base,
+	}
+	s.NoError(st.SubscriptionRepo.CreateWithLineItems(ctx, quarterly, []*subscription.SubscriptionLineItem{{
+		ID: "li_calls_q", SubscriptionID: quarterly.ID, CustomerID: quarterly.CustomerID, EntityID: "plan_usage",
+		EntityType: types.SubscriptionLineItemEntityTypePlan, PriceID: "p_calls_q", PriceType: types.PRICE_TYPE_USAGE,
+		MeterID: "m_calls", DisplayName: "li_calls_q", Currency: "usd", BillingPeriod: types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1, InvoiceCadence: types.InvoiceCadenceArrear, StartDate: queryOct1, BaseModel: base,
+	}}))
+
+	// 15 days inside both subscriptions.
+	window := func(r *dto.UsageQueryRequest) {
+		r.MeterIDs = []string{"m_calls"}
+		r.StartTime, r.EndTime = lo.ToPtr(queryOct1), lo.ToPtr(queryOct15)
+	}
+
+	// Monthly: acme's 3 calls + the child's 1 at $0.01; quarterly: acme's 3 calls at $0.02.
+	resp, err := s.query(func(r *dto.UsageQueryRequest) { window(r); r.GroupBy = []string{"meter_id"} })
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	row := resp.Items[0]
+	s.Equal("0.10", row.Amount, "both subscriptions charge the events")
+	s.Equal("4", row.Usage, "each event counts once")
+	s.EqualValues(4, row.EventCount)
+	s.Equal([]string{"sub_parent", "sub_quarterly"}, row.SubscriptionIDs)
+	s.Equal("4", resp.Totals.Usage)
+
+	resp, err = s.query(func(r *dto.UsageQueryRequest) { window(r); r.GroupBy = []string{"sub_line_item_id"} })
+	s.NoError(err)
+	byLine := lo.SliceToMap(resp.Items, func(i dto.UsageQueryItem) (string, [2]string) {
+		return i.Group["sub_line_item_id"], [2]string{i.Amount, i.Usage}
+	})
+	s.Equal(map[string][2]string{"li_calls": {"0.04", "4"}, "li_calls_q": {"0.06", "3"}}, byLine, "split by line, each line counts its own events")
+	s.Equal("7", resp.Totals.Usage, "totals add up the lines")
+
+	resp, err = s.query(func(r *dto.UsageQueryRequest) {
+		window(r)
+		r.GroupBy = []string{"meter_id"}
+		r.Filters = []dto.UsageQueryFilter{{Key: "sub_line_item_id", Op: "in", Values: []string{"li_calls_q"}}}
+	})
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	s.Equal([2]string{"0.06", "3"}, [2]string{resp.Items[0].Amount, resp.Items[0].Usage}, "the filtered line's events count")
+}
+
 func (s *UsageQuerySuite) TestSourcesKeepOnlyTheirEvents() {
 	resp, err := s.query(func(r *dto.UsageQueryRequest) { r.Sources = []string{"api"} })
 	s.NoError(err)

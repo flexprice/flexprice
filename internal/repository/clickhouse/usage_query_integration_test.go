@@ -168,11 +168,16 @@ func randomUsageQuery(rng *rand.Rand, dedupe bool) *usageanalytics.Query {
 			q.Metrics = append(q.Metrics, usageanalytics.Metric{Type: usageanalytics.MetricDistinct, Key: keyUser})
 		}
 	}
-	switch rng.Intn(4) {
+	switch rng.Intn(6) {
 	case 0:
 		q.Filters = []usageanalytics.Filter{{Key: keyApp, Op: usageanalytics.FilterIn, Values: []string{"build", "run"}}}
 	case 1:
 		q.Filters = []usageanalytics.Filter{{Key: keyUser, Op: usageanalytics.FilterNotIn, Values: []string{"", "123"}}}
+	case 2:
+		// li_tok_old overlaps li_tok_addon; dropping it moves those events' usage to the add-on.
+		q.Filters = []usageanalytics.Filter{{Key: keyLine, Op: usageanalytics.FilterNotIn, Values: []string{"li_tok_old"}}}
+	case 3:
+		q.Filters = []usageanalytics.Filter{{Key: keyLine, Op: usageanalytics.FilterIn, Values: []string{"li_tok_addon", "li_min"}}}
 	}
 	if rng.Intn(4) == 0 {
 		q.Search = []string{"AL", "o", "12", "zzz"}[rng.Intn(4)]

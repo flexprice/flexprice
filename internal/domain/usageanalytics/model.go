@@ -5,6 +5,7 @@ package usageanalytics
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -256,6 +257,22 @@ func (q *Query) Validate() error {
 }
 
 // Windows returns the start of each window from the one containing Start up to End, stopping
+// CountsPerLine reports whether usage and event counts are per line: an event inside two line windows
+// counts once per line only when rows are split by line; otherwise it counts once.
+func (q *Query) CountsPerLine() bool {
+	return slices.ContainsFunc(q.GroupBy, func(k Key) bool { return k.Kind == KeySubLineItemID })
+}
+
+// KeepsLine reports whether the subscription_line_item_id filters keep a line's events.
+func (q *Query) KeepsLine(lineID string) bool {
+	for _, f := range q.Filters {
+		if f.Key.Kind == KeySubLineItemID && slices.Contains(f.Values, lineID) != (f.Op == FilterIn) {
+			return false
+		}
+	}
+	return true
+}
+
 // after MaxWindows+1.
 func (q *Query) Windows() []time.Time {
 	var out []time.Time

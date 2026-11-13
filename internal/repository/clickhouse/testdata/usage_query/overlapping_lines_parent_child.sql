@@ -8,13 +8,15 @@ lines AS (
         toDateTime(l.5, 'UTC') AS w_start,
         toDateTime(l.6, 'UTC') AS w_end,
         toDecimal256(l.7, 20) AS unit_price,
-        toDecimal256(l.8, 20) AS list_unit_price
-    FROM (SELECT arrayJoin(arrayZip(@line_ids, @line_meter_ids, @line_feature_ids, @line_customer_ids, @line_starts, @line_ends, @line_unit_prices, @line_list_unit_prices)) AS l)
+        toDecimal256(l.8, 20) AS list_unit_price,
+        l.9 = 1 AS is_primary
+    FROM (SELECT arrayJoin(arrayZip(@line_ids, @line_meter_ids, @line_feature_ids, @line_customer_ids, @line_starts, @line_ends, @line_unit_prices, @line_list_unit_prices, @line_primary)) AS l)
 ),
 priced AS (
     SELECT
         mu.qty_total AS qty,
         l.line_id AS line_id,
+        l.is_primary AS is_primary,
         toDecimal256(mu.qty_total, 15) * l.unit_price AS amount,
         toDecimal256(mu.qty_total, 15) * l.list_unit_price AS subtotal,
         l.line_id AS k0,
@@ -36,8 +38,8 @@ grouped AS (
         k1,
         sum(amount) AS g_amount,
         sum(subtotal) AS g_subtotal,
-        sum(qty) AS g_qty,
-        count() AS g_events
+        sumIf(qty, is_primary) AS g_qty,
+        countIf(is_primary) AS g_events
     FROM priced
     GROUP BY k0, k1
 )
@@ -67,6 +69,7 @@ SETTINGS max_memory_usage = 96636764160
 -- @line_ends = [1793491200 1793491200 1793491200]
 -- @line_unit_prices = [0.002 0.002 0.001]
 -- @line_list_unit_prices = [0.002 0.002 0.001]
+-- @line_primary = [1 1 1]
 -- @tenant_id = tenant_1
 -- @environment_id = env_1
 -- @customer_ids = [cust_parent cust_child cust_a]

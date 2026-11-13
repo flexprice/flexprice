@@ -12,6 +12,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/flexprice/flexprice/internal/domain/usageanalytics"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
@@ -215,4 +216,43 @@ func renderGolden(built *breakdownSQL) string {
 func TestSQLStringLiteral(t *testing.T) {
 	require.Equal(t, `'it\'s'`, sqlStringLiteral("it's"))
 	require.Equal(t, `'a\\b'`, sqlStringLiteral(`a\b`))
+}
+
+func TestLineSlices_OnePrimaryLinePerInstant(t *testing.T) {
+	monthly := goldenLine("li_a", "m_calls", oct1, nov1, "0.01")
+	quarterly := goldenLine("li_b", "m_calls", oct15, nov1.AddDate(0, 2, 0), "0.02")
+	other := goldenLine("li_c", "m_tokens", oct1, nov1, "0.002")
+	type slice struct {
+		line       string
+		start, end time.Time
+		primary    bool
+	}
+	got := func(q *usageanalytics.Query) []slice {
+		var out []slice
+		for _, sl := range lineSlices(q, []usageanalytics.LineWindow{quarterly, monthly, other}) {
+			out = append(out, slice{sl.line.LineItemID, time.Unix(sl.start, 0).UTC(), time.Unix(sl.end, 0).UTC(), sl.primary})
+		}
+		return out
+	}
+	byMeter := goldenQuery(nil)
+	byLine := goldenQuery(func(q *usageanalytics.Query) { q.GroupBy = []usageanalytics.Key{keyLine} })
+	withoutA := goldenQuery(func(q *usageanalytics.Query) {
+		q.Filters = []usageanalytics.Filter{{Key: keyLine, Op: usageanalytics.FilterNotIn, Values: []string{"li_a"}}}
+	})
+
+	require.Equal(t, []slice{
+		{"li_b", oct15, nov1, false}, // li_a is the lower ID where both run
+		{"li_b", nov1, nov1.AddDate(0, 2, 0), true},
+		{"li_a", oct1, oct15, true},
+		{"li_a", oct15, nov1, true},
+		{"li_c", oct1, nov1, true}, // another meter never overlaps
+	}, got(byMeter))
+	require.True(t, lo.EveryBy(got(byLine), func(s slice) bool { return s.primary }), "split by line, every line counts its events")
+	require.Equal(t, []slice{
+		{"li_b", oct15, nov1, true}, // li_a is filtered out, so li_b counts
+		{"li_b", nov1, nov1.AddDate(0, 2, 0), true},
+		{"li_a", oct1, oct15, false},
+		{"li_a", oct15, nov1, false},
+		{"li_c", oct1, nov1, true},
+	}, got(withoutA))
 }

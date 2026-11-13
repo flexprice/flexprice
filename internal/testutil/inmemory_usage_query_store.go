@@ -25,6 +25,7 @@ func NewInMemoryUsageQueryStore(usage *InMemoryMeterUsageStore) *InMemoryUsageQu
 
 type pricedEvent struct {
 	lineID                string
+	primary               bool // the event's usage and count go to this line; one per event unless counted per line
 	ts                    time.Time
 	qty, amount, subtotal decimal.Decimal
 	keys                  map[usageanalytics.Key]string
@@ -47,7 +48,9 @@ func addPoint(points map[int64]*usageanalytics.Point, q *usageanalytics.Query, e
 	}
 	p.Amount = p.Amount.Add(ev.amount)
 	p.Subtotal = p.Subtotal.Add(ev.subtotal)
-	p.Quantity = p.Quantity.Add(ev.qty)
+	if ev.primary {
+		p.Quantity = p.Quantity.Add(ev.qty)
+	}
 }
 
 func sortedPoints(points map[int64]*usageanalytics.Point) []usageanalytics.Point {
@@ -94,8 +97,10 @@ func (s *InMemoryUsageQueryStore) GetBreakdown(_ context.Context, params *usagea
 		}
 		g.row.Amount = g.row.Amount.Add(ev.amount)
 		g.row.Subtotal = g.row.Subtotal.Add(ev.subtotal)
-		g.row.Quantity = g.row.Quantity.Add(ev.qty)
-		g.row.EventCount++
+		if ev.primary {
+			g.row.Quantity = g.row.Quantity.Add(ev.qty)
+			g.row.EventCount++
+		}
 		g.lines[ev.lineID] = true
 		if q.WindowSize != "" {
 			addPoint(g.points, q, ev)
@@ -171,6 +176,7 @@ func (s *InMemoryUsageQueryStore) pricedEvents(params *usageanalytics.QueryParam
 			continue
 		}
 		ts := r.Timestamp.UTC().Truncate(time.Second)
+		var matched []usageanalytics.LineWindow
 		for _, l := range params.Lines {
 			if l.MeterID != r.MeterID || !lo.Contains(l.ExternalCustomerIDs, r.ExternalCustomerID) {
 				continue
@@ -178,9 +184,24 @@ func (s *InMemoryUsageQueryStore) pricedEvents(params *usageanalytics.QueryParam
 			if ts.Before(l.Start.Truncate(time.Second)) || !ts.Before(l.End.Truncate(time.Second)) {
 				continue
 			}
+			matched = append(matched, l)
+		}
+		// The event counts once, on the lowest-ID line the line filters keep, unless rows are split by line.
+		first := -1
+		for i, l := range matched {
+			if !q.KeepsLine(l.LineItemID) {
+				continue
+			}
+			if first < 0 || l.LineItemID < matched[first].LineItemID ||
+				(l.LineItemID == matched[first].LineItemID && l.Start.Before(matched[first].Start)) {
+				first = i
+			}
+		}
+		for i, l := range matched {
 			qty := r.QtyTotal.Truncate(15)
 			out = append(out, pricedEvent{
 				lineID:   l.LineItemID,
+				primary:  q.CountsPerLine() || i == first,
 				ts:       ts,
 				qty:      qty,
 				amount:   qty.Mul(l.UnitPrice),

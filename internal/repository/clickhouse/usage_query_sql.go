@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -67,7 +68,7 @@ func buildPointsSQL(params *usageanalytics.QueryParams, pageGroups [][]string) *
 	sb.WriteString(b.pricedCTE())
 	sb.WriteString(",\n")
 	sb.WriteString(fmt.Sprintf("filtered AS (\n    SELECT *\n    FROM priced%s\n)\n", b.filterWhere(groupCols)))
-	sb.WriteString(fmt.Sprintf(`SELECT %[1]s, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sum(qty))
+	sb.WriteString(fmt.Sprintf(`SELECT %[1]s, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sumIf(qty, is_primary))
 FROM filtered
 WHERE has(%[2]s, [%[1]s])
 GROUP BY %[1]s, w`, strings.Join(groupCols, ", "), b.bind("page_groups", pageGroups)))
@@ -155,21 +156,87 @@ func (b *breakdownSQLBuilder) keyExpr(k usageanalytics.Key) string {
 	panic(fmt.Sprintf("usageanalytics: unhandled key kind %q", k.Kind))
 }
 
-// linesCTE expands the line windows into one row per (line × customer).
+// lineSlice is one line window for one customer, cut where another window on the same meter and
+// customer starts or ends. Primary marks the one slice per instant whose events count toward usage.
+type lineSlice struct {
+	line       usageanalytics.LineWindow
+	customer   string
+	start, end int64 // unix seconds; end exclusive
+	primary    bool
+}
+
+// lineSlices cuts the line windows so that, where windows overlap, exactly one slice is primary: the
+// lowest line ID among lines the line filters keep. With per-line counts every slice is primary.
+func lineSlices(q *usageanalytics.Query, lines []usageanalytics.LineWindow) []lineSlice {
+	type span struct {
+		idx        int
+		line       usageanalytics.LineWindow
+		customer   string
+		start, end int64
+	}
+	var spans []span
+	byKey := map[string][]int{} // meter + customer -> span indexes
+	for i, l := range lines {
+		for _, c := range lo.Uniq(l.ExternalCustomerIDs) {
+			key := l.MeterID + "\x00" + c
+			byKey[key] = append(byKey[key], len(spans))
+			spans = append(spans, span{idx: i, line: l, customer: c, start: l.Start.Unix(), end: l.End.Unix()})
+		}
+	}
+	before := func(a, b span) bool {
+		if a.line.LineItemID != b.line.LineItemID {
+			return a.line.LineItemID < b.line.LineItemID
+		}
+		if a.start != b.start {
+			return a.start < b.start
+		}
+		return a.idx < b.idx
+	}
+
+	perLine := q.CountsPerLine()
+	var out []lineSlice
+	for _, sp := range spans {
+		peers := byKey[sp.line.MeterID+"\x00"+sp.customer]
+		cuts := []int64{sp.start, sp.end}
+		for _, j := range peers {
+			for _, t := range []int64{spans[j].start, spans[j].end} {
+				if t > sp.start && t < sp.end {
+					cuts = append(cuts, t)
+				}
+			}
+		}
+		cuts = lo.Uniq(cuts)
+		sort.Slice(cuts, func(a, b int) bool { return cuts[a] < cuts[b] })
+		for k := 0; k+1 < len(cuts); k++ {
+			from, to := cuts[k], cuts[k+1]
+			primary := perLine
+			if !perLine && q.KeepsLine(sp.line.LineItemID) {
+				primary = !lo.ContainsBy(peers, func(j int) bool {
+					o := spans[j]
+					return o.start <= from && o.end >= to && q.KeepsLine(o.line.LineItemID) && before(o, sp)
+				})
+			}
+			out = append(out, lineSlice{line: sp.line, customer: sp.customer, start: from, end: to, primary: primary})
+		}
+	}
+	return out
+}
+
+// linesCTE has one row per line slice.
 func (b *breakdownSQLBuilder) linesCTE() string {
 	var lineIDs, meterIDs, featureIDs, customerIDs, prices, listPrices []string
 	var starts, ends []int64
-	for _, l := range b.params.Lines {
-		for _, c := range lo.Uniq(l.ExternalCustomerIDs) {
-			lineIDs = append(lineIDs, l.LineItemID)
-			meterIDs = append(meterIDs, l.MeterID)
-			featureIDs = append(featureIDs, l.FeatureID)
-			customerIDs = append(customerIDs, c)
-			starts = append(starts, l.Start.Unix())
-			ends = append(ends, l.End.Unix())
-			prices = append(prices, l.UnitPrice.String())
-			listPrices = append(listPrices, l.ListUnitPrice.String())
-		}
+	var primary []uint8
+	for _, sl := range lineSlices(b.query, b.params.Lines) {
+		lineIDs = append(lineIDs, sl.line.LineItemID)
+		meterIDs = append(meterIDs, sl.line.MeterID)
+		featureIDs = append(featureIDs, sl.line.FeatureID)
+		customerIDs = append(customerIDs, sl.customer)
+		starts = append(starts, sl.start)
+		ends = append(ends, sl.end)
+		prices = append(prices, sl.line.UnitPrice.String())
+		listPrices = append(listPrices, sl.line.ListUnitPrice.String())
+		primary = append(primary, lo.Ternary[uint8](sl.primary, 1, 0))
 	}
 	return fmt.Sprintf(`lines AS (
     SELECT
@@ -180,12 +247,13 @@ func (b *breakdownSQLBuilder) linesCTE() string {
         toDateTime(l.5, 'UTC') AS w_start,
         toDateTime(l.6, 'UTC') AS w_end,
         toDecimal256(l.7, %[1]d) AS unit_price,
-        toDecimal256(l.8, %[1]d) AS list_unit_price
-    FROM (SELECT arrayJoin(arrayZip(%[2]s, %[3]s, %[4]s, %[5]s, %[6]s, %[7]s, %[8]s, %[9]s)) AS l)
+        toDecimal256(l.8, %[1]d) AS list_unit_price,
+        l.9 = 1 AS is_primary
+    FROM (SELECT arrayJoin(arrayZip(%[2]s, %[3]s, %[4]s, %[5]s, %[6]s, %[7]s, %[8]s, %[9]s, %[10]s)) AS l)
 )`, usagePriceScale,
 		b.bind("line_ids", lineIDs), b.bind("line_meter_ids", meterIDs), b.bind("line_feature_ids", featureIDs),
 		b.bind("line_customer_ids", customerIDs), b.bind("line_starts", starts), b.bind("line_ends", ends),
-		b.bind("line_unit_prices", prices), b.bind("line_list_unit_prices", listPrices))
+		b.bind("line_unit_prices", prices), b.bind("line_list_unit_prices", listPrices), b.bind("line_primary", primary))
 }
 
 // pricedCTE has one row per event × matching line window, with its amount and every key the query uses.
@@ -198,6 +266,7 @@ func (b *breakdownSQLBuilder) pricedCTE() string {
 	cols := []string{
 		"mu.qty_total AS qty",
 		"l.line_id AS line_id",
+		"l.is_primary AS is_primary",
 		fmt.Sprintf("toDecimal256(mu.qty_total, %d) * l.unit_price AS amount", usageQtyScale),
 		fmt.Sprintf("toDecimal256(mu.qty_total, %d) * l.list_unit_price AS subtotal", usageQtyScale),
 	}
@@ -235,7 +304,7 @@ func (b *breakdownSQLBuilder) pricedCTE() string {
 func (b *breakdownSQLBuilder) groupedCTE() string {
 	groupCols := b.groupAliases()
 	cols := append([]string{}, groupCols...)
-	cols = append(cols, "sum(amount) AS g_amount", "sum(subtotal) AS g_subtotal", "sum(qty) AS g_qty", "count() AS g_events")
+	cols = append(cols, "sum(amount) AS g_amount", "sum(subtotal) AS g_subtotal", "sumIf(qty, is_primary) AS g_qty", "countIf(is_primary) AS g_events")
 	if b.query.Columns != nil {
 		cols = append(cols, fmt.Sprintf("sumMap(map(%s, amount)) AS g_columns", b.alias(*b.query.Columns)))
 	}
