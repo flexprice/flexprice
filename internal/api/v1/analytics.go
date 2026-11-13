@@ -17,11 +17,11 @@ import (
 type AnalyticsHandler struct {
 	svc        service.AnalyticsService
 	revenueSvc interfaces.RevenueService
-	usageSvc   service.UsageQueryService
+	usageSvc   service.UsageAnalyticsService
 	log        *logger.Logger
 }
 
-func NewAnalyticsHandler(svc service.AnalyticsService, revenueSvc interfaces.RevenueService, usageSvc service.UsageQueryService, log *logger.Logger) *AnalyticsHandler {
+func NewAnalyticsHandler(svc service.AnalyticsService, revenueSvc interfaces.RevenueService, usageSvc service.UsageAnalyticsService, log *logger.Logger) *AnalyticsHandler {
 	return &AnalyticsHandler{svc: svc, revenueSvc: revenueSvc, usageSvc: usageSvc, log: log}
 }
 

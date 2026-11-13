@@ -13,17 +13,17 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// usageQueryRepository implements usageanalytics.Repository on meter_usage.
-type usageQueryRepository struct {
+// usageAnalyticsRepository implements usageanalytics.Repository on meter_usage.
+type usageAnalyticsRepository struct {
 	store  *clickhouse.ClickHouseStore
 	logger *logger.Logger
 }
 
-func NewUsageQueryRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger) usageanalytics.Repository {
-	return &usageQueryRepository{store: store, logger: logger}
+func NewUsageAnalyticsRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger) usageanalytics.Repository {
+	return &usageAnalyticsRepository{store: store, logger: logger}
 }
 
-func (r *usageQueryRepository) GetBreakdown(ctx context.Context, params *usageanalytics.QueryParams) (*usageanalytics.Result, error) {
+func (r *usageAnalyticsRepository) GetBreakdown(ctx context.Context, params *usageanalytics.QueryParams) (*usageanalytics.Result, error) {
 	if params == nil || params.Query == nil {
 		return nil, ierr.NewError("params and query are required").Mark(ierr.ErrValidation)
 	}
@@ -72,7 +72,7 @@ func (r *usageQueryRepository) GetBreakdown(ctx context.Context, params *usagean
 	return result, nil
 }
 
-func (r *usageQueryRepository) run(ctx context.Context, params *usageanalytics.QueryParams) (*usageanalytics.Result, error) {
+func (r *usageAnalyticsRepository) run(ctx context.Context, params *usageanalytics.QueryParams) (*usageanalytics.Result, error) {
 	q := params.Query
 	built := buildBreakdownSQL(params)
 
@@ -188,7 +188,7 @@ func (r *usageQueryRepository) run(ctx context.Context, params *usageanalytics.Q
 }
 
 // addPoints reads amount per window for the page rows.
-func (r *usageQueryRepository) addPoints(ctx context.Context, params *usageanalytics.QueryParams, result *usageanalytics.Result) error {
+func (r *usageAnalyticsRepository) addPoints(ctx context.Context, params *usageanalytics.QueryParams, result *usageanalytics.Result) error {
 	q := params.Query
 	groupID := func(group []string) string { b, _ := json.Marshal(group); return string(b) } // injective, unlike a separator
 	rowByGroup := make(map[string]*usageanalytics.Row, len(result.Items))

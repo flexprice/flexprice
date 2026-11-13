@@ -28,19 +28,19 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// UsageQuerySuite runs the usage breakdown over in-memory stores, with the in-memory reference
+// UsageAnalyticsSuite runs the usage breakdown over in-memory stores, with the in-memory reference
 // standing in for ClickHouse, and checks it against billing on the same data.
-type UsageQuerySuite struct {
+type UsageAnalyticsSuite struct {
 	testutil.BaseServiceTestSuite
 	params  ServiceParams
-	svc     UsageQueryService
+	svc     UsageAnalyticsService
 	billing BillingService
 	parent  *subscription.Subscription
 	child   *subscription.Subscription
 }
 
-func TestUsageQuery(t *testing.T) {
-	suite.Run(t, new(UsageQuerySuite))
+func TestUsageAnalytics(t *testing.T) {
+	suite.Run(t, new(UsageAnalyticsSuite))
 }
 
 var (
@@ -49,11 +49,11 @@ var (
 	queryNov1  = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 )
 
-func (s *UsageQuerySuite) GetContext() context.Context {
+func (s *UsageAnalyticsSuite) GetContext() context.Context {
 	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_cost")
 }
 
-func (s *UsageQuerySuite) SetupTest() {
+func (s *UsageAnalyticsSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.BaseServiceTestSuite.ClearStores()
 	stores := s.GetStores()
@@ -98,14 +98,14 @@ func (s *UsageQuerySuite) SetupTest() {
 		ProrationCalculator:      s.GetCalculator(),
 	}
 	usage := stores.MeterUsageRepo.(*testutil.InMemoryMeterUsageStore)
-	s.svc = NewUsageQueryService(s.params, testutil.NewInMemoryUsageQueryStore(usage))
+	s.svc = NewUsageAnalyticsService(s.params, testutil.NewInMemoryUsageAnalyticsStore(usage))
 	s.billing = NewBillingService(s.params)
 	s.seed()
 }
 
 // seed builds a parent (acme) with one inherited child (acme_child) on a monthly plan:
 // tokens (SUM, price change on Oct 15), calls (COUNT), scaled (SUM_WITH_MULTIPLIER), tiered (excluded).
-func (s *UsageQuerySuite) seed() {
+func (s *UsageAnalyticsSuite) seed() {
 	ctx := s.GetContext()
 	st := s.GetStores()
 	base := func() types.BaseModel { return types.GetDefaultBaseModel(ctx) }
@@ -200,7 +200,7 @@ func (s *UsageQuerySuite) seed() {
 	s.usage("m_tokens", "acme", queryNov1.Add(time.Hour), "999", map[string]any{"user": "alice"})
 }
 
-func (s *UsageQuerySuite) usage(meterID, customerID string, ts time.Time, qty string, props map[string]any) {
+func (s *UsageAnalyticsSuite) usage(meterID, customerID string, ts time.Time, qty string, props map[string]any) {
 	ctx := s.GetContext()
 	id := types.GenerateUUIDWithPrefix("mu")
 	s.NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
@@ -215,7 +215,7 @@ func (s *UsageQuerySuite) usage(meterID, customerID string, ts time.Time, qty st
 // supportedMeters are the fixture's flat-priced meters; m_tiered makes an unfiltered request fail.
 var supportedMeters = []string{"m_tokens", "m_calls", "m_scaled"}
 
-func (s *UsageQuerySuite) query(mutate func(r *dto.UsageQueryRequest)) (*dto.UsageQueryResponse, error) {
+func (s *UsageAnalyticsSuite) query(mutate func(r *dto.UsageQueryRequest)) (*dto.UsageQueryResponse, error) {
 	req := &dto.UsageQueryRequest{
 		ExternalCustomerID: "acme",
 		StartTime:          lo.ToPtr(queryOct1),
@@ -235,7 +235,7 @@ func amountByGroup(resp *dto.UsageQueryResponse, key string) map[string]string {
 	return lo.SliceToMap(resp.Items, func(i dto.UsageQueryItem) (string, string) { return i.Group[key], i.Amount })
 }
 
-func (s *UsageQuerySuite) TestPriceChangeAttributesEachEventAtItsOwnPrice() {
+func (s *UsageAnalyticsSuite) TestPriceChangeAttributesEachEventAtItsOwnPrice() {
 	resp, err := s.query(func(r *dto.UsageQueryRequest) { r.MeterIDs = []string{"m_tokens"} })
 	s.NoError(err)
 	s.Equal(map[string]string{"alice": "7000.00", "bob": "6000.00"}, amountByGroup(resp, "properties.user"))
@@ -246,7 +246,7 @@ func (s *UsageQuerySuite) TestPriceChangeAttributesEachEventAtItsOwnPrice() {
 
 // assertLinesEqualInvoice checks that every line in the breakdown amounts exactly what the October
 // invoice charges for it, and returns how many lines there were.
-func (s *UsageQuerySuite) assertLinesEqualInvoice(meterIDs ...string) int {
+func (s *UsageAnalyticsSuite) assertLinesEqualInvoice(meterIDs ...string) int {
 	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.parent.ID)
 	s.NoError(err)
 	inv, err := s.billing.PrepareSubscriptionInvoiceRequest(s.GetContext(), &dto.PrepareSubscriptionInvoiceRequestParams{
@@ -277,12 +277,12 @@ func (s *UsageQuerySuite) assertLinesEqualInvoice(meterIDs ...string) int {
 	return len(resp.Items)
 }
 
-func (s *UsageQuerySuite) TestFullPeriodLineTotalsEqualTheInvoice() {
+func (s *UsageAnalyticsSuite) TestFullPeriodLineTotalsEqualTheInvoice() {
 	s.Equal(4, s.assertLinesEqualInvoice(), "tok_old, tok_new, calls, scaled; tiered is excluded")
 }
 
 // assertUnsupported checks the request fails as bad input naming exactly these meters and reasons.
-func (s *UsageQuerySuite) assertUnsupported(err error, want map[string]string) {
+func (s *UsageAnalyticsSuite) assertUnsupported(err error, want map[string]string) {
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err), "want validation error, got %v", err)
 	ids := lo.Keys(want)
@@ -291,14 +291,14 @@ func (s *UsageQuerySuite) assertUnsupported(err error, want map[string]string) {
 	s.Contains(err.Error(), "usage analytics does not support meters "+strings.Join(named, ", ")+" yet")
 }
 
-func (s *UsageQuerySuite) TestGroupByDefaultsToMeter() {
+func (s *UsageAnalyticsSuite) TestGroupByDefaultsToMeter() {
 	resp, err := s.query(func(r *dto.UsageQueryRequest) { r.GroupBy = nil })
 	s.NoError(err)
 	// 13,000 tokens, 4 calls × 0.01, 40 scaled × 0.5.
 	s.Equal(map[string]string{"m_tokens": "13000.00", "m_calls": "0.04", "m_scaled": "20.00"}, amountByGroup(resp, "meter_id"))
 }
 
-func (s *UsageQuerySuite) TestUnsupportedMeterRejectsTheRequest() {
+func (s *UsageAnalyticsSuite) TestUnsupportedMeterRejectsTheRequest() {
 	_, err := s.query(func(r *dto.UsageQueryRequest) { r.MeterIDs = nil })
 	s.assertUnsupported(err, map[string]string{"m_tiered": excludedNotFlatPrice})
 
@@ -309,7 +309,7 @@ func (s *UsageQuerySuite) TestUnsupportedMeterRejectsTheRequest() {
 	s.Equal(map[string]string{"alice": "7020.00", "bob": "6000.00", "123": "0.03", dto.UsageNoneValue: "0.01"}, amountByGroup(resp, "properties.user"))
 }
 
-func (s *UsageQuerySuite) TestEntitlementsAndGrantsExcludeTheirMeters() {
+func (s *UsageAnalyticsSuite) TestEntitlementsAndGrantsExcludeTheirMeters() {
 	ctx := s.GetContext()
 	_, err := s.GetStores().EntitlementRepo.Create(ctx, &entitlement.Entitlement{
 		ID: "ent_calls", EntityType: types.ENTITLEMENT_ENTITY_TYPE_PLAN, EntityID: "plan_usage", FeatureID: "f_calls",
@@ -333,7 +333,7 @@ func (s *UsageQuerySuite) TestEntitlementsAndGrantsExcludeTheirMeters() {
 	s.Equal("13000.00", resp.Totals.Amount)
 }
 
-func (s *UsageQuerySuite) TestSubscriptionGrantExcludesTheLinesBillingLowered() {
+func (s *UsageAnalyticsSuite) TestSubscriptionGrantExcludesTheLinesBillingLowered() {
 	ctx := s.GetContext()
 	// Billing refuses subscription grants next to a tiered line, so end it before the period.
 	tiered, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, "li_tiered")
@@ -365,7 +365,7 @@ func (s *UsageQuerySuite) TestSubscriptionGrantExcludesTheLinesBillingLowered() 
 	s.Equal(1, s.assertLinesEqualInvoice("m_calls"), "the calls line equals its invoice line")
 }
 
-func (s *UsageQuerySuite) TestChildSeesOnlyItsOwnEventsAtTheParentsPrices() {
+func (s *UsageAnalyticsSuite) TestChildSeesOnlyItsOwnEventsAtTheParentsPrices() {
 	resp, err := s.query(func(r *dto.UsageQueryRequest) {
 		r.ExternalCustomerID = "acme_child"
 		r.Expand = []dto.UsageExpand{dto.UsageExpandSubscription, dto.UsageExpandPlan}
@@ -376,7 +376,7 @@ func (s *UsageQuerySuite) TestChildSeesOnlyItsOwnEventsAtTheParentsPrices() {
 	s.Equal([]string{"plan_usage"}, resp.Items[0].PlanIDs)
 }
 
-func (s *UsageQuerySuite) TestPausedChildHasNoAmountAsTheParentInvoiceSkipsIt() {
+func (s *UsageAnalyticsSuite) TestPausedChildHasNoAmountAsTheParentInvoiceSkipsIt() {
 	child := *s.child
 	child.SubscriptionStatus = types.SubscriptionStatusPaused
 	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), &child))
@@ -387,7 +387,7 @@ func (s *UsageQuerySuite) TestPausedChildHasNoAmountAsTheParentInvoiceSkipsIt() 
 	s.Equal("0.00", resp.Totals.Amount)
 }
 
-func (s *UsageQuerySuite) TestPercentageCouponsDiscountEachLineAsTheInvoiceDoes() {
+func (s *UsageAnalyticsSuite) TestPercentageCouponsDiscountEachLineAsTheInvoiceDoes() {
 	ctx := s.GetContext()
 	st := s.GetStores()
 	addCoupon := func(id string, typ types.CouponType, cadence types.CouponCadence, amount string, lineID *string) {
@@ -430,7 +430,7 @@ func (s *UsageQuerySuite) TestPercentageCouponsDiscountEachLineAsTheInvoiceDoes(
 
 // A second, quarterly subscription on m_calls overlaps the monthly one: both charge the same events,
 // but the events and their usage count once unless rows are split by line.
-func (s *UsageQuerySuite) TestOverlappingSubscriptionsCountEachEventOnce() {
+func (s *UsageAnalyticsSuite) TestOverlappingSubscriptionsCountEachEventOnce() {
 	ctx := s.GetContext()
 	st := s.GetStores()
 	base := types.GetDefaultBaseModel(ctx)
@@ -489,7 +489,7 @@ func (s *UsageQuerySuite) TestOverlappingSubscriptionsCountEachEventOnce() {
 	s.Equal([2]string{"0.06", "3"}, [2]string{resp.Items[0].Amount, resp.Items[0].Usage}, "the filtered line's events count")
 }
 
-func (s *UsageQuerySuite) TestSourcesKeepOnlyTheirEvents() {
+func (s *UsageAnalyticsSuite) TestSourcesKeepOnlyTheirEvents() {
 	resp, err := s.query(func(r *dto.UsageQueryRequest) { r.Sources = []string{"api"} })
 	s.NoError(err)
 	s.Equal("13020.04", resp.Totals.Amount, "every fixture event comes from api")
@@ -500,7 +500,7 @@ func (s *UsageQuerySuite) TestSourcesKeepOnlyTheirEvents() {
 	s.Empty(resp.Items)
 }
 
-func (s *UsageQuerySuite) TestRowsAlwaysCarryIDsAndExpandAddsObjectMaps() {
+func (s *UsageAnalyticsSuite) TestRowsAlwaysCarryIDsAndExpandAddsObjectMaps() {
 	resp, err := s.query(func(r *dto.UsageQueryRequest) {
 		r.MeterIDs = []string{"m_tokens"}
 		r.GroupBy = []string{"meter_id"}
@@ -530,7 +530,7 @@ func (s *UsageQuerySuite) TestRowsAlwaysCarryIDsAndExpandAddsObjectMaps() {
 	s.Equal([]string{"f_tokens"}, lo.Keys(resp.Features))
 }
 
-func (s *UsageQuerySuite) TestCancelledChildKeepsTheAmountOfPeriodsItsParentInvoiced() {
+func (s *UsageAnalyticsSuite) TestCancelledChildKeepsTheAmountOfPeriodsItsParentInvoiced() {
 	cancel := func(at time.Time) {
 		child := *s.child
 		child.SubscriptionStatus = types.SubscriptionStatusCancelled
@@ -558,7 +558,7 @@ func (s *UsageQuerySuite) TestCancelledChildKeepsTheAmountOfPeriodsItsParentInvo
 	s.Positive(s.assertLinesEqualInvoice(), "billing's own October invoice agrees")
 }
 
-func (s *UsageQuerySuite) TestColumnsMetricsAndPaging() {
+func (s *UsageAnalyticsSuite) TestColumnsMetricsAndPaging() {
 	resp, err := s.query(func(r *dto.UsageQueryRequest) {
 		r.GroupBy = []string{"meter_id"}
 		r.Columns = "properties.user"
@@ -578,7 +578,7 @@ func (s *UsageQuerySuite) TestColumnsMetricsAndPaging() {
 	s.Equal(dto.UsageQueryValue{Count: 1, Values: []string{"alice"}}, row.Metrics["distinct:properties.user"])
 }
 
-func (s *UsageQuerySuite) TestWeeklyPointsListEveryWindow() {
+func (s *UsageAnalyticsSuite) TestWeeklyPointsListEveryWindow() {
 	resp, err := s.query(func(r *dto.UsageQueryRequest) {
 		r.MeterIDs = []string{"m_tokens"}
 		r.WindowSize = types.WindowSizeWeek
@@ -595,7 +595,7 @@ func (s *UsageQuerySuite) TestWeeklyPointsListEveryWindow() {
 	s.Equal([]point{{"2026-09-27", "0.00"}, {"2026-10-04", "0.00"}, {"2026-10-11", "6000.00"}, {"2026-10-18", "0.00"}, {"2026-10-25", "0.00"}}, byUser["bob"])
 }
 
-func (s *UsageQuerySuite) TestRejectedRequests() {
+func (s *UsageAnalyticsSuite) TestRejectedRequests() {
 	tests := []struct {
 		name   string
 		mutate func(r *dto.UsageQueryRequest)
@@ -623,7 +623,7 @@ func (s *UsageQuerySuite) TestRejectedRequests() {
 	}
 }
 
-func (s *UsageQuerySuite) TestUnsupportedKeyNamesTheSupportedOnes() {
+func (s *UsageAnalyticsSuite) TestUnsupportedKeyNamesTheSupportedOnes() {
 	tests := []struct {
 		name   string
 		mutate func(r *dto.UsageQueryRequest)
@@ -648,7 +648,7 @@ func (s *UsageQuerySuite) TestUnsupportedKeyNamesTheSupportedOnes() {
 	}
 }
 
-func (s *UsageQuerySuite) TestFilterOnMissingValueAndSingleMeterUsageSort() {
+func (s *UsageAnalyticsSuite) TestFilterOnMissingValueAndSingleMeterUsageSort() {
 	resp, err := s.query(func(r *dto.UsageQueryRequest) {
 		r.MeterIDs = []string{"m_calls"}
 		r.Filters = []dto.UsageQueryFilter{{Key: "properties.user", Op: "in", Values: []string{dto.UsageNoneValue}}}

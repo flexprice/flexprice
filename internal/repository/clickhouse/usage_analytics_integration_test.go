@@ -197,9 +197,9 @@ func TestUsageBreakdown_MatchesReference_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	usageRepo := &MeterUsageRepository{store: store, logger: log, qb: NewMeterUsageQueryBuilder()}
-	queryRepo := NewUsageQueryRepository(store, log)
+	queryRepo := NewUsageAnalyticsRepository(store, log)
 	refUsage := testutil.NewInMemoryMeterUsageStore()
-	ref := testutil.NewInMemoryUsageQueryStore(refUsage)
+	ref := testutil.NewInMemoryUsageAnalyticsStore(refUsage)
 
 	rng := rand.New(rand.NewSource(1804))
 	clean := seedUsageFixture(t, rng, usageRepo, refUsage, false)

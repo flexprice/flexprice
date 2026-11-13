@@ -33,18 +33,18 @@ const (
 	excludedUnmatchedCharge  = "unmatched_charge"
 )
 
-// UsageQueryService attributes billed amount to the events, and their properties, that caused it.
-type UsageQueryService interface {
+// UsageAnalyticsService attributes billed amount to the events, and their properties, that caused it.
+type UsageAnalyticsService interface {
 	GetBreakdown(ctx context.Context, req *dto.UsageQueryRequest) (*dto.UsageQueryResponse, error)
 }
 
-type usageQueryService struct {
+type usageAnalyticsService struct {
 	ServiceParams
 	repo usageanalytics.Repository
 }
 
-func NewUsageQueryService(params ServiceParams, repo usageanalytics.Repository) UsageQueryService {
-	return &usageQueryService{ServiceParams: params, repo: repo}
+func NewUsageAnalyticsService(params ServiceParams, repo usageanalytics.Repository) UsageAnalyticsService {
+	return &usageAnalyticsService{ServiceParams: params, repo: repo}
 }
 
 // billedSubscription is a requested customer's subscription with the subscription whose lines price it
@@ -69,7 +69,7 @@ type queryInputs struct {
 	unappliedCoupons map[string]bool
 }
 
-func (s *usageQueryService) GetBreakdown(ctx context.Context, req *dto.UsageQueryRequest) (*dto.UsageQueryResponse, error) {
+func (s *usageAnalyticsService) GetBreakdown(ctx context.Context, req *dto.UsageQueryRequest) (*dto.UsageQueryResponse, error) {
 	if req.ExternalCustomerID == "" {
 		return nil, ierr.NewError("external_customer_id is required").Mark(ierr.ErrValidation)
 	}
@@ -154,7 +154,7 @@ func (s *usageQueryService) GetBreakdown(ctx context.Context, req *dto.UsageQuer
 }
 
 // requestedMeterIDs resolves meter_ids and feature_ids to one meter set; nil means every meter.
-func (s *usageQueryService) requestedMeterIDs(ctx context.Context, q *usageanalytics.Query) (map[string]bool, error) {
+func (s *usageAnalyticsService) requestedMeterIDs(ctx context.Context, q *usageanalytics.Query) (map[string]bool, error) {
 	if len(q.MeterIDs) == 0 && len(q.FeatureIDs) == 0 {
 		return nil, nil
 	}
@@ -177,7 +177,7 @@ func (s *usageQueryService) requestedMeterIDs(ctx context.Context, q *usageanaly
 
 // subscriptionsInRange returns the customer's subscriptions active in [start, end), each with the
 // subscription that prices it and the customers whose events it covers.
-func (s *usageQueryService) subscriptionsInRange(ctx context.Context, cust *customer.Customer, start, end time.Time) ([]billedSubscription, error) {
+func (s *usageAnalyticsService) subscriptionsInRange(ctx context.Context, cust *customer.Customer, start, end time.Time) ([]billedSubscription, error) {
 	subs, err := customerSubscriptionsWithParents(ctx, s.SubRepo, cust.ID, false)
 	if err != nil {
 		return nil, err
@@ -263,7 +263,7 @@ func childCoverageEnd(parent, child *subscription.Subscription) (time.Time, bool
 
 // cancelledChildren prices a parent's cancelled inherited children for the periods its invoices still
 // covered them; ExternalCustomerIDsForSubscription lists only the children covered today.
-func (s *usageQueryService) cancelledChildren(ctx context.Context, cs billedSubscription) ([]billedSubscription, error) {
+func (s *usageAnalyticsService) cancelledChildren(ctx context.Context, cs billedSubscription) ([]billedSubscription, error) {
 	filter := types.NewNoLimitSubscriptionFilter()
 	filter.ParentSubscriptionIDs = []string{cs.sub.ID}
 	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
@@ -328,7 +328,7 @@ func splitByBillingPeriod(cs billedSubscription) ([]usageanalytics.BillingPeriod
 // addBilledLines prices the owner's billing period through billing, as its invoice is priced, and turns
 // each line billing charged at a plain flat rate into a line window clipped to the segment. Every
 // other line excludes its meter.
-func (s *usageQueryService) addBilledLines(
+func (s *usageAnalyticsService) addBilledLines(
 	ctx context.Context,
 	billing *billingService,
 	cs billedSubscription,
@@ -407,7 +407,7 @@ func (s *usageQueryService) addBilledLines(
 // periodDiscounts returns each line's price multiplier from the percentage coupons (forever or
 // repeated) active in the billing period: line coupons, then subscription coupons, compounding, as
 // usage analytics applies them. Any other active coupon is recorded as not applied.
-func (s *usageQueryService) periodDiscounts(ctx context.Context, owner *subscription.Subscription, seg usageanalytics.BillingPeriodSegment, in *queryInputs) (func(lineID string) decimal.Decimal, error) {
+func (s *usageAnalyticsService) periodDiscounts(ctx context.Context, owner *subscription.Subscription, seg usageanalytics.BillingPeriodSegment, in *queryInputs) (func(lineID string) decimal.Decimal, error) {
 	applicable := func(c *coupon.Coupon) bool {
 		return c.Type == types.CouponTypePercentage && c.PercentageOff != nil &&
 			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated)
@@ -481,7 +481,7 @@ func excludeMeter(in *queryInputs, meterID, reason string) {
 }
 
 // loadMeters fills the meters and their features for line items not seen yet.
-func (s *usageQueryService) loadMeters(ctx context.Context, items []*subscription.SubscriptionLineItem, in *queryInputs) error {
+func (s *usageAnalyticsService) loadMeters(ctx context.Context, items []*subscription.SubscriptionLineItem, in *queryInputs) error {
 	var missing []string
 	for _, li := range items {
 		if _, ok := in.meterByID[li.MeterID]; li.MeterID != "" && !ok {
@@ -676,7 +676,7 @@ func sortedIDs(ids []string) []string {
 }
 
 // expandObjects fills the object maps requested in expand, for the IDs on the page's rows.
-func (s *usageQueryService) expandObjects(ctx context.Context, expand []dto.UsageExpand, resp *dto.UsageQueryResponse, in *queryInputs) error {
+func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []dto.UsageExpand, resp *dto.UsageQueryResponse, in *queryInputs) error {
 	want := lo.SliceToMap(expand, func(e dto.UsageExpand) (dto.UsageExpand, bool) { return e, true })
 	if len(want) == 0 {
 		return nil

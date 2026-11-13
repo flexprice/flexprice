@@ -13,14 +13,14 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// InMemoryUsageQueryStore implements usageanalytics.Repository over an InMemoryMeterUsageStore.
+// InMemoryUsageAnalyticsStore implements usageanalytics.Repository over an InMemoryMeterUsageStore.
 // It mirrors the ClickHouse usage query in plain Go and serves as its reference in tests.
-type InMemoryUsageQueryStore struct {
+type InMemoryUsageAnalyticsStore struct {
 	usage *InMemoryMeterUsageStore
 }
 
-func NewInMemoryUsageQueryStore(usage *InMemoryMeterUsageStore) *InMemoryUsageQueryStore {
-	return &InMemoryUsageQueryStore{usage: usage}
+func NewInMemoryUsageAnalyticsStore(usage *InMemoryMeterUsageStore) *InMemoryUsageAnalyticsStore {
+	return &InMemoryUsageAnalyticsStore{usage: usage}
 }
 
 type pricedEvent struct {
@@ -62,7 +62,7 @@ func sortedPoints(points map[int64]*usageanalytics.Point) []usageanalytics.Point
 	return out
 }
 
-func (s *InMemoryUsageQueryStore) GetBreakdown(_ context.Context, params *usageanalytics.QueryParams) (*usageanalytics.Result, error) {
+func (s *InMemoryUsageAnalyticsStore) GetBreakdown(_ context.Context, params *usageanalytics.QueryParams) (*usageanalytics.Result, error) {
 	q := params.Query
 	if err := q.Validate(); err != nil {
 		return nil, err
@@ -164,7 +164,7 @@ func groupID(group []string) string {
 }
 
 // pricedEvents prices each event once per line window it falls in.
-func (s *InMemoryUsageQueryStore) pricedEvents(params *usageanalytics.QueryParams) []pricedEvent {
+func (s *InMemoryUsageAnalyticsStore) pricedEvents(params *usageanalytics.QueryParams) []pricedEvent {
 	q := params.Query
 	s.usage.mu.RLock()
 	records := dedupeMeterUsage(s.usage.records, q.Deduplicate)
