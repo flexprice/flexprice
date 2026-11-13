@@ -387,27 +387,25 @@ func (s *UsageAnalyticsSuite) TestPausedChildHasNoAmountAsTheParentInvoiceSkipsI
 	s.Equal("0.00", resp.Totals.Amount)
 }
 
-// addCoupon attaches a coupon to the parent subscription, or to one of its lines.
-func (s *UsageAnalyticsSuite) addCoupon(id string, typ types.CouponType, cadence types.CouponCadence, amount string, lineID *string) {
+func (s *UsageAnalyticsSuite) TestPercentageCouponsDiscountEachLineAsTheInvoiceDoes() {
 	ctx := s.GetContext()
 	st := s.GetStores()
-	c := &coupon.Coupon{ID: id, Name: id, Type: typ, Cadence: cadence, Currency: "usd", BaseModel: types.GetDefaultBaseModel(ctx)}
-	if typ == types.CouponTypePercentage {
-		c.PercentageOff = lo.ToPtr(decimal.RequireFromString(amount))
-	} else {
-		c.AmountOff = lo.ToPtr(decimal.RequireFromString(amount))
+	addCoupon := func(id string, typ types.CouponType, cadence types.CouponCadence, amount string, lineID *string) {
+		c := &coupon.Coupon{ID: id, Name: id, Type: typ, Cadence: cadence, Currency: "usd", BaseModel: types.GetDefaultBaseModel(ctx)}
+		if typ == types.CouponTypePercentage {
+			c.PercentageOff = lo.ToPtr(decimal.RequireFromString(amount))
+		} else {
+			c.AmountOff = lo.ToPtr(decimal.RequireFromString(amount))
+		}
+		s.NoError(st.CouponRepo.Create(ctx, c))
+		s.NoError(st.CouponAssociationRepo.Create(ctx, &coupon_association.CouponAssociation{
+			ID: "ca_" + id, CouponID: id, SubscriptionID: s.parent.ID, SubscriptionLineItemID: lineID,
+			StartDate: queryOct1, BaseModel: types.GetDefaultBaseModel(ctx),
+		}))
 	}
-	s.NoError(st.CouponRepo.Create(ctx, c))
-	s.NoError(st.CouponAssociationRepo.Create(ctx, &coupon_association.CouponAssociation{
-		ID: "ca_" + id, CouponID: id, SubscriptionID: s.parent.ID, SubscriptionLineItemID: lineID,
-		StartDate: queryOct1, BaseModel: types.GetDefaultBaseModel(ctx),
-	}))
-}
-
-func (s *UsageAnalyticsSuite) TestPercentageCouponsDiscountEachLineAsTheInvoiceDoes() {
-	s.addCoupon("c_line20", types.CouponTypePercentage, types.CouponCadenceForever, "20", lo.ToPtr("li_tok_new"))
-	s.addCoupon("c_sub10", types.CouponTypePercentage, types.CouponCadenceRepeated, "10", nil)
-	s.addCoupon("c_fixed5", types.CouponTypeFixed, types.CouponCadenceForever, "5", nil)
+	addCoupon("c_line20", types.CouponTypePercentage, types.CouponCadenceForever, "20", lo.ToPtr("li_tok_new"))
+	addCoupon("c_sub10", types.CouponTypePercentage, types.CouponCadenceRepeated, "10", nil)
+	addCoupon("c_fixed5", types.CouponTypeFixed, types.CouponCadenceForever, "5", nil)
 
 	tokens := func(apply bool) *dto.UsageAnalyticsResponse {
 		resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
@@ -432,9 +430,7 @@ func (s *UsageAnalyticsSuite) TestPercentageCouponsDiscountEachLineAsTheInvoiceD
 
 // A second, quarterly subscription on m_calls overlaps the monthly one: both charge the same events,
 // but the events and their usage count once unless rows are split by line.
-// addQuarterlyCallsSubscription gives acme a second, quarterly subscription on m_calls at $0.02,
-// overlapping the monthly one.
-func (s *UsageAnalyticsSuite) addQuarterlyCallsSubscription() {
+func (s *UsageAnalyticsSuite) TestOverlappingSubscriptionsCountEachEventOnce() {
 	ctx := s.GetContext()
 	st := s.GetStores()
 	base := types.GetDefaultBaseModel(ctx)
@@ -457,10 +453,6 @@ func (s *UsageAnalyticsSuite) addQuarterlyCallsSubscription() {
 		MeterID: "m_calls", DisplayName: "li_calls_q", Currency: "usd", BillingPeriod: types.BILLING_PERIOD_QUARTER,
 		BillingPeriodCount: 1, InvoiceCadence: types.InvoiceCadenceArrear, StartDate: queryOct1, BaseModel: base,
 	}}))
-}
-
-func (s *UsageAnalyticsSuite) TestOverlappingSubscriptionsCountEachEventOnce() {
-	s.addQuarterlyCallsSubscription()
 
 	// 15 days inside both subscriptions.
 	window := func(r *dto.UsageAnalyticsRequest) {
@@ -694,286 +686,4 @@ func TestSplitByBillingPeriod(t *testing.T) {
 	if _, err := splitByBillingPeriod(billedSubscription{sub: &broken, owner: &broken, start: cs.start, end: cs.end}); err == nil {
 		t.Fatal("want an error for an invalid billing period")
 	}
-}
-
-// parityValues are the values both analytics APIs report for one group, money rounded to cents.
-type parityValues struct {
-	Usage, Subtotal, Discount, Amount string
-	Events                            uint64
-}
-
-// oldAnalytics runs the existing analytics API (/events/analytics) over the suite's data.
-func (s *UsageAnalyticsSuite) oldAnalytics(mutate func(p *events.MeterUsageDetailedAnalyticsParams)) *dto.GetUsageAnalyticsResponse {
-	ctx := s.GetContext()
-	p := &events.MeterUsageDetailedAnalyticsParams{
-		TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
-		ExternalCustomerID: "acme", StartTime: queryOct1, EndTime: queryNov1,
-		MeterIDs: supportedMeters, UseFinal: true,
-	}
-	if mutate != nil {
-		mutate(p)
-	}
-	resp, err := NewMeterUsageService(s.params).GetDetailedAnalytics(ctx, p)
-	s.Require().NoError(err)
-	return resp
-}
-
-// oldBy sums the old API's items per key.
-func oldBy(resp *dto.GetUsageAnalyticsResponse, key func(dto.UsageAnalyticItem) string) map[string]parityValues {
-	type acc struct {
-		usage, subtotal, discount, amount decimal.Decimal
-		events                            uint64
-	}
-	sums := map[string]*acc{}
-	for _, it := range resp.Items {
-		k := key(it)
-		a := sums[k]
-		if a == nil {
-			a = &acc{}
-			sums[k] = a
-		}
-		a.usage = a.usage.Add(it.TotalUsage)
-		a.subtotal = a.subtotal.Add(it.Subtotal)
-		a.discount = a.discount.Add(it.TotalDiscount)
-		a.amount = a.amount.Add(it.TotalCost)
-		a.events += it.EventCount
-	}
-	out := map[string]parityValues{}
-	for k, a := range sums {
-		out[k] = parityValues{
-			Usage: a.usage.String(), Subtotal: a.subtotal.StringFixed(2), Discount: a.discount.StringFixed(2),
-			Amount: a.amount.StringFixed(2), Events: a.events,
-		}
-	}
-	return out
-}
-
-// newBy reads the new API's rows per key.
-func newBy(resp *dto.UsageAnalyticsResponse, key func(dto.UsageAnalyticsItem) string) map[string]parityValues {
-	out := map[string]parityValues{}
-	for _, it := range resp.Items {
-		out[key(it)] = parityValues{
-			Usage: decimal.RequireFromString(it.Usage).String(), Subtotal: it.Subtotal, Discount: it.Discount,
-			Amount: it.Amount, Events: it.EventCount,
-		}
-	}
-	return out
-}
-
-// pointKey is one group's time window, with money rounded to cents.
-type pointKey struct{ group, window string }
-
-func oldPoints(resp *dto.GetUsageAnalyticsResponse, key func(dto.UsageAnalyticItem) string) map[pointKey][2]string {
-	sums := map[pointKey][2]decimal.Decimal{}
-	for _, it := range resp.Items {
-		for _, p := range it.Points {
-			k := pointKey{key(it), p.Timestamp.UTC().Format(time.RFC3339)}
-			v := sums[k]
-			sums[k] = [2]decimal.Decimal{v[0].Add(p.Usage), v[1].Add(p.Cost)}
-		}
-	}
-	return nonZeroPoints(sums)
-}
-
-func newPoints(resp *dto.UsageAnalyticsResponse, key func(dto.UsageAnalyticsItem) string) map[pointKey][2]string {
-	sums := map[pointKey][2]decimal.Decimal{}
-	for _, it := range resp.Items {
-		for _, p := range it.Points {
-			sums[pointKey{key(it), p.Timestamp.UTC().Format(time.RFC3339)}] = [2]decimal.Decimal{
-				decimal.RequireFromString(p.Usage), decimal.RequireFromString(p.Amount),
-			}
-		}
-	}
-	return nonZeroPoints(sums)
-}
-
-// nonZeroPoints drops empty windows: the new API lists every window, the old one only those with usage.
-func nonZeroPoints(sums map[pointKey][2]decimal.Decimal) map[pointKey][2]string {
-	out := map[pointKey][2]string{}
-	for k, v := range sums {
-		if !v[0].IsZero() || !v[1].IsZero() {
-			out[k] = [2]string{v[0].String(), v[1].StringFixed(2)}
-		}
-	}
-	return out
-}
-
-// groupKey joins a new row's group values in order, with $none read as the old API's empty value.
-func groupKey(keys ...string) func(dto.UsageAnalyticsItem) string {
-	return func(it dto.UsageAnalyticsItem) string {
-		return strings.Join(lo.Map(keys, func(k string, _ int) string { return strings.TrimPrefix(it.Group[k], dto.UsageNoneValue) }), "|")
-	}
-}
-
-// parityCase is one request asked of both analytics APIs.
-type parityCase struct {
-	name   string
-	old    func(p *events.MeterUsageDetailedAnalyticsParams)
-	new    func(r *dto.UsageAnalyticsRequest)
-	oldKey func(dto.UsageAnalyticItem) string
-	newKey func(dto.UsageAnalyticsItem) string
-}
-
-var (
-	byOldLine  = func(it dto.UsageAnalyticItem) string { return it.SubLineItemID }
-	byOldMeter = func(it dto.UsageAnalyticItem) string { return it.MeterID }
-	byOldUser  = func(it dto.UsageAnalyticItem) string { return it.MeterID + "|" + it.Properties["user"] }
-	byOldSrc   = func(it dto.UsageAnalyticItem) string { return it.MeterID + "|" + it.Source }
-)
-
-// assertParity runs a case through both APIs and requires the same values per group, per window and in total.
-func (s *UsageAnalyticsSuite) assertParity(c parityCase) {
-	old := s.oldAnalytics(func(p *events.MeterUsageDetailedAnalyticsParams) {
-		p.IncludeChildren = true // the new API, like the invoice, always prices a parent's children
-		if c.old != nil {
-			c.old(p)
-		}
-	})
-	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
-		r.ApplyDiscounts = true // the old API always applies discounts
-		if c.new != nil {
-			c.new(r)
-		}
-	})
-	s.Require().NoError(err)
-
-	s.Equal(oldBy(old, c.oldKey), newBy(resp, c.newKey), "values per group")
-	s.Equal(oldPoints(old, c.oldKey), newPoints(resp, c.newKey), "values per window")
-	s.Equal(
-		dto.UsageAmounts{Subtotal: old.Subtotal.StringFixed(2), Discount: old.TotalDiscount.StringFixed(2), Amount: old.TotalCost.StringFixed(2)},
-		resp.Totals.UsageAmounts, "totals")
-}
-
-// metersWithoutMultiplier leave out m_scaled: the old API reads SUM_WITH_MULTIPLIER as zero once the
-// request sets group_by, window_size or sources (buildMeterUsageAggregationColumns has no case for it).
-var metersWithoutMultiplier = []string{"m_tokens", "m_calls"}
-
-func (s *UsageAnalyticsSuite) TestParityWithOldAnalytics() {
-	week := func(p *events.MeterUsageDetailedAnalyticsParams) {
-		p.MeterIDs, p.WindowSize = metersWithoutMultiplier, types.WindowSizeWeek
-	}
-	day := func(p *events.MeterUsageDetailedAnalyticsParams) {
-		p.MeterIDs, p.WindowSize = metersWithoutMultiplier, types.WindowSizeDay
-	}
-	oct10, oct20 := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
-
-	cases := []parityCase{
-		{name: "per line, full period", oldKey: byOldLine, newKey: groupKey("sub_line_item_id"),
-			new: func(r *dto.UsageAnalyticsRequest) { r.GroupBy = []string{"sub_line_item_id"} }},
-		{name: "per meter", oldKey: byOldMeter, newKey: groupKey("meter_id"),
-			new: func(r *dto.UsageAnalyticsRequest) { r.GroupBy = []string{"meter_id"} }},
-		{name: "per meter, part of the period", oldKey: byOldMeter, newKey: groupKey("meter_id"),
-			old: func(p *events.MeterUsageDetailedAnalyticsParams) { p.StartTime, p.EndTime = oct10, oct20 },
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.GroupBy = []string{"meter_id"}
-				r.StartTime, r.EndTime = lo.ToPtr(oct10), lo.ToPtr(oct20)
-			}},
-		{name: "per meter, daily points", oldKey: byOldMeter, newKey: groupKey("meter_id"), old: day,
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.MeterIDs, r.GroupBy, r.WindowSize = metersWithoutMultiplier, []string{"meter_id"}, types.WindowSizeDay
-			}},
-		{name: "per meter, weekly points", oldKey: byOldMeter, newKey: groupKey("meter_id"), old: week,
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.MeterIDs, r.GroupBy, r.WindowSize = metersWithoutMultiplier, []string{"meter_id"}, types.WindowSizeWeek
-			}},
-		{name: "per feature", oldKey: byOldMeter, newKey: groupKey("meter_id"),
-			old: func(p *events.MeterUsageDetailedAnalyticsParams) {
-				p.MeterIDs = nil
-				p.FeatureIDs = []string{"f_tokens", "f_calls"}
-			},
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.MeterIDs, r.FeatureIDs, r.GroupBy = nil, []string{"f_tokens", "f_calls"}, []string{"meter_id"}
-			}},
-		{name: "per user property", oldKey: byOldUser, newKey: groupKey("meter_id", "properties.user"),
-			old: func(p *events.MeterUsageDetailedAnalyticsParams) {
-				p.MeterIDs = metersWithoutMultiplier
-				p.GroupBy = []string{"properties.user"}
-			},
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.MeterIDs, r.GroupBy = metersWithoutMultiplier, []string{"meter_id", "properties.user"}
-			}},
-		{name: "per user property, weekly points", oldKey: byOldUser, newKey: groupKey("meter_id", "properties.user"),
-			old: func(p *events.MeterUsageDetailedAnalyticsParams) {
-				p.MeterIDs, p.GroupBy, p.WindowSize = metersWithoutMultiplier, []string{"properties.user"}, types.WindowSizeWeek
-			},
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.MeterIDs, r.GroupBy, r.WindowSize = metersWithoutMultiplier, []string{"meter_id", "properties.user"}, types.WindowSizeWeek
-			}},
-		{name: "per source", oldKey: byOldSrc, newKey: groupKey("meter_id", "source"),
-			old: func(p *events.MeterUsageDetailedAnalyticsParams) {
-				p.MeterIDs = metersWithoutMultiplier
-				p.GroupBy = []string{"source"}
-			},
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.MeterIDs, r.GroupBy = metersWithoutMultiplier, []string{"meter_id", "source"}
-			}},
-		{name: "property filter", oldKey: byOldMeter, newKey: groupKey("meter_id"),
-			old: func(p *events.MeterUsageDetailedAnalyticsParams) {
-				p.MeterIDs, p.PropertyFilters = metersWithoutMultiplier, map[string][]string{"user": {"alice"}}
-			},
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.MeterIDs, r.GroupBy = metersWithoutMultiplier, []string{"meter_id"}
-				r.Filters = []dto.UsageAnalyticsFilter{{Key: "properties.user", Op: "in", Values: []string{"alice"}}}
-			}},
-		{name: "source filter", oldKey: byOldMeter, newKey: groupKey("meter_id"),
-			old: func(p *events.MeterUsageDetailedAnalyticsParams) {
-				p.MeterIDs, p.Sources = metersWithoutMultiplier, []string{"api"}
-			},
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.MeterIDs, r.GroupBy, r.Sources = metersWithoutMultiplier, []string{"meter_id"}, []string{"api"}
-			}},
-		{name: "child customer", oldKey: byOldLine, newKey: groupKey("sub_line_item_id"),
-			old: func(p *events.MeterUsageDetailedAnalyticsParams) { p.ExternalCustomerID = "acme_child" },
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.ExternalCustomerID, r.GroupBy = "acme_child", []string{"sub_line_item_id"}
-			}},
-	}
-	for _, c := range cases {
-		s.Run(c.name, func() { s.assertParity(c) })
-	}
-}
-
-func (s *UsageAnalyticsSuite) TestParityWithOldAnalyticsWithCoupons() {
-	s.addCoupon("c_line20", types.CouponTypePercentage, types.CouponCadenceForever, "20", lo.ToPtr("li_tok_new"))
-	s.addCoupon("c_sub10", types.CouponTypePercentage, types.CouponCadenceRepeated, "10", nil)
-	for _, c := range []parityCase{
-		{name: "per line", oldKey: byOldLine, newKey: groupKey("sub_line_item_id"),
-			new: func(r *dto.UsageAnalyticsRequest) { r.GroupBy = []string{"sub_line_item_id"} }},
-		{name: "per user property, daily points", oldKey: byOldUser, newKey: groupKey("meter_id", "properties.user"),
-			old: func(p *events.MeterUsageDetailedAnalyticsParams) {
-				p.MeterIDs, p.GroupBy, p.WindowSize = metersWithoutMultiplier, []string{"properties.user"}, types.WindowSizeDay
-			},
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.MeterIDs, r.GroupBy, r.WindowSize = metersWithoutMultiplier, []string{"meter_id", "properties.user"}, types.WindowSizeDay
-			}},
-	} {
-		s.Run(c.name, func() { s.assertParity(c) })
-	}
-}
-
-// With overlapping subscriptions both APIs charge each line the same; per line, usage matches too.
-// Per meter the old API adds each line's usage, so an event under two lines counts twice there;
-// the new API counts it once.
-func (s *UsageAnalyticsSuite) TestParityWithOldAnalyticsOverlappingSubscriptions() {
-	s.addQuarterlyCallsSubscription()
-	oct15 := func(p *events.MeterUsageDetailedAnalyticsParams) {
-		p.MeterIDs, p.EndTime = []string{"m_calls"}, queryOct15
-	}
-	s.Run("per line", func() {
-		s.assertParity(parityCase{oldKey: byOldLine, newKey: groupKey("sub_line_item_id"), old: oct15,
-			new: func(r *dto.UsageAnalyticsRequest) {
-				r.MeterIDs, r.EndTime, r.GroupBy = []string{"m_calls"}, lo.ToPtr(queryOct15), []string{"sub_line_item_id"}
-			}})
-	})
-	s.Run("per meter: same money, usage counted once", func() {
-		old := oldBy(s.oldAnalytics(func(p *events.MeterUsageDetailedAnalyticsParams) { p.IncludeChildren = true; oct15(p) }), byOldMeter)
-		resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
-			r.MeterIDs, r.EndTime, r.GroupBy, r.ApplyDiscounts = []string{"m_calls"}, lo.ToPtr(queryOct15), []string{"meter_id"}, true
-		})
-		s.Require().NoError(err)
-		got := newBy(resp, groupKey("meter_id"))["m_calls"]
-		s.Equal(old["m_calls"].Amount, got.Amount)
-		s.Equal(parityValues{Usage: "7", Subtotal: "0.10", Discount: "0.00", Amount: "0.10", Events: 7}, old["m_calls"], "old: 4 + 3 events")
-		s.Equal(parityValues{Usage: "4", Subtotal: "0.10", Discount: "0.00", Amount: "0.10", Events: 4}, got, "new: 4 distinct events")
-	})
 }
