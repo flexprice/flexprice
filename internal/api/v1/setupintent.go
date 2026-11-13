@@ -19,7 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
-	"github.com/samber/lo"
 )
 
 type SetupIntentHandler struct {
@@ -248,14 +247,17 @@ func (h *SetupIntentHandler) handleRazorpaySetupLink(c *gin.Context, call func(r
 }
 
 func toSetupIntentResponse(customerID string, link *interfaces.SetupLinkResponse) dto.SetupIntentResponse {
-	return dto.SetupIntentResponse{
+	resp := dto.SetupIntentResponse{
 		SetupIntentID: link.ProviderSessionID,
 		CheckoutURL:   link.URL,
 		Status:        link.Status,
 		CustomerID:    customerID,
 		CreatedAt:     link.CreatedAt.Unix(),
-		ExpiresAt:     lo.FromPtr(link.ExpiresAt).Unix(),
 	}
+	if link.ExpiresAt != nil {
+		resp.ExpiresAt = link.ExpiresAt.Unix()
+	}
+	return resp
 }
 
 func (h *SetupIntentHandler) createStripeSetupIntent(c *gin.Context, customerID string, req *dto.CreateSetupIntentRequest) {

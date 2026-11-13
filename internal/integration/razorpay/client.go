@@ -523,10 +523,7 @@ func (c *Client) CancelInvoice(ctx context.Context, invoiceID string) (*Authoriz
 	result, err := rc.Post("/v1/invoices/"+invoiceID+"/cancel", map[string]interface{}{}, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to cancel Razorpay invoice", "error", err, "invoice_id", invoiceID)
-		return nil, ierr.NewError("failed to cancel Razorpay invoice").
-			WithHint("Only a link that hasn't been completed, expired or cancelled can be cancelled").
-			WithReportableDetails(map[string]interface{}{"invoice_id": invoiceID, "error": err.Error()}).
-			Mark(ierr.ErrInvalidOperation)
+		return nil, requestError(err, "failed to cancel Razorpay invoice", "Unable to cancel the Razorpay link")
 	}
 
 	resp, err := utils.ToStruct[AuthorizationLinkResponse](result)

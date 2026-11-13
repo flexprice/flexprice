@@ -414,9 +414,9 @@ func TestPaymentMethodAdapterListSavedMethods(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns tokens", func(t *testing.T) {
-		a := &PaymentMethodAdapter{CustomerSvc: &stubRazorpayCustomerSvc{tokens: []*interfaces.ProviderPaymentMethod{
+		a := NewPaymentMethodAdapter(nil, &stubRazorpayCustomerSvc{tokens: []*interfaces.ProviderPaymentMethod{
 			{GatewayMethodID: "token_1", Method: types.PaymentMethodTypeCard, Active: true, Recurring: &interfaces.ProviderRecurringPaymentDetails{Status: types.RecurringPaymentStatusActive}},
-		}}}
+		}}, nil)
 		got, err := a.ListSavedMethods(ctx, "cust_1")
 		require.NoError(t, err)
 		require.Len(t, got, 1)
@@ -424,14 +424,14 @@ func TestPaymentMethodAdapterListSavedMethods(t *testing.T) {
 	})
 
 	t.Run("unsynced customer has nothing saved", func(t *testing.T) {
-		a := &PaymentMethodAdapter{CustomerSvc: &stubRazorpayCustomerSvc{err: ierr.NewError("not synced").Mark(ierr.ErrNotFound)}}
+		a := NewPaymentMethodAdapter(nil, &stubRazorpayCustomerSvc{err: ierr.NewError("not synced").Mark(ierr.ErrNotFound)}, nil)
 		got, err := a.ListSavedMethods(ctx, "cust_1")
 		require.NoError(t, err)
 		assert.Empty(t, got)
 	})
 
 	t.Run("gateway failure propagates", func(t *testing.T) {
-		a := &PaymentMethodAdapter{CustomerSvc: &stubRazorpayCustomerSvc{err: errors.New("boom")}}
+		a := NewPaymentMethodAdapter(nil, &stubRazorpayCustomerSvc{err: errors.New("boom")}, nil)
 		_, err := a.ListSavedMethods(ctx, "cust_1")
 		assert.Error(t, err)
 	})
@@ -439,7 +439,7 @@ func TestPaymentMethodAdapterListSavedMethods(t *testing.T) {
 
 func TestPaymentMethodAdapterRejectsManagement(t *testing.T) {
 	ctx := context.Background()
-	a := &PaymentMethodAdapter{CustomerSvc: &stubRazorpayCustomerSvc{}}
+	a := NewPaymentMethodAdapter(nil, &stubRazorpayCustomerSvc{}, nil)
 
 	assert.True(t, ierr.IsValidation(a.DeleteSavedMethod(ctx, "cust_1", "token_1")))
 	assert.True(t, ierr.IsValidation(a.SetDefaultSavedMethod(ctx, "cust_1", "token_1")))
@@ -515,7 +515,7 @@ func TestPaymentMethodAdapterCreateSetupLink(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &setupLinkClient{}
 			customerSvc := &stubRazorpayCustomerSvc{customer: tt.customer}
-			a := &PaymentMethodAdapter{Client: client, CustomerSvc: customerSvc}
+			a := NewPaymentMethodAdapter(client, customerSvc, nil)
 
 			resp, err := a.CreateSetupLink(context.Background(), interfaces.SetupLinkRequest{CustomerID: "cust_1", MaxAmount: tt.maxAmount})
 			if tt.wantErr {

@@ -168,7 +168,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			resp = chargedResp
 			// The debit lands after the settlement window, so the session must outlive it
 			// or the late capture is refunded.
-			if settleBy := clock.Now().Add(session.PaymentProvider.SavedMethodSettlement(cfg.PaymentMethod)); settleBy.After(session.ExpiresAt) {
+			if settleBy := clock.Now().Add(session.PaymentProvider.SavedMethodSettlement(chargedResp.PaymentMethod)); settleBy.After(session.ExpiresAt) {
 				session.ExpiresAt = settleBy
 			}
 			break

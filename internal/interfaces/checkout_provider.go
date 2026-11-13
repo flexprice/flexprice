@@ -91,11 +91,12 @@ type CheckoutLineItem struct {
 
 // CheckoutProviderResponse is the unified output from all checkout provider adapters.
 type CheckoutProviderResponse struct {
-	ProviderSessionID       string              // stored in EntityIntegrationMapping
-	NextAction              types.PaymentAction // type + URL for the customer
-	ProviderPaymentIntentID string              // charge/intent ID, stored after payment confirmation
-	ExpiresAt               *time.Time          // nil if provider doesn't return expiry
-	ProviderMetadata        map[string]string   // debug data only, not for business logic
+	ProviderSessionID       string                  // stored in EntityIntegrationMapping
+	NextAction              types.PaymentAction     // type + URL for the customer
+	ProviderPaymentIntentID string                  // charge/intent ID, stored after payment confirmation
+	ExpiresAt               *time.Time              // nil if provider doesn't return expiry
+	ProviderMetadata        map[string]string       // debug data only, not for business logic
+	PaymentMethod           types.PaymentMethodType // method a saved-method charge used
 }
 
 // AuthorizationLinkRequest is the unified input for mandate/authorization

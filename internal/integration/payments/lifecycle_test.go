@@ -622,6 +622,11 @@ func TestChargeInFlight(t *testing.T) {
 		}
 	}
 
+	submitted := func(p *payment.Payment) *payment.Payment {
+		p.GatewayTrackingID = lo.ToPtr("order_1")
+		return p
+	}
+
 	tests := []struct {
 		name      string
 		payments  []*payment.Payment
@@ -630,11 +635,12 @@ func TestChargeInFlight(t *testing.T) {
 	}{
 		{name: "no payments"},
 		{name: "failed only", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusFailed)}},
-		{name: "initiated mandate charge", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusInitiated)}, want: true},
+		{name: "initiated mandate charge sent to the gateway", payments: []*payment.Payment{submitted(pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusInitiated))}, want: true},
+		{name: "initiated charge never sent to the gateway", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusInitiated)}},
 		{name: "pending upi charge", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeUPI, types.PaymentStatusPending)}, want: true},
 		{name: "processing card charge", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeCard, types.PaymentStatusProcessing)}, want: true},
 		{name: "pending payment link", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypePaymentLink, types.PaymentStatusInitiated)}},
-		{name: "excluded payment", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusInitiated)}, excludeID: "pay_1"},
+		{name: "excluded payment", payments: []*payment.Payment{submitted(pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusInitiated))}, excludeID: "pay_1"},
 		{name: "succeeded charge", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusSucceeded)}},
 	}
 

@@ -13,13 +13,17 @@ import (
 const enachSetupLinkExpiry = 7 * 24 * time.Hour
 
 type PaymentMethodAdapter struct {
-	Client          RazorpayClient
-	CustomerSvc     RazorpayCustomerService
-	FlexCustomerSvc interfaces.CustomerService
+	client          RazorpayClient
+	customerSvc     RazorpayCustomerService
+	flexCustomerSvc interfaces.CustomerService
+}
+
+func NewPaymentMethodAdapter(client RazorpayClient, customerSvc RazorpayCustomerService, flexCustomerSvc interfaces.CustomerService) *PaymentMethodAdapter {
+	return &PaymentMethodAdapter{client: client, customerSvc: customerSvc, flexCustomerSvc: flexCustomerSvc}
 }
 
 func (a *PaymentMethodAdapter) ListSavedMethods(ctx context.Context, customerID string) ([]interfaces.ProviderPaymentMethod, error) {
-	_, tokens, err := a.CustomerSvc.ListCustomerTokens(ctx, customerID)
+	_, tokens, err := a.customerSvc.ListCustomerTokens(ctx, customerID)
 	if err != nil {
 		if ierr.IsNotFound(err) {
 			return nil, nil
@@ -46,7 +50,7 @@ func (a *PaymentMethodAdapter) SetDefaultSavedMethod(ctx context.Context, custom
 
 // CreateSetupLink returns a ₹0 eNACH registration link; Razorpay doesn't redirect these, so ReturnURL is unused.
 func (a *PaymentMethodAdapter) CreateSetupLink(ctx context.Context, req interfaces.SetupLinkRequest) (*interfaces.SetupLinkResponse, error) {
-	c, err := a.CustomerSvc.EnsureCustomerSyncedToRazorpay(ctx, req.CustomerID, a.FlexCustomerSvc)
+	c, err := a.customerSvc.EnsureCustomerSyncedToRazorpay(ctx, req.CustomerID, a.flexCustomerSvc)
 	if err != nil {
 		return nil, err
 	}
@@ -71,11 +75,11 @@ func (a *PaymentMethodAdapter) CreateSetupLink(ctx context.Context, req interfac
 		linkReq.SubscriptionRegistration.MaxAmount = toPaise(*req.MaxAmount)
 	}
 
-	link, err := createCustomerLink(ctx, a.Client, a.CustomerSvc, c, linkReq)
+	link, err := createCustomerLink(ctx, a.client, a.customerSvc, c, linkReq)
 	if err != nil {
 		return nil, err
 	}
-	if err := a.CustomerSvc.SaveSetupLink(ctx, req.CustomerID, link.ID); err != nil {
+	if err := a.customerSvc.SaveSetupLink(ctx, req.CustomerID, link.ID); err != nil {
 		return nil, err
 	}
 	return link.toSetupLink(), nil

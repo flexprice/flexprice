@@ -642,9 +642,19 @@ func ChargeInFlight(ctx context.Context, paymentRepo payment.Repository, invoice
 		return false, err
 	}
 
-	openStatuses := []types.PaymentStatus{types.PaymentStatusInitiated, types.PaymentStatusPending, types.PaymentStatusProcessing}
 	return lo.ContainsBy(pymnts, func(p *payment.Payment) bool {
-		return p.ID != excludeID && p.PaymentMethodType.IsSavedMethod() && lo.Contains(openStatuses, p.PaymentStatus)
+		if p.ID == excludeID || !p.PaymentMethodType.IsSavedMethod() {
+			return false
+		}
+		switch p.PaymentStatus {
+		case types.PaymentStatusPending, types.PaymentStatusProcessing:
+			return true
+		case types.PaymentStatusInitiated:
+			// An INITIATED payment never sent to the gateway (process_payment false) is not a debit.
+			return lo.FromPtr(p.GatewayPaymentID) != "" || lo.FromPtr(p.GatewayTrackingID) != ""
+		default:
+			return false
+		}
 	}), nil
 }
 

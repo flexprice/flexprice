@@ -29,11 +29,12 @@ func (grantingLocker) AcquireLock(context.Context, string, time.Duration) (cache
 
 type lateCaptureClient struct {
 	RazorpayClient
-	refunds int
+	refunds      int
+	refundStatus string
 }
 
 func (c *lateCaptureClient) FetchPayment(context.Context, string) (map[string]interface{}, error) {
-	return map[string]interface{}{"status": "captured"}, nil
+	return map[string]interface{}{"status": "captured", "refund_status": c.refundStatus}, nil
 }
 
 func (c *lateCaptureClient) RefundPayment(context.Context, string, int64, string) (map[string]interface{}, error) {
@@ -109,4 +110,15 @@ func TestRefundLateCapturedPayment(t *testing.T) {
 			assert.Equal(t, "rfnd_1", payments.metadata["razorpay_refund_id"])
 		})
 	}
+}
+
+func TestRefundLateCapturedPayment_RepeatKeepsRefundID(t *testing.T) {
+	client := &lateCaptureClient{refundStatus: "full"}
+	payments := &lateCapturePayments{status: types.PaymentStatusFailed, metadata: types.Metadata{"razorpay_refund_id": "rfnd_1"}}
+	svc := &PaymentService{client: client, locker: grantingLocker{}, logger: logger.NewNoopLogger()}
+
+	require.NoError(t, svc.RefundLateCapturedPayment(context.Background(), "pay_fp", "pay_rzp", payments))
+
+	assert.Zero(t, client.refunds)
+	assert.Equal(t, "rfnd_1", payments.metadata["razorpay_refund_id"])
 }

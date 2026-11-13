@@ -38,6 +38,7 @@ type AutoChargeResult struct {
 	RazorpayPaymentID string // may be empty if the payment was already in-flight (AlreadySubmitted=true)
 	RazorpayOrderID   string // Razorpay order_xxx — always populated when a new or existing order was resolved
 	AlreadySubmitted  bool   // true = payment was previously submitted; webhook will reconcile
+	Method            types.PaymentMethodType
 }
 
 // ChargeSavedTokenRequest is the input for PaymentService.ChargeSavedToken.
@@ -890,6 +891,7 @@ func (s *PaymentService) ChargeSavedToken(
 	if err != nil {
 		return nil, false, err
 	}
+	result.Method = token.Method
 
 	s.logger.Info(ctx, "charge saved token: submitted",
 		"invoice_id", req.InvoiceID,
@@ -1052,6 +1054,9 @@ func (s *PaymentService) RefundLateCapturedPayment(
 
 	// A FAILED payment can't move again, so only the refund is recorded.
 	if existingPayment.PaymentStatus == types.PaymentStatusFailed {
+		if refundID == "" {
+			return nil
+		}
 		metadata := lo.Assign(existingPayment.Metadata, types.Metadata{"razorpay_refund_id": refundID})
 		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, dto.UpdatePaymentRequest{Metadata: &metadata}); err != nil {
 			return ierr.WithError(err).

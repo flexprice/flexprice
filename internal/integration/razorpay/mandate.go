@@ -310,6 +310,7 @@ func (a *CheckoutAdapter) TryAutoChargingSavedMethod(
 	return &interfaces.CheckoutProviderResponse{
 		ProviderSessionID:       sessionID,
 		ProviderPaymentIntentID: result.RazorpayPaymentID,
+		PaymentMethod:           result.Method,
 		// No NextAction — off-session charge; completion via payment webhook.
 	}, true, nil
 }
@@ -354,7 +355,7 @@ func createCustomerLink(ctx context.Context, client RazorpayClient, customerSvc 
 		return link, nil
 	}
 
-	if _, err := client.CancelInvoice(ctx, link.ID); err != nil {
+	if _, err := client.CancelInvoice(context.WithoutCancel(ctx), link.ID); err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Razorpay attached the link to another customer and it couldn't be cancelled").
 			WithReportableDetails(map[string]interface{}{"customer_id": c.ID, "link_id": link.ID}).

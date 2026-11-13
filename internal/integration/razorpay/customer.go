@@ -394,8 +394,9 @@ func (s *CustomerService) createSetupLinkMapping(ctx context.Context, customerID
 }
 
 // cancelSetupLink is best effort: a link that was already completed, expired or cancelled can't be cancelled.
+// It outlives the request so a dropped client still leaves no stray link.
 func (s *CustomerService) cancelSetupLink(ctx context.Context, linkID string) {
-	if _, err := s.client.CancelInvoice(ctx, linkID); err != nil {
+	if _, err := s.client.CancelInvoice(context.WithoutCancel(ctx), linkID); err != nil {
 		s.logger.Info(ctx, "razorpay setup link not cancelled", "link_id", linkID, "error", err)
 	}
 }
