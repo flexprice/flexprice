@@ -320,7 +320,7 @@ func (r *secretRepository) RevokeByUserID(ctx context.Context, userID string) ([
 		).
 		SetStatus(string(types.StatusDeleted)).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SaveReturning(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).
