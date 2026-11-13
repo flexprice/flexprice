@@ -318,8 +318,8 @@ func (s *StorageExportConfig) ValidateForProvider(providerType SecretProvider) e
 // S3JobConfig represents the configuration for an S3 export job
 // This is stored in the job_config JSON field of scheduled_tasks table
 type S3JobConfig struct {
-	Bucket               string               `json:"bucket"`                           // S3 bucket name
-	Region               string               `json:"region"`                           // AWS region (e.g., "us-west-2")
+	Bucket               string               `json:"bucket,omitempty"`                 // S3 bucket name
+	Region               string               `json:"region,omitempty"`                 // AWS region (e.g., "us-west-2")
 	KeyPrefix            string               `json:"key_prefix,omitempty"`             // Optional prefix for S3 keys (e.g., "flexprice-exports/")
 	Compression          S3CompressionType    `json:"compression,omitempty"`            // Compression type: "gzip", "none" (default: "none")
 	Encryption           S3EncryptionType     `json:"encryption,omitempty"`             // Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default: "AES256")

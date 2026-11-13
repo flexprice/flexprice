@@ -72,6 +72,42 @@ func TestUpdateScheduledTaskRequestValidate(t *testing.T) {
 	}
 }
 
+func TestScheduledTaskResponse_ManagedCopyHidesStorage(t *testing.T) {
+	task := &scheduledtask.ScheduledTask{
+		ID:          "st1",
+		ManagedCopy: true,
+		JobConfig: &types.S3JobConfig{
+			Bucket:               "fp-bucket",
+			Region:               "us-west-2",
+			KeyPrefix:            "exports/t1/e1/st1",
+			Provider:             types.SecretProviderS3,
+			Compression:          types.S3CompressionTypeGzip,
+			ExportMetadataFields: types.ExportMetadataFields{{EntityType: "customer", FieldKey: "region"}},
+		},
+	}
+	raw, err := json.Marshal(ToScheduledTaskResponse(task))
+	require.NoError(t, err)
+	var m struct {
+		JobConfig map[string]any `json:"job_config"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &m))
+	require.Equal(t, map[string]any{
+		"compression":            "gzip",
+		"export_metadata_fields": []any{map[string]any{"entity_type": "customer", "field_key": "region"}},
+	}, m.JobConfig)
+	require.Equal(t, "fp-bucket", task.JobConfig.Bucket)
+}
+
+func TestScheduledTaskResponse_ConnectionKeepsStorage(t *testing.T) {
+	task := &scheduledtask.ScheduledTask{
+		ID:           "st1",
+		ConnectionID: "c1",
+		JobConfig:    &types.S3JobConfig{Bucket: "customer", Region: "eu-west-1", KeyPrefix: "out"},
+	}
+	resp := ToScheduledTaskResponse(task)
+	require.Equal(t, task.JobConfig, resp.JobConfig)
+}
+
 func TestScheduledTaskResponse_OldShapeUnchanged(t *testing.T) {
 	task := &scheduledtask.ScheduledTask{
 		ID:           "st1",
