@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/types"
@@ -28,20 +29,44 @@ func (s *integrationSyncService) SyncEntity(ctx context.Context, req dto.Integra
 		return err
 	}
 
+	// One connection named: only its provider is synced, not every connected one.
+	var only *connection.Connection
+	var opts []integrationevents.DispatchOption
+	if req.ConnectionID != "" {
+		conn, err := s.ConnectionRepo.Get(ctx, req.ConnectionID)
+		if err != nil {
+			if ierr.IsNotFound(err) {
+				return ierr.NewError("connection not found").
+					WithHint("The connection to sync with does not exist in this environment").
+					Mark(ierr.ErrValidation)
+			}
+			return err
+		}
+		if conn.Status != types.StatusPublished {
+			return ierr.NewError("connection is not active").
+				WithHint("Sync with a published connection").
+				Mark(ierr.ErrValidation)
+		}
+		only = conn
+		opts = append(opts, integrationevents.OnlyProvider(conn.ProviderType))
+	}
+
 	switch req.EntityType {
 	case types.IntegrationEntityTypeInvoice:
 		if req.Method == dto.IntegrationSyncMethodPull {
-			return s.pullInvoice(ctx, req.EntityID)
+			return s.pullInvoice(ctx, req.EntityID, only)
 		}
-		return s.syncInvoice(ctx, req.EntityID, req.Resync)
+		return s.syncInvoice(ctx, req.EntityID, req.Resync, opts...)
 	case types.IntegrationEntityTypeCustomer:
-		return s.syncCustomer(ctx, req.EntityID)
+		return s.syncCustomer(ctx, req.EntityID, opts...)
 	default:
 		return ierr.NewError("unsupported entity_type").Mark(ierr.ErrValidation)
 	}
 }
 
-func (s *integrationSyncService) pullInvoice(ctx context.Context, invoiceID string) error {
+// pullInvoice reads the invoice back from each published connection in the
+// invoice's scope, or from `only` when set.
+func (s *integrationSyncService) pullInvoice(ctx context.Context, invoiceID string, only *connection.Connection) error {
 	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, invoiceID)
 	if err != nil {
 		return err
@@ -50,6 +75,21 @@ func (s *integrationSyncService) pullInvoice(ctx context.Context, invoiceID stri
 	connections, err := s.ConnectionRepo.ListPublishedInScope(ctx)
 	if err != nil {
 		return err
+	}
+	if only != nil {
+		// The named connection must be one the invoice's scope may use.
+		var inScope []*connection.Connection
+		for _, conn := range connections {
+			if conn.ID == only.ID {
+				inScope = append(inScope, conn)
+			}
+		}
+		if len(inScope) == 0 {
+			return ierr.NewError("connection is not available for this invoice").
+				WithHint("Sync with a connection that belongs to the invoice's billing entity").
+				Mark(ierr.ErrValidation)
+		}
+		connections = inScope
 	}
 
 	for _, conn := range connections {
@@ -65,7 +105,7 @@ func (s *integrationSyncService) pullInvoice(ctx context.Context, invoiceID stri
 	return nil
 }
 
-func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID string, resync bool) error {
+func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID string, resync bool, opts ...integrationevents.DispatchOption) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
 		return err
@@ -93,11 +133,11 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 		Payload:       payload,
 	}
 	return integrationevents.DispatchInvoiceVendorSync(
-		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.Logger, event, "", resync,
+		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.Logger, event, "", resync, opts...,
 	)
 }
 
-func (s *integrationSyncService) syncCustomer(ctx context.Context, customerID string) error {
+func (s *integrationSyncService) syncCustomer(ctx context.Context, customerID string, opts ...integrationevents.DispatchOption) error {
 	if _, err := s.CustomerRepo.Get(ctx, customerID); err != nil {
 		return err
 	}
@@ -118,6 +158,6 @@ func (s *integrationSyncService) syncCustomer(ctx context.Context, customerID st
 		Payload:       payload,
 	}
 	return integrationevents.DispatchCustomerVendorSync(
-		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.Logger, event, "",
+		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.Logger, event, "", opts...,
 	)
 }

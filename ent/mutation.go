@@ -33075,6 +33075,7 @@ type CustomerMutation struct {
 	contact_persons       *[]*schema.ContactPerson
 	appendcontact_persons []*schema.ContactPerson
 	billing_entity_id     *string
+	settings              **types.SettingsOverride
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*Customer, error)
@@ -34237,6 +34238,55 @@ func (m *CustomerMutation) ResetBillingEntityID() {
 	delete(m.clearedFields, customer.FieldBillingEntityID)
 }
 
+// SetSettings sets the "settings" field.
+func (m *CustomerMutation) SetSettings(to *types.SettingsOverride) {
+	m.settings = &to
+}
+
+// Settings returns the value of the "settings" field in the mutation.
+func (m *CustomerMutation) Settings() (r *types.SettingsOverride, exists bool) {
+	v := m.settings
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSettings returns the old "settings" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldSettings(ctx context.Context) (v *types.SettingsOverride, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSettings is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSettings requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSettings: %w", err)
+	}
+	return oldValue.Settings, nil
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (m *CustomerMutation) ClearSettings() {
+	m.settings = nil
+	m.clearedFields[customer.FieldSettings] = struct{}{}
+}
+
+// SettingsCleared returns if the "settings" field was cleared in this mutation.
+func (m *CustomerMutation) SettingsCleared() bool {
+	_, ok := m.clearedFields[customer.FieldSettings]
+	return ok
+}
+
+// ResetSettings resets all changes to the "settings" field.
+func (m *CustomerMutation) ResetSettings() {
+	m.settings = nil
+	delete(m.clearedFields, customer.FieldSettings)
+}
+
 // Where appends a list predicates to the CustomerMutation builder.
 func (m *CustomerMutation) Where(ps ...predicate.Customer) {
 	m.predicates = append(m.predicates, ps...)
@@ -34271,7 +34321,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 24)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -34341,6 +34391,9 @@ func (m *CustomerMutation) Fields() []string {
 	if m.billing_entity_id != nil {
 		fields = append(fields, customer.FieldBillingEntityID)
 	}
+	if m.settings != nil {
+		fields = append(fields, customer.FieldSettings)
+	}
 	return fields
 }
 
@@ -34395,6 +34448,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.ContactPersons()
 	case customer.FieldBillingEntityID:
 		return m.BillingEntityID()
+	case customer.FieldSettings:
+		return m.Settings()
 	}
 	return nil, false
 }
@@ -34450,6 +34505,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldContactPersons(ctx)
 	case customer.FieldBillingEntityID:
 		return m.OldBillingEntityID(ctx)
+	case customer.FieldSettings:
+		return m.OldSettings(ctx)
 	}
 	return nil, fmt.Errorf("unknown Customer field %s", name)
 }
@@ -34620,6 +34677,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBillingEntityID(v)
 		return nil
+	case customer.FieldSettings:
+		v, ok := value.(*types.SettingsOverride)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSettings(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
 }
@@ -34698,6 +34762,9 @@ func (m *CustomerMutation) ClearedFields() []string {
 	if m.FieldCleared(customer.FieldBillingEntityID) {
 		fields = append(fields, customer.FieldBillingEntityID)
 	}
+	if m.FieldCleared(customer.FieldSettings) {
+		fields = append(fields, customer.FieldSettings)
+	}
 	return fields
 }
 
@@ -34759,6 +34826,9 @@ func (m *CustomerMutation) ClearField(name string) error {
 		return nil
 	case customer.FieldBillingEntityID:
 		m.ClearBillingEntityID()
+		return nil
+	case customer.FieldSettings:
+		m.ClearSettings()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer nullable field %s", name)
@@ -34836,6 +34906,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldBillingEntityID:
 		m.ResetBillingEntityID()
+		return nil
+	case customer.FieldSettings:
+		m.ResetSettings()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
@@ -80725,6 +80798,7 @@ type SubscriptionMutation struct {
 	auto_invoice_threshold     *decimal.Decimal
 	synced_price_sequence      *int64
 	addsynced_price_sequence   *int64
+	settings                   **types.SettingsOverride
 	clearedFields              map[string]struct{}
 	line_items                 map[string]struct{}
 	removedline_items          map[string]struct{}
@@ -82821,6 +82895,55 @@ func (m *SubscriptionMutation) ResetSyncedPriceSequence() {
 	m.addsynced_price_sequence = nil
 }
 
+// SetSettings sets the "settings" field.
+func (m *SubscriptionMutation) SetSettings(to *types.SettingsOverride) {
+	m.settings = &to
+}
+
+// Settings returns the value of the "settings" field in the mutation.
+func (m *SubscriptionMutation) Settings() (r *types.SettingsOverride, exists bool) {
+	v := m.settings
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSettings returns the old "settings" field's value of the Subscription entity.
+// If the Subscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionMutation) OldSettings(ctx context.Context) (v *types.SettingsOverride, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSettings is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSettings requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSettings: %w", err)
+	}
+	return oldValue.Settings, nil
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (m *SubscriptionMutation) ClearSettings() {
+	m.settings = nil
+	m.clearedFields[subscription.FieldSettings] = struct{}{}
+}
+
+// SettingsCleared returns if the "settings" field was cleared in this mutation.
+func (m *SubscriptionMutation) SettingsCleared() bool {
+	_, ok := m.clearedFields[subscription.FieldSettings]
+	return ok
+}
+
+// ResetSettings resets all changes to the "settings" field.
+func (m *SubscriptionMutation) ResetSettings() {
+	m.settings = nil
+	delete(m.clearedFields, subscription.FieldSettings)
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by ids.
 func (m *SubscriptionMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -83260,7 +83383,7 @@ func (m *SubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 46)
+	fields := make([]string, 0, 47)
 	if m.tenant_id != nil {
 		fields = append(fields, subscription.FieldTenantID)
 	}
@@ -83399,6 +83522,9 @@ func (m *SubscriptionMutation) Fields() []string {
 	if m.synced_price_sequence != nil {
 		fields = append(fields, subscription.FieldSyncedPriceSequence)
 	}
+	if m.settings != nil {
+		fields = append(fields, subscription.FieldSettings)
+	}
 	return fields
 }
 
@@ -83499,6 +83625,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.AutoInvoiceThreshold()
 	case subscription.FieldSyncedPriceSequence:
 		return m.SyncedPriceSequence()
+	case subscription.FieldSettings:
+		return m.Settings()
 	}
 	return nil, false
 }
@@ -83600,6 +83728,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldAutoInvoiceThreshold(ctx)
 	case subscription.FieldSyncedPriceSequence:
 		return m.OldSyncedPriceSequence(ctx)
+	case subscription.FieldSettings:
+		return m.OldSettings(ctx)
 	}
 	return nil, fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -83931,6 +84061,13 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSyncedPriceSequence(v)
 		return nil
+	case subscription.FieldSettings:
+		v, ok := value.(*types.SettingsOverride)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSettings(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -84057,6 +84194,9 @@ func (m *SubscriptionMutation) ClearedFields() []string {
 	if m.FieldCleared(subscription.FieldAutoInvoiceThreshold) {
 		fields = append(fields, subscription.FieldAutoInvoiceThreshold)
 	}
+	if m.FieldCleared(subscription.FieldSettings) {
+		fields = append(fields, subscription.FieldSettings)
+	}
 	return fields
 }
 
@@ -84127,6 +84267,9 @@ func (m *SubscriptionMutation) ClearField(name string) error {
 		return nil
 	case subscription.FieldAutoInvoiceThreshold:
 		m.ClearAutoInvoiceThreshold()
+		return nil
+	case subscription.FieldSettings:
+		m.ClearSettings()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription nullable field %s", name)
@@ -84273,6 +84416,9 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 		return nil
 	case subscription.FieldSyncedPriceSequence:
 		m.ResetSyncedPriceSequence()
+		return nil
+	case subscription.FieldSettings:
+		m.ResetSettings()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)

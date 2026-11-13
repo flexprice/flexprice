@@ -490,7 +490,6 @@ func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrant_RefusesCommitme
 func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrant_IgnoresTerminatedOpenEndedCommitment() {
 	s.enableEntitlementAlerts()
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	fx := s.newSubGrantSubscription("commit-terminated-open")
 	dead := &commitment.Commitment{
 		ID:               "cmt_dead_open",

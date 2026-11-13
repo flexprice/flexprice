@@ -18641,7 +18641,7 @@ const docTemplate = `{
                     }
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -18697,7 +18697,7 @@ const docTemplate = `{
                     }
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -21613,6 +21613,14 @@ const docTemplate = `{
                     "description": "onboarding_workflow_name is given if a custom onboarding workflow is to be triggered for this customer",
                     "type": "string"
                 },
+                "settings": {
+                    "description": "settings overrides the environment settings for this customer's subscriptions",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
+                },
                 "skip_onboarding_workflow": {
                     "description": "skip_onboarding_workflow when true, prevents the customer onboarding workflow from being triggered\nThis is used internally when a customer is created via a workflow to prevent infinite loops\nDefault: false",
                     "type": "boolean"
@@ -22558,31 +22566,46 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "commitment_amount": {
-                    "description": "Commitment fields",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_duration": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
                 },
                 "commitment_overage_factor": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_quantity": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_time_buckets": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "commitment_type": {
-                    "$ref": "#/definitions/types.CommitmentType"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CommitmentType"
+                        }
+                    ]
                 },
                 "commitment_windowed": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "display_name": {
@@ -22672,10 +22695,11 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.CollectionMethod"
                 },
                 "commitment_amount": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "commitment_duration": {
-                    "description": "CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.BillingPeriod"
@@ -22710,6 +22734,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "enable_true_up": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "end_date": {
@@ -22744,7 +22769,7 @@ const docTemplate = `{
                     ]
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id.",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -22785,6 +22810,7 @@ const docTemplate = `{
                     }
                 },
                 "overage_factor": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "override_entitlements": {
@@ -22820,6 +22846,14 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
+                "settings": {
+                    "description": "Settings overrides the customer and environment settings for this subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
                         }
                     ]
                 },
@@ -23655,6 +23689,14 @@ const docTemplate = `{
                 "name": {
                     "description": "Name is the name of the customer",
                     "type": "string"
+                },
+                "settings": {
+                    "description": "Settings overrides the environment's settings for this customer's subscriptions.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -25199,10 +25241,11 @@ const docTemplate = `{
                     }
                 },
                 "commitment_amount": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "commitment_duration": {
-                    "description": "CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.BillingPeriod"
@@ -25223,13 +25266,14 @@ const docTemplate = `{
                     }
                 },
                 "enable_true_up": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "external_customer_id": {
                     "type": "string"
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id.",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -25253,6 +25297,7 @@ const docTemplate = `{
                     }
                 },
                 "overage_factor": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "override_entitlements": {
@@ -30182,6 +30227,14 @@ const docTemplate = `{
                 "proration_behavior": {
                     "$ref": "#/definitions/types.ProrationBehavior"
                 },
+                "settings": {
+                    "description": "Settings overrides the customer's and environment's settings for this subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
+                },
                 "start_date": {
                     "description": "StartDate is the start date of the subscription",
                     "type": "string"
@@ -30443,6 +30496,14 @@ const docTemplate = `{
                 },
                 "proration_behavior": {
                     "$ref": "#/definitions/types.ProrationBehavior"
+                },
+                "settings": {
+                    "description": "Settings overrides the customer's and environment's settings for this subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
                 },
                 "start_date": {
                     "description": "StartDate is the start date of the subscription",
@@ -31526,6 +31587,14 @@ const docTemplate = `{
                     "description": "name is the updated name or company name for the customer",
                     "type": "string"
                 },
+                "settings": {
+                    "description": "settings replaces the customer's setting overrides when provided; send {} to inherit the environment settings",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
+                },
                 "tax_treatment": {
                     "description": "tax_treatment is the updated tax treatment for the customer",
                     "allOf": [
@@ -31945,32 +32014,46 @@ const docTemplate = `{
                     ]
                 },
                 "commitment_amount": {
-                    "description": "Commitment fields",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_duration": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
                 },
                 "commitment_overage_factor": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_quantity": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_time_buckets": {
-                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).",
+                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).\n\nDeprecated: use POST /commitments instead.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "commitment_type": {
-                    "$ref": "#/definitions/types.CommitmentType"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CommitmentType"
+                        }
+                    ]
                 },
                 "commitment_windowed": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "effective_from": {
@@ -32039,6 +32122,14 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
+                "settings": {
+                    "description": "Settings replaces the subscription's setting overrides when provided; send {} to inherit.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
                         }
                     ]
                 },
@@ -33403,6 +33494,14 @@ const docTemplate = `{
                 "name": {
                     "description": "Name is the name of the customer",
                     "type": "string"
+                },
+                "settings": {
+                    "description": "Settings overrides the environment's settings for this customer's subscriptions.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -39997,6 +40096,26 @@ const docTemplate = `{
                 "RevenueReportGroupByContract",
                 "RevenueReportGroupByPOB"
             ]
+        },
+        "types.SettingsOverride": {
+            "type": "object",
+            "properties": {
+                "subscription_config": {
+                    "$ref": "#/definitions/types.SubscriptionConfigOverride"
+                }
+            }
+        },
+        "types.SubscriptionConfigOverride": {
+            "type": "object",
+            "properties": {
+                "auto_cancellation_enabled": {
+                    "type": "boolean"
+                },
+                "grace_period_days": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
         },
         "types.TenantInternalStatus": {
             "type": "string",

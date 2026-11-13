@@ -15,7 +15,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
-	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -43,8 +42,7 @@ type commitmentFixtures struct {
 	priceOtherMeterInGroup *price.Price
 }
 
-// seedCommitmentFixtures stores a monthly subscription anchored 1 Jan 2025 with two usage prices in group grp_1,
-// and enables commitments_v2.
+// seedCommitmentFixtures stores a monthly subscription anchored 1 Jan 2025 with two usage prices in group grp_1.
 func seedCommitmentFixtures(t *testing.T, ctx context.Context, stores testutil.Stores) commitmentFixtures {
 	t.Helper()
 	jan := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -178,25 +176,7 @@ func seedCommitmentFixtures(t *testing.T, ctx context.Context, stores testutil.S
 	apiOnlyLine := line("subs_line_api_only", apiOnly)
 	require.NoError(t, stores.SubscriptionLineItemRepo.Create(ctx, apiOnlyLine))
 
-	setCommitmentsV2(t, ctx, stores, true)
 	return fx
-}
-
-func setCommitmentsV2(t *testing.T, ctx context.Context, stores testutil.Stores, enabled bool) {
-	t.Helper()
-	if _, err := stores.SettingsRepo.GetByKey(ctx, types.SettingKeyCommitmentsV2); err == nil {
-		require.NoError(t, stores.SettingsRepo.DeleteByKey(ctx, types.SettingKeyCommitmentsV2))
-	}
-
-	setting := &settings.Setting{
-		ID:            types.GenerateUUIDWithPrefix("setting"),
-		Key:           types.SettingKeyCommitmentsV2,
-		Value:         map[string]interface{}{"enabled": enabled},
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		BaseModel:     types.GetDefaultBaseModel(ctx),
-	}
-
-	require.NoError(t, stores.SettingsRepo.Create(ctx, setting))
 }
 
 // fixedFee is a fixed cancellation fee of amount.
@@ -303,16 +283,6 @@ func (s *CommitmentServiceSuite) TestCreate_AmountCommitmentHasNoPrices() {
 	s.True(resp.CommitmentValue.Equal(decimal.NewFromInt(1200)), "got %s", resp.CommitmentValue)
 }
 
-func (s *CommitmentServiceSuite) TestCreate_RejectedWhenDisabled() {
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
-	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
-	s.Require().Error(err)
-	s.True(ierr.IsInvalidOperation(err), "got %v", err)
-	enabled, err := s.svc.IsEnabled(s.GetContext())
-	s.Require().NoError(err)
-	s.False(enabled)
-}
-
 func (s *CommitmentServiceSuite) TestCreate_IdempotencyKeyReturnsExisting() {
 	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
 	req.IdempotencyKey = lo.ToPtr("contract-1")
@@ -408,13 +378,6 @@ func (s *CommitmentServiceSuite) TestCreate_IdempotencyKeyFromAnotherSubscriptio
 	n, err := s.GetStores().CommitmentRepo.Count(ctx, commitment.NewNoLimitFilter())
 	s.Require().NoError(err)
 	s.Equal(1, n)
-}
-
-func (s *CommitmentServiceSuite) TestPreview_RejectedWhenDisabled() {
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
-	_, err := s.svc.Preview(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
-	s.Require().Error(err)
-	s.True(ierr.IsInvalidOperation(err), "got %v", err)
 }
 
 func (s *CommitmentServiceSuite) TestPreview_DoesNotPersist() {
@@ -984,14 +947,6 @@ func (s *CommitmentServiceSuite) TestTerminate_SecondTerminateBillsNothing() {
 	s.Len(invoices, 1)
 }
 
-func (s *CommitmentServiceSuite) TestTerminate_RejectedWhenDisabled() {
-	created := s.createChargeable(true)
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
-	at := created.StartDate.AddDate(0, 3, 0)
-	_, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
-	s.True(ierr.IsInvalidOperation(err), "got %v", err)
-}
-
 // failingInvoiceRepo rejects every invoice insert.
 type failingInvoiceRepo struct{ invoice.Repository }
 
@@ -1283,14 +1238,6 @@ func (s *CommitmentServiceSuite) TestCancelSubscription_TerminatesCommitments() 
 	got, err := s.svc.Get(s.GetContext(), created.ID)
 	s.Require().NoError(err)
 	s.Equal(types.CommitmentStatusTerminated, got.CommitmentStatus)
-}
-
-func (s *CommitmentServiceSuite) TestTerminateResources_NoopWhenDisabled() {
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
-	subSvc := NewSubscriptionService(fullServiceParams(&s.BaseServiceTestSuite))
-	s.Require().NoError(subSvc.TerminateSubscriptionResources(s.GetContext(), dto.TerminateSubscriptionResourcesRequest{
-		SubscriptionID: s.fx.sub.ID, EffectiveDate: s.fx.sub.StartDate.AddDate(0, 2, 0),
-	}))
 }
 
 // recordingDB and recordingCommitmentRepo log the order of transactions, locks and reads.

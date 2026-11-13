@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/temporal/queries"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"go.temporal.io/api/serviceerror"
 )
 
 // WorkflowService provides workflow list and query operations for the API.
@@ -196,6 +198,11 @@ func (s *workflowService) GetWorkflowSummary(ctx context.Context, workflowID, ru
 		return nil, err
 	}
 	info, err := s.querier.DescribeWorkflow(ctx, workflowID, runID)
+	if _, ok := stderrors.AsType[*serviceerror.NotFound](err); ok {
+		return nil, ierr.WithError(err).
+			WithHint("No workflow run found with this ID. Finished runs are kept only for a limited time.").
+			Mark(ierr.ErrNotFound)
+	}
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve workflow summary from Temporal").
@@ -237,6 +244,11 @@ func (s *workflowService) GetWorkflowDetails(ctx context.Context, workflowID, ru
 		return nil, err
 	}
 	info, err := s.querier.DescribeWorkflow(ctx, workflowID, runID)
+	if _, ok := stderrors.AsType[*serviceerror.NotFound](err); ok {
+		return nil, ierr.WithError(err).
+			WithHint("No workflow run found with this ID. Finished runs are kept only for a limited time.").
+			Mark(ierr.ErrNotFound)
+	}
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve workflow details from Temporal").
@@ -287,6 +299,11 @@ func (s *workflowService) GetWorkflowTimeline(ctx context.Context, workflowID, r
 		return nil, err
 	}
 	info, err := s.querier.DescribeWorkflow(ctx, workflowID, runID)
+	if _, ok := stderrors.AsType[*serviceerror.NotFound](err); ok {
+		return nil, ierr.WithError(err).
+			WithHint("No workflow run found with this ID. Finished runs are kept only for a limited time.").
+			Mark(ierr.ErrNotFound)
+	}
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve workflow details from Temporal").

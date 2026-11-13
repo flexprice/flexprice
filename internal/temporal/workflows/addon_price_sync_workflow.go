@@ -30,7 +30,9 @@ func AddonPriceSyncWorkflow(ctx workflow.Context, in models.AddonPriceSyncWorkfl
 	}
 
 	ao := workflow.ActivityOptions{
+		// The activity heartbeats, so a dead worker is noticed after HeartbeatTimeout.
 		StartToCloseTimeout: time.Hour * 6,
+		HeartbeatTimeout:    time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    time.Second,
 			BackoffCoefficient: 2.0,

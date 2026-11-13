@@ -57,27 +57,20 @@ func (s *invoiceService) refreshStaleDraft(
 		return err
 	}
 
-	enabled, err := newCommitmentService(s.ServiceParams).IsEnabled(ctx)
+	subscriptionIDs, err := s.invoicedSubscriptionIDs(ctx, *inv.SubscriptionID)
 	if err != nil {
 		return err
 	}
 
-	var missing []string
+	missing, err := s.missingInstalments(ctx, subscriptionIDs, inv, billed)
+	if err != nil {
+		return err
+	}
+
 	var changed bool
-	if enabled {
-		subscriptionIDs, err := s.invoicedSubscriptionIDs(ctx, *inv.SubscriptionID)
-		if err != nil {
+	if inv.LastComputedAt != nil {
+		if changed, err = s.commitmentChangedSince(ctx, subscriptionIDs, *inv.LastComputedAt); err != nil {
 			return err
-		}
-
-		if missing, err = s.missingInstalments(ctx, subscriptionIDs, inv, billed); err != nil {
-			return err
-		}
-
-		if inv.LastComputedAt != nil {
-			if changed, err = s.commitmentChangedSince(ctx, subscriptionIDs, *inv.LastComputedAt); err != nil {
-				return err
-			}
 		}
 	}
 

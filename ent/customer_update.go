@@ -363,6 +363,18 @@ func (_u *CustomerUpdate) ClearBillingEntityID() *CustomerUpdate {
 	return _u
 }
 
+// SetSettings sets the "settings" field.
+func (_u *CustomerUpdate) SetSettings(v *types.SettingsOverride) *CustomerUpdate {
+	_u.mutation.SetSettings(v)
+	return _u
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (_u *CustomerUpdate) ClearSettings() *CustomerUpdate {
+	_u.mutation.ClearSettings()
+	return _u
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (_u *CustomerUpdate) Mutation() *CustomerMutation {
 	return _u.mutation
@@ -545,6 +557,12 @@ func (_u *CustomerUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.BillingEntityIDCleared() {
 		_spec.ClearField(customer.FieldBillingEntityID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Settings(); ok {
+		_spec.SetField(customer.FieldSettings, field.TypeJSON, value)
+	}
+	if _u.mutation.SettingsCleared() {
+		_spec.ClearField(customer.FieldSettings, field.TypeJSON)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -898,6 +916,18 @@ func (_u *CustomerUpdateOne) ClearBillingEntityID() *CustomerUpdateOne {
 	return _u
 }
 
+// SetSettings sets the "settings" field.
+func (_u *CustomerUpdateOne) SetSettings(v *types.SettingsOverride) *CustomerUpdateOne {
+	_u.mutation.SetSettings(v)
+	return _u
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (_u *CustomerUpdateOne) ClearSettings() *CustomerUpdateOne {
+	_u.mutation.ClearSettings()
+	return _u
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (_u *CustomerUpdateOne) Mutation() *CustomerMutation {
 	return _u.mutation
@@ -1110,6 +1140,12 @@ func (_u *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err 
 	}
 	if _u.mutation.BillingEntityIDCleared() {
 		_spec.ClearField(customer.FieldBillingEntityID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Settings(); ok {
+		_spec.SetField(customer.FieldSettings, field.TypeJSON, value)
+	}
+	if _u.mutation.SettingsCleared() {
+		_spec.ClearField(customer.FieldSettings, field.TypeJSON)
 	}
 	_node = &Customer{config: _u.config}
 	_spec.Assign = _node.assignValues

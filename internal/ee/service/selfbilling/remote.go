@@ -28,6 +28,9 @@ const (
 	trialCurrency      = "usd"
 	trialBillingPeriod = sdktypes.BillingPeriodMonthly
 
+	// trialPaymentBehavior keeps a trial whose trial-end invoice is unpaid incomplete; Cloud's default_active would activate it.
+	trialPaymentBehavior = sdktypes.PaymentBehaviorAllowIncomplete
+
 	// metaExternalID tags a checkout session with the customer it belongs to.
 	metaExternalID = "self_billing_external_id"
 	metaTaxID      = "tax_id"
@@ -35,6 +38,9 @@ const (
 	summaryInvoiceLimit = 12
 
 	usageEventSource = "self_billing"
+
+	// fxRateQueryLimit is the API's page maximum, well above the number of currencies.
+	fxRateQueryLimit = 1000
 )
 
 type remoteClient struct {
@@ -97,6 +103,7 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) (bool, erro
 		PlanID:             c.planID,
 		Currency:           trialCurrency,
 		BillingPeriod:      trialBillingPeriod,
+		PaymentBehavior:    lo.ToPtr(trialPaymentBehavior),
 	})
 	if err != nil {
 		return false, cloudErr(err)
@@ -305,6 +312,36 @@ func (c *remoteClient) IngestBulk(ctx context.Context, events []usageEvent) erro
 
 	_, err := c.sdk.Events.IngestEventsBulk(ctx, req)
 	return cloudErr(err)
+}
+
+// USDRates reads the billing tenant's tenant-wide rates to USD; a market rate has no stored value, so it is left out.
+func (c *remoteClient) USDRates(ctx context.Context) (map[string]decimal.Decimal, error) {
+	resp, err := c.sdk.FXRates.QueryFXRates(ctx, sdktypes.FXRateFilter{
+		Scope:      lo.ToPtr(sdktypes.FXRateScopeTenant),
+		ToCurrency: lo.ToPtr(usdCurrency),
+		Status:     lo.ToPtr(sdktypes.StatusPublished),
+		Limit:      lo.ToPtr(int64(fxRateQueryLimit)),
+	})
+	if err != nil {
+		return nil, cloudErr(err)
+	}
+
+	rates := make(map[string]decimal.Decimal)
+	for _, r := range resp.ListFXRatesResponse.GetItems() {
+		if lo.FromPtr(r.Source) == sdktypes.FXRateSourceMarket {
+			continue
+		}
+
+		rate, err := decimal.NewFromString(lo.FromPtr(r.Rate))
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithMessagef("flexprice cloud fx rate %s has an unparseable rate %q", lo.FromPtr(r.ID), lo.FromPtr(r.Rate)).
+				WithHint("The billing FX rate could not be read").
+				Mark(ierr.ErrInternal)
+		}
+		rates[strings.ToLower(lo.FromPtr(r.FromCurrency))] = rate
+	}
+	return rates, nil
 }
 
 // toRemoteSubscription maps the SDK subscription onto local types; Flexprice Cloud shares our status values.

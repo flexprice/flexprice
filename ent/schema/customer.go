@@ -115,6 +115,8 @@ func (Customer) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+		field.JSON("settings", &types.SettingsOverride{}).
+			Optional(),
 	}
 }
 
@@ -154,5 +156,8 @@ func (Customer) Indexes() []ent.Index {
 			StorageKey(Idx_customer_metadata_gin),
 		index.Fields("tenant_id", "environment_id", "billing_entity_id").
 			StorageKey("idx_customers_tenant_env_billing_entity"),
+		index.Fields("tenant_id", "environment_id").
+			StorageKey("idx_customers_settings_override").
+			Annotations(entsql.IndexWhere("((settings IS NOT NULL) AND ((status)::text = 'published'::text))")),
 	}
 }

@@ -149,6 +149,26 @@ func (r *billingInstalmentRepository) List(ctx context.Context, filter *billingt
 	return billingterm.InstalmentsFromEnt(rows), nil
 }
 
+func (r *billingInstalmentRepository) ListEnvironments(ctx context.Context, filter *billingterm.InstalmentFilter) ([]types.TenantEnvironment, error) {
+	span := StartRepositorySpan(ctx, "billing_instalment", "list_environments", nil)
+	defer FinishSpan(span)
+
+	var envs []types.TenantEnvironment
+	query := r.client.Reader(ctx).BillingInstalment.Query().Where(entbillinginstalment.Status(string(types.StatusPublished)))
+	err := applyInstalmentFilter(query, filter).
+		GroupBy(entbillinginstalment.FieldTenantID, entbillinginstalment.FieldEnvironmentID).
+		Scan(ctx, &envs)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list environments with billing instalments").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return envs, nil
+}
+
 func (r *billingInstalmentRepository) ListInvoiced(
 	ctx context.Context,
 	ownerType types.BillingTermOwnerType,

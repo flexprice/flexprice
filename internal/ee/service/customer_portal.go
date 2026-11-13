@@ -155,6 +155,9 @@ func (s *customerPortalService) UpdateCustomer(ctx context.Context, req dto.Upda
 		return nil, ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
 	}
 
+	// Setting overrides are negotiated terms; a customer must not change their own.
+	req.Settings = nil
+
 	customer, err := s.customerService.UpdateCustomer(ctx, customerID, req)
 	if err != nil {
 		return nil, err

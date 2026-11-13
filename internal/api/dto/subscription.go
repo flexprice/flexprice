@@ -76,6 +76,9 @@ func (r *SubscriptionPhaseCreateRequest) ToSubscriptionPhase(ctx context.Context
 	}
 }
 
+// LineItemCommitmentConfig is a legacy line-item commitment.
+//
+// Deprecated: use the commitments API instead.
 type LineItemCommitmentConfig struct {
 	CommitmentAmount   *decimal.Decimal     `json:"commitment_amount,omitempty"`
 	CommitmentQuantity *decimal.Decimal     `json:"commitment_quantity,omitempty"`
@@ -432,13 +435,18 @@ type SubscriptionCreationConfig struct {
 
 	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
 
+	// Deprecated: use POST /commitments instead.
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
 
-	// CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).
+	// Deprecated: use POST /commitments instead.
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 
-	OverageFactor    *decimal.Decimal   `json:"overage_factor,omitempty" swaggertype:"string"`
-	EnableTrueUp     bool               `json:"enable_true_up"`
+	// Deprecated: use POST /commitments instead.
+	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
+
+	// Deprecated: use POST /commitments instead.
+	EnableTrueUp bool `json:"enable_true_up"`
+
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 
 	// SubscriptionCoupons is the preferred way to attach coupons at creation.
@@ -451,7 +459,7 @@ type SubscriptionCreationConfig struct {
 	// Deprecated: use SubscriptionCoupons instead.
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 
-	// LineItemCommitments sets per-line-item commitment config, keyed by price_id.
+	// Deprecated: use POST /commitments instead.
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
 
 	// OverrideLineItems overrides specific plan prices for this subscription.
@@ -647,6 +655,9 @@ type CreateSubscriptionRequest struct {
 	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
 	PaymentTerms       *types.PaymentTerms      `json:"payment_terms,omitempty"`
 
+	// Settings overrides the customer and environment settings for this subscription.
+	Settings *types.SettingsOverride `json:"settings,omitempty"`
+
 	// AutoInvoiceThreshold triggers a mid-period invoice when usage (in subscription currency) exceeds this amount.
 	// Standalone subscriptions only; all plan prices must be usage-based. Immutable after creation.
 	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
@@ -764,6 +775,9 @@ type UpdateSubscriptionRequest struct {
 
 	// ProrationBehavior updates the stored behavior. Omit to leave it unchanged.
 	ProrationBehavior *types.ProrationBehavior `json:"proration_behavior,omitempty"`
+
+	// Settings replaces the subscription's setting overrides when provided; send {} to inherit.
+	Settings *types.SettingsOverride `json:"settings,omitempty"`
 }
 
 // Validate checks UpdateSubscriptionRequest fields for basic structural validity.
@@ -1642,6 +1656,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
 		ParentSubscriptionID:   parentSubscriptionID,
 		PaymentTerms:           r.PaymentTerms,
+		Settings:               NormalizeSettingsOverride(r.Settings),
 		SubscriptionType:       subscriptionType,
 	}
 
