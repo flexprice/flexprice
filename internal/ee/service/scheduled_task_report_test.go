@@ -226,10 +226,10 @@ func TestUpdateAndForceRun_ReportAllowedWithAnalyticsRead(t *testing.T) {
 	s.rbac = testRBAC(t)
 	ctx := withRoles(exportCtx(), roleWithAnalytics)
 
-	_, err := s.UpdateScheduledTask(ctx, "st_1", dto.UpdateScheduledTaskRequest{Enabled: &disable})
+	_, err := s.TriggerForceRun(ctx, "st_1", dto.TriggerForceRunRequest{})
 	require.NoError(t, err)
 
-	_, err = s.TriggerForceRun(ctx, "st_1", dto.TriggerForceRunRequest{})
+	_, err = s.UpdateScheduledTask(ctx, "st_1", dto.UpdateScheduledTaskRequest{Enabled: &disable})
 	require.NoError(t, err)
 }
 
@@ -240,10 +240,10 @@ func TestUpdateAndForceRun_EventsExportUnaffected(t *testing.T) {
 	s.rbac = testRBAC(t)
 	ctx := withRoles(exportCtx(), roleWithoutAnalytics)
 
-	_, err := s.UpdateScheduledTask(ctx, "st_1", dto.UpdateScheduledTaskRequest{Enabled: &disable})
+	_, err := s.TriggerForceRun(ctx, "st_1", dto.TriggerForceRunRequest{})
 	require.NoError(t, err)
 
-	_, err = s.TriggerForceRun(ctx, "st_1", dto.TriggerForceRunRequest{})
+	_, err = s.UpdateScheduledTask(ctx, "st_1", dto.UpdateScheduledTaskRequest{Enabled: &disable})
 	require.NoError(t, err)
 }
 

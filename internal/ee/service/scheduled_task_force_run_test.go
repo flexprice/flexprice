@@ -98,6 +98,7 @@ func TestTriggerForceRun_ReportWindowMustBeWholeUTCDays(t *testing.T) {
 		Interval:     types.ScheduledTaskIntervalDaily,
 		Schedule:     &types.ExportSchedule{Timezone: "Asia/Kolkata"},
 		SourceConfig: &types.ExportSourceConfig{ReportKey: "k", ReportParams: &types.ReportParams{Shape: "timeseries"}},
+		Enabled:      true,
 	}
 	at := func(s string) *time.Time {
 		v, err := time.Parse(time.RFC3339, s)
@@ -128,6 +129,7 @@ func TestTriggerForceRun_ReportWindowCappedByMaxRangeDays(t *testing.T) {
 		EntityType:   types.ScheduledTaskEntityTypeReport,
 		Interval:     types.ScheduledTaskIntervalManual,
 		SourceConfig: &types.ExportSourceConfig{ReportKey: "events_volume", ReportParams: &types.ReportParams{Shape: "timeseries"}},
+		Enabled:      true,
 	}
 	at := func(s string) *time.Time {
 		v, err := time.Parse(time.RFC3339, s)
@@ -157,6 +159,7 @@ func TestTriggerForceRun_ViewWindowValidatedAgainstView(t *testing.T) {
 		EntityType:   types.ScheduledTaskEntityTypeAnalyticsView,
 		Interval:     types.ScheduledTaskIntervalManual,
 		SourceConfig: &types.ExportSourceConfig{ViewID: "view_1"},
+		Enabled:      true,
 	}
 	at := func(s string) *time.Time {
 		v, err := time.Parse(time.RFC3339, s)
