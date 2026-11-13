@@ -149,17 +149,16 @@ func (s *InMemoryCustomerDeletionStore) Create(ctx context.Context, request *cus
 
 	existing, err := s.requests.List(ctx, nil, func(ctx context.Context, r *customerdeletion.CustomerDeletionRequest, _ interface{}) bool {
 		return deletionScoped(ctx, r.TenantID, r.EnvironmentID) &&
-			(r.CustomerID == request.CustomerID || r.ExternalID == request.ExternalID)
+			r.CustomerID == request.CustomerID
 	}, nil)
 	if err != nil {
 		return err
 	}
 	if len(existing) > 0 {
 		return ierr.NewError("customer deletion request already exists").
-			WithHint("A deletion request already exists for this customer or external ID").
+			WithHint("A deletion request already exists for this customer").
 			WithReportableDetails(map[string]any{
 				"customer_id": request.CustomerID,
-				"external_id": request.ExternalID,
 			}).
 			Mark(ierr.ErrAlreadyExists)
 	}
@@ -217,9 +216,28 @@ func (s *InMemoryCustomerDeletionStore) GetByCustomerID(ctx context.Context, cus
 }
 
 func (s *InMemoryCustomerDeletionStore) GetByExternalID(ctx context.Context, externalID string) (*customerdeletion.CustomerDeletionRequest, error) {
-	return s.getBy(ctx, func(ctx context.Context, r *customerdeletion.CustomerDeletionRequest) bool {
-		return r.ExternalID == externalID
-	}, "external_id", externalID)
+	items, err := s.requests.List(ctx, nil, func(ctx context.Context, r *customerdeletion.CustomerDeletionRequest, _ interface{}) bool {
+		return deletionScoped(ctx, r.TenantID, r.EnvironmentID) && r.ExternalID == externalID
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, ierr.NewError("customer deletion request not found").
+			WithHintf("No deletion request exists for external_id %s", externalID).
+			WithReportableDetails(map[string]any{
+				"external_id": externalID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	latest := items[0]
+	for _, r := range items[1:] {
+		if r.RequestedAt.After(latest.RequestedAt) {
+			latest = r
+		}
+	}
+	return copyDeletionRequest(latest), nil
 }
 
 func (s *InMemoryCustomerDeletionStore) getBy(ctx context.Context, match func(context.Context, *customerdeletion.CustomerDeletionRequest) bool, key, value string) (*customerdeletion.CustomerDeletionRequest, error) {

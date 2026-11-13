@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS "customer_deletion_categories" ("id" character varyin
 
 CREATE UNIQUE INDEX IF NOT EXISTS "customerdeletionrequest_tenant_id_environment_id_customer_id" ON "customer_deletion_requests" ("tenant_id", "environment_id", "customer_id");
 
--- No partial predicate: retirement is permanent
-CREATE UNIQUE INDEX IF NOT EXISTS "customerdeletionrequest_tenant_id_environment_id_external_id" ON "customer_deletion_requests" ("tenant_id", "environment_id", "external_id");
+-- Not unique: external IDs are reusable after erasure
+CREATE INDEX IF NOT EXISTS "customerdeletionrequest_tenant_id_environment_id_external_id" ON "customer_deletion_requests" ("tenant_id", "environment_id", "external_id");
 
 CREATE INDEX IF NOT EXISTS "customerdeletionrequest_tenant_id_environment_id_state" ON "customer_deletion_requests" ("tenant_id", "environment_id", "state");
 

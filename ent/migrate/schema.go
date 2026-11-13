@@ -1119,7 +1119,7 @@ var (
 			},
 			{
 				Name:    "customerdeletionrequest_tenant_id_environment_id_external_id",
-				Unique:  true,
+				Unique:  false,
 				Columns: []*schema.Column{CustomerDeletionRequestsColumns[1], CustomerDeletionRequestsColumns[7], CustomerDeletionRequestsColumns[9]},
 			},
 			{

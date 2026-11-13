@@ -34,7 +34,7 @@ type CustomerDeletionRequest struct {
 	EnvironmentID string `json:"environment_id,omitempty"`
 	// Internal customer ID; stable across later redaction
 	CustomerID string `json:"customer_id,omitempty"`
-	// Permanent, never cleared; tenant-facing key and never-reuse registry value
+	// External ID as of the request; reusable afterwards, so not unique
 	ExternalID string `json:"external_id,omitempty"`
 	// Request lifecycle: suppressed, redacting, completed, failed. Unrelated to the status column
 	State string `json:"state,omitempty"`

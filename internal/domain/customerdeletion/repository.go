@@ -10,7 +10,7 @@ type Repository interface {
 	// GetByCustomerID retrieves the deletion request for an internal customer ID
 	GetByCustomerID(ctx context.Context, customerID string) (*CustomerDeletionRequest, error)
 
-	// GetByExternalID retrieves the deletion request for a retired external ID
+	// GetByExternalID retrieves the most recent deletion request for an external ID
 	GetByExternalID(ctx context.Context, externalID string) (*CustomerDeletionRequest, error)
 
 	// ListCategories retrieves the category rows of a request
