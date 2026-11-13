@@ -358,8 +358,8 @@ sequenceDiagram
         SVC->>PG: transaction: conditional cancel + restore status + lift suppression + clear snapshot
         SVC->>SL: invalidate suppression and read caches (retryable)
         SVC->>WF: advisory cancellation signal
-        WF->>SL: ensure cancelled cache cleanup (idempotent; no transition)
-        SVC-->>T: cancelled after cleanup; 503 request_id if cleanup pending
+        WF->>SL: ensure cancelled cache cleanup, idempotent, no transition
+        SVC-->>T: cancelled after cleanup, 503 request_id if cleanup pending
     else cooldown ends
         WF->>PG: suppressed -> redacting (conditional)
         WF->>PG: lock affected customers, revalidate and mark irreversible (one transaction)
