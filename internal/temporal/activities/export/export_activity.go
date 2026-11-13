@@ -105,6 +105,17 @@ type ExportDataOutput struct {
 	Metadata      map[string]string
 }
 
+// Deterministic failures skip Temporal retries.
+func exportFailure(err error) error {
+	switch {
+	case ierr.IsValidation(err):
+		return temporal.NewNonRetryableApplicationError(err.Error(), "ValidationError", err)
+	case ierr.IsNotFound(err):
+		return temporal.NewNonRetryableApplicationError(err.Error(), "NotFound", err)
+	}
+	return err
+}
+
 // ExportData performs the complete export: prepare data, generate CSV, upload to provider
 func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) (*ExportDataOutput, error) {
 	a.logger.Info(ctx, "starting data export",
@@ -138,10 +149,7 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 	response, err := exportService.Export(ctx, request)
 	if err != nil {
 		a.logger.Error(ctx, "export failed", "error", err, "entity_type", input.EntityType)
-		if ierr.IsValidation(err) {
-			return nil, temporal.NewNonRetryableApplicationError(err.Error(), "ValidationError", err)
-		}
-		return nil, err
+		return nil, exportFailure(err)
 	}
 
 	a.logger.Info(ctx, "export completed successfully",
