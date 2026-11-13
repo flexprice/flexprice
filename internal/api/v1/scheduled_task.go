@@ -66,6 +66,7 @@ func (h *ScheduledTaskHandler) CreateScheduledTask(c *gin.Context) {
 // @Summary Get scheduled task
 // @ID getScheduledTask
 // @Description Use when you need to load a single scheduled task (e.g. to show details in a UI or check its configuration).
+// @Description report and analytics_view exports need analytics read access; without it this returns 403.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
@@ -73,6 +74,7 @@ func (h *ScheduledTaskHandler) CreateScheduledTask(c *gin.Context) {
 // @Param id path string true "Scheduled Task ID"
 // @Success 200 {object} dto.ScheduledTaskResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 403 {object} ierr.ErrorResponse "Forbidden"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks/scheduled/{id} [get]
@@ -92,6 +94,7 @@ func (h *ScheduledTaskHandler) GetScheduledTask(c *gin.Context) {
 // @Summary List scheduled tasks
 // @ID listScheduledTasks
 // @Description Use when listing or managing scheduled tasks in an admin UI. Returns all exports, including those without a connection; supports filtering and pagination.
+// @Description report and analytics_view rows omit source_config when the caller lacks analytics read access.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json

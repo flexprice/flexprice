@@ -247,6 +247,57 @@ func TestUpdateAndForceRun_EventsExportUnaffected(t *testing.T) {
 	require.NoError(t, err)
 }
 
+type listRepoFake struct {
+	scheduledtask.Repository
+	tasks []*scheduledtask.ScheduledTask
+}
+
+func (r *listRepoFake) List(context.Context, *scheduledtask.ListFilters) ([]*scheduledtask.ScheduledTask, error) {
+	return r.tasks, nil
+}
+
+func TestGetScheduledTask_ReportNeedsAnalyticsRead(t *testing.T) {
+	for _, entity := range []types.ScheduledTaskEntityType{types.ScheduledTaskEntityTypeReport, types.ScheduledTaskEntityTypeAnalyticsView} {
+		t.Run(string(entity), func(t *testing.T) {
+			s := newExportService(&exportRepoFake{task: storedExportTask(entity)}, &exportTemporalFake{})
+			s.rbac = testRBAC(t)
+
+			_, err := s.GetScheduledTask(withRoles(exportCtx(), roleWithoutAnalytics), "st_1")
+			require.True(t, ierr.IsPermissionDenied(err), "got %v", err)
+
+			resp, err := s.GetScheduledTask(withRoles(exportCtx(), roleWithAnalytics), "st_1")
+			require.NoError(t, err)
+			require.NotNil(t, resp.SourceConfig)
+		})
+	}
+
+	s := newExportService(&exportRepoFake{task: storedExportTask(types.ScheduledTaskEntityTypeEvents)}, &exportTemporalFake{})
+	s.rbac = testRBAC(t)
+	_, err := s.GetScheduledTask(withRoles(exportCtx(), roleWithoutAnalytics), "st_1")
+	require.NoError(t, err)
+}
+
+func TestListScheduledTasks_HidesReportSourceWithoutAnalyticsRead(t *testing.T) {
+	repo := &listRepoFake{tasks: []*scheduledtask.ScheduledTask{
+		storedExportTask(types.ScheduledTaskEntityTypeReport),
+		storedExportTask(types.ScheduledTaskEntityTypeEvents),
+	}}
+	s := newExportService(&exportRepoFake{}, &exportTemporalFake{})
+	s.repo = repo
+	s.rbac = testRBAC(t)
+
+	resp, err := s.ListScheduledTasks(withRoles(exportCtx(), roleWithoutAnalytics), nil, "", "", "", "")
+	require.NoError(t, err)
+	require.Len(t, resp.Items, 2)
+	require.Nil(t, resp.Items[0].SourceConfig)
+	require.Equal(t, types.ScheduledTaskEntityTypeReport, resp.Items[0].EntityType)
+
+	resp, err = s.ListScheduledTasks(withRoles(exportCtx(), roleWithAnalytics), nil, "", "", "", "")
+	require.NoError(t, err)
+	require.NotNil(t, resp.Items[0].SourceConfig)
+	require.NotNil(t, repo.tasks[0].SourceConfig)
+}
+
 func TestCheckReportGrain(t *testing.T) {
 	tests := []struct {
 		name     string

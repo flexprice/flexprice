@@ -254,6 +254,9 @@ func (s *scheduledTaskService) GetScheduledTask(ctx context.Context, id string) 
 			WithHint("Scheduled task not found").
 			Mark(ierr.ErrNotFound)
 	}
+	if err := requireAnalyticsRead(ctx, s.rbac, task.EntityType); err != nil {
+		return nil, err
+	}
 
 	return dto.ToScheduledTaskResponse(task), nil
 }
@@ -304,7 +307,13 @@ func (s *scheduledTaskService) ListScheduledTasks(ctx context.Context, filter *t
 		Offset: filter.GetOffset(),
 	}
 
-	return dto.ToScheduledTaskListResponse(tasks, pagination), nil
+	resp := dto.ToScheduledTaskListResponse(tasks, pagination)
+	for _, item := range resp.Items {
+		if requireAnalyticsRead(ctx, s.rbac, item.EntityType) != nil {
+			item.SourceConfig = nil
+		}
+	}
+	return resp, nil
 }
 
 // UpdateScheduledTask updates a scheduled task (only enabled field can be changed)
