@@ -8128,6 +8128,121 @@ const docTemplate = `{
                 }
             }
         },
+        "/payments/customers/{id}/setup/intent": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the live state of the customer's latest setup link. Razorpay only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Get setup intent",
+                "operationId": "getSetupIntent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "razorpay"
+                        ],
+                        "type": "string",
+                        "description": "Payment provider",
+                        "name": "provider",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/SetupIntentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments/customers/{id}/setup/intent/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Cancels the customer's latest setup link if it hasn't been completed. Razorpay only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Cancel setup intent",
+                "operationId": "cancelSetupIntent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "razorpay"
+                        ],
+                        "type": "string",
+                        "description": "Payment provider",
+                        "name": "provider",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/SetupIntentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "delete"
+            }
+        },
         "/payments/{id}": {
             "get": {
                 "security": [
@@ -16368,6 +16483,75 @@ const docTemplate = `{
                         "description": "Webhook payload",
                         "schema": {
                             "$ref": "#/definitions/webhookDto.InvoiceWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.cancelled": {
+            "post": {
+                "description": "Fired when a saved mandate is cancelled. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.cancelled",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.confirmed": {
+            "post": {
+                "description": "Fired when the bank confirms a saved mandate (Razorpay eNACH). Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.confirmed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.rejected": {
+            "post": {
+                "description": "Fired when the bank rejects a mandate; failure_reason carries the bank's reason. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.rejected",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
                         }
                     }
                 }
@@ -28385,6 +28569,23 @@ const docTemplate = `{
                 }
             }
         },
+        "SavedBankAccountDetails": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "auth_type": {
+                    "type": "string"
+                },
+                "ifsc": {
+                    "type": "string"
+                },
+                "last4": {
+                    "type": "string"
+                }
+            }
+        },
         "SavedCardDetails": {
             "type": "object",
             "properties": {
@@ -28405,6 +28606,9 @@ const docTemplate = `{
         "SavedPaymentMethod": {
             "type": "object",
             "properties": {
+                "bank_account": {
+                    "$ref": "#/definitions/SavedBankAccountDetails"
+                },
                 "can_auto_charge": {
                     "description": "Capability, not permission: could this be charged with nobody present.\nTrue for any active Chargebee or Stripe card (both vault off-session by\nconstruction); false for a Razorpay token without a mandate.",
                     "type": "boolean"
@@ -28807,6 +29011,38 @@ const docTemplate = `{
                 },
                 "usage": {
                     "$ref": "#/definitions/CustomerUsageSummaryResponse"
+                }
+            }
+        },
+        "SetupIntentResponse": {
+            "type": "object",
+            "properties": {
+                "checkout_session_id": {
+                    "type": "string"
+                },
+                "checkout_url": {
+                    "type": "string"
+                },
+                "client_secret": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "integer"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "integer"
+                },
+                "setup_intent_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "usage": {
+                    "type": "string"
                 }
             }
         },
@@ -35707,7 +35943,8 @@ const docTemplate = `{
                 "item_price",
                 "price",
                 "invoice_line_item",
-                "subscription_line_item"
+                "subscription_line_item",
+                "payment_method_setup"
             ],
             "x-enum-varnames": [
                 "IntegrationEntityTypeCustomer",
@@ -35721,7 +35958,8 @@ const docTemplate = `{
                 "IntegrationEntityTypeItemPrice",
                 "IntegrationEntityTypePrice",
                 "IntegrationEntityTypeInvoiceLineItem",
-                "IntegrationEntityTypeSubscriptionLineItem"
+                "IntegrationEntityTypeSubscriptionLineItem",
+                "IntegrationEntityTypePaymentMethodSetup"
             ]
         },
         "types.InvoiceBillingReason": {
@@ -36314,7 +36552,8 @@ const docTemplate = `{
                 "OFFLINE",
                 "CREDITS",
                 "PAYMENT_LINK",
-                "UPI"
+                "UPI",
+                "ENACH"
             ],
             "x-enum-varnames": [
                 "PaymentMethodTypeCard",
@@ -36322,7 +36561,8 @@ const docTemplate = `{
                 "PaymentMethodTypeOffline",
                 "PaymentMethodTypeCredits",
                 "PaymentMethodTypePaymentLink",
-                "PaymentMethodTypeUPI"
+                "PaymentMethodTypeUPI",
+                "PaymentMethodTypeENACH"
             ]
         },
         "types.PaymentStatus": {
@@ -38354,6 +38594,9 @@ const docTemplate = `{
                 "checkout.session.completed",
                 "checkout.session.failed",
                 "checkout.session.expired",
+                "mandate.confirmed",
+                "mandate.rejected",
+                "mandate.cancelled",
                 "event.rejected"
             ],
             "x-enum-varnames": [
@@ -38428,6 +38671,9 @@ const docTemplate = `{
                 "WebhookEventCheckoutSessionCompleted",
                 "WebhookEventCheckoutSessionFailed",
                 "WebhookEventCheckoutSessionExpired",
+                "WebhookEventMandateConfirmed",
+                "WebhookEventMandateRejected",
+                "WebhookEventMandateCancelled",
                 "WebhookEventEventRejected"
             ]
         },
@@ -40772,6 +41018,72 @@ const docTemplate = `{
                 },
                 "invoice": {
                     "$ref": "#/definitions/webhookDto.Invoice"
+                }
+            }
+        },
+        "webhookDto.Mandate": {
+            "type": "object",
+            "properties": {
+                "bank_account": {
+                    "$ref": "#/definitions/webhookDto.MandateBankAccount"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "failure_reason": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "max_amount": {
+                    "type": "string"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.PaymentGatewayType"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.PaymentMethodType"
+                }
+            }
+        },
+        "webhookDto.MandateBankAccount": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "auth_type": {
+                    "type": "string"
+                },
+                "bank": {
+                    "type": "string"
+                },
+                "ifsc": {
+                    "type": "string"
+                },
+                "last4": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.MandateWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "mandate": {
+                    "$ref": "#/definitions/webhookDto.Mandate"
                 }
             }
         },

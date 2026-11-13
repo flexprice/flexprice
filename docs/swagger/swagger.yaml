@@ -7959,6 +7959,17 @@ definitions:
       pob_id:
         type: string
     type: object
+  SavedBankAccountDetails:
+    properties:
+      account_type:
+        type: string
+      auth_type:
+        type: string
+      ifsc:
+        type: string
+      last4:
+        type: string
+    type: object
   SavedCardDetails:
     properties:
       brand:
@@ -7972,6 +7983,8 @@ definitions:
     type: object
   SavedPaymentMethod:
     properties:
+      bank_account:
+        $ref: '#/definitions/SavedBankAccountDetails'
       can_auto_charge:
         description: |-
           Capability, not permission: could this be charged with nobody present.
@@ -8244,6 +8257,27 @@ definitions:
         type: string
       usage:
         $ref: '#/definitions/CustomerUsageSummaryResponse'
+    type: object
+  SetupIntentResponse:
+    properties:
+      checkout_session_id:
+        type: string
+      checkout_url:
+        type: string
+      client_secret:
+        type: string
+      created_at:
+        type: integer
+      customer_id:
+        type: string
+      expires_at:
+        type: integer
+      setup_intent_id:
+        type: string
+      status:
+        type: string
+      usage:
+        type: string
     type: object
   SourceUsageItem:
     properties:
@@ -13250,6 +13284,7 @@ definitions:
     - price
     - invoice_line_item
     - subscription_line_item
+    - payment_method_setup
     type: string
     x-enum-varnames:
     - IntegrationEntityTypeCustomer
@@ -13264,6 +13299,7 @@ definitions:
     - IntegrationEntityTypePrice
     - IntegrationEntityTypeInvoiceLineItem
     - IntegrationEntityTypeSubscriptionLineItem
+    - IntegrationEntityTypePaymentMethodSetup
   types.InvoiceBillingReason:
     enum:
     - SUBSCRIPTION_CREATE
@@ -13737,6 +13773,7 @@ definitions:
     - CREDITS
     - PAYMENT_LINK
     - UPI
+    - ENACH
     type: string
     x-enum-varnames:
     - PaymentMethodTypeCard
@@ -13745,6 +13782,7 @@ definitions:
     - PaymentMethodTypeCredits
     - PaymentMethodTypePaymentLink
     - PaymentMethodTypeUPI
+    - PaymentMethodTypeENACH
   types.PaymentStatus:
     enum:
     - INITIATED
@@ -15275,6 +15313,9 @@ definitions:
     - checkout.session.completed
     - checkout.session.failed
     - checkout.session.expired
+    - mandate.confirmed
+    - mandate.rejected
+    - mandate.cancelled
     - event.rejected
     type: string
     x-enum-varnames:
@@ -15349,6 +15390,9 @@ definitions:
     - WebhookEventCheckoutSessionCompleted
     - WebhookEventCheckoutSessionFailed
     - WebhookEventCheckoutSessionExpired
+    - WebhookEventMandateConfirmed
+    - WebhookEventMandateRejected
+    - WebhookEventMandateCancelled
     - WebhookEventEventRejected
   types.WindowSize:
     enum:
@@ -17041,6 +17085,49 @@ definitions:
         $ref: '#/definitions/types.WebhookEventName'
       invoice:
         $ref: '#/definitions/webhookDto.Invoice'
+    type: object
+  webhookDto.Mandate:
+    properties:
+      bank_account:
+        $ref: '#/definitions/webhookDto.MandateBankAccount'
+      currency:
+        type: string
+      customer_id:
+        type: string
+      expires_at:
+        type: string
+      failure_reason:
+        type: string
+      id:
+        type: string
+      max_amount:
+        type: string
+      provider:
+        $ref: '#/definitions/types.PaymentGatewayType'
+      status:
+        type: string
+      type:
+        $ref: '#/definitions/types.PaymentMethodType'
+    type: object
+  webhookDto.MandateBankAccount:
+    properties:
+      account_type:
+        type: string
+      auth_type:
+        type: string
+      bank:
+        type: string
+      ifsc:
+        type: string
+      last4:
+        type: string
+    type: object
+  webhookDto.MandateWebhookPayload:
+    properties:
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      mandate:
+        $ref: '#/definitions/webhookDto.Mandate'
     type: object
   webhookDto.Meter:
     properties:
@@ -23144,6 +23231,83 @@ paths:
       summary: Process payment
       tags:
       - Payments
+  /payments/customers/{id}/setup/intent:
+    get:
+      description: Returns the live state of the customer's latest setup link. Razorpay
+        only.
+      operationId: getSetupIntent
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payment provider
+        enum:
+        - razorpay
+        in: query
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SetupIntentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get setup intent
+      tags:
+      - Payments
+  /payments/customers/{id}/setup/intent/cancel:
+    post:
+      description: Cancels the customer's latest setup link if it hasn't been completed.
+        Razorpay only.
+      operationId: cancelSetupIntent
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payment provider
+        enum:
+        - razorpay
+        in: query
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SetupIntentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Cancel setup intent
+      tags:
+      - Payments
+      x-scope: delete
   /performance_obligations/{id}:
     get:
       description: Use when you need to load a single performance obligation with
@@ -28541,6 +28705,53 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.voided
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.cancelled:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a saved mandate is cancelled. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.cancelled
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.confirmed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when the bank confirms a saved mandate (Razorpay eNACH).
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.confirmed
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.rejected:
+    post:
+      consumes:
+      - application/json
+      description: Fired when the bank rejects a mandate; failure_reason carries the
+        bank's reason. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.rejected
       tags:
       - Webhook Events
   /webhook-events/payment.attempt.failed:
