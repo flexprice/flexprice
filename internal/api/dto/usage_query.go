@@ -34,7 +34,7 @@ const (
 	UsageExpandFeature      UsageExpand = "feature"
 )
 
-// UsageQueryRequest is the body of POST /analytics/usage/query.
+// UsageQueryRequest is the body of POST /usage/analytics.
 type UsageQueryRequest struct {
 	ExternalCustomerID string             `json:"external_customer_id" binding:"required"`
 	StartTime          *time.Time         `json:"start_time,omitempty"`

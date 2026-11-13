@@ -262,12 +262,13 @@ func NewRouter(
 			meterUsage.POST("/properties/values", observe(types.EntityEvent), handlers.MeterUsage.GetPropertyValues)
 		}
 
+		v1Private.POST("/usage/analytics", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.QueryUsage)
+
 		// Analytics query + view endpoints
 		analytics := v1Private.Group("/analytics")
 		{
 			analytics.POST("/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.Query)
 			analytics.POST("/revenue", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.GetRevenueAnalytics)
-			analytics.POST("/usage/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.QueryUsage)
 			analytics.POST("/views", write(types.EntityAnalytics, types.ActionWrite), handlers.Analytics.CreateView)
 			analytics.GET("/views", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.ListViews)
 			analytics.GET("/views/:id", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.GetView)
