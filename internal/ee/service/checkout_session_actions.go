@@ -168,7 +168,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			resp = chargedResp
 			// The debit lands after the settlement window, so the session must outlive it
 			// or the late capture is refunded.
-			if settleBy := clock.Now().Add(session.PaymentProvider.SavedMethodSettlement()); settleBy.After(session.ExpiresAt) {
+			if settleBy := clock.Now().Add(session.PaymentProvider.SavedMethodSettlement(cfg.PaymentMethod)); settleBy.After(session.ExpiresAt) {
 				session.ExpiresAt = settleBy
 			}
 			break
@@ -180,6 +180,17 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		if cfg.CustomerNotPresent {
 			return nil, ierr.NewError("no saved payment method could be charged").
 				WithHint("The customer has no payment method that can be charged automatically").
+				WithReportableDetails(map[string]any{
+					"customer_id": req.CustomerID,
+					"invoice_id":  req.InvoiceID,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		// eNACH mandates are set up through setup intents, never at checkout.
+		if cfg.PaymentMethod == types.PaymentMethodTypeENACH {
+			return nil, ierr.NewError("no active eNACH mandate covers this amount").
+				WithHint("No active eNACH mandate covers this amount. Set one up first.").
 				WithReportableDetails(map[string]any{
 					"customer_id": req.CustomerID,
 					"invoice_id":  req.InvoiceID,

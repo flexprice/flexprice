@@ -838,13 +838,49 @@ func (s *CheckoutPollSuite) TestSavedMethodChargeExtendsSessionPastSettlement() 
 			_, err = s.svc.callCheckoutProvider(ctx, session, dto.NewPaymentResponse(payment))
 			s.Require().NoError(err)
 
-			settlement := provider.SavedMethodSettlement()
+			settlement := provider.SavedMethodSettlement("")
 			if settlement == 0 {
 				s.Equal(linkExpiry, session.ExpiresAt, "an instant charge keeps the link-sized expiry")
 				return
 			}
 			s.False(session.ExpiresAt.Before(time.Now().UTC().Add(settlement-time.Minute)),
 				"the session must outlive the debit it is waiting on")
+		})
+	}
+}
+
+func (s *CheckoutPollSuite) TestENACHCheckoutDebitsMandateOrRefuses() {
+	tests := []struct {
+		name    string
+		charged bool
+	}{
+		{name: "no mandate is refused without a link"},
+		{name: "a mandate is debited and the session waits 7 days", charged: true},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.provider.charged = tt.charged
+			session := s.seedSession(types.CheckoutStatusInitiated, "", "")
+			session.PaymentProvider = types.CheckoutPaymentProviderRazorpay
+			session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(&types.CheckoutPaymentProviderConfig{
+				CollectionMethod: types.CollectionMethodChargeAutomatically,
+				PaymentMethod:    types.PaymentMethodTypeENACH,
+			})
+			payment, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+			s.Require().NoError(err)
+
+			result, err := s.svc.callCheckoutProvider(ctx, session, dto.NewPaymentResponse(payment))
+
+			if !tt.charged {
+				s.True(ierr.IsInvalidOperation(err), "got %v", err)
+				s.Nil(result)
+				return
+			}
+			s.Require().NoError(err)
+			s.Equal("order_charged", result.ProviderSessionID)
+			s.False(session.ExpiresAt.Before(time.Now().UTC().Add(7*24*time.Hour-time.Minute)),
+				"an eNACH debit can take up to 7 days to settle")
 		})
 	}
 }
