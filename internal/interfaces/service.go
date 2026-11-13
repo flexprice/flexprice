@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/shopspring/decimal"
 )
 
@@ -81,6 +82,7 @@ type InvoiceService interface {
 	ApplyExternalInvoiceDiscount(ctx context.Context, invoiceID string, req dto.ApplyExternalInvoiceDiscountRequest) error
 	// VoidInvoice voids the invoice and returns its updated (voided) state.
 	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) (*invoice.Invoice, error)
+	PublishInvoicePaymentFailed(ctx context.Context, event webhookDto.InternalInvoicePaymentFailedEvent)
 }
 
 type PlanService interface {
@@ -257,6 +259,9 @@ type SubscriptionService interface {
 
 	// CascadeCancelToInheritedSubscriptions mirrors the parent's cancellation fields onto INHERITED child subscriptions (no-op if not a parent). Used by Temporal update-billing-period cancellation and aligned with CancelSubscription / cron processing.
 	CascadeCancelToInheritedSubscriptions(ctx context.Context, parentSub *subscription.Subscription) error
+
+	// CascadeCancelToGroupedInvoicingSubscriptions cancels a cancelled parent's grouped_invoicing children and ends their resources; returns the cancelled children.
+	CascadeCancelToGroupedInvoicingSubscriptions(ctx context.Context, parentSub *subscription.Subscription) ([]*subscription.Subscription, error)
 
 	// TerminateSubscriptionResources terminates line items, addon associations, and credit
 	// grants for a subscription as of req.EffectiveDate. Called eagerly by CancelSubscription for

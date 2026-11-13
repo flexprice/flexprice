@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
 // Handler handles Razorpay webhook events
@@ -321,6 +322,10 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		return nil
 	}
 
+	// A redelivered decline finds the payment already FAILED and was reported the first time.
+	reportAutoChargeDecline := paymentRecord.PaymentStatus != types.PaymentStatusFailed &&
+		paymentRecord.Metadata[types.MetadataKeyPaymentTrigger] == types.PaymentTriggerInvoiceAutoCharge
+
 	// Build error message
 	errorMsg := "Payment failed"
 	if payment.ErrorDescription != "" {
@@ -402,6 +407,17 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		"razorpay_payment_id", payment.ID,
 		"error_code", payment.ErrorCode,
 		"error_description", payment.ErrorDescription)
+
+	if reportAutoChargeDecline {
+		services.InvoiceService.PublishInvoicePaymentFailed(ctx, webhookDto.InternalInvoicePaymentFailedEvent{
+			InvoiceID:           paymentRecord.DestinationID,
+			Provider:            types.SecretProviderRazorpay,
+			Reason:              types.InvoicePaymentFailureReasonDeclined,
+			PaymentID:           flexpricePaymentID,
+			Error:               errorMsg,
+			IsAutoChargeAttempt: true,
+		})
+	}
 
 	return nil
 }

@@ -76,6 +76,9 @@ func (r *SubscriptionPhaseCreateRequest) ToSubscriptionPhase(ctx context.Context
 	}
 }
 
+// LineItemCommitmentConfig is a legacy line-item commitment.
+//
+// Deprecated: use the commitments API instead.
 type LineItemCommitmentConfig struct {
 	CommitmentAmount   *decimal.Decimal     `json:"commitment_amount,omitempty"`
 	CommitmentQuantity *decimal.Decimal     `json:"commitment_quantity,omitempty"`
@@ -432,13 +435,18 @@ type SubscriptionCreationConfig struct {
 
 	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
 
+	// Deprecated: use POST /commitments instead.
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
 
-	// CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).
+	// Deprecated: use POST /commitments instead.
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 
-	OverageFactor    *decimal.Decimal   `json:"overage_factor,omitempty" swaggertype:"string"`
-	EnableTrueUp     bool               `json:"enable_true_up"`
+	// Deprecated: use POST /commitments instead.
+	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
+
+	// Deprecated: use POST /commitments instead.
+	EnableTrueUp bool `json:"enable_true_up"`
+
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 
 	// SubscriptionCoupons is the preferred way to attach coupons at creation.
@@ -451,7 +459,7 @@ type SubscriptionCreationConfig struct {
 	// Deprecated: use SubscriptionCoupons instead.
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 
-	// LineItemCommitments sets per-line-item commitment config, keyed by price_id.
+	// Deprecated: use POST /commitments instead.
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
 
 	// OverrideLineItems overrides specific plan prices for this subscription.
@@ -2174,6 +2182,8 @@ type GetUsageBySubscriptionRequest struct {
 	// Source indicates the caller context. When "invoice_creation", ClickHouse queries use FINAL.
 	// Optional; omit for default (no FINAL).
 	Source string `json:"-"`
+	// LineItems are the active line items at StartTime; empty loads them.
+	LineItems []*subscription.SubscriptionLineItem `json:"-"`
 }
 
 type GetUsageBySubscriptionResponse struct {

@@ -70,7 +70,6 @@ func (s *CommitmentE2ESuite) SetupTest() {
 	}
 	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, s.tokens))
 	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, s.gpus))
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 }
 
 // planWith stores a plan with one arrear usage price on the meter, billed every period; tiers, when given, make
@@ -745,6 +744,35 @@ func (s *CommitmentE2ESuite) TestAnalytics_UngroupedLineCarriesTheCommitment() {
 	s.True(item.CommitmentInfo.ComputedTrueUpAmount.Equal(dec("50")))
 }
 
+// Finalizing a cycle draft that is still the billing run's empty shell computes it first, rather than billing it empty.
+func (s *CommitmentE2ESuite) TestFinalize_ComputesANeverComputedDraft() {
+	ctx := s.GetContext()
+	feb := s.jan.AddDate(0, 1, 0)
+	tokens := s.planWith("finalize_uncomputed", types.BILLING_PERIOD_MONTHLY, s.tokens, "0", tokenSlabs...)
+	sub := s.subscribe(tokens, s.jan)
+	s.commit(sub.ID, floorRequest("Platform floor", tokens.ID, "150", s.jan, s.jan.AddDate(0, 6, 0)))
+	s.recordSourcedTokens()
+
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	draft, err := invoices.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: sub.ID,
+		PeriodStart:    s.jan,
+		PeriodEnd:      feb,
+		ReferencePoint: types.ReferencePointPeriodEnd,
+	})
+	s.Require().NoError(err)
+	s.Require().Nil(draft.LastComputedAt)
+	want := s.invoiceFor(sub.ID, s.jan, feb).AmountDue
+	s.Require().True(want.Equal(dec("150")), "the period bills %s", want)
+
+	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
+	finalized, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, finalized.InvoiceStatus)
+	s.NotNil(finalized.LastComputedAt)
+	s.True(finalized.AmountDue.Equal(want), "finalized %s, want %s", finalized.AmountDue, want)
+}
+
 // A query ending mid-period before today is priced as that window's invoice prices it, with the floor prorated to the
 // window; only a window reaching today projects the open period's floor to its end.
 func (s *CommitmentE2ESuite) TestAnalytics_PastMidPeriodQueryPricesItsOwnWindow() {
@@ -854,7 +882,7 @@ func (s *CommitmentE2ESuite) TestAnalytics_TrueUpSharedByWithinAcrossScopedLines
 		s.Require().NotNil(info, lineID)
 		s.True(info.ComputedCommitmentUtilizedAmount.Equal(dec(within)), "%s within %s", lineID, info.ComputedCommitmentUtilizedAmount)
 		share := dec("77.5").Mul(dec(within)).Div(dec("122.5"))
-		s.True(info.ComputedTrueUpAmount.Sub(share).Abs().LessThan(dec("0.000001")), "%s true-up %s, want %s", lineID, info.ComputedTrueUpAmount, share)
+		s.True(info.ComputedTrueUpAmount.Sub(share).Abs().LessThan(dec("0.01")), "%s true-up %s, want %s to the cent", lineID, info.ComputedTrueUpAmount, share)
 	}
 }
 

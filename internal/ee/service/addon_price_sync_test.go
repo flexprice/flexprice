@@ -36,6 +36,9 @@ func (s *AddonPriceSyncSuite) SetupTest() {
 		AddonPriceSyncRepo:       s.GetStores().AddonPriceSyncRepo,
 		PriceRepo:                s.GetStores().PriceRepo,
 		SubRepo:                  s.GetStores().SubscriptionRepo,
+		CommitmentRepo:           s.GetStores().CommitmentRepo,
+		BillingTermRepo:          s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:    s.GetStores().BillingInstalmentRepo,
 		SubscriptionLineItemRepo: s.GetStores().SubscriptionLineItemRepo,
 		SettingsRepo:             s.GetStores().SettingsRepo,
 	}

@@ -456,3 +456,12 @@ func (f *PaymentMethodFilter) IsUnlimited() bool {
 	}
 	return f.QueryFilter.IsUnlimited()
 }
+
+// InvoicePaymentFailureReason is why a payment of an invoice did not succeed.
+type InvoicePaymentFailureReason string
+
+const (
+	InvoicePaymentFailureReasonPaymentMethodUnavailable InvoicePaymentFailureReason = "payment_method_unavailable"
+	InvoicePaymentFailureReasonProviderError            InvoicePaymentFailureReason = "provider_error"
+	InvoicePaymentFailureReasonDeclined                 InvoicePaymentFailureReason = "declined"
+)

@@ -115,6 +115,8 @@ func (s *billingService) adjustMeterUsageGrants(
 	m *meter.Meter,
 	sub *subscription.Subscription,
 	extCustomerIDs []string,
+	lines []lineUsage,
+	window TimeInterval,
 ) (adjustMeterUsageGrantsResult, bool, error) {
 	if len(grants) == 0 {
 		return adjustMeterUsageGrantsResult{}, false, nil
@@ -156,8 +158,14 @@ func (s *billingService) adjustMeterUsageGrants(
 		//   EG1 [t0,t1) EC1 Q=1000 U=1200 => over 200
 		//   EG2 [t1,t2) EC2 Q= 800 U= 900 => over 100
 		//   bill 300 — the 1200 and the 900 are different events
-		for _, total := range perECOverage {
-			res.Overage = res.Overage.Add(total)
+		// Each line bills only the overage reached inside its own window, so a meter split
+		// across lines by a price change bills each grant's overage once.
+		for _, g := range grants {
+			share, err := s.grantOverageInWindow(ctx, g, window, lines, measure, m, sub, extCustomerIDs)
+			if err != nil {
+				return adjustMeterUsageGrantsResult{}, false, err
+			}
+			res.Overage = res.Overage.Add(share)
 		}
 	} else {
 		// Overlapping => parallel ECs meter the SAME events against their own quotas,
@@ -167,7 +175,7 @@ func (s *billingService) adjustMeterUsageGrants(
 		//   adding gives 900 for 900 units of usage — every unit billed twice.
 		// Measure the merged overage window instead: 900 units, crossing at 600,
 		// bills the 300 spent past it, once.
-		overage, err := s.mergedOverage(ctx, m, sub, extCustomerIDs, grants, measure)
+		overage, err := s.mergedOverage(ctx, m, sub, extCustomerIDs, grants, measure, window)
 		if err != nil {
 			return adjustMeterUsageGrantsResult{}, false, err
 		}
@@ -201,7 +209,7 @@ func (s *billingService) adjustMeterUsageGrants(
 //
 // Quantity measure: one ClickHouse query over all windows (TimeRanges)
 // Amount measure: one billing-path pricing per window.
-// Zero queries when nothing crossed.
+// Zero queries when nothing crossed. Windows are clipped to the line's window.
 func (s *billingService) mergedOverage(
 	ctx context.Context,
 	m *meter.Meter,
@@ -209,18 +217,21 @@ func (s *billingService) mergedOverage(
 	extCustomerIDs []string,
 	grants []*entitlementgrant.EntitlementGrant,
 	measure types.EntitlementGrantMeasure,
+	window TimeInterval,
 ) (decimal.Decimal, error) {
 	overageIntervals := make([]TimeInterval, 0, len(grants))
 	for _, g := range grants {
-		if g != nil && g.QuotaCrossedAt != nil {
-			overageIntervals = append(overageIntervals, TimeInterval{Start: *g.QuotaCrossedAt, End: g.ValidTo})
+		if g == nil || g.QuotaCrossedAt == nil {
+			continue
+		}
+		start := types.LatestOf(*g.QuotaCrossedAt, window.Start)
+		end := types.EarliestOf(g.ValidTo, window.End)
+		if end.After(start) {
+			overageIntervals = append(overageIntervals, TimeInterval{Start: start, End: end})
 		}
 	}
 	if len(overageIntervals) == 0 {
 		return decimal.Zero, nil
-	}
-	if m == nil {
-		return decimal.Zero, errGrantDepsMissing
 	}
 
 	overageWindows := MergeIntervals(overageIntervals)
@@ -228,36 +239,104 @@ func (s *billingService) mergedOverage(
 	for _, w := range overageWindows {
 		billableRanges = append(billableRanges, events.TimeRange{Start: w.Start, End: w.End})
 	}
+	return NewMeterUsageService(s.ServiceParams).GetGrantUsage(ctx, sub, m, extCustomerIDs, measure, billableRanges)
+}
 
-	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
-	total := decimal.Zero
-	switch measure {
-	case types.EntitlementGrantMeasureQuantity:
-		usage, err := meterUsageSvc.GetUsageTotal(ctx, &dto.UsageTotalRequest{
-			TenantID:            types.GetTenantID(ctx),
-			EnvironmentID:       types.GetEnvironmentID(ctx),
-			ExternalCustomerIDs: extCustomerIDs,
-			MeterID:             m.ID,
-			AggregationType:     m.Aggregation.Type,
-			TimeRanges:          billableRanges,
-		})
-		if err != nil {
+// grantOverageInWindow is the part of the grant's overage reached inside window:
+// overage at the window's end less overage at its start, both clipped to the grant.
+func (s *billingService) grantOverageInWindow(
+	ctx context.Context,
+	g *entitlementgrant.EntitlementGrant,
+	window TimeInterval,
+	lines []lineUsage,
+	measure types.EntitlementGrantMeasure,
+	m *meter.Meter,
+	sub *subscription.Subscription,
+	extCustomerIDs []string,
+) (decimal.Decimal, error) {
+	start := types.LatestOf(g.ValidFrom, window.Start)
+	end := types.EarliestOf(g.ValidTo, window.End)
+	if g.Unlimited || !end.After(start) {
+		return decimal.Zero, nil
+	}
+
+	usageAtStart, usageAtEnd := decimal.Zero, g.Usage
+	var err error
+	if start.After(g.ValidFrom) {
+		if usageAtStart, err = s.grantUsageUntil(ctx, g, start, lines, measure, m, sub, extCustomerIDs); err != nil {
 			return decimal.Zero, err
 		}
-		total = usage
-	case types.EntitlementGrantMeasureAmount:
-		if sub == nil {
-			return decimal.Zero, errGrantDepsMissing
-		}
-		for _, r := range billableRanges {
-			cost, err := meterUsageSvc.GetMeterWindowCost(ctx, sub, m.ID, r.Start, r.End)
-			if err != nil {
-				return decimal.Zero, err
-			}
-			total = total.Add(cost)
+	}
+	if end.Before(g.ValidTo) {
+		if usageAtEnd, err = s.grantUsageUntil(ctx, g, end, lines, measure, m, sub, extCustomerIDs); err != nil {
+			return decimal.Zero, err
 		}
 	}
-	return total, nil
+	return decimal.Max(g.OverageOf(usageAtEnd).Sub(g.OverageOf(usageAtStart)), decimal.Zero), nil
+}
+
+// grantUsageUntil is the grant's usage from valid_from to t, a line boundary. When the meter's lines
+// start with the grant it is the usage of the lines ending by t; otherwise it is read from ClickHouse.
+func (s *billingService) grantUsageUntil(
+	ctx context.Context,
+	g *entitlementgrant.EntitlementGrant,
+	t time.Time,
+	lines []lineUsage,
+	measure types.EntitlementGrantMeasure,
+	m *meter.Meter,
+	sub *subscription.Subscription,
+	extCustomerIDs []string,
+) (decimal.Decimal, error) {
+	if len(lines) > 0 && lines[0].start.Equal(g.ValidFrom) {
+		total := decimal.Zero
+		for _, l := range lines {
+			if !l.end.After(t) {
+				total = total.Add(l.usage)
+			}
+		}
+		return total, nil
+	}
+	return NewMeterUsageService(s.ServiceParams).GetGrantUsage(ctx, sub, m, extCustomerIDs, measure, []events.TimeRange{{Start: g.ValidFrom, End: t}})
+}
+
+// lineUsage is a usage line's elapsed window with the usage already fetched for it, in its grants' measure.
+type lineUsage struct {
+	start, end time.Time
+	usage      decimal.Decimal
+}
+
+// lineUsageByMeter collects the elapsed usage lines of each meter that has grants: units for the
+// quantity measure, billed amount for the amount measure.
+func lineUsageByMeter(
+	items []*subscription.SubscriptionLineItem,
+	chargesByLineItemID map[string][]*dto.SubscriptionUsageByMetersResponse,
+	grantsByMeterID map[string][]*entitlementgrant.EntitlementGrant,
+	periodStart, periodEnd, asOf time.Time,
+) map[string][]lineUsage {
+	out := make(map[string][]lineUsage)
+	for _, item := range items {
+		grants := grantsByMeterID[item.MeterID]
+		if item.PriceType != types.PRICE_TYPE_USAGE || len(grants) == 0 {
+			continue
+		}
+		start, end, active := elapsedLineItemWindow(item, periodStart, periodEnd, asOf)
+		if !active || !end.After(start) {
+			continue
+		}
+		line := lineUsage{start: start, end: end}
+		for _, c := range chargesByLineItemID[item.ID] {
+			if grants[0].Measure == types.EntitlementGrantMeasureAmount {
+				line.usage = line.usage.Add(c.AmountDecimal())
+			} else {
+				line.usage = line.usage.Add(c.QuantityDecimal())
+			}
+		}
+		out[item.MeterID] = append(out[item.MeterID], line)
+	}
+	for _, ls := range out {
+		sort.Slice(ls, func(i, j int) bool { return ls[i].start.Before(ls[j].start) })
+	}
+	return out
 }
 
 // grantWindowsOverlap reports whether any two grant windows share an instant — the

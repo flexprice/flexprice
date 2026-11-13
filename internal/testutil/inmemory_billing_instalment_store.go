@@ -42,7 +42,12 @@ func billingInstalmentFilterFn(ctx context.Context, in *billingterm.Instalment, 
 	}
 
 	f, ok := filter.(*billingterm.InstalmentFilter)
-	if !ok || f == nil {
+	return !ok || billingInstalmentMatches(in, f)
+}
+
+// billingInstalmentMatches applies the filter's predicates, ignoring scope.
+func billingInstalmentMatches(in *billingterm.Instalment, f *billingterm.InstalmentFilter) bool {
+	if f == nil {
 		return true
 	}
 
@@ -117,6 +122,19 @@ func (s *InMemoryBillingInstalmentStore) List(ctx context.Context, filter *billi
 	}
 
 	return lo.Map(rows, func(in *billingterm.Instalment, _ int) *billingterm.Instalment { return lo.ToPtr(*in) }), nil
+}
+
+func (s *InMemoryBillingInstalmentStore) ListEnvironments(ctx context.Context, filter *billingterm.InstalmentFilter) ([]types.TenantEnvironment, error) {
+	rows, err := s.InMemoryStore.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	envs := lo.FilterMap(rows, func(in *billingterm.Instalment, _ int) (types.TenantEnvironment, bool) {
+		env := types.TenantEnvironment{TenantID: in.TenantID, EnvironmentID: in.EnvironmentID}
+		return env, in.Status == types.StatusPublished && billingInstalmentMatches(in, filter)
+	})
+	return lo.Uniq(envs), nil
 }
 
 func (s *InMemoryBillingInstalmentStore) ListInvoiced(

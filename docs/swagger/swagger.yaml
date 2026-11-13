@@ -954,8 +954,7 @@ definitions:
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: LineItemCommitments allows setting commitment configuration per
-          addon line item (keyed by price_id)
+        description: 'Deprecated: use POST /commitments instead.'
         type: object
       metadata:
         additionalProperties: true
@@ -997,8 +996,7 @@ definitions:
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: LineItemCommitments allows setting commitment configuration per
-          addon line item (keyed by price_id)
+        description: 'Deprecated: use POST /commitments instead.'
         type: object
       metadata:
         additionalProperties: true
@@ -2135,8 +2133,6 @@ definitions:
         type: string
       termination_invoice_id:
         type: string
-      timezone:
-        type: string
       total_amount:
         type: string
       type:
@@ -2745,8 +2741,6 @@ definitions:
       subscription_id:
         description: SubscriptionID is required on POST /commitments and set server-side
           on inline commitments.
-        type: string
-      timezone:
         type: string
       type:
         $ref: '#/definitions/types.CommitmentType'
@@ -3772,23 +3766,32 @@ definitions:
   CreateSubscriptionLineItemRequest:
     properties:
       commitment_amount:
-        description: Commitment fields
+        description: 'Deprecated: use POST /commitments instead.'
         type: number
       commitment_duration:
-        $ref: '#/definitions/types.BillingPeriod'
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriod'
+        description: 'Deprecated: use POST /commitments instead.'
       commitment_overage_factor:
+        description: 'Deprecated: use POST /commitments instead.'
         type: number
       commitment_quantity:
+        description: 'Deprecated: use POST /commitments instead.'
         type: number
       commitment_time_buckets:
+        description: 'Deprecated: use POST /commitments instead.'
         items:
           $ref: '#/definitions/CommitmentBucketRequest'
         type: array
       commitment_true_up_enabled:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       commitment_type:
-        $ref: '#/definitions/types.CommitmentType'
+        allOf:
+        - $ref: '#/definitions/types.CommitmentType'
+        description: 'Deprecated: use POST /commitments instead.'
       commitment_windowed:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       display_name:
         type: string
@@ -3852,12 +3855,12 @@ definitions:
       collection_method:
         $ref: '#/definitions/types.CollectionMethod'
       commitment_amount:
+        description: 'Deprecated: use POST /commitments instead.'
         type: string
       commitment_duration:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
-        description: CommitmentDuration allows a different commitment period than
-          billing (e.g. ANNUAL on MONTHLY).
+        description: 'Deprecated: use POST /commitments instead.'
       commitments:
         description: |-
           Commitments are created with the subscription. subscription_id, and entity_id on a subscription scope,
@@ -3881,6 +3884,7 @@ definitions:
           provided.
         type: string
       enable_true_up:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       end_date:
         type: string
@@ -3917,8 +3921,7 @@ definitions:
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: LineItemCommitments sets per-line-item commitment config, keyed
-          by price_id.
+        description: 'Deprecated: use POST /commitments instead.'
         type: object
       line_item_coupons:
         additionalProperties:
@@ -3945,6 +3948,7 @@ definitions:
           type: string
         type: object
       overage_factor:
+        description: 'Deprecated: use POST /commitments instead.'
         type: string
       override_entitlements:
         items:
@@ -5742,12 +5746,12 @@ definitions:
           $ref: '#/definitions/AddAddonToSubscriptionRequest'
         type: array
       commitment_amount:
+        description: 'Deprecated: use POST /commitments instead.'
         type: string
       commitment_duration:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
-        description: CommitmentDuration allows a different commitment period than
-          billing (e.g. ANNUAL on MONTHLY).
+        description: 'Deprecated: use POST /commitments instead.'
       coupons:
         description: 'Deprecated: use SubscriptionCoupons instead.'
         items:
@@ -5758,14 +5762,14 @@ definitions:
           $ref: '#/definitions/CreateCreditGrantRequest'
         type: array
       enable_true_up:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       external_customer_id:
         type: string
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: LineItemCommitments sets per-line-item commitment config, keyed
-          by price_id.
+        description: 'Deprecated: use POST /commitments instead.'
         type: object
       line_item_coupons:
         additionalProperties:
@@ -5780,6 +5784,7 @@ definitions:
           $ref: '#/definitions/CreateSubscriptionLineItemRequest'
         type: array
       overage_factor:
+        description: 'Deprecated: use POST /commitments instead.'
         type: string
       override_entitlements:
         items:
@@ -7289,6 +7294,12 @@ definitions:
         type: string
       updated_by:
         type: string
+      warnings:
+        description: Warnings lists defaults applied on create that the caller may
+          want to set explicitly.
+        items:
+          type: string
+        type: array
     type: object
   PriceUnitConfig:
     properties:
@@ -10607,25 +10618,35 @@ definitions:
           BucketSize overrides the windowing used to turn this meter's usage into
           billable units for this line item. See CreatePriceRequest.BucketSize.
       commitment_amount:
-        description: Commitment fields
+        description: 'Deprecated: use POST /commitments instead.'
         type: number
       commitment_duration:
-        $ref: '#/definitions/types.BillingPeriod'
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriod'
+        description: 'Deprecated: use POST /commitments instead.'
       commitment_overage_factor:
+        description: 'Deprecated: use POST /commitments instead.'
         type: number
       commitment_quantity:
+        description: 'Deprecated: use POST /commitments instead.'
         type: number
       commitment_time_buckets:
-        description: Pointer so an explicit empty array can clear existing buckets
-          (omission keeps them).
+        description: |-
+          Pointer so an explicit empty array can clear existing buckets (omission keeps them).
+
+          Deprecated: use POST /commitments instead.
         items:
           $ref: '#/definitions/CommitmentBucketRequest'
         type: array
       commitment_true_up_enabled:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       commitment_type:
-        $ref: '#/definitions/types.CommitmentType'
+        allOf:
+        - $ref: '#/definitions/types.CommitmentType'
+        description: 'Deprecated: use POST /commitments instead.'
       commitment_windowed:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       effective_from:
         description: EffectiveFrom for the existing line item (if not provided, defaults
@@ -10983,9 +11004,16 @@ definitions:
       computed_commitment_utilized_amount:
         description: Commitment breakdown (only populated for windowed commitments)
         type: string
+      computed_commitment_utilized_quantity:
+        description: Usage units behind the commitment breakdown, for v2 commitments
+        type: string
       computed_overage_amount:
         type: string
+      computed_overage_quantity:
+        type: string
       computed_true_up_amount:
+        type: string
+      computed_true_up_quantity:
         type: string
       cost:
         description: Cost is the final cost after discount (Subtotal - Discount)
@@ -12333,14 +12361,25 @@ definitions:
   types.CommitmentInfo:
     properties:
       amount:
+        description: Amount is the commitment amount (v1), or computed_commitment_utilized_amount
+          + computed_true_up_amount (v2).
         type: string
       computed_commitment_utilized_amount:
         type: string
+      computed_commitment_utilized_quantity:
+        description: |-
+          Usage units behind the computed amounts: usage a billing-terms commitment covers counts as utilized at no
+          charge, and a quantity commitment's true-up counts its unused units.
+        type: string
       computed_overage_amount:
+        type: string
+      computed_overage_quantity:
         type: string
       computed_true_up_amount:
         description: total_cost = computed_commitment_utilized_amount + computed_overage_amount
           + computed_true_up_amount
+        type: string
+      computed_true_up_quantity:
         type: string
       duration:
         $ref: '#/definitions/types.BillingPeriod'
@@ -15293,6 +15332,7 @@ definitions:
     - invoice.update.voided
     - invoice.update
     - invoice.payment.overdue
+    - invoice.payment.failed
     - invoice.sync.success
     - invoice.sync.failed
     - wallet.credit_balance.dropped
@@ -15367,6 +15407,7 @@ definitions:
     - WebhookEventInvoiceUpdateVoided
     - WebhookEventInvoiceUpdate
     - WebhookEventInvoicePaymentOverdue
+    - WebhookEventInvoicePaymentFailed
     - WebhookEventInvoiceSyncSuccess
     - WebhookEventInvoiceSyncFailed
     - WebhookEventWalletCreditBalanceDropped
@@ -16441,6 +16482,16 @@ definitions:
       name:
         type: string
     type: object
+  types.InvoicePaymentFailureReason:
+    enum:
+    - payment_method_unavailable
+    - provider_error
+    - declined
+    type: string
+    x-enum-varnames:
+    - InvoicePaymentFailureReasonPaymentMethodUnavailable
+    - InvoicePaymentFailureReasonProviderError
+    - InvoicePaymentFailureReasonDeclined
   types.JournalDirection:
     enum:
     - debit
@@ -17076,6 +17127,23 @@ definitions:
         type: string
       subscription_line_item_id:
         type: string
+    type: object
+  webhookDto.InvoicePaymentFailedWebhookPayload:
+    properties:
+      error:
+        type: string
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      invoice:
+        $ref: '#/definitions/webhookDto.Invoice'
+      is_auto_charge_attempt:
+        type: boolean
+      payment_id:
+        type: string
+      provider:
+        $ref: '#/definitions/types.SecretProvider'
+      reason:
+        $ref: '#/definitions/types.InvoicePaymentFailureReason'
     type: object
   webhookDto.InvoiceSyncWebhookPayload:
     properties:
@@ -26702,68 +26770,6 @@ paths:
       summary: Trigger force run
       tags:
       - Scheduled Tasks
-  /tasks/scheduled/schedule-draft-finalization:
-    post:
-      consumes:
-      - application/json
-      description: Triggers the draft invoice finalization workflow that scans computed
-        draft invoices whose finalization delay has elapsed and finalizes them (assign
-        invoice number, sync to vendors, attempt payment).
-      operationId: scheduleDraftFinalization
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: object
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Schedule draft finalization
-      tags:
-      - Scheduled Tasks
-  /tasks/scheduled/schedule-update-billing-period:
-    post:
-      consumes:
-      - application/json
-      description: Use when you need to trigger a billing-period update workflow (e.g.
-        to recalculate or sync billing windows).
-      operationId: scheduleUpdateBillingPeriod
-      parameters:
-      - description: Schedule Update Billing Period Request
-        in: body
-        name: request
-        required: true
-        schema:
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: object
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Schedule update billing period
-      tags:
-      - Scheduled Tasks
   /taxes/associations:
     get:
       consumes:
@@ -28468,6 +28474,23 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.create.drafted
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.payment.failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a payment of an invoice does not succeed. `reason` is
+        `payment_method_unavailable`, `provider_error` or `declined`; `is_auto_charge_attempt`
+        is true when Flexprice charged the saved payment method. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoicePaymentFailedWebhookPayload'
+      summary: invoice.payment.failed
       tags:
       - Webhook Events
   /webhook-events/invoice.payment.overdue:
