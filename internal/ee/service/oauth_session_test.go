@@ -44,6 +44,7 @@ func TestStoreOAuthSessionIgnoresReservedMetadataKeys(t *testing.T) {
 			"oauth_provider":    "quickbooks",
 			"credentials":       "evil",
 			"sync_config":       "evil",
+			"billing_entity_id": "evil",
 			"organization_name": "kept",
 		},
 	}
@@ -57,6 +58,8 @@ func TestStoreOAuthSessionIgnoresReservedMetadataKeys(t *testing.T) {
 	require.WithinDuration(t, expiresAt, got.ExpiresAt, time.Second)
 	require.Equal(t, "kept", got.Metadata["organization_name"])
 	require.Len(t, got.Credentials, 2)
+	require.Nil(t, got.BillingEntityID)
+	require.NotContains(t, got.Metadata, "billing_entity_id")
 
 	_, err = svc.GetOAuthSession(ctx, "evil_session")
 	require.Error(t, err)
