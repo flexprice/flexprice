@@ -165,58 +165,48 @@ type lineSlice struct {
 	primary    bool
 }
 
-// lineSlices cuts the line windows so that, where windows overlap, exactly one slice is primary: the
-// lowest line ID among lines the line filters keep. With per-line counts every slice is primary.
+// lineSlices cuts each line window, per customer, wherever another window on the same meter and
+// customer starts or ends. Where windows overlap, the slice of the lowest line ID that the line
+// filters keep is primary; with per-line counts every slice is primary.
 func lineSlices(q *usageanalytics.Query, lines []usageanalytics.LineWindow) []lineSlice {
-	type span struct {
-		idx        int
-		line       usageanalytics.LineWindow
-		customer   string
-		start, end int64
-	}
-	var spans []span
-	byKey := map[string][]int{} // meter + customer -> span indexes
-	for i, l := range lines {
+	// Group the windows by meter and customer; only windows in one group can overlap.
+	var keys []string
+	groups := map[string][]lineSlice{}
+	for _, l := range lines {
 		for _, c := range lo.Uniq(l.ExternalCustomerIDs) {
 			key := l.MeterID + "\x00" + c
-			byKey[key] = append(byKey[key], len(spans))
-			spans = append(spans, span{idx: i, line: l, customer: c, start: l.Start.Unix(), end: l.End.Unix()})
+			if _, ok := groups[key]; !ok {
+				keys = append(keys, key)
+			}
+			groups[key] = append(groups[key], lineSlice{line: l, customer: c, start: l.Start.Unix(), end: l.End.Unix()})
 		}
-	}
-	before := func(a, b span) bool {
-		if a.line.LineItemID != b.line.LineItemID {
-			return a.line.LineItemID < b.line.LineItemID
-		}
-		if a.start != b.start {
-			return a.start < b.start
-		}
-		return a.idx < b.idx
 	}
 
-	perLine := q.CountsPerLine()
 	var out []lineSlice
-	for _, sp := range spans {
-		peers := byKey[sp.line.MeterID+"\x00"+sp.customer]
-		cuts := []int64{sp.start, sp.end}
-		for _, j := range peers {
-			for _, t := range []int64{spans[j].start, spans[j].end} {
-				if t > sp.start && t < sp.end {
-					cuts = append(cuts, t)
-				}
+	for _, key := range keys {
+		windows := groups[key]
+		// Sorted so that, where windows overlap, the earlier one counts the event.
+		sort.SliceStable(windows, func(a, b int) bool {
+			if windows[a].line.LineItemID != windows[b].line.LineItemID {
+				return windows[a].line.LineItemID < windows[b].line.LineItemID
 			}
-		}
-		cuts = lo.Uniq(cuts)
+			return windows[a].start < windows[b].start
+		})
+		cuts := lo.Uniq(lo.FlatMap(windows, func(w lineSlice, _ int) []int64 { return []int64{w.start, w.end} }))
 		sort.Slice(cuts, func(a, b int) bool { return cuts[a] < cuts[b] })
-		for k := 0; k+1 < len(cuts); k++ {
-			from, to := cuts[k], cuts[k+1]
-			primary := perLine
-			if !perLine && q.KeepsLine(sp.line.LineItemID) {
-				primary = !lo.ContainsBy(peers, func(j int) bool {
-					o := spans[j]
-					return o.start <= from && o.end >= to && q.KeepsLine(o.line.LineItemID) && before(o, sp)
+
+		for i, w := range windows {
+			for k := 0; k+1 < len(cuts); k++ {
+				from, to := cuts[k], cuts[k+1]
+				if from < w.start || to > w.end {
+					continue
+				}
+				wonByEarlier := lo.ContainsBy(windows[:i], func(e lineSlice) bool {
+					return e.start <= from && e.end >= to && q.KeepsLine(e.line.LineItemID)
 				})
+				primary := q.CountsPerLine() || (q.KeepsLine(w.line.LineItemID) && !wonByEarlier)
+				out = append(out, lineSlice{line: w.line, customer: w.customer, start: from, end: to, primary: primary})
 			}
-			out = append(out, lineSlice{line: sp.line, customer: sp.customer, start: from, end: to, primary: primary})
 		}
 	}
 	return out

@@ -233,18 +233,18 @@ func TestLineSlices_OnePrimaryLinePerInstant(t *testing.T) {
 	})
 
 	require.Equal(t, []slice{
-		{"li_b", oct15, nov1, false}, // li_a is the lower ID where both run
-		{"li_b", nov1, nov1.AddDate(0, 2, 0), true},
 		{"li_a", oct1, oct15, true},
 		{"li_a", oct15, nov1, true},
+		{"li_b", oct15, nov1, false}, // li_a is the lower ID where both run
+		{"li_b", nov1, nov1.AddDate(0, 2, 0), true},
 		{"li_c", oct1, nov1, true}, // another meter never overlaps
 	}, got(byMeter))
 	require.True(t, lo.EveryBy(got(byLine), func(s slice) bool { return s.primary }), "split by line, every line counts its events")
 	require.Equal(t, []slice{
-		{"li_b", oct15, nov1, true}, // li_a is filtered out, so li_b counts
-		{"li_b", nov1, nov1.AddDate(0, 2, 0), true},
 		{"li_a", oct1, oct15, false},
 		{"li_a", oct15, nov1, false},
+		{"li_b", oct15, nov1, true}, // li_a is filtered out, so li_b counts
+		{"li_b", nov1, nov1.AddDate(0, 2, 0), true},
 		{"li_c", oct1, nov1, true},
 	}, got(withoutA))
 }
