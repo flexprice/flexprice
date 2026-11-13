@@ -120,10 +120,8 @@ type DeleteSubscriptionLineItemRequest struct {
 }
 
 type UpdateSubscriptionLineItemRequest struct {
-	// EffectiveFrom is when the new version starts and the current one ends (defaults to now).
-	// A date before the current version's start_date replaces that version (and any version
-	// it supersedes that also starts on or after the date) with one starting at the date;
-	// the version active at that date is cut there. Price fields are optional in that case.
+	// EffectiveFrom is when the new version starts and the current one ends (defaults to now). A date before
+	// the current version's start_date replaces it from that date instead, and price fields become optional.
 	EffectiveFrom *time.Time `json:"effective_from,omitempty"`
 
 	BillingModel types.BillingModel `json:"billing_model,omitempty"`
