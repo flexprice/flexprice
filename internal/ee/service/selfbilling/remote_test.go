@@ -20,6 +20,7 @@ import (
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	sdktypes "github.com/flexprice/go-sdk/v2/models/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,6 +37,7 @@ const (
 	pathCustomerPortal       = "/customers/portal/"  // as CreateCustomerPortalSession builds it
 	pathCheckoutSessions     = "/checkout/sessions/" // as GetCheckoutSession builds it
 	pathEventsBulk           = "/events/bulk"        // as IngestEventsBulk builds it
+	pathFXRateQuery          = "/forex/query"        // as QueryFXRates builds it
 )
 
 // notFoundBody is the JSON error envelope the Flexprice API returns for a 404.
@@ -63,6 +65,7 @@ type fakeCloud struct {
 	checkouts  map[string]cannedResponse // checkout session id -> response
 	modify     *cannedResponse           // ExecuteSubscriptionModify response
 	failAll    *cannedResponse           // when set, every request gets this response
+	fxRates    []map[string]any          // QueryFXRates items
 
 	created       []string
 	rekeyedTo     []string
@@ -72,6 +75,7 @@ type fakeCloud struct {
 	cancelled     []string
 	portals       []string
 	bulkIngests   []map[string]any // IngestEventsBulk request bodies
+	fxQueries     []map[string]any // QueryFXRates request bodies
 }
 
 func newFakeCloud(existing map[string]string) *fakeCloud {
@@ -291,6 +295,12 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 			f.bulkIngests = append(f.bulkIngests, body)
 			w.WriteHeader(http.StatusAccepted)
 			_ = json.NewEncoder(w).Encode(map[string]any{"message": "accepted"})
+
+		case r.Method == http.MethodPost && r.URL.Path == pathFXRateQuery:
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			f.fxQueries = append(f.fxQueries, body)
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": f.fxRates})
 
 		default:
 			t.Errorf("unexpected call %s %s", r.Method, r.URL.String())
@@ -937,6 +947,51 @@ func TestRemoteClient_IngestBulkMapsCloudErrors(t *testing.T) {
 	c := newTestRemoteClient(t, f)
 
 	err := c.IngestBulk(context.Background(), []usageEvent{{id: "evt:1", name: "events_ingested", extID: "in:t1"}})
+	require.Error(t, err)
+	assert.True(t, ierr.IsHTTPClient(err), "got %v", err)
+	assert.True(t, isRemoteFailure(err))
+}
+
+func TestRemoteClient_USDRates(t *testing.T) {
+	f := newFakeCloud(map[string]string{})
+	f.fxRates = []map[string]any{
+		{"from_currency": "inr", "to_currency": "usd", "rate": "0.012", "source": "fixed"},
+		{"from_currency": "EUR", "to_currency": "usd", "rate": "1.08", "source": "fixed"},
+		{"from_currency": "gbp", "to_currency": "usd", "rate": "0", "source": "market"},
+	}
+	c := newTestRemoteClient(t, f)
+
+	rates, err := c.USDRates(context.Background())
+	require.NoError(t, err)
+
+	assert.Len(t, rates, 2, "a market rate carries no usable value")
+	assert.True(t, decimal.RequireFromString("0.012").Equal(rates["inr"]))
+	assert.True(t, decimal.RequireFromString("1.08").Equal(rates["eur"]), "keys are lower-cased")
+
+	require.Len(t, f.fxQueries, 1)
+	assert.Equal(t, "tenant", f.fxQueries[0]["scope"])
+	assert.Equal(t, "usd", f.fxQueries[0]["to_currency"])
+	assert.Equal(t, "published", f.fxQueries[0]["status"])
+}
+
+func TestRemoteClient_USDRatesUnparseableRate(t *testing.T) {
+	f := newFakeCloud(map[string]string{})
+	f.fxRates = []map[string]any{
+		{"from_currency": "inr", "to_currency": "usd", "rate": "not-a-number", "source": "fixed"},
+	}
+	c := newTestRemoteClient(t, f)
+
+	_, err := c.USDRates(context.Background())
+	require.Error(t, err)
+	assert.True(t, ierr.IsInternal(err), "got %v", err)
+}
+
+func TestRemoteClient_USDRatesMapsCloudErrors(t *testing.T) {
+	f := newFakeCloud(map[string]string{})
+	f.failAll = &cannedResponse{http.StatusInternalServerError, `{"code":"internal_error","message":"boom","http_status_code":500}`}
+	c := newTestRemoteClient(t, f)
+
+	_, err := c.USDRates(context.Background())
 	require.Error(t, err)
 	assert.True(t, ierr.IsHTTPClient(err), "got %v", err)
 	assert.True(t, isRemoteFailure(err))
