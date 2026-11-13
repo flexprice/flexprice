@@ -144,7 +144,7 @@ After an erasure, the same person signs up again under the same `external_id`. T
 
 **R10.** Every request leaves a permanent, pseudonymised record: `subject_ref`, `customer_id`, timestamps, channel, state and per-category outcomes. It keeps no external identifier and no personal field. `customer_id` is a Flexprice-generated id. It stays because it links the retained financial records, and after redaction it no longer resolves to any personal data.
 
-**R11.** Redaction ends with a verification step. A category is reported `deleted` only when no rows remain for the customer in its store. The customer record is reported `redacted` only when every personal field has been overwritten. The row itself stays, because retained financial records reference it.
+**R11.** Redaction ends with a verification step. A category is reported `deleted` only when no **in-scope** rows remain for the customer in its store, meaning rows ingested before the request's cutoff. Rows ingested after it are outside this request and their presence is not a failure. An unscoped zero-row check would fail the moment the tenant sends one more event, so the bound is part of the criterion rather than an optimisation. The customer record is reported `redacted` only when every personal field has been overwritten. The row itself stays, because retained financial records reference it.
 
 **R12.** Every tenant `/v1/privacy` endpoint requires a user caller holding `super_admin` in the tenant. API keys and service accounts are refused with `403`, whatever roles they carry.
 
@@ -234,7 +234,7 @@ if not policy.enabled:
 validate input                                       // else 400
 
 customer = CustomerRepo.Get(customer_id)             // archived allowed; else 404
-if existing = DeletionRequestRepo.GetNonCancelledByCustomerID(customer.id):
+if existing = DeletionRequestRepo.GetOpenByCustomerID(customer.id):   // open only; completed permits a new request
     return 200 existing
 subject_ref = hmac_sha256(kms_key(tenant), customer.external_id)
 
@@ -259,7 +259,7 @@ in one transaction:
     CustomerRepo.Archive(customer_id)
     DispatchOutbox.Create(request.id) // same transaction; no PII; deterministic workflow ID
 on unique-index conflict:
-    return 200 DeletionRequestRepo.GetNonCancelledByCustomerID(customer.id)
+    return 200 DeletionRequestRepo.GetOpenByCustomerID(customer.id)
 
 EnsureWorkflowDispatched(request.id) // fast path; outbox dispatcher retries durably
 
@@ -335,7 +335,7 @@ sequenceDiagram
     T->>API: POST /v1/privacy/deletion-requests
     API->>API: caller is super_admin user, feature enabled
     API->>SVC: Create(request)
-    SVC->>PG: non-cancelled request for customer generation?
+    SVC->>PG: open request for customer generation?
     alt already exists
         SVC-->>T: 200 existing record
     end
@@ -369,7 +369,7 @@ sequenceDiagram
         WF->>PG: lock affected customers, revalidate and mark irreversible (one transaction)
         WF->>PG: redact customer record
         WF->>AN: purge usage data by snapshot key
-        WF->>AN: verify no rows remain
+        WF->>AN: verify no in-scope rows remain
         WF->>PG: transaction: persist document cleanup intent + request -> completed
         WF->>WF: durable document job waits for configured retention
         WF->>FS: delete invoice documents
@@ -384,9 +384,14 @@ sequenceDiagram
 
 Ingestion is untouched by a deletion request. Client emitters are outside our control, and refusing their events would mean overriding the controller's own instruction to process data (UC2). The hot path keeps no suppression list and pays no lookup.
 
-Scope comes from the cutoff instead: a request erases rows whose `ingested_at` is earlier than its `requested_at`. An event the tenant sends after requesting erasure is kept, because they sent it knowingly after asking. A later request covers it under its own, later cutoff.
+Scope comes from the cutoff instead: a request erases rows whose `ingested_at` is earlier than the cutoff. The cutoff is `instruction_received_at`, not `requested_at`. A written instruction received on the 1st and entered on the 6th erases the data held on the 1st, because clause 7.2(b) scopes an instruction to the data held when it was received, and the later entry date is Flexprice's delay rather than the tenant's. For API requests the two timestamps coincide. An event the tenant sends after the instruction is kept, because they sent it knowingly after asking.
 
-The consequence is tenant-facing and must not be softened: a suppressed customer can still accrue new data. Verification therefore proves **zero rows ingested before `requested_at`**, never zero rows outright.
+The consequence is tenant-facing and must not be softened: a suppressed customer can still accrue new data. Verification therefore proves **zero in-scope rows**, never zero rows outright.
+
+Two cases the cutoff alone does not settle, both open:
+
+- **In flight at the cutoff.** `ingested_at` is assigned when the row is written, not when the event was accepted, so an event accepted before the instruction can land after the cutoff and escape the purge. That is data Flexprice held at receipt which verification would not catch, and clause 7.2(b) covers it. Closing this needs an acceptance-time marker carried through the pipeline, or a grace period subtracted from the cutoff; until then the guarantee is bounded by write latency rather than by receipt.
+- **A later request for the same customer.** Repeated calls collapse onto the existing non-cancelled request, so once a request completes, nothing ingested since can be erased: the repeat returns the original record with its original cutoff. A second request after completion must be allowed and must take its own cutoff. That narrows idempotency to requests still open, and §10's "Repeat request" row has to distinguish a duplicate of an open request from a genuine new instruction.
 
 ---
 
@@ -460,7 +465,9 @@ The request lives in Postgres, not the analytics store. It is mutable state that
 
 **This contradicts the tables shipped on FLE-1887, and the schema is what must change.** `customer_deletion_requests` carries a single `external_id` column declared `NotEmpty().Immutable()`, so the purge key is permanent and BR5 cannot clear it. A request that reaches `completed` therefore keeps a raw tenant-facing identifier on the permanent audit row forever, which is the outcome R10 and clause 7.2(g) exist to prevent, and it makes `subject_ref` pointless by storing the plaintext beside it.
 
-Two changes, both to an unshipped migration: add `subject_ref`, and make the identifier column optional, nullable and mutable so BR5's clearing path can run. Tracked on FLE-1887 / #3300.
+The same tables also carry a blanket `UNIQUE (tenant_id, environment_id, customer_id)`, which enforces one erasure request per customer for all time. A customer whose data is erased and who keeps sending events can then never be erased again, with their data frozen at the first cutoff. Idempotency needs a partial index over non-terminal states instead.
+
+Three changes, all to an unshipped migration: add `subject_ref`; make the identifier column optional, nullable and mutable so BR5's clearing path can run; and replace the blanket customer uniqueness with a partial index. Tracked on FLE-1887 / #3300.
 
 ### `deletion_request_categories` — new Postgres table
 
@@ -476,7 +483,7 @@ Each category response:
 
 Indexes:
 
-- Idempotency is scoped to tenant/environment and customer generation; repeat/concurrent calls for the same customer return the same non-cancelled request. A cancelled request permits a new request. Do not make `subject_ref` unique forever across confirmed replacement customers.
+- Idempotency is scoped to tenant/environment and customer generation; repeat/concurrent calls for the same customer return the same **open** request. A cancelled or completed request permits a new one, so the uniqueness is a partial index over non-terminal states, never a blanket unique index on `(tenant_id, environment_id, customer_id)` — that would enforce one erasure per customer for all time and freeze their data at the first cutoff. Do not make `subject_ref` unique forever across confirmed replacement customers.
 - `(tenant_id, environment_id, state)` for listing and worker pickup
 - `(tenant_id, environment_id, customer_id)`
 
@@ -577,7 +584,8 @@ Not part of the tenant API and not in the public spec. Same body plus required `
 ```json
 "verification": {
   "customer_record": "redacted",
-  "usage_data_rows_remaining": 0,
+  "usage_data_in_scope_rows_remaining": 0,
+  "cutoff": "2026-10-06T09:00:00Z",
   "verified_at": "2026-10-13T10:12:00Z"
 }
 ```
@@ -614,7 +622,8 @@ Checked in the order listed (R15). The lifecycle API implementation must add the
 | Scenario | Expected Behavior |
 |---|---|
 | Customer already archived (churned) | Valid target. Proceeds as normal. Cancel leaves them archived. |
-| Repeat request for the same subject | `200` with the original record and its original `requested_at`. |
+| Repeat request while one is open | `200` with the original record and its original cutoff. |
+| Repeat request after one completed | Allowed. Creates a new request with its own cutoff, covering what was ingested since. Without this a completed request would freeze the customer's data at the first cutoff forever. |
 | Two identical requests at the same moment | One creates the request. The other hits the unique index and returns `200` with the same record. |
 | Request after a cancelled one | Allowed. Creates a new request. |
 | `cooldown_days = 0` | Redaction starts immediately. Nothing to cancel. |
@@ -661,7 +670,7 @@ Checked in the order listed (R15). The lifecycle API implementation must add the
 
 **AC12.** After redaction, the customer's personal fields read `[redacted]`, `external_id` is a fresh opaque value unrelated to `subject_ref` or the original identifier, persisted once and reused on retries, `metadata` is empty, and `GET` reports `customer_record: redacted`.
 
-**AC13.** After redaction, no rows remain for the customer's usage data or #2963 deletion records in the analytics store, and `GET` reports `usage_data: deleted`.
+**AC13.** After redaction, no in-scope rows remain for the customer's usage data or #2963 deletion records in the analytics store, and `GET` reports `usage_data: deleted`. A row ingested after the cutoff leaves that report unchanged.
 
 **AC14.** Invoice documents are deleted when the dispute window ends, and not before.
 
