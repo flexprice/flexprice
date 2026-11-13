@@ -15613,6 +15613,29 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/checkout.session.cancelled": {
+            "post": {
+                "description": "Fired when a Checkout Session is cancelled through the API, alongside checkout.session.expired. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "checkout.session.cancelled",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.CheckoutSessionWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/checkout.session.completed": {
             "post": {
                 "description": "Fired when payment is confirmed; the subscription is now active and the invoice is finalized. Doc-only for parsing.",
@@ -38406,6 +38429,7 @@ const docTemplate = `{
                 "checkout.session.completed",
                 "checkout.session.failed",
                 "checkout.session.expired",
+                "checkout.session.cancelled",
                 "event.rejected"
             ],
             "x-enum-varnames": [
@@ -38481,6 +38505,7 @@ const docTemplate = `{
                 "WebhookEventCheckoutSessionCompleted",
                 "WebhookEventCheckoutSessionFailed",
                 "WebhookEventCheckoutSessionExpired",
+                "WebhookEventCheckoutSessionCancelled",
                 "WebhookEventEventRejected"
             ]
         },
