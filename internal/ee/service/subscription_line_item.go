@@ -699,6 +699,118 @@ func replaceMetadataPreservingLineage(item *subscription.SubscriptionLineItem, m
 	item.Metadata = updated
 }
 
+// isBackdatedVersion reports whether an explicit effective date falls before the
+// line item's start, which replaces the version rather than ending it.
+func isBackdatedVersion(item *subscription.SubscriptionLineItem, effectiveFrom *time.Time, effective time.Time) bool {
+	return effectiveFrom != nil && item != nil && !item.StartDate.IsZero() && effective.Before(item.StartDate)
+}
+
+// retireLineItemVersionsFrom walks tip's predecessor chain, retiring every version that
+// starts on or after `from` (the replacement covers their whole window) and cutting the
+// version active at `from` to end there. It returns that cut version, nil when `from`
+// precedes the whole chain, and the retired versions. Both are returned as they were
+// before the change so the detach guards can run once the replacement exists.
+func (s *subscriptionService) retireLineItemVersionsFrom(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	tip *subscription.SubscriptionLineItem,
+	from time.Time,
+) (*subscription.SubscriptionLineItem, []*subscription.SubscriptionLineItem, error) {
+	if from.Before(sub.StartDate) {
+		return nil, nil, ierr.NewError("effective_from cannot be before subscription start date").
+			WithHint("The replacement version cannot start before the subscription does").
+			WithReportableDetails(map[string]interface{}{
+				"line_item_id":       tip.ID,
+				"effective_from":     from,
+				"subscription_start": sub.StartDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	retired := make([]*subscription.SubscriptionLineItem, 0, 1)
+	cur := tip
+	for {
+		snapshot := *cur
+		retired = append(retired, &snapshot)
+		ended := *cur
+		ended.Status = types.StatusDeleted
+		if err := s.SubscriptionLineItemRepo.Update(ctx, &ended); err != nil {
+			return nil, nil, err
+		}
+
+		predID := predecessorLineItemID(cur)
+		if predID == "" {
+			return nil, retired, nil
+		}
+		pred, err := s.SubscriptionLineItemRepo.GetForUpdate(ctx, predID)
+		if err != nil {
+			if ierr.IsNotFound(err) {
+				return nil, retired, nil
+			}
+			return nil, nil, err
+		}
+		if pred.Status != types.StatusPublished {
+			return nil, retired, nil
+		}
+		if pred.StartDate.Before(from) {
+			anchor := *pred
+			cut := *pred
+			cut.EndDate = from
+			cut.SuccessorLineItemID = nil
+			clearLineItemMetadataIDs(&cut, types.SubscriptionLineItemMetadataKeySuccessorID)
+			if err := s.SubscriptionLineItemRepo.Update(ctx, &cut); err != nil {
+				return nil, nil, err
+			}
+			return &anchor, retired, nil
+		}
+		cur = pred
+	}
+}
+
+// linkReplacementVersion finishes a backdated version: it runs the detach guards for the
+// versions retireLineItemVersionsFrom retired or cut (the replacement now counts as
+// cover), points the cut version at the replacement and pulls an addon's association
+// start back to it.
+func (s *subscriptionService) linkReplacementVersion(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	anchor *subscription.SubscriptionLineItem,
+	retired []*subscription.SubscriptionLineItem,
+	replacement *subscription.SubscriptionLineItem,
+) error {
+	for _, li := range retired {
+		if err := checkLineDetach(ctx, s.ServiceParams, sub, li, li.StartDate); err != nil {
+			return err
+		}
+	}
+	if anchor != nil {
+		if err := checkLineDetach(ctx, s.ServiceParams, sub, anchor, replacement.StartDate); err != nil {
+			return err
+		}
+		cut, err := s.SubscriptionLineItemRepo.Get(ctx, anchor.ID)
+		if err != nil {
+			return err
+		}
+		cut.SuccessorLineItemID = lo.ToPtr(replacement.ID)
+		if err := s.SubscriptionLineItemRepo.Update(ctx, cut); err != nil {
+			return err
+		}
+	}
+
+	if replacement.AddonAssociationID == nil || *replacement.AddonAssociationID == "" {
+		return nil
+	}
+	assoc, err := s.AddonAssociationRepo.GetByID(ctx, *replacement.AddonAssociationID)
+	if err != nil {
+		return err
+	}
+	if assoc.StartDate == nil || !assoc.StartDate.After(replacement.StartDate) {
+		return nil
+	}
+	assoc.StartDate = lo.ToPtr(replacement.StartDate)
+	return s.AddonAssociationRepo.Update(ctx, assoc)
+}
+
 // UpdateSubscriptionLineItem updates a subscription line item by terminating the existing one and creating a new one
 // This method reuses existing service methods for creating and deleting line items
 func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.UpdateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
@@ -755,10 +867,21 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 		endDate = req.EffectiveFrom.UTC()
 	}
 
+	// An explicit effective date before the current version's start cannot end that
+	// version; it replaces it with one that starts earlier. Price fields are optional
+	// there, since the replacement may only correct the date.
+	backdated := isBackdatedVersion(existingLineItem, req.EffectiveFrom, endDate)
+	if req.EffectiveFrom != nil && !req.ShouldCreateNewLineItem() && !backdated {
+		return nil, ierr.NewError("effective_from requires at least one critical field").
+			WithHint("When providing effective_from on or after the line item's start date, you must also provide one of: amount, billing_model, tier_mode, tiers, transform_quantity, price_unit_amount, price_unit_tiers, bucket_size, or commitment fields").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Check if we need to create a new line item (with price overrides)
-	if req.ShouldCreateNewLineItem() {
+	if req.ShouldCreateNewLineItem() || backdated {
 		// Execute the complex update within a transaction
 		var newLineItem *subscription.SubscriptionLineItem
+		var replaced []*subscription.SubscriptionLineItem
 		err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 			locked, lockErr := s.SubscriptionLineItemRepo.GetForUpdate(ctx, lineItemID)
 			if lockErr != nil {
@@ -779,12 +902,13 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return alreadyScheduledVersionError(lineItemID, successor.ID)
 			}
 
-			// Effective date must not be before the line item's start date (avoids end_date < start_date).
-			// Only the versioning path terminates the line item, so an in-place edit of a line
-			// that starts in the future must not be blocked by the default now() end date.
-			if !locked.StartDate.IsZero() && endDate.Before(locked.StartDate) {
+			backdated = isBackdatedVersion(locked, req.EffectiveFrom, endDate)
+
+			// Without an explicit effective date the default now() must not end a line
+			// that starts in the future (end_date < start_date).
+			if !backdated && !locked.StartDate.IsZero() && endDate.Before(locked.StartDate) {
 				return ierr.NewError("effective date must be on or after line item start date").
-					WithHint("The effective date for terminating this line item cannot be before the line item's start date").
+					WithHint("Pass an explicit effective_from before the start date to replace this version from that date").
 					WithReportableDetails(map[string]interface{}{
 						"line_item_id":   lineItemID,
 						"start_date":     locked.StartDate,
@@ -793,8 +917,10 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 					Mark(ierr.ErrValidation)
 			}
 
-			if err := validateLineItemEndDateChange(locked, endDate); err != nil {
-				return err
+			if !backdated {
+				if err := validateLineItemEndDateChange(locked, endDate); err != nil {
+					return err
+				}
 			}
 
 			// locked and the repo's copy can be the same object, so this must be read
@@ -802,41 +928,57 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			oldEndDate := locked.EndDate
 			endedLineItem := *locked // price overrides repoint locked, so keep the line as it was
 
-			price, err := NewPriceService(s.ServiceParams).GetPrice(ctx, locked.PriceID)
-			if err != nil {
-				return err
+			// Retire the versions the replacement covers before the override repoints
+			// locked's PriceID, so the retired rows keep the price they billed with.
+			var anchor *subscription.SubscriptionLineItem
+			if backdated {
+				var retireErr error
+				anchor, replaced, retireErr = s.retireLineItemVersionsFrom(ctx, sub, locked, endDate)
+				if retireErr != nil {
+					return retireErr
+				}
 			}
 
-			// Convert request to OverrideLineItemRequest format to reuse existing logic
-			overrideReq := dto.OverrideLineItemRequest{
-				PriceID:           locked.PriceID,
-				Quantity:          &locked.Quantity,
-				BillingModel:      req.BillingModel,
-				Amount:            req.Amount,
-				TierMode:          req.TierMode,
-				Tiers:             req.Tiers,
-				TransformQuantity: req.TransformQuantity,
-				PriceUnitAmount:   req.PriceUnitAmount,
-				PriceUnitTiers:    req.PriceUnitTiers,
-				BucketSize:        req.BucketSize,
-			}
-			priceMap := map[string]*dto.PriceResponse{locked.PriceID: price}
-
-			// Process the price override using existing method
-			lineItems := []*subscription.SubscriptionLineItem{locked}
-			if err := s.ProcessSubscriptionPriceOverrides(ctx, sub, []dto.OverrideLineItemRequest{overrideReq}, lineItems, priceMap); err != nil {
-				return err
-			}
-
-			// The ProcessSubscriptionPriceOverrides method updates the line item's PriceID
 			newPriceID := locked.PriceID
+			if req.ShouldCreateNewLineItem() {
+				price, err := NewPriceService(s.ServiceParams).GetPrice(ctx, locked.PriceID)
+				if err != nil {
+					return err
+				}
 
-			// Terminate the existing line item using existing method
-			deleteReq := dto.DeleteSubscriptionLineItemRequest{
-				EffectiveFrom: &endDate,
+				// Convert request to OverrideLineItemRequest format to reuse existing logic
+				overrideReq := dto.OverrideLineItemRequest{
+					PriceID:           locked.PriceID,
+					Quantity:          &locked.Quantity,
+					BillingModel:      req.BillingModel,
+					Amount:            req.Amount,
+					TierMode:          req.TierMode,
+					Tiers:             req.Tiers,
+					TransformQuantity: req.TransformQuantity,
+					PriceUnitAmount:   req.PriceUnitAmount,
+					PriceUnitTiers:    req.PriceUnitTiers,
+					BucketSize:        req.BucketSize,
+				}
+				priceMap := map[string]*dto.PriceResponse{locked.PriceID: price}
+
+				// Process the price override using existing method
+				lineItems := []*subscription.SubscriptionLineItem{locked}
+				if err := s.ProcessSubscriptionPriceOverrides(ctx, sub, []dto.OverrideLineItemRequest{overrideReq}, lineItems, priceMap); err != nil {
+					return err
+				}
+
+				// The ProcessSubscriptionPriceOverrides method updates the line item's PriceID
+				newPriceID = locked.PriceID
 			}
-			if _, err := s.deleteSubscriptionLineItem(ctx, lineItemID, deleteReq); err != nil {
-				return err
+
+			if !backdated {
+				// Terminate the existing line item using existing method
+				deleteReq := dto.DeleteSubscriptionLineItemRequest{
+					EffectiveFrom: &endDate,
+				}
+				if _, err := s.deleteSubscriptionLineItem(ctx, lineItemID, deleteReq); err != nil {
+					return err
+				}
 			}
 
 			// Create new line item using the DTO method
@@ -846,6 +988,12 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				newLineItem.EndDate = oldEndDate // Fill the gap freed up by the backdate
 			}
 			newLineItem.PredecessorLineItemID = lo.ToPtr(lineItemID)
+			if backdated {
+				newLineItem.PredecessorLineItemID = nil
+				if anchor != nil {
+					newLineItem.PredecessorLineItemID = lo.ToPtr(anchor.ID)
+				}
+			}
 			newLineItem.SuccessorLineItemID = nil
 			clearLineItemMetadataIDs(newLineItem, lineageMetadataKeys...)
 
@@ -901,6 +1049,9 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			if err := s.SubscriptionLineItemRepo.Create(ctx, newLineItem); err != nil {
 				return err
 			}
+			if backdated {
+				return s.linkReplacementVersion(ctx, sub, anchor, replaced, newLineItem)
+			}
 			predecessor, err := s.SubscriptionLineItemRepo.Get(ctx, lineItemID)
 			if err != nil {
 				return err
@@ -921,6 +1072,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			"old_line_item_id", lineItemID,
 			"new_line_item_id", newLineItem.ID,
 			"end_date", endDate,
+			"replaced_line_item_ids", lo.Map(replaced, func(li *subscription.SubscriptionLineItem, _ int) string { return li.ID }),
 		)
 
 		NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)

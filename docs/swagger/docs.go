@@ -31974,7 +31974,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "effective_from": {
-                    "description": "EffectiveFrom for the existing line item (if not provided, defaults to now)",
+                    "description": "EffectiveFrom is when the new version starts and the current one ends (defaults to now).\nA date before the current version's start_date replaces that version (and any version\nit supersedes that also starts on or after the date) with one starting at the date;\nthe version active at that date is cut there. Price fields are optional in that case.",
                     "type": "string"
                 },
                 "metadata": {

@@ -752,23 +752,197 @@ func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_Backda
 	s.Empty(wallets, "known limitation: backdating an already-terminated line item does not currently produce a proration credit")
 }
 
-func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_EffectiveFromBeforeStartDate() {
+// An effective date before the only version's start replaces it: the replacement
+// becomes the first version and the original is retired, not ended.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_EffectiveFromBeforeStartDate_ReplacesVersion() {
 	ctx := s.GetContext()
 	effectiveBefore := s.testData.lineItem.StartDate.Add(-24 * time.Hour)
 	newAmount := decimal.NewFromInt(100)
 
-	req := dto.UpdateSubscriptionLineItemRequest{
+	resp, err := s.service.UpdateSubscriptionLineItem(ctx, s.testData.lineItem.ID, dto.UpdateSubscriptionLineItemRequest{
 		Amount:        &newAmount,
 		EffectiveFrom: &effectiveBefore,
-	}
+	})
+	s.NoError(err)
+	replacement := resp.SubscriptionLineItem
+	s.NotEqual(s.testData.lineItem.ID, replacement.ID)
+	s.Equal(effectiveBefore.Unix(), replacement.StartDate.Unix())
+	s.True(replacement.EndDate.IsZero())
+	s.Nil(replacement.PredecessorLineItemID, "nothing was active before the replacement")
+	s.NotEqual(s.testData.lineItem.PriceID, replacement.PriceID, "a price change still creates an override price")
 
-	_, err := s.service.UpdateSubscriptionLineItem(ctx, s.testData.lineItem.ID, req)
+	retired := s.reloadLineItem(s.testData.lineItem.ID)
+	s.Equal(types.StatusDeleted, retired.Status)
+	s.True(retired.EndDate.IsZero(), "the retired version is not ended, it is removed from the timeline")
+	s.Equal(s.testData.lineItem.PriceID, retired.PriceID, "the retired row keeps the price it billed with")
+}
+
+// Without an explicit effective_from a line that has not started cannot be versioned:
+// the default now() would end it before it starts.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_FutureLine_DefaultEffectiveFromRejected() {
+	future := s.stageLineItem(func(li *subscription.SubscriptionLineItem) {
+		li.StartDate = time.Now().UTC().Add(5 * 24 * time.Hour)
+	})
+	newAmount := decimal.NewFromInt(100)
+
+	_, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), future.ID, dto.UpdateSubscriptionLineItemRequest{
+		Amount: &newAmount,
+	})
 	s.Error(err)
 	s.Contains(err.Error(), "effective date must be on or after line item start date")
+	s.Equal(types.StatusPublished, s.reloadLineItem(future.ID).Status)
+}
 
-	li, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.testData.lineItem.ID)
+// Backdating a version into its predecessor's window: the version is retired, the
+// predecessor is cut at the new date and linked to the replacement.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_BackdatedVersion_CutsPredecessor() {
+	original := s.testData.lineItem
+	versionStart := original.StartDate.Add(48 * time.Hour)
+	current := s.scheduleVersion(original.ID, 75, versionStart)
+
+	effective := original.StartDate.Add(24 * time.Hour)
+	newAmount := decimal.NewFromInt(90)
+	resp, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), current.ID, dto.UpdateSubscriptionLineItemRequest{
+		Amount:        &newAmount,
+		EffectiveFrom: &effective,
+	})
 	s.NoError(err)
-	s.True(li.EndDate.IsZero())
+	replacement := resp.SubscriptionLineItem
+
+	s.Equal(effective.Unix(), replacement.StartDate.Unix())
+	s.True(replacement.EndDate.IsZero(), "the replacement inherits the retired version's open end")
+	s.Equal(original.ID, lo.FromPtr(replacement.PredecessorLineItemID))
+
+	s.Equal(types.StatusDeleted, s.reloadLineItem(current.ID).Status)
+
+	cut := s.reloadLineItem(original.ID)
+	s.Equal(types.StatusPublished, cut.Status)
+	s.assertEndDate(cut, effective, "the predecessor must end where the replacement starts")
+	s.Equal(replacement.ID, lo.FromPtr(cut.SuccessorLineItemID))
+
+	history, err := s.service.GetSubscriptionLineItemHistory(s.GetContext(), replacement.ID)
+	s.NoError(err)
+	s.ElementsMatch([]string{original.ID, replacement.ID}, lo.Map(history.Items, func(it *dto.SubscriptionLineItemResponse, _ int) string { return it.ID }))
+}
+
+// The replacement keeps the retired version's end date, so a scheduled end survives the correction.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_BackdatedVersion_KeepsEndDate() {
+	original := s.testData.lineItem
+	versionStart := original.StartDate.Add(48 * time.Hour)
+	current := s.scheduleVersion(original.ID, 75, versionStart)
+	scheduledEnd := time.Now().UTC().Add(20 * 24 * time.Hour)
+	_, err := s.service.DeleteSubscriptionLineItem(s.GetContext(), current.ID, dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: &scheduledEnd})
+	s.NoError(err)
+
+	effective := original.StartDate.Add(24 * time.Hour)
+	newAmount := decimal.NewFromInt(90)
+	resp, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), current.ID, dto.UpdateSubscriptionLineItemRequest{
+		Amount:        &newAmount,
+		EffectiveFrom: &effective,
+	})
+	s.NoError(err)
+	s.assertEndDate(resp.SubscriptionLineItem, scheduledEnd, "the replacement must keep the scheduled end")
+}
+
+// A date-only correction needs no price fields: the replacement keeps the current price.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_BackdatedVersion_DateOnlyKeepsPrice() {
+	original := s.testData.lineItem
+	current := s.scheduleVersion(original.ID, 75, original.StartDate.Add(48*time.Hour))
+
+	effective := original.StartDate.Add(24 * time.Hour)
+	resp, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), current.ID, dto.UpdateSubscriptionLineItemRequest{
+		EffectiveFrom: &effective,
+	})
+	s.NoError(err)
+	s.Equal(current.PriceID, resp.SubscriptionLineItem.PriceID)
+	s.Equal(effective.Unix(), resp.SubscriptionLineItem.StartDate.Unix())
+	s.Equal(types.StatusDeleted, s.reloadLineItem(current.ID).Status)
+	s.assertEndDate(s.reloadLineItem(original.ID), effective, "the predecessor must end where the replacement starts")
+}
+
+// A date before several versions retires all of them and cuts the one active at the date.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_BackdatedVersion_CollapsesChain() {
+	original := s.testData.lineItem
+	itemB := s.scheduleVersion(original.ID, 75, original.StartDate.Add(36*time.Hour))
+	itemC := s.scheduleVersion(itemB.ID, 90, original.StartDate.Add(48*time.Hour))
+
+	effective := original.StartDate.Add(24 * time.Hour)
+	newAmount := decimal.NewFromInt(120)
+	resp, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), itemC.ID, dto.UpdateSubscriptionLineItemRequest{
+		Amount:        &newAmount,
+		EffectiveFrom: &effective,
+	})
+	s.NoError(err)
+	replacement := resp.SubscriptionLineItem
+
+	s.Equal(types.StatusDeleted, s.reloadLineItem(itemB.ID).Status)
+	s.Equal(types.StatusDeleted, s.reloadLineItem(itemC.ID).Status)
+	cut := s.reloadLineItem(original.ID)
+	s.assertEndDate(cut, effective, "the version active at the date is cut there")
+	s.Equal(replacement.ID, lo.FromPtr(cut.SuccessorLineItemID))
+	s.Equal(original.ID, lo.FromPtr(replacement.PredecessorLineItemID))
+}
+
+// A version that starts exactly at the date is covered by the replacement, so it is
+// retired rather than left as a zero-length line.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_BackdatedVersion_StartEqualToDateIsRetired() {
+	original := s.testData.lineItem
+	sameDay := original.StartDate.Add(24 * time.Hour)
+	itemB := s.scheduleVersion(original.ID, 75, sameDay)
+	itemC := s.scheduleVersion(itemB.ID, 90, original.StartDate.Add(48*time.Hour))
+
+	resp, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), itemC.ID, dto.UpdateSubscriptionLineItemRequest{
+		EffectiveFrom: &sameDay,
+	})
+	s.NoError(err)
+	s.Equal(types.StatusDeleted, s.reloadLineItem(itemB.ID).Status)
+	s.Equal(types.StatusDeleted, s.reloadLineItem(itemC.ID).Status)
+	s.assertEndDate(s.reloadLineItem(original.ID), sameDay, "the original is cut at the date")
+	s.Equal(original.ID, lo.FromPtr(resp.SubscriptionLineItem.PredecessorLineItemID))
+}
+
+// A date before the whole chain retires every version; the replacement has no predecessor.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_BackdatedVersion_BeforeWholeChain() {
+	original := s.testData.lineItem
+	itemB := s.scheduleVersion(original.ID, 75, original.StartDate.Add(24*time.Hour))
+
+	effective := original.StartDate.Add(-24 * time.Hour)
+	resp, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), itemB.ID, dto.UpdateSubscriptionLineItemRequest{
+		EffectiveFrom: &effective,
+	})
+	s.NoError(err)
+	s.Nil(resp.SubscriptionLineItem.PredecessorLineItemID)
+	s.Equal(types.StatusDeleted, s.reloadLineItem(original.ID).Status)
+	s.Equal(types.StatusDeleted, s.reloadLineItem(itemB.ID).Status)
+}
+
+// The replacement cannot start before the subscription; nothing is changed on rejection.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_BackdatedVersion_BeforeSubscriptionStartRejected() {
+	original := s.testData.lineItem
+	itemB := s.scheduleVersion(original.ID, 75, original.StartDate.Add(24*time.Hour))
+
+	effective := s.testData.subscription.StartDate.Add(-time.Hour)
+	_, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), itemB.ID, dto.UpdateSubscriptionLineItemRequest{
+		EffectiveFrom: &effective,
+	})
+	s.Error(err)
+	s.Contains(err.Error(), "effective_from cannot be before subscription start date")
+	s.Equal(types.StatusPublished, s.reloadLineItem(itemB.ID).Status)
+	s.Equal(types.StatusPublished, s.reloadLineItem(original.ID).Status)
+}
+
+// A version that already has a scheduled successor is still edited through that successor.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_BackdatedVersion_WithSuccessorRejected() {
+	original := s.testData.lineItem
+	itemB := s.scheduleVersion(original.ID, 75, original.StartDate.Add(24*time.Hour))
+	s.scheduleVersion(itemB.ID, 90, original.StartDate.Add(48*time.Hour))
+
+	effective := original.StartDate.Add(12 * time.Hour)
+	_, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), itemB.ID, dto.UpdateSubscriptionLineItemRequest{
+		EffectiveFrom: &effective,
+	})
+	s.Error(err)
+	s.Contains(err.Error(), "line item already has a scheduled version")
 }
 
 func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_EffectiveFromBackdated() {
