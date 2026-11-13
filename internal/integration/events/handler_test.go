@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
@@ -94,11 +95,37 @@ func (fakeWorkflowRun) GetRunID() string { return "run_1" }
 type fakeTemporalService struct {
 	temporalservice.TemporalService
 	inputs []interface{}
+	err    error
 }
 
 func (f *fakeTemporalService) ExecuteWorkflow(_ context.Context, _ types.TemporalWorkflowType, params interface{}) (temporalmodels.WorkflowRun, error) {
 	f.inputs = append(f.inputs, params)
+	if f.err != nil {
+		return nil, f.err
+	}
 	return fakeWorkflowRun{}, nil
+}
+
+func TestExecuteWorkflow_StartErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		startErr error
+		wantErr  bool
+	}{
+		{name: "started"},
+		{name: "already running is a skip", startErr: ierr.NewError("already started").Mark(ierr.ErrAlreadyExists)},
+		{name: "other failure is retried", startErr: ierr.NewError("temporal down").Mark(ierr.ErrInternal), wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			temporalSvc := &fakeTemporalService{err: tc.startErr}
+			err := executeWorkflow(context.Background(), temporalSvc, testLogger(), types.TemporalRazorpayInvoiceSyncWorkflow, nil, types.SecretProviderRazorpay, "inv_1")
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("wantErr %v, got %v", tc.wantErr, err)
+			}
+		})
+	}
 }
 
 func TestTriggerZohoBooksIfEnabled_MappedInvoice(t *testing.T) {
