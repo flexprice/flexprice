@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // InternalCheckoutSessionEvent is the internal payload stored in system_events.
@@ -27,13 +28,28 @@ type CheckoutSession struct {
 	CompletedAt       *time.Time                    `json:"completed_at,omitempty"`
 	CancelledAt       *time.Time                    `json:"cancelled_at,omitempty"`
 	PaymentAction     *types.PaymentAction          `json:"payment_action,omitempty"`
+	Amount            *decimal.Decimal              `json:"amount,omitempty" swaggertype:"string"`
+	Currency          string                        `json:"currency,omitempty"`
+	Metadata          types.Metadata                `json:"metadata,omitempty"`
+	CreatedAt         time.Time                     `json:"created_at"`
+	UpdatedAt         time.Time                     `json:"updated_at"`
 }
 
 func NewCheckoutSession(resp *dto.CheckoutSessionResponse) *CheckoutSession {
 	if resp == nil {
 		return nil
 	}
+	var amount *decimal.Decimal
+	var currency string
+	if resp.Payment != nil {
+		amount, currency = &resp.Payment.Amount, resp.Payment.Currency
+	}
 	return &CheckoutSession{
+		Amount:            amount,
+		Currency:          currency,
+		Metadata:          resp.Metadata,
+		CreatedAt:         resp.CreatedAt,
+		UpdatedAt:         resp.UpdatedAt,
 		ID:                resp.ID,
 		CustomerID:        resp.CustomerID,
 		Action:            resp.Action,

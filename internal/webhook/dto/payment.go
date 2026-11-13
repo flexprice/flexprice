@@ -30,6 +30,12 @@ type Payment struct {
 	VoidedAt          *time.Time                   `json:"voided_at,omitempty"`
 	ErrorMessage      *string                      `json:"error_message,omitempty"`
 	InvoiceNumber     *string                      `json:"invoice_number,omitempty"`
+	GatewayPaymentID  *string                      `json:"gateway_payment_id,omitempty"`
+	GatewayTrackingID *string                      `json:"gateway_tracking_id,omitempty"`
+	PaymentMethodID   string                       `json:"payment_method_id,omitempty"`
+	Metadata          types.Metadata               `json:"metadata,omitempty"`
+	CreatedAt         time.Time                    `json:"created_at"`
+	UpdatedAt         time.Time                    `json:"updated_at"`
 }
 
 func NewPayment(resp *dto.PaymentResponse) *Payment {
@@ -52,6 +58,12 @@ func NewPayment(resp *dto.PaymentResponse) *Payment {
 		VoidedAt:          resp.VoidedAt,
 		ErrorMessage:      resp.ErrorMessage,
 		InvoiceNumber:     resp.InvoiceNumber,
+		GatewayPaymentID:  resp.GatewayPaymentID,
+		GatewayTrackingID: resp.GatewayTrackingID,
+		PaymentMethodID:   resp.PaymentMethodID,
+		Metadata:          resp.Metadata,
+		CreatedAt:         resp.CreatedAt,
+		UpdatedAt:         resp.UpdatedAt,
 	}
 }
 

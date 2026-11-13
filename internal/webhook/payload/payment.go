@@ -40,7 +40,7 @@ func (b *PaymentPayloadBuilder) BuildPayload(ctx context.Context, eventType type
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	payment, err := b.services.PaymentService.GetPayment(ctx, paymentID)
+	payment, err := b.services.PaymentService.GetStoredPayment(ctx, paymentID)
 	if err != nil {
 		return nil, err
 	}
@@ -77,17 +77,9 @@ func (b *PaymentAttemptPayloadBuilder) BuildPayload(ctx context.Context, eventTy
 		return nil, err
 	}
 
-	payments, err := b.services.PaymentService.ListPayments(ctx, &types.PaymentFilter{
-		QueryFilter: types.NewDefaultQueryFilter(),
-		PaymentIDs:  []string{event.PaymentID},
-	})
+	payment, err := b.services.PaymentService.GetStoredPayment(ctx, event.PaymentID)
 	if err != nil {
 		return nil, err
-	}
-	if len(payments.Items) == 0 {
-		return nil, ierr.NewError("payment not found").
-			WithReportableDetails(map[string]any{"payment_id": event.PaymentID}).
-			Mark(ierr.ErrNotFound)
 	}
 
 	filter := types.NewDefaultCheckoutSessionFilter()
@@ -106,7 +98,7 @@ func (b *PaymentAttemptPayloadBuilder) BuildPayload(ctx context.Context, eventTy
 
 	return json.Marshal(webhookDto.PaymentAttemptWebhookPayload{
 		EventType:       eventType,
-		Payment:         webhookDto.NewPayment(payments.Items[0]),
+		Payment:         webhookDto.NewPayment(payment),
 		Attempt:         webhookDto.NewPaymentAttempt(attempt),
 		CheckoutSession: session,
 	})

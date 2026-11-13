@@ -244,9 +244,11 @@ func (s *checkoutSessionService) checkoutPaymentBlock(
 		return nil
 	}
 	return &dto.CheckoutPaymentBlock{
-		ID:      p.ID,
-		Status:  p.PaymentStatus,
-		Gateway: lo.FromPtr(p.PaymentGateway),
+		ID:       p.ID,
+		Status:   p.PaymentStatus,
+		Gateway:  lo.FromPtr(p.PaymentGateway),
+		Amount:   p.Amount,
+		Currency: p.Currency,
 	}
 }
 

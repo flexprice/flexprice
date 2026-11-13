@@ -48,6 +48,8 @@ type CustomerService interface {
 type PaymentService interface {
 	CreatePayment(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error)
 	GetPayment(ctx context.Context, id string) (*dto.PaymentResponse, error)
+	// GetStoredPayment reads the payment as saved, in any status, without syncing it from the gateway.
+	GetStoredPayment(ctx context.Context, id string) (*dto.PaymentResponse, error)
 	ListPayments(ctx context.Context, filter *types.PaymentFilter) (*dto.ListPaymentsResponse, error)
 	// GetOrCreateInvoicePaymentLink returns the invoice's open payment link on the gateway, or creates one.
 	GetOrCreateInvoicePaymentLink(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error)

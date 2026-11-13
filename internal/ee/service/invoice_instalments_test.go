@@ -590,7 +590,7 @@ func (s *CommitmentE2ESuite) TestPaymentFinalize_ClaimsInstalments() {
 	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
 
 	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
-	processor := &paymentProcessor{ServiceParams: params}
+	processor := NewPaymentProcessorService(params).(*paymentProcessor)
 	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
 
 	finalized, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
@@ -641,7 +641,7 @@ func (s *CommitmentE2ESuite) TestPaymentFinalize_StaleDraftKeepsPayment() {
 	paid := s.draftPayment(draft, types.PaymentStatusSucceeded)
 
 	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
-	processor := &paymentProcessor{ServiceParams: params}
+	processor := NewPaymentProcessorService(params).(*paymentProcessor)
 	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
 
 	finalized, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
