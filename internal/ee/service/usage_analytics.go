@@ -306,23 +306,16 @@ func splitByBillingPeriod(cs billedSubscription) ([]usageanalytics.BillingPeriod
 		return nil, err
 	}
 
-	var segments []usageanalytics.BillingPeriodSegment
-	for t := cs.start; t.Before(cs.end); {
-		p := types.FullBillingPeriod(t, grid)
-		if !p.End.After(t) {
-			break
-		}
-		seg := usageanalytics.BillingPeriodSegment{
+	periods := types.BillingPeriodsIn(grid, cs.start, cs.end)
+	return lo.Map(periods, func(p types.Period, _ int) usageanalytics.BillingPeriodSegment {
+		return usageanalytics.BillingPeriodSegment{
 			SubscriptionID: cs.sub.ID,
 			PeriodStart:    maxTime(p.Start, owner.StartDate),
 			PeriodEnd:      p.End,
-			Start:          t,
+			Start:          maxTime(p.Start, cs.start),
 			End:            minTime(p.End, cs.end),
 		}
-		segments = append(segments, seg)
-		t = seg.End
-	}
-	return segments, nil
+	}), nil
 }
 
 // addBilledLines prices the owner's billing period through billing, as its invoice is priced, and turns
