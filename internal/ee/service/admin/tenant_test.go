@@ -134,6 +134,7 @@ func newTenantTestDeps(t *testing.T) *tenantTestDeps {
 		UserRepo:        d.users,
 		TenantRepo:      d.tenants,
 		EnvironmentRepo: d.environments,
+		SecretRepo:      testutil.NewInMemorySecretStore(),
 		SelfBilling:     &recordingSelfBilling{},
 	}
 	return d

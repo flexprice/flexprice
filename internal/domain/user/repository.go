@@ -13,5 +13,6 @@ type Repository interface {
 	Update(ctx context.Context, user *User) error
 	UpdateRoles(ctx context.Context, id string, roles []string) error
 	Delete(ctx context.Context, id string) error
+	DeleteCache(ctx context.Context, id string)
 	ListByFilter(ctx context.Context, filter *types.UserFilter) ([]*User, int64, error)
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -28,6 +29,53 @@ import (
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/crypto/bcrypt"
 )
+
+type fakeRemoveProvider struct {
+	authProvider.Provider
+	errs  []error
+	calls int
+}
+
+func (f *fakeRemoveProvider) RemoveUser(context.Context, string) error {
+	err := f.errs[f.calls]
+	f.calls++
+	return err
+}
+
+type txFlagDB struct {
+	postgres.IClient
+	inTx *bool
+}
+
+func (d txFlagDB) WithTx(ctx context.Context, fn func(context.Context) error) error {
+	return d.IClient.WithTx(ctx, func(ctx context.Context) error {
+		*d.inTx = true
+		defer func() { *d.inTx = false }()
+		return fn(ctx)
+	})
+}
+
+type cacheSpySecretStore struct {
+	*testutil.InMemorySecretStore
+	inTx          *bool
+	cached        map[string]bool
+	invalidatedTx []bool
+}
+
+func (c *cacheSpySecretStore) RevokeByUserID(ctx context.Context, userID string) ([]*domainSecret.Secret, error) {
+	revoked, err := c.InMemorySecretStore.RevokeByUserID(ctx, userID)
+	for _, k := range revoked {
+		c.cached[k.ID] = true
+	}
+	return revoked, err
+}
+
+func (c *cacheSpySecretStore) InvalidateCache(_ context.Context, secrets []*domainSecret.Secret) {
+	c.invalidatedTx = append(c.invalidatedTx, *c.inTx)
+	for _, k := range secrets {
+		delete(c.cached, k.ID)
+	}
+}
 
 type UserServiceSuite struct {
 	suite.Suite
@@ -1142,7 +1190,7 @@ func (s *UserServiceSuite) TestRemoveUser() {
 		s.userService = &userService{db: testutil.NewMockPostgresClient(testLogger(s.T())), userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, cfg: &config.Configuration{}, logger: testLogger(s.T())}
 	}
 
-	s.Run("success_user_removed_api_key_retained", func() {
+	s.Run("success_user_removed_api_key_revoked", func() {
 		seedStore()
 		_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
 			ID:       "key-1",
@@ -1161,8 +1209,59 @@ func (s *UserServiceSuite) TestRemoveUser() {
 		s.Equal(types.StatusArchived, removedUser.Status)
 
 		key, err := s.secretRepo.Get(ctx, "key-1")
-		s.NoError(err, "the user's API key must remain active after removal")
-		s.Equal(types.StatusPublished, key.Status)
+		s.NoError(err)
+		s.Equal(types.StatusDeleted, key.Status)
+	})
+
+	s.Run("cache_invalidated_after_commit", func() {
+		seedStore()
+		_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
+			ID:        "key-1",
+			UserID:    "user-1",
+			UserType:  string(types.UserTypeUser),
+			BaseModel: types.BaseModel{TenantID: types.DefaultTenantID, Status: types.StatusPublished},
+		})
+		inTx := false
+		spy := &cacheSpySecretStore{InMemorySecretStore: s.secretRepo, inTx: &inTx, cached: map[string]bool{}}
+		s.userService.secretRepo = spy
+		s.userService.db = txFlagDB{IClient: s.userService.db, inTx: &inTx}
+
+		s.NoError(s.userService.RemoveUser(ctx, "user-1"))
+		s.Equal([]bool{false}, spy.invalidatedTx)
+		s.Empty(spy.cached)
+	})
+
+	s.Run("provider_failure_then_retry_completes", func() {
+		seedStore()
+		_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
+			ID:        "key-1",
+			UserID:    "user-1",
+			UserType:  string(types.UserTypeUser),
+			BaseModel: types.BaseModel{TenantID: types.DefaultTenantID, Status: types.StatusPublished},
+		})
+		fake := &fakeRemoveProvider{errs: []error{cockroachErrors.New("provider down"), nil}}
+		s.userService.newProvider = func(*config.Configuration) authProvider.Provider { return fake }
+
+		s.Error(s.userService.RemoveUser(ctx, "user-1"))
+		archived, err := s.userRepo.GetByID(ctx, "user-1")
+		s.NoError(err)
+		s.Equal(types.StatusArchived, archived.Status)
+		key, err := s.secretRepo.Get(ctx, "key-1")
+		s.NoError(err)
+		s.Equal(types.StatusDeleted, key.Status)
+
+		s.NoError(s.userService.RemoveUser(ctx, "user-1"))
+		s.Equal(2, fake.calls)
+	})
+
+	s.Run("retry_provider_not_found_is_success", func() {
+		seedStore()
+		fake := &fakeRemoveProvider{errs: []error{cockroachErrors.New("provider down"), ierr.NewError("gone").Mark(ierr.ErrNotFound)}}
+		s.userService.newProvider = func(*config.Configuration) authProvider.Provider { return fake }
+
+		s.Error(s.userService.RemoveUser(ctx, "user-1"))
+		s.NoError(s.userService.RemoveUser(ctx, "user-1"))
+		s.Equal(2, fake.calls)
 	})
 
 	s.Run("empty_id_returns_validation_error", func() {
