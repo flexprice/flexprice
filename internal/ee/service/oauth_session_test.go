@@ -23,7 +23,9 @@ func TestStoreOAuthSessionIgnoresReservedMetadataKeys(t *testing.T) {
 	ctx = types.SetTenantID(ctx, "tenant_1")
 	ctx = types.SetEnvironmentID(ctx, "env_1")
 
-	svc := NewOAuthService(testutil.NewInMemoryConnectionStore(), plainEncryption{}, nil, nil, logger.NewNoopLogger())
+	log := logger.NewNoopLogger()
+	params := ServiceParams{Logger: log, DB: testutil.NewMockPostgresClient(log), SettingsRepo: testutil.NewInMemorySettingsStore()}
+	svc := NewOAuthService(testutil.NewInMemoryConnectionStore(), plainEncryption{}, nil, nil, log, params)
 
 	expiresAt := clock.Now().Add(10 * time.Minute)
 	session := &types.OAuthSession{
