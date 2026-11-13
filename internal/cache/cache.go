@@ -114,7 +114,9 @@ const (
 	PrefixCreditGrantApplyLock = "credit_grant:apply:"
 	// PrefixCheckoutPollLock debounces gateway reconciliation on the checkout read
 	// (used with the payment ID). Acquired and never released — TTL expiry is the window.
-	PrefixCheckoutPollLock     = "checkout:poll:"
+	PrefixCheckoutPollLock = "checkout:poll:"
+	// PrefixCheckoutSessionLock serializes completion and teardown of a checkout session.
+	PrefixCheckoutSessionLock  = "checkout:session:"
 	PrefixPublishedConnections = "published_connections:"
 	PrefixMeterFeature         = "meter:feature:v1:"
 	PrefixReportResult         = "report_result:v1:"

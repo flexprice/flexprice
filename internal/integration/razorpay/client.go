@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -268,12 +269,7 @@ func (c *Client) CreateCustomer(ctx context.Context, customerData map[string]int
 	razorpayCustomer, err := razorpayClient.Customer.Create(customerData, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create customer in Razorpay", "error", err)
-		return nil, ierr.WithError(err).
-			WithHint("Unable to create customer in Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"error": err.Error(),
-			}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to create customer in Razorpay")
 	}
 
 	c.logger.Info(ctx, "successfully created customer in Razorpay", "customer_id", razorpayCustomer["id"])
@@ -290,13 +286,7 @@ func (c *Client) UpdateCustomer(ctx context.Context, customerID string, customer
 	}
 	updatedCustomer, err := razorpayClient.Customer.Edit(customerID, customerData, nil)
 	if err != nil {
-		return nil, ierr.NewError("failed to update customer in Razorpay").
-			WithHint("Unable to update customer in Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": customerID,
-				"error":       err.Error(),
-			}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to update customer in Razorpay")
 	}
 	return updatedCustomer, nil
 }
@@ -397,12 +387,7 @@ func (c *Client) CreateInvoice(ctx context.Context, invoiceData map[string]inter
 	razorpayInvoice, err := razorpayClient.Invoice.Create(invoiceData, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create invoice in Razorpay", "error", err)
-		return nil, ierr.NewError("failed to create invoice in Razorpay").
-			WithHint("Unable to create invoice in Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"error": err.Error(),
-			}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to create invoice in Razorpay")
 	}
 
 	c.logger.Info(ctx, "successfully created invoice in Razorpay",
@@ -426,13 +411,7 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (map[string]i
 		c.logger.Error(ctx, "failed to fetch invoice from Razorpay",
 			"error", err,
 			"invoice_id", invoiceID)
-		return nil, ierr.NewError("failed to fetch invoice from Razorpay").
-			WithHint("Unable to retrieve invoice from Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id": invoiceID,
-				"error":      err.Error(),
-			}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to retrieve invoice from Razorpay")
 	}
 
 	c.logger.Info(ctx, "successfully fetched invoice from Razorpay",
@@ -453,6 +432,16 @@ func (c *Client) sdkClient(ctx context.Context) (*razorpay.Client, error) {
 	return rc, nil
 }
 
+// razorpayErr wraps an SDK error: a bad request becomes a 400 carrying Razorpay's reason,
+// anything else (a 429 also arrives as BadRequestError) a 500 with hint.
+func razorpayErr(err error, hint string) error {
+	var badRequest *rzperrors.BadRequestError
+	if errors.As(err, &badRequest) && badRequest.Message != "" && !strings.Contains(strings.ToLower(badRequest.Message), "too many requests") {
+		return ierr.WithError(err).WithHint(badRequest.Message).Mark(ierr.ErrValidation)
+	}
+	return ierr.WithError(err).WithHint(hint).Mark(ierr.ErrSystem)
+}
+
 // GetCustomerTokens fetches all tokens registered against a Razorpay customer.
 // GET /v1/customers/{id}/tokens — SDK: Token.All.
 func (c *Client) GetCustomerTokens(ctx context.Context, razorpayCustomerID string) ([]map[string]interface{}, error) {
@@ -464,10 +453,7 @@ func (c *Client) GetCustomerTokens(ctx context.Context, razorpayCustomerID strin
 	result, err := rc.Token.All(razorpayCustomerID, nil, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to list Razorpay customer tokens", "error", err, "customer_id", razorpayCustomerID)
-		return nil, ierr.NewError("failed to list Razorpay customer tokens").
-			WithHint("Unable to list tokens from Razorpay").
-			WithReportableDetails(map[string]interface{}{"customer_id": razorpayCustomerID, "error": err.Error()}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to list tokens from Razorpay")
 	}
 
 	items, _ := result["items"].([]interface{})
@@ -489,10 +475,7 @@ func (c *Client) CreateAuthorizationLink(ctx context.Context, data map[string]in
 	result, err := rc.Post("/v1/subscription_registration/auth_links", data, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create Razorpay authorization link", "error", err)
-		return nil, ierr.NewError("failed to create Razorpay authorization link").
-			WithHint("Unable to create authorization link in Razorpay").
-			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to create authorization link in Razorpay")
 	}
 
 	c.logger.Info(ctx, "successfully created Razorpay authorization link", "id", result["id"])
@@ -509,10 +492,7 @@ func (c *Client) CreateOrder(ctx context.Context, orderData map[string]interface
 	result, err := rc.Order.Create(orderData, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create Razorpay order", "error", err)
-		return nil, ierr.NewError("failed to create Razorpay order").
-			WithHint("Unable to create order in Razorpay").
-			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to create order in Razorpay")
 	}
 
 	c.logger.Info(ctx, "successfully created Razorpay order", "order_id", result["id"])
@@ -530,10 +510,7 @@ func (c *Client) CreateRecurringPayment(ctx context.Context, paymentData map[str
 	result, err := rc.Payment.CreateRecurringPayment(paymentData, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create Razorpay recurring payment", "error", err)
-		return nil, ierr.NewError("failed to create Razorpay recurring payment").
-			WithHint("Unable to charge the stored token in Razorpay").
-			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to charge the stored token in Razorpay")
 	}
 
 	return result, nil
@@ -555,10 +532,7 @@ func (c *Client) FetchOrdersByReceipt(ctx context.Context, receipt string) (map[
 		c.logger.Error(ctx, "failed to fetch Razorpay orders by receipt",
 			"error", err,
 			"receipt", receipt)
-		return nil, ierr.NewError("failed to fetch orders by receipt").
-			WithHint("Unable to query Razorpay orders").
-			WithReportableDetails(map[string]interface{}{"receipt": receipt, "error": err.Error()}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to query Razorpay orders")
 	}
 
 	items, _ := result["items"].([]interface{})
@@ -589,10 +563,7 @@ func (c *Client) FetchOrder(ctx context.Context, orderID string) (map[string]int
 	order, err := rc.Order.Fetch(orderID, nil, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to fetch Razorpay order", "error", err, "order_id", orderID)
-		return nil, ierr.NewError("failed to fetch order from Razorpay").
-			WithHint("Unable to retrieve order from Razorpay").
-			WithReportableDetails(map[string]interface{}{"order_id": orderID, "error": err.Error()}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to retrieve order from Razorpay")
 	}
 	return order, nil
 }
@@ -608,10 +579,7 @@ func (c *Client) FetchOrderPayments(ctx context.Context, orderID string) ([]map[
 	result, err := rc.Order.Payments(orderID, nil, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to fetch payments for Razorpay order", "error", err, "order_id", orderID)
-		return nil, ierr.NewError("failed to fetch payments for order").
-			WithHint("Unable to retrieve order payments from Razorpay").
-			WithReportableDetails(map[string]interface{}{"order_id": orderID, "error": err.Error()}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to retrieve order payments from Razorpay")
 	}
 
 	items, _ := result["items"].([]interface{})
@@ -648,14 +616,7 @@ func (c *Client) RefundPayment(ctx context.Context, paymentID string, amountPais
 	if err != nil {
 		c.logger.Error(ctx, "failed to refund Razorpay payment",
 			"error", err, "payment_id", paymentID, "amount_paise", amountPaise)
-		return nil, ierr.NewError("failed to refund Razorpay payment").
-			WithHint("Unable to refund the payment in Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"payment_id":   paymentID,
-				"amount_paise": amountPaise,
-				"error":        err.Error(),
-			}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to refund the payment in Razorpay")
 	}
 
 	c.logger.Info(ctx, "successfully refunded Razorpay payment",
@@ -673,13 +634,7 @@ func (c *Client) FetchPayment(ctx context.Context, paymentID string) (map[string
 	result, err := rc.Payment.Fetch(paymentID, nil, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to fetch Razorpay payment", "error", err, "payment_id", paymentID)
-		return nil, ierr.NewError("failed to fetch Razorpay payment").
-			WithHint("Unable to retrieve the payment from Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"payment_id": paymentID,
-				"error":      err.Error(),
-			}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to retrieve the payment from Razorpay")
 	}
 
 	return result, nil
@@ -695,13 +650,7 @@ func (c *Client) FetchPaymentLink(ctx context.Context, paymentLinkID string) (ma
 	result, err := rc.PaymentLink.Fetch(paymentLinkID, nil, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to fetch Razorpay payment link", "error", err, "payment_link_id", paymentLinkID)
-		return nil, ierr.NewError("failed to fetch Razorpay payment link").
-			WithHint("Unable to retrieve the payment link from Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"payment_link_id": paymentLinkID,
-				"error":           err.Error(),
-			}).
-			Mark(ierr.ErrInternal)
+		return nil, razorpayErr(err, "Unable to retrieve the payment link from Razorpay")
 	}
 
 	return result, nil

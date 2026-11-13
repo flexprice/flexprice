@@ -103,7 +103,7 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 		},
 		{
 			ID:        types.ScheduleIDCheckoutSessionExpiry,
-			Interval:  30 * time.Minute,
+			Interval:  10 * time.Minute,
 			Workflow:  cronWorkflows.CheckoutSessionExpiryWorkflow,
 			Input:     models.CheckoutSessionExpiryWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,

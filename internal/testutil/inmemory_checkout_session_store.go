@@ -288,7 +288,7 @@ func (s *InMemoryCheckoutSessionStore) MarkCompleted(ctx context.Context, sessio
 	return true, nil
 }
 
-func (s *InMemoryCheckoutSessionStore) MarkTerminal(ctx context.Context, sessionID string, status types.CheckoutStatus, failureReason *string) (bool, error) {
+func (s *InMemoryCheckoutSessionStore) MarkTerminal(ctx context.Context, sessionID string, status types.CheckoutStatus, failureReason *string, cancelledAt *time.Time) (bool, error) {
 	if status != types.CheckoutStatusExpired && status != types.CheckoutStatusFailed {
 		return false, ierr.NewError("invalid terminal checkout status").
 			WithHint("MarkTerminal accepts expired or failed").
@@ -307,6 +307,7 @@ func (s *InMemoryCheckoutSessionStore) MarkTerminal(ctx context.Context, session
 	}
 	session.CheckoutStatus = status
 	session.FailureReason = failureReason
+	session.CancelledAt = cancelledAt
 	if err := s.InMemoryStore.Update(ctx, sessionID, session); err != nil {
 		return false, err
 	}
