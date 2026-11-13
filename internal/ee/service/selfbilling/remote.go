@@ -28,6 +28,9 @@ const (
 	trialCurrency      = "usd"
 	trialBillingPeriod = sdktypes.BillingPeriodMonthly
 
+	// trialPaymentBehavior keeps a trial whose trial-end invoice is unpaid incomplete; Cloud's default_active would activate it.
+	trialPaymentBehavior = sdktypes.PaymentBehaviorAllowIncomplete
+
 	// metaExternalID tags a checkout session with the customer it belongs to.
 	metaExternalID = "self_billing_external_id"
 	metaTaxID      = "tax_id"
@@ -97,6 +100,7 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) (bool, erro
 		PlanID:             c.planID,
 		Currency:           trialCurrency,
 		BillingPeriod:      trialBillingPeriod,
+		PaymentBehavior:    lo.ToPtr(trialPaymentBehavior),
 	})
 	if err != nil {
 		return false, cloudErr(err)
