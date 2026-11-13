@@ -41,6 +41,9 @@ type billingClient interface {
 
 	// IngestBulk sends usage events; Flexprice Cloud drops a re-sent event ID as a duplicate.
 	IngestBulk(ctx context.Context, events []usageEvent) error
+
+	// USDRates returns Flexprice Cloud's published fixed FX rates to USD, keyed by lower-cased source currency.
+	USDRates(ctx context.Context) (map[string]decimal.Decimal, error)
 }
 
 type customerInput struct {

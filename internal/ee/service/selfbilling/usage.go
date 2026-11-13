@@ -2,12 +2,15 @@ package selfbilling
 
 import (
 	"context"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
 
+	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -21,6 +24,9 @@ const (
 
 	// eventHourFormat keys an event to its UTC hour, so a re-sent hour reuses the same event ID.
 	eventHourFormat = "2006010215"
+
+	// usdCurrency is the currency Flexprice Cloud prices invoice value in.
+	usdCurrency = "usd"
 )
 
 // pushUsage re-sends the settled hours [to-lookback, to), to = floor(now-settle delay); deterministic IDs make Flexprice Cloud drop repeats.
@@ -53,6 +59,19 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 		return err
 	}
 
+	// Flexprice Cloud's FX rates are read only when a row needs converting, so a USD-only push never depends on them.
+	usdRates := map[string]decimal.Decimal{usdCurrency: decimal.NewFromInt(1)}
+	needsRates := lo.SomeBy(invoices, func(inv *domainsb.TenantHourInvoices) bool {
+		return !types.IsMatchingCurrency(inv.Currency, usdCurrency)
+	})
+	if needsRates {
+		cloudRates, err := s.client.USDRates(ctx)
+		if err != nil {
+			return err
+		}
+		maps.Copy(usdRates, cloudRates)
+	}
+
 	events := make([]usageEvent, 0, len(counts)+len(invoices))
 	for _, c := range counts {
 		if s.Config.Billing.IsBillingTenant(c.TenantID) {
@@ -74,21 +93,31 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 		})
 	}
 
-	// amount stays equal to total, the field the invoice_value meter sums.
+	// amount repeats usd_amount, the field the invoice_value meter sums; the other amounts stay in the invoice currency.
+	var missingRates []string
 	for _, inv := range invoices {
 		if s.Config.Billing.IsBillingTenant(inv.TenantID) {
 			continue
 		}
 
-		hour := inv.Hour.UTC()
 		currency := strings.ToUpper(inv.Currency)
+		usdRate, ok := usdRates[strings.ToLower(inv.Currency)]
+		if !ok {
+			missingRates = append(missingRates, currency)
+			continue
+		}
+
+		hour := inv.Hour.UTC()
+		usdAmount := types.RoundToCurrencyPrecision(inv.Total.Mul(usdRate), usdCurrency).String()
 		events = append(events, usageEvent{
 			id:        strings.Join([]string{"inv", region, inv.TenantID, inv.EnvironmentID, currency, hour.Format(eventHourFormat)}, ":"),
 			name:      eventNameInvoiceValue,
 			extID:     s.extID(inv.TenantID),
 			timestamp: hour,
 			properties: map[string]string{
-				"amount":                        inv.Total.String(),
+				"amount":                        usdAmount,
+				"usd_amount":                    usdAmount,
+				"usd_rate":                      usdRate.String(),
 				"total":                         inv.Total.String(),
 				"subtotal":                      inv.Subtotal.String(),
 				"total_discount":                inv.TotalDiscount.String(),
@@ -103,6 +132,14 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 				"region":                        region,
 			},
 		})
+	}
+
+	// A later run inside the lookback sends a skipped row once its rate exists on Flexprice Cloud.
+	if len(missingRates) > 0 {
+		s.Logger.Error(ctx, "self-billing invoice value skipped for currencies without a USD rate",
+			"error", "no fx rate to usd on flexprice cloud",
+			"currencies", lo.Uniq(missingRates),
+		)
 	}
 
 	for _, chunk := range lo.Chunk(events, maxBulkEvents) {

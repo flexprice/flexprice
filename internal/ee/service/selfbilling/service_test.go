@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -43,6 +44,10 @@ type fakeClient struct {
 
 	ingested  [][]usageEvent // one entry per IngestBulk call
 	ingestErr error
+
+	usdRates     map[string]decimal.Decimal
+	usdRatesErr  error
+	usdRateCalls int
 
 	// freeFirstPeriod makes StartTrialEndCheckout end the trial with nothing to collect; the subscription turns active.
 	freeFirstPeriod bool
@@ -182,6 +187,14 @@ func (f *fakeClient) IngestBulk(_ context.Context, events []usageEvent) error {
 	}
 	f.ingested = append(f.ingested, events)
 	return nil
+}
+
+func (f *fakeClient) USDRates(context.Context) (map[string]decimal.Decimal, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.usdRateCalls++
+	return f.usdRates, f.usdRatesErr
 }
 
 // recordingClient records the context provisioning ran with, signals each call, and can panic.
