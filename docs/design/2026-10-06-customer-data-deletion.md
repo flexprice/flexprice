@@ -15,7 +15,7 @@ A tenant-facing API that permanently erases a customer's personal data on the te
 
 A request goes through three stages:
 
-1. **Suppression**, as soon as the request is accepted. The customer’s personal data is inaccessible through APIs, the UI, exports and hosted links, and new events and replay for them are refused. Permitted financial reads may return amounts, dates and statuses with identifying fields removed; retained personal documents remain inaccessible through customer-facing links.
+1. **Suppression**, as soon as the request is accepted. The customer’s personal data is inaccessible through APIs, the UI, exports and hosted links. Ingestion is **not** blocked: events keep being accepted, and the request erases only what was ingested before it (§7, erasure cutoff). Permitted financial reads may return amounts, dates and statuses with identifying fields removed; retained personal documents remain inaccessible through customer-facing links.
 2. **Cooldown**, a per-tenant window during which the tenant can cancel the request. The data stays suppressed throughout.
 3. **Redaction**, when the cooldown ends. This cannot be undone. Personal data is overwritten in the transactional store and the customer's usage data is purged from the analytics store.
 
@@ -140,7 +140,7 @@ After an erasure, the same person signs up again under the same `external_id`. T
 
 **R8.** Personal data and usage data are redacted within 30 calendar days of `instruction_received_at`, apart from the categories retained under BR1. For API requests this is receipt of the valid API instruction; for written requests it is the original receipt time of the tenant instruction, not operator entry time. Persist `redaction_due_at = instruction_received_at + 30 days` and `cooldown_ends_at = instruction_received_at + cooldown_days`. Late entry never resets either clock: elapsed cooldowns run immediately; overdue instructions are flagged and escalated for immediate execution. The cooldown plus redaction must fit the original deadline.
 
-**R9.** Event ingestion refuses events for a suppressed customer with `422`. A bulk call accepts the other events and returns a `rejected` list with each refused event's index, event id and reason (`customer_suppressed`). Clients retry nothing from that list.
+**R9.** Event ingestion is unchanged by a deletion request. Events for a suppressed customer are accepted, single and bulk alike, and no `rejected` list is produced on suppression grounds. Scope is set by the cutoff instead: the request erases only rows ingested before its `requested_at`.
 
 **R10.** Every request leaves a permanent, pseudonymised record: `subject_ref`, `customer_id`, timestamps, channel, state and per-category outcomes. It keeps no external identifier and no personal field. `customer_id` is a Flexprice-generated id. It stays because it links the retained financial records, and after redaction it no longer resolves to any personal data.
 
@@ -150,7 +150,7 @@ After an erasure, the same person signs up again under the same `external_id`. T
 
 **R13.** The feature, the cooldown and the retention periods live in a new `customer_data_deletion` setting (§8). Flexprice sets it per tenant directly in the database, with values taken from the tenant's contract. It is not exposed through the settings API, so a tenant can neither enable the feature nor change its values. Unset values fall back to the defaults.
 
-**R14.** When the feature is not enabled, `POST /v1/privacy/deletion-requests` returns `404`. Reads, cancel and retry keep working on requests created while it was enabled, so turning the feature off never strands an open request or hides an audit record. Ingestion runs the suppression check only for tenants with the feature enabled or with any suppression entry in force, so every other tenant's hot path is unchanged.
+**R14.** When the feature is not enabled, `POST /v1/privacy/deletion-requests` returns `404`. Reads, cancel and retry keep working on requests created while it was enabled, so turning the feature off never strands an open request or hides an audit record. Ingestion is never gated on this setting, because it performs no suppression check at all.
 
 **R15.** Checks run in a fixed order: caller (`403`), feature (`404`), input (`400`), customer (`404`), existing request (`200`), validation gate (`409`).
 
@@ -259,8 +259,6 @@ on unique-index conflict:
 
 EnsureWorkflowDispatched(request.id) // fast path; outbox dispatcher retries durably
 
-if SuppressionList.Add(tenant, env, subject_ref) fails:
-    return 503 { request_id }                        // workflow retries the write
 EnsureReadSuppressionAndAccessRevocation(request.id)
 EnsureWriterSuppressionAndDrain(request.id)          // failure: 503 with request id; workflow retries
 if not DeletionRequestRepo.MarkSuppressed(request.id, now): // pending_suppression -> suppressed
@@ -325,7 +323,7 @@ sequenceDiagram
     participant API as PrivacyHandler
     participant SVC as DeletionRequestService
     participant PG as Transactional store
-    participant SL as Suppression list
+    participant SL as Read suppression
     participant WF as Deletion workflow
     participant AN as Analytics store
     participant FS as File storage
@@ -343,7 +341,7 @@ sequenceDiagram
     end
     SVC->>PG: create pending_suppression request + archive + dispatch outbox (one tx)
     SVC->>WF: ensure started (durable outbox retry)
-    SVC->>SL: add subject_ref
+    SVC->>SL: mark reads suppressed
     alt suppression write failed
         SVC-->>T: 503 request_id (workflow retries)
     end
@@ -378,18 +376,13 @@ sequenceDiagram
     API-->>T: state, timestamps, per-category outcomes
 ```
 
-### Ingest suppression
+### Ingestion is not fenced
 
-```
-IngestEvent -> validate
-            -> subject_ref = sha256(external_customer_id || tenant_salt)
-            -> suppressed?  yes: 422 (bulk: added to rejected list), not published
-                            no:  publish (hot path unchanged)
-```
+Ingestion is untouched by a deletion request. Client emitters are outside our control, and refusing their events would mean overriding the controller's own instruction to process data (UC2). The hot path keeps no suppression list and pays no lookup.
 
-The suppression check must not slow ingestion down. The list is held only as hashes, so it never holds the raw identifiers it exists to protect. Entries have no expiry. They are removed only by cancellation or by a confirmed new subject (BR6).
+Scope comes from the cutoff instead: a request erases rows whose `ingested_at` is earlier than its `requested_at`. An event the tenant sends after requesting erasure is kept, because they sent it knowingly after asking. A later request covers it under its own, later cutoff.
 
-If the list is lost, it is rebuilt from `deletion_requests` before ingestion resumes checking. The rebuild loads every request in `pending_suppression`, `suppressed`, `redacting`, `completed` or `failed` whose suppression has not been lifted. Cancelled requests and lifted suppressions are never reloaded.
+The consequence is tenant-facing and must not be softened: a suppressed customer can still accrue new data. Verification therefore proves **zero rows ingested before `requested_at`**, never zero rows outright.
 
 ---
 
@@ -603,7 +596,7 @@ The bulk ingest response gains a `rejected` array. Accepted events are published
 
 ### Errors
 
-Checked in the order listed (R15). The lifecycle API implementation must add the new domain error marks below to `internal/errors` and register their statuses in `HTTPStatusFromErr`, with mapping tests. Existing `ErrInvalidOperation` remains `400` and `ErrInternal` remains `500`; they cannot implement the promised `409`, `422` or `503`. This PRD introduces no runtime error types.
+Checked in the order listed (R15). The lifecycle API implementation must add the new domain error marks below to `internal/errors` and register their statuses in `HTTPStatusFromErr`, with mapping tests. Existing `ErrInvalidOperation` remains `400` and `ErrInternal` remains `500`; they cannot implement the promised `409` or `503`. This PRD introduces no runtime error types.
 
 | HTTP | `ierr` mark | Condition |
 |---|---|---|
@@ -613,7 +606,6 @@ Checked in the order listed (R15). The lifecycle API implementation must add the
 | 404 | `ErrNotFound` | Customer or request not in this environment |
 | 409 | New `ErrConflict` → `http.StatusConflict` | Validation gate tripped; cancel or retry from a state that doesn't allow it; `external_id` reuse without `confirm_new_subject` |
 | 503 | `ErrServiceUnavailable` → `http.StatusServiceUnavailable` | Suppression or cancellation cache cleanup failed, request recorded |
-| 422 | New `ErrCustomerSuppressed` → `http.StatusUnprocessableEntity` | Ingestion: event for a suppressed customer |
 
 ---
 
@@ -632,14 +624,13 @@ Checked in the order listed (R15). The lifecycle API implementation must add the
 | Feature turned off while requests are open | Open requests run to completion. Reads, cancel and retry still work. Only new requests get `404`. |
 | New subscription created during the cooldown | Recheck fails and the request moves to `failed`. Nothing is redacted. The tenant retries or cancels. |
 | Suppression write fails on create | `503` with the request id. The workflow retries the write before anything else. |
-| Events arrive after suppression | Refused with `422`. Nothing new lands. |
-| Bulk call with one suppressed customer | Other events ingest. The refused ones are listed in `rejected`. |
-| Events already in flight when suppression lands | Purged in redaction. The verification step catches anything that lands late. |
-| Raw-event reprocessing after the purge | Refused by persistent subject suppression, independently of erased per-event audit rows. |
+| Events arrive after suppression | Ingested normally. Their `ingested_at` is later than `requested_at`, so they fall outside this request's scope and are not erased by it. |
+| Bulk call with one suppressed customer | Unaffected. Nothing is rejected on suppression grounds. |
+| Events already in flight when suppression lands | Ingested before `requested_at`, so in scope and purged in redaction. Verification catches anything that lands late. |
+| Raw-event reprocessing after the purge | Re-ingests, and lands after the cutoff, so it survives this request. A tenant replaying erased data is re-supplying it as controller. |
 | Same `external_id` used for a new customer | `409` while the old purge is pending/running/failed. After verified completion, explicit confirmation and replay isolation are required before lifting suppression (BR6). |
 | Dispute window already passed at cooldown end | Invoice documents are deleted together with everything else. |
 | Customer never had any transactions | Nothing to retain. Every category ends `redacted` or `deleted`. |
-| Suppression list lost | Rebuilt from `deletion_requests` before ingestion resumes checking. Cancelled and lifted entries are not reloaded. |
 | Redaction step fails | Retried. After retries are exhausted, `failed` with the reason. The customer stays suppressed. Retry resumes cleanup; cancel is allowed only if irreversible work never began. |
 
 ---
@@ -662,7 +653,7 @@ Checked in the order listed (R15). The lifecycle API implementation must add the
 
 **AC8.** With `cooldown_days = 7`, nothing is redacted before day 7. Redaction completes within 30 calendar days of the request.
 
-**AC9.** An event for a suppressed customer returns `422` and is not published. In a bulk call that includes one suppressed customer, every other event is still ingested and the refused ones appear in `rejected` with their index and event id.
+**AC9.** An event for a suppressed customer is accepted and published, single or bulk, with no `rejected` entry on suppression grounds. Its `ingested_at` is later than `requested_at`, and a verification run for that request still reports zero in-scope rows.
 
 **AC10.** If the suppression write fails, the call returns `503` with the request id, and the workflow applies suppression before any other step.
 
@@ -682,7 +673,7 @@ Checked in the order listed (R15). The lifecycle API implementation must add the
 
 **AC18.** A written instruction entered through the operator route records `request_channel = written`, the operator as `created_by` and the `instruction_ref`, and behaves identically after that.
 
-**AC19.** With the feature not enabled, `POST` returns `404`. Ingestion skips suppression lookups only when no suppression entry is in force. Disabling the feature while any request remains suppressed continues to reject that customer’s ingestion and replay. Requests created while it was enabled stay readable.
+**AC19.** With the feature not enabled, `POST` returns `404`. Ingestion is unaffected either way. Requests created while it was enabled stay readable, cancellable and retryable.
 
 **AC20.** A user without `super_admin` gets `403`. An API key or service account gets `403` even when it carries `super_admin`. A `403` is returned before any feature or input check.
 
@@ -766,7 +757,7 @@ Implementation parent: [FLE-1836](https://linear.app/flexprice/issue/FLE-1836).
 | Hashed `subject_ref`, permanent pseudonymised record | Proves the deletion happened (Art. 5(2)). Treated as personal data, with the salt access-restricted. |
 | `external_id` captured at request time | The purge needs it after the customer row is redacted. |
 | `external_id` reuse needs explicit confirmation | Prevents both permanent blocking of a new customer and silent re-attachment to an erased one. |
-| `422` at ingestion, not a silent drop | The client can tell suppression apart from a malformed payload. |
+| Ingestion never fenced | Client emitters are outside our control, and refusing a controller's events overrides their instruction. The cutoff bounds scope instead. |
 | Reuse merged #3161 mutation primitives | Offboarding owns all-history orchestration and persistent suppression; correction guards and dedup release remain separate. |
 | Free-form `metadata` on linked records redacted | Tenants can put personal data in any free-form field. Financial fields stay intact. |
 | Workflow inputs carry only the request id | Personal data never lands in workflow history. |
