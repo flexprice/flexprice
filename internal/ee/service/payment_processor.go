@@ -134,6 +134,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	}
 
 	statusBeforeOutcome := paymentObj.PaymentStatus
+	var outcomeEvent types.WebhookEventName
 	// Update payment status based on processing result
 	if processErr != nil {
 		// For payment links, if the error occurred during payment link creation,
@@ -156,7 +157,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			paymentObj.ErrorMessage = lo.ToPtr(errMsg)
 			failedAt := time.Now().UTC()
 			paymentObj.FailedAt = &failedAt
-			p.publishSystemEvent(ctx, types.WebhookEventPaymentFailed, paymentObj.ID)
+			outcomeEvent = types.WebhookEventPaymentFailed
 		}
 	} else {
 		// For payment links, keep as pending until external payment completion
@@ -164,13 +165,13 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			paymentObj.PaymentStatus = types.PaymentStatusPending
 			paymentObj.SucceededAt = nil // Keep succeeded_at as nil
 			p.Logger.Info(ctx, "keeping payment link as pending", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
-			p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
+			outcomeEvent = types.WebhookEventPaymentPending
 		} else {
 			paymentObj.PaymentStatus = types.PaymentStatusSucceeded
 			succeededAt := time.Now().UTC()
 			paymentObj.SucceededAt = &succeededAt
 			p.Logger.Info(ctx, "marking payment as succeeded", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
-			p.publishSystemEvent(ctx, types.WebhookEventPaymentSuccess, paymentObj.ID)
+			outcomeEvent = types.WebhookEventPaymentSuccess
 		}
 	}
 
@@ -180,6 +181,9 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		return paymentObj, err
 	}
 	recordPaymentTransition(ctx, paymentObj, statusBeforeOutcome)
+	if outcomeEvent != "" {
+		p.publishSystemEvent(ctx, outcomeEvent, paymentObj.ID)
+	}
 
 	// If payment succeeded, handle post-processing
 	if paymentObj.PaymentStatus == types.PaymentStatusSucceeded {

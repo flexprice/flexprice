@@ -271,9 +271,9 @@ func RegisterPostCommit(ctx context.Context, fn func()) bool {
 }
 
 // AfterCommit runs fn once the surrounding transaction commits, or now when
-// there is none. fn receives ctx without the finished transaction.
+// there is none. fn gets a detached, uncancellable ctx.
 func AfterCommit(ctx context.Context, fn func(ctx context.Context)) {
-	detached := WithoutDBTransaction(ctx)
+	detached := WithoutDBTransaction(context.WithoutCancel(ctx))
 	if !RegisterPostCommit(ctx, func() { fn(detached) }) {
 		fn(detached)
 	}
