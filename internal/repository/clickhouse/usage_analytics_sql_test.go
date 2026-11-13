@@ -110,8 +110,8 @@ func TestBuildBreakdownSQL_Invariants(t *testing.T) {
 				q.GroupBy = []usageanalytics.Key{keyFeature}
 				q.Columns = &keyApp
 				q.Metrics = []usageanalytics.Metric{
-					{Type: usageanalytics.MetricDistinct, Key: keyOwner},
-					{Type: usageanalytics.MetricDistinct, Key: keyUser},
+					{Type: types.AggregationCountUnique, Key: keyOwner},
+					{Type: types.AggregationCountUnique, Key: keyUser},
 				}
 				q.Sort = usageanalytics.Sort{Field: usageanalytics.SortColumn, Column: "run", Desc: true}
 				q.WithLineItemIDs = true

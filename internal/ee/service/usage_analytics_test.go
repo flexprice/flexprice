@@ -98,7 +98,8 @@ func (s *UsageAnalyticsSuite) SetupTest() {
 		ProrationCalculator:      s.GetCalculator(),
 	}
 	usage := stores.MeterUsageRepo.(*testutil.InMemoryMeterUsageStore)
-	s.svc = NewUsageAnalyticsService(s.params, testutil.NewInMemoryUsageAnalyticsStore(usage))
+	s.params.UsageAnalyticsRepo = testutil.NewInMemoryUsageAnalyticsStore(usage)
+	s.svc = NewUsageAnalyticsService(s.params)
 	s.billing = NewBillingService(s.params)
 	s.seed()
 }
@@ -262,7 +263,7 @@ func (s *UsageAnalyticsSuite) assertLinesEqualInvoice(meterIDs ...string) int {
 
 	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
 		r.GroupBy = []string{"sub_line_item_id"}
-		r.Expand = []dto.UsageExpand{dto.UsageExpandPrice}
+		r.Expand = []types.ExpandableField{types.ExpandPrices}
 		if len(meterIDs) > 0 {
 			r.MeterIDs = meterIDs
 		}
@@ -368,7 +369,7 @@ func (s *UsageAnalyticsSuite) TestSubscriptionGrantExcludesTheLinesBillingLowere
 func (s *UsageAnalyticsSuite) TestChildSeesOnlyItsOwnEventsAtTheParentsPrices() {
 	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
 		r.ExternalCustomerID = "acme_child"
-		r.Expand = []dto.UsageExpand{dto.UsageExpandSubscription, dto.UsageExpandPlan}
+		r.Expand = []types.ExpandableField{types.ExpandSubscription, types.ExpandPlans}
 	})
 	s.NoError(err)
 	s.Equal(map[string]string{"bob": "6000.00", dto.UsageNoneValue: "0.01"}, amountByGroup(resp, "properties.user"))
@@ -517,8 +518,8 @@ func (s *UsageAnalyticsSuite) TestRowsAlwaysCarryIDsAndExpandAddsObjectMaps() {
 	resp, err = s.query(func(r *dto.UsageAnalyticsRequest) {
 		r.MeterIDs = []string{"m_tokens"}
 		r.GroupBy = []string{"meter_id"}
-		r.Expand = []dto.UsageExpand{dto.UsageExpandPrice, dto.UsageExpandPlan, dto.UsageExpandAddon,
-			dto.UsageExpandSubscription, dto.UsageExpandMeter, dto.UsageExpandFeature}
+		r.Expand = []types.ExpandableField{types.ExpandPrices, types.ExpandPlans, types.ExpandAddons,
+			types.ExpandSubscription, types.ExpandMeters, types.ExpandFeatures}
 	})
 	s.NoError(err)
 	s.ElementsMatch([]string{"p_tok_new", "p_tok_old"}, lo.Keys(resp.Prices))
@@ -562,7 +563,7 @@ func (s *UsageAnalyticsSuite) TestColumnsMetricsAndPaging() {
 	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) {
 		r.GroupBy = []string{"meter_id"}
 		r.Columns = "properties.user"
-		r.Metrics = []dto.UsageAnalyticsMetric{{Type: "distinct", Key: "properties.user"}}
+		r.Metrics = []dto.UsageAnalyticsMetric{{Type: types.AggregationCountUnique, Key: "properties.user"}}
 		r.Limit = 1
 		r.Offset = 1
 	})
@@ -575,7 +576,7 @@ func (s *UsageAnalyticsSuite) TestColumnsMetricsAndPaging() {
 	row := resp.Items[0]
 	s.Equal("m_scaled", row.Group["meter_id"])
 	s.Equal(map[string]dto.UsageColumn{"alice": {Amount: "20.00"}}, row.Columns)
-	s.Equal(dto.UsageAnalyticsValue{Count: 1, Values: []string{"alice"}}, row.Metrics["distinct:properties.user"])
+	s.Equal(dto.UsageAnalyticsValue{Count: 1, Values: []string{"alice"}}, row.Metrics["COUNT_UNIQUE:properties.user"])
 }
 
 func (s *UsageAnalyticsSuite) TestWeeklyPointsListEveryWindow() {
@@ -607,7 +608,7 @@ func (s *UsageAnalyticsSuite) TestRejectedRequests() {
 		{"unknown key", func(r *dto.UsageAnalyticsRequest) { r.GroupBy = []string{"customer"} }},
 		{"only start_time", func(r *dto.UsageAnalyticsRequest) { r.EndTime = nil }},
 		{"unknown timezone", func(r *dto.UsageAnalyticsRequest) { r.Timezone = "Mars/Base" }},
-		{"unknown expand", func(r *dto.UsageAnalyticsRequest) { r.Expand = []dto.UsageExpand{"wallet"} }},
+		{"unknown expand", func(r *dto.UsageAnalyticsRequest) { r.Expand = []types.ExpandableField{"wallet"} }},
 		{"line item columns", func(r *dto.UsageAnalyticsRequest) { r.Columns = "sub_line_item_id" }},
 		{"hourly windows", func(r *dto.UsageAnalyticsRequest) { r.WindowSize = types.WindowSizeHour }},
 		{"more than 400 daily windows", func(r *dto.UsageAnalyticsRequest) {

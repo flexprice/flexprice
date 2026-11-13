@@ -163,9 +163,9 @@ func randomUsageAnalyticsQuery(rng *rand.Rand, dedupe bool) *usageanalytics.Quer
 		}
 	}
 	if rng.Intn(2) == 0 {
-		q.Metrics = []usageanalytics.Metric{{Type: usageanalytics.MetricDistinct, Key: keyOwner}}
+		q.Metrics = []usageanalytics.Metric{{Type: types.AggregationCountUnique, Key: keyOwner}}
 		if rng.Intn(2) == 0 {
-			q.Metrics = append(q.Metrics, usageanalytics.Metric{Type: usageanalytics.MetricDistinct, Key: keyUser})
+			q.Metrics = append(q.Metrics, usageanalytics.Metric{Type: types.AggregationCountUnique, Key: keyUser})
 		}
 	}
 	switch rng.Intn(6) {

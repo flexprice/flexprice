@@ -110,7 +110,7 @@ func TestValidateRejectsKeysParseKeyCannotProduce(t *testing.T) {
 		"unknown kind in group_by":  func(q *Query) { q.GroupBy = []Key{unknown} },
 		"unknown kind in columns":   func(q *Query) { q.Columns = &unknown },
 		"unsafe property in filter": func(q *Query) { q.Filters = []Filter{{Key: unsafe, Op: FilterIn, Values: []string{"a"}}} },
-		"unsafe property in metric": func(q *Query) { q.Metrics = []Metric{{Type: MetricDistinct, Key: unsafe}} },
+		"unsafe property in metric": func(q *Query) { q.Metrics = []Metric{{Type: types.AggregationCountUnique, Key: unsafe}} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			q := base()

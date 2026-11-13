@@ -107,7 +107,7 @@ type Filter struct {
 type SortField string
 
 const (
-	SortAmount      SortField = "amount"      // amount after discounts
+	SortAmount     SortField = "amount"      // amount after discounts
 	SortColumn     SortField = "column"      // amount in one column value
 	SortName       SortField = "name"        // group values
 	SortUsage      SortField = "usage"       // quantity
@@ -121,19 +121,12 @@ type Sort struct {
 	Desc   bool
 }
 
-// MetricType is an allowed aggregate. The server maps each type to its SQL; callers never send SQL.
-type MetricType string
-
-const (
-	MetricDistinct MetricType = "distinct"
-)
-
 // MaxDistinctValues is how many values a distinct metric returns; above it only the count is returned.
 const MaxDistinctValues = 5
 
 // Metric is an extra aggregate per row, e.g. the distinct owners behind a group.
 type Metric struct {
-	Type MetricType
+	Type types.AggregationType // only COUNT_UNIQUE today
 	Key  Key
 }
 
@@ -167,10 +160,10 @@ type Query struct {
 // Validate checks the parts of the query the SQL builder relies on.
 func (q *Query) Validate() error {
 	if !q.Start.Before(q.End) {
-		return validationErr("start_time must be before end_time")
+		return ierr.Validationf("start_time must be before end_time")
 	}
 	if n := len(q.GroupBy); n == 0 || n > MaxGroupByKeys {
-		return validationErr("group_by needs 1 to %d keys", MaxGroupByKeys)
+		return ierr.Validationf("group_by needs 1 to %d keys", MaxGroupByKeys)
 	}
 	keys := append([]Key{}, q.GroupBy...)
 	if q.Columns != nil {
@@ -184,73 +177,73 @@ func (q *Query) Validate() error {
 	}
 	for _, k := range keys {
 		if !k.valid() {
-			return validationErr("invalid key %q", k)
+			return ierr.Validationf("invalid key %q", k)
 		}
 	}
 	seen := map[Key]bool{}
 	for _, k := range q.GroupBy {
 		if k.Kind == KeyMonth {
-			return validationErr("month can be used only in columns")
+			return ierr.Validationf("month can be used only in columns")
 		}
 		if seen[k] {
-			return validationErr("group_by key %s is repeated", k)
+			return ierr.Validationf("group_by key %s is repeated", k)
 		}
 		seen[k] = true
 	}
 	if len(q.Filters) > MaxFilters {
-		return validationErr("at most %d filters", MaxFilters)
+		return ierr.Validationf("at most %d filters", MaxFilters)
 	}
 	for _, f := range q.Filters {
 		if f.Key.Kind == KeyMonth {
-			return validationErr("month cannot be filtered")
+			return ierr.Validationf("month cannot be filtered")
 		}
 		if f.Op != FilterIn && f.Op != FilterNotIn {
-			return validationErr("filter op must be in or not_in")
+			return ierr.Validationf("filter op must be in or not_in")
 		}
 		if n := len(f.Values); n == 0 || n > MaxFilterValues {
-			return validationErr("filter on %s needs 1 to %d values", f.Key, MaxFilterValues)
+			return ierr.Validationf("filter on %s needs 1 to %d values", f.Key, MaxFilterValues)
 		}
 	}
 	if len(q.Search) > MaxSearchLength {
-		return validationErr("search is longer than %d characters", MaxSearchLength)
+		return ierr.Validationf("search is longer than %d characters", MaxSearchLength)
 	}
 	if len(q.Metrics) > MaxMetrics {
-		return validationErr("at most %d metrics", MaxMetrics)
+		return ierr.Validationf("at most %d metrics", MaxMetrics)
 	}
 	for _, m := range q.Metrics {
-		if m.Type != MetricDistinct {
-			return validationErr("unknown metric type %q", m.Type)
+		if m.Type != types.AggregationCountUnique {
+			return ierr.Validationf("unsupported metric type %q; supported: %s", m.Type, types.AggregationCountUnique)
 		}
 		if m.Key.Kind == KeyMonth {
-			return validationErr("month cannot be a metric key")
+			return ierr.Validationf("month cannot be a metric key")
 		}
 	}
 	switch q.Sort.Field {
 	case SortAmount, SortName, SortUsage, SortEventCount:
 	case SortColumn:
 		if q.Columns == nil {
-			return validationErr("sort by column needs columns")
+			return ierr.Validationf("sort by column needs columns")
 		}
 	default:
-		return validationErr("unknown sort %q", q.Sort.Field)
+		return ierr.Validationf("unknown sort %q", q.Sort.Field)
 	}
 	if q.Limit < 1 || q.Limit > MaxLimit {
-		return validationErr("limit must be between 1 and %d", MaxLimit)
+		return ierr.Validationf("limit must be between 1 and %d", MaxLimit)
 	}
 	if q.Offset < 0 {
-		return validationErr("offset must not be negative")
+		return ierr.Validationf("offset must not be negative")
 	}
 	if q.Timezone == nil {
-		return validationErr("timezone is required")
+		return ierr.Validationf("timezone is required")
 	}
 	if q.WindowSize != "" {
 		switch q.WindowSize {
 		case types.WindowSizeDay, types.WindowSizeWeek, types.WindowSizeMonth:
 		default:
-			return validationErr("window_size must be DAY, WEEK or MONTH")
+			return ierr.Validationf("window_size must be DAY, WEEK or MONTH")
 		}
 		if len(q.Windows()) > MaxWindows {
-			return validationErr("the range spans more than %d windows; use a larger window_size", MaxWindows)
+			return ierr.Validationf("the range spans more than %d windows; use a larger window_size", MaxWindows)
 		}
 	}
 	return nil
@@ -317,10 +310,6 @@ func DateStart(year int, month time.Month, day int, tz *time.Location) time.Time
 		t = t.Add(15 * time.Minute)
 	}
 	return t
-}
-
-func validationErr(format string, args ...any) error {
-	return ierr.NewErrorf(format, args...).Mark(ierr.ErrValidation)
 }
 
 // BillingPeriodSegment is the part of the requested range inside one billing period of one subscription.

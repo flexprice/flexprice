@@ -24,36 +24,24 @@ const MaxUsageColumns = 50
 // defaultUsageRange is the range used when start_time and end_time are both omitted.
 const defaultUsageRange = 7 * 24 * time.Hour
 
-// UsageExpand names an object map a response can carry for the IDs on its rows.
-type UsageExpand string
-
-const (
-	UsageExpandPrice        UsageExpand = "price"
-	UsageExpandPlan         UsageExpand = "plan"
-	UsageExpandAddon        UsageExpand = "addon"
-	UsageExpandSubscription UsageExpand = "subscription"
-	UsageExpandMeter        UsageExpand = "meter"
-	UsageExpandFeature      UsageExpand = "feature"
-)
-
 // UsageAnalyticsRequest is the body of POST /usage/analytics.
 type UsageAnalyticsRequest struct {
-	ExternalCustomerID string                 `json:"external_customer_id" binding:"required"`
-	StartTime          *time.Time             `json:"start_time,omitempty"`
-	EndTime            *time.Time             `json:"end_time,omitempty"`
-	Timezone           string                 `json:"timezone,omitempty"`
-	MeterIDs           []string               `json:"meter_ids,omitempty"`
-	FeatureIDs         []string               `json:"feature_ids,omitempty"`
-	Sources            []string               `json:"sources,omitempty"`  // event sources to keep; same as a source "in" filter
-	GroupBy            []string               `json:"group_by,omitempty"` // defaults to meter_id
-	Columns            string                 `json:"columns,omitempty"`
-	Filters            []UsageAnalyticsFilter `json:"filters,omitempty"`
-	Search             string                 `json:"search,omitempty"`
-	Sort               *UsageAnalyticsSort    `json:"sort,omitempty"`
-	Metrics            []UsageAnalyticsMetric `json:"metrics,omitempty"`
-	Expand             []UsageExpand          `json:"expand,omitempty"`
-	Deduplicate        bool                   `json:"deduplicate,omitempty"`
-	WindowSize         types.WindowSize       `json:"window_size,omitempty"`
+	ExternalCustomerID string                  `json:"external_customer_id" binding:"required"`
+	StartTime          *time.Time              `json:"start_time,omitempty"`
+	EndTime            *time.Time              `json:"end_time,omitempty"`
+	Timezone           string                  `json:"timezone,omitempty"`
+	MeterIDs           []string                `json:"meter_ids,omitempty"`
+	FeatureIDs         []string                `json:"feature_ids,omitempty"`
+	Sources            []string                `json:"sources,omitempty"`  // event sources to keep; same as a source "in" filter
+	GroupBy            []string                `json:"group_by,omitempty"` // defaults to meter_id
+	Columns            string                  `json:"columns,omitempty"`
+	Filters            []UsageAnalyticsFilter  `json:"filters,omitempty"`
+	Search             string                  `json:"search,omitempty"`
+	Sort               *UsageAnalyticsSort     `json:"sort,omitempty"`
+	Metrics            []UsageAnalyticsMetric  `json:"metrics,omitempty"`
+	Expand             []types.ExpandableField `json:"expand,omitempty"`
+	Deduplicate        bool                    `json:"deduplicate,omitempty"`
+	WindowSize         types.WindowSize        `json:"window_size,omitempty"`
 	// ApplyDiscounts prices each line after its percentage coupons (forever or repeated), as the invoice does.
 	ApplyDiscounts bool `json:"apply_discounts,omitempty"`
 	Limit          int  `json:"limit,omitempty"`
@@ -74,10 +62,10 @@ type UsageAnalyticsSort struct {
 	Order  string `json:"order,omitempty"`
 }
 
-// UsageAnalyticsMetric is an extra per-row aggregate from a fixed list, e.g. {"type": "distinct", "key": "properties.owner"}.
+// UsageAnalyticsMetric is an extra per-row aggregate, e.g. {"type": "COUNT_UNIQUE", "key": "properties.owner"}.
 type UsageAnalyticsMetric struct {
-	Type string `json:"type"`
-	Key  string `json:"key"`
+	Type types.AggregationType `json:"type"`
+	Key  string                `json:"key"`
 }
 
 // ToQuery validates the request and converts it to a query; now fills the default range.
@@ -101,12 +89,12 @@ func (r *UsageAnalyticsRequest) ToQuery(now time.Time) (*usageanalytics.Query, e
 	case r.StartTime != nil && r.EndTime != nil:
 		q.Start, q.End = *r.StartTime, *r.EndTime
 	default:
-		return nil, usageValidationErr("start_time and end_time must be set together")
+		return nil, ierr.Validationf("start_time and end_time must be set together")
 	}
 
 	tz, err := time.LoadLocation(lo.Ternary(r.Timezone == "", "UTC", r.Timezone))
 	if err != nil {
-		return nil, usageValidationErr("unknown timezone %q", r.Timezone)
+		return nil, ierr.Validationf("unknown timezone %q", r.Timezone)
 	}
 	q.Timezone = tz
 
@@ -148,13 +136,13 @@ func (r *UsageAnalyticsRequest) ToQuery(now time.Time) (*usageanalytics.Query, e
 		if err != nil {
 			return nil, err
 		}
-		q.Metrics = append(q.Metrics, usageanalytics.Metric{Type: usageanalytics.MetricType(m.Type), Key: k})
+		q.Metrics = append(q.Metrics, usageanalytics.Metric{Type: m.Type, Key: k})
 	}
 
 	q.Sort = usageanalytics.Sort{Field: usageanalytics.SortAmount, Desc: true}
 	if r.Sort != nil {
 		if r.Sort.Order != "" && r.Sort.Order != "asc" && r.Sort.Order != "desc" {
-			return nil, usageValidationErr("sort order must be asc or desc")
+			return nil, ierr.Validationf("sort order must be asc or desc")
 		}
 		q.Sort = usageanalytics.Sort{
 			Field:  usageanalytics.SortField(r.Sort.Field),
@@ -165,9 +153,9 @@ func (r *UsageAnalyticsRequest) ToQuery(now time.Time) (*usageanalytics.Query, e
 
 	for _, e := range r.Expand {
 		switch e {
-		case UsageExpandPrice, UsageExpandPlan, UsageExpandAddon, UsageExpandSubscription, UsageExpandMeter, UsageExpandFeature:
+		case types.ExpandPrices, types.ExpandPlans, types.ExpandAddons, types.ExpandSubscription, types.ExpandMeters, types.ExpandFeatures:
 		default:
-			return nil, usageValidationErr("unknown expand %q", e)
+			return nil, ierr.Validationf("unknown expand %q", e)
 		}
 	}
 
@@ -199,10 +187,6 @@ func parseFieldKey(field, s string, allowed []usageanalytics.KeyKind) (usageanal
 		WithHint(msg).
 		WithReportableDetails(map[string]any{"field": field, "value": s, "supported": supported}).
 		Mark(ierr.ErrValidation)
-}
-
-func usageValidationErr(format string, args ...any) error {
-	return ierr.NewErrorf(format, args...).Mark(ierr.ErrValidation)
 }
 
 // UsageAnalyticsResponse is one page of usage rows.
