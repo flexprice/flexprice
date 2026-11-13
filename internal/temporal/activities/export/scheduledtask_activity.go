@@ -111,7 +111,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 			"start_time", startTime,
 			"end_time", endTime)
 	} else if task.EntityType.IsReportSource() {
-		startTime, endTime, err = scheduledtask.ReportWindow(task.Interval, executionTime)
+		startTime, endTime, err = scheduledtask.ReportWindow(task.Interval, task.Schedule, executionTime)
 		if err != nil {
 			a.logger.Error(ctx, "failed to compute report window", "error", err, "scheduled_task_id", input.ScheduledTaskID)
 			return nil, temporal.NewNonRetryableApplicationError("invalid export schedule", "InvalidSchedule", err)
