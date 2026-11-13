@@ -64,25 +64,35 @@ func (s *integrationSyncService) SyncEntity(ctx context.Context, req dto.Integra
 	}
 }
 
-// pullInvoice reads the invoice back from each published connection, or from `only` when set.
+// pullInvoice reads the invoice back from each published connection in the
+// invoice's scope, or from `only` when set.
 func (s *integrationSyncService) pullInvoice(ctx context.Context, invoiceID string, only *connection.Connection) error {
-	var connections []*connection.Connection
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	connections, err := s.ConnectionRepo.ListPublishedInScope(ctx)
+	if err != nil {
+		return err
+	}
 	if only != nil {
-		connections = []*connection.Connection{only}
-	} else {
-		all, err := s.ConnectionRepo.List(ctx, &types.ConnectionFilter{
-			QueryFilter: types.NewNoLimitQueryFilter(),
-		})
-		if err != nil {
-			return err
+		// The named connection must be one the invoice's scope may use.
+		var inScope []*connection.Connection
+		for _, conn := range connections {
+			if conn.ID == only.ID {
+				inScope = append(inScope, conn)
+			}
 		}
-		connections = all
+		if len(inScope) == 0 {
+			return ierr.NewError("connection is not available for this invoice").
+				WithHint("Sync with a connection that belongs to the invoice's billing entity").
+				Mark(ierr.ErrValidation)
+		}
+		connections = inScope
 	}
 
 	for _, conn := range connections {
-		if conn.Status != types.StatusPublished {
-			continue
-		}
 		integ, err := s.IntegrationFactory.GetIntegrationByProvider(ctx, conn.ProviderType)
 		if err != nil {
 			continue
@@ -106,6 +116,11 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 			Mark(ierr.ErrValidation)
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
 	payload, err := json.Marshal(map[string]string{"invoice_id": invoiceID})
 	if err != nil {
 		return err
@@ -124,6 +139,10 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 
 func (s *integrationSyncService) syncCustomer(ctx context.Context, customerID string, opts ...integrationevents.DispatchOption) error {
 	if _, err := s.CustomerRepo.Get(ctx, customerID); err != nil {
+		return err
+	}
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+	if err != nil {
 		return err
 	}
 

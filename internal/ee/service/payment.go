@@ -92,6 +92,31 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		}
 	}
 
+	// Offline and credit payments need no gateway, so they skip the billing entity's connection check.
+	if p.PaymentMethodType != types.PaymentMethodTypeOffline && p.PaymentMethodType != types.PaymentMethodTypeCredits {
+		customerID := p.DestinationID
+		if invoice != nil {
+			customerID = invoice.CustomerID
+		}
+		ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+		if err != nil {
+			return nil, err
+		}
+		var provider types.SecretProvider
+		switch {
+		case req.PaymentGateway != nil:
+			provider = types.SecretProvider(*req.PaymentGateway)
+		case p.PaymentMethodType == types.PaymentMethodTypeCard && req.ProcessPayment:
+			// Card payments without a gateway are charged through Stripe; recorded ones (Zoho, QuickBooks) need none.
+			provider = types.SecretProviderStripe
+		}
+		if provider != "" {
+			if err := requireProviderConnected(ctx, s.ServiceParams, provider); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// Check if payment link already exists for this invoice
 	// If invoice was synced to gateway and has a payment URL, return it immediately
 	// No payment record is created here - the webhook will create it when payment is made
@@ -191,6 +216,12 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
+
+	connectionID, err := s.gatewayConnectionID(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	p.ConnectionID = connectionID
 
 	if err := s.PaymentRepo.Create(ctx, p); err != nil {
 		// Concurrent request already inserted with this key — return theirs.
@@ -527,7 +558,20 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		p.PaymentStatus = target
 	}
 	if req.PaymentGateway != nil {
+		if lo.FromPtr(p.PaymentGateway) != *req.PaymentGateway {
+			p.ConnectionID = nil
+		}
 		p.PaymentGateway = req.PaymentGateway
+		if p.ConnectionID == nil {
+			gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p)
+			if err != nil {
+				return nil, err
+			}
+			p.ConnectionID, err = s.gatewayConnectionID(gatewayCtx, p)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	if req.GatewayPaymentID != nil {
 		p.GatewayPaymentID = req.GatewayPaymentID
@@ -905,25 +949,29 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	gatewayTrackingID := lo.FromPtr(p.GatewayTrackingID)
 	gateway := types.PaymentGatewayType(*p.PaymentGateway)
 
+	gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p)
+	if err != nil {
+		return p, err
+	}
+
 	var newStatus types.PaymentStatus
-	var err error
 	var backfillGatewayPaymentID string
 
 	if gatewayPaymentID != "" {
 		switch gateway {
 		case types.PaymentGatewayTypeStripe:
-			newStatus, err = s.fetchStripePaymentStatus(ctx, gatewayPaymentID)
+			newStatus, err = s.fetchStripePaymentStatus(gatewayCtx, gatewayPaymentID)
 		case types.PaymentGatewayTypeRazorpay:
-			newStatus, err = s.fetchRazorpayPaymentStatus(ctx, gatewayPaymentID)
+			newStatus, err = s.fetchRazorpayPaymentStatus(gatewayCtx, gatewayPaymentID)
 		case types.PaymentGatewayTypeMoyasar:
-			newStatus, err = s.fetchMoyasarPaymentStatus(ctx, gatewayPaymentID)
+			newStatus, err = s.fetchMoyasarPaymentStatus(gatewayCtx, gatewayPaymentID)
 		default:
 			return p, nil
 		}
 	} else if gatewayTrackingID != "" {
 		switch gateway {
 		case types.PaymentGatewayTypeRazorpay:
-			newStatus, backfillGatewayPaymentID, err = s.fetchRazorpayPaymentLinkStatus(ctx, gatewayTrackingID)
+			newStatus, backfillGatewayPaymentID, err = s.fetchRazorpayPaymentLinkStatus(gatewayCtx, gatewayTrackingID)
 		default:
 			return p, nil
 		}
@@ -1048,6 +1096,21 @@ func (s *paymentService) fetchMoyasarPaymentStatus(ctx context.Context, gatewayP
 	return integrations.MoyasarPaymentStatus(resp.Status).ToFlexpricePaymentStatus()
 }
 
+// gatewayConnectionID is the payment's connection, else its gateway's connection in scope; nil when there is none.
+func (s *paymentService) gatewayConnectionID(ctx context.Context, p *payment.Payment) (*string, error) {
+	if p.ConnectionID != nil || lo.FromPtr(p.PaymentGateway) == "" {
+		return p.ConnectionID, nil
+	}
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProvider(*p.PaymentGateway))
+	if ierr.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return lo.ToPtr(conn.ID), nil
+}
+
 // CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
 // session directly via repo, without gateway calls or lifecycle processing.
 // TODO: migrate to full payment lifecycle method when payment lifecycle service is released
@@ -1055,6 +1118,13 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 	if req == nil || req.Invoice == nil {
 		return nil, ierr.NewError("request and invoice are required").
 			Mark(ierr.ErrValidation)
+	}
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, req.Invoice.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireProviderConnected(ctx, s.ServiceParams, types.SecretProvider(req.Gateway)); err != nil {
+		return nil, err
 	}
 
 	gatewayStr := string(req.Gateway)
@@ -1082,6 +1152,12 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 		return nil, err
 	}
 
+	connectionID, err := s.gatewayConnectionID(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	p.ConnectionID = connectionID
+
 	if err := s.PaymentRepo.Create(ctx, p); err != nil {
 		return nil, err
 	}
@@ -1098,6 +1174,10 @@ func (s *paymentService) ListPaymentMethods(ctx context.Context, customerID stri
 			Mark(ierr.ErrValidation)
 	}
 	if _, err := s.CustomerRepo.Get(ctx, customerID); err != nil {
+		return nil, err
+	}
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+	if err != nil {
 		return nil, err
 	}
 

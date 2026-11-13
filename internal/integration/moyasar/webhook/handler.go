@@ -349,10 +349,16 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment *moyasar.Moy
 		"moyasar_payment_id", payment.ID,
 		"moyasar_invoice_id", moyasarInvoiceID)
 
+	conn, err := h.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		ProviderTypes:     []string{string(types.SecretProviderMoyasar)},
 		ProviderEntityIDs: []string{moyasarInvoiceID},
 		EntityType:        types.IntegrationEntityTypeInvoice,
+		ConnectionID:      conn.ID,
 	}
 
 	mappings, err := h.entityIntegrationMappingRepo.List(ctx, filter)
@@ -408,7 +414,6 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, payment *moyasar.Moya
 		h.logger.Info(ctx, "payment_failed has no flexprice_payment_id, skipping", "moyasar_payment_id", payment.ID)
 		return nil
 	}
-
 	errorMessage := "payment failed"
 	if payment.Source != nil && payment.Source.Message != "" {
 		errorMessage = payment.Source.Message

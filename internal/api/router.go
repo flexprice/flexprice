@@ -467,9 +467,6 @@ func NewRouter(
 			subscription.PUT("/lineitems/:id", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.UpdateSubscriptionLineItem)
 			subscription.DELETE("/lineitems/:id", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.DeleteSubscriptionLineItem)
 
-			subscription.POST("/temporal/schedule-update-billing-period", write(types.EntitySubscription, types.ActionWrite), handlers.ScheduledTask.ScheduleUpdateBillingPeriod)
-			subscription.POST("/temporal/schedule-draft-finalization", write(types.EntitySubscription, types.ActionWrite), handlers.ScheduledTask.ScheduleDraftFinalization)
-
 			// Trigger subscription billing workflow
 			subscription.POST("/temporal/:subscription_id/trigger-workflow", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.TriggerSubscriptionWorkflow)
 			subscription.POST("/temporal/:subscription_id/draft-and-compute", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.TriggerSubscriptionDraftAndComputeWorkflow)
@@ -889,6 +886,7 @@ func NewRouter(
 	webhooks := v1Public.Group("/webhooks")
 	webhooks.Use(middleware.WebhookBodyLimitMiddleware(middleware.MaxWebhookBodyBytes), middleware.WebhookActorMiddleware, middleware.WebhookLoggingMiddleware(logger, webhookRequestRepo))
 	{
+		// Each route also takes ?connection={connection_id} to verify and apply the event as that connection
 		// Stripe webhook endpoint: POST /v1/webhooks/stripe/{tenant_id}/{environment_id}
 		webhooks.POST("/stripe/:tenant_id/:environment_id", handlers.Webhook.HandleStripeWebhook)
 		// HubSpot webhook endpoint: POST /v1/webhooks/hubspot/{tenant_id}/{environment_id}

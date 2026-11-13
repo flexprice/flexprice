@@ -334,11 +334,17 @@ func (s *PaymentService) reconcileInvoiceWithExternalPayment(ctx context.Context
 
 // findInvoiceMappingByProviderID finds an invoice mapping by QuickBooks invoice ID
 func (s *PaymentService) findInvoiceMappingByProviderID(ctx context.Context, qbInvoiceID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		ProviderTypes:     []string{string(types.SecretProviderQuickBooks)},
 		ProviderEntityIDs: []string{qbInvoiceID},
 		EntityType:        types.IntegrationEntityTypeInvoice,
 		QueryFilter:       types.NewDefaultQueryFilter(),
+		ConnectionID:      conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)

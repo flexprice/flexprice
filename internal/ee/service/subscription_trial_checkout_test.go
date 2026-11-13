@@ -46,6 +46,7 @@ func TestTrialConversionPeriod(t *testing.T) {
 func (s *SubscriptionServiceSuite) seedTrialingFixedFeeSubscription(amount decimal.Decimal) *subscription.Subscription {
 	ctx := s.GetContext()
 	s.GetIntegrationFactory().SetCheckoutProvider(&fakeCheckoutProvider{})
+	seedCheckoutConnections(&s.BaseServiceTestSuite)
 	now := time.Now().UTC()
 	trialStart, trialEnd := now.Add(-24*time.Hour), now.Add(13*24*time.Hour)
 

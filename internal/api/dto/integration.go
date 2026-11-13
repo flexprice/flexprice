@@ -70,6 +70,8 @@ type LinkIntegrationMappingRequest struct {
 	ProviderType     string                      `json:"provider_type" validate:"required,max=50"`
 	ProviderEntityID string                      `json:"provider_entity_id" validate:"required,max=255"`
 	Metadata         map[string]interface{}      `json:"metadata,omitempty"`
+
+	ConnectionID *string `json:"-"`
 }
 
 type LinkIntegrationMappingResponse struct {

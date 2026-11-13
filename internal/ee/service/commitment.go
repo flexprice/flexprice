@@ -29,7 +29,6 @@ type CommitmentService interface {
 	Update(ctx context.Context, id string, req dto.UpdateCommitmentRequest) (*dto.CommitmentResponse, error)
 	Terminate(ctx context.Context, id string, req dto.TerminateCommitmentRequest) (*dto.CommitmentResponse, error)
 	TerminateForSubscription(ctx context.Context, subscriptionID string, effectiveAt time.Time) error
-	IsEnabled(ctx context.Context) (bool, error)
 	// GetBillingTerms returns the commitment's published terms and its current instalments.
 	GetBillingTerms(ctx context.Context, id string) (*dto.BillingTermsResponse, error)
 	// PreviewBillingTerms returns what ReplaceBillingTerms would, writing nothing.
@@ -43,8 +42,8 @@ type CommitmentService interface {
 	ListInstalments(ctx context.Context, id string, statuses []types.InstalmentStatus) (*dto.ListInstalmentsResponse, error)
 	// GetInstalment returns one instalment of any commitment in the environment.
 	GetInstalment(ctx context.Context, instalmentID string) (*billingterm.Instalment, error)
-	// BillDueInstalments issues a one-off invoice for each due separate-invoice instalment in every environment with
-	// commitments enabled. A failed instalment is logged and the rest still bill; the failures are returned together.
+	// BillDueInstalments issues a one-off invoice for each due separate-invoice instalment in every environment. A
+	// failed instalment is logged and the rest still bill; the failures are returned together.
 	BillDueInstalments(ctx context.Context) error
 	// ListOverlapping returns the subscription's active and terminated commitments whose term overlaps [from, to); a
 	// terminated one still bills up to terminated_at.
@@ -66,31 +65,6 @@ func NewCommitmentService(params ServiceParams) CommitmentService {
 // newCommitmentService hands same-package callers the concrete type, for create options beyond the public API.
 func newCommitmentService(params ServiceParams) *commitmentService {
 	return &commitmentService{ServiceParams: params}
-}
-
-func (s *commitmentService) IsEnabled(ctx context.Context) (bool, error) {
-	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
-	cfg, err := GetSetting[types.CommitmentsV2Config](settingsSvc, ctx, types.SettingKeyCommitmentsV2)
-	if err != nil {
-		return false, err
-	}
-
-	return cfg.Enabled, nil
-}
-
-func (s *commitmentService) requireEnabled(ctx context.Context) error {
-	enabled, err := s.IsEnabled(ctx)
-	if err != nil {
-		return err
-	}
-
-	if !enabled {
-		return ierr.NewError("commitments are not enabled for this environment").
-			WithHint("Enable the commitments_v2 setting").
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	return nil
 }
 
 func (s *commitmentService) Preview(
@@ -301,10 +275,6 @@ func (s *commitmentService) prepare(
 	req *dto.CreateCommitmentRequest,
 	opts commitmentCreateOptions,
 ) (*dto.CommitmentResponse, *commitmentContext, error) {
-	if err := s.requireEnabled(ctx); err != nil {
-		return nil, nil, err
-	}
-
 	cc, err := s.loadCommitmentContext(ctx, req.SubscriptionID)
 	if err != nil {
 		return nil, nil, err
@@ -550,10 +520,6 @@ func (s *commitmentService) Terminate(
 	req dto.TerminateCommitmentRequest,
 ) (*dto.CommitmentResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	if err := s.requireEnabled(ctx); err != nil {
 		return nil, err
 	}
 
@@ -919,6 +885,39 @@ func cancellationFeeLine(
 		EntityID:     lo.ToPtr(c.ID),
 		Metadata:     metadata,
 	}, nil
+}
+
+// CoveringMeters returns the IDs of the subscription's active and terminated commitments whose scope covers, during their
+// term, one of its usage lines on the given meters.
+func (s *commitmentService) CoveringMeters(ctx context.Context, subscriptionID string, meterIDs []string) ([]string, error) {
+	commitments, err := s.CommitmentRepo.List(ctx, commitment.NewSubscriptionFilter(
+		subscriptionID, types.CommitmentStatusActive, types.CommitmentStatusTerminated,
+	))
+	if err != nil || len(commitments) == 0 {
+		return nil, err
+	}
+
+	cc, err := s.loadCommitmentContext(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	meters := make(map[string]bool, len(meterIDs))
+	for _, id := range meterIDs {
+		meters[id] = true
+	}
+
+	var ids []string
+	for _, c := range commitments {
+		for _, li := range scopeLinesInPeriod(c, cc, c.StartDate, c.EffectiveEnd()) {
+			if meters[li.MeterID] {
+				ids = append(ids, c.ID)
+				break
+			}
+		}
+	}
+
+	return ids, nil
 }
 
 func (s *commitmentService) ListOverlapping(

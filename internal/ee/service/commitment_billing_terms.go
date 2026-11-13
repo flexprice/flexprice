@@ -14,7 +14,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -237,10 +236,6 @@ func (s *commitmentService) PreviewBillingTerms(
 	id string,
 	req dto.ReplaceBillingTermsRequest,
 ) (*dto.BillingTermsResponse, error) {
-	if err := s.requireEnabled(ctx); err != nil {
-		return nil, err
-	}
-
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -277,10 +272,6 @@ func (s *commitmentService) ReplaceBillingTerms(
 	id string,
 	req dto.ReplaceBillingTermsRequest,
 ) (*dto.BillingTermsResponse, error) {
-	if err := s.requireEnabled(ctx); err != nil {
-		return nil, err
-	}
-
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -437,19 +428,21 @@ func (s *commitmentService) settle(
 
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
 
-	due := lo.Filter(cancelled, func(inst *billingterm.Instalment, _ int) bool { return !inst.BillOn.After(effectiveAt) })
-	if len(due) == 0 {
+	owed := lo.Filter(cancelled, func(inst *billingterm.Instalment, _ int) bool {
+		return owedAtTermination(inst, effectiveAt)
+	})
+	if len(owed) == 0 {
 		return nil, nil
 	}
 
-	first := lo.MinBy(due, func(a, b *billingterm.Instalment) bool { return a.ServicePeriodStart.Before(b.ServicePeriodStart) })
-	last := lo.MaxBy(due, func(a, b *billingterm.Instalment) bool { return a.ServicePeriodEnd.After(b.ServicePeriodEnd) })
+	first := lo.MinBy(owed, func(a, b *billingterm.Instalment) bool { return a.ServicePeriodStart.Before(b.ServicePeriodStart) })
+	last := lo.MaxBy(owed, func(a, b *billingterm.Instalment) bool { return a.ServicePeriodEnd.After(b.ServicePeriodEnd) })
 	settlement := billingterm.NewOwnerInstalment(ctx, c).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)).
 		WithKind(types.InstalmentKindSettlement).
 		WithDelivery(types.InstalmentDeliverySeparateInvoice).
 		WithBillOn(effectiveAt).
-		WithAmount(sumInstalments(due)).
+		WithAmount(sumInstalments(owed)).
 		WithInvoiceLabel(settlementLabel).
 		WithServicePeriod(types.Period{Start: first.ServicePeriodStart, End: last.ServicePeriodEnd}).
 		Build()
@@ -461,6 +454,19 @@ func (s *commitmentService) settle(
 
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, created)
 	return created[0], nil
+}
+
+// owedAtTermination reports whether a termination at terminatedAt still bills the instalment: it fell due by the
+// termination and pays for time before it, so an advance instalment due at the termination is not billed.
+func owedAtTermination(inst *billingterm.Instalment, terminatedAt time.Time) bool {
+	return !inst.BillOn.After(terminatedAt) && inst.ServicePeriodStart.Before(terminatedAt)
+}
+
+// cancelledByTermination reports whether c, the instalment's commitment, was terminated without owing the instalment,
+// so the instalment is never billed.
+func cancelledByTermination(c *commitment.Commitment, inst *billingterm.Instalment) bool {
+	return c != nil && c.CommitmentStatus == types.CommitmentStatusTerminated && c.TerminatedAt != nil &&
+		!owedAtTermination(inst, *c.TerminatedAt)
 }
 
 // settleEnded bills the instalments still scheduled on a billing-terms commitment that ended before its subscription
@@ -499,39 +505,32 @@ func (s *commitmentService) settleEnded(ctx context.Context, c *commitment.Commi
 }
 
 func (s *commitmentService) BillDueInstalments(ctx context.Context) error {
-	configs, err := s.SettingsRepo.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeyCommitmentsV2)
+	dueBy := clock.Now()
+	due := &billingterm.InstalmentFilter{
+		OwnerType:      types.BillingTermOwnerCommitment,
+		Statuses:       []types.InstalmentStatus{types.InstalmentStatusScheduled},
+		Deliveries:     []types.InstalmentDelivery{types.InstalmentDeliverySeparateInvoice},
+		BillOnOrBefore: &dueBy,
+	}
+
+	envs, err := s.BillingInstalmentRepo.ListEnvironments(ctx, due)
 	if err != nil {
 		return err
 	}
 
 	var errs []error
-	for _, env := range configs {
-		cfg, err := utils.ToStruct[types.CommitmentsV2Config](env.Config)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("decoding commitments_v2 setting for environment %s: %w", env.EnvironmentID, err))
-			continue
-		}
-		if !cfg.Enabled {
-			continue
-		}
-
+	for _, env := range envs {
 		envCtx := types.SetEnvironmentID(types.SetTenantID(ctx, env.TenantID), env.EnvironmentID)
-		errs = append(errs, s.billEnvironmentInstalments(envCtx))
+		errs = append(errs, s.billEnvironmentInstalments(envCtx, due))
 	}
 
 	return errors.Join(errs...)
 }
 
-// billEnvironmentInstalments bills the environment's due separate-invoice instalments one at a time, so a failure
+// billEnvironmentInstalments bills the environment's instalments the filter selects one at a time, so a failure
 // leaves the others billed and its own instalment scheduled for the next run.
-func (s *commitmentService) billEnvironmentInstalments(ctx context.Context) error {
-	dueBy := clock.Now()
-	due, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
-		OwnerType:      types.BillingTermOwnerCommitment,
-		Statuses:       []types.InstalmentStatus{types.InstalmentStatusScheduled},
-		Deliveries:     []types.InstalmentDelivery{types.InstalmentDeliverySeparateInvoice},
-		BillOnOrBefore: &dueBy,
-	})
+func (s *commitmentService) billEnvironmentInstalments(ctx context.Context, filter *billingterm.InstalmentFilter) error {
+	due, err := s.BillingInstalmentRepo.List(ctx, filter)
 	if err != nil {
 		return err
 	}
@@ -564,9 +563,8 @@ func (s *commitmentService) billEnvironmentInstalments(ctx context.Context) erro
 }
 
 // billInstalment issues the instalment's one-off invoice under its commitment's lock; finalizing it claims the
-// instalment. It returns nil when the instalment was claimed or cancelled since it was listed, when its subscription
-// or commitment no longer exists, or when it is not a settlement and its subscription is not active (draft,
-// incomplete, trialing, paused), so it waits for a later run.
+// instalment. It returns nil for an instalment claimed or cancelled since it was listed, orphaned, or cancelled by a
+// termination, and for a non-settlement whose subscription is not active, which waits for a later run.
 func (s *commitmentService) billInstalment(ctx context.Context, listed *billingterm.Instalment) (*dto.InvoiceResponse, error) {
 	var inv *dto.InvoiceResponse
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
@@ -613,6 +611,17 @@ func (s *commitmentService) billInstalment(ctx context.Context, listed *billingt
 		}
 		if err != nil {
 			return err
+		}
+
+		if cancelledByTermination(c, instalment) {
+			s.Logger.Info(ctx, "commitment.instalment_skipped",
+				"operation", "commitment.instalment_skipped",
+				"reason", "the commitment's termination does not owe the instalment",
+				"instalment_id", instalment.ID,
+				"commitment_id", c.ID,
+				"terminated_at", lo.FromPtr(c.TerminatedAt),
+			)
+			return nil
 		}
 
 		billingPeriod := string(sub.BillingPeriod)

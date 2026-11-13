@@ -28,6 +28,8 @@ type Payment struct {
 	PaymentGateway *string `json:"payment_gateway,omitempty"`
 	// The gateway_payment_id is the transaction identifier from the external payment gateway (optional)
 	GatewayPaymentID *string `json:"gateway_payment_id,omitempty"`
+	// The connection_id is the gateway connection that took this payment (optional)
+	ConnectionID *string `json:"connection_id,omitempty"`
 	// The gateway_tracking_id is the tracking identifier from the external payment gateway (optional)
 	GatewayTrackingID *string `json:"gateway_tracking_id,omitempty"`
 	// The gateway_metadata field contains gateway-specific metadata (optional)
@@ -188,6 +190,7 @@ func FromEnt(p *ent.Payment) *Payment {
 		PaymentMethodID:   p.PaymentMethodID,
 		PaymentGateway:    p.PaymentGateway,
 		GatewayPaymentID:  p.GatewayPaymentID,
+		ConnectionID:      p.ConnectionID,
 		GatewayTrackingID: p.GatewayTrackingID,
 		GatewayMetadata:   p.GatewayMetadata,
 		Amount:            p.Amount,

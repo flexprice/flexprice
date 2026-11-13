@@ -28,6 +28,9 @@ func (a *entityIntegrationMappingAdapter) CreateEntityIntegrationMapping(ctx con
 	if err := entityintegrationmapping.Validate(mapping); err != nil {
 		return nil, ierr.WithError(err).WithHint("Invalid entity integration mapping data").Mark(ierr.ErrValidation)
 	}
+	if err := entityintegrationmapping.ValidateConnection(mapping); err != nil {
+		return nil, err
+	}
 	if err := a.repo.Create(ctx, mapping); err != nil {
 		return nil, err
 	}

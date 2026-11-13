@@ -687,6 +687,11 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 		"plan_name", plan.Name,
 		"prices_count", len(prices))
 
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Step 1: Get or select the latest item family
 	itemFamily, err := s.itemFamilyService.GetLatestItemFamily(ctx)
 	if err != nil {
@@ -838,6 +843,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 			Metadata: map[string]interface{}{
 				"chargebee_charge_item_id": item.ID,
 			},
+			ConnectionID: lo.ToPtr(conn.ID),
 		}
 		// Override tenant_id from price (price has TenantID in BaseModel)
 		mapping.TenantID = p.TenantID

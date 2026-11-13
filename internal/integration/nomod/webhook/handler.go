@@ -97,11 +97,17 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, charge *nomod.Charge
 		"charge_id", charge.ID,
 		"nomod_invoice_id", nomodInvoiceID)
 
+	conn, err := h.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Look up FlexPrice invoice using entity_integration_mapping with List and filters
 	filter := &types.EntityIntegrationMappingFilter{
 		ProviderTypes:     []string{string(types.SecretProviderNomod)},
 		ProviderEntityIDs: []string{nomodInvoiceID},
 		EntityType:        types.IntegrationEntityTypeInvoice,
+		ConnectionID:      conn.ID,
 	}
 
 	mappings, err := h.entityIntegrationMappingRepo.List(ctx, filter)

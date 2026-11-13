@@ -365,7 +365,7 @@ type GetUsageAnalyticsRequest struct {
 	EndTime             time.Time        `json:"end_time,omitempty"`
 	GroupBy             []string         `json:"group_by,omitempty"` // allowed values: "source", "feature_id", "properties.<field_name>"
 	WindowSize          types.WindowSize `json:"window_size,omitempty"`
-	Expand              []string         `json:"expand,omitempty"` // allowed values: "price", "meter", "feature", "subscription_line_item","plan","addon"
+	Expand              []string         `json:"expand,omitempty"` // allowed values: "price", "meter", "feature", "subscription_line_item","plan","addon","source","instalments"
 	// Property filters to filter the events by the keys in `properties` field of the event
 	PropertyFilters map[string][]string `json:"property_filters,omitempty"`
 	// IncludeChildren when true folds child customers' usage into the single aggregated total.
@@ -391,6 +391,25 @@ type GetUsageAnalyticsResponse struct {
 	Currency        string               `json:"currency"`
 	Items           []UsageAnalyticItem  `json:"items"`
 	CustomAnalytics []CustomAnalyticItem `json:"custom_analytics,omitempty"`
+	// Instalments lists, with expand "instalments", the instalments invoiced in the range for the v2 commitments covering
+	// a queried meter; it is empty with property or source filters, or when no usage line runs in the range.
+	Instalments []UsageAnalyticInstalment `json:"instalments,omitempty"`
+	// TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes "instalments".
+	TotalCostWithInstalments *decimal.Decimal `json:"total_cost_with_instalments,omitempty" swaggertype:"string"`
+}
+
+// UsageAnalyticInstalment is one commitment instalment billed inside an analytics range.
+type UsageAnalyticInstalment struct {
+	ID                 string          `json:"id"`
+	CommitmentID       string          `json:"commitment_id"`
+	SubscriptionID     string          `json:"subscription_id,omitempty"`
+	InvoiceID          string          `json:"invoice_id,omitempty"`
+	InvoiceLabel       string          `json:"invoice_label"`
+	Amount             decimal.Decimal `json:"amount" swaggertype:"string"`
+	Currency           string          `json:"currency"`
+	InvoicedAt         *time.Time      `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
+	ServicePeriodStart time.Time       `json:"service_period_start"`
+	ServicePeriodEnd   time.Time       `json:"service_period_end"`
 }
 
 // UsageAnalyticItem represents a single analytic item in the response
@@ -453,9 +472,14 @@ type UsageAnalyticPoint struct {
 	EventCount uint64          `json:"event_count"`               // Number of events in this time window
 
 	// Commitment breakdown (only populated for windowed commitments)
-	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount,omitempty" swaggertype:"string"`
-	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount,omitempty" swaggertype:"string"`
-	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount,omitempty" swaggertype:"string"`
+	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount,omitzero" swaggertype:"string"`
+	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount,omitzero" swaggertype:"string"`
+	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount,omitzero" swaggertype:"string"`
+
+	// Usage units behind the commitment breakdown, for v2 commitments
+	ComputedCommitmentUtilizedQuantity decimal.Decimal `json:"computed_commitment_utilized_quantity,omitzero" swaggertype:"string"`
+	ComputedOverageQuantity            decimal.Decimal `json:"computed_overage_quantity,omitzero" swaggertype:"string"`
+	ComputedTrueUpQuantity             decimal.Decimal `json:"computed_true_up_quantity,omitzero" swaggertype:"string"`
 
 	// Buckets lists every commitment bucket this (possibly rolled-up) window
 	// overlaps — only populated when BreakdownBucket=true and the line item has

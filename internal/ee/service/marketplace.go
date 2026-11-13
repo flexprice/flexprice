@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // MarketplaceService registers marketplace agreements, linking a Flexprice subscription, customer
@@ -103,6 +104,22 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 			Mark(ierr.ErrValidation)
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, sub.CustomerID)
+	if err != nil {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", err, "stage", "scope_billing_entity")
+		return nil, err
+	}
+
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, req.Provider)
+	if err != nil {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", err, "stage", "get_connection")
+		return nil, err
+	}
+
 	// The agreement identifier (license_arn for AWS, usage_reporting_id for GCP) maps to exactly one
 	// subscription. It is stored as the subscription mapping's provider_entity_id, so look it up
 	// directly by that indexed field.
@@ -156,7 +173,7 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		// Plan mapping carries the plan-level provider config (AWS: product_code + dimension +
 		// concurrent_agreements; GCP: service_name + metric_name). It may already exist if another
 		// agreement for the same plan was registered earlier — created once, never updated.
-		planMapping, txErr := s.createMappingIfAbsent(txCtx, providerType, types.IntegrationEntityTypePlan, req.PlanID, planProviderEntityID, planMetadata)
+		planMapping, txErr := s.createMappingIfAbsent(txCtx, conn.ID, providerType, types.IntegrationEntityTypePlan, req.PlanID, planProviderEntityID, planMetadata)
 		if txErr != nil {
 			return txErr
 		}
@@ -164,7 +181,7 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 
 		// Subscription mapping: the agreement identifier. A new agreement is always a new subscription,
 		// so this is always a fresh row.
-		subMapping, txErr := s.createMappingIfAbsent(txCtx, providerType, types.IntegrationEntityTypeSubscription, req.SubscriptionID, subProviderEntityID, nil)
+		subMapping, txErr := s.createMappingIfAbsent(txCtx, conn.ID, providerType, types.IntegrationEntityTypeSubscription, req.SubscriptionID, subProviderEntityID, nil)
 		if txErr != nil {
 			return txErr
 		}
@@ -172,7 +189,7 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 
 		// Customer mapping: the buyer's account identifier. May already exist if the same customer
 		// holds an earlier agreement — created once, never updated.
-		custMapping, txErr := s.createMappingIfAbsent(txCtx, providerType, types.IntegrationEntityTypeCustomer, req.CustomerID, custProviderEntityID, nil)
+		custMapping, txErr := s.createMappingIfAbsent(txCtx, conn.ID, providerType, types.IntegrationEntityTypeCustomer, req.CustomerID, custProviderEntityID, nil)
 		if txErr != nil {
 			return txErr
 		}
@@ -208,6 +225,7 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 // customer mapping shared across agreements is left exactly as first written.
 func (s *marketplaceService) createMappingIfAbsent(
 	ctx context.Context,
+	connectionID string,
 	providerType string,
 	entityType types.IntegrationEntityType,
 	entityID string,
@@ -219,6 +237,7 @@ func (s *marketplaceService) createMappingIfAbsent(
 		EntityID:      entityID,
 		EntityType:    entityType,
 		ProviderTypes: []string{providerType},
+		ConnectionID:  connectionID,
 	})
 	if err != nil {
 		return nil, err
@@ -235,9 +254,13 @@ func (s *marketplaceService) createMappingIfAbsent(
 		ProviderEntityID: providerEntityID,
 		Metadata:         metadata,
 		EnvironmentID:    types.GetEnvironmentID(ctx),
+		ConnectionID:     lo.ToPtr(connectionID),
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
 	if err := entityintegrationmapping.Validate(mapping); err != nil {
+		return nil, err
+	}
+	if err := entityintegrationmapping.ValidateConnection(mapping); err != nil {
 		return nil, err
 	}
 	if err := s.EntityIntegrationMappingRepo.Create(ctx, mapping); err != nil {

@@ -14,7 +14,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -239,14 +238,6 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_Validation() {
 	}
 }
 
-func (s *CommitmentServiceSuite) TestCreate_BillingTerms_RejectedWhenDisabled() {
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
-
-	_, err := s.svc.Create(s.GetContext(), s.billingTermsRequest())
-	s.Require().Error(err)
-	s.True(ierr.IsInvalidOperation(err), "got %v", err)
-}
-
 func (s *CommitmentServiceSuite) TestCreate_BillingTerms_SeparateInvoiceDelivery() {
 	req := s.billingTermsRequest()
 	req.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
@@ -367,7 +358,7 @@ func (s *CommitmentServiceSuite) claimFirstInstalment(invoiceID string) *billing
 	rows := s.storedInstalments()
 	s.Require().NotEmpty(rows)
 
-	claimed, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), invoiceID, []string{rows[0].ID})
+	claimed, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), invoiceID, time.Now(), []string{rows[0].ID})
 	s.Require().NoError(err)
 	s.Require().Len(claimed, 1)
 	return claimed[0]
@@ -427,7 +418,7 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_NumbersNewInstalmentsAf
 
 	rows := s.storedInstalments()
 	slices.SortFunc(rows, byBillOn)
-	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", []string{rows[0].ID, rows[1].ID})
+	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", time.Now(), []string{rows[0].ID, rows[1].ID})
 	s.Require().NoError(err)
 
 	between := rows[0].BillOn.AddDate(0, 0, 14)
@@ -455,7 +446,7 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_NumbersOnlyAfterNumbere
 	rows := s.storedInstalments()
 	milestone, ok := lo.Find(rows, func(i *billingterm.Instalment) bool { return i.InvoiceLabel == "Go-live milestone" })
 	s.Require().True(ok)
-	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", []string{milestone.ID})
+	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", time.Now(), []string{milestone.ID})
 	s.Require().NoError(err)
 
 	edit := dto.ReplaceBillingTermsRequest{BillingTerms: upfrontPlusRemainder()[1:]}
@@ -484,7 +475,7 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_SizesThePlanAfterTheCan
 
 	rows := s.storedInstalments()
 	racing := s.racingCommitmentService(func(ctx context.Context) {
-		_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_race", []string{rows[0].ID})
+		_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_race", time.Now(), []string{rows[0].ID})
 		s.Require().NoError(err)
 	})
 
@@ -501,7 +492,7 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsAFullyInvoicedCo
 	s.Require().NoError(err)
 
 	ids := lo.Map(s.storedInstalments(), func(i *billingterm.Instalment, _ int) string { return i.ID })
-	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", ids)
+	_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_x", time.Now(), ids)
 	s.Require().NoError(err)
 
 	_, err = s.svc.PreviewBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
@@ -758,11 +749,6 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsInactiveOrPerPer
 	_, err = s.svc.ReplaceBillingTerms(ctx, "cmt_missing", req)
 	s.Require().Error(err)
 	s.True(ierr.IsNotFound(err), "got %v", err)
-
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)
-	_, err = s.svc.ReplaceBillingTerms(ctx, terminated.ID, req)
-	s.Require().Error(err)
-	s.True(ierr.IsInvalidOperation(err), "got %v", err)
 }
 
 func (s *CommitmentServiceSuite) TestGetBillingTerms_And_ListInstalments() {
@@ -852,12 +838,10 @@ func (s *CommitmentServiceSuite) TestListInstalments_FiltersByStatus() {
 	}
 }
 
-func (s *CommitmentServiceSuite) TestGetBillingTerms_ReadsWhenDisabledAndEmptyForPerPeriod() {
+func (s *CommitmentServiceSuite) TestGetBillingTerms_EmptyForPerPeriod() {
 	ctx := s.GetContext()
 	perPeriod, err := s.svc.Create(ctx, validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
-
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)
 
 	got, err := s.svc.GetBillingTerms(ctx, perPeriod.ID)
 	s.Require().NoError(err)
@@ -1026,6 +1010,11 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 	}
 
 	monthlyArrears := []dto.BillingTermInput{monthlyArrearsTerm()}
+	monthlyAdvance := []dto.BillingTermInput{{
+		Kind:           types.BillingTermKindRecurring,
+		ValueType:      types.BillingTermValueRemainder,
+		InvoiceCadence: lo.ToPtr(types.InvoiceCadenceAdvance),
+	}}
 
 	tests := []struct {
 		name           string
@@ -1071,6 +1060,20 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 			wantSettlement: "300",
 			wantService:    types.Period{Start: jan, End: time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)},
 		},
+		{
+			name:           "monthly advance, terminated as May's falls due",
+			terms:          monthlyAdvance,
+			at:             may,
+			wantCancelled:  12,
+			wantSettlement: "400",
+			wantService:    types.Period{Start: jan, End: may},
+		},
+		{
+			name:          "all upfront, terminated at the start",
+			terms:         []dto.BillingTermInput{wholeValueUpfront(nil)},
+			at:            jan,
+			wantCancelled: 1,
+		},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
@@ -1080,7 +1083,7 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_Settlements() {
 			s.Require().NoError(err)
 
 			billed := instalmentIDs(s.storedInstalments()[:tt.invoiced])
-			_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_billed", billed)
+			_, err = s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_billed", time.Now(), billed)
 			s.Require().NoError(err)
 
 			publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
@@ -1266,23 +1269,6 @@ func (s *CommitmentE2ESuite) instalmentStatus(id string) *billingterm.Instalment
 	return inst
 }
 
-// An environment whose commitments_v2 setting cannot be read fails the run, and the other environments are still billed.
-func (s *CommitmentE2ESuite) TestBillDueInstalments_ReportsAnUnreadableSetting() {
-	sub, _ := s.separateInvoiceCommitment("unreadable")
-	other := types.SetEnvironmentID(s.GetContext(), "env_unreadable")
-	s.Require().NoError(s.GetStores().SettingsRepo.Create(other, &settings.Setting{
-		ID:            types.GenerateUUIDWithPrefix("setting"),
-		Key:           types.SettingKeyCommitmentsV2,
-		Value:         map[string]interface{}{"enabled": "yes"},
-		EnvironmentID: "env_unreadable",
-		BaseModel:     types.GetDefaultBaseModel(other),
-	}))
-
-	err := s.commitments.BillDueInstalments(s.GetContext())
-	s.Require().ErrorContains(err, "env_unreadable")
-	s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), 1)
-}
-
 // B1: the upfront instalment is due, so one run bills it on a finalized one-off invoice and claims it; the milestone
 // waits for its trigger and a second run issues nothing.
 func (s *CommitmentE2ESuite) TestBillDueInstalments_IssuesOneOffInvoices() {
@@ -1379,20 +1365,6 @@ func (s *CommitmentE2ESuite) TestBillDueInstalments_RebillsAfterVoid() {
 	s.Equal(second[0].ID, lo.FromPtr(rebilled.InvoiceID))
 }
 
-func (s *CommitmentE2ESuite) TestBillDueInstalments_IgnoresDisabledEnvironments() {
-	ctx := s.GetContext()
-	sub, committed := s.separateInvoiceCommitment("disabled")
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)
-
-	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
-	s.Empty(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms))
-	s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(committed.Instalments[0].ID).InstalmentStatus)
-
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
-	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
-	s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), 1)
-}
-
 // unreadableCommitmentRepo fails every read of one commitment.
 type unreadableCommitmentRepo struct {
 	commitment.Repository
@@ -1443,6 +1415,25 @@ func (s *CommitmentE2ESuite) TestBillDueInstalments_SkipsMissingSubscriptionOrCo
 	for _, committed := range []*dto.CommitmentResponse{ofGoneSub, archived} {
 		s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(committed.Instalments[0].ID).InstalmentStatus)
 	}
+}
+
+// An instalment back on schedule though its commitment was terminated before it fell due, as a void used to leave one,
+// is skipped by the run and stays scheduled rather than being billed again.
+func (s *CommitmentE2ESuite) TestBillDueInstalments_SkipsInstalmentsATerminationCancelled() {
+	ctx := s.GetContext()
+	feb15 := s.jan.AddDate(0, 1, 14)
+	sub, instalments, marchInvoice := s.billedThroughMarch("skip_terminated", types.InstalmentDeliverySeparateInvoice)
+	march := instalments[2]
+	_, err := s.commitments.Terminate(ctx, march.OwnerID, dto.TerminateCommitmentRequest{EffectiveAt: &feb15})
+	s.Require().NoError(err)
+
+	_, err = s.GetStores().BillingInstalmentRepo.Reschedule(ctx, marchInvoice)
+	s.Require().NoError(err)
+
+	live := len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms))
+	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
+	s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), live, "nothing is billed again")
+	s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(march.ID).InstalmentStatus)
 }
 
 // settlementOf returns the commitment's only settlement instalment.
@@ -1675,7 +1666,7 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_SettlesTheOpenDra
 	s.Require().True(arrear.Amount.Equal(dec("97.5")) && arrear.BillOn.Equal(feb), "%s on %s", arrear.Amount, arrear.BillOn)
 
 	// The upfront was billed when January opened.
-	_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_opening", []string{upfront.ID})
+	_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_opening", time.Now(), []string{upfront.ID})
 	s.Require().NoError(err)
 	s.record(s.tokens, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), "1500")
 
@@ -1786,6 +1777,36 @@ func (s *CommitmentE2ESuite) TestPlanInstalments_AnEditStartsAtTheAnniversaryPer
 	s.True(planned[0].BillOn.Equal(time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)), "starts on %s", planned[0].BillOn)
 }
 
+// A terminated commitment still owes the instalments due by its termination that pay for time before it: an arrears
+// instalment falling due at that instant is owed, an advance one is not.
+func TestCancelledByTermination(t *testing.T) {
+	feb := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	mar := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	apr := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	advance := &billingterm.Instalment{BillOn: mar, ServicePeriodStart: mar, ServicePeriodEnd: apr}
+	arrears := &billingterm.Instalment{BillOn: mar, ServicePeriodStart: feb, ServicePeriodEnd: mar}
+	tests := []struct {
+		name         string
+		inst         *billingterm.Instalment
+		status       types.CommitmentStatus
+		terminatedAt *time.Time
+		want         bool
+	}{
+		{name: "active", inst: advance, status: types.CommitmentStatusActive},
+		{name: "advance terminated after it fell due", inst: advance, status: types.CommitmentStatusTerminated, terminatedAt: lo.ToPtr(mar.AddDate(0, 0, 14))},
+		{name: "advance terminated as it fell due", inst: advance, status: types.CommitmentStatusTerminated, terminatedAt: &mar, want: true},
+		{name: "advance terminated before it fell due", inst: advance, status: types.CommitmentStatusTerminated, terminatedAt: lo.ToPtr(mar.AddDate(0, 0, -14)), want: true},
+		{name: "arrears terminated as it fell due", inst: arrears, status: types.CommitmentStatusTerminated, terminatedAt: &mar},
+		{name: "arrears terminated before it fell due", inst: arrears, status: types.CommitmentStatusTerminated, terminatedAt: lo.ToPtr(mar.AddDate(0, 0, -14)), want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &commitment.Commitment{CommitmentStatus: tt.status, TerminatedAt: tt.terminatedAt}
+			require.Equal(t, tt.want, cancelledByTermination(c, tt.inst))
+		})
+	}
+}
+
 // Anniversary periods count from the commitment start in billing-period lengths and add up to its value: a month-end
 // start clamps to shorter months, and a start in another timezone keeps its local day.
 func TestAnniversaryPeriods(t *testing.T) {
@@ -1814,7 +1835,6 @@ func TestAnniversaryPeriods(t *testing.T) {
 				Value:       decimal.NewFromInt(100),
 				Currency:    "usd",
 				Measurement: types.CommitmentMeasurementBillingPeriod,
-				Timezone:    types.DefaultTimezone,
 				StartDate:   tt.start,
 				EndDate:     lo.ToPtr(tt.start.AddDate(1, 0, 0)),
 			}

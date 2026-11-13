@@ -12,6 +12,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
@@ -127,7 +128,7 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		return nil, err
 	}
 
-	response := &dto.PriceResponse{Price: p}
+	response := &dto.PriceResponse{Price: p, Warnings: req.StartDateWarnings()}
 
 	// Sync new price to Chargebee if it belongs to a plan
 	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
@@ -424,8 +425,8 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 		}
 
 		// Add successful prices to response
-		for _, p := range prices {
-			priceResp := &dto.PriceResponse{Price: p}
+		for i, p := range prices {
+			priceResp := &dto.PriceResponse{Price: p, Warnings: req.Items[i].StartDateWarnings()}
 			response.Items = append(response.Items, priceResp)
 		}
 
@@ -1626,26 +1627,22 @@ func (s *priceService) validateGroup(ctx context.Context, prices []*price.Price)
 	return nil
 }
 
-// syncPriceToChargebeeIfEnabled syncs a price to Chargebee if the integration is enabled
+// syncPriceToChargebeeIfEnabled syncs a price to every Chargebee connection in the environment.
 // This is a non-blocking operation - errors are logged but don't fail the price operation
 func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceID, planID string) {
-	// Early return if integration factory is not available
-	if s.IntegrationFactory == nil {
+	if s.IntegrationFactory == nil || s.ConnectionRepo == nil {
 		return
 	}
 
-	// Get Chargebee integration
-	chargebeeIntegration, err := s.IntegrationFactory.GetChargebeeIntegration(ctx)
+	hasConnection, err := hasPublishedConnection(ctx, s.ConnectionRepo, types.SecretProviderChargebee)
 	if err != nil {
-		s.Logger.Debug(ctx, "Chargebee integration not available, skipping sync",
+		s.Logger.Error(ctx, "failed to check Chargebee connections",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
 		return
 	}
-
-	// Check if Chargebee connection exists
-	if !chargebeeIntegration.Client.HasChargebeeConnection(ctx) {
+	if !hasConnection {
 		s.Logger.Debug(ctx, "Chargebee connection not configured, skipping sync",
 			"price_id", priceID,
 			"plan_id", planID)
@@ -1673,7 +1670,14 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 	}
 
 	// Sync to Chargebee (non-blocking - log errors but don't fail)
-	if syncErr := chargebeeIntegration.PlanSyncSvc.SyncPlanToChargebee(ctx, plan, []*price.Price{priceModel}); syncErr != nil {
+	syncErr := ForEachConnection(ctx, s.ConnectionRepo, types.SecretProviderChargebee, func(ctx context.Context, _ *connection.Connection) error {
+		chargebeeIntegration, err := s.IntegrationFactory.GetChargebeeIntegration(ctx)
+		if err != nil {
+			return err
+		}
+		return chargebeeIntegration.PlanSyncSvc.SyncPlanToChargebee(ctx, plan, []*price.Price{priceModel})
+	})
+	if syncErr != nil {
 		s.Logger.Error(ctx, "failed to sync price to Chargebee",
 			"price_id", priceID,
 			"plan_id", planID,
@@ -1812,24 +1816,24 @@ func (s *priceService) syncPriceToQuickBooksIfEnabled(ctx context.Context, price
 	}
 
 	// Check if QuickBooks integration is available
-	if s.IntegrationFactory == nil {
+	if s.IntegrationFactory == nil || s.ConnectionRepo == nil {
 		return
 	}
 
-	// Quick check: does QuickBooks connection exist?
-	_, err := s.IntegrationFactory.GetQuickBooksIntegration(ctx)
+	// Quick check: does any QuickBooks connection exist?
+	hasConnection, err := hasPublishedConnection(ctx, s.ConnectionRepo, types.SecretProviderQuickBooks)
 	if err != nil {
-		if ierr.IsNotFound(err) {
-			// Connection not configured - skip silently
-			s.Logger.Debug(ctx, "QB TEMPORAL SYNC - connection not found, skipping",
-				"price_id", priceID)
-			return
-		}
 		// Actual error - log but don't fail
 		s.Logger.Error(ctx, "error checking QuickBooks connection",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
+		return
+	}
+	if !hasConnection {
+		// Connection not configured - skip silently
+		s.Logger.Debug(ctx, "QB TEMPORAL SYNC - connection not found, skipping",
+			"price_id", priceID)
 		return
 	}
 

@@ -63,7 +63,7 @@ func (s *CommitmentE2ESuite) markInvoiced(req *dto.CreateInvoiceRequest) {
 		return *line.BillingInstalmentID
 	})
 
-	invoiced, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE), ids)
+	invoiced, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE), time.Now(), ids)
 	s.Require().NoError(err)
 	s.Require().Len(invoiced, len(ids))
 }
@@ -352,17 +352,22 @@ func (s *CommitmentE2ESuite) TestInstalments_ReconcileKeepsSamePeriodPair() {
 	}
 }
 
-// With commitments_v2 off, no invoice bills instalments.
-func (s *CommitmentE2ESuite) TestInstalments_DisabledSettingAddsNothing() {
-	feb := s.jan.AddDate(0, 1, 0)
-	tokens := s.planWith("disabled", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
-	sub := s.subscribe(tokens, s.jan)
-	s.commit(sub.ID, termsRequest("Platform", tokens.ID, "100", s.jan, s.jan.AddDate(0, 10, 0), upfrontPlusRemainder()...))
+// An instalment back on schedule though its commitment was terminated before it fell due, as a void used to leave one,
+// is left off the subscription invoices rather than billed again.
+func (s *CommitmentE2ESuite) TestInstalments_SkipThoseATerminationCancelled() {
+	ctx := s.GetContext()
+	feb, mar, feb15 := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0), s.jan.AddDate(0, 1, 14)
+	sub, instalments, february := s.billedThroughMarch("skip_terminated", types.InstalmentDeliverySubscriptionInvoice)
+	march := instalments[2]
+	_, err := s.commitments.Terminate(ctx, march.OwnerID, dto.TerminateCommitmentRequest{EffectiveAt: &feb15})
+	s.Require().NoError(err)
 
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
+	_, err = s.GetStores().BillingInstalmentRepo.Reschedule(ctx, february)
+	s.Require().NoError(err)
+	s.Require().Equal(types.InstalmentStatusScheduled, s.instalmentStatus(march.ID).InstalmentStatus)
 
-	s.Empty(instalmentLines(s.invoiceAt(types.ReferencePointPeriodStart, sub.ID, s.jan, feb)))
-	s.Empty(instalmentLines(s.invoiceFor(sub.ID, s.jan, feb)))
+	s.Empty(instalmentLines(s.invoiceFor(sub.ID, feb, mar)))
+	s.Empty(instalmentLines(s.invoiceFor(sub.ID, mar, mar.AddDate(0, 1, 0))))
 }
 
 // A term can deliver differently from its commitment: the upfront bills on its own invoice on its date while the

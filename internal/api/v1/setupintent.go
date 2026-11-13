@@ -22,14 +22,16 @@ import (
 type SetupIntentHandler struct {
 	integrationFactory *integration.Factory
 	customerService    interfaces.CustomerService
+	entityScope        interfaces.BillingEntityScope
 	config             *config.Configuration
 	log                *logger.Logger
 }
 
-func NewSetupIntentHandler(integrationFactory *integration.Factory, customerService interfaces.CustomerService, cfg *config.Configuration, log *logger.Logger) *SetupIntentHandler {
+func NewSetupIntentHandler(integrationFactory *integration.Factory, customerService interfaces.CustomerService, entityScope interfaces.BillingEntityScope, cfg *config.Configuration, log *logger.Logger) *SetupIntentHandler {
 	return &SetupIntentHandler{
 		integrationFactory: integrationFactory,
 		customerService:    customerService,
+		entityScope:        entityScope,
 		config:             cfg,
 		log:                log,
 	}
@@ -65,6 +67,21 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 		c.Error(err)
 		return
 	}
+
+	ctx, err := h.entityScope.ScopeToCustomer(c.Request.Context(), customerID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	provider := types.SecretProviderStripe
+	if req.Provider == types.SecretProviderMoyasar {
+		provider = types.SecretProviderMoyasar
+	}
+	if err := h.entityScope.RequireProviderConnected(ctx, provider); err != nil {
+		c.Error(err)
+		return
+	}
+	c.Request = c.Request.WithContext(ctx)
 
 	switch req.Provider {
 	case types.SecretProviderMoyasar:
@@ -202,17 +219,23 @@ func (h *SetupIntentHandler) ListCustomerPaymentMethods(c *gin.Context) {
 		return
 	}
 
-	// Get Stripe integration
-	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(c.Request.Context())
+	ctx, err := h.entityScope.ScopeToCustomer(c.Request.Context(), customerID)
 	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to get Stripe integration", "error", err)
 		c.Error(err)
 		return
 	}
 
-	resp, err := stripeIntegration.PaymentSvc.ListCustomerPaymentMethods(c.Request.Context(), customerID, &req, h.customerService)
+	// Get Stripe integration
+	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to list Customer Payment Methods", "error", err)
+		h.log.Error(ctx, "Failed to get Stripe integration", "error", err)
+		c.Error(err)
+		return
+	}
+
+	resp, err := stripeIntegration.PaymentSvc.ListCustomerPaymentMethods(ctx, customerID, &req, h.customerService)
+	if err != nil {
+		h.log.Error(ctx, "Failed to list Customer Payment Methods", "error", err)
 		c.Error(err)
 		return
 	}

@@ -67,6 +67,8 @@ type BillingInstalment struct {
 	InstalmentStatus types.InstalmentStatus `json:"instalment_status,omitempty"`
 	// InvoiceID holds the value of the "invoice_id" field.
 	InvoiceID *string `json:"invoice_id,omitempty"`
+	// InvoicedAt holds the value of the "invoiced_at" field.
+	InvoicedAt *time.Time `json:"invoiced_at,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata     types.Metadata `json:"metadata,omitempty"`
 	selectValues sql.SelectValues
@@ -81,7 +83,7 @@ func (*BillingInstalment) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case billinginstalment.FieldID, billinginstalment.FieldTenantID, billinginstalment.FieldStatus, billinginstalment.FieldCreatedBy, billinginstalment.FieldUpdatedBy, billinginstalment.FieldEnvironmentID, billinginstalment.FieldOwnerType, billinginstalment.FieldOwnerID, billinginstalment.FieldBillingTermID, billinginstalment.FieldCustomerID, billinginstalment.FieldSubscriptionID, billinginstalment.FieldCurrency, billinginstalment.FieldKind, billinginstalment.FieldBillTrigger, billinginstalment.FieldInvoiceLabel, billinginstalment.FieldDelivery, billinginstalment.FieldInstalmentStatus, billinginstalment.FieldInvoiceID:
 			values[i] = new(sql.NullString)
-		case billinginstalment.FieldCreatedAt, billinginstalment.FieldUpdatedAt, billinginstalment.FieldBillOn, billinginstalment.FieldTriggeredAt, billinginstalment.FieldServicePeriodStart, billinginstalment.FieldServicePeriodEnd:
+		case billinginstalment.FieldCreatedAt, billinginstalment.FieldUpdatedAt, billinginstalment.FieldBillOn, billinginstalment.FieldTriggeredAt, billinginstalment.FieldServicePeriodStart, billinginstalment.FieldServicePeriodEnd, billinginstalment.FieldInvoicedAt:
 			values[i] = new(sql.NullTime)
 		case billinginstalment.FieldMetadata:
 			values[i] = new(types.Metadata)
@@ -254,6 +256,13 @@ func (_m *BillingInstalment) assignValues(columns []string, values []any) error 
 				_m.InvoiceID = new(string)
 				*_m.InvoiceID = value.String
 			}
+		case billinginstalment.FieldInvoicedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field invoiced_at", values[i])
+			} else if value.Valid {
+				_m.InvoicedAt = new(time.Time)
+				*_m.InvoicedAt = value.Time
+			}
 		case billinginstalment.FieldMetadata:
 			if value, ok := values[i].(*types.Metadata); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
@@ -374,6 +383,11 @@ func (_m *BillingInstalment) String() string {
 	if v := _m.InvoiceID; v != nil {
 		builder.WriteString("invoice_id=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.InvoicedAt; v != nil {
+		builder.WriteString("invoiced_at=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")

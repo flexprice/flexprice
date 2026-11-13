@@ -18,6 +18,7 @@ import (
 	transactionModel "github.com/chargebee/chargebee-go/v3/models/transaction"
 	transactionEnum "github.com/chargebee/chargebee-go/v3/models/transaction/enum"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
@@ -109,6 +110,10 @@ type refundClient struct {
 	refundErr      error
 }
 
+func (c *refundClient) GetConnection(_ context.Context) (*connection.Connection, error) {
+	return &connection.Connection{ID: "conn_test", ProviderType: types.SecretProviderChargebee}, nil
+}
+
 func (c *refundClient) RetrieveTransaction(_ context.Context, _ string) (*transactionModel.Transaction, error) {
 	txn := &transactionModel.Transaction{Id: testChargebeeTxnID, Amount: c.amount}
 	if c.amountRefunded > 0 {
@@ -185,8 +190,10 @@ func (s *ChargebeeWebhookCheckoutSuite) SetupTest() {
 
 	log := logger.NewNoopLogger()
 
+	s.client = &refundClient{amount: 10000}
 	invoiceSvc := &chargebee.InvoiceService{
 		InvoiceServiceParams: chargebee.InvoiceServiceParams{
+			Client: s.client,
 			EntityIntegrationMappingRepo: mappingStore{
 				entityIDByProviderEntityID: map[string]string{
 					testChargebeeInvoiceID: testFlexpriceInvoiceID,
@@ -196,7 +203,6 @@ func (s *ChargebeeWebhookCheckoutSuite) SetupTest() {
 		},
 	}
 
-	s.client = &refundClient{amount: 10000}
 	s.handler = NewHandler(s.client, invoiceSvc, chargebee.NewPaymentService(s.client, grantingLocker{}, log), log)
 	s.checkoutSvc = &fakeCheckoutSessionService{}
 	s.paymentSvc = &fakePaymentService{payment: &dto.PaymentResponse{

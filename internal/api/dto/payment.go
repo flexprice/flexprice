@@ -28,6 +28,8 @@ type CreatePaymentRequest struct {
 	ProcessPayment         bool                         `json:"process_payment" default:"true"`
 	SaveCardAndMakeDefault bool                         `json:"save_card_and_make_default" default:"false"`
 	GatewayOptions         *PaymentGatewayOptions       `json:"gateway_options,omitempty"`
+	// PaymentTrigger marks a payment Flexprice created itself; only internal callers can set it.
+	PaymentTrigger string `json:"-"`
 }
 
 // PaymentGatewayOptions holds typed, per-gateway payment options. Adding
@@ -100,7 +102,10 @@ type RecordAttemptRequest struct {
 
 // PaymentResponse represents a payment response
 type PaymentResponse struct {
-	ID                     string                       `json:"id"`
+	ID string `json:"id"`
+	// connection_id is the connection that took this payment; null when no gateway connection was used
+	ConnectionID *string `json:"connection_id"`
+
 	IdempotencyKey         string                       `json:"idempotency_key"`
 	DestinationType        types.PaymentDestinationType `json:"destination_type"`
 	DestinationID          string                       `json:"destination_id"`
@@ -148,6 +153,7 @@ func (p *PaymentResponse) ToPayment() *payment.Payment {
 		GatewayPaymentID:  p.GatewayPaymentID,
 		GatewayTrackingID: p.GatewayTrackingID,
 		GatewayMetadata:   p.GatewayMetadata,
+		ConnectionID:      p.ConnectionID,
 		Metadata:          p.Metadata,
 		SucceededAt:       p.SucceededAt,
 		FailedAt:          p.FailedAt,
@@ -204,6 +210,7 @@ func NewPaymentResponse(p *payment.Payment) *PaymentResponse {
 		GatewayPaymentID:  p.GatewayPaymentID,
 		GatewayTrackingID: p.GatewayTrackingID,
 		GatewayMetadata:   p.GatewayMetadata,
+		ConnectionID:      p.ConnectionID,
 		Metadata:          p.Metadata,
 		SucceededAt:       p.SucceededAt,
 		FailedAt:          p.FailedAt,
@@ -299,6 +306,12 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 		GatewayMetadata:   gatewayMetadata,
 		EnvironmentID:     types.GetEnvironmentID(ctx),
 		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	if p.Metadata[types.MetadataKeyPaymentTrigger] == types.PaymentTriggerInvoiceAutoCharge {
+		delete(p.Metadata, types.MetadataKeyPaymentTrigger)
+	}
+	if r.PaymentTrigger != "" {
+		p.Metadata = lo.Assign(p.Metadata, types.Metadata{types.MetadataKeyPaymentTrigger: r.PaymentTrigger})
 	}
 
 	// Set initial payment status. When ProcessPayment is false the payment is being

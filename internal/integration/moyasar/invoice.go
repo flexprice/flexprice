@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // MoyasarInvoiceSyncRequest represents a request to sync FlexPrice invoice to Moyasar
@@ -367,6 +368,11 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		"synced_at":           clock.Now().Format(time.RFC3339),
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityType:       types.IntegrationEntityTypeInvoice,
@@ -376,6 +382,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		Metadata:         metadata,
 		EnvironmentID:    environmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
@@ -399,10 +406,16 @@ func (s *InvoiceSyncService) GetExistingMoyasarMapping(
 	ctx context.Context,
 	flexInvoiceID string,
 ) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityType:    types.IntegrationEntityTypeInvoice,
 		EntityID:      flexInvoiceID,
 		ProviderTypes: []string{string(types.SecretProviderMoyasar)},
+		ConnectionID:  conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)

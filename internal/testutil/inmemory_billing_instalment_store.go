@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
@@ -41,7 +42,12 @@ func billingInstalmentFilterFn(ctx context.Context, in *billingterm.Instalment, 
 	}
 
 	f, ok := filter.(*billingterm.InstalmentFilter)
-	if !ok || f == nil {
+	return !ok || billingInstalmentMatches(in, f)
+}
+
+// billingInstalmentMatches applies the filter's predicates, ignoring scope.
+func billingInstalmentMatches(in *billingterm.Instalment, f *billingterm.InstalmentFilter) bool {
+	if f == nil {
 		return true
 	}
 
@@ -118,6 +124,47 @@ func (s *InMemoryBillingInstalmentStore) List(ctx context.Context, filter *billi
 	return lo.Map(rows, func(in *billingterm.Instalment, _ int) *billingterm.Instalment { return lo.ToPtr(*in) }), nil
 }
 
+func (s *InMemoryBillingInstalmentStore) ListEnvironments(ctx context.Context, filter *billingterm.InstalmentFilter) ([]types.TenantEnvironment, error) {
+	rows, err := s.InMemoryStore.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	envs := lo.FilterMap(rows, func(in *billingterm.Instalment, _ int) (types.TenantEnvironment, bool) {
+		env := types.TenantEnvironment{TenantID: in.TenantID, EnvironmentID: in.EnvironmentID}
+		return env, in.Status == types.StatusPublished && billingInstalmentMatches(in, filter)
+	})
+	return lo.Uniq(envs), nil
+}
+
+func (s *InMemoryBillingInstalmentStore) ListInvoiced(
+	ctx context.Context,
+	ownerType types.BillingTermOwnerType,
+	ownerIDs []string,
+	period types.Period,
+) ([]*billingterm.Instalment, error) {
+	invoicedIn := func(ctx context.Context, in *billingterm.Instalment, _ interface{}) bool {
+		return billingInstalmentInScope(ctx, in) &&
+			in.OwnerType == ownerType &&
+			lo.Contains(ownerIDs, in.OwnerID) &&
+			in.InstalmentStatus == types.InstalmentStatusInvoiced &&
+			in.InvoicedAt != nil && !in.InvoicedAt.Before(period.Start) && in.InvoicedAt.Before(period.End)
+	}
+
+	rows, err := s.InMemoryStore.List(ctx, nil, invoicedIn, func(i, j *billingterm.Instalment) bool {
+		if !i.InvoicedAt.Equal(*j.InvoicedAt) {
+			return i.InvoicedAt.Before(*j.InvoicedAt)
+		}
+
+		return i.ID < j.ID
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return lo.Map(rows, func(in *billingterm.Instalment, _ int) *billingterm.Instalment { return lo.ToPtr(*in) }), nil
+}
+
 func (s *InMemoryBillingInstalmentStore) Update(ctx context.Context, in *billingterm.Instalment) (*billingterm.Instalment, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -163,7 +210,7 @@ func (s *InMemoryBillingInstalmentStore) Cancel(ctx context.Context, ownerType t
 	)
 }
 
-func (s *InMemoryBillingInstalmentStore) Claim(ctx context.Context, invoiceID string, ids []string) ([]*billingterm.Instalment, error) {
+func (s *InMemoryBillingInstalmentStore) Claim(ctx context.Context, invoiceID string, invoicedAt time.Time, ids []string) ([]*billingterm.Instalment, error) {
 	if len(ids) == 0 {
 		return []*billingterm.Instalment{}, nil
 	}
@@ -175,6 +222,7 @@ func (s *InMemoryBillingInstalmentStore) Claim(ctx context.Context, invoiceID st
 		func(in *billingterm.Instalment) {
 			in.InstalmentStatus = types.InstalmentStatusInvoiced
 			in.InvoiceID = lo.ToPtr(invoiceID)
+			in.InvoicedAt = lo.ToPtr(invoicedAt)
 		},
 	)
 }
@@ -187,6 +235,25 @@ func (s *InMemoryBillingInstalmentStore) Reschedule(ctx context.Context, invoice
 		func(in *billingterm.Instalment) {
 			in.InstalmentStatus = types.InstalmentStatusScheduled
 			in.InvoiceID = nil
+			in.InvoicedAt = nil
+		},
+	)
+}
+
+func (s *InMemoryBillingInstalmentStore) CancelInvoiced(ctx context.Context, invoiceID string, ids []string) ([]*billingterm.Instalment, error) {
+	if len(ids) == 0 {
+		return []*billingterm.Instalment{}, nil
+	}
+
+	return s.transition(ctx,
+		func(in *billingterm.Instalment) bool {
+			return lo.Contains(ids, in.ID) && in.InvoiceID != nil && *in.InvoiceID == invoiceID &&
+				in.InstalmentStatus == types.InstalmentStatusInvoiced
+		},
+		func(in *billingterm.Instalment) {
+			in.InstalmentStatus = types.InstalmentStatusCancelled
+			in.InvoiceID = nil
+			in.InvoicedAt = nil
 		},
 	)
 }

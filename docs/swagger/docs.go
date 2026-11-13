@@ -13168,99 +13168,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/tasks/scheduled/schedule-draft-finalization": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Triggers the draft invoice finalization workflow that scans computed draft invoices whose finalization delay has elapsed and finalizes them (assign invoice number, sync to vendors, attempt payment).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Scheduled Tasks"
-                ],
-                "summary": "Schedule draft finalization",
-                "operationId": "scheduleDraftFinalization",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/tasks/scheduled/schedule-update-billing-period": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when you need to trigger a billing-period update workflow (e.g. to recalculate or sync billing windows).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Scheduled Tasks"
-                ],
-                "summary": "Schedule update billing period",
-                "operationId": "scheduleUpdateBillingPeriod",
-                "parameters": [
-                    {
-                        "description": "Schedule Update Billing Period Request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/tasks/scheduled/{id}": {
             "get": {
                 "security": [
@@ -16212,6 +16119,29 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/invoice.payment.failed": {
+            "post": {
+                "description": "Fired when a payment of an invoice does not succeed. ` + "`" + `reason` + "`" + ` is ` + "`" + `payment_method_unavailable` + "`" + `, ` + "`" + `provider_error` + "`" + ` or ` + "`" + `declined` + "`" + `; ` + "`" + `is_auto_charge_attempt` + "`" + ` is true when Flexprice charged the saved payment method. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.payment.failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoicePaymentFailedWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/invoice.payment.overdue": {
             "post": {
                 "description": "Fired when an invoice payment is overdue past the due date. ` + "`" + `invoice.line_items` + "`" + ` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and ` + "`" + `invoice.subscription.plan.prices` + "`" + ` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.",
@@ -17955,6 +17885,10 @@ const docTemplate = `{
                 "invoice_label": {
                     "type": "string"
                 },
+                "invoiced_at": {
+                    "description": "InvoicedAt is when the invoice billing the instalment was finalized.",
+                    "type": "string"
+                },
                 "kind": {
                     "$ref": "#/definitions/types.InstalmentKind"
                 },
@@ -18707,7 +18641,7 @@ const docTemplate = `{
                     }
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -18763,7 +18697,7 @@ const docTemplate = `{
                     }
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -20418,9 +20352,6 @@ const docTemplate = `{
                 "termination_invoice_id": {
                     "type": "string"
                 },
-                "timezone": {
-                    "type": "string"
-                },
                 "total_amount": {
                     "type": "string"
                 },
@@ -21312,9 +21243,6 @@ const docTemplate = `{
                 },
                 "subscription_id": {
                     "description": "SubscriptionID is required on POST /commitments and set server-side on inline commitments.",
-                    "type": "string"
-                },
-                "timezone": {
                     "type": "string"
                 },
                 "type": {
@@ -22630,31 +22558,46 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "commitment_amount": {
-                    "description": "Commitment fields",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_duration": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
                 },
                 "commitment_overage_factor": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_quantity": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_time_buckets": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "commitment_type": {
-                    "$ref": "#/definitions/types.CommitmentType"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CommitmentType"
+                        }
+                    ]
                 },
                 "commitment_windowed": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "display_name": {
@@ -22744,10 +22687,11 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.CollectionMethod"
                 },
                 "commitment_amount": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "commitment_duration": {
-                    "description": "CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.BillingPeriod"
@@ -22782,6 +22726,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "enable_true_up": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "end_date": {
@@ -22816,7 +22761,7 @@ const docTemplate = `{
                     ]
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id.",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -22857,6 +22802,7 @@ const docTemplate = `{
                     }
                 },
                 "overage_factor": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "override_entitlements": {
@@ -24816,7 +24762,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "expand": {
-                    "description": "allowed values: \"price\", \"meter\", \"feature\", \"subscription_line_item\",\"plan\",\"addon\"",
+                    "description": "allowed values: \"price\", \"meter\", \"feature\", \"subscription_line_item\",\"plan\",\"addon\",\"source\",\"instalments\"",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -24879,6 +24825,13 @@ const docTemplate = `{
                         "$ref": "#/definitions/CustomAnalyticItem"
                     }
                 },
+                "instalments": {
+                    "description": "Instalments lists, with expand \"instalments\", the instalments invoiced in the range for the v2 commitments covering\na queried meter; it is empty with property or source filters, or when no usage line runs in the range.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/UsageAnalyticInstalment"
+                    }
+                },
                 "items": {
                     "type": "array",
                     "items": {
@@ -24890,6 +24843,10 @@ const docTemplate = `{
                 },
                 "total_cost": {
                     "description": "TotalCost is the final cost after discount (Subtotal - TotalDiscount)",
+                    "type": "string"
+                },
+                "total_cost_with_instalments": {
+                    "description": "TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes \"instalments\".",
                     "type": "string"
                 },
                 "total_discount": {
@@ -25260,10 +25217,11 @@ const docTemplate = `{
                     }
                 },
                 "commitment_amount": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "commitment_duration": {
-                    "description": "CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.BillingPeriod"
@@ -25284,13 +25242,14 @@ const docTemplate = `{
                     }
                 },
                 "enable_true_up": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "external_customer_id": {
                     "type": "string"
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id.",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -25314,6 +25273,7 @@ const docTemplate = `{
                     }
                 },
                 "overage_factor": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "override_entitlements": {
@@ -26853,6 +26813,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/PaymentAttemptResponse"
                     }
                 },
+                "connection_id": {
+                    "description": "connection_id is the connection that took this payment; null when no gateway connection was used",
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -27390,6 +27354,13 @@ const docTemplate = `{
                 },
                 "updated_by": {
                     "type": "string"
+                },
+                "warnings": {
+                    "description": "Warnings lists defaults applied on create that the caller may want to set explicitly.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -31995,32 +31966,46 @@ const docTemplate = `{
                     ]
                 },
                 "commitment_amount": {
-                    "description": "Commitment fields",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_duration": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
                 },
                 "commitment_overage_factor": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_quantity": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_time_buckets": {
-                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).",
+                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).\n\nDeprecated: use POST /commitments instead.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "commitment_type": {
-                    "$ref": "#/definitions/types.CommitmentType"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CommitmentType"
+                        }
+                    ]
                 },
                 "commitment_windowed": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "effective_from": {
@@ -32308,6 +32293,42 @@ const docTemplate = `{
                 }
             }
         },
+        "UsageAnalyticInstalment": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "commitment_id": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_label": {
+                    "type": "string"
+                },
+                "invoiced_at": {
+                    "description": "when the invoice billing it was finalized",
+                    "type": "string"
+                },
+                "service_period_end": {
+                    "type": "string"
+                },
+                "service_period_start": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                }
+            }
+        },
         "UsageAnalyticItem": {
             "type": "object",
             "properties": {
@@ -32500,10 +32521,20 @@ const docTemplate = `{
                     "description": "Commitment breakdown (only populated for windowed commitments)",
                     "type": "string"
                 },
+                "computed_commitment_utilized_quantity": {
+                    "description": "Usage units behind the commitment breakdown, for v2 commitments",
+                    "type": "string"
+                },
                 "computed_overage_amount": {
                     "type": "string"
                 },
+                "computed_overage_quantity": {
+                    "type": "string"
+                },
                 "computed_true_up_amount": {
+                    "type": "string"
+                },
+                "computed_true_up_quantity": {
                     "type": "string"
                 },
                 "cost": {
@@ -34358,16 +34389,27 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
+                    "description": "Amount is the commitment amount (v1), or computed_commitment_utilized_amount + computed_true_up_amount (v2).",
                     "type": "string"
                 },
                 "computed_commitment_utilized_amount": {
                     "type": "string"
                 },
+                "computed_commitment_utilized_quantity": {
+                    "description": "Usage units behind the computed amounts: usage a billing-terms commitment covers counts as utilized at no\ncharge, and a quantity commitment's true-up counts its unused units.",
+                    "type": "string"
+                },
                 "computed_overage_amount": {
+                    "type": "string"
+                },
+                "computed_overage_quantity": {
                     "type": "string"
                 },
                 "computed_true_up_amount": {
                     "description": "total_cost = computed_commitment_utilized_amount + computed_overage_amount + computed_true_up_amount",
+                    "type": "string"
+                },
+                "computed_true_up_quantity": {
                     "type": "string"
                 },
                 "duration": {
@@ -38277,6 +38319,7 @@ const docTemplate = `{
                 "invoice.update.voided",
                 "invoice.update",
                 "invoice.payment.overdue",
+                "invoice.payment.failed",
                 "invoice.sync.success",
                 "invoice.sync.failed",
                 "wallet.credit_balance.dropped",
@@ -38351,6 +38394,7 @@ const docTemplate = `{
                 "WebhookEventInvoiceUpdateVoided",
                 "WebhookEventInvoiceUpdate",
                 "WebhookEventInvoicePaymentOverdue",
+                "WebhookEventInvoicePaymentFailed",
                 "WebhookEventInvoiceSyncSuccess",
                 "WebhookEventInvoiceSyncFailed",
                 "WebhookEventWalletCreditBalanceDropped",
@@ -39792,6 +39836,19 @@ const docTemplate = `{
                 }
             }
         },
+        "types.InvoicePaymentFailureReason": {
+            "type": "string",
+            "enum": [
+                "payment_method_unavailable",
+                "provider_error",
+                "declined"
+            ],
+            "x-enum-varnames": [
+                "InvoicePaymentFailureReasonPaymentMethodUnavailable",
+                "InvoicePaymentFailureReasonProviderError",
+                "InvoicePaymentFailureReasonDeclined"
+            ]
+        },
         "types.JournalDirection": {
             "type": "string",
             "enum": [
@@ -40692,6 +40749,32 @@ const docTemplate = `{
                 }
             }
         },
+        "webhookDto.InvoicePaymentFailedWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "invoice": {
+                    "$ref": "#/definitions/webhookDto.Invoice"
+                },
+                "is_auto_charge_attempt": {
+                    "type": "boolean"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.SecretProvider"
+                },
+                "reason": {
+                    "$ref": "#/definitions/types.InvoicePaymentFailureReason"
+                }
+            }
+        },
         "webhookDto.InvoiceSyncWebhookPayload": {
             "type": "object",
             "properties": {
@@ -40744,6 +40827,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
+                    "type": "string"
+                },
+                "connection_id": {
                     "type": "string"
                 },
                 "currency": {

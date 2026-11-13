@@ -27,10 +27,6 @@ func usageLinesWithTotal(ctx context.Context, l *commitmentLoader) ([]dto.Create
 	return lines, groupingSumAmounts(lines), err
 }
 
-func (s *BillingServiceSuite) enableCommitmentsV2() {
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), true)
-}
-
 // newTestCommitment returns a binding per_period commitment scoped to one price, active from start to end.
 func (s *BillingServiceSuite) newTestCommitment(
 	id string,
@@ -54,7 +50,6 @@ func (s *BillingServiceSuite) newTestCommitment(
 		Type:               typ,
 		Value:              dec(value),
 		Measurement:        types.CommitmentMeasurementBillingPeriod,
-		Timezone:           "UTC",
 		Priority:           1,
 		Binding:            true,
 		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),
@@ -304,7 +299,6 @@ func (s *BillingServiceSuite) rawUsage(sub *subscription.Subscription) *dto.GetU
 func (s *BillingServiceSuite) TestCommitmentLoader_AmountTrueUp() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
 	// $100 amount commitment on the api-calls price; 7000 calls cost $60 on the slab tiers.
 	c := s.createCommitment(
@@ -386,7 +380,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingTermsCoverUsage() {
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			s.setupTestData()
-			s.enableCommitmentsV2()
 			periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
 			c := s.newTestCommitment(
 				types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT), s.testData.subscription,
@@ -441,28 +434,9 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingTermsCoverUsage() {
 	}
 }
 
-func (s *BillingServiceSuite) TestCommitmentLoader_FlagOff_Empty() {
-	s.setupTestData()
-	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
-	s.createCommitment(
-		types.COMMITMENT_TYPE_AMOUNT,
-		"100",
-		s.testData.prices.apiCalls.ID,
-		periodStart,
-		periodStart.AddDate(1, 0, 0),
-	)
-	l := s.loaderFor(s.testData.subscription, s.usageResponse(s.testData.prices.apiCalls, "7000"), periodStart, periodEnd)
-	s.Empty(l.HandledLineIDs())
-	lines, total, err := usageLinesWithTotal(s.GetContext(), l)
-	s.Require().NoError(err)
-	s.Empty(lines)
-	s.True(total.IsZero())
-}
-
 func (s *BillingServiceSuite) TestCommitmentLoader_NoOverlap_Empty() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
 	// Starts after the period, and one terminated before it began.
 	s.createCommitment(types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodEnd, periodEnd.AddDate(1, 0, 0))
@@ -489,7 +463,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_NoOverlap_Empty() {
 // A call that does not carry an in-scope line (another cadence group, or an already-invoiced arrear item) leaves it alone.
 func (s *BillingServiceSuite) TestCommitmentLoader_LinesOutsideTheCallAreNotHandled() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
 	s.createCommitment(
 		types.COMMITMENT_TYPE_AMOUNT,
@@ -513,7 +486,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_LinesOutsideTheCallAreNotHand
 // A window that is not inside one commitment period never gets the commitment's capacity or true-up.
 func (s *BillingServiceSuite) TestCommitmentLoader_WindowAcrossCommitmentPeriodsIsSkipped() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	p := s.usagePriceFor("price_flat_api", s.testData.meters.apiCalls, "1")
 	li := &subscription.SubscriptionLineItem{
 		ID:          "subs_line_flat_api",
@@ -546,10 +518,9 @@ func (s *BillingServiceSuite) TestCommitmentLoader_WindowAcrossCommitmentPeriods
 }
 
 func (s *BillingServiceSuite) TestCommitmentLoader_StackedWindowed_Simplismart() {
-	// Stacked GPU reservations at reduced scale: per-minute meter; C1 = 8 all day (p1, 0.048); C2 = 32, 09:00-21:00 IST from 25 Aug (p2, 0.0491667).
+	// Stacked GPU reservations at reduced scale: per-minute meter; C1 = 8 all day (p1, 0.048); C2 = 32, 03:30-15:30 UTC (09:00-21:00 IST) from 25 Aug (p2, 0.0491667).
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 
 	gpuMeter := &meter.Meter{
 		ID:        "meter_gpu_minutes",
@@ -614,11 +585,10 @@ func (s *BillingServiceSuite) TestCommitmentLoader_StackedWindowed_Simplismart()
 		periodEnd,
 	)
 	c2.Measurement, c2.CommittedPriceID, c2.Priority = types.CommitmentMeasurementWindow, lo.ToPtr(p2.ID), 2
-	c2.Timezone = "Asia/Kolkata"
 	c2.ActiveWindows = types.ActiveWindows{
 		{
-			Start: types.Bucket{Hour: 9},
-			End:   types.Bucket{Hour: 21},
+			Start: types.Bucket{Hour: 3, Minute: 30},
+			End:   types.Bucket{Hour: 15, Minute: 30},
 		},
 	}
 	s.storeCommitment(c1)
@@ -657,7 +627,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_StackedWindowed_Simplismart()
 func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodSplitAtReplacement() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub, p := s.apiFixture("sub_replacement")
 	switchAt := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
 	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
@@ -687,7 +656,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodSplitAtReplaceme
 		// One overage line per usage line: 6 from A's half and 3 from B's, at the shared $2 overage.
 		overage := loaderLinesOfKind(lines, types.CommitmentLineOverage)
 		s.Require().Len(overage, 1)
-		s.True(overage[0].Quantity.Round(6).Equal(dec("9")), "overage %s", overage[0].Quantity)
+		s.True(overage[0].Quantity.Equal(dec("9")), "overage %s", overage[0].Quantity)
 		s.True(overage[0].Amount.Equal(dec("18")), "overage %s", overage[0].Amount)
 		s.True(total.Equal(dec("33.5")), "total %s", total)
 		return lines
@@ -716,7 +685,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodSplitQueries() {
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			s.setupTestData()
-			s.enableCommitmentsV2()
 			sub, p := s.apiFixture("sub_queries")
 			periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
 			if tt.switchAt == nil {
@@ -750,7 +718,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodSplitQueries() {
 func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodStartsMidPeriod() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub, p := s.apiFixture("sub_mid")
 	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
 	startAt := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
@@ -768,7 +735,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodStartsMidPeriod(
 	s.Equal([]int{-1, 0}, stacks[0].Commitments[0].PoolOf)
 	s.Equal([]decimal.Decimal{dec("20"), dec("20")}, stacks[0].Lines[0].Usage)
 	s.True(allocs[0].Commitments[0].Used.Equal(dec("20")), "used %s", allocs[0].Commitments[0].Used)
-	s.True(allocs[0].Commitments[0].Capacity.Round(6).Equal(dec("34")), "capacity %s", allocs[0].Commitments[0].Capacity)
+	s.True(allocs[0].Commitments[0].Capacity.Equal(dec("34")), "capacity %s", allocs[0].Commitments[0].Capacity)
 	s.True(allocs[0].Overage[0][0].Equal(dec("20")), "pre-start usage stays overage")
 	s.True(allocs[0].Overage[0][1].IsZero())
 
@@ -784,7 +751,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodStartsMidPeriod(
 func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodEndsMidPeriod() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub, p := s.apiFixture("sub_mid_end")
 	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
 	endAt := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
@@ -802,7 +768,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodEndsMidPeriod() 
 	s.Equal([]time.Time{periodStart, endAt}, stacks[0].Windows)
 	s.Equal([]int{0, -1}, stacks[0].Commitments[0].PoolOf)
 	s.True(allocs[0].Commitments[0].Used.Equal(dec("20")), "used %s", allocs[0].Commitments[0].Used)
-	s.True(allocs[0].Commitments[0].Capacity.Round(6).Equal(dec("28")), "capacity %s", allocs[0].Commitments[0].Capacity)
+	s.True(allocs[0].Commitments[0].Capacity.Equal(dec("28")), "capacity %s", allocs[0].Commitments[0].Capacity)
 	s.True(allocs[0].Overage[0][0].IsZero())
 	s.True(allocs[0].Overage[0][1].Equal(dec("20")), "post-end usage stays overage")
 
@@ -847,7 +813,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_OveragePriceSkipsUsageOutside
 		s.Run(tt.name, func() {
 			ctx := s.GetContext()
 			s.setupTestData()
-			s.enableCommitmentsV2()
 			sub, p := s.apiFixture("sub_overage_scope")
 			start, end := sub.CurrentPeriodStart, mid
 			if tt.startAtMid {
@@ -861,11 +826,11 @@ func (s *BillingServiceSuite) TestCommitmentLoader_OveragePriceSkipsUsageOutside
 
 			lines, total, err := usageLinesWithTotal(ctx, s.loaderFor(sub, s.meterUsage(sub), sub.CurrentPeriodStart, sub.CurrentPeriodEnd))
 			s.Require().NoError(err)
-			s.True(s.loaderLine(lines, types.CommitmentLineUtilized, c.ID).Quantity.Round(6).Equal(dec(tt.within)))
+			s.True(s.loaderLine(lines, types.CommitmentLineUtilized, c.ID).Quantity.Equal(dec(tt.within)))
 
 			overage := loaderLinesOfKind(lines, types.CommitmentLineOverage)
 			s.Require().Len(overage, 1)
-			s.True(overage[0].Quantity.Round(6).Equal(dec(tt.beyondCap)), "beyond-capacity overage %s", overage[0].Quantity)
+			s.True(overage[0].Quantity.Equal(dec(tt.beyondCap)), "beyond-capacity overage %s", overage[0].Quantity)
 			s.True(overage[0].Amount.Equal(dec(tt.beyondCap).Mul(dec("3"))), "beyond-capacity overage %s", overage[0].Amount)
 
 			plain := loaderLinesOfKind(lines, types.CommitmentLinePlain)
@@ -881,7 +846,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_OveragePriceSkipsUsageOutside
 func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodPoolsAcrossTheSplit() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub, p := s.apiFixture("sub_pool")
 	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
 	startAt := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
@@ -905,14 +869,14 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodPoolsAcrossTheSp
 	s.Equal([]int{-1, 0}, py.PoolOf)
 
 	// X's 25 serve 20 before the split and 5 after; Y takes the other 15 of the 17 it holds.
-	s.True(allocs[0].Commitments[0].Used.Round(6).Equal(dec("25")), "X used %s", allocs[0].Commitments[0].Used)
-	s.True(allocs[0].Commitments[1].Used.Round(6).Equal(dec("15")), "Y used %s", allocs[0].Commitments[1].Used)
-	s.True(allocs[0].Commitments[1].Unused.Round(6).Equal(dec("2")), "Y unused %s", allocs[0].Commitments[1].Unused)
+	s.True(allocs[0].Commitments[0].Used.Equal(dec("25")), "X used %s", allocs[0].Commitments[0].Used)
+	s.True(allocs[0].Commitments[1].Used.Equal(dec("15")), "Y used %s", allocs[0].Commitments[1].Used)
+	s.True(allocs[0].Commitments[1].Unused.Equal(dec("2")), "Y unused %s", allocs[0].Commitments[1].Unused)
 
 	lines, total, err := usageLinesWithTotal(ctx, l)
 	s.Require().NoError(err)
 	s.Empty(loaderLinesOfKind(lines, types.CommitmentLineOverage))
-	s.True(s.loaderLine(lines, types.CommitmentLineTrueUp, y.ID).Quantity.Round(6).Equal(dec("2")))
+	s.True(s.loaderLine(lines, types.CommitmentLineTrueUp, y.ID).Quantity.Equal(dec("2")))
 	// X 12.5 + Y 7.5 within + Y true-up 1.
 	s.True(total.Equal(dec("21")), "total %s", total)
 }
@@ -921,7 +885,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodPoolsAcrossTheSp
 func (s *BillingServiceSuite) TestCommitmentLoader_PartialInvoicesSumToThePeriodFloor() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	p := s.usagePriceFor("price_flat_api", s.testData.meters.apiCalls, "1")
 	li := &subscription.SubscriptionLineItem{ID: "subs_line_flat_api", PriceID: p.ID, MeterID: s.testData.meters.apiCalls.ID, DisplayName: "API"}
 	sub := s.fixedDateSub("sub_partial", li)
@@ -951,7 +914,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_PartialInvoicesSumToThePeriod
 func (s *BillingServiceSuite) TestCommitmentLoader_PartialInvoicesSumToTheLastPeriodFloor() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	p := s.usagePriceFor("price_flat_api", s.testData.meters.apiCalls, "1")
 	li := &subscription.SubscriptionLineItem{ID: "subs_line_flat_api", PriceID: p.ID, MeterID: s.testData.meters.apiCalls.ID, DisplayName: "API"}
 	sub := s.fixedDateSub("sub_last_partial", li)
@@ -1024,7 +986,6 @@ func (s *BillingServiceSuite) istDailyWindowFixture() (*subscription.Subscriptio
 func (s *BillingServiceSuite) TestCommitmentLoader_DailyGridIsUTCForChargesKeyedInSubscriptionTimezone() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub, c, usage := s.istDailyWindowFixture()
 
 	stacks, allocs, err := s.loaderFor(sub, usage, sub.CurrentPeriodStart, sub.CurrentPeriodEnd).Stacks(ctx)
@@ -1047,7 +1008,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_DailyGridIsUTCForChargesKeyed
 func (s *BillingServiceSuite) TestCommitmentLoader_WindowFloorMatchesPoolCapacity() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub, c, usage := s.istDailyWindowFixture()
 	c.CommitmentStatus, c.TerminatedAt = types.CommitmentStatusTerminated, lo.ToPtr(time.Date(2026, 8, 9, 20, 0, 0, 0, time.UTC))
 	_, err := s.GetStores().CommitmentRepo.Update(ctx, c)
@@ -1072,7 +1032,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_WindowFloorMatchesPoolCapacit
 func (s *BillingServiceSuite) TestCommitmentLoader_OpenEndedWindowEndsWithTheSubscription() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub, c, usage := s.istDailyWindowFixture()
 	c.EndDate = nil
 	_, err := s.GetStores().CommitmentRepo.Update(ctx, c)
@@ -1090,7 +1049,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_OpenEndedWindowEndsWithTheSub
 func (s *BillingServiceSuite) TestCommitmentLoader_BucketsJoinTheWindowContainingThem() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub, _, usage := s.istDailyWindowFixture()
 
 	// meter_usage buckets in UTC, so its grid is UTC days and the IST-midnight instants sit 5h30 before them.
@@ -1142,7 +1100,6 @@ func bucketCharge(li *subscription.SubscriptionLineItem, p *price.Price, days ma
 func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodPricesEachBucketAtTheMargin() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	p := s.dailyGPUPrice("gpu_margin",
 		price.PriceTier{UpTo: lo.ToPtr(uint64(100)), UnitAmount: dec("1")},
 		price.PriceTier{UnitAmount: dec("0.1")},
@@ -1184,7 +1141,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodPricesEachBucket
 func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodMixedLinesShareOnePool() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	gpu := s.dailyGPUPrice("gpu_mixed", price.PriceTier{UnitAmount: dec("1")})
 	gpuLine := &subscription.SubscriptionLineItem{ID: "subs_line_gpu_mixed", PriceID: gpu.ID, MeterID: gpu.MeterID, DisplayName: "GPU"}
 	api := s.usagePriceFor("price_flat_api", s.testData.meters.apiCalls, "1")
@@ -1221,7 +1177,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodMixedLinesShareO
 func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodFillsVersionsInTimeOrder() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	m := &meter.Meter{
 		ID:          "meter_versions",
 		Name:        "Tokens",
@@ -1284,7 +1239,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodFillsVersionsInT
 func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodWeeklyBucketFillsFromItsVersionStart() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	m := &meter.Meter{
 		ID:          "meter_weekly_versions",
 		Name:        "Tokens",
@@ -1351,7 +1305,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_TieredPartialFloorsSumToThePe
 	none := &dto.GetUsageBySubscriptionResponse{Currency: "usd"}
 	s.Run("billing period", func() {
 		s.setupTestData()
-		s.enableCommitmentsV2()
 		sub, p := s.apiFixture("sub_tiered_floor")
 		committed := s.usagePriceFor("price_tiered_floor_committed", s.testData.meters.apiCalls, "0")
 		c := s.newTestCommitment("cmt_tiered_floor", sub, types.COMMITMENT_TYPE_QUANTITY, "62", p.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
@@ -1376,7 +1329,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_TieredPartialFloorsSumToThePe
 
 	s.Run("window", func() {
 		s.setupTestData()
-		s.enableCommitmentsV2()
 		sub, _, _ := s.istDailyWindowFixture()
 		tiered("price_ist_daily_committed", 200)
 
@@ -1402,7 +1354,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_TieredPartialFloorsSumToThePe
 func (s *BillingServiceSuite) TestCommitmentLoader_PartialWithinIsCappedAtTheFloor() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub, p := s.apiFixture("sub_capped_within")
 	committed := s.usagePriceFor("price_capped_within_committed", s.testData.meters.apiCalls, "0")
 	committed.BillingModel, committed.TierMode = types.BILLING_MODEL_TIERED, types.BILLING_TIER_SLAB
@@ -1466,7 +1417,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodWeeklyBucketsKee
 		s.Run(tt.name, func() {
 			ctx := s.GetContext()
 			s.setupTestData()
-			s.enableCommitmentsV2()
 			m := &meter.Meter{
 				ID:          "meter_gpu_weekly",
 				Name:        "Weekly GPU",
@@ -1568,7 +1518,6 @@ func TestSpreadCost_ConservesTotalProportionally(t *testing.T) {
 func (s *BillingServiceSuite) TestCommitmentLoader_AmountSpansSpreadThePeriodCost() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	p := s.usagePriceFor("price_volume_api", s.testData.meters.apiCalls, "0")
 	p.BillingModel, p.TierMode = types.BILLING_MODEL_TIERED, types.BILLING_TIER_VOLUME
 	p.Tiers = []price.PriceTier{
@@ -1606,7 +1555,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_AmountSpansSpreadThePeriodCos
 // The states below are only reachable by bypassing create validation, so the loader fails closed on them.
 func (s *BillingServiceSuite) TestCommitmentLoader_FailsClosedOnLineInTwoStacks() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub, p := s.apiFixture("sub_two_stacks")
 	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
 	switchAt := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
@@ -1634,7 +1582,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_FailsClosedOnLineInTwoStacks(
 func (s *BillingServiceSuite) TestCommitmentLoader_FailsClosedOnGroupedBucketedPrice() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	grouped := &meter.Meter{
 		ID:          "meter_grouped_gpu",
 		Name:        "Grouped GPU",
@@ -1667,7 +1614,6 @@ func (s *BillingServiceSuite) TestCommitmentLoader_FailsClosedOnDifferentOverage
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			s.setupTestData()
-			s.enableCommitmentsV2()
 			sub, p := s.apiFixture("sub_overage")
 			periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
 			switchAt := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
@@ -1728,39 +1674,15 @@ func (s *BillingServiceSuite) requireSameBytes(want, got interface{}) {
 	s.True(bytes.Equal(wantJSON, gotJSON), "want %s\ngot  %s", wantJSON, gotJSON)
 }
 
-// A subscription without commitments bills the same lines whether or not the setting is on.
-func (s *BillingServiceSuite) TestCommitmentWiring_NoCommitmentsIdenticalWithSettingOnAndOff() {
-	s.setupTestData()
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
-	offRaw, offLines, offTotal := s.wiredCharges()
-	s.Require().NotEmpty(offRaw.LineItems)
-	s.Require().NotEmpty(offLines)
-
-	s.enableCommitmentsV2()
-	onRaw, onLines, onTotal := s.wiredCharges()
-	s.requireSameBytes(offRaw, onRaw)
-	s.requireSameBytes(offLines, onLines)
-	s.True(offTotal.Equal(onTotal), "total %s vs %s", offTotal, onTotal)
-}
-
-// Commitments that are off, not yet started or already terminated leave both paths unchanged.
+// Commitments not yet started or already terminated leave both paths unchanged.
 func (s *BillingServiceSuite) TestCommitmentWiring_InertCommitmentsLeaveInvoiceUnchanged() {
 	tests := []struct {
 		name  string
 		setup func(periodStart, periodEnd time.Time)
 	}{
 		{
-			name: "setting off",
-			setup: func(periodStart, _ time.Time) {
-				s.createCommitment(
-					types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0),
-				)
-			},
-		},
-		{
-			name: "setting on, no overlapping commitment",
+			name: "no overlapping commitment",
 			setup: func(periodStart, periodEnd time.Time) {
-				s.enableCommitmentsV2()
 				s.createCommitment(
 					types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodEnd, periodEnd.AddDate(1, 0, 0),
 				)
@@ -1793,7 +1715,6 @@ func (s *BillingServiceSuite) TestCommitmentWiring_InertCommitmentsLeaveInvoiceU
 
 func (s *BillingServiceSuite) TestCommitmentWiring_MeterUsagePathAppliesCommitment() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
 	c := s.createCommitment(
 		types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0),
@@ -1813,7 +1734,6 @@ func (s *BillingServiceSuite) TestCommitmentWiring_MeterUsagePathAppliesCommitme
 
 func (s *BillingServiceSuite) TestCommitmentWiring_BillingTermsCoverUsageOnBothPaths() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub := s.testData.subscription
 	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
 	c := s.newTestCommitment(
@@ -1861,7 +1781,6 @@ func (s *BillingServiceSuite) TestCommitmentWiring_BillingTermsCoverUsageOnBothP
 // A line with a legacy line-item commitment that a new commitment also scopes is billed only by the new one.
 func (s *BillingServiceSuite) TestCommitmentWiring_PrefersNewCommitmentOverLegacyLineCommitment() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	li, _ := lo.Find(s.testData.subscription.LineItems, func(li *subscription.SubscriptionLineItem) bool {
 		return li.PriceID == s.testData.prices.apiCalls.ID
 	})
@@ -1887,7 +1806,7 @@ func (s *BillingServiceSuite) TestCommitmentWiring_PrefersNewCommitmentOverLegac
 }
 
 // A legacy line-item commitment on one line and a new commitment on another bill side by side: the legacy line bills as
-// it does with the setting off, and the new commitment bills only its own line.
+// it does without the new commitment, and the new commitment bills only its own line.
 func (s *BillingServiceSuite) TestCommitmentWiring_LegacyAndNewCommitmentsOnDifferentLines() {
 	s.setupTestData()
 	legacyPrice := s.usagePriceFor("price_side_legacy", s.testData.meters.apiCalls, "1")
@@ -1940,10 +1859,8 @@ func (s *BillingServiceSuite) TestCommitmentWiring_LegacyAndNewCommitmentsOnDiff
 		})
 	}
 
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
 	before := charge()
 
-	s.enableCommitmentsV2()
 	c := s.newTestCommitment(
 		"cmt_side_by_side", sub, types.COMMITMENT_TYPE_AMOUNT, "100", coveredPrice.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd,
 	)
@@ -1969,7 +1886,6 @@ func (s *BillingServiceSuite) TestCommitmentWiring_LegacyAndNewCommitmentsOnDiff
 // A commitment whose scoped lines bill on another cadence group contributes nothing to this call.
 func (s *BillingServiceSuite) TestCommitmentWiring_OtherCadenceGroupContributesNothing() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	monthlyPrice := s.usagePriceFor("price_cadence_monthly", s.testData.meters.apiCalls, "1")
 	annualPrice := s.usagePriceFor("price_cadence_annual", s.testData.meters.apiCalls, "1")
 	monthly := &subscription.SubscriptionLineItem{
@@ -2029,7 +1945,6 @@ func (s *BillingServiceSuite) TestCommitmentWiring_OtherCadenceGroupContributesN
 func (s *BillingServiceSuite) TestCommitmentWiring_RawPathScopeGuards() {
 	s.Run("lines outside the call", func() {
 		s.setupTestData()
-		s.enableCommitmentsV2()
 		periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
 		s.createCommitment(
 			types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0),
@@ -2051,7 +1966,6 @@ func (s *BillingServiceSuite) TestCommitmentWiring_RawPathScopeGuards() {
 
 	s.Run("window across commitment periods", func() {
 		s.setupTestData()
-		s.enableCommitmentsV2()
 		p := s.usagePriceFor("price_flat_api_span", s.testData.meters.apiCalls, "1")
 		li := &subscription.SubscriptionLineItem{
 			ID:          "subs_line_flat_api_span",
@@ -2120,7 +2034,6 @@ func (s *BillingServiceSuite) TestCommitmentWiring_PreviewMatchesInvoice() {
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			s.setupTestData()
-			s.enableCommitmentsV2()
 			tt.setup(s.testData.subscription.CurrentPeriodStart)
 
 			raw, lines, total := s.wiredCharges()
@@ -2149,7 +2062,6 @@ func (s *EntitlementQuantityTestSuite) recalcFixture(
 	commitments ...*commitment.Commitment,
 ) *invoicedomain.Invoice {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	aug := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	sep := aug.AddDate(0, 1, 0)
 	sub := &subscription.Subscription{
@@ -2246,7 +2158,6 @@ func (s *EntitlementQuantityTestSuite) recalcCommitment(id string, value string,
 		Type:               types.COMMITMENT_TYPE_AMOUNT,
 		Value:              dec(value),
 		Measurement:        types.CommitmentMeasurementBillingPeriod,
-		Timezone:           "UTC",
 		Priority:           priority,
 		Binding:            true,
 		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),
@@ -2308,7 +2219,6 @@ func (s *BillingServiceSuite) rawUsageWindow(sub *subscription.Subscription, fro
 
 func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_AmountCommitment() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub := s.testData.subscription
 	periodStart := sub.CurrentPeriodStart
 	// $100 amount commitment; the 500 recorded api calls cost $10.
@@ -2351,7 +2261,6 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_AmountCommitment() {
 // used amount keeps the usage value.
 func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_BillingTermsBillNothing() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub := s.testData.subscription
 	periodStart := sub.CurrentPeriodStart
 	c := s.newTestCommitment(
@@ -2373,7 +2282,6 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_BillingTermsBillNothi
 // window covers the whole period or stops inside it.
 func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_OpenEndedAppliesToThePeriodEnd() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub := s.testData.subscription
 	periodStart := sub.CurrentPeriodStart
 	c := s.newTestCommitment(
@@ -2406,7 +2314,6 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_OpenEndedAppliesToThe
 // (req.Source set) and lifetime windows skip it.
 func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_MeterUsagePath() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub := s.testData.subscription
 	periodStart := sub.CurrentPeriodStart
 	c := s.createCommitment(
@@ -2437,7 +2344,6 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_MeterUsagePath() {
 // Usage over capacity fills the commitment: ValueWithin reaches PeriodAmount and nothing is unused.
 func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_UsageOverCapacity() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub := s.testData.subscription
 	// $5 amount commitment against $10 of usage.
 	c := s.createCommitment(
@@ -2457,7 +2363,6 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_UsageOverCapacity() {
 
 func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_QuantityCommitmentStack() {
 	s.setupTestData()
-	s.enableCommitmentsV2()
 	sub := s.testData.subscription
 	committed := s.usagePriceFor("price_breakdown_committed", s.testData.meters.apiCalls, "0.01")
 	// 300 of the 500 calls are committed at $0.01; the other 200 are billed on the line's own price.
@@ -2483,23 +2388,13 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_NilWithoutApplicableC
 		setup func(periodStart, periodEnd time.Time)
 	}{
 		{
-			name: "flag off",
-			setup: func(periodStart, _ time.Time) {
-				s.createCommitment(
-					types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0),
-				)
-			},
-		},
-		{
-			name: "flag on, no commitment",
+			name: "no commitment",
 			setup: func(_, _ time.Time) {
-				s.enableCommitmentsV2()
 			},
 		},
 		{
-			name: "flag on, no overlapping commitment",
+			name: "no overlapping commitment",
 			setup: func(_, periodEnd time.Time) {
-				s.enableCommitmentsV2()
 				s.createCommitment(
 					types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodEnd, periodEnd.AddDate(1, 0, 0),
 				)
@@ -2522,7 +2417,6 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_NilWithoutApplicableC
 func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_MidPeriodWindow() {
 	ctx := s.GetContext()
 	s.setupTestData()
-	s.enableCommitmentsV2()
 
 	dayMeter := &meter.Meter{
 		ID:        "meter_daily_gpu",
@@ -2617,7 +2511,8 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_MidPeriodWindow() {
 
 	// The API path projects to the window's end on its own: a mid-period query reports full-window
 	// capacity and the matching floor, not capacity elapsed so far.
-	api, err := s.service.(*billingService).commitmentUsageBreakdown(ctx, sub, usage, periodStart, periodEnd)
+	aug10 := time.Date(2026, 8, 10, 18, 0, 0, 0, time.UTC)
+	api, err := s.service.(*billingService).commitmentUsageBreakdown(ctx, sub, usage, periodStart, periodEnd, aug10)
 	s.Require().NoError(err)
 	s.Require().Len(api, 1)
 	s.True(api[0].Committed.Quantity.Equal(dec("310")), "api capacity %s", api[0].Committed.Quantity)
@@ -2627,21 +2522,26 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_MidPeriodWindow() {
 
 	// A to-date query projects capacity to the period end but counts only usage inside its window:
 	// Aug 20's GPUs stay out of an Aug 11 cutoff even though the loader re-reads bucketed usage.
-	toDate, err := s.service.(*billingService).commitmentUsageBreakdown(
-		ctx, sub, usage, periodStart, time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC),
-	)
+	cutoff := time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC)
+	toDate, err := s.service.(*billingService).commitmentUsageBreakdown(ctx, sub, usage, periodStart, cutoff, aug10)
 	s.Require().NoError(err)
 	s.Require().Len(toDate, 1)
 	s.True(toDate[0].Committed.Quantity.Equal(dec("310")), "to-date capacity %s", toDate[0].Committed.Quantity)
 	s.True(toDate[0].Committed.Amount.Equal(dec("155")), "to-date floor %s", toDate[0].Committed.Amount)
 	s.True(toDate[0].Used.Quantity.Equal(dec("10")), "to-date used %s", toDate[0].Used.Quantity)
 
+	// Asked once the cutoff has passed, the same window is priced as its own: ten days of capacity and their floor.
+	past, err := s.service.(*billingService).commitmentUsageBreakdown(ctx, sub, usage, periodStart, cutoff, periodEnd)
+	s.Require().NoError(err)
+	s.Require().Len(past, 1)
+	s.True(past[0].Committed.Quantity.Equal(dec("100")), "past capacity %s", past[0].Committed.Quantity)
+	s.True(past[0].Committed.Amount.Equal(dec("50")), "past floor %s", past[0].Committed.Amount)
+	s.True(past[0].Used.Quantity.Equal(dec("10")), "past used %s", past[0].Used.Quantity)
+
 	// A window starting mid-period misses earlier usage, so it keeps clipped-preview semantics:
 	// six days of capacity, none of it used.
 	midStart, err := s.service.(*billingService).commitmentUsageBreakdown(
-		ctx, sub, usage,
-		time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC),
-		time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC),
+		ctx, sub, usage, time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC), cutoff, aug10,
 	)
 	s.Require().NoError(err)
 	s.Require().Len(midStart, 1)
@@ -2670,4 +2570,162 @@ func TestRawChargesByLine_SplitsChargesAcrossLinesSharingAPrice(t *testing.T) {
 	got = rawChargesByLine(sub, untagged)
 	require.Len(t, got["li_old"], 1)
 	require.Len(t, got["li_new"], 1)
+}
+
+// A bucket counts when it ends inside the span and the term, and the active windows hold its start.
+func TestActiveBuckets_CountsTheBucketsTheTermAndWindowsHold(t *testing.T) {
+	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	day := types.Period{Start: jan, End: jan.AddDate(0, 0, 1)}
+	tests := []struct {
+		name       string
+		commitment commitment.Commitment
+		subEnd     *time.Time
+		span       types.Period
+		bucket     types.WindowSize
+		want       int64
+	}{
+		{
+			name:       "minutes from a start inside a minute, which the term holds",
+			commitment: commitment.Commitment{StartDate: jan.Add(90 * time.Second)},
+			span:       types.Period{Start: jan, End: jan.Add(time.Hour)},
+			bucket:     types.WindowSizeMinute,
+			want:       59,
+		},
+		{
+			name:       "hours up to a termination",
+			commitment: commitment.Commitment{StartDate: jan, EndDate: lo.ToPtr(jan.AddDate(0, 1, 0)), TerminatedAt: lo.ToPtr(jan.Add(10 * time.Hour))},
+			span:       day,
+			bucket:     types.WindowSizeHour,
+			want:       10,
+		},
+		{
+			name:       "open-ended until the subscription ends",
+			commitment: commitment.Commitment{StartDate: jan},
+			subEnd:     lo.ToPtr(jan.Add(6 * time.Hour)),
+			span:       day,
+			bucket:     types.WindowSize15Min,
+			want:       24,
+		},
+		{
+			name: "hours inside active windows",
+			commitment: commitment.Commitment{StartDate: jan, ActiveWindows: types.ActiveWindows{
+				{Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 17}},
+			}},
+			span:   day,
+			bucket: types.WindowSizeHour,
+			want:   8,
+		},
+		{
+			name:       "days before the commitment starts",
+			commitment: commitment.Commitment{StartDate: jan.AddDate(0, 0, 10)},
+			span:       types.Period{Start: jan, End: jan.AddDate(0, 0, 10)},
+			bucket:     types.WindowSizeDay,
+			want:       0,
+		},
+		{
+			name:       "days from a start inside the span",
+			commitment: commitment.Commitment{StartDate: jan.AddDate(0, 0, 10)},
+			span:       types.Period{Start: jan, End: jan.AddDate(0, 1, 0)},
+			bucket:     types.WindowSizeDay,
+			want:       21,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &commitmentLoader{
+				sub: &subscription.Subscription{BillingAnchor: jan, EndDate: tt.subEnd},
+			}
+			require.Equal(t, tt.want, l.activeBuckets(&tt.commitment, tt.span, tt.bucket))
+		})
+	}
+}
+
+// A line's commitments are those whose scope holds it, and the lines their bills depend on reach through every
+// commitment sharing a line with them: x shares c with y, which also draws on d, while z touches none of them.
+func TestCommitmentLoader_CommitmentsCoveringAndLinesAffecting(t *testing.T) {
+	a, c := &subscription.SubscriptionLineItem{ID: "a"}, &subscription.SubscriptionLineItem{ID: "c"}
+	d, e := &subscription.SubscriptionLineItem{ID: "d"}, &subscription.SubscriptionLineItem{ID: "e"}
+	l := &commitmentLoader{
+		commitments: []*stackedCommitment{
+			{Commitment: &commitment.Commitment{ID: "y"}},
+			{Commitment: &commitment.Commitment{ID: "x"}},
+			{Commitment: &commitment.Commitment{ID: "z"}},
+		},
+		scopeByCommitment: map[string]*loadedScope{
+			"x": {lineItems: []*subscription.SubscriptionLineItem{a, c}},
+			"y": {lineItems: []*subscription.SubscriptionLineItem{c, d}},
+			"z": {lineItems: []*subscription.SubscriptionLineItem{e}},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		line      string
+		covering  []string
+		affecting map[string]bool
+	}{
+		{name: "through a shared line", line: "a", covering: []string{"x"}, affecting: map[string]bool{"a": true, "c": true, "d": true}},
+		{name: "from the other side", line: "d", covering: []string{"y"}, affecting: map[string]bool{"a": true, "c": true, "d": true}},
+		{name: "a separate scope", line: "e", covering: []string{"z"}, affecting: map[string]bool{"e": true}},
+		{name: "no covering commitment", line: "b", affecting: map[string]bool{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lineIDs := map[string]bool{tt.line: true}
+			require.Equal(t, tt.covering, l.CommitmentsCovering(lineIDs))
+			require.Equal(t, tt.affecting, l.LinesAffecting(lineIDs))
+		})
+	}
+}
+
+// A window is priced through the open period's end only when it covers that period from its start into today, on a
+// subscription still running; any other window is priced to its own end.
+func TestProjectedPeriodEnd(t *testing.T) {
+	periodStart := time.Date(2026, time.November, 1, 0, 0, 0, 0, time.UTC)
+	periodEnd := periodStart.AddDate(0, 1, 0)
+	now := time.Date(2026, time.November, 9, 15, 0, 0, 0, time.UTC)
+	running := &subscription.Subscription{
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+	}
+	cancelled := *running
+	cancelled.SubscriptionStatus = types.SubscriptionStatusCancelled
+	pastDay := time.Date(2026, time.November, 3, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name  string
+		sub   *subscription.Subscription
+		start time.Time
+		end   time.Time
+		want  time.Time
+	}{
+		{name: "month to date", sub: running, start: periodStart, end: now, want: periodEnd},
+		{name: "into today", sub: running, start: periodStart, end: now.Add(-14 * time.Hour), want: periodEnd},
+		{name: "a past slice of the period", sub: running, start: periodStart, end: pastDay, want: pastDay},
+		{name: "from inside the period", sub: running, start: pastDay, end: now, want: now},
+		{name: "a cancelled subscription", sub: &cancelled, start: periodStart, end: now, want: now},
+		{name: "past the period", sub: running, start: periodStart, end: periodEnd.AddDate(0, 0, 1), want: periodEnd.AddDate(0, 0, 1)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, projectedPeriodEnd(tt.sub, tt.start, tt.end, now))
+		})
+	}
+}
+
+// BenchmarkActiveBuckets_ElevenMonthsOfMinutes counts the minute buckets an annual commitment period accrued before its
+// last billing period.
+func BenchmarkActiveBuckets_ElevenMonthsOfMinutes(b *testing.B) {
+	start := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	c := &commitment.Commitment{StartDate: start}
+	l := &commitmentLoader{
+		sub: &subscription.Subscription{BillingAnchor: start},
+	}
+	elapsed := types.Period{Start: start, End: start.AddDate(0, 11, 0)}
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		l.activeBuckets(c, elapsed, types.WindowSizeMinute)
+	}
 }

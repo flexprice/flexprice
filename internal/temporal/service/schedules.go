@@ -168,7 +168,7 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{
-			// Always declared; BillDueInstalments only visits environments that enable commitments_v2.
+			// Always declared; BillDueInstalments only visits environments holding a due instalment.
 			ID:        types.ScheduleIDBillingInstalmentsDue,
 			Interval:  15 * time.Minute,
 			Workflow:  cronWorkflows.BillingInstalmentsDueWorkflow,

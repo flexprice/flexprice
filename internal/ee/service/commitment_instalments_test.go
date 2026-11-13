@@ -37,7 +37,7 @@ func (s *CommitmentServiceSuite) fiveOfTwelveInvoiced() (*dto.CommitmentResponse
 	s.Require().Len(before, 12)
 
 	ids := lo.Map(before[:5], func(inst *billingterm.Instalment, _ int) string { return inst.ID })
-	claimed, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), "inv_x", ids)
+	claimed, err := s.GetStores().BillingInstalmentRepo.Claim(s.GetContext(), "inv_x", time.Now(), ids)
 	s.Require().NoError(err)
 	s.Require().Len(claimed, 5)
 
@@ -238,7 +238,7 @@ func (s *CommitmentServiceSuite) TestTriggerInstalment_Rejections() {
 	invoicedReq := s.milestoneRequest()
 	invoicedReq.Priority = 3
 	invoicedCommitment, invoicedMilestone := s.milestoneOf(invoicedReq)
-	claimed, err := repo.Claim(ctx, "inv_x", []string{invoicedMilestone.ID})
+	claimed, err := repo.Claim(ctx, "inv_x", time.Now(), []string{invoicedMilestone.ID})
 	s.Require().NoError(err)
 	s.Require().Len(claimed, 1)
 
@@ -295,17 +295,6 @@ func (s *CommitmentServiceSuite) TestTriggerInstalment_RejectsInactiveOrPerPerio
 	_, err := s.svc.TriggerInstalment(ctx, "cmt_missing", "binst_any", req)
 	s.Require().Error(err)
 	s.True(ierr.IsNotFound(err), "got %v", err)
-
-	activeReq := s.milestoneRequest()
-	activeReq.Priority = 2
-	created, milestone := s.milestoneOf(activeReq)
-
-	before := s.storedInstalments()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)
-	_, err = s.svc.TriggerInstalment(ctx, created.ID, milestone.ID, req)
-	s.Require().Error(err)
-	s.True(ierr.IsInvalidOperation(err), "got %v", err)
-	s.Equal(before, s.storedInstalments())
 }
 
 // milestoneCommitment commits 100 a month from 1 Jan 2026 to end, billed as half at signing and half at go-live, a
