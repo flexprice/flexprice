@@ -624,16 +624,20 @@ func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string
 	if err != nil {
 		return err
 	}
-	if v.Definition != nil && v.Definition.Family == types.FamilyReport {
+	if v.Definition == nil {
+		return ierr.NewError("view has no definition").Mark(ierr.ErrValidation)
+	}
+	def := exportDefinition(*v.Definition, "2026-01-01..2026-01-02")
+	if def.Family == types.FamilyReport {
 		if err := s.requireReports(); err != nil {
 			return err
 		}
-		if _, err := analytics.ResolveVariables(v.Definition, nil); err != nil {
+		if _, err := analytics.ResolveVariables(def, nil); err != nil {
 			return err
 		}
-		return checkReportRange(string(v.Definition.Metrics[0]), windowDays)
+		return checkReportRange(string(def.Metrics[0]), windowDays)
 	}
-	rv, err := analytics.ResolveVariables(v.Definition, nil)
+	rv, err := analytics.ResolveVariables(def, nil)
 	if err != nil {
 		return err
 	}
@@ -645,6 +649,29 @@ func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string
 		}
 	}
 	return nil
+}
+
+// exportDefinition pins the range and drops its variable.
+func exportDefinition(def analytics.ViewDefinition, rng string) *analytics.ViewDefinition {
+	placeholder := def.Time.Range
+	def.Time.Range = rng
+	if !strings.HasPrefix(placeholder, "{{") || !strings.HasSuffix(placeholder, "}}") {
+		return &def
+	}
+	for _, f := range def.Filters {
+		if f != nil && slices.Contains(f.Value, placeholder) {
+			return &def
+		}
+	}
+	name := placeholder[2 : len(placeholder)-2]
+	vars := make([]*analytics.Variable, 0, len(def.Variables))
+	for _, va := range def.Variables {
+		if va == nil || va.Name != name {
+			vars = append(vars, va)
+		}
+	}
+	def.Variables = vars
+	return &def
 }
 
 func (s *analyticsService) RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error) {
@@ -659,14 +686,13 @@ func (s *analyticsService) RunViewForExport(ctx context.Context, viewID, rng str
 	if v.Definition == nil {
 		return nil, time.Time{}, ierr.NewError("view has no definition").Mark(ierr.ErrValidation)
 	}
-	def := *v.Definition
-	def.Time.Range = rng
+	def := exportDefinition(*v.Definition, rng)
 
 	if def.Family == types.FamilyReport {
-		res, err := s.runReportView(ctx, &def)
+		res, err := s.runReportView(ctx, def)
 		return res, v.UpdatedAt, err
 	}
-	res, err := s.ExecuteView(ctx, &def, nil)
+	res, err := s.ExecuteView(ctx, def, nil)
 	if err != nil {
 		return nil, time.Time{}, err
 	}

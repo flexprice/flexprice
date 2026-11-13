@@ -78,6 +78,41 @@ func TestRunViewForExport_OverridesRangeWithoutMutatingStore(t *testing.T) {
 	assert.Equal(t, "last_30_days", stored.Definition.Time.Range)
 }
 
+func TestViewSource_RangeVariableIsReplacedByWindow(t *testing.T) {
+	repo := &testutil.InMemoryReportsRepo{On: true, Columns: reportCols("currency", "invoice_total"), Rows: [][]string{{"usd", "1"}}}
+	svc, _ := exportSvc(repo)
+	ctx := userCtx("env_1")
+
+	def := billingView(types.ShapeScalar)
+	def.Time.Range = "{{period}}"
+	def.Variables = []*analytics.Variable{{Name: "period", Type: types.VariableTypeDateRange, Required: true}}
+	v := &analytics.View{Name: "picker", Definition: def}
+	require.NoError(t, svc.CreateView(ctx, v))
+
+	require.NoError(t, svc.ValidateViewSource(ctx, v.ID, 1))
+	_, _, err := svc.RunViewForExport(ctx, v.ID, "2026-11-09..2026-11-10")
+	require.NoError(t, err)
+	assert.Equal(t, "2026-11-09", repo.Last.Time.From.Format("2006-01-02"))
+
+	stored, err := svc.GetView(ctx, v.ID)
+	require.NoError(t, err)
+	assert.Len(t, stored.Definition.Variables, 1)
+}
+
+func TestViewSource_SharedRangeVariableStillRequired(t *testing.T) {
+	svc, _ := exportSvc(&testutil.InMemoryReportsRepo{On: true})
+	ctx := userCtx("env_1")
+
+	def := billingView(types.ShapeScalar)
+	def.Time.Range = "{{cur}}"
+	def.Filters = []*analytics.Filter{{Field: "currency", Op: types.EQUAL, Value: []string{"{{cur}}"}}}
+	def.Variables = []*analytics.Variable{{Name: "cur", Type: types.VariableTypeString, Required: true}}
+	v := &analytics.View{Name: "shared", Definition: def}
+	require.NoError(t, svc.CreateView(ctx, v))
+
+	assert.True(t, ierr.IsValidation(svc.ValidateViewSource(ctx, v.ID, 1)))
+}
+
 func TestRunViewForExport_DeletedViewNotFound(t *testing.T) {
 	svc, _ := exportSvc(&testutil.InMemoryReportsRepo{On: true})
 	ctx := userCtx("env_1")
