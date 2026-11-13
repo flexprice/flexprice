@@ -3036,6 +3036,11 @@ definitions:
         description: onboarding_workflow_name is given if a custom onboarding workflow
           is to be triggered for this customer
         type: string
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: settings overrides the environment settings for this customer's
+          subscriptions
       skip_onboarding_workflow:
         description: |-
           skip_onboarding_workflow when true, prevents the customer onboarding workflow from being triggered
@@ -3969,6 +3974,11 @@ definitions:
         - $ref: '#/definitions/types.ProrationBehavior'
         description: 'ProrationBehavior: create_prorations or none (default). Ignored
           for anniversary billing.'
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings overrides the customer and environment settings for
+          this subscription.
       start_date:
         type: string
       subscription_coupons:
@@ -4601,6 +4611,11 @@ definitions:
       name:
         description: Name is the name of the customer
         type: string
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings overrides the environment's settings for this customer's
+          subscriptions.
       status:
         $ref: '#/definitions/types.Status'
       tax_treatment:
@@ -9295,6 +9310,11 @@ definitions:
         type: string
       proration_behavior:
         $ref: '#/definitions/types.ProrationBehavior'
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings overrides the customer's and environment's settings
+          for this subscription.
       start_date:
         description: StartDate is the start date of the subscription
         type: string
@@ -9513,6 +9533,11 @@ definitions:
         type: boolean
       proration_behavior:
         $ref: '#/definitions/types.ProrationBehavior'
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings overrides the customer's and environment's settings
+          for this subscription.
       start_date:
         description: StartDate is the start date of the subscription
         type: string
@@ -10294,6 +10319,11 @@ definitions:
       name:
         description: name is the updated name or company name for the customer
         type: string
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: settings replaces the customer's setting overrides when provided;
+          send {} to inherit the environment settings
       tax_treatment:
         allOf:
         - $ref: '#/definitions/types.TaxTreatment'
@@ -10669,6 +10699,11 @@ definitions:
         - $ref: '#/definitions/types.ProrationBehavior'
         description: ProrationBehavior updates the stored behavior. Omit to leave
           it unchanged.
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings replaces the subscription's setting overrides when provided;
+          send {} to inherit.
       status:
         $ref: '#/definitions/types.SubscriptionStatus'
     type: object
@@ -11632,6 +11667,11 @@ definitions:
       name:
         description: Name is the name of the customer
         type: string
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings overrides the environment's settings for this customer's
+          subscriptions.
       status:
         $ref: '#/definitions/types.Status'
       tax_treatment:
@@ -16599,6 +16639,19 @@ definitions:
     - RevenueReportGroupByCustomer
     - RevenueReportGroupByContract
     - RevenueReportGroupByPOB
+  types.SettingsOverride:
+    properties:
+      subscription_config:
+        $ref: '#/definitions/types.SubscriptionConfigOverride'
+    type: object
+  types.SubscriptionConfigOverride:
+    properties:
+      auto_cancellation_enabled:
+        type: boolean
+      grace_period_days:
+        minimum: 0
+        type: integer
+    type: object
   types.TenantInternalStatus:
     enum:
     - trialing

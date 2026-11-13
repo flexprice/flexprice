@@ -96,6 +96,17 @@ type SubscriptionConfig struct {
 	AutoCancellationEnabled bool `json:"auto_cancellation_enabled"`
 }
 
+// SettingsOverride holds the environment settings a customer or subscription overrides; unset fields inherit.
+type SettingsOverride struct {
+	SubscriptionConfig *SubscriptionConfigOverride `json:"subscription_config,omitempty"`
+}
+
+// SubscriptionConfigOverride is the overridable subset of SubscriptionConfig.
+type SubscriptionConfigOverride struct {
+	GracePeriodDays         *int  `json:"grace_period_days,omitempty" validate:"omitempty,min=0"`
+	AutoCancellationEnabled *bool `json:"auto_cancellation_enabled,omitempty"`
+}
+
 // Validate implements SettingConfig interface
 func (c SubscriptionConfig) Validate() error {
 	return validator.ValidateRequest(c)

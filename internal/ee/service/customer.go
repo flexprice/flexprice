@@ -280,6 +280,9 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	if req.ContactPersons != nil {
 		cust.ContactPersons = req.ContactPersons
 	}
+	if req.Settings != nil {
+		cust.Settings = dto.NormalizeSettingsOverride(req.Settings)
+	}
 
 	// Update address fields
 	if req.AddressLine1 != nil {

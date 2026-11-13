@@ -113,6 +113,8 @@ type Subscription struct {
 	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty"`
 	// SyncedPriceSequence holds the value of the "synced_price_sequence" field.
 	SyncedPriceSequence int64 `json:"synced_price_sequence,omitempty"`
+	// Settings holds the value of the "settings" field.
+	Settings *types.SettingsOverride `json:"settings,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionQuery when eager-loading is set.
 	Edges        SubscriptionEdges `json:"edges"`
@@ -223,7 +225,7 @@ func (*Subscription) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case subscription.FieldCommitmentAmount, subscription.FieldOverageFactor, subscription.FieldAutoInvoiceThreshold:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
-		case subscription.FieldMetadata:
+		case subscription.FieldMetadata, subscription.FieldSettings:
 			values[i] = new([]byte)
 		case subscription.FieldCancelAtPeriodEnd, subscription.FieldEnableTrueUp:
 			values[i] = new(sql.NullBool)
@@ -545,6 +547,14 @@ func (_m *Subscription) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SyncedPriceSequence = value.Int64
 			}
+		case subscription.FieldSettings:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field settings", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Settings); err != nil {
+					return fmt.Errorf("unmarshal field settings: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -784,6 +794,9 @@ func (_m *Subscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("synced_price_sequence=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SyncedPriceSequence))
+	builder.WriteString(", ")
+	builder.WriteString("settings=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Settings))
 	builder.WriteByte(')')
 	return builder.String()
 }

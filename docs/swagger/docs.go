@@ -21613,6 +21613,14 @@ const docTemplate = `{
                     "description": "onboarding_workflow_name is given if a custom onboarding workflow is to be triggered for this customer",
                     "type": "string"
                 },
+                "settings": {
+                    "description": "settings overrides the environment settings for this customer's subscriptions",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
+                },
                 "skip_onboarding_workflow": {
                     "description": "skip_onboarding_workflow when true, prevents the customer onboarding workflow from being triggered\nThis is used internally when a customer is created via a workflow to prevent infinite loops\nDefault: false",
                     "type": "boolean"
@@ -22841,6 +22849,14 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "settings": {
+                    "description": "Settings overrides the customer and environment settings for this subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
+                },
                 "start_date": {
                     "type": "string"
                 },
@@ -23673,6 +23689,14 @@ const docTemplate = `{
                 "name": {
                     "description": "Name is the name of the customer",
                     "type": "string"
+                },
+                "settings": {
+                    "description": "Settings overrides the environment's settings for this customer's subscriptions.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -30203,6 +30227,14 @@ const docTemplate = `{
                 "proration_behavior": {
                     "$ref": "#/definitions/types.ProrationBehavior"
                 },
+                "settings": {
+                    "description": "Settings overrides the customer's and environment's settings for this subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
+                },
                 "start_date": {
                     "description": "StartDate is the start date of the subscription",
                     "type": "string"
@@ -30464,6 +30496,14 @@ const docTemplate = `{
                 },
                 "proration_behavior": {
                     "$ref": "#/definitions/types.ProrationBehavior"
+                },
+                "settings": {
+                    "description": "Settings overrides the customer's and environment's settings for this subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
                 },
                 "start_date": {
                     "description": "StartDate is the start date of the subscription",
@@ -31547,6 +31587,14 @@ const docTemplate = `{
                     "description": "name is the updated name or company name for the customer",
                     "type": "string"
                 },
+                "settings": {
+                    "description": "settings replaces the customer's setting overrides when provided; send {} to inherit the environment settings",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
+                },
                 "tax_treatment": {
                     "description": "tax_treatment is the updated tax treatment for the customer",
                     "allOf": [
@@ -32074,6 +32122,14 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
+                "settings": {
+                    "description": "Settings replaces the subscription's setting overrides when provided; send {} to inherit.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
                         }
                     ]
                 },
@@ -33438,6 +33494,14 @@ const docTemplate = `{
                 "name": {
                     "description": "Name is the name of the customer",
                     "type": "string"
+                },
+                "settings": {
+                    "description": "Settings overrides the environment's settings for this customer's subscriptions.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -40032,6 +40096,26 @@ const docTemplate = `{
                 "RevenueReportGroupByContract",
                 "RevenueReportGroupByPOB"
             ]
+        },
+        "types.SettingsOverride": {
+            "type": "object",
+            "properties": {
+                "subscription_config": {
+                    "$ref": "#/definitions/types.SubscriptionConfigOverride"
+                }
+            }
+        },
+        "types.SubscriptionConfigOverride": {
+            "type": "object",
+            "properties": {
+                "auto_cancellation_enabled": {
+                    "type": "boolean"
+                },
+                "grace_period_days": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
         },
         "types.TenantInternalStatus": {
             "type": "string",

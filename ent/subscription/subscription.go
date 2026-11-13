@@ -108,6 +108,8 @@ const (
 	FieldAutoInvoiceThreshold = "auto_invoice_threshold"
 	// FieldSyncedPriceSequence holds the string denoting the synced_price_sequence field in the database.
 	FieldSyncedPriceSequence = "synced_price_sequence"
+	// FieldSettings holds the string denoting the settings field in the database.
+	FieldSettings = "settings"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
@@ -233,6 +235,7 @@ var Columns = []string{
 	FieldSubscriptionType,
 	FieldAutoInvoiceThreshold,
 	FieldSyncedPriceSequence,
+	FieldSettings,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
