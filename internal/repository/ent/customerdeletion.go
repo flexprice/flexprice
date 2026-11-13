@@ -172,7 +172,7 @@ func (r *customerDeletionRepository) GetByCustomerID(ctx context.Context, custom
 	return domaincd.FromEnt(request), nil
 }
 
-// GetByExternalID retrieves the deletion request for a retired external ID
+// GetByExternalID retrieves the most recent deletion request for an external ID
 func (r *customerDeletionRepository) GetByExternalID(ctx context.Context, externalID string) (*domaincd.CustomerDeletionRequest, error) {
 	client := r.client.Reader(ctx)
 	request, err := client.CustomerDeletionRequest.
@@ -182,7 +182,8 @@ func (r *customerDeletionRepository) GetByExternalID(ctx context.Context, extern
 			customerdeletionrequest.TenantID(types.GetTenantID(ctx)),
 			customerdeletionrequest.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		Only(ctx)
+		Order(ent.Desc(customerdeletionrequest.FieldRequestedAt)).
+		First(ctx)
 
 	if err != nil {
 		if ent.IsNotFound(err) {
