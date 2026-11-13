@@ -152,7 +152,7 @@ func (r *ScheduledTaskRepository) Update(ctx context.Context, task *domainst.Sch
 	return nil
 }
 
-// UpdateSettings writes editable settings.
+// UpdateSettings writes name, schedule and updated_by only.
 func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask) error {
 	update := r.client.Writer(ctx).ScheduledTask.
 		UpdateOneID(task.ID).
@@ -160,7 +160,6 @@ func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *doma
 			scheduledtask.TenantID(types.GetTenantID(ctx)),
 			scheduledtask.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetEnabled(task.Enabled).
 		SetUpdatedBy(task.UpdatedBy)
 
 	if task.Name != "" {
@@ -172,11 +171,6 @@ func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *doma
 		update = update.SetSchedule(task.Schedule)
 	} else {
 		update = update.ClearSchedule()
-	}
-	if task.TemporalScheduleID != "" {
-		update = update.SetTemporalScheduleID(task.TemporalScheduleID)
-	} else {
-		update = update.ClearTemporalScheduleID()
 	}
 
 	saved, err := update.Save(ctx)
