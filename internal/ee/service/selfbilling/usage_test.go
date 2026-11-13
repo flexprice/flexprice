@@ -192,7 +192,7 @@ func TestPushUsage_USDConversion(t *testing.T) {
 	}
 }
 
-func TestPushUsage_MissingUSDRateSkipsRow(t *testing.T) {
+func TestPushUsage_MissingUSDRateSendsZero(t *testing.T) {
 	hour := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 
 	core, logs := observer.New(zap.ErrorLevel)
@@ -220,8 +220,23 @@ func TestPushUsage_MissingUSDRateSkipsRow(t *testing.T) {
 
 	require.NoError(t, s.pushUsage(context.Background(), usageNow))
 
-	ids := lo.Map(allIngested(fc), func(e usageEvent, _ int) string { return e.id })
-	assert.ElementsMatch(t, []string{"evt:us:t1:env_1:2026100109", "inv:us:t1:env_1:INR:2026100109"}, ids)
+	byID := lo.KeyBy(allIngested(fc), func(e usageEvent) string { return e.id })
+	assert.ElementsMatch(t, []string{
+		"evt:us:t1:env_1:2026100109",
+		"inv:us:t1:env_1:INR:2026100109",
+		"inv:us:t1:env_1:EUR:2026100109",
+		"inv:us:t1:env_2:EUR:2026100109",
+	}, lo.Keys(byID), "a row without a rate is still sent")
+
+	assert.Equal(t, "0.12", byID["inv:us:t1:env_1:INR:2026100109"].properties["amount"])
+	for _, id := range []string{"inv:us:t1:env_1:EUR:2026100109", "inv:us:t1:env_2:EUR:2026100109"} {
+		props := byID[id].properties
+		assert.Equal(t, "0", props["amount"], "nothing is billed until the rate exists")
+		assert.Equal(t, "10", props["total"], "the invoice amounts are kept for reprocessing")
+		assert.Equal(t, "EUR", props["currency"])
+		assert.NotContains(t, props, "usd_amount")
+		assert.NotContains(t, props, "usd_rate")
+	}
 
 	require.Equal(t, 1, logs.Len(), "one log names every currency without a rate")
 	assert.Equal(t, "[EUR]", fmt.Sprint(logs.All()[0].ContextMap()["currencies"]))

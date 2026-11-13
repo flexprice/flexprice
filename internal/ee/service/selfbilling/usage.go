@@ -100,43 +100,45 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 			continue
 		}
 
+		hour := inv.Hour.UTC()
 		currency := strings.ToUpper(inv.Currency)
-		usdRate, ok := usdRates[strings.ToLower(inv.Currency)]
-		if !ok {
-			missingRates = append(missingRates, currency)
-			continue
+		properties := map[string]string{
+			"amount":                        "0",
+			"total":                         inv.Total.String(),
+			"subtotal":                      inv.Subtotal.String(),
+			"total_discount":                inv.TotalDiscount.String(),
+			"total_prepaid_credits_applied": inv.TotalPrepaidCreditsApplied.String(),
+			"total_tax":                     inv.TotalTax.String(),
+			"amount_due":                    inv.AmountDue.String(),
+			"amount_paid":                   inv.AmountPaid.String(),
+			"invoice_count":                 strconv.FormatUint(inv.InvoiceCount, 10),
+			"currency":                      currency,
+			"environment_id":                inv.EnvironmentID,
+			"environment_type":              lo.CoalesceOrEmpty(envTypes[inv.EnvironmentID], types.EnvironmentProduction).String(),
+			"region":                        region,
 		}
 
-		hour := inv.Hour.UTC()
-		usdAmount := types.RoundToCurrencyPrecision(inv.Total.Mul(usdRate), usdCurrency).String()
+		// A row without a rate still goes out with amount 0 and no usd_* fields, so Flexprice Cloud keeps it for reprocessing.
+		if usdRate, ok := usdRates[strings.ToLower(inv.Currency)]; ok {
+			usdAmount := types.RoundToCurrencyPrecision(inv.Total.Mul(usdRate), usdCurrency).String()
+			properties["amount"] = usdAmount
+			properties["usd_amount"] = usdAmount
+			properties["usd_rate"] = usdRate.String()
+		} else {
+			missingRates = append(missingRates, currency)
+		}
+
 		events = append(events, usageEvent{
-			id:        strings.Join([]string{"inv", region, inv.TenantID, inv.EnvironmentID, currency, hour.Format(eventHourFormat)}, ":"),
-			name:      eventNameInvoiceValue,
-			extID:     s.extID(inv.TenantID),
-			timestamp: hour,
-			properties: map[string]string{
-				"amount":                        usdAmount,
-				"usd_amount":                    usdAmount,
-				"usd_rate":                      usdRate.String(),
-				"total":                         inv.Total.String(),
-				"subtotal":                      inv.Subtotal.String(),
-				"total_discount":                inv.TotalDiscount.String(),
-				"total_prepaid_credits_applied": inv.TotalPrepaidCreditsApplied.String(),
-				"total_tax":                     inv.TotalTax.String(),
-				"amount_due":                    inv.AmountDue.String(),
-				"amount_paid":                   inv.AmountPaid.String(),
-				"invoice_count":                 strconv.FormatUint(inv.InvoiceCount, 10),
-				"currency":                      currency,
-				"environment_id":                inv.EnvironmentID,
-				"environment_type":              lo.CoalesceOrEmpty(envTypes[inv.EnvironmentID], types.EnvironmentProduction).String(),
-				"region":                        region,
-			},
+			id:         strings.Join([]string{"inv", region, inv.TenantID, inv.EnvironmentID, currency, hour.Format(eventHourFormat)}, ":"),
+			name:       eventNameInvoiceValue,
+			extID:      s.extID(inv.TenantID),
+			timestamp:  hour,
+			properties: properties,
 		})
 	}
 
-	// A later run inside the lookback sends a skipped row once its rate exists on Flexprice Cloud.
 	if len(missingRates) > 0 {
-		s.Logger.Error(ctx, "self-billing invoice value skipped for currencies without a USD rate",
+		s.Logger.Error(ctx, "self-billing invoice value sent with amount 0 for currencies without a USD rate",
 			"error", "no fx rate to usd on flexprice cloud",
 			"currencies", lo.Uniq(missingRates),
 		)

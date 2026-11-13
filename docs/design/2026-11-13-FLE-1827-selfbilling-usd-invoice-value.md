@@ -44,7 +44,7 @@ Flexprice Cloud bills each tenant 0.5% of its finalized invoice value, priced in
 
 - If any invoice row is non-USD, `USDRates` is called once. A USD-only push never calls it. A failed call fails the push like any other read failure, and the next hourly run re-sends the lookback window.
 - USD rows use rate `1`.
-- A row whose currency has no rate is skipped. One `Error` log names the missing currencies. The 6-hour lookback recovers the row if the rate is added in time.
+- A row whose currency has no rate is still sent, with `amount = 0` and no `usd_amount` or `usd_rate`, so Flexprice Cloud keeps its invoice amounts and nothing is billed for it. One `Error` log names the missing currencies. See §5 for recovering these rows.
 - `usd_amount = RoundToCurrencyPrecision(total × usd_rate, "usd")`, the helper invoice conversion already uses.
 
 ### 4.3 Event properties
@@ -54,7 +54,7 @@ Flexprice Cloud bills each tenant 0.5% of its finalized invoice value, priced in
 | `currency`, `total`, `subtotal`, `total_discount`, `total_prepaid_credits_applied`, `total_tax`, `amount_due`, `amount_paid` | Unchanged, in the invoice currency |
 | `usd_rate` (new) | Rate used, `1` for USD |
 | `usd_amount` (new) | `total × usd_rate`, rounded to cents; equal to `total` for USD |
-| `amount` | Equal to `usd_amount` |
+| `amount` | Equal to `usd_amount`; `0` when the currency has no rate |
 
 `amount` was only ever a copy of `total` for the meter. A meter's aggregation field cannot be changed once created, so pointing the meter at `usd_amount` would need a new meter, a new plan price and a move of every subscription. Redefining `amount` needs no change on Flexprice Cloud, and past USD events already hold the right value.
 
@@ -62,5 +62,19 @@ The event ID keeps the invoice currency (`inv:<region>:<tenant>:<env>:<CURRENCY>
 
 ## 5. Rollout
 
-1. Create the FX rates on Flexprice Cloud before deploying, for every currency tenants invoice in. Otherwise those rows are skipped and lost after 6 hours.
-2. Hours sent before the deploy keep `amount` in their own currency. Re-sends reuse their IDs, so they are never corrected. Whether to fix the current period for non-USD tenants is an ops decision.
+How Flexprice Cloud treats these events decides the order:
+
+- Meter filters are applied when an event is processed into `meter_usage`, not when an invoice is computed. A filter change only affects events processed after it.
+- Updating a meter only adds filter values (`mergeFilters`); it cannot remove a filter.
+- Raw `events` keep the latest re-send of an ID. Billing reads `meter_usage FINAL`, which skips a repeated ID for 24 hours when Redis deduplication is on, so a correction may need a reprocess.
+
+Steps:
+
+1. Create the FX rates on Flexprice Cloud for every currency tenants invoice in.
+2. Deploy every region.
+3. Remove the `currency = USD` filter from the `invoice_value` meter on Flexprice Cloud. The API cannot remove it, so it is a direct edit of the meter's `filters`. Do it after step 2 and before the next hourly push (pushes run at :20), so no region sends a native-currency `amount` past the meter, and no converted row is dropped.
+4. If step 3 lands after a push, reprocess that customer's events on Flexprice Cloud for the hours between the deploy and the filter change. Their raw events already hold the USD amount.
+
+Rows sent with `amount = 0` (no rate): add the rate, and the next re-send inside the 6-hour lookback carries the USD amount; reprocess on Flexprice Cloud if billing still shows 0. Older rows need re-ingesting on Flexprice Cloud with the same event ID and the USD amount, then a reprocess.
+
+Hours sent before the deploy were dropped by the `currency = USD` filter when processed and stay out of billing. Whether to bill them for the current period is an ops decision.
