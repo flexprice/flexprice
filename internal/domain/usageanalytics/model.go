@@ -1,6 +1,6 @@
-// Package costanalytics holds the types of the cost analytics query: who spent what, attributed
+// Package usageanalytics holds the types of the usage analytics query: who spent what, attributed
 // per event from the customer's own billed prices.
-package costanalytics
+package usageanalytics
 
 import (
 	"fmt"
@@ -106,8 +106,8 @@ type Filter struct {
 type SortField string
 
 const (
-	SortTotal      SortField = "total"       // cost
-	SortColumn     SortField = "column"      // cost in one column value
+	SortAmount      SortField = "amount"      // amount after discounts
+	SortColumn     SortField = "column"      // amount in one column value
 	SortName       SortField = "name"        // group values
 	SortUsage      SortField = "usage"       // quantity
 	SortEventCount SortField = "event_count" // number of events
@@ -141,7 +141,7 @@ func (m Metric) Name() string {
 	return fmt.Sprintf("%s:%s", m.Type, m.Key)
 }
 
-// Query is a validated cost analytics request.
+// Query is a validated usage analytics request.
 type Query struct {
 	CustomerID          string
 	ExternalCustomerIDs []string
@@ -156,7 +156,7 @@ type Query struct {
 	Sort                Sort
 	Metrics             []Metric
 	Deduplicate         bool
-	// WindowSize (DAY, WEEK or MONTH) adds cost per time window to each row and to the totals.
+	// WindowSize (DAY, WEEK or MONTH) adds amount per time window to each row and to the totals.
 	WindowSize types.WindowSize
 	// WithLineItemIDs adds the line items behind each row, for expanding rows to prices and plans.
 	WithLineItemIDs bool
@@ -225,7 +225,7 @@ func (q *Query) Validate() error {
 		}
 	}
 	switch q.Sort.Field {
-	case SortTotal, SortName, SortUsage, SortEventCount:
+	case SortAmount, SortName, SortUsage, SortEventCount:
 	case SortColumn:
 		if q.Columns == nil {
 			return validationErr("sort by column needs columns")
@@ -324,26 +324,29 @@ type LineWindow struct {
 	Segment             BillingPeriodSegment
 	Start, End          time.Time // line active range clipped to the segment; end exclusive
 	Currency            string
-	UnitPrice           decimal.Decimal
+	UnitPrice           decimal.Decimal // after discounts
+	ListUnitPrice       decimal.Decimal // before discounts; equals UnitPrice when none apply
 }
 
 // Row is one group of the result. Group values follow Query.GroupBy; an empty value means the
 // events had no such key.
 type Row struct {
 	Group       []string
-	Cost        decimal.Decimal // unrounded
+	Amount      decimal.Decimal // unrounded, after discounts
+	Subtotal    decimal.Decimal // unrounded, before discounts
 	Quantity    decimal.Decimal
 	EventCount  uint64
-	Columns     map[string]decimal.Decimal // cost per column value, when columns are requested
+	Columns     map[string]decimal.Decimal // amount per column value, when columns are requested
 	Metrics     map[string]MetricValue     // keyed by Metric.Name()
 	LineItemIDs []string                   // with Query.WithLineItemIDs
 	Points      []Point                    // with Query.WindowSize: windows with events, oldest first
 }
 
-// Point is a row's or the totals' cost in one time window.
+// Point is a row's or the totals' amount in one time window.
 type Point struct {
 	WindowStart time.Time
-	Cost        decimal.Decimal // unrounded
+	Amount      decimal.Decimal // unrounded, after discounts
+	Subtotal    decimal.Decimal // unrounded, before discounts
 	Quantity    decimal.Decimal
 }
 

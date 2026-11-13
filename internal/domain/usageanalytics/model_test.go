@@ -1,4 +1,4 @@
-package costanalytics
+package usageanalytics
 
 import (
 	"testing"
@@ -51,7 +51,7 @@ func TestQueryValidate(t *testing.T) {
 			End:      time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC),
 			Timezone: time.UTC,
 			GroupBy:  []Key{user},
-			Sort:     Sort{Field: SortTotal, Desc: true},
+			Sort:     Sort{Field: SortAmount, Desc: true},
 			Limit:    DefaultLimit,
 		}
 	}
@@ -101,7 +101,7 @@ func TestValidateRejectsKeysParseKeyCannotProduce(t *testing.T) {
 	base := func() *Query {
 		return &Query{
 			Start: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), End: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC),
-			Timezone: time.UTC, GroupBy: []Key{{Kind: KeySource}}, Sort: Sort{Field: SortTotal}, Limit: 10,
+			Timezone: time.UTC, GroupBy: []Key{{Kind: KeySource}}, Sort: Sort{Field: SortAmount}, Limit: 10,
 		}
 	}
 	unknown := Key{Kind: "unknown"}
@@ -188,7 +188,7 @@ func TestValidateWindowSize(t *testing.T) {
 		start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 		return &Query{
 			Start: start, End: start.AddDate(0, 0, days), Timezone: time.UTC, WindowSize: size,
-			GroupBy: []Key{{Kind: KeySource}}, Sort: Sort{Field: SortTotal}, Limit: 10,
+			GroupBy: []Key{{Kind: KeySource}}, Sort: Sort{Field: SortAmount}, Limit: 10,
 		}
 	}
 	require.NoError(t, q(types.WindowSizeDay, MaxWindows).Validate())

@@ -7,23 +7,23 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clickhouse"
-	"github.com/flexprice/flexprice/internal/domain/costanalytics"
+	"github.com/flexprice/flexprice/internal/domain/usageanalytics"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/shopspring/decimal"
 )
 
-// costAnalyticsRepository implements costanalytics.Repository on meter_usage.
-type costAnalyticsRepository struct {
+// usageQueryRepository implements usageanalytics.Repository on meter_usage.
+type usageQueryRepository struct {
 	store  *clickhouse.ClickHouseStore
 	logger *logger.Logger
 }
 
-func NewCostAnalyticsRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger) costanalytics.Repository {
-	return &costAnalyticsRepository{store: store, logger: logger}
+func NewUsageQueryRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger) usageanalytics.Repository {
+	return &usageQueryRepository{store: store, logger: logger}
 }
 
-func (r *costAnalyticsRepository) GetCostBreakdown(ctx context.Context, params *costanalytics.QueryParams) (*costanalytics.Result, error) {
+func (r *usageQueryRepository) GetBreakdown(ctx context.Context, params *usageanalytics.QueryParams) (*usageanalytics.Result, error) {
 	if params == nil || params.Query == nil {
 		return nil, ierr.NewError("params and query are required").Mark(ierr.ErrValidation)
 	}
@@ -31,10 +31,10 @@ func (r *costAnalyticsRepository) GetCostBreakdown(ctx context.Context, params *
 		return nil, err
 	}
 	if len(params.Lines) == 0 {
-		return &costanalytics.Result{Items: []costanalytics.Row{}, Totals: emptyCostRow()}, nil
+		return &usageanalytics.Result{Items: []usageanalytics.Row{}, Totals: emptyUsageRow()}, nil
 	}
 
-	span := StartRepositorySpan(ctx, "meter_usage", "get_cost_breakdown", map[string]interface{}{
+	span := StartRepositorySpan(ctx, "meter_usage", "get_usage_breakdown", map[string]interface{}{
 		"line_windows": len(params.Lines),
 		"group_by":     len(params.Query.GroupBy),
 		"deduplicate":  params.Query.Deduplicate,
@@ -51,7 +51,7 @@ func (r *costAnalyticsRepository) GetCostBreakdown(ctx context.Context, params *
 	if len(result.Items) == 0 && params.Query.Offset > 0 {
 		q := *params.Query
 		q.Limit, q.Offset = 1, 0
-		first, err := r.run(ctx, &costanalytics.QueryParams{
+		first, err := r.run(ctx, &usageanalytics.QueryParams{
 			TenantID: params.TenantID, EnvironmentID: params.EnvironmentID, Query: &q, Lines: params.Lines,
 		})
 		if err != nil {
@@ -72,38 +72,38 @@ func (r *costAnalyticsRepository) GetCostBreakdown(ctx context.Context, params *
 	return result, nil
 }
 
-func (r *costAnalyticsRepository) run(ctx context.Context, params *costanalytics.QueryParams) (*costanalytics.Result, error) {
+func (r *usageQueryRepository) run(ctx context.Context, params *usageanalytics.QueryParams) (*usageanalytics.Result, error) {
 	q := params.Query
-	built := buildCostBreakdownSQL(params)
+	built := buildBreakdownSQL(params)
 
 	rows, err := r.store.GetConn().Query(ctx, built.query, built.args...)
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to query cost breakdown").
+			WithHint("Failed to query usage breakdown").
 			Mark(ierr.ErrDatabase)
 	}
 	defer rows.Close()
 
-	result := &costanalytics.Result{Items: []costanalytics.Row{}, Totals: emptyCostRow()}
+	result := &usageanalytics.Result{Items: []usageanalytics.Row{}, Totals: emptyUsageRow()}
 	for rows.Next() {
 		var (
-			group                   = make([]string, len(q.GroupBy))
-			cost, qty               string
-			events                  uint64
-			columns                 map[string]string
-			lineIDs                 []string
-			metricCounts            = make([]uint64, len(q.Metrics))
-			metricValues            = make([][]string, len(q.Metrics))
-			totalCount, totalEvents uint64
-			totalCost, totalQty     string
-			totalColumns            map[string]string
+			group                                = make([]string, len(q.GroupBy))
+			amount, subtotal, qty                string
+			events                               uint64
+			columns                              map[string]string
+			lineIDs                              []string
+			metricCounts                         = make([]uint64, len(q.Metrics))
+			metricValues                         = make([][]string, len(q.Metrics))
+			totalCount, totalEvents              uint64
+			totalAmount, totalSubtotal, totalQty string
+			totalColumns                         map[string]string
 		)
 
 		targets := make([]any, 0, len(group)+12+2*len(q.Metrics))
 		for i := range group {
 			targets = append(targets, &group[i])
 		}
-		targets = append(targets, &cost, &qty, &events)
+		targets = append(targets, &amount, &subtotal, &qty, &events)
 		if q.Columns != nil {
 			targets = append(targets, &columns)
 		}
@@ -113,14 +113,14 @@ func (r *costAnalyticsRepository) run(ctx context.Context, params *costanalytics
 		for i := range q.Metrics {
 			targets = append(targets, &metricCounts[i], &metricValues[i])
 		}
-		targets = append(targets, &totalCount, &totalCost, &totalQty, &totalEvents)
+		targets = append(targets, &totalCount, &totalAmount, &totalSubtotal, &totalQty, &totalEvents)
 		if q.Columns != nil {
 			targets = append(targets, &totalColumns)
 		}
 
 		if err := rows.Scan(targets...); err != nil {
 			return nil, ierr.WithError(err).
-				WithHint("Failed to scan cost breakdown row").
+				WithHint("Failed to scan usage breakdown row").
 				Mark(ierr.ErrDatabase)
 		}
 
@@ -143,35 +143,37 @@ func (r *costAnalyticsRepository) run(ctx context.Context, params *costanalytics
 			return out
 		}
 
-		row := costanalytics.Row{
+		row := usageanalytics.Row{
 			Group:      group,
-			Cost:       dec(cost),
+			Amount:     dec(amount),
+			Subtotal:   dec(subtotal),
 			Quantity:   dec(qty),
 			EventCount: events,
 			Columns:    decMap(columns),
-			Metrics:    make(map[string]costanalytics.MetricValue, len(q.Metrics)),
+			Metrics:    make(map[string]usageanalytics.MetricValue, len(q.Metrics)),
 		}
 		if q.WithLineItemIDs {
 			sort.Strings(lineIDs)
 			row.LineItemIDs = lineIDs
 		}
 		for i, m := range q.Metrics {
-			v := costanalytics.MetricValue{Count: metricCounts[i]}
-			if metricCounts[i] <= costanalytics.MaxDistinctValues {
+			v := usageanalytics.MetricValue{Count: metricCounts[i]}
+			if metricCounts[i] <= usageanalytics.MaxDistinctValues {
 				v.Values = metricValues[i]
 				sort.Strings(v.Values)
 			}
 			row.Metrics[m.Name()] = v
 		}
-		totals := costanalytics.Row{
-			Cost:       dec(totalCost),
+		totals := usageanalytics.Row{
+			Amount:     dec(totalAmount),
+			Subtotal:   dec(totalSubtotal),
 			Quantity:   dec(totalQty),
 			EventCount: totalEvents,
 			Columns:    decMap(totalColumns),
 		}
 		if parseErr != nil {
 			return nil, ierr.WithError(parseErr).
-				WithHint("Failed to parse cost breakdown amounts").
+				WithHint("Failed to parse usage breakdown amounts").
 				Mark(ierr.ErrDatabase)
 		}
 		result.Items = append(result.Items, row)
@@ -179,57 +181,61 @@ func (r *costAnalyticsRepository) run(ctx context.Context, params *costanalytics
 	}
 	if err := rows.Err(); err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to read cost breakdown rows").
+			WithHint("Failed to read usage breakdown rows").
 			Mark(ierr.ErrDatabase)
 	}
 	return result, nil
 }
 
-// addPoints reads cost per window for the page rows and the totals.
-func (r *costAnalyticsRepository) addPoints(ctx context.Context, params *costanalytics.QueryParams, result *costanalytics.Result) error {
+// addPoints reads amount per window for the page rows and the totals.
+func (r *usageQueryRepository) addPoints(ctx context.Context, params *usageanalytics.QueryParams, result *usageanalytics.Result) error {
 	q := params.Query
 	groupID := func(group []string) string { b, _ := json.Marshal(group); return string(b) } // injective, unlike a separator
-	rowByGroup := make(map[string]*costanalytics.Row, len(result.Items))
+	rowByGroup := make(map[string]*usageanalytics.Row, len(result.Items))
 	pageGroups := make([][]string, 0, len(result.Items))
 	for i := range result.Items {
 		rowByGroup[groupID(result.Items[i].Group)] = &result.Items[i]
 		pageGroups = append(pageGroups, result.Items[i].Group)
 	}
 
-	built := buildCostPointsSQL(params, pageGroups)
+	built := buildPointsSQL(params, pageGroups)
 	rows, err := r.store.GetConn().Query(ctx, built.query, built.args...)
 	if err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to query cost over time").
+			WithHint("Failed to query amount over time").
 			Mark(ierr.ErrDatabase)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var (
-			isTotal           uint8
-			group             = make([]string, len(q.GroupBy))
-			window, cost, qty string
+			isTotal                       uint8
+			group                         = make([]string, len(q.GroupBy))
+			window, amount, subtotal, qty string
 		)
 		targets := []any{&isTotal}
 		for i := range group {
 			targets = append(targets, &group[i])
 		}
-		targets = append(targets, &window, &cost, &qty)
+		targets = append(targets, &window, &amount, &subtotal, &qty)
 		if err := rows.Scan(targets...); err != nil {
 			return ierr.WithError(err).
-				WithHint("Failed to scan cost over time").
+				WithHint("Failed to scan amount over time").
 				Mark(ierr.ErrDatabase)
 		}
 
 		day, err := time.Parse(time.DateOnly, window)
 		if err != nil {
-			return ierr.WithError(err).WithHint("Failed to parse cost window").Mark(ierr.ErrDatabase)
+			return ierr.WithError(err).WithHint("Failed to parse amount window").Mark(ierr.ErrDatabase)
 		}
-		start := costanalytics.DateStart(day.Year(), day.Month(), day.Day(), q.Timezone)
-		c, err := decimal.NewFromString(cost)
+		start := usageanalytics.DateStart(day.Year(), day.Month(), day.Day(), q.Timezone)
+		c, err := decimal.NewFromString(amount)
 		if err != nil {
-			return ierr.WithError(err).WithHint("Failed to parse cost over time").Mark(ierr.ErrDatabase)
+			return ierr.WithError(err).WithHint("Failed to parse amount over time").Mark(ierr.ErrDatabase)
+		}
+		sub, err := decimal.NewFromString(subtotal)
+		if err != nil {
+			return ierr.WithError(err).WithHint("Failed to parse subtotal over time").Mark(ierr.ErrDatabase)
 		}
 		n, err := decimal.NewFromString(qty)
 		if err != nil {
@@ -242,11 +248,11 @@ func (r *costAnalyticsRepository) addPoints(ctx context.Context, params *costana
 				continue
 			}
 		}
-		target.Points = append(target.Points, costanalytics.Point{WindowStart: start, Cost: c, Quantity: n})
+		target.Points = append(target.Points, usageanalytics.Point{WindowStart: start, Amount: c, Subtotal: sub, Quantity: n})
 	}
 	if err := rows.Err(); err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to read cost over time").
+			WithHint("Failed to read amount over time").
 			Mark(ierr.ErrDatabase)
 	}
 
@@ -257,10 +263,10 @@ func (r *costAnalyticsRepository) addPoints(ctx context.Context, params *costana
 	return nil
 }
 
-func sortPoints(points []costanalytics.Point) {
+func sortPoints(points []usageanalytics.Point) {
 	sort.Slice(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
 }
 
-func emptyCostRow() costanalytics.Row {
-	return costanalytics.Row{Cost: decimal.Zero, Quantity: decimal.Zero}
+func emptyUsageRow() usageanalytics.Row {
+	return usageanalytics.Row{Amount: decimal.Zero, Subtotal: decimal.Zero, Quantity: decimal.Zero}
 }

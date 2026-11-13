@@ -156,7 +156,7 @@ func main() {
 			repository.NewEventRepository,
 			repository.NewProcessedEventRepository,
 			repository.NewMeterUsageRepository,
-			repository.NewCostAnalyticsRepository,
+			repository.NewUsageQueryRepository,
 			repository.NewActivityRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
@@ -360,7 +360,7 @@ func main() {
 			service.NewWorkflowExecutionService,
 			service.NewWorkflowService,
 			service.NewAnalyticsService,
-			service.NewCostAnalyticsService,
+			service.NewUsageQueryService,
 		),
 	)
 
@@ -472,7 +472,7 @@ func provideHandlers(
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
 	analyticsService service.AnalyticsService,
-	costAnalyticsService service.CostAnalyticsService,
+	usageQueryService service.UsageQueryService,
 	revenueService interfaces.RevenueService,
 	selfBillingService selfbilling.Service,
 ) api.Handlers {
@@ -543,7 +543,7 @@ func provideHandlers(
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
 		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
-		Analytics:                v1.NewAnalyticsHandler(analyticsService, revenueService, costAnalyticsService, logger),
+		Analytics:                v1.NewAnalyticsHandler(analyticsService, revenueService, usageQueryService, logger),
 	}
 }
 

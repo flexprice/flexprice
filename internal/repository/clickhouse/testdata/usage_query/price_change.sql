@@ -7,14 +7,16 @@ lines AS (
         l.4 AS customer_id,
         toDateTime(l.5, 'UTC') AS w_start,
         toDateTime(l.6, 'UTC') AS w_end,
-        toDecimal256(l.7, 20) AS unit_price
-    FROM (SELECT arrayJoin(arrayZip(@line_ids, @line_meter_ids, @line_feature_ids, @line_customer_ids, @line_starts, @line_ends, @line_unit_prices)) AS l)
+        toDecimal256(l.7, 20) AS unit_price,
+        toDecimal256(l.8, 20) AS list_unit_price
+    FROM (SELECT arrayJoin(arrayZip(@line_ids, @line_meter_ids, @line_feature_ids, @line_customer_ids, @line_starts, @line_ends, @line_unit_prices, @line_list_unit_prices)) AS l)
 ),
 priced AS (
     SELECT
         mu.qty_total AS qty,
         l.line_id AS line_id,
-        toDecimal256(mu.qty_total, 15) * l.unit_price AS cost,
+        toDecimal256(mu.qty_total, 15) * l.unit_price AS amount,
+        toDecimal256(mu.qty_total, 15) * l.list_unit_price AS subtotal,
         if(JSONType(mu.properties, 'user') = 'String', JSONExtractString(mu.properties, 'user'), JSONExtractRaw(mu.properties, 'user')) AS k0
     FROM meter_usage AS mu
     INNER JOIN lines AS l ON mu.meter_id = l.meter_id AND mu.external_customer_id = l.customer_id
@@ -30,7 +32,8 @@ priced AS (
 grouped AS (
     SELECT
         k0,
-        sum(cost) AS g_cost,
+        sum(amount) AS g_amount,
+        sum(subtotal) AS g_subtotal,
         sum(qty) AS g_qty,
         count() AS g_events
     FROM priced
@@ -38,15 +41,17 @@ grouped AS (
 )
 SELECT
     k0,
-    toString(g_cost),
+    toString(g_amount),
+    toString(g_subtotal),
     toString(g_qty),
     g_events,
     count() OVER () AS total_count,
-    toString(sum(g_cost) OVER ()),
+    toString(sum(g_amount) OVER ()),
+    toString(sum(g_subtotal) OVER ()),
     toString(sum(g_qty) OVER ()),
     sum(g_events) OVER ()
 FROM grouped
-ORDER BY g_cost DESC, k0 ASC
+ORDER BY g_amount DESC, k0 ASC
 LIMIT @limit OFFSET @offset
 SETTINGS max_memory_usage = 96636764160
 
@@ -58,6 +63,7 @@ SETTINGS max_memory_usage = 96636764160
 -- @line_starts = [1790812800 1792022400]
 -- @line_ends = [1792022400 1793491200]
 -- @line_unit_prices = [0.002 0.003]
+-- @line_list_unit_prices = [0.002 0.003]
 -- @tenant_id = tenant_1
 -- @environment_id = env_1
 -- @customer_ids = [cust_a]

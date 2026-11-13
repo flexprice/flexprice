@@ -7,82 +7,83 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/domain/costanalytics"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/usageanalytics"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-// InMemoryCostAnalyticsStore implements costanalytics.Repository over an InMemoryMeterUsageStore.
-// It mirrors the ClickHouse cost query in plain Go and serves as its reference in tests.
-type InMemoryCostAnalyticsStore struct {
+// InMemoryUsageQueryStore implements usageanalytics.Repository over an InMemoryMeterUsageStore.
+// It mirrors the ClickHouse usage query in plain Go and serves as its reference in tests.
+type InMemoryUsageQueryStore struct {
 	usage *InMemoryMeterUsageStore
 }
 
-func NewInMemoryCostAnalyticsStore(usage *InMemoryMeterUsageStore) *InMemoryCostAnalyticsStore {
-	return &InMemoryCostAnalyticsStore{usage: usage}
+func NewInMemoryUsageQueryStore(usage *InMemoryMeterUsageStore) *InMemoryUsageQueryStore {
+	return &InMemoryUsageQueryStore{usage: usage}
 }
 
 type pricedEvent struct {
-	lineID    string
-	ts        time.Time
-	qty, cost decimal.Decimal
-	keys      map[costanalytics.Key]string
+	lineID                string
+	ts                    time.Time
+	qty, amount, subtotal decimal.Decimal
+	keys                  map[usageanalytics.Key]string
 }
 
-type costGroup struct {
-	row     costanalytics.Row
+type usageGroup struct {
+	row     usageanalytics.Row
 	metrics []map[string]bool
 	lines   map[string]bool
-	points  map[int64]*costanalytics.Point
+	points  map[int64]*usageanalytics.Point
 }
 
-// addPoint adds an event's cost to its window.
-func addPoint(points map[int64]*costanalytics.Point, q *costanalytics.Query, ev pricedEvent) {
-	start := costanalytics.WindowStart(ev.ts, q.WindowSize, q.Timezone)
+// addPoint adds an event's amount to its window.
+func addPoint(points map[int64]*usageanalytics.Point, q *usageanalytics.Query, ev pricedEvent) {
+	start := usageanalytics.WindowStart(ev.ts, q.WindowSize, q.Timezone)
 	p, ok := points[start.Unix()]
 	if !ok {
-		p = &costanalytics.Point{WindowStart: start, Cost: decimal.Zero, Quantity: decimal.Zero}
+		p = &usageanalytics.Point{WindowStart: start, Amount: decimal.Zero, Subtotal: decimal.Zero, Quantity: decimal.Zero}
 		points[start.Unix()] = p
 	}
-	p.Cost = p.Cost.Add(ev.cost)
+	p.Amount = p.Amount.Add(ev.amount)
+	p.Subtotal = p.Subtotal.Add(ev.subtotal)
 	p.Quantity = p.Quantity.Add(ev.qty)
 }
 
-func sortedPoints(points map[int64]*costanalytics.Point) []costanalytics.Point {
+func sortedPoints(points map[int64]*usageanalytics.Point) []usageanalytics.Point {
 	if len(points) == 0 {
 		return nil
 	}
-	out := lo.Map(lo.Values(points), func(p *costanalytics.Point, _ int) costanalytics.Point { return *p })
+	out := lo.Map(lo.Values(points), func(p *usageanalytics.Point, _ int) usageanalytics.Point { return *p })
 	sort.Slice(out, func(i, j int) bool { return out[i].WindowStart.Before(out[j].WindowStart) })
 	return out
 }
 
-func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params *costanalytics.QueryParams) (*costanalytics.Result, error) {
+func (s *InMemoryUsageQueryStore) GetBreakdown(_ context.Context, params *usageanalytics.QueryParams) (*usageanalytics.Result, error) {
 	q := params.Query
 	if err := q.Validate(); err != nil {
 		return nil, err
 	}
-	result := &costanalytics.Result{Items: []costanalytics.Row{}, Totals: costanalytics.Row{Cost: decimal.Zero, Quantity: decimal.Zero}}
+	result := &usageanalytics.Result{Items: []usageanalytics.Row{}, Totals: usageanalytics.Row{Amount: decimal.Zero, Subtotal: decimal.Zero, Quantity: decimal.Zero}}
 	if len(params.Lines) == 0 {
 		return result, nil
 	}
 
-	groups := map[string]*costGroup{}
-	totalPoints := map[int64]*costanalytics.Point{}
+	groups := map[string]*usageGroup{}
+	totalPoints := map[int64]*usageanalytics.Point{}
 	for _, ev := range s.pricedEvents(params) {
-		if !matchesCostFilters(q, ev) {
+		if !matchesUsageFilters(q, ev) {
 			continue
 		}
-		group := lo.Map(q.GroupBy, func(k costanalytics.Key, _ int) string { return ev.keys[k] })
+		group := lo.Map(q.GroupBy, func(k usageanalytics.Key, _ int) string { return ev.keys[k] })
 		id := groupID(group)
 		g, ok := groups[id]
 		if !ok {
-			g = &costGroup{
-				row:     costanalytics.Row{Group: group, Cost: decimal.Zero, Quantity: decimal.Zero, Metrics: map[string]costanalytics.MetricValue{}},
+			g = &usageGroup{
+				row:     usageanalytics.Row{Group: group, Amount: decimal.Zero, Subtotal: decimal.Zero, Quantity: decimal.Zero, Metrics: map[string]usageanalytics.MetricValue{}},
 				metrics: make([]map[string]bool, len(q.Metrics)),
 				lines:   map[string]bool{},
-				points:  map[int64]*costanalytics.Point{},
+				points:  map[int64]*usageanalytics.Point{},
 			}
 			for i := range g.metrics {
 				g.metrics[i] = map[string]bool{}
@@ -92,7 +93,8 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 			}
 			groups[id] = g
 		}
-		g.row.Cost = g.row.Cost.Add(ev.cost)
+		g.row.Amount = g.row.Amount.Add(ev.amount)
+		g.row.Subtotal = g.row.Subtotal.Add(ev.subtotal)
 		g.row.Quantity = g.row.Quantity.Add(ev.qty)
 		g.row.EventCount++
 		g.lines[ev.lineID] = true
@@ -102,7 +104,7 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 		}
 		if q.Columns != nil {
 			c := ev.keys[*q.Columns]
-			g.row.Columns[c] = g.row.Columns[c].Add(ev.cost)
+			g.row.Columns[c] = g.row.Columns[c].Add(ev.amount)
 		}
 		for i, m := range q.Metrics {
 			if v := ev.keys[m.Key]; v != "" {
@@ -114,15 +116,15 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 		return result, nil
 	}
 
-	rows := make([]costanalytics.Row, 0, len(groups))
-	totals := costanalytics.Row{Cost: decimal.Zero, Quantity: decimal.Zero}
+	rows := make([]usageanalytics.Row, 0, len(groups))
+	totals := usageanalytics.Row{Amount: decimal.Zero, Subtotal: decimal.Zero, Quantity: decimal.Zero}
 	if q.Columns != nil {
 		totals.Columns = map[string]decimal.Decimal{}
 	}
 	for _, g := range groups {
 		for i, m := range q.Metrics {
-			v := costanalytics.MetricValue{Count: uint64(len(g.metrics[i]))}
-			if v.Count <= costanalytics.MaxDistinctValues {
+			v := usageanalytics.MetricValue{Count: uint64(len(g.metrics[i]))}
+			if v.Count <= usageanalytics.MaxDistinctValues {
 				v.Values = lo.Keys(g.metrics[i])
 				sort.Strings(v.Values)
 			}
@@ -133,7 +135,8 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 			sort.Strings(g.row.LineItemIDs)
 		}
 		g.row.Points = sortedPoints(g.points)
-		totals.Cost = totals.Cost.Add(g.row.Cost)
+		totals.Amount = totals.Amount.Add(g.row.Amount)
+		totals.Subtotal = totals.Subtotal.Add(g.row.Subtotal)
 		totals.Quantity = totals.Quantity.Add(g.row.Quantity)
 		totals.EventCount += g.row.EventCount
 		for c, v := range g.row.Columns {
@@ -141,7 +144,7 @@ func (s *InMemoryCostAnalyticsStore) GetCostBreakdown(_ context.Context, params 
 		}
 		rows = append(rows, g.row)
 	}
-	sortCostRows(rows, q.Sort)
+	sortUsageRows(rows, q.Sort)
 
 	result.TotalCount = uint64(len(rows))
 	totals.Points = sortedPoints(totalPoints)
@@ -158,8 +161,8 @@ func groupID(group []string) string {
 	return string(b)
 }
 
-// pricedEvents costs each event once per line window it falls in.
-func (s *InMemoryCostAnalyticsStore) pricedEvents(params *costanalytics.QueryParams) []pricedEvent {
+// pricedEvents prices each event once per line window it falls in.
+func (s *InMemoryUsageQueryStore) pricedEvents(params *usageanalytics.QueryParams) []pricedEvent {
 	q := params.Query
 	s.usage.mu.RLock()
 	records := dedupeMeterUsage(s.usage.records, q.Deduplicate)
@@ -180,11 +183,12 @@ func (s *InMemoryCostAnalyticsStore) pricedEvents(params *costanalytics.QueryPar
 			}
 			qty := r.QtyTotal.Truncate(15)
 			out = append(out, pricedEvent{
-				lineID: l.LineItemID,
-				ts:     ts,
-				qty:    qty,
-				cost:   qty.Mul(l.UnitPrice),
-				keys:   costKeyValues(q, r, l, ts),
+				lineID:   l.LineItemID,
+				ts:       ts,
+				qty:      qty,
+				amount:   qty.Mul(l.UnitPrice),
+				subtotal: qty.Mul(l.ListUnitPrice),
+				keys:     usageKeyValues(q, r, l, ts),
 			})
 		}
 	}
@@ -212,8 +216,8 @@ func dedupeMeterUsage(records []*events.MeterUsage, dedupe bool) []*events.Meter
 	return lo.Map(order, func(k string, _ int) *events.MeterUsage { return latest[k] })
 }
 
-func costKeyValues(q *costanalytics.Query, r *events.MeterUsage, l costanalytics.LineWindow, ts time.Time) map[costanalytics.Key]string {
-	keys := append([]costanalytics.Key{}, q.GroupBy...)
+func usageKeyValues(q *usageanalytics.Query, r *events.MeterUsage, l usageanalytics.LineWindow, ts time.Time) map[usageanalytics.Key]string {
+	keys := append([]usageanalytics.Key{}, q.GroupBy...)
 	if q.Columns != nil {
 		keys = append(keys, *q.Columns)
 	}
@@ -224,28 +228,28 @@ func costKeyValues(q *costanalytics.Query, r *events.MeterUsage, l costanalytics
 		keys = append(keys, m.Key)
 	}
 
-	out := make(map[costanalytics.Key]string, len(keys))
+	out := make(map[usageanalytics.Key]string, len(keys))
 	for _, k := range keys {
 		switch k.Kind {
-		case costanalytics.KeyProperty:
-			out[k] = costPropertyValue(r.Properties, k.Property)
-		case costanalytics.KeySource:
+		case usageanalytics.KeyProperty:
+			out[k] = usagePropertyValue(r.Properties, k.Property)
+		case usageanalytics.KeySource:
 			out[k] = r.Source
-		case costanalytics.KeyMeterID:
+		case usageanalytics.KeyMeterID:
 			out[k] = r.MeterID
-		case costanalytics.KeyFeatureID:
+		case usageanalytics.KeyFeatureID:
 			out[k] = l.FeatureID
-		case costanalytics.KeySubLineItemID:
+		case usageanalytics.KeySubLineItemID:
 			out[k] = l.LineItemID
-		case costanalytics.KeyMonth:
+		case usageanalytics.KeyMonth:
 			out[k] = ts.In(q.Timezone).Format("2006-01")
 		}
 	}
 	return out
 }
 
-// costPropertyValue reads a property as ClickHouse does: strings as-is, anything else as raw JSON.
-func costPropertyValue(props map[string]interface{}, name string) string {
+// usagePropertyValue reads a property as ClickHouse does: strings as-is, anything else as raw JSON.
+func usagePropertyValue(props map[string]interface{}, name string) string {
 	v, ok := props[name]
 	if !ok {
 		return ""
@@ -260,10 +264,10 @@ func costPropertyValue(props map[string]interface{}, name string) string {
 	return string(raw)
 }
 
-func matchesCostFilters(q *costanalytics.Query, ev pricedEvent) bool {
+func matchesUsageFilters(q *usageanalytics.Query, ev pricedEvent) bool {
 	for _, f := range q.Filters {
 		in := lo.Contains(f.Values, ev.keys[f.Key])
-		if in != (f.Op == costanalytics.FilterIn) {
+		if in != (f.Op == usageanalytics.FilterIn) {
 			return false
 		}
 	}
@@ -271,14 +275,14 @@ func matchesCostFilters(q *costanalytics.Query, ev pricedEvent) bool {
 		return true
 	}
 	search := strings.ToLower(q.Search)
-	return lo.SomeBy(q.GroupBy, func(k costanalytics.Key) bool {
+	return lo.SomeBy(q.GroupBy, func(k usageanalytics.Key) bool {
 		return strings.Contains(strings.ToLower(ev.keys[k]), search)
 	})
 }
 
-// sortCostRows orders by the sort field, then by group values ascending.
-func sortCostRows(rows []costanalytics.Row, s costanalytics.Sort) {
-	byGroup := func(a, b costanalytics.Row) int {
+// sortUsageRows orders by the sort field, then by group values ascending.
+func sortUsageRows(rows []usageanalytics.Row, s usageanalytics.Sort) {
+	byGroup := func(a, b usageanalytics.Row) int {
 		for i := range a.Group {
 			if c := strings.Compare(a.Group[i], b.Group[i]); c != 0 {
 				return c
@@ -290,15 +294,15 @@ func sortCostRows(rows []costanalytics.Row, s costanalytics.Sort) {
 		a, b := rows[i], rows[j]
 		var c int
 		switch s.Field {
-		case costanalytics.SortTotal:
-			c = a.Cost.Cmp(b.Cost)
-		case costanalytics.SortUsage:
+		case usageanalytics.SortAmount:
+			c = a.Amount.Cmp(b.Amount)
+		case usageanalytics.SortUsage:
 			c = a.Quantity.Cmp(b.Quantity)
-		case costanalytics.SortEventCount:
+		case usageanalytics.SortEventCount:
 			c = compareUint64(a.EventCount, b.EventCount)
-		case costanalytics.SortColumn:
+		case usageanalytics.SortColumn:
 			c = a.Columns[s.Column].Cmp(b.Columns[s.Column])
-		case costanalytics.SortName:
+		case usageanalytics.SortName:
 			c = byGroup(a, b)
 			if s.Desc {
 				c = -c

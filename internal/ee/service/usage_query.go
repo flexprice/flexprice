@@ -8,7 +8,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
-	"github.com/flexprice/flexprice/internal/domain/costanalytics"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	ca "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -16,13 +15,14 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/usageanalytics"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-// Reasons a meter is left out of a cost breakdown.
+// Reasons a meter is left out of a usage breakdown.
 const (
 	excludedNotFlatPrice     = "not_flat_price"
 	excludedCustomPriceUnit  = "custom_price_unit"
@@ -32,32 +32,32 @@ const (
 	excludedUnmatchedCharge  = "unmatched_charge"
 )
 
-// CostAnalyticsService attributes billed cost to the events, and their properties, that caused it.
-type CostAnalyticsService interface {
-	GetCostBreakdown(ctx context.Context, req *dto.CostAnalyticsRequest) (*dto.CostAnalyticsResponse, error)
+// UsageQueryService attributes billed amount to the events, and their properties, that caused it.
+type UsageQueryService interface {
+	GetBreakdown(ctx context.Context, req *dto.UsageQueryRequest) (*dto.UsageQueryResponse, error)
 }
 
-type costAnalyticsService struct {
+type usageQueryService struct {
 	ServiceParams
-	repo costanalytics.Repository
+	repo usageanalytics.Repository
 }
 
-func NewCostAnalyticsService(params ServiceParams, repo costanalytics.Repository) CostAnalyticsService {
-	return &costAnalyticsService{ServiceParams: params, repo: repo}
+func NewUsageQueryService(params ServiceParams, repo usageanalytics.Repository) UsageQueryService {
+	return &usageQueryService{ServiceParams: params, repo: repo}
 }
 
-// costSubscription is a requested customer's subscription with the subscription whose lines price it
+// billedSubscription is a requested customer's subscription with the subscription whose lines price it
 // (the parent, for an inherited child) and the customers whose events it covers.
-type costSubscription struct {
+type billedSubscription struct {
 	sub         *subscription.Subscription
 	owner       *subscription.Subscription
 	customerIDs []string // external IDs
 	start, end  time.Time
 }
 
-// costInputs collects the line windows handed to ClickHouse and what the response needs besides.
-type costInputs struct {
-	windows        []costanalytics.LineWindow
+// queryInputs collects the line windows handed to ClickHouse and what the response needs besides.
+type queryInputs struct {
+	windows        []usageanalytics.LineWindow
 	excluded       map[string]string // meter ID → reason
 	lineByID       map[string]*subscription.SubscriptionLineItem
 	meterByID      map[string]*meter.Meter
@@ -68,7 +68,7 @@ type costInputs struct {
 	unappliedCoupons map[string]bool
 }
 
-func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.CostAnalyticsRequest) (*dto.CostAnalyticsResponse, error) {
+func (s *usageQueryService) GetBreakdown(ctx context.Context, req *dto.UsageQueryRequest) (*dto.UsageQueryResponse, error) {
 	if req.ExternalCustomerID == "" {
 		return nil, ierr.NewError("external_customer_id is required").Mark(ierr.ErrValidation)
 	}
@@ -93,7 +93,7 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 		return nil, err
 	}
 
-	in := &costInputs{
+	in := &queryInputs{
 		excluded:         map[string]string{},
 		applyDiscounts:   req.ApplyDiscounts,
 		unappliedCoupons: map[string]bool{},
@@ -124,13 +124,13 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 	if err != nil {
 		return nil, err
 	}
-	if q.Sort.Field == costanalytics.SortUsage && len(lo.Uniq(lo.Map(windows, func(w costanalytics.LineWindow, _ int) string { return w.MeterID }))) > 1 {
+	if q.Sort.Field == usageanalytics.SortUsage && len(lo.Uniq(lo.Map(windows, func(w usageanalytics.LineWindow, _ int) string { return w.MeterID }))) > 1 {
 		return nil, ierr.NewError("sort by usage needs a single meter").
 			WithHint("Quantities of different meters cannot be compared; pass one meter_id or sort by total").
 			Mark(ierr.ErrValidation)
 	}
 
-	result, err := s.repo.GetCostBreakdown(ctx, &costanalytics.QueryParams{
+	result, err := s.repo.GetBreakdown(ctx, &usageanalytics.QueryParams{
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		Query:         q,
@@ -143,8 +143,8 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 	for _, cs := range subs {
 		in.subByID[cs.owner.ID] = cs.owner
 	}
-	resp := toCostAnalyticsResponse(q, currency, result, in.lineByID)
-	if err := s.expandCostObjects(ctx, req.Expand, resp, in); err != nil {
+	resp := toUsageQueryResponse(q, currency, result, in.lineByID)
+	if err := s.expandObjects(ctx, req.Expand, resp, in); err != nil {
 		return nil, err
 	}
 	resp.UnappliedCouponIDs = lo.Keys(in.unappliedCoupons)
@@ -153,7 +153,7 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 }
 
 // requestedMeterIDs resolves meter_ids and feature_ids to one meter set; nil means every meter.
-func (s *costAnalyticsService) requestedMeterIDs(ctx context.Context, q *costanalytics.Query) (map[string]bool, error) {
+func (s *usageQueryService) requestedMeterIDs(ctx context.Context, q *usageanalytics.Query) (map[string]bool, error) {
 	if len(q.MeterIDs) == 0 && len(q.FeatureIDs) == 0 {
 		return nil, nil
 	}
@@ -176,7 +176,7 @@ func (s *costAnalyticsService) requestedMeterIDs(ctx context.Context, q *costana
 
 // subscriptionsInRange returns the customer's subscriptions active in [start, end), each with the
 // subscription that prices it and the customers whose events it covers.
-func (s *costAnalyticsService) subscriptionsInRange(ctx context.Context, cust *customer.Customer, start, end time.Time) ([]costSubscription, error) {
+func (s *usageQueryService) subscriptionsInRange(ctx context.Context, cust *customer.Customer, start, end time.Time) ([]billedSubscription, error) {
 	subs, err := customerSubscriptionsWithParents(ctx, s.SubRepo, cust.ID, false)
 	if err != nil {
 		return nil, err
@@ -184,7 +184,7 @@ func (s *costAnalyticsService) subscriptionsInRange(ctx context.Context, cust *c
 	byID := lo.KeyBy(subs, func(sub *subscription.Subscription) string { return sub.ID })
 
 	subService := NewSubscriptionService(s.ServiceParams)
-	out := make([]costSubscription, 0, len(subs))
+	out := make([]billedSubscription, 0, len(subs))
 	for _, sub := range subs {
 		if sub.CustomerID != cust.ID {
 			continue // a parent owned by another customer, loaded only to price its inherited child
@@ -200,7 +200,7 @@ func (s *costAnalyticsService) subscriptionsInRange(ctx context.Context, cust *c
 			continue
 		}
 
-		cs := costSubscription{sub: sub, owner: sub, start: subStart, end: subEnd}
+		cs := billedSubscription{sub: sub, owner: sub, start: subStart, end: subEnd}
 		if sub.SubscriptionType == types.SubscriptionTypeInherited && lo.FromPtr(sub.ParentSubscriptionID) != "" {
 			// A child is priced on its parent's lines, over its own events only.
 			parent := byID[lo.FromPtr(sub.ParentSubscriptionID)]
@@ -262,7 +262,7 @@ func childCoverageEnd(parent, child *subscription.Subscription) (time.Time, bool
 
 // cancelledChildren prices a parent's cancelled inherited children for the periods its invoices still
 // covered them; ExternalCustomerIDsForSubscription lists only the children covered today.
-func (s *costAnalyticsService) cancelledChildren(ctx context.Context, cs costSubscription) ([]costSubscription, error) {
+func (s *usageQueryService) cancelledChildren(ctx context.Context, cs billedSubscription) ([]billedSubscription, error) {
 	filter := types.NewNoLimitSubscriptionFilter()
 	filter.ParentSubscriptionIDs = []string{cs.sub.ID}
 	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
@@ -280,7 +280,7 @@ func (s *costAnalyticsService) cancelledChildren(ctx context.Context, cs costSub
 	}
 	externalID := lo.SliceToMap(customers, func(c *customer.Customer) (string, string) { return c.ID, c.ExternalID })
 
-	var out []costSubscription
+	var out []billedSubscription
 	for _, child := range children {
 		ext := externalID[child.CustomerID]
 		if ext == "" || lo.Contains(cs.customerIDs, ext) {
@@ -291,27 +291,27 @@ func (s *costAnalyticsService) cancelledChildren(ctx context.Context, cs costSub
 			return nil, err
 		}
 		if end := minTime(cs.end, until); covered && cs.start.Before(end) {
-			out = append(out, costSubscription{sub: cs.sub, owner: cs.sub, customerIDs: []string{ext}, start: cs.start, end: end})
+			out = append(out, billedSubscription{sub: cs.sub, owner: cs.sub, customerIDs: []string{ext}, start: cs.start, end: end})
 		}
 	}
 	return out, nil
 }
 
 // splitByBillingPeriod cuts a subscription's range at the billing period boundaries of its owner.
-func splitByBillingPeriod(cs costSubscription) ([]costanalytics.BillingPeriodSegment, error) {
+func splitByBillingPeriod(cs billedSubscription) ([]usageanalytics.BillingPeriodSegment, error) {
 	owner := cs.owner
 	grid, err := types.NewBillingPeriodGrid(owner.BillingAnchor, owner.BillingPeriod, max(owner.BillingPeriodCount, 1), owner.Timezone)
 	if err != nil {
 		return nil, err
 	}
 
-	var segments []costanalytics.BillingPeriodSegment
+	var segments []usageanalytics.BillingPeriodSegment
 	for t := cs.start; t.Before(cs.end); {
 		p := types.FullBillingPeriod(t, grid)
 		if !p.End.After(t) {
 			break
 		}
-		seg := costanalytics.BillingPeriodSegment{
+		seg := usageanalytics.BillingPeriodSegment{
 			SubscriptionID: cs.sub.ID,
 			PeriodStart:    maxTime(p.Start, owner.StartDate),
 			PeriodEnd:      p.End,
@@ -327,13 +327,13 @@ func splitByBillingPeriod(cs costSubscription) ([]costanalytics.BillingPeriodSeg
 // addBilledLines prices the owner's billing period through billing, as its invoice is priced, and turns
 // each line billing charged at a plain flat rate into a line window clipped to the segment. Every
 // other line excludes its meter.
-func (s *costAnalyticsService) addBilledLines(
+func (s *usageQueryService) addBilledLines(
 	ctx context.Context,
 	billing *billingService,
-	cs costSubscription,
-	seg costanalytics.BillingPeriodSegment,
+	cs billedSubscription,
+	seg usageanalytics.BillingPeriodSegment,
 	meterFilter map[string]bool,
-	in *costInputs,
+	in *queryInputs,
 ) error {
 	// Billing gets every line: subscription-wide rules (grants, commitments) spread across all of them.
 	items, err := billing.periodLineItems(ctx, cs.owner.ID, seg.PeriodStart)
@@ -387,7 +387,7 @@ func (s *costAnalyticsService) addBilledLines(
 			continue
 		}
 		in.lineByID[li.ID] = li
-		in.windows = append(in.windows, costanalytics.LineWindow{
+		in.windows = append(in.windows, usageanalytics.LineWindow{
 			LineItemID:          li.ID,
 			MeterID:             li.MeterID,
 			FeatureID:           featureID(in.featureByMeter[li.MeterID]),
@@ -397,6 +397,7 @@ func (s *costAnalyticsService) addBilledLines(
 			End:                 end,
 			Currency:            li.Price.Currency,
 			UnitPrice:           li.Price.Amount.Mul(discount(li.ID)),
+			ListUnitPrice:       li.Price.Amount,
 		})
 	}
 	return nil
@@ -405,7 +406,7 @@ func (s *costAnalyticsService) addBilledLines(
 // periodDiscounts returns each line's price multiplier from the percentage coupons (forever or
 // repeated) active in the billing period: line coupons, then subscription coupons, compounding, as
 // usage analytics applies them. Any other active coupon is recorded as not applied.
-func (s *costAnalyticsService) periodDiscounts(ctx context.Context, owner *subscription.Subscription, seg costanalytics.BillingPeriodSegment, in *costInputs) (func(lineID string) decimal.Decimal, error) {
+func (s *usageQueryService) periodDiscounts(ctx context.Context, owner *subscription.Subscription, seg usageanalytics.BillingPeriodSegment, in *queryInputs) (func(lineID string) decimal.Decimal, error) {
 	applicable := func(c *coupon.Coupon) bool {
 		return c.Type == types.CouponTypePercentage && c.PercentageOff != nil &&
 			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated)
@@ -446,7 +447,7 @@ func flatExclusion(owner *subscription.Subscription, li *subscription.Subscripti
 		return excludedNotFlatPrice
 	case p.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM || lo.FromPtr(li.PriceUnitID) != "" || lo.FromPtr(li.PriceUnit) != "":
 		return excludedCustomPriceUnit
-	case m == nil || !isCostSupportedMeter(m) || price.IsBucketed(p, m):
+	case m == nil || !isSupportedMeter(m) || price.IsBucketed(p, m):
 		return excludedUnsupportedMeter
 	case owner.HasCommitment() || c.CommitmentID != nil || c.CommitmentInfo != nil || c.Metadata[types.MetadataKeyIsOverage] == types.MetadataValueTrue:
 		return excludedCommitment
@@ -456,7 +457,7 @@ func flatExclusion(owner *subscription.Subscription, li *subscription.Subscripti
 	return ""
 }
 
-// unsupportedMetersErr rejects the request when a requested meter has a line cost analytics cannot
+// unsupportedMetersErr rejects the request when a requested meter has a line usage analytics cannot
 // price yet, naming each meter and why, so no total silently leaves usage out.
 func unsupportedMetersErr(excluded map[string]string) error {
 	if len(excluded) == 0 {
@@ -465,20 +466,20 @@ func unsupportedMetersErr(excluded map[string]string) error {
 	meterIDs := lo.Keys(excluded)
 	sort.Strings(meterIDs)
 	named := lo.Map(meterIDs, func(id string, _ int) string { return id + " (" + excluded[id] + ")" })
-	return ierr.NewErrorf("cost analytics does not support meters %s yet", strings.Join(named, ", ")).
+	return ierr.NewErrorf("usage analytics does not support meters %s yet", strings.Join(named, ", ")).
 		WithHint("Only flat-priced usage without commitments or entitlements is supported; pass meter_ids or feature_ids to leave these meters out").
 		WithReportableDetails(map[string]any{"unsupported_meters": excluded}).
 		Mark(ierr.ErrValidation)
 }
 
-func excludeMeter(in *costInputs, meterID, reason string) {
+func excludeMeter(in *queryInputs, meterID, reason string) {
 	if _, seen := in.excluded[meterID]; !seen {
 		in.excluded[meterID] = reason
 	}
 }
 
 // loadMeters fills the meters and their features for line items not seen yet.
-func (s *costAnalyticsService) loadMeters(ctx context.Context, items []*subscription.SubscriptionLineItem, in *costInputs) error {
+func (s *usageQueryService) loadMeters(ctx context.Context, items []*subscription.SubscriptionLineItem, in *queryInputs) error {
 	var missing []string
 	for _, li := range items {
 		if _, ok := in.meterByID[li.MeterID]; li.MeterID != "" && !ok {
@@ -512,8 +513,8 @@ func (s *costAnalyticsService) loadMeters(ctx context.Context, items []*subscrip
 	return nil
 }
 
-// isCostSupportedMeter reports whether qty_total is the billed quantity of each event.
-func isCostSupportedMeter(m *meter.Meter) bool {
+// isSupportedMeter reports whether qty_total is the billed quantity of each event.
+func isSupportedMeter(m *meter.Meter) bool {
 	switch m.Aggregation.Type {
 	case types.AggregationSum, types.AggregationCount, types.AggregationSumWithMultiplier:
 		return true
@@ -521,8 +522,8 @@ func isCostSupportedMeter(m *meter.Meter) bool {
 	return false
 }
 
-func singleCurrency(windows []costanalytics.LineWindow) (string, error) {
-	currencies := lo.Uniq(lo.Map(windows, func(w costanalytics.LineWindow, _ int) string { return strings.ToLower(w.Currency) }))
+func singleCurrency(windows []usageanalytics.LineWindow) (string, error) {
+	currencies := lo.Uniq(lo.Map(windows, func(w usageanalytics.LineWindow, _ int) string { return strings.ToLower(w.Currency) }))
 	switch len(currencies) {
 	case 0:
 		return "", nil
@@ -530,87 +531,91 @@ func singleCurrency(windows []costanalytics.LineWindow) (string, error) {
 		return currencies[0], nil
 	}
 	return "", ierr.NewError("customer is billed in more than one currency").
-		WithHint("Cost analytics supports one currency per customer; filter by meter_ids to one currency").
+		WithHint("Usage analytics supports one currency per customer; filter by meter_ids to one currency").
 		WithReportableDetails(map[string]any{"currencies": currencies}).
 		Mark(ierr.ErrValidation)
 }
 
-// toCostAnalyticsResponse rounds money once per row and once for totals, names missing values
-// CostNoneValue and keeps the top column values by total cost.
-func toCostAnalyticsResponse(
-	q *costanalytics.Query,
+// toUsageQueryResponse rounds money once per row and once for totals, names missing values
+// UsageNoneValue and keeps the top column values by total amount.
+func toUsageQueryResponse(
+	q *usageanalytics.Query,
 	currency string,
-	result *costanalytics.Result,
+	result *usageanalytics.Result,
 	lineByID map[string]*subscription.SubscriptionLineItem,
-) *dto.CostAnalyticsResponse {
+) *dto.UsageQueryResponse {
 	precision := types.GetCurrencyPrecision(currency)
 	money := func(d decimal.Decimal) string { return d.Round(precision).StringFixed(precision) }
-	none := func(v string) string { return lo.Ternary(v == "", dto.CostNoneValue, v) }
+	amounts := func(subtotal, amount decimal.Decimal) dto.UsageAmounts {
+		sub, amt := subtotal.Round(precision), amount.Round(precision)
+		return dto.UsageAmounts{Subtotal: sub.StringFixed(precision), Discount: sub.Sub(amt).StringFixed(precision), Amount: amt.StringFixed(precision)}
+	}
+	none := func(v string) string { return lo.Ternary(v == "", dto.UsageNoneValue, v) }
 
-	resp := &dto.CostAnalyticsResponse{
+	resp := &dto.UsageQueryResponse{
 		Currency:   currency,
 		Pagination: types.PaginationResponse{Total: int(result.TotalCount), Limit: q.Limit, Offset: q.Offset},
-		Items:      make([]dto.CostAnalyticsItem, 0, len(result.Items)),
-		Totals: dto.CostAnalyticsTotals{
-			Cost:       money(result.Totals.Cost),
-			Quantity:   result.Totals.Quantity.String(),
-			EventCount: result.Totals.EventCount,
+		Items:      make([]dto.UsageQueryItem, 0, len(result.Items)),
+		Totals: dto.UsageQueryTotals{
+			UsageAmounts: amounts(result.Totals.Subtotal, result.Totals.Amount),
+			Usage:        result.Totals.Quantity.String(),
+			EventCount:   result.Totals.EventCount,
 		},
 	}
 
 	var windows []time.Time
 	if q.WindowSize != "" {
 		windows = q.Windows()
-		resp.Totals.Points = costPoints(result.Totals.Points, windows, money)
+		resp.Totals.Points = usagePoints(result.Totals.Points, windows, amounts)
 	}
 
 	var shown map[string]bool
 	if q.Columns != nil {
 		resp.ColumnValues, shown = topColumnValues(result.Totals.Columns)
-		resp.Totals.Columns = costColumns(result.Totals.Columns, shown, money, none)
+		resp.Totals.Columns = amountColumns(result.Totals.Columns, shown, money, none)
 	}
 
 	for _, row := range result.Items {
-		item := dto.CostAnalyticsItem{
-			Group:      make(map[string]string, len(q.GroupBy)),
-			Cost:       money(row.Cost),
-			Quantity:   row.Quantity.String(),
-			EventCount: row.EventCount,
+		item := dto.UsageQueryItem{
+			Group:        make(map[string]string, len(q.GroupBy)),
+			UsageAmounts: amounts(row.Subtotal, row.Amount),
+			Usage:        row.Quantity.String(),
+			EventCount:   row.EventCount,
 		}
 		for i, k := range q.GroupBy {
 			item.Group[k.String()] = none(row.Group[i])
 		}
 		if q.Columns != nil {
-			item.Columns = costColumns(row.Columns, shown, money, none)
+			item.Columns = amountColumns(row.Columns, shown, money, none)
 		}
 		if len(row.Metrics) > 0 {
-			item.Metrics = make(map[string]dto.CostAnalyticsValue, len(row.Metrics))
+			item.Metrics = make(map[string]dto.UsageQueryValue, len(row.Metrics))
 			for name, v := range row.Metrics {
-				item.Metrics[name] = dto.CostAnalyticsValue{Count: v.Count, Values: v.Values}
+				item.Metrics[name] = dto.UsageQueryValue{Count: v.Count, Values: v.Values}
 			}
 		}
 		if q.WindowSize != "" {
-			item.Points = costPoints(row.Points, windows, money)
+			item.Points = usagePoints(row.Points, windows, amounts)
 		}
-		costItemIDs(&item, row.LineItemIDs, lineByID)
+		usageItemIDs(&item, row.LineItemIDs, lineByID)
 		resp.Items = append(resp.Items, item)
 	}
 	return resp
 }
 
-// costPoints lists every window in the range, at zero where the row had no events.
-func costPoints(points []costanalytics.Point, windows []time.Time, money func(decimal.Decimal) string) []dto.CostWindowPoint {
-	byStart := lo.KeyBy(points, func(p costanalytics.Point) int64 { return p.WindowStart.Unix() })
-	return lo.Map(windows, func(w time.Time, _ int) dto.CostWindowPoint {
+// usagePoints lists every window in the range, at zero where the row had no events.
+func usagePoints(points []usageanalytics.Point, windows []time.Time, amounts func(subtotal, amount decimal.Decimal) dto.UsageAmounts) []dto.UsagePoint {
+	byStart := lo.KeyBy(points, func(p usageanalytics.Point) int64 { return p.WindowStart.Unix() })
+	return lo.Map(windows, func(w time.Time, _ int) dto.UsagePoint {
 		p, ok := byStart[w.Unix()]
 		if !ok {
-			return dto.CostWindowPoint{WindowStart: w, Cost: money(decimal.Zero), Quantity: "0"}
+			return dto.UsagePoint{Timestamp: w, UsageAmounts: amounts(decimal.Zero, decimal.Zero), Usage: "0"}
 		}
-		return dto.CostWindowPoint{WindowStart: w, Cost: money(p.Cost), Quantity: p.Quantity.String()}
+		return dto.UsagePoint{Timestamp: w, UsageAmounts: amounts(p.Subtotal, p.Amount), Usage: p.Quantity.String()}
 	})
 }
 
-// topColumnValues returns the MaxCostColumns values with the highest total cost, in that order.
+// topColumnValues returns the MaxUsageColumns values with the highest total amount, in that order.
 func topColumnValues(totals map[string]decimal.Decimal) ([]string, map[string]bool) {
 	values := lo.Keys(totals)
 	sort.Slice(values, func(i, j int) bool {
@@ -619,32 +624,32 @@ func topColumnValues(totals map[string]decimal.Decimal) ([]string, map[string]bo
 		}
 		return values[i] < values[j]
 	})
-	if len(values) > dto.MaxCostColumns {
-		values = values[:dto.MaxCostColumns]
+	if len(values) > dto.MaxUsageColumns {
+		values = values[:dto.MaxUsageColumns]
 	}
 	shown := lo.SliceToMap(values, func(v string) (string, bool) { return v, true })
-	return lo.Map(values, func(v string, _ int) string { return lo.Ternary(v == "", dto.CostNoneValue, v) }), shown
+	return lo.Map(values, func(v string, _ int) string { return lo.Ternary(v == "", dto.UsageNoneValue, v) }), shown
 }
 
-// costColumns keeps the shown column values and sums the rest into CostOtherColumn, so columns add up to the row.
-func costColumns(costs map[string]decimal.Decimal, shown map[string]bool, money func(decimal.Decimal) string, none func(string) string) map[string]dto.CostColumn {
-	out := make(map[string]dto.CostColumn, len(costs))
+// amountColumns keeps the shown column values and sums the rest into UsageOtherColumn, so columns add up to the row.
+func amountColumns(amounts map[string]decimal.Decimal, shown map[string]bool, money func(decimal.Decimal) string, none func(string) string) map[string]dto.UsageColumn {
+	out := make(map[string]dto.UsageColumn, len(amounts))
 	other, hasOther := decimal.Zero, false
-	for v, c := range costs {
+	for v, c := range amounts {
 		if shown[v] {
-			out[none(v)] = dto.CostColumn{Cost: money(c)}
+			out[none(v)] = dto.UsageColumn{Amount: money(c)}
 			continue
 		}
 		other, hasOther = other.Add(c), true
 	}
 	if hasOther {
-		out[dto.CostOtherColumn] = dto.CostColumn{Cost: money(other)}
+		out[dto.UsageOtherColumn] = dto.UsageColumn{Amount: money(other)}
 	}
 	return out
 }
 
-// costItemIDs sets the prices, plans, add-ons and subscriptions of the lines behind a row.
-func costItemIDs(item *dto.CostAnalyticsItem, lineIDs []string, lineByID map[string]*subscription.SubscriptionLineItem) {
+// usageItemIDs sets the prices, plans, add-ons and subscriptions of the lines behind a row.
+func usageItemIDs(item *dto.UsageQueryItem, lineIDs []string, lineByID map[string]*subscription.SubscriptionLineItem) {
 	var prices, plans, addons, subs []string
 	for _, id := range lineIDs {
 		li := lineByID[id]
@@ -669,16 +674,16 @@ func sortedIDs(ids []string) []string {
 	return ids
 }
 
-// expandCostObjects fills the object maps requested in expand, for the IDs on the page's rows.
-func (s *costAnalyticsService) expandCostObjects(ctx context.Context, expand []dto.CostExpand, resp *dto.CostAnalyticsResponse, in *costInputs) error {
-	want := lo.SliceToMap(expand, func(e dto.CostExpand) (dto.CostExpand, bool) { return e, true })
+// expandObjects fills the object maps requested in expand, for the IDs on the page's rows.
+func (s *usageQueryService) expandObjects(ctx context.Context, expand []dto.UsageExpand, resp *dto.UsageQueryResponse, in *queryInputs) error {
+	want := lo.SliceToMap(expand, func(e dto.UsageExpand) (dto.UsageExpand, bool) { return e, true })
 	if len(want) == 0 {
 		return nil
 	}
-	ids := func(pick func(dto.CostAnalyticsItem) []string) []string {
-		return sortedIDs(lo.FlatMap(resp.Items, func(it dto.CostAnalyticsItem, _ int) []string { return pick(it) }))
+	ids := func(pick func(dto.UsageQueryItem) []string) []string {
+		return sortedIDs(lo.FlatMap(resp.Items, func(it dto.UsageQueryItem, _ int) []string { return pick(it) }))
 	}
-	priceIDs := ids(func(it dto.CostAnalyticsItem) []string { return it.PriceIDs })
+	priceIDs := ids(func(it dto.UsageQueryItem) []string { return it.PriceIDs })
 	priceByID := map[string]*price.Price{}
 	for _, li := range in.lineByID {
 		if li.Price != nil {
@@ -690,7 +695,7 @@ func (s *costAnalyticsService) expandCostObjects(ctx context.Context, expand []d
 		return lo.FromPtr(p).MeterID, p != nil
 	}))
 
-	if want[dto.CostExpandPrice] {
+	if want[dto.UsageExpandPrice] {
 		resp.Prices = map[string]*dto.PriceResponse{}
 		for _, id := range priceIDs {
 			if p := priceByID[id]; p != nil {
@@ -698,17 +703,17 @@ func (s *costAnalyticsService) expandCostObjects(ctx context.Context, expand []d
 			}
 		}
 	}
-	if want[dto.CostExpandSubscription] {
+	if want[dto.UsageExpandSubscription] {
 		resp.Subscriptions = map[string]*dto.SubscriptionResponse{}
-		for _, id := range ids(func(it dto.CostAnalyticsItem) []string { return it.SubscriptionIDs }) {
+		for _, id := range ids(func(it dto.UsageQueryItem) []string { return it.SubscriptionIDs }) {
 			if sub := in.subByID[id]; sub != nil {
 				resp.Subscriptions[id] = &dto.SubscriptionResponse{Subscription: sub}
 			}
 		}
 	}
-	if want[dto.CostExpandPlan] {
+	if want[dto.UsageExpandPlan] {
 		resp.Plans = map[string]*dto.PlanResponse{}
-		if planIDs := ids(func(it dto.CostAnalyticsItem) []string { return it.PlanIDs }); len(planIDs) > 0 {
+		if planIDs := ids(func(it dto.UsageQueryItem) []string { return it.PlanIDs }); len(planIDs) > 0 {
 			plans, err := s.PlanRepo.ListByIDs(ctx, planIDs)
 			if err != nil {
 				return err
@@ -718,9 +723,9 @@ func (s *costAnalyticsService) expandCostObjects(ctx context.Context, expand []d
 			}
 		}
 	}
-	if want[dto.CostExpandAddon] {
+	if want[dto.UsageExpandAddon] {
 		resp.Addons = map[string]*dto.AddonResponse{}
-		if addonIDs := ids(func(it dto.CostAnalyticsItem) []string { return it.AddonIDs }); len(addonIDs) > 0 {
+		if addonIDs := ids(func(it dto.UsageQueryItem) []string { return it.AddonIDs }); len(addonIDs) > 0 {
 			filter := types.NewNoLimitAddonFilter()
 			filter.AddonIDs = addonIDs
 			addons, err := s.AddonRepo.List(ctx, filter)
@@ -732,7 +737,7 @@ func (s *costAnalyticsService) expandCostObjects(ctx context.Context, expand []d
 			}
 		}
 	}
-	if want[dto.CostExpandMeter] {
+	if want[dto.UsageExpandMeter] {
 		resp.Meters = map[string]*dto.MeterResponse{}
 		for _, id := range meterIDs {
 			if m := in.meterByID[id]; m != nil {
@@ -740,7 +745,7 @@ func (s *costAnalyticsService) expandCostObjects(ctx context.Context, expand []d
 			}
 		}
 	}
-	if want[dto.CostExpandFeature] {
+	if want[dto.UsageExpandFeature] {
 		resp.Features = map[string]*dto.FeatureResponse{}
 		for _, id := range meterIDs {
 			if f := in.featureByMeter[id]; f != nil {

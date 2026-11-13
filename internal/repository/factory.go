@@ -17,7 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
-	"github.com/flexprice/flexprice/internal/domain/costanalytics"
 	"github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_application"
@@ -58,6 +57,7 @@ import (
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/usageanalytics"
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -359,9 +359,9 @@ func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
 	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
 }
 
-// NewCostAnalyticsRepository returns the ClickHouse repository that prices meter_usage events for cost analytics.
-func NewCostAnalyticsRepository(p RepositoryParams) costanalytics.Repository {
-	return clickhouseRepo.NewCostAnalyticsRepository(p.ClickHouseDB, p.Logger)
+// NewUsageQueryRepository returns the ClickHouse repository that prices meter_usage events for usage analytics.
+func NewUsageQueryRepository(p RepositoryParams) usageanalytics.Repository {
+	return clickhouseRepo.NewUsageQueryRepository(p.ClickHouseDB, p.Logger)
 }
 
 func NewActivityRepository(p RepositoryParams) domainActivity.Repository {

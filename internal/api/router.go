@@ -267,7 +267,7 @@ func NewRouter(
 		{
 			analytics.POST("/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.Query)
 			analytics.POST("/revenue", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.GetRevenueAnalytics)
-			analytics.POST("/cost/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.QueryCost)
+			analytics.POST("/usage/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.QueryUsage)
 			analytics.POST("/views", write(types.EntityAnalytics, types.ActionWrite), handlers.Analytics.CreateView)
 			analytics.GET("/views", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.ListViews)
 			analytics.GET("/views/:id", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.GetView)

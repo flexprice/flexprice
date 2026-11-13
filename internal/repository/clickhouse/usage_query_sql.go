@@ -6,38 +6,38 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/flexprice/flexprice/internal/domain/costanalytics"
+	"github.com/flexprice/flexprice/internal/domain/usageanalytics"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
 
-// Cost is computed in Decimal256: qty_total (scale 15) × unit price (scale 20) has scale 35, which
+// Amount is computed in Decimal256: qty_total (scale 15) × unit price (scale 20) has scale 35, which
 // would overflow Decimal128 above about 1,000 units.
 const (
-	costPriceScale = 20
-	costQtyScale   = 15
+	usagePriceScale = 20
+	usageQtyScale   = 15
 )
 
-// costSQL is a built cost breakdown query and its named arguments.
-type costSQL struct {
+// breakdownSQL is a built usage breakdown query and its named arguments.
+type breakdownSQL struct {
 	query string
 	args  []any
 	// keyAliases maps each key used by the query to its column alias in the priced CTE.
-	keyAliases map[costanalytics.Key]string
+	keyAliases map[usageanalytics.Key]string
 }
 
-// costSQLBuilder builds the cost breakdown query. The inner "priced" CTE costs every event inside a
+// breakdownSQLBuilder builds the usage breakdown query. The inner "priced" CTE prices every event inside a
 // line window; the outer levels filter, group, sort, page and total, and never depend on pricing.
-type costSQLBuilder struct {
-	params *costanalytics.QueryParams
-	query  *costanalytics.Query
+type breakdownSQLBuilder struct {
+	params *usageanalytics.QueryParams
+	query  *usageanalytics.Query
 	args   []any
-	keys   []costanalytics.Key // distinct keys in first-use order; alias k<i>
-	window bool                // priced rows carry their time window as w
+	keys   []usageanalytics.Key // distinct keys in first-use order; alias k<i>
+	window bool                 // priced rows carry their time window as w
 }
 
-func buildCostBreakdownSQL(params *costanalytics.QueryParams) *costSQL {
-	b := &costSQLBuilder{params: params, query: params.Query}
+func buildBreakdownSQL(params *usageanalytics.QueryParams) *breakdownSQL {
+	b := &breakdownSQLBuilder{params: params, query: params.Query}
 	b.collectKeys()
 
 	var sb strings.Builder
@@ -54,10 +54,10 @@ func buildCostBreakdownSQL(params *costanalytics.QueryParams) *costSQL {
 	return b.result(sb.String())
 }
 
-// buildCostPointsSQL returns cost per window for each page row (pageGroups, in GroupBy order) and,
+// buildPointsSQL returns amount per window for each page row (pageGroups, in GroupBy order) and,
 // marked is_total, per window over every row that passes the filters.
-func buildCostPointsSQL(params *costanalytics.QueryParams, pageGroups [][]string) *costSQL {
-	b := &costSQLBuilder{params: params, query: params.Query, window: true}
+func buildPointsSQL(params *usageanalytics.QueryParams, pageGroups [][]string) *breakdownSQL {
+	b := &breakdownSQLBuilder{params: params, query: params.Query, window: true}
 	b.collectKeys()
 	groupCols := b.groupAliases()
 
@@ -71,13 +71,13 @@ func buildCostPointsSQL(params *costanalytics.QueryParams, pageGroups [][]string
 
 	var parts []string
 	if len(pageGroups) > 0 {
-		parts = append(parts, fmt.Sprintf(`SELECT 0 AS is_total, %[1]s, toString(w), toString(sum(cost)), toString(sum(qty))
+		parts = append(parts, fmt.Sprintf(`SELECT 0 AS is_total, %[1]s, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sum(qty))
 FROM filtered
 WHERE has(%[2]s, [%[1]s])
 GROUP BY %[1]s, w`, strings.Join(groupCols, ", "), b.bind("page_groups", pageGroups)))
 	}
 	blanks := strings.Join(lo.Map(groupCols, func(a string, _ int) string { return "'' AS " + a }), ", ")
-	parts = append(parts, fmt.Sprintf(`SELECT 1 AS is_total, %s, toString(w), toString(sum(cost)), toString(sum(qty))
+	parts = append(parts, fmt.Sprintf(`SELECT 1 AS is_total, %s, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sum(qty))
 FROM filtered
 GROUP BY w`, blanks))
 	sb.WriteString(strings.Join(parts, "\nUNION ALL\n"))
@@ -85,16 +85,16 @@ GROUP BY w`, blanks))
 	return b.result(sb.String())
 }
 
-func (b *costSQLBuilder) result(query string) *costSQL {
-	aliases := make(map[costanalytics.Key]string, len(b.keys))
+func (b *breakdownSQLBuilder) result(query string) *breakdownSQL {
+	aliases := make(map[usageanalytics.Key]string, len(b.keys))
 	for i, k := range b.keys {
 		aliases[k] = keyAlias(i)
 	}
-	return &costSQL{query: query, args: b.args, keyAliases: aliases}
+	return &breakdownSQL{query: query, args: b.args, keyAliases: aliases}
 }
 
 // windowExpr is the local date that starts the event's window, in the query timezone.
-func (b *costSQLBuilder) windowExpr() string {
+func (b *breakdownSQLBuilder) windowExpr() string {
 	day := fmt.Sprintf("toDate(mu.timestamp, %s)", sqlStringLiteral(b.query.Timezone.String()))
 	switch b.query.WindowSize {
 	case types.WindowSizeWeek:
@@ -106,20 +106,20 @@ func (b *costSQLBuilder) windowExpr() string {
 }
 
 // settings caps memory like every meter_usage query and, with dedupe, keeps FINAL within partitions.
-func (b *costSQLBuilder) settings() string {
+func (b *breakdownSQLBuilder) settings() string {
 	if b.query.Deduplicate {
 		return "\nSETTINGS " + maxMemoryUsageSetting + ", do_not_merge_across_partitions_select_final = 1"
 	}
 	return "\nSETTINGS " + maxMemoryUsageSetting
 }
 
-func (b *costSQLBuilder) bind(name string, value any) string {
+func (b *breakdownSQLBuilder) bind(name string, value any) string {
 	b.args = append(b.args, clickhouse.Named(name, value))
 	return "@" + name
 }
 
-func (b *costSQLBuilder) collectKeys() {
-	add := func(k costanalytics.Key) {
+func (b *breakdownSQLBuilder) collectKeys() {
+	add := func(k usageanalytics.Key) {
 		if !lo.Contains(b.keys, k) {
 			b.keys = append(b.keys, k)
 		}
@@ -140,34 +140,34 @@ func (b *costSQLBuilder) collectKeys() {
 
 func keyAlias(i int) string { return fmt.Sprintf("k%d", i) }
 
-func (b *costSQLBuilder) alias(k costanalytics.Key) string {
+func (b *breakdownSQLBuilder) alias(k usageanalytics.Key) string {
 	return keyAlias(lo.IndexOf(b.keys, k))
 }
 
 // keyExpr reads a key from an event row (mu) joined to its line window (l).
-func (b *costSQLBuilder) keyExpr(k costanalytics.Key) string {
+func (b *breakdownSQLBuilder) keyExpr(k usageanalytics.Key) string {
 	switch k.Kind {
-	case costanalytics.KeyProperty:
+	case usageanalytics.KeyProperty:
 		// JSONExtractString returns '' for numbers, so non-strings are read raw.
 		name := sqlStringLiteral(k.Property)
 		return fmt.Sprintf("if(JSONType(mu.properties, %[1]s) = 'String', JSONExtractString(mu.properties, %[1]s), JSONExtractRaw(mu.properties, %[1]s))", name)
-	case costanalytics.KeySource:
+	case usageanalytics.KeySource:
 		return "toString(mu.source)"
-	case costanalytics.KeyMeterID:
+	case usageanalytics.KeyMeterID:
 		return "toString(mu.meter_id)"
-	case costanalytics.KeyFeatureID:
+	case usageanalytics.KeyFeatureID:
 		return "l.feature_id"
-	case costanalytics.KeySubLineItemID:
+	case usageanalytics.KeySubLineItemID:
 		return "l.line_id"
-	case costanalytics.KeyMonth:
+	case usageanalytics.KeyMonth:
 		return fmt.Sprintf("formatDateTime(mu.timestamp, '%%Y-%%m', %s)", sqlStringLiteral(b.query.Timezone.String()))
 	}
-	panic(fmt.Sprintf("costanalytics: unhandled key kind %q", k.Kind))
+	panic(fmt.Sprintf("usageanalytics: unhandled key kind %q", k.Kind))
 }
 
 // linesCTE expands the line windows into one row per (line × customer).
-func (b *costSQLBuilder) linesCTE() string {
-	var lineIDs, meterIDs, featureIDs, customerIDs, prices []string
+func (b *breakdownSQLBuilder) linesCTE() string {
+	var lineIDs, meterIDs, featureIDs, customerIDs, prices, listPrices []string
 	var starts, ends []int64
 	for _, l := range b.params.Lines {
 		for _, c := range lo.Uniq(l.ExternalCustomerIDs) {
@@ -178,6 +178,7 @@ func (b *costSQLBuilder) linesCTE() string {
 			starts = append(starts, l.Start.Unix())
 			ends = append(ends, l.End.Unix())
 			prices = append(prices, l.UnitPrice.String())
+			listPrices = append(listPrices, l.ListUnitPrice.String())
 		}
 	}
 	return fmt.Sprintf(`lines AS (
@@ -188,25 +189,27 @@ func (b *costSQLBuilder) linesCTE() string {
         l.4 AS customer_id,
         toDateTime(l.5, 'UTC') AS w_start,
         toDateTime(l.6, 'UTC') AS w_end,
-        toDecimal256(l.7, %d) AS unit_price
-    FROM (SELECT arrayJoin(arrayZip(%s, %s, %s, %s, %s, %s, %s)) AS l)
-)`, costPriceScale,
+        toDecimal256(l.7, %[1]d) AS unit_price,
+        toDecimal256(l.8, %[1]d) AS list_unit_price
+    FROM (SELECT arrayJoin(arrayZip(%[2]s, %[3]s, %[4]s, %[5]s, %[6]s, %[7]s, %[8]s, %[9]s)) AS l)
+)`, usagePriceScale,
 		b.bind("line_ids", lineIDs), b.bind("line_meter_ids", meterIDs), b.bind("line_feature_ids", featureIDs),
 		b.bind("line_customer_ids", customerIDs), b.bind("line_starts", starts), b.bind("line_ends", ends),
-		b.bind("line_unit_prices", prices))
+		b.bind("line_unit_prices", prices), b.bind("line_list_unit_prices", listPrices))
 }
 
-// pricedCTE has one row per event × matching line window, with its cost and every key the query uses.
-func (b *costSQLBuilder) pricedCTE() string {
-	customers := lo.Uniq(lo.FlatMap(b.params.Lines, func(l costanalytics.LineWindow, _ int) []string { return l.ExternalCustomerIDs }))
-	meters := lo.Uniq(lo.Map(b.params.Lines, func(l costanalytics.LineWindow, _ int) string { return l.MeterID }))
-	minStart := lo.MinBy(b.params.Lines, func(a, b costanalytics.LineWindow) bool { return a.Start.Before(b.Start) }).Start
-	maxEnd := lo.MaxBy(b.params.Lines, func(a, b costanalytics.LineWindow) bool { return a.End.After(b.End) }).End
+// pricedCTE has one row per event × matching line window, with its amount and every key the query uses.
+func (b *breakdownSQLBuilder) pricedCTE() string {
+	customers := lo.Uniq(lo.FlatMap(b.params.Lines, func(l usageanalytics.LineWindow, _ int) []string { return l.ExternalCustomerIDs }))
+	meters := lo.Uniq(lo.Map(b.params.Lines, func(l usageanalytics.LineWindow, _ int) string { return l.MeterID }))
+	minStart := lo.MinBy(b.params.Lines, func(a, b usageanalytics.LineWindow) bool { return a.Start.Before(b.Start) }).Start
+	maxEnd := lo.MaxBy(b.params.Lines, func(a, b usageanalytics.LineWindow) bool { return a.End.After(b.End) }).End
 
 	cols := []string{
 		"mu.qty_total AS qty",
 		"l.line_id AS line_id",
-		fmt.Sprintf("toDecimal256(mu.qty_total, %d) * l.unit_price AS cost", costQtyScale),
+		fmt.Sprintf("toDecimal256(mu.qty_total, %d) * l.unit_price AS amount", usageQtyScale),
+		fmt.Sprintf("toDecimal256(mu.qty_total, %d) * l.list_unit_price AS subtotal", usageQtyScale),
 	}
 	for i, k := range b.keys {
 		cols = append(cols, fmt.Sprintf("%s AS %s", b.keyExpr(k), keyAlias(i)))
@@ -239,12 +242,12 @@ func (b *costSQLBuilder) pricedCTE() string {
 }
 
 // groupedCTE filters the priced events, then aggregates per group.
-func (b *costSQLBuilder) groupedCTE() string {
+func (b *breakdownSQLBuilder) groupedCTE() string {
 	groupCols := b.groupAliases()
 	cols := append([]string{}, groupCols...)
-	cols = append(cols, "sum(cost) AS g_cost", "sum(qty) AS g_qty", "count() AS g_events")
+	cols = append(cols, "sum(amount) AS g_amount", "sum(subtotal) AS g_subtotal", "sum(qty) AS g_qty", "count() AS g_events")
 	if b.query.Columns != nil {
-		cols = append(cols, fmt.Sprintf("sumMap(map(%s, cost)) AS g_columns", b.alias(*b.query.Columns)))
+		cols = append(cols, fmt.Sprintf("sumMap(map(%s, amount)) AS g_columns", b.alias(*b.query.Columns)))
 	}
 	if b.query.WithLineItemIDs {
 		cols = append(cols, "groupUniqArray(line_id) AS g_line_ids")
@@ -253,7 +256,7 @@ func (b *costSQLBuilder) groupedCTE() string {
 		a := b.alias(m.Key)
 		cols = append(cols,
 			fmt.Sprintf("uniqExactIf(%[1]s, %[1]s != '') AS m%[2]d_count", a, i),
-			fmt.Sprintf("groupUniqArrayIf(%[3]d)(%[1]s, %[1]s != '') AS m%[2]d_values", a, i, costanalytics.MaxDistinctValues+1))
+			fmt.Sprintf("groupUniqArrayIf(%[3]d)(%[1]s, %[1]s != '') AS m%[2]d_values", a, i, usageanalytics.MaxDistinctValues+1))
 	}
 
 	return fmt.Sprintf(`grouped AS (
@@ -265,11 +268,11 @@ func (b *costSQLBuilder) groupedCTE() string {
 }
 
 // filterWhere is the WHERE clause applying the filters and search to priced rows, or "".
-func (b *costSQLBuilder) filterWhere(groupCols []string) string {
+func (b *breakdownSQLBuilder) filterWhere(groupCols []string) string {
 	var conds []string
 	for i, f := range b.query.Filters {
 		cond := fmt.Sprintf("has(%s, %s)", b.bind(fmt.Sprintf("filter_%d", i), f.Values), b.alias(f.Key))
-		if f.Op == costanalytics.FilterNotIn {
+		if f.Op == usageanalytics.FilterNotIn {
 			cond = "NOT " + cond
 		}
 		conds = append(conds, cond)
@@ -287,16 +290,16 @@ func (b *costSQLBuilder) filterWhere(groupCols []string) string {
 	return "\n    WHERE " + strings.Join(conds, "\n      AND ")
 }
 
-func (b *costSQLBuilder) groupAliases() []string {
-	return lo.Map(b.query.GroupBy, func(k costanalytics.Key, _ int) string { return b.alias(k) })
+func (b *breakdownSQLBuilder) groupAliases() []string {
+	return lo.Map(b.query.GroupBy, func(k usageanalytics.Key, _ int) string { return b.alias(k) })
 }
 
 // outerSelect returns the page of groups, with totals over every group as window aggregates so rows,
 // totals and the count come from the same read.
-func (b *costSQLBuilder) outerSelect() string {
+func (b *breakdownSQLBuilder) outerSelect() string {
 	groupCols := b.groupAliases()
 	cols := append([]string{}, groupCols...)
-	cols = append(cols, "toString(g_cost)", "toString(g_qty)", "g_events")
+	cols = append(cols, "toString(g_amount)", "toString(g_subtotal)", "toString(g_qty)", "g_events")
 	if b.query.Columns != nil {
 		cols = append(cols, "mapApply((k, v) -> (k, toString(v)), g_columns)")
 	}
@@ -308,7 +311,8 @@ func (b *costSQLBuilder) outerSelect() string {
 	}
 	cols = append(cols,
 		"count() OVER () AS total_count",
-		"toString(sum(g_cost) OVER ())",
+		"toString(sum(g_amount) OVER ())",
+		"toString(sum(g_subtotal) OVER ())",
 		"toString(sum(g_qty) OVER ())",
 		"sum(g_events) OVER ()")
 	if b.query.Columns != nil {
@@ -324,22 +328,22 @@ LIMIT %s OFFSET %s`, strings.Join(cols, ",\n    "), strings.Join(b.orderBy(group
 }
 
 // orderBy sorts by the requested field, then by the group values so equal rows keep a stable order.
-func (b *costSQLBuilder) orderBy(groupCols []string) []string {
+func (b *breakdownSQLBuilder) orderBy(groupCols []string) []string {
 	dir := "ASC"
 	if b.query.Sort.Desc {
 		dir = "DESC"
 	}
 	var primary string
 	switch b.query.Sort.Field {
-	case costanalytics.SortTotal:
-		primary = "g_cost"
-	case costanalytics.SortUsage:
+	case usageanalytics.SortAmount:
+		primary = "g_amount"
+	case usageanalytics.SortUsage:
 		primary = "g_qty"
-	case costanalytics.SortEventCount:
+	case usageanalytics.SortEventCount:
 		primary = "g_events"
-	case costanalytics.SortColumn:
+	case usageanalytics.SortColumn:
 		primary = fmt.Sprintf("g_columns[%s]", b.bind("sort_column", b.query.Sort.Column))
-	case costanalytics.SortName:
+	case usageanalytics.SortName:
 		return lo.Map(groupCols, func(a string, _ int) string { return a + " " + dir })
 	}
 	return append([]string{primary + " " + dir}, lo.Map(groupCols, func(a string, _ int) string { return a + " ASC" })...)

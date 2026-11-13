@@ -7,14 +7,16 @@ lines AS (
         l.4 AS customer_id,
         toDateTime(l.5, 'UTC') AS w_start,
         toDateTime(l.6, 'UTC') AS w_end,
-        toDecimal256(l.7, 20) AS unit_price
-    FROM (SELECT arrayJoin(arrayZip(@line_ids, @line_meter_ids, @line_feature_ids, @line_customer_ids, @line_starts, @line_ends, @line_unit_prices)) AS l)
+        toDecimal256(l.7, 20) AS unit_price,
+        toDecimal256(l.8, 20) AS list_unit_price
+    FROM (SELECT arrayJoin(arrayZip(@line_ids, @line_meter_ids, @line_feature_ids, @line_customer_ids, @line_starts, @line_ends, @line_unit_prices, @line_list_unit_prices)) AS l)
 ),
 priced AS (
     SELECT
         mu.qty_total AS qty,
         l.line_id AS line_id,
-        toDecimal256(mu.qty_total, 15) * l.unit_price AS cost,
+        toDecimal256(mu.qty_total, 15) * l.unit_price AS amount,
+        toDecimal256(mu.qty_total, 15) * l.list_unit_price AS subtotal,
         if(JSONType(mu.properties, 'user') = 'String', JSONExtractString(mu.properties, 'user'), JSONExtractRaw(mu.properties, 'user')) AS k0,
         toString(mu.source) AS k1,
         if(JSONType(mu.properties, 'app') = 'String', JSONExtractString(mu.properties, 'app'), JSONExtractRaw(mu.properties, 'app')) AS k2,
@@ -36,12 +38,12 @@ filtered AS (
     WHERE has(@filter_0, k2)
       AND (positionCaseInsensitiveUTF8(k0, @search) > 0 OR positionCaseInsensitiveUTF8(k1, @search) > 0)
 )
-SELECT 0 AS is_total, k0, k1, toString(w), toString(sum(cost)), toString(sum(qty))
+SELECT 0 AS is_total, k0, k1, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sum(qty))
 FROM filtered
 WHERE has(@page_groups, [k0, k1])
 GROUP BY k0, k1, w
 UNION ALL
-SELECT 1 AS is_total, '' AS k0, '' AS k1, toString(w), toString(sum(cost)), toString(sum(qty))
+SELECT 1 AS is_total, '' AS k0, '' AS k1, toString(w), toString(sum(amount)), toString(sum(subtotal)), toString(sum(qty))
 FROM filtered
 GROUP BY w
 SETTINGS max_memory_usage = 96636764160, do_not_merge_across_partitions_select_final = 1
@@ -54,6 +56,7 @@ SETTINGS max_memory_usage = 96636764160, do_not_merge_across_partitions_select_f
 -- @line_starts = [1790812800]
 -- @line_ends = [1793491200]
 -- @line_unit_prices = [0.002]
+-- @line_list_unit_prices = [0.002]
 -- @tenant_id = tenant_1
 -- @environment_id = env_1
 -- @customer_ids = [cust_a]
