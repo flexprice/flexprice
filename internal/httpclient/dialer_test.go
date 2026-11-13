@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // The dial-time guard is what closes DNS rebinding: a URL validated as public
@@ -97,6 +98,40 @@ func TestGuardedTransportIgnoresProxyEnvironment(t *testing.T) {
 	if err == nil {
 		resp.Body.Close()
 		t.Fatal("expected the guarded transport to refuse a loopback server")
+	}
+	if !errors.Is(err, ErrBlockedAddress) {
+		t.Fatalf("expected ErrBlockedAddress, got: %v", err)
+	}
+}
+
+func TestPublicOnlyUploadClientBoundsPhasesNotBody(t *testing.T) {
+	client := NewPublicOnlyUploadClient(2 * time.Minute)
+	if client.Timeout != 0 {
+		t.Fatalf("upload client must not cap the whole request, got %v", client.Timeout)
+	}
+	if client.CheckRedirect == nil {
+		t.Fatal("upload client must refuse redirects")
+	}
+
+	transport := newUploadTransport(2 * time.Minute)
+	if transport.ResponseHeaderTimeout != 2*time.Minute {
+		t.Fatalf("response header timeout = %v", transport.ResponseHeaderTimeout)
+	}
+	if transport.TLSHandshakeTimeout == 0 {
+		t.Fatal("TLS handshake must stay bounded")
+	}
+	if transport.Proxy != nil {
+		t.Fatal("upload transport must not use a proxy")
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	resp, err := (&http.Client{Transport: transport}).Get(srv.URL)
+	if err == nil {
+		resp.Body.Close()
+		t.Fatal("upload transport must keep the public-only dial guard")
 	}
 	if !errors.Is(err, ErrBlockedAddress) {
 		t.Fatalf("expected ErrBlockedAddress, got: %v", err)

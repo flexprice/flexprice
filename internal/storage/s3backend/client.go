@@ -28,7 +28,7 @@ import (
 
 const defaultPresignExpiry = 30 * time.Minute
 
-const publicOnlyTimeout = 10 * time.Minute
+const publicOnlyResponseHeaderTimeout = 2 * time.Minute
 
 // Config holds everything needed to construct an S3-backed storagetypes.Storage.
 type Config struct {
@@ -172,7 +172,7 @@ func New(ctx context.Context, cfg *Config, log *logger.Logger) (storagetypes.Sto
 	}
 
 	if cfg.PublicOnlyEndpoint {
-		opts = append(opts, awsConfig.WithHTTPClient(httpclient.NewPublicOnlyClient(publicOnlyTimeout)))
+		opts = append(opts, awsConfig.WithHTTPClient(httpclient.NewPublicOnlyUploadClient(publicOnlyResponseHeaderTimeout)))
 	}
 
 	awsCfg, err := awsConfig.LoadDefaultConfig(ctx, opts...)
