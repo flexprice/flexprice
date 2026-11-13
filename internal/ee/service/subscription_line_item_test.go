@@ -916,6 +916,28 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Backda
 	s.Equal(types.StatusDeleted, s.reloadLineItem(itemB.ID).Status)
 }
 
+// Ending every line of the subscription must not republish a retired version, which would
+// bill alongside its replacement again.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_BackdatedVersion_RetiredNotRevivedByBulkTerminate() {
+	original := s.testData.lineItem
+	current := s.scheduleVersion(original.ID, 75, original.StartDate.Add(48*time.Hour))
+
+	effective := original.StartDate.Add(24 * time.Hour)
+	resp, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), current.ID, dto.UpdateSubscriptionLineItemRequest{
+		EffectiveFrom: &effective,
+	})
+	s.NoError(err)
+
+	cancelAt := time.Now().UTC()
+	_, err = s.GetStores().SubscriptionLineItemRepo.BulkTerminate(s.GetContext(), s.testData.subscription.ID, cancelAt)
+	s.NoError(err)
+
+	retired := s.reloadLineItem(current.ID)
+	s.Equal(types.StatusDeleted, retired.Status)
+	s.True(retired.EndDate.IsZero(), "a retired version is not part of the timeline and must be left alone")
+	s.assertEndDate(s.reloadLineItem(resp.SubscriptionLineItem.ID), cancelAt, "the replacement is the live version and ends")
+}
+
 // The replacement cannot start before the subscription; nothing is changed on rejection.
 func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_BackdatedVersion_BeforeSubscriptionStartRejected() {
 	original := s.testData.lineItem
