@@ -494,7 +494,7 @@ func (s *CostAnalyticsSuite) TestColumnsMetricsAndPaging() {
 		r.Offset = 1
 	})
 	s.NoError(err)
-	s.EqualValues(3, resp.TotalCount)
+	s.Equal(types.PaginationResponse{Total: 3, Limit: 1, Offset: 1}, resp.Pagination, "offset echoes the request")
 	s.Len(resp.Items, 1)
 	s.Equal([]string{"alice", "bob", "123", dto.CostNoneValue}, resp.ColumnValues, "ordered by total cost")
 	s.Equal("13020.04", resp.Totals.Cost, "totals cover every row, not the page")

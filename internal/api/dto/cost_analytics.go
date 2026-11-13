@@ -179,10 +179,11 @@ func costValidationErr(format string, args ...any) error {
 // CostAnalyticsResponse is one page of cost rows.
 type CostAnalyticsResponse struct {
 	Currency     string              `json:"currency"`
-	TotalCount   uint64              `json:"total_count"`
 	ColumnValues []string            `json:"column_values,omitempty"`
 	Totals       CostAnalyticsTotals `json:"totals"`
 	Items        []CostAnalyticsItem `json:"items"`
+	// Pagination.Total counts rows across all pages; Offset echoes the request.
+	Pagination types.PaginationResponse `json:"pagination"`
 	// UnappliedCouponIDs are coupons active in the range that apply_discounts cannot spread over events
 	// (fixed amount or one-time); the invoice may be lower by them.
 	UnappliedCouponIDs []string `json:"unapplied_coupon_ids,omitempty"`

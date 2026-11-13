@@ -549,7 +549,7 @@ func toCostAnalyticsResponse(
 
 	resp := &dto.CostAnalyticsResponse{
 		Currency:   currency,
-		TotalCount: result.TotalCount,
+		Pagination: types.PaginationResponse{Total: int(result.TotalCount), Limit: q.Limit, Offset: q.Offset},
 		Items:      make([]dto.CostAnalyticsItem, 0, len(result.Items)),
 		Totals: dto.CostAnalyticsTotals{
 			Cost:       money(result.Totals.Cost),
