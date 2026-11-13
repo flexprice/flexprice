@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -210,11 +212,15 @@ func (s *CostAnalyticsSuite) usage(meterID, customerID string, ts time.Time, qty
 	}}))
 }
 
+// supportedMeters are the fixture's flat-priced meters; m_tiered makes an unfiltered request fail.
+var supportedMeters = []string{"m_tokens", "m_calls", "m_scaled"}
+
 func (s *CostAnalyticsSuite) query(mutate func(r *dto.CostAnalyticsRequest)) (*dto.CostAnalyticsResponse, error) {
 	req := &dto.CostAnalyticsRequest{
 		ExternalCustomerID: "acme",
 		StartTime:          lo.ToPtr(costOct1),
 		EndTime:            lo.ToPtr(costNov1),
+		MeterIDs:           supportedMeters,
 		GroupBy:            []string{"properties.user"},
 		Deduplicate:        true,
 		Limit:              100,
@@ -240,7 +246,7 @@ func (s *CostAnalyticsSuite) TestPriceChangeAttributesEachEventAtItsOwnPrice() {
 
 // assertLinesEqualInvoice checks that every line in the breakdown costs exactly what the October
 // invoice charges for it, and returns how many lines there were.
-func (s *CostAnalyticsSuite) assertLinesEqualInvoice() int {
+func (s *CostAnalyticsSuite) assertLinesEqualInvoice(meterIDs ...string) int {
 	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.parent.ID)
 	s.NoError(err)
 	inv, err := s.billing.PrepareSubscriptionInvoiceRequest(s.GetContext(), &dto.PrepareSubscriptionInvoiceRequestParams{
@@ -257,6 +263,9 @@ func (s *CostAnalyticsSuite) assertLinesEqualInvoice() int {
 	resp, err := s.query(func(r *dto.CostAnalyticsRequest) {
 		r.GroupBy = []string{"sub_line_item_id"}
 		r.Expand = []dto.CostExpand{dto.CostExpandPrice}
+		if len(meterIDs) > 0 {
+			r.MeterIDs = meterIDs
+		}
 	})
 	s.NoError(err)
 	for _, item := range resp.Items {
@@ -272,10 +281,29 @@ func (s *CostAnalyticsSuite) TestFullPeriodLineTotalsEqualTheInvoice() {
 	s.Equal(4, s.assertLinesEqualInvoice(), "tok_old, tok_new, calls, scaled; tiered is excluded")
 }
 
-func (s *CostAnalyticsSuite) TestUnsupportedMeterIsExcludedNotApproximated() {
+// assertUnsupported checks the request fails as bad input naming exactly these meters and reasons.
+func (s *CostAnalyticsSuite) assertUnsupported(err error, want map[string]string) {
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "want validation error, got %v", err)
+	ids := lo.Keys(want)
+	sort.Strings(ids)
+	named := lo.Map(ids, func(id string, _ int) string { return id + " (" + want[id] + ")" })
+	s.Contains(err.Error(), "cost analytics does not support meters "+strings.Join(named, ", ")+" yet")
+}
+
+func (s *CostAnalyticsSuite) TestGroupByDefaultsToMeter() {
+	resp, err := s.query(func(r *dto.CostAnalyticsRequest) { r.GroupBy = nil })
+	s.NoError(err)
+	// 13,000 tokens, 4 calls × 0.01, 40 scaled × 0.5.
+	s.Equal(map[string]string{"m_tokens": "13000.00", "m_calls": "0.04", "m_scaled": "20.00"}, costByGroup(resp, "meter_id"))
+}
+
+func (s *CostAnalyticsSuite) TestUnsupportedMeterRejectsTheRequest() {
+	_, err := s.query(func(r *dto.CostAnalyticsRequest) { r.MeterIDs = nil })
+	s.assertUnsupported(err, map[string]string{"m_tiered": excludedNotFlatPrice})
+
 	resp, err := s.query(nil)
 	s.NoError(err)
-	s.Equal([]dto.CostExcludedMeter{{MeterID: "m_tiered", Reason: excludedNotFlatPrice}}, resp.ExcludedMeters)
 	// 13,000 tokens + 4 calls × 0.01 + 40 scaled × 0.5; the tiered $ never appears.
 	s.Equal("13020.04", resp.Totals.Cost)
 	s.Equal(map[string]string{"alice": "7020.00", "bob": "6000.00", "123": "0.03", dto.CostNoneValue: "0.01"}, costByGroup(resp, "properties.user"))
@@ -297,12 +325,11 @@ func (s *CostAnalyticsSuite) TestEntitlementsAndGrantsExcludeTheirMeters() {
 	})
 	s.NoError(err)
 
-	resp, err := s.query(nil)
+	_, err = s.query(nil)
+	s.assertUnsupported(err, map[string]string{"m_calls": excludedEntitlement, "m_scaled": excludedEntitlement})
+
+	resp, err := s.query(func(r *dto.CostAnalyticsRequest) { r.MeterIDs = []string{"m_tokens"} })
 	s.NoError(err)
-	reasons := lo.SliceToMap(resp.ExcludedMeters, func(e dto.CostExcludedMeter) (string, string) { return e.MeterID, e.Reason })
-	s.Equal(map[string]string{
-		"m_calls": excludedEntitlement, "m_scaled": excludedEntitlement, "m_tiered": excludedNotFlatPrice,
-	}, reasons)
 	s.Equal("13000.00", resp.Totals.Cost)
 }
 
@@ -321,17 +348,21 @@ func (s *CostAnalyticsSuite) TestSubscriptionGrantExcludesTheLinesBillingLowered
 	})
 	s.NoError(err)
 	// Billing applies the grant from its stored usage, which the invoice run refreshes.
-	s.assertLinesEqualInvoice()
-
-	resp, err := s.query(nil)
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.parent.ID)
 	s.NoError(err)
+	_, err = s.billing.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription: sub, PeriodStart: costOct1, PeriodEnd: costNov1, ReferencePoint: types.ReferencePointPeriodEnd,
+	})
+	s.NoError(err)
+
 	// Billing spreads the $10 over the tokens and scaled lines; calls stay at their flat price.
-	s.Equal([]dto.CostExcludedMeter{
-		{MeterID: "m_scaled", Reason: excludedEntitlement},
-		{MeterID: "m_tokens", Reason: excludedEntitlement},
-	}, resp.ExcludedMeters)
+	_, err = s.query(nil)
+	s.assertUnsupported(err, map[string]string{"m_scaled": excludedEntitlement, "m_tokens": excludedEntitlement})
+
+	resp, err := s.query(func(r *dto.CostAnalyticsRequest) { r.MeterIDs = []string{"m_calls"} })
+	s.NoError(err)
 	s.Equal("0.04", resp.Totals.Cost)
-	s.Equal(1, s.assertLinesEqualInvoice(), "only the calls line remains, equal to its invoice line")
+	s.Equal(1, s.assertLinesEqualInvoice("m_calls"), "the calls line equals its invoice line")
 }
 
 func (s *CostAnalyticsSuite) TestChildSeesOnlyItsOwnEventsAtTheParentsPrices() {

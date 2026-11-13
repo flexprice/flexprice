@@ -115,8 +115,10 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 		}
 	}
 
-	// A meter with any line billing did not price flat is left out entirely, so no row mixes priced and unpriced usage.
-	windows := lo.Filter(in.windows, func(w costanalytics.LineWindow, _ int) bool { _, out := in.excluded[w.MeterID]; return !out })
+	if err := unsupportedMetersErr(in.excluded); err != nil {
+		return nil, err
+	}
+	windows := in.windows
 
 	currency, err := singleCurrency(windows)
 	if err != nil {
@@ -141,7 +143,7 @@ func (s *costAnalyticsService) GetCostBreakdown(ctx context.Context, req *dto.Co
 	for _, cs := range subs {
 		in.subByID[cs.owner.ID] = cs.owner
 	}
-	resp := toCostAnalyticsResponse(q, currency, result, in.lineByID, in.excluded)
+	resp := toCostAnalyticsResponse(q, currency, result, in.lineByID)
 	if err := s.expandCostObjects(ctx, req.Expand, resp, in); err != nil {
 		return nil, err
 	}
@@ -454,6 +456,21 @@ func flatExclusion(owner *subscription.Subscription, li *subscription.Subscripti
 	return ""
 }
 
+// unsupportedMetersErr rejects the request when a requested meter has a line cost analytics cannot
+// price yet, naming each meter and why, so no total silently leaves usage out.
+func unsupportedMetersErr(excluded map[string]string) error {
+	if len(excluded) == 0 {
+		return nil
+	}
+	meterIDs := lo.Keys(excluded)
+	sort.Strings(meterIDs)
+	named := lo.Map(meterIDs, func(id string, _ int) string { return id + " (" + excluded[id] + ")" })
+	return ierr.NewErrorf("cost analytics does not support meters %s yet", strings.Join(named, ", ")).
+		WithHint("Only flat-priced usage without commitments or entitlements is supported; pass meter_ids or feature_ids to leave these meters out").
+		WithReportableDetails(map[string]any{"unsupported_meters": excluded}).
+		Mark(ierr.ErrValidation)
+}
+
 func excludeMeter(in *costInputs, meterID, reason string) {
 	if _, seen := in.excluded[meterID]; !seen {
 		in.excluded[meterID] = reason
@@ -525,28 +542,21 @@ func toCostAnalyticsResponse(
 	currency string,
 	result *costanalytics.Result,
 	lineByID map[string]*subscription.SubscriptionLineItem,
-	excluded map[string]string,
 ) *dto.CostAnalyticsResponse {
 	precision := types.GetCurrencyPrecision(currency)
 	money := func(d decimal.Decimal) string { return d.Round(precision).StringFixed(precision) }
 	none := func(v string) string { return lo.Ternary(v == "", dto.CostNoneValue, v) }
 
 	resp := &dto.CostAnalyticsResponse{
-		Currency:       currency,
-		TotalCount:     result.TotalCount,
-		Items:          make([]dto.CostAnalyticsItem, 0, len(result.Items)),
-		ExcludedMeters: make([]dto.CostExcludedMeter, 0, len(excluded)),
-		ContractRows:   []dto.CostAnalyticsContract{},
+		Currency:   currency,
+		TotalCount: result.TotalCount,
+		Items:      make([]dto.CostAnalyticsItem, 0, len(result.Items)),
 		Totals: dto.CostAnalyticsTotals{
 			Cost:       money(result.Totals.Cost),
 			Quantity:   result.Totals.Quantity.String(),
 			EventCount: result.Totals.EventCount,
 		},
 	}
-	for meterID, reason := range excluded {
-		resp.ExcludedMeters = append(resp.ExcludedMeters, dto.CostExcludedMeter{MeterID: meterID, Reason: reason})
-	}
-	sort.Slice(resp.ExcludedMeters, func(i, j int) bool { return resp.ExcludedMeters[i].MeterID < resp.ExcludedMeters[j].MeterID })
 
 	var windows []time.Time
 	if q.WindowSize != "" {

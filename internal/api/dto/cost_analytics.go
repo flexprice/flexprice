@@ -42,7 +42,7 @@ type CostAnalyticsRequest struct {
 	Timezone           string                `json:"timezone,omitempty"`
 	MeterIDs           []string              `json:"meter_ids,omitempty"`
 	FeatureIDs         []string              `json:"feature_ids,omitempty"`
-	GroupBy            []string              `json:"group_by" binding:"required"`
+	GroupBy            []string              `json:"group_by,omitempty"` // defaults to meter_id
 	Columns            string                `json:"columns,omitempty"`
 	Filters            []CostAnalyticsFilter `json:"filters,omitempty"`
 	Search             string                `json:"search,omitempty"`
@@ -107,7 +107,11 @@ func (r *CostAnalyticsRequest) ToQuery(now time.Time) (*costanalytics.Query, err
 	}
 	q.Timezone = tz
 
-	for _, s := range r.GroupBy {
+	groupBy := r.GroupBy
+	if len(groupBy) == 0 {
+		groupBy = []string{string(costanalytics.KeyMeterID)}
+	}
+	for _, s := range groupBy {
 		k, err := costanalytics.ParseKey(s)
 		if err != nil {
 			return nil, err
@@ -174,13 +178,11 @@ func costValidationErr(format string, args ...any) error {
 
 // CostAnalyticsResponse is one page of cost rows.
 type CostAnalyticsResponse struct {
-	Currency       string                  `json:"currency"`
-	TotalCount     uint64                  `json:"total_count"`
-	ColumnValues   []string                `json:"column_values,omitempty"`
-	Totals         CostAnalyticsTotals     `json:"totals"`
-	Items          []CostAnalyticsItem     `json:"items"`
-	ExcludedMeters []CostExcludedMeter     `json:"excluded_meters"`
-	ContractRows   []CostAnalyticsContract `json:"contract_rows"`
+	Currency     string              `json:"currency"`
+	TotalCount   uint64              `json:"total_count"`
+	ColumnValues []string            `json:"column_values,omitempty"`
+	Totals       CostAnalyticsTotals `json:"totals"`
+	Items        []CostAnalyticsItem `json:"items"`
 	// UnappliedCouponIDs are coupons active in the range that apply_discounts cannot spread over events
 	// (fixed amount or one-time); the invoice may be lower by them.
 	UnappliedCouponIDs []string `json:"unapplied_coupon_ids,omitempty"`
@@ -234,16 +236,4 @@ type CostColumn struct {
 type CostAnalyticsValue struct {
 	Count  uint64   `json:"count"`
 	Values []string `json:"values,omitempty"`
-}
-
-// CostExcludedMeter is a requested meter left out of every row and total, and why.
-type CostExcludedMeter struct {
-	MeterID string `json:"meter_id"`
-	Reason  string `json:"reason"`
-}
-
-// CostAnalyticsContract is a named amount not caused by events, such as a commitment true-up.
-type CostAnalyticsContract struct {
-	Name string `json:"name"`
-	Cost string `json:"cost"`
 }
