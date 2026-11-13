@@ -28665,7 +28665,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "plan_id": {
-                    "description": "PlanID is the offered plan to pay for; empty keeps the trial's plan. Honoured only while trialing.",
+                    "description": "PlanID is the offered plan to buy; empty means the default plan.",
                     "type": "string"
                 },
                 "tax_id": {
@@ -28777,7 +28777,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/SelfBillingPlanResponse"
                 },
                 "plans": {
-                    "description": "Plans are the offered plans, the default first, while the tenant can still choose one at checkout.",
+                    "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/SelfBillingPlanResponse"

@@ -86,6 +86,13 @@ func (s *selfBillingService) updateTenantStatus(ctx context.Context, t *tenant.T
 		return next, nil
 	}
 
+	// A bought plan replaces the trial; one still running would otherwise end into an invoice.
+	if sub != nil && sub.status == types.SubscriptionStatusActive {
+		if err := s.client.EndTrials(ctx, s.extID(t.ID)); err != nil {
+			return "", err
+		}
+	}
+
 	if err := s.raiseProductionLimit(ctx); err != nil {
 		return "", err
 	}

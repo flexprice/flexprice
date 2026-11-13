@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math"
 	"net/http"
 	"strings"
 	"time"
 
 	cockroach "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -44,10 +42,10 @@ const (
 
 type remoteClient struct {
 	sdk *flexprice.Flexprice
-	// planID is the default plan every trial starts on; offered is every plan a trialing tenant may choose, planID first.
-	planID   string
-	offered  []string
-	provider sdktypes.CheckoutPaymentProvider
+	// defaultPlanID is the plan every trial starts on; planIDs is every plan a tenant may buy, the default included.
+	defaultPlanID string
+	planIDs       []string
+	provider      sdktypes.CheckoutPaymentProvider
 }
 
 func newRemoteClient(cfg config.BillingConfig) *remoteClient {
@@ -58,10 +56,10 @@ func newRemoteClient(cfg config.BillingConfig) *remoteClient {
 	)
 
 	return &remoteClient{
-		sdk:      sdk,
-		planID:   cfg.PlanID,
-		offered:  cfg.OfferedPlanIDs(),
-		provider: sdktypes.CheckoutPaymentProvider(cfg.CheckoutProvider()),
+		sdk:           sdk,
+		defaultPlanID: cfg.DefaultPlanID,
+		planIDs:       cfg.PlanIDs,
+		provider:      sdktypes.CheckoutPaymentProvider(cfg.CheckoutProvider()),
 	}
 }
 
@@ -100,77 +98,102 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) (bool, erro
 		return false, err
 	}
 
-	_, err = c.sdk.Subscriptions.CreateSubscription(ctx, sdktypes.CreateSubscriptionRequest{
-		ExternalCustomerID: lo.ToPtr(extID),
-		PlanID:             c.planID,
-		Currency:           trialCurrency,
-		BillingPeriod:      trialBillingPeriod,
-		PaymentBehavior:    lo.ToPtr(trialPaymentBehavior),
-	})
-	if err != nil {
+	req := newSubscriptionRequest(extID, c.defaultPlanID)
+	req.PaymentBehavior = lo.ToPtr(trialPaymentBehavior)
+	if _, err := c.sdk.Subscriptions.CreateSubscription(ctx, req); err != nil {
 		return false, cloudErr(err)
 	}
 	return true, nil
 }
 
-// SwitchTrialPlan recreates the trial on planID rather than using Flexprice Cloud's plan change, which ends a trial and
-// invoices the new plan at once; here the first payment must stay behind the trial-end checkout.
-// The new trial is created before the old one is cancelled, so a failure never leaves the customer without a live
-// subscription; if the old one cannot be cancelled the new one is withdrawn again.
-func (c *remoteClient) SwitchTrialPlan(ctx context.Context, extID string, sub *remoteSubscription, planID string) (*remoteSubscription, error) {
-	created, err := c.sdk.Subscriptions.CreateSubscription(ctx, sdktypes.CreateSubscriptionRequest{
+// StartPlanCheckout creates a subscription on in.planID behind a checkout: Cloud keeps it draft until paid and archives it
+// if the checkout fails. It has no trial, and a $0 first period activates at once with no session.
+func (c *remoteClient) StartPlanCheckout(ctx context.Context, in checkoutInput) (*remoteCheckout, error) {
+	req := newSubscriptionRequest(in.extID, in.planID)
+	req.TrialPeriodDays = lo.ToPtr(int64(0))
+	req.Checkout = &sdktypes.CheckoutParams{
+		PaymentProvider: c.provider,
+		SuccessURL:      lo.ToPtr(in.successURL),
+		FailureURL:      lo.ToPtr(in.failureURL),
+		Metadata:        map[string]string{metaExternalID: in.extID},
+		// One open purchase per current subscription, so two checkouts can never both be paid.
+		IdempotencyKey: lo.ToPtr("plan_checkout:" + in.subscriptionID),
+	}
+
+	resp, err := c.sdk.Subscriptions.CreateSubscription(ctx, req)
+	if httpStatus(err) == http.StatusConflict {
+		return nil, ierr.WithError(err).
+			WithHint("A checkout is already open; finish it, or wait for it to expire, before starting another").
+			Mark(ierr.ErrAlreadyExists)
+	}
+	if err != nil {
+		return nil, cloudErr(err)
+	}
+
+	if resp.SubscriptionResponse == nil || resp.SubscriptionResponse.CheckoutSession == nil {
+		return &remoteCheckout{
+			status:   types.CheckoutStatusCompleted,
+			extID:    in.extID,
+			terminal: true,
+		}, nil
+	}
+	return toRemoteCheckout(resp.SubscriptionResponse.CheckoutSession), nil
+}
+
+// EndTrials cancels the customer's trials on self-serve plans, without an invoice, once a paid subscription replaced them.
+func (c *remoteClient) EndTrials(ctx context.Context, extID string) error {
+	resp, err := c.sdk.Subscriptions.QuerySubscription(ctx, sdktypes.SubscriptionFilter{
+		ExternalCustomerID: lo.ToPtr(extID),
+		SubscriptionStatus: []sdktypes.SubscriptionStatus{sdktypes.SubscriptionStatusTrialing},
+	})
+	if isNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return cloudErr(err)
+	}
+	if resp.ListSubscriptionsResponse == nil {
+		return unreadablePricing()
+	}
+
+	for _, sub := range resp.ListSubscriptionsResponse.Items {
+		if !lo.Contains(c.planIDs, lo.FromPtr(sub.PlanID)) {
+			continue
+		}
+		_, err := c.sdk.Subscriptions.CancelSubscription(ctx, lo.FromPtr(sub.ID), sdktypes.CancelSubscriptionRequest{
+			CancellationType:               sdktypes.CancellationTypeImmediate,
+			CancelImmediatelyInvoicePolicy: lo.ToPtr(sdktypes.CancelImmediatelyInvoicePolicySkip),
+			Reason:                         lo.ToPtr("self_billing_plan_purchased"),
+		})
+		if err != nil {
+			return cloudErr(err)
+		}
+	}
+	return nil
+}
+
+// newSubscriptionRequest holds what every self-serve subscription shares. Only the trial is allow_incomplete: a checkout
+// subscription is send_invoice, which Cloud does not allow with it.
+func newSubscriptionRequest(extID, planID string) sdktypes.CreateSubscriptionRequest {
+	return sdktypes.CreateSubscriptionRequest{
 		ExternalCustomerID: lo.ToPtr(extID),
 		PlanID:             planID,
 		Currency:           trialCurrency,
 		BillingPeriod:      trialBillingPeriod,
-		TrialPeriodDays:    lo.ToPtr(remainingTrialDays(sub.trialEnd, clock.Now())),
-	})
-	if err != nil {
-		return nil, cloudErr(err)
 	}
-	if created.SubscriptionResponse == nil || lo.FromPtr(created.SubscriptionResponse.ID) == "" {
-		return nil, unreadablePricing()
-	}
-	next := toRemoteSubscription(created.SubscriptionResponse)
-
-	if err := c.cancelTrial(ctx, sub.id, "self_billing_plan_switch"); err != nil {
-		// Withdraw the new trial so the customer is not left with two; the original error is the one to report.
-		_ = c.cancelTrial(ctx, next.id, "self_billing_plan_switch_rollback")
-		return nil, err
-	}
-	return next, nil
-}
-
-// cancelTrial ends a trialing subscription now; a trial has never been charged, so it is cancelled without an invoice.
-func (c *remoteClient) cancelTrial(ctx context.Context, subscriptionID, reason string) error {
-	_, err := c.sdk.Subscriptions.CancelSubscription(ctx, subscriptionID, sdktypes.CancelSubscriptionRequest{
-		CancellationType:               sdktypes.CancellationTypeImmediate,
-		CancelImmediatelyInvoicePolicy: lo.ToPtr(sdktypes.CancelImmediatelyInvoicePolicySkip),
-		Reason:                         lo.ToPtr(reason),
-	})
-	return cloudErr(err)
-}
-
-// remainingTrialDays is what is left of a trial in whole days, rounded up, and at least one, so switching plans never
-// restarts the trial and never ends it outright.
-func remainingTrialDays(trialEnd *time.Time, now time.Time) int64 {
-	if trialEnd == nil || !trialEnd.After(now) {
-		return 1
-	}
-	return max(int64(math.Ceil(trialEnd.Sub(now).Hours()/24)), 1)
 }
 
 func (c *remoteClient) LatestSubscription(ctx context.Context, extID string) (*remoteSubscription, error) {
 	ctx, cancel := context.WithTimeout(ctx, remoteTimeout)
 	defer cancel()
 
-	// The customer endpoint excludes incomplete and paused subscriptions.
+	// The customer endpoint excludes incomplete and paused subscriptions. A draft is an unpaid checkout, not yet the
+	// tenant's subscription.
 	statuses := []sdktypes.SubscriptionStatus{
 		sdktypes.SubscriptionStatusActive,
 		sdktypes.SubscriptionStatusTrialing,
 		sdktypes.SubscriptionStatusIncomplete,
 		sdktypes.SubscriptionStatusPaused,
-		sdktypes.SubscriptionStatusDraft,
 	}
 
 	for _, filter := range [][]sdktypes.SubscriptionStatus{statuses, {sdktypes.SubscriptionStatusCancelled}} {
@@ -310,10 +333,17 @@ func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummar
 		invoices:     []remoteInvoice{},
 	}
 
-	// The plans on offer, only while one can still be chosen: checkout switches only a self-serve trial, never a
-	// negotiated (enterprise) subscription, and never once paid.
-	if sub == nil || (sub.status == types.SubscriptionStatusTrialing && lo.Contains(c.offered, sub.planID)) {
-		out.plans, err = c.offeredPlans(ctx)
+	// The plans on offer while one can be bought: during a self-serve trial, and once no subscription is live. A
+	// negotiated (enterprise) trial keeps its plan.
+	noLiveSubscription := sub == nil || sub.status == types.SubscriptionStatusCancelled
+	selfServeTrial := sub != nil && sub.status == types.SubscriptionStatusTrialing && lo.Contains(c.planIDs, sub.planID)
+	if noLiveSubscription || selfServeTrial {
+		// With no live subscription the plan shown is already the default's offer.
+		var known *dto.SelfBillingPlanResponse
+		if noLiveSubscription {
+			known = plan
+		}
+		out.plans, err = c.offeredPlans(ctx, known)
 		if err != nil {
 			return nil, err
 		}

@@ -909,9 +909,9 @@ type BillingConfig struct {
 	Region        string `mapstructure:"region"`
 	APIHost       string `mapstructure:"api_host"`
 	APIKey        string `mapstructure:"api_key"`
-	// PlanID is the default self-serve plan: every new tenant's trial starts on it.
-	PlanID string `mapstructure:"plan_id"`
-	// PlanIDs are further plans a trialing tenant may choose at checkout, besides PlanID.
+	// DefaultPlanID is the plan every new tenant's trial starts on; it must be one of PlanIDs.
+	DefaultPlanID string `mapstructure:"default_plan_id"`
+	// PlanIDs are every plan a tenant may buy at checkout, the default included.
 	PlanIDs      []string `mapstructure:"plan_ids"`
 	DashboardURL string   `mapstructure:"dashboard_url"`
 
@@ -935,27 +935,12 @@ func (c BillingConfig) UsageLookback() time.Duration {
 	return time.Duration(c.UsageLookbackHours) * time.Hour
 }
 
-// OfferedPlanIDs lists the plans a tenant may choose, the default PlanID first, without blanks or repeats.
-func (c BillingConfig) OfferedPlanIDs() []string {
-	out := make([]string, 0, 1+len(c.PlanIDs))
-	seen := make(map[string]bool, 1+len(c.PlanIDs))
-	for _, id := range append([]string{c.PlanID}, c.PlanIDs...) {
-		id = strings.TrimSpace(id)
-		if id == "" || seen[id] {
-			continue
-		}
-		seen[id] = true
-		out = append(out, id)
-	}
-	return out
-}
-
 // IsSelfBillingEnabled reports whether this deployment bills its tenants through Flexprice Cloud.
 func (c BillingConfig) IsSelfBillingEnabled() bool {
 	return c.Enabled &&
 		c.Region != "" &&
 		c.APIKey != "" &&
-		c.PlanID != "" &&
+		c.DefaultPlanID != "" &&
 		c.DashboardURL != "" &&
 		c.CheckoutProvider().Validate() == nil &&
 		c.hasSecureAPIHost()
@@ -1310,6 +1295,10 @@ func NewConfig() (*Configuration, error) {
 	var cfg Configuration
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unable to decode into config struct, %v", err)
+	}
+
+	if cfg.Billing.Enabled && cfg.Billing.DefaultPlanID != "" && !slices.Contains(cfg.Billing.PlanIDs, cfg.Billing.DefaultPlanID) {
+		return nil, fmt.Errorf("billing.default_plan_id %q must be one of billing.plan_ids", cfg.Billing.DefaultPlanID)
 	}
 
 	// Step 6: Parse API keys from env var (JSON string override).

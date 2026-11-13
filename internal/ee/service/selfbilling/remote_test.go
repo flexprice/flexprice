@@ -152,8 +152,11 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 				return left.After(right)
 			})
 
-			limit := int(body["limit"].(float64))
-			_ = json.NewEncoder(w).Encode(map[string]any{"items": matching[:min(limit, len(matching))]})
+			limit := len(matching)
+			if l, ok := body["limit"].(float64); ok {
+				limit = min(int(l), limit)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": matching[:limit]})
 
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/plans/"):
 			plan, ok := f.plans[strings.TrimPrefix(r.URL.Path, "/plans/")]
@@ -285,9 +288,16 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			f.subscriptions = append(f.subscriptions, body)
 			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id": "sub_new", "plan_id": body["plan_id"], "subscription_status": "trialing",
-			})
+			created := map[string]any{"id": "sub_new", "plan_id": body["plan_id"], "subscription_status": "trialing"}
+			if body["checkout"] != nil {
+				created["subscription_status"] = "draft"
+				created["checkout_session"] = map[string]any{
+					"id": "cs_new", "checkout_status": "pending",
+					"payment_action": map[string]any{"url": "https://checkout.test/new"},
+					"metadata":       map[string]any{metaExternalID: body["external_customer_id"]},
+				}
+			}
+			_ = json.NewEncoder(w).Encode(created)
 
 		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, pathSubscriptions+"/") && strings.HasSuffix(r.URL.Path, "/cancel"):
 			var body map[string]any
@@ -323,8 +333,8 @@ func newTestRemoteClientWith(t *testing.T, f *fakeCloud, extra config.BillingCon
 		Region:  "in",
 		APIHost: srv.URL,
 		APIKey:  "sk",
-		PlanID:  "plan_1",
-		PlanIDs: extra.PlanIDs,
+		DefaultPlanID: "plan_1",
+		PlanIDs:       lo.CoalesceSliceOrEmpty(extra.PlanIDs, []string{"plan_1"}),
 
 		PaymentProvider: extra.PaymentProvider,
 	})
@@ -469,7 +479,7 @@ func TestLatestSubscription(t *testing.T) {
 
 			require.Len(t, f.searches, wantSearches)
 			assert.Equal(t, "in:t1", f.searches[0]["external_customer_id"])
-			assert.ElementsMatch(t, []any{"active", "trialing", "incomplete", "paused", "draft"}, f.searches[0]["subscription_status"])
+			assert.ElementsMatch(t, []any{"active", "trialing", "incomplete", "paused"}, f.searches[0]["subscription_status"])
 			assert.EqualValues(t, 1, f.searches[0]["limit"])
 			if wantSearches == 2 {
 				assert.Equal(t, []any{"cancelled"}, f.searches[1]["subscription_status"])
@@ -954,88 +964,79 @@ func TestRemoteClient_IngestBulkMapsCloudErrors(t *testing.T) {
 	assert.True(t, isRemoteFailure(err))
 }
 
-func TestSwitchTrialPlan(t *testing.T) {
-	trialEnd := time.Now().Add(9*24*time.Hour + time.Hour) // 9 days and an hour left
-
+func TestStartPlanCheckout(t *testing.T) {
 	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
 	c := newTestRemoteClient(t, f)
 
-	next, err := c.SwitchTrialPlan(context.Background(), "in:t1",
-		&remoteSubscription{id: "sub_old", planID: "plan_1", status: types.SubscriptionStatusTrialing, trialEnd: &trialEnd}, "plan_2")
+	co, err := c.StartPlanCheckout(context.Background(), checkoutInput{
+		extID: "in:t1", subscriptionID: "sub_trial", planID: "plan_2",
+		successURL: "https://app.test/ok", failureURL: "https://app.test/fail",
+	})
 	require.NoError(t, err)
-	assert.Equal(t, "sub_new", next.id)
-	assert.Equal(t, "plan_2", next.planID)
+	assert.Equal(t, "cs_new", co.id)
+	assert.Equal(t, "https://checkout.test/new", co.url)
 
-	// The new trial comes first, on the chosen plan, keeping what is left of the trial (rounded up to whole days).
+	// One subscription on the chosen plan, with no trial, behind a checkout keyed to the current subscription.
 	require.Len(t, f.subscriptions, 1)
-	assert.Equal(t, "plan_2", f.subscriptions[0]["plan_id"])
-	assert.Equal(t, "in:t1", f.subscriptions[0]["external_customer_id"])
-	assert.EqualValues(t, 10, f.subscriptions[0]["trial_period_days"])
+	body := f.subscriptions[0]
+	assert.Equal(t, "plan_2", body["plan_id"])
+	assert.Equal(t, "in:t1", body["external_customer_id"])
+	assert.EqualValues(t, 0, body["trial_period_days"])
+	assert.Nil(t, body["payment_behavior"])
+	checkout := body["checkout"].(map[string]any)
+	assert.Equal(t, "plan_checkout:sub_trial", checkout["idempotency_key"])
+	assert.Equal(t, "https://app.test/ok", checkout["success_url"])
+	assert.Empty(t, f.subCancels, "the trial stays until the purchase is paid")
+}
 
-	// Then the old trial is cancelled at once, with no invoice.
+func TestStartPlanCheckout_OpenCheckoutConflicts(t *testing.T) {
+	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+	f.failPaths[pathSubscriptions] = cannedResponse{http.StatusConflict, `{"error":{"message":"exists"}}`}
+	c := newTestRemoteClient(t, f)
+
+	_, err := c.StartPlanCheckout(context.Background(), checkoutInput{extID: "in:t1", subscriptionID: "sub_trial", planID: "plan_1"})
+	require.Error(t, err)
+	assert.True(t, ierr.IsAlreadyExists(err), "got %v", err)
+}
+
+func TestEndTrials(t *testing.T) {
+	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+	f.subs["in:t1"] = []map[string]any{
+		{"id": "s_trial", "plan_id": "plan_1", "subscription_status": "trialing"},
+		{"id": "s_enterprise", "plan_id": "plan_enterprise", "subscription_status": "trialing"},
+		{"id": "s_paid", "plan_id": "plan_2", "subscription_status": "active"},
+	}
+	c := newTestRemoteClientWith(t, f, config.BillingConfig{PlanIDs: []string{"plan_1", "plan_2"}})
+
+	require.NoError(t, c.EndTrials(context.Background(), "in:t1"))
+
+	// Only the self-serve trial ends, at once and with no invoice.
 	require.Len(t, f.subCancels, 1)
-	assert.Equal(t, "sub_old", f.subCancels[0]["id"])
+	assert.Equal(t, "s_trial", f.subCancels[0]["id"])
 	assert.Equal(t, "immediate", f.subCancels[0]["cancellation_type"])
 	assert.Equal(t, "skip", f.subCancels[0]["cancel_immediately_invoice_policy"])
 }
 
-func TestSwitchTrialPlan_RollsBackWhenTheOldTrialStays(t *testing.T) {
-	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
-	f.failPaths[pathSubscriptions+"/sub_old/cancel"] = cannedResponse{http.StatusInternalServerError, `{"error":{"message":"boom"}}`}
-	c := newTestRemoteClient(t, f)
-
-	_, err := c.SwitchTrialPlan(context.Background(), "in:t1",
-		&remoteSubscription{id: "sub_old", planID: "plan_1", status: types.SubscriptionStatusTrialing}, "plan_2")
-	require.Error(t, err)
-
-	// The new trial is withdrawn again, so the customer keeps only the one it had.
-	require.Len(t, f.subCancels, 1)
-	assert.Equal(t, "sub_new", f.subCancels[0]["id"])
-}
-
-func TestRemainingTrialDays(t *testing.T) {
-	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
-	at := func(d time.Duration) *time.Time { v := now.Add(d); return &v }
-	tests := []struct {
-		name     string
-		trialEnd *time.Time
-		want     int64
-	}{
-		{"whole_days", at(14 * 24 * time.Hour), 14},
-		{"part_day_rounds_up", at(3*24*time.Hour + time.Minute), 4},
-		{"last_hours_keep_one_day", at(2 * time.Hour), 1},
-		{"ended_keeps_one_day", at(-time.Hour), 1},
-		{"unknown_keeps_one_day", nil, 1},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, remainingTrialDays(tt.trialEnd, now))
-		})
-	}
-}
-
-func TestRemoteClient_SummaryOffersPlansOnlyWhileTrialing(t *testing.T) {
+func TestRemoteClient_SummaryOffersPlansWhileOneCanBeBought(t *testing.T) {
 	tests := []struct {
 		name      string
 		status    string
+		planID    string
 		wantPlans []string
 	}{
-		{"trialing_sees_every_offered_plan_default_first", "trialing", []string{"plan_1", "plan_2"}},
-		{"active_sees_none", "active", nil},
-		{"enterprise_trial_sees_none", "trialing_enterprise", nil},
+		{"trialing_sees_every_offered_plan", "trialing", "plan_1", []string{"plan_2", "plan_1"}},
+		{"ended_trial_sees_every_offered_plan", "cancelled", "plan_1", []string{"plan_2", "plan_1"}},
+		{"active_sees_none", "active", "plan_1", nil},
+		{"enterprise_trial_sees_none", "trialing", "plan_enterprise", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
 			f.plans["plan_2"] = map[string]any{"id": "plan_2", "name": "Growth", "prices": []any{}}
-			status, planID := tt.status, "plan_1"
-			if tt.status == "trialing_enterprise" {
-				status, planID = "trialing", "plan_enterprise"
-			}
-			f.subs["in:t1"] = []map[string]any{{"id": "s1", "plan_id": planID, "subscription_status": status}}
+			f.subs["in:t1"] = []map[string]any{{"id": "s1", "plan_id": tt.planID, "subscription_status": tt.status}}
 			f.subDetails["s1"] = map[string]any{
-				"id": "s1", "subscription_status": status,
-				"plan": map[string]any{"id": planID, "name": "Plan"},
+				"id": "s1", "subscription_status": tt.status,
+				"plan": map[string]any{"id": tt.planID, "name": "Plan"},
 			}
 			c := newTestRemoteClientWith(t, f, config.BillingConfig{PlanIDs: []string{"plan_2", "plan_1"}})
 
@@ -1049,4 +1050,14 @@ func TestRemoteClient_SummaryOffersPlansOnlyWhileTrialing(t *testing.T) {
 			assert.Equal(t, tt.wantPlans, got)
 		})
 	}
+}
+
+func TestRemoteClient_SummaryLoadsTheDefaultPlanOnce(t *testing.T) {
+	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+	f.plans["plan_2"] = map[string]any{"id": "plan_2", "name": "Growth", "prices": []any{}}
+	c := newTestRemoteClientWith(t, f, config.BillingConfig{PlanIDs: []string{"plan_1", "plan_2"}})
+
+	_, err := c.Summary(context.Background(), "in:t1")
+	require.NoError(t, err)
+	assert.Equal(t, 1, lo.Count(f.requests, "GET /plans/plan_1"))
 }

@@ -38,22 +38,30 @@ func TestStartCheckout(t *testing.T) {
 		wantStatus    types.CheckoutStatus
 		wantURL       string
 		wantTenant    types.TenantInternalStatus
-		wantCheckouts int
+		wantOpened    []string
 	}{
 		{
-			name:          "trialing_opens_trial_end_checkout",
-			remoteStatus:  types.SubscriptionStatusTrialing,
-			wantStatus:    types.CheckoutStatusPending,
-			wantURL:       "https://checkout.test/sub_us:t1",
-			wantTenant:    types.TenantInternalStatusTrialing,
-			wantCheckouts: 1,
+			name:         "trialing_buys_the_default_plan",
+			remoteStatus: types.SubscriptionStatusTrialing,
+			wantStatus:   types.CheckoutStatusPending,
+			wantURL:      "https://checkout.test/sub_us:t1",
+			wantTenant:   types.TenantInternalStatusTrialing,
+			wantOpened:   []string{"plan_1"},
 		},
 		{
-			name:          "no_subscription_provisions_then_checks_out",
-			wantStatus:    types.CheckoutStatusPending,
-			wantURL:       "https://checkout.test/sub_us:t1",
-			wantTenant:    types.TenantInternalStatusTrialing,
-			wantCheckouts: 1,
+			name:         "ended_trial_buys_the_default_plan",
+			remoteStatus: types.SubscriptionStatusCancelled,
+			wantStatus:   types.CheckoutStatusPending,
+			wantURL:      "https://checkout.test/sub_us:t1",
+			wantTenant:   types.TenantInternalStatusTrialing,
+			wantOpened:   []string{"plan_1"},
+		},
+		{
+			name:       "no_subscription_provisions_then_checks_out",
+			wantStatus: types.CheckoutStatusPending,
+			wantURL:    "https://checkout.test/sub_us:t1",
+			wantTenant: types.TenantInternalStatusTrialing,
+			wantOpened: []string{"plan_1"},
 		},
 		{
 			name:         "active_activates_without_checkout",
@@ -69,12 +77,12 @@ func TestStartCheckout(t *testing.T) {
 			wantTenant:   types.TenantInternalStatusTrialing,
 		},
 		{
-			name:          "free_first_period_activates_once_subscription_active",
-			remoteStatus:  types.SubscriptionStatusTrialing,
-			free:          true,
-			wantStatus:    types.CheckoutStatusCompleted,
-			wantTenant:    types.TenantInternalStatusActive,
-			wantCheckouts: 1,
+			name:         "free_first_period_activates_once_subscription_active",
+			remoteStatus: types.SubscriptionStatusTrialing,
+			free:         true,
+			wantStatus:   types.CheckoutStatusCompleted,
+			wantTenant:   types.TenantInternalStatusActive,
+			wantOpened:   []string{"plan_1"},
 		},
 	}
 	for _, tt := range tests {
@@ -84,7 +92,7 @@ func TestStartCheckout(t *testing.T) {
 			s, d := newTestService(fc)
 			seedTenant(t, d, "t1", types.TenantInternalStatusTrialing)
 			if tt.remoteStatus != "" {
-				fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", status: tt.remoteStatus}
+				fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", planID: "plan_1", status: tt.remoteStatus}
 			}
 
 			resp, err := s.StartCheckout(tenantCtx("t1"), "t1", checkoutReq)
@@ -93,7 +101,7 @@ func TestStartCheckout(t *testing.T) {
 			assert.Equal(t, tt.wantStatus, resp.Status)
 			assert.Equal(t, tt.wantURL, resp.URL)
 			assert.Equal(t, tt.wantTenant, resp.Tenant)
-			assert.Equal(t, tt.wantCheckouts, fc.trialCheckouts)
+			assert.Equal(t, tt.wantOpened, fc.opened)
 
 			got, err := d.tenants.GetByID(context.Background(), "t1")
 			require.NoError(t, err)
@@ -111,7 +119,6 @@ func TestStartCheckout_Rejected(t *testing.T) {
 		wantKind     func(error) bool
 	}{
 		{"invalid_request", dto.SelfBillingCheckoutRequest{}, types.SubscriptionStatusTrialing, ierr.IsValidation},
-		{"cancelled_subscription", checkoutReq, types.SubscriptionStatusCancelled, ierr.IsInvalidOperation},
 		{"paused_subscription", checkoutReq, types.SubscriptionStatusPaused, ierr.IsInvalidOperation},
 	}
 	for _, tt := range tests {
@@ -124,7 +131,7 @@ func TestStartCheckout_Rejected(t *testing.T) {
 			_, err := s.StartCheckout(tenantCtx("t1"), "t1", tt.req)
 			require.Error(t, err)
 			assert.True(t, tt.wantKind(err), "got %v", err)
-			assert.Equal(t, 0, fc.trialCheckouts)
+			assert.Empty(t, fc.opened)
 		})
 	}
 }
@@ -295,79 +302,75 @@ func TestStartCheckout_SavesAddressOnTenant(t *testing.T) {
 
 func TestStartCheckout_ChoosesPlan(t *testing.T) {
 	tests := []struct {
-		name         string
-		planID       string
-		wantSwitches []string
-		wantCheckout string // the subscription the checkout is opened on
+		name          string
+		planID        string
+		currentPlanID string
+		remoteStatus  types.SubscriptionStatus
+		wantOpened    []string
 	}{
-		{name: "no_plan_keeps_the_trial", wantCheckout: "cs_sub_us:t1"},
-		{name: "same_plan_does_not_switch", planID: "plan_1", wantCheckout: "cs_sub_us:t1"},
-		{
-			name:         "another_offered_plan_switches_the_trial_first",
-			planID:       "plan_2",
-			wantSwitches: []string{"plan_2"},
-			wantCheckout: "cs_sub_us:t1_plan_2",
-		},
+		{name: "no_plan_buys_the_default", currentPlanID: "plan_1", remoteStatus: types.SubscriptionStatusTrialing, wantOpened: []string{"plan_1"}},
+		{name: "trial_buys_another_plan", planID: "plan_2", currentPlanID: "plan_1", remoteStatus: types.SubscriptionStatusTrialing, wantOpened: []string{"plan_2"}},
+		{name: "ended_trial_buys_another_plan", planID: "plan_2", currentPlanID: "plan_1", remoteStatus: types.SubscriptionStatusCancelled, wantOpened: []string{"plan_2"}},
+		{name: "enterprise_trial_pays_its_own_plan", currentPlanID: "plan_enterprise", remoteStatus: types.SubscriptionStatusTrialing, wantOpened: []string{"trial_end"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fc := newFakeClient()
 			s, d := newTestService(fc)
 			seedTenant(t, d, "t1", types.TenantInternalStatusTrialing)
-			fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", planID: "plan_1", status: types.SubscriptionStatusTrialing}
+			fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", planID: tt.currentPlanID, status: tt.remoteStatus}
 
 			req := checkoutReq
 			req.PlanID = tt.planID
-			resp, err := s.StartCheckout(tenantCtx("t1"), "t1", req)
+			_, err := s.StartCheckout(tenantCtx("t1"), "t1", req)
 			require.NoError(t, err)
-
-			assert.Equal(t, tt.wantSwitches, fc.switches)
-			assert.Equal(t, tt.wantCheckout, resp.CheckoutID)
-			assert.Equal(t, 1, fc.trialCheckouts)
+			assert.Equal(t, tt.wantOpened, fc.opened)
 		})
 	}
 }
 
 func TestStartCheckout_PlanRejected(t *testing.T) {
 	tests := []struct {
-		name         string
-		planID       string
-		remoteStatus types.SubscriptionStatus
-		switchErr    error
-		wantKind     func(error) bool
+		name          string
+		planID        string
+		currentPlanID string
+		wantKind      func(error) bool
+		wantNoWrites  bool
 	}{
-		{"plan_not_offered", "plan_enterprise", types.SubscriptionStatusTrialing, nil, ierr.IsValidation},
-		{"paid_subscription_cannot_change_plan", "plan_2", types.SubscriptionStatusActive, nil, ierr.IsInvalidOperation},
-		{"pending_payment_cannot_change_plan", "plan_2", types.SubscriptionStatusIncomplete, nil, ierr.IsInvalidOperation},
-		{"enterprise_trial_keeps_its_plan", "plan_2", types.SubscriptionStatusTrialing, nil, ierr.IsInvalidOperation},
-		{
-			"failed_switch_opens_no_checkout", "plan_2", types.SubscriptionStatusTrialing,
-			ierr.NewError("cloud down").Mark(ierr.ErrInternal), ierr.IsInternal,
-		},
+		{name: "plan_not_offered", planID: "plan_enterprise", currentPlanID: "plan_1", wantKind: ierr.IsValidation, wantNoWrites: true},
+		{name: "enterprise_trial_keeps_its_plan", planID: "plan_2", currentPlanID: "plan_enterprise", wantKind: ierr.IsInvalidOperation},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fc := newFakeClient()
-			fc.switchErr = tt.switchErr
 			s, d := newTestService(fc)
 			seedTenant(t, d, "t1", types.TenantInternalStatusTrialing)
-			current := "plan_1"
-			if tt.name == "enterprise_trial_keeps_its_plan" {
-				current = "plan_enterprise"
-			}
-			fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", planID: current, status: tt.remoteStatus}
+			fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", planID: tt.currentPlanID, status: types.SubscriptionStatusTrialing}
 
 			req := checkoutReq
 			req.PlanID = tt.planID
 			_, err := s.StartCheckout(tenantCtx("t1"), "t1", req)
 			require.Error(t, err)
 			assert.True(t, tt.wantKind(err), "got %v", err)
-			assert.Equal(t, 0, fc.trialCheckouts)
-			if tt.name == "plan_not_offered" {
-				assert.Empty(t, fc.switches)
-				_, saved := fc.billingUpdate("us:t1")
-				assert.False(t, saved, "an unoffered plan is refused before anything is written")
-			}
+			assert.Empty(t, fc.opened)
+			_, saved := fc.billingUpdate("us:t1")
+			assert.Equal(t, !tt.wantNoWrites, saved)
 		})
 	}
+}
+
+func TestUpdateTenantStatus_EndsTrialsOnceAPlanIsBought(t *testing.T) {
+	fc := newFakeClient()
+	s, d := newTestService(fc)
+	seedTenant(t, d, "t1", types.TenantInternalStatusTrialing)
+	tnt, err := d.tenants.GetByID(context.Background(), "t1")
+	require.NoError(t, err)
+
+	_, err = s.updateTenantStatus(tenantCtx("t1"), tnt, &remoteSubscription{id: "sub_paid", status: types.SubscriptionStatusIncomplete})
+	require.NoError(t, err)
+	assert.Empty(t, fc.trialsEnded, "an unpaid subscription leaves the trial alone")
+
+	_, err = s.updateTenantStatus(tenantCtx("t1"), tnt, &remoteSubscription{id: "sub_paid", status: types.SubscriptionStatusActive})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"us:t1"}, fc.trialsEnded)
 }
