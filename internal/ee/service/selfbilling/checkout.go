@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 const (
@@ -14,7 +15,8 @@ const (
 	checkoutFailurePath = "/billing/checkout/failure"
 )
 
-// StartCheckout only checks out a trialing subscription; an active one activates and an incomplete one pays in the portal.
+// StartCheckout only checks out a trialing subscription, first moving it onto req.PlanID when that differs; an active
+// one activates and an incomplete one pays in the portal.
 func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string, req dto.SelfBillingCheckoutRequest) (_ *dto.SelfBillingCheckoutResponse, err error) {
 	defer func() { s.logRemoteFailure(ctx, "start_checkout", tenantID, err) }()
 
@@ -24,6 +26,12 @@ func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string,
 
 	if err := req.Validate(); err != nil {
 		return nil, err
+	}
+	if req.PlanID != "" && !lo.Contains(s.Config.Billing.OfferedPlanIDs(), req.PlanID) {
+		return nil, ierr.NewError("plan is not offered for self-serve checkout").
+			WithHint("Choose one of the plans offered on the upgrade page").
+			WithReportableDetails(map[string]any{"plan_id": req.PlanID}).
+			Mark(ierr.ErrValidation)
 	}
 
 	t, err := s.TenantRepo.GetByID(ctx, tenantID)
@@ -63,8 +71,28 @@ func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string,
 			Mark(ierr.ErrNotFound)
 	}
 
+	// A different plan can be chosen only before the first payment, while the subscription is still a trial.
+	// A negotiated (enterprise) subscription keeps its plan whatever the request says.
+	switching := req.PlanID != "" && req.PlanID != sub.planID
+	if switching && (sub.status != types.SubscriptionStatusTrialing || !lo.Contains(s.Config.Billing.OfferedPlanIDs(), sub.planID)) {
+		return nil, ierr.NewErrorf("flexprice cloud subscription %s is %s; its plan cannot change at checkout", sub.id, sub.status).
+			WithHint("Your plan can no longer be changed here; contact support").
+			WithReportableDetails(map[string]any{
+				"subscription_id": sub.id,
+				"status":          sub.status,
+				"plan_id":         req.PlanID,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
 	switch sub.status {
 	case types.SubscriptionStatusTrialing:
+		if switching {
+			sub, err = s.client.SwitchTrialPlan(ctx, extID, sub, req.PlanID)
+			if err != nil {
+				return nil, err
+			}
+		}
 	case types.SubscriptionStatusActive:
 		status, err := s.updateTenantStatus(ctx, t, sub)
 		if err != nil {

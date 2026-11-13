@@ -49,6 +49,9 @@ type fakeClient struct {
 
 	// staleAfterTrialEnd leaves the subscription unchanged after a free trial end, as a lagging read would.
 	staleAfterTrialEnd bool
+
+	switches  []string // planIDs passed to SwitchTrialPlan
+	switchErr error
 }
 
 func newFakeClient() *fakeClient {
@@ -88,8 +91,21 @@ func (f *fakeClient) StartTrial(_ context.Context, extID string) (bool, error) {
 		return false, f.err
 	}
 	f.trialsStarted++
-	f.subs[extID] = &remoteSubscription{id: "sub_" + extID, status: types.SubscriptionStatusTrialing}
+	f.subs[extID] = &remoteSubscription{id: "sub_" + extID, planID: "plan_1", status: types.SubscriptionStatusTrialing}
 	return f.err == nil, f.err
+}
+
+func (f *fakeClient) SwitchTrialPlan(_ context.Context, extID string, sub *remoteSubscription, planID string) (*remoteSubscription, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.switches = append(f.switches, planID)
+	if f.switchErr != nil {
+		return nil, f.switchErr
+	}
+	next := &remoteSubscription{id: sub.id + "_" + planID, planID: planID, status: types.SubscriptionStatusTrialing, trialEnd: sub.trialEnd}
+	f.subs[extID] = next
+	return next, nil
 }
 
 func (f *fakeClient) LatestSubscription(_ context.Context, extID string) (*remoteSubscription, error) {
@@ -255,6 +271,7 @@ func newTestService(client billingClient) (*selfBillingService, *testDeps) {
 			APIHost:      "https://cloud.test/v1",
 			APIKey:       "sk",
 			PlanID:       "plan_1",
+			PlanIDs:      []string{"plan_2"},
 			DashboardURL: "https://us.app.test",
 		}},
 	}

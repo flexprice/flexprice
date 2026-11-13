@@ -14,6 +14,7 @@ import (
 	"time"
 
 	cockroach "github.com/cockroachdb/errors"
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -70,6 +71,7 @@ type fakeCloud struct {
 	subscriptions []map[string]any // CreateSubscription request bodies
 	modifications []map[string]any // ExecuteSubscriptionModify request bodies
 	cancelled     []string
+	subCancels    []map[string]any // CancelSubscription request bodies, with the subscription id under "id"
 	portals       []string
 	bulkIngests   []map[string]any // IngestEventsBulk request bodies
 }
@@ -283,7 +285,16 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			f.subscriptions = append(f.subscriptions, body)
 			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "sub_new"})
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": "sub_new", "plan_id": body["plan_id"], "subscription_status": "trialing",
+			})
+
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, pathSubscriptions+"/") && strings.HasSuffix(r.URL.Path, "/cancel"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			body["id"] = strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, pathSubscriptions+"/"), "/cancel")
+			f.subCancels = append(f.subCancels, body)
+			_ = json.NewEncoder(w).Encode(map[string]any{"subscription_id": body["id"], "status": "cancelled"})
 
 		case r.Method == http.MethodPost && r.URL.Path == pathEventsBulk:
 			var body map[string]any
@@ -313,6 +324,7 @@ func newTestRemoteClientWith(t *testing.T, f *fakeCloud, extra config.BillingCon
 		APIHost: srv.URL,
 		APIKey:  "sk",
 		PlanID:  "plan_1",
+		PlanIDs: extra.PlanIDs,
 
 		PaymentProvider: extra.PaymentProvider,
 	})
@@ -939,4 +951,101 @@ func TestRemoteClient_IngestBulkMapsCloudErrors(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, ierr.IsHTTPClient(err), "got %v", err)
 	assert.True(t, isRemoteFailure(err))
+}
+
+func TestSwitchTrialPlan(t *testing.T) {
+	trialEnd := time.Now().Add(9*24*time.Hour + time.Hour) // 9 days and an hour left
+
+	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+	c := newTestRemoteClient(t, f)
+
+	next, err := c.SwitchTrialPlan(context.Background(), "in:t1",
+		&remoteSubscription{id: "sub_old", planID: "plan_1", status: types.SubscriptionStatusTrialing, trialEnd: &trialEnd}, "plan_2")
+	require.NoError(t, err)
+	assert.Equal(t, "sub_new", next.id)
+	assert.Equal(t, "plan_2", next.planID)
+
+	// The new trial comes first, on the chosen plan, keeping what is left of the trial (rounded up to whole days).
+	require.Len(t, f.subscriptions, 1)
+	assert.Equal(t, "plan_2", f.subscriptions[0]["plan_id"])
+	assert.Equal(t, "in:t1", f.subscriptions[0]["external_customer_id"])
+	assert.EqualValues(t, 10, f.subscriptions[0]["trial_period_days"])
+
+	// Then the old trial is cancelled at once, with no invoice.
+	require.Len(t, f.subCancels, 1)
+	assert.Equal(t, "sub_old", f.subCancels[0]["id"])
+	assert.Equal(t, "immediate", f.subCancels[0]["cancellation_type"])
+	assert.Equal(t, "skip", f.subCancels[0]["cancel_immediately_invoice_policy"])
+}
+
+func TestSwitchTrialPlan_RollsBackWhenTheOldTrialStays(t *testing.T) {
+	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+	f.failPaths[pathSubscriptions+"/sub_old/cancel"] = cannedResponse{http.StatusInternalServerError, `{"error":{"message":"boom"}}`}
+	c := newTestRemoteClient(t, f)
+
+	_, err := c.SwitchTrialPlan(context.Background(), "in:t1",
+		&remoteSubscription{id: "sub_old", planID: "plan_1", status: types.SubscriptionStatusTrialing}, "plan_2")
+	require.Error(t, err)
+
+	// The new trial is withdrawn again, so the customer keeps only the one it had.
+	require.Len(t, f.subCancels, 1)
+	assert.Equal(t, "sub_new", f.subCancels[0]["id"])
+}
+
+func TestRemainingTrialDays(t *testing.T) {
+	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	at := func(d time.Duration) *time.Time { v := now.Add(d); return &v }
+	tests := []struct {
+		name     string
+		trialEnd *time.Time
+		want     int64
+	}{
+		{"whole_days", at(14 * 24 * time.Hour), 14},
+		{"part_day_rounds_up", at(3*24*time.Hour + time.Minute), 4},
+		{"last_hours_keep_one_day", at(2 * time.Hour), 1},
+		{"ended_keeps_one_day", at(-time.Hour), 1},
+		{"unknown_keeps_one_day", nil, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, remainingTrialDays(tt.trialEnd, now))
+		})
+	}
+}
+
+func TestRemoteClient_SummaryOffersPlansOnlyWhileTrialing(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    string
+		wantPlans []string
+	}{
+		{"trialing_sees_every_offered_plan_default_first", "trialing", []string{"plan_1", "plan_2"}},
+		{"active_sees_none", "active", nil},
+		{"enterprise_trial_sees_none", "trialing_enterprise", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+			f.plans["plan_2"] = map[string]any{"id": "plan_2", "name": "Growth", "prices": []any{}}
+			status, planID := tt.status, "plan_1"
+			if tt.status == "trialing_enterprise" {
+				status, planID = "trialing", "plan_enterprise"
+			}
+			f.subs["in:t1"] = []map[string]any{{"id": "s1", "plan_id": planID, "subscription_status": status}}
+			f.subDetails["s1"] = map[string]any{
+				"id": "s1", "subscription_status": status,
+				"plan": map[string]any{"id": planID, "name": "Plan"},
+			}
+			c := newTestRemoteClientWith(t, f, config.BillingConfig{PlanIDs: []string{"plan_2", "plan_1"}})
+
+			summary, err := c.Summary(context.Background(), "in:t1")
+			require.NoError(t, err)
+			got := lo.Map(summary.plans, func(p *dto.SelfBillingPlanResponse, _ int) string { return p.ID })
+			if tt.wantPlans == nil {
+				assert.Empty(t, got)
+				return
+			}
+			assert.Equal(t, tt.wantPlans, got)
+		})
+	}
 }

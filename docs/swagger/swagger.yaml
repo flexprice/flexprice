@@ -8170,6 +8170,10 @@ definitions:
         type: string
       name:
         type: string
+      plan_id:
+        description: PlanID is the offered plan to pay for; empty keeps the trial's
+          plan. Honoured only while trialing.
+        type: string
       tax_id:
         type: string
     required:
@@ -8247,6 +8251,12 @@ definitions:
         type: array
       plan:
         $ref: '#/definitions/SelfBillingPlanResponse'
+      plans:
+        description: Plans are the offered plans, the default first, while the tenant
+          can still choose one at checkout.
+        items:
+          $ref: '#/definitions/SelfBillingPlanResponse'
+        type: array
       status:
         $ref: '#/definitions/types.TenantInternalStatus'
       subscription_status:

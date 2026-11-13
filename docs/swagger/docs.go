@@ -28640,6 +28640,10 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "plan_id": {
+                    "description": "PlanID is the offered plan to pay for; empty keeps the trial's plan. Honoured only while trialing.",
+                    "type": "string"
+                },
                 "tax_id": {
                     "type": "string"
                 }
@@ -28747,6 +28751,13 @@ const docTemplate = `{
                 },
                 "plan": {
                     "$ref": "#/definitions/SelfBillingPlanResponse"
+                },
+                "plans": {
+                    "description": "Plans are the offered plans, the default first, while the tenant can still choose one at checkout.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SelfBillingPlanResponse"
+                    }
                 },
                 "status": {
                     "$ref": "#/definitions/types.TenantInternalStatus"

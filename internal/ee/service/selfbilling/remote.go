@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"strings"
 	"time"
 
 	cockroach "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -38,8 +40,10 @@ const (
 )
 
 type remoteClient struct {
-	sdk      *flexprice.Flexprice
+	sdk *flexprice.Flexprice
+	// planID is the default plan every trial starts on; offered is every plan a trialing tenant may choose, planID first.
 	planID   string
+	offered  []string
 	provider sdktypes.CheckoutPaymentProvider
 }
 
@@ -53,6 +57,7 @@ func newRemoteClient(cfg config.BillingConfig) *remoteClient {
 	return &remoteClient{
 		sdk:      sdk,
 		planID:   cfg.PlanID,
+		offered:  cfg.OfferedPlanIDs(),
 		provider: sdktypes.CheckoutPaymentProvider(cfg.CheckoutProvider()),
 	}
 }
@@ -102,6 +107,53 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) (bool, erro
 		return false, cloudErr(err)
 	}
 	return true, nil
+}
+
+// SwitchTrialPlan recreates the trial on planID rather than using Flexprice Cloud's plan change, which ends a trial and
+// invoices the new plan at once; here the first payment must stay behind the trial-end checkout.
+// The new trial is created before the old one is cancelled, so a failure never leaves the customer without a live
+// subscription; if the old one cannot be cancelled the new one is withdrawn again.
+func (c *remoteClient) SwitchTrialPlan(ctx context.Context, extID string, sub *remoteSubscription, planID string) (*remoteSubscription, error) {
+	created, err := c.sdk.Subscriptions.CreateSubscription(ctx, sdktypes.CreateSubscriptionRequest{
+		ExternalCustomerID: lo.ToPtr(extID),
+		PlanID:             planID,
+		Currency:           trialCurrency,
+		BillingPeriod:      trialBillingPeriod,
+		TrialPeriodDays:    lo.ToPtr(remainingTrialDays(sub.trialEnd, clock.Now())),
+	})
+	if err != nil {
+		return nil, cloudErr(err)
+	}
+	if created.SubscriptionResponse == nil || lo.FromPtr(created.SubscriptionResponse.ID) == "" {
+		return nil, unreadablePricing()
+	}
+	next := toRemoteSubscription(created.SubscriptionResponse)
+
+	if err := c.cancelTrial(ctx, sub.id, "self_billing_plan_switch"); err != nil {
+		// Withdraw the new trial so the customer is not left with two; the original error is the one to report.
+		_ = c.cancelTrial(ctx, next.id, "self_billing_plan_switch_rollback")
+		return nil, err
+	}
+	return next, nil
+}
+
+// cancelTrial ends a trialing subscription now; a trial has never been charged, so it is cancelled without an invoice.
+func (c *remoteClient) cancelTrial(ctx context.Context, subscriptionID, reason string) error {
+	_, err := c.sdk.Subscriptions.CancelSubscription(ctx, subscriptionID, sdktypes.CancelSubscriptionRequest{
+		CancellationType:               sdktypes.CancellationTypeImmediate,
+		CancelImmediatelyInvoicePolicy: lo.ToPtr(sdktypes.CancelImmediatelyInvoicePolicySkip),
+		Reason:                         lo.ToPtr(reason),
+	})
+	return cloudErr(err)
+}
+
+// remainingTrialDays is what is left of a trial in whole days, rounded up, and at least one, so switching plans never
+// restarts the trial and never ends it outright.
+func remainingTrialDays(trialEnd *time.Time, now time.Time) int64 {
+	if trialEnd == nil || !trialEnd.After(now) {
+		return 1
+	}
+	return max(int64(math.Ceil(trialEnd.Sub(now).Hours()/24)), 1)
 }
 
 func (c *remoteClient) LatestSubscription(ctx context.Context, extID string) (*remoteSubscription, error) {
@@ -254,6 +306,15 @@ func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummar
 		invoices:     []remoteInvoice{},
 	}
 
+	// The plans on offer, only while one can still be chosen: checkout switches only a self-serve trial, never a
+	// negotiated (enterprise) subscription, and never once paid.
+	if sub == nil || (sub.status == types.SubscriptionStatusTrialing && lo.Contains(c.offered, sub.planID)) {
+		out.plans, err = c.offeredPlans(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	invoices, err := c.sdk.Invoices.QueryInvoice(ctx, sdktypes.InvoiceFilter{
 		ExternalCustomerID: lo.ToPtr(extID),
 		Limit:              lo.ToPtr(int64(summaryInvoiceLimit)),
@@ -311,6 +372,7 @@ func (c *remoteClient) IngestBulk(ctx context.Context, events []usageEvent) erro
 func toRemoteSubscription(s *sdktypes.SubscriptionResponse) *remoteSubscription {
 	return &remoteSubscription{
 		id:       lo.FromPtr(s.ID),
+		planID:   lo.FromPtr(s.PlanID),
 		status:   types.SubscriptionStatus(lo.FromPtr(s.SubscriptionStatus)),
 		trialEnd: s.TrialEnd,
 	}

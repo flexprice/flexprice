@@ -24,6 +24,9 @@ type billingClient interface {
 	// UpdateBillingDetails sets the customer's address and tax ID, keeping its other metadata.
 	UpdateBillingDetails(ctx context.Context, extID string, details billingDetails) error
 
+	// SwitchTrialPlan moves a trialing subscription onto planID, keeping what is left of its trial, and returns the new subscription.
+	SwitchTrialPlan(ctx context.Context, extID string, sub *remoteSubscription, planID string) (*remoteSubscription, error)
+
 	// StartTrialEndCheckout gates the trial's end behind a configured checkout provider on Flexprice Cloud, resuming an open one.
 	StartTrialEndCheckout(ctx context.Context, in checkoutInput) (*remoteCheckout, error)
 
@@ -69,6 +72,7 @@ func (d billingDetails) hasAddress() bool {
 
 type remoteSubscription struct {
 	id       string
+	planID   string
 	status   types.SubscriptionStatus
 	trialEnd *time.Time
 }
@@ -96,8 +100,10 @@ type portalSession struct {
 type remoteSummary struct {
 	subscription *remoteSubscription
 	plan         *dto.SelfBillingPlanResponse
-	invoices     []remoteInvoice
-	usage        *dto.CustomerUsageSummaryResponse
+	// plans are the offered plans, the default first; empty once the tenant can no longer choose.
+	plans    []*dto.SelfBillingPlanResponse
+	invoices []remoteInvoice
+	usage    *dto.CustomerUsageSummaryResponse
 }
 
 type remoteInvoice struct {

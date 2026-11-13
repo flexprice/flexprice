@@ -292,3 +292,82 @@ func TestStartCheckout_SavesAddressOnTenant(t *testing.T) {
 	}, got.BillingDetails.Address)
 	assert.Equal(t, types.TenantInternalStatusTrialing, got.InternalStatus)
 }
+
+func TestStartCheckout_ChoosesPlan(t *testing.T) {
+	tests := []struct {
+		name         string
+		planID       string
+		wantSwitches []string
+		wantCheckout string // the subscription the checkout is opened on
+	}{
+		{name: "no_plan_keeps_the_trial", wantCheckout: "cs_sub_us:t1"},
+		{name: "same_plan_does_not_switch", planID: "plan_1", wantCheckout: "cs_sub_us:t1"},
+		{
+			name:         "another_offered_plan_switches_the_trial_first",
+			planID:       "plan_2",
+			wantSwitches: []string{"plan_2"},
+			wantCheckout: "cs_sub_us:t1_plan_2",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := newFakeClient()
+			s, d := newTestService(fc)
+			seedTenant(t, d, "t1", types.TenantInternalStatusTrialing)
+			fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", planID: "plan_1", status: types.SubscriptionStatusTrialing}
+
+			req := checkoutReq
+			req.PlanID = tt.planID
+			resp, err := s.StartCheckout(tenantCtx("t1"), "t1", req)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantSwitches, fc.switches)
+			assert.Equal(t, tt.wantCheckout, resp.CheckoutID)
+			assert.Equal(t, 1, fc.trialCheckouts)
+		})
+	}
+}
+
+func TestStartCheckout_PlanRejected(t *testing.T) {
+	tests := []struct {
+		name         string
+		planID       string
+		remoteStatus types.SubscriptionStatus
+		switchErr    error
+		wantKind     func(error) bool
+	}{
+		{"plan_not_offered", "plan_enterprise", types.SubscriptionStatusTrialing, nil, ierr.IsValidation},
+		{"paid_subscription_cannot_change_plan", "plan_2", types.SubscriptionStatusActive, nil, ierr.IsInvalidOperation},
+		{"pending_payment_cannot_change_plan", "plan_2", types.SubscriptionStatusIncomplete, nil, ierr.IsInvalidOperation},
+		{"enterprise_trial_keeps_its_plan", "plan_2", types.SubscriptionStatusTrialing, nil, ierr.IsInvalidOperation},
+		{
+			"failed_switch_opens_no_checkout", "plan_2", types.SubscriptionStatusTrialing,
+			ierr.NewError("cloud down").Mark(ierr.ErrInternal), ierr.IsInternal,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := newFakeClient()
+			fc.switchErr = tt.switchErr
+			s, d := newTestService(fc)
+			seedTenant(t, d, "t1", types.TenantInternalStatusTrialing)
+			current := "plan_1"
+			if tt.name == "enterprise_trial_keeps_its_plan" {
+				current = "plan_enterprise"
+			}
+			fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", planID: current, status: tt.remoteStatus}
+
+			req := checkoutReq
+			req.PlanID = tt.planID
+			_, err := s.StartCheckout(tenantCtx("t1"), "t1", req)
+			require.Error(t, err)
+			assert.True(t, tt.wantKind(err), "got %v", err)
+			assert.Equal(t, 0, fc.trialCheckouts)
+			if tt.name == "plan_not_offered" {
+				assert.Empty(t, fc.switches)
+				_, saved := fc.billingUpdate("us:t1")
+				assert.False(t, saved, "an unoffered plan is refused before anything is written")
+			}
+		})
+	}
+}

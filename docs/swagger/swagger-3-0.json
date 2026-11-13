@@ -31245,6 +31245,10 @@
           "name": {
             "type": "string"
           },
+          "plan_id": {
+            "type": "string",
+            "description": "PlanID is the offered plan to pay for; empty keeps the trial's plan. Honoured only while trialing."
+          },
           "tax_id": {
             "type": "string"
           }
@@ -31354,6 +31358,13 @@
           },
           "plan": {
             "$ref": "#/components/schemas/SelfBillingPlanResponse"
+          },
+          "plans": {
+            "type": "array",
+            "description": "Plans are the offered plans, the default first, while the tenant can still choose one at checkout.",
+            "items": {
+              "$ref": "#/components/schemas/SelfBillingPlanResponse"
+            }
           },
           "status": {
             "$ref": "#/components/schemas/types.TenantInternalStatus"

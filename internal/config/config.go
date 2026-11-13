@@ -909,8 +909,11 @@ type BillingConfig struct {
 	Region        string `mapstructure:"region"`
 	APIHost       string `mapstructure:"api_host"`
 	APIKey        string `mapstructure:"api_key"`
-	PlanID        string `mapstructure:"plan_id"`
-	DashboardURL  string `mapstructure:"dashboard_url"`
+	// PlanID is the default self-serve plan: every new tenant's trial starts on it.
+	PlanID string `mapstructure:"plan_id"`
+	// PlanIDs are further plans a trialing tenant may choose at checkout, besides PlanID.
+	PlanIDs      []string `mapstructure:"plan_ids"`
+	DashboardURL string   `mapstructure:"dashboard_url"`
 
 	// PaymentProvider is the provider of Flexprice Cloud's trial-end checkout; empty means stripe.
 	PaymentProvider types.CheckoutPaymentProvider `mapstructure:"payment_provider"`
@@ -930,6 +933,21 @@ func (c BillingConfig) UsageLookback() time.Duration {
 		return defaultUsageLookback
 	}
 	return time.Duration(c.UsageLookbackHours) * time.Hour
+}
+
+// OfferedPlanIDs lists the plans a tenant may choose, the default PlanID first, without blanks or repeats.
+func (c BillingConfig) OfferedPlanIDs() []string {
+	out := make([]string, 0, 1+len(c.PlanIDs))
+	seen := make(map[string]bool, 1+len(c.PlanIDs))
+	for _, id := range append([]string{c.PlanID}, c.PlanIDs...) {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
 }
 
 // IsSelfBillingEnabled reports whether this deployment bills its tenants through Flexprice Cloud.
@@ -1403,7 +1421,7 @@ const (
 // A non-local deployment booting with any of these for an ENABLED feature is running on a
 // public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
 var placeholderSecrets = map[string]bool{
-	"": true, // unset
+	"":             true, // unset
 	"super_secret": true,
 	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
 	"<supabase service key>":                                   true,
