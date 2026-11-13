@@ -120,7 +120,8 @@ type DeleteSubscriptionLineItemRequest struct {
 }
 
 type UpdateSubscriptionLineItemRequest struct {
-	// EffectiveFrom for the existing line item (if not provided, defaults to now)
+	// EffectiveFrom is when the new version starts and the current one ends (defaults to now). A date before
+	// the current version's start_date replaces it from that date instead, and price fields become optional.
 	EffectiveFrom *time.Time `json:"effective_from,omitempty"`
 
 	BillingModel types.BillingModel `json:"billing_model,omitempty"`
@@ -607,13 +608,6 @@ func (r *DeleteSubscriptionLineItemRequest) Validate() error {
 
 // Validate validates the update subscription line item request
 func (r *UpdateSubscriptionLineItemRequest) Validate() error {
-	// If EffectiveFrom is provided, at least one critical field must be present
-	if r.EffectiveFrom != nil && !r.ShouldCreateNewLineItem() {
-		return ierr.NewError("effective_from requires at least one critical field").
-			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, transform_quantity, price_unit_amount, price_unit_tiers, bucket_size, or commitment fields").
-			Mark(ierr.ErrValidation)
-	}
-
 	// BucketSizeNone is the explicit-clear sentinel, not a window, so it skips the
 	// enum check. Validating here stops a bad window reaching the price layer,
 	// where it surfaces only after the override has already been built.
