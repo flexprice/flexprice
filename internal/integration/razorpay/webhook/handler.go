@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/clock"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
 // Handler handles Razorpay webhook events
@@ -101,6 +103,8 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhook
 		return h.handleRefundProcessed(ctx, event, services)
 	case EventRefundFailed:
 		return h.handleRefundFailed(ctx, event, services)
+	case EventTokenConfirmed, EventTokenRejected, EventTokenCancelled:
+		return h.handleTokenEvent(ctx, event, services)
 	case EventRefundCreated:
 		// The refund row is already PROCESSING from the API call that created it.
 		h.logger.Info(ctx, "received refund.created webhook", "razorpay_refund_id", event.Payload.Refund.Entity.ID)
@@ -122,6 +126,11 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		"currency", payment.Currency,
 		"status", payment.Status,
 	)
+
+	// A ₹0 capture is a mandate registration, not a charge.
+	if payment.Amount == 0 {
+		return nil
+	}
 
 	// Get FlexPrice payment ID from notes
 	flexpricePaymentID, ok := payment.Notes["flexprice_payment_id"].(string)
@@ -180,6 +189,17 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID,
 			"status", paymentRecord.PaymentStatus)
+		return nil
+	}
+
+	// We already gave up on this payment, so the late capture is refunded rather than applied.
+	if paymentRecord.PaymentStatus == types.PaymentStatusFailed {
+		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, payment.ID, services.PaymentService); err != nil {
+			h.logger.Error(ctx, "failed to refund payment captured after it failed",
+				"error", err,
+				"flexprice_payment_id", flexpricePaymentID,
+				"razorpay_payment_id", payment.ID)
+		}
 		return nil
 	}
 
@@ -663,4 +683,86 @@ func (h *Handler) resolveRefund(ctx context.Context, razorpayRefundID string, se
 		return nil
 	}
 	return row
+}
+
+var mandateEvents = map[RazorpayEventType]types.WebhookEventName{
+	EventTokenConfirmed: types.WebhookEventMandateConfirmed,
+	EventTokenRejected:  types.WebhookEventMandateRejected,
+	EventTokenCancelled: types.WebhookEventMandateCancelled,
+}
+
+// handleTokenEvent forwards a mandate status change as a mandate.* webhook; nothing is stored.
+func (h *Handler) handleTokenEvent(ctx context.Context, event *RazorpayWebhookEvent, services *ServiceDependencies) error {
+	raw := event.Payload.Token.Entity
+	token, err := razorpay.NormalizeRazorpayToken(raw)
+	if err != nil || token == nil {
+		h.logger.Info(ctx, "skipping unsupported Razorpay token event", "event_type", event.Event, "error", err)
+		return nil
+	}
+
+	customerID := h.tokenCustomerID(ctx, raw)
+	if customerID == "" {
+		h.logger.Info(ctx, "no Flexprice customer for Razorpay token, skipping", "token_id", token.GatewayMethodID)
+		return nil
+	}
+
+	eventName := mandateEvents[RazorpayEventType(event.Event)]
+	payload, err := json.Marshal(webhookDto.InternalMandateEvent{Mandate: toMandate(token, customerID, eventName)})
+	if err != nil {
+		h.logger.Error(ctx, "failed to marshal mandate webhook payload", "error", err, "token_id", token.GatewayMethodID)
+		return nil
+	}
+
+	if err := services.WebhookPublisher.PublishWebhook(ctx, &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     clock.Now(),
+		Payload:       payload,
+		EntityType:    types.SystemEntityTypeCustomer,
+		EntityID:      customerID,
+	}); err != nil {
+		h.logger.Error(ctx, "failed to publish mandate webhook", "error", err, "token_id", token.GatewayMethodID)
+	}
+	return nil
+}
+
+// tokenCustomerID maps the event's Razorpay customer to ours, falling back to the link notes.
+func (h *Handler) tokenCustomerID(ctx context.Context, raw map[string]interface{}) string {
+	if razorpayCustomerID, _ := raw["customer_id"].(string); razorpayCustomerID != "" {
+		mappings, err := h.entityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
+			EntityType:        types.IntegrationEntityTypeCustomer,
+			ProviderTypes:     []string{string(types.SecretProviderRazorpay)},
+			ProviderEntityIDs: []string{razorpayCustomerID},
+		})
+		if err == nil && len(mappings) > 0 {
+			return mappings[0].EntityID
+		}
+	}
+
+	notes, _ := raw["notes"].(map[string]interface{})
+	customerID, _ := notes["flexprice_customer_id"].(string)
+	return customerID
+}
+
+func toMandate(token *interfaces.ProviderPaymentMethod, customerID string, eventName types.WebhookEventName) webhookDto.Mandate {
+	mandate := webhookDto.Mandate{
+		ID:         token.GatewayMethodID,
+		CustomerID: customerID,
+		Provider:   types.PaymentGatewayTypeRazorpay,
+		Type:       token.Method,
+		Status:     strings.TrimPrefix(string(eventName), "mandate."),
+		Currency:   "INR",
+	}
+	if token.Recurring != nil {
+		mandate.MaxAmount = token.Recurring.MaxAmount
+		mandate.ExpiresAt = token.Recurring.AutoChargeableTill
+		mandate.FailureReason = lo.EmptyableToPtr(token.Recurring.FailureReason)
+	}
+	if b := token.BankAccount; b != nil {
+		mandate.BankAccount = &webhookDto.MandateBankAccount{Bank: b.Bank, IFSC: b.IFSC, Last4: b.Last4, AccountType: b.AccountType, AuthType: b.AuthType}
+	}
+	return mandate
 }

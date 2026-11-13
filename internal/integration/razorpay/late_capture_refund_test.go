@@ -43,8 +43,9 @@ func (c *lateCaptureClient) RefundPayment(context.Context, string, int64, string
 
 type lateCapturePayments struct {
 	interfaces.PaymentService
-	status  types.PaymentStatus
-	updates []types.PaymentStatus
+	status   types.PaymentStatus
+	updates  []types.PaymentStatus
+	metadata types.Metadata
 }
 
 func (p *lateCapturePayments) GetPayment(context.Context, string) (*dto.PaymentResponse, error) {
@@ -52,6 +53,12 @@ func (p *lateCapturePayments) GetPayment(context.Context, string) (*dto.PaymentR
 }
 
 func (p *lateCapturePayments) UpdatePayment(_ context.Context, _ string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error) {
+	if req.Metadata != nil {
+		p.metadata = *req.Metadata
+	}
+	if req.PaymentStatus == nil {
+		return &dto.PaymentResponse{ID: "pay_fp", PaymentStatus: p.status}, nil
+	}
 	target := types.PaymentStatus(lo.FromPtr(req.PaymentStatus))
 	if err := p.status.ValidateTransitionTo(target); err != nil {
 		return nil, err
@@ -66,16 +73,24 @@ func TestRefundLateCapturedPayment(t *testing.T) {
 		name        string
 		status      types.PaymentStatus
 		wantUpdates []types.PaymentStatus
+		wantStatus  types.PaymentStatus
 	}{
 		{
 			name:        "pending checkout payment records the capture before the refund",
 			status:      types.PaymentStatusPending,
 			wantUpdates: []types.PaymentStatus{types.PaymentStatusSucceeded, types.PaymentStatusRefunded},
+			wantStatus:  types.PaymentStatusRefunded,
 		},
 		{
 			name:        "payment already synced to succeeded is only refunded",
 			status:      types.PaymentStatusSucceeded,
 			wantUpdates: []types.PaymentStatus{types.PaymentStatusRefunded},
+			wantStatus:  types.PaymentStatusRefunded,
+		},
+		{
+			name:       "failed payment is refunded and stays failed",
+			status:     types.PaymentStatusFailed,
+			wantStatus: types.PaymentStatusFailed,
 		},
 	}
 
@@ -90,7 +105,8 @@ func TestRefundLateCapturedPayment(t *testing.T) {
 
 			assert.Equal(t, 1, client.refunds)
 			assert.Equal(t, tt.wantUpdates, payments.updates)
-			assert.Equal(t, types.PaymentStatusRefunded, payments.status)
+			assert.Equal(t, tt.wantStatus, payments.status)
+			assert.Equal(t, "rfnd_1", payments.metadata["razorpay_refund_id"])
 		})
 	}
 }

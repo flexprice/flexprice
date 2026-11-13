@@ -150,13 +150,15 @@ type Token struct {
 	VPA              *TokenVPA              `json:"vpa"`
 	BankDetails      *TokenBankDetails      `json:"bank_details"`
 	AuthType         string                 `json:"auth_type"`
+	Bank             string                 `json:"bank"`
 	MaxAmount        float64                `json:"max_amount"`
 	ExpiredAt        int64                  `json:"expired_at"`
 	CreatedAt        int64                  `json:"created_at"`
 }
 
 type TokenRecurringDetails struct {
-	Status string `json:"status"`
+	Status        string `json:"status"`
+	FailureReason string `json:"failure_reason"`
 }
 
 type TokenCard struct {
@@ -200,11 +202,12 @@ type SubscriptionRegistration struct {
 
 // AuthorizationLinkResponse is the invoice Razorpay creates for a registration link.
 type AuthorizationLinkResponse struct {
-	ID        string `json:"id"`
-	ShortURL  string `json:"short_url"`
-	Status    string `json:"status"`
-	ExpireBy  int64  `json:"expire_by"`
-	CreatedAt int64  `json:"created_at"`
+	ID         string `json:"id"`
+	ShortURL   string `json:"short_url"`
+	CustomerID string `json:"customer_id"`
+	Status     string `json:"status"`
+	ExpireBy   int64  `json:"expire_by"`
+	CreatedAt  int64  `json:"created_at"`
 }
 
 func (l AuthorizationLinkResponse) toSetupLink() *interfaces.SetupLinkResponse {

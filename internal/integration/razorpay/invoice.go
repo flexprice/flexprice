@@ -372,7 +372,7 @@ func (s *InvoiceSyncService) failAutoChargePayment(ctx context.Context, paymentI
 	if s.lifecycle == nil {
 		return
 	}
-	
+
 	if err := s.lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 		FlexpricePaymentID: paymentID,
 		ErrorMessage:       cause.Error(),

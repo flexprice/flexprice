@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,7 +41,7 @@ func (s *inlineMappingStore) Get(_ context.Context, _ string) (*entityintegratio
 	return nil, ierr.NewError("not found").Mark(ierr.ErrNotFound)
 }
 func (s *inlineMappingStore) List(_ context.Context, _ *types.EntityIntegrationMappingFilter) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
-	return nil, nil
+	return s.created, nil
 }
 func (s *inlineMappingStore) Count(_ context.Context, _ *types.EntityIntegrationMappingFilter) (int, error) {
 	return 0, nil
@@ -58,6 +59,10 @@ func newSyncService(client RazorpayClient, store entityintegrationmapping.Reposi
 		entityIntegrationMappingRepo: store,
 		logger:                       logger.NewNoopLogger(),
 	}
+}
+
+func mappedToRazorpay() *inlineMappingStore {
+	return &inlineMappingStore{created: []*entityintegrationmapping.EntityIntegrationMapping{{ProviderEntityID: "cust_rzp"}}}
 }
 
 func TestApplyCustomerCreateIdempotency(t *testing.T) {
@@ -178,4 +183,58 @@ func TestSaveSetupLink(t *testing.T) {
 			assert.Equal(t, tt.wantLinkID, store.mapping.ProviderEntityID)
 		})
 	}
+}
+
+type contactSyncClient struct {
+	stubCustomerClient
+	current map[string]interface{}
+	updates []map[string]interface{}
+}
+
+func (c *contactSyncClient) FetchCustomer(_ context.Context, _ string) (map[string]interface{}, error) {
+	return c.current, nil
+}
+
+func (c *contactSyncClient) UpdateCustomer(_ context.Context, _ string, data map[string]interface{}) (map[string]interface{}, error) {
+	c.updates = append(c.updates, data)
+	return c.current, nil
+}
+
+func TestVerifyLinkCustomer(t *testing.T) {
+	c := &domainCustomer.Customer{ID: "cust_1", Email: "a@example.com", Contact: lo.ToPtr("9000090000")}
+	tests := []struct {
+		name    string
+		current map[string]interface{}
+		wantErr bool
+	}{
+		{name: "matching details pass", current: map[string]interface{}{"email": "a@example.com", "contact": "9000090000"}},
+		{name: "missing phone is refused", current: map[string]interface{}{"email": "a@example.com", "contact": nil}, wantErr: true},
+		{name: "different email is refused", current: map[string]interface{}{"email": "b@example.com", "contact": "9000090000"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &contactSyncClient{current: tt.current}
+			svc := newSyncService(client, mappedToRazorpay())
+
+			id, err := svc.VerifyLinkCustomer(context.Background(), c)
+
+			assert.Empty(t, client.updates, "verification never writes to Razorpay")
+			if tt.wantErr {
+				assert.True(t, ierr.IsValidation(err))
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, "cust_rzp", id)
+		})
+	}
+}
+
+func TestUpdateCustomerInRazorpay(t *testing.T) {
+	client := &contactSyncClient{}
+	svc := newSyncService(client, mappedToRazorpay())
+	c := &domainCustomer.Customer{ID: "cust_1", Name: "Asha", Email: "a@example.com", Contact: lo.ToPtr("9000090000")}
+
+	require.NoError(t, svc.UpdateCustomerInRazorpay(context.Background(), c))
+
+	assert.Equal(t, []map[string]interface{}{{"name": "Asha", "email": "a@example.com", "contact": "9000090000"}}, client.updates)
 }

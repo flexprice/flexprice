@@ -64,13 +64,14 @@ func (a *PaymentMethodAdapter) CreateSetupLink(ctx context.Context, req interfac
 		ExpireBy:                 clock.Now().Add(enachSetupLinkExpiry).Unix(),
 		EmailNotify:              true,
 		SMSNotify:                true,
+		Notes:                    map[string]interface{}{"flexprice_customer_id": req.CustomerID},
 		SubscriptionRegistration: SubscriptionRegistration{Method: "emandate"},
 	}
 	if req.MaxAmount != nil {
 		linkReq.SubscriptionRegistration.MaxAmount = toPaise(*req.MaxAmount)
 	}
 
-	link, err := a.Client.CreateAuthorizationLink(ctx, linkReq)
+	link, err := createCustomerLink(ctx, a.Client, a.CustomerSvc, c, linkReq)
 	if err != nil {
 		return nil, err
 	}

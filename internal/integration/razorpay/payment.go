@@ -1038,6 +1038,22 @@ func (s *PaymentService) RefundLateCapturedPayment(
 			Mark(ierr.ErrInternal)
 	}
 
+	// A FAILED payment can't move again, so only the refund is recorded.
+	if existingPayment.PaymentStatus == types.PaymentStatusFailed {
+		metadata := lo.Assign(existingPayment.Metadata, types.Metadata{"razorpay_refund_id": refundID})
+		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, dto.UpdatePaymentRequest{Metadata: &metadata}); err != nil {
+			return ierr.WithError(err).
+				WithMessage("refund confirmed at Razorpay but failed to record it on the FlexPrice payment").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id":          flexpricePaymentID,
+					"razorpay_payment_id": razorpayPaymentID,
+					"razorpay_refund_id":  refundID,
+				}).
+				Mark(ierr.ErrInternal)
+		}
+		return nil
+	}
+
 	if existingPayment.PaymentStatus != types.PaymentStatusSucceeded && existingPayment.PaymentStatus != types.PaymentStatusOverpaid {
 		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, dto.UpdatePaymentRequest{
 			PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),

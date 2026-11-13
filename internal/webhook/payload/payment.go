@@ -111,3 +111,33 @@ func (b *PaymentAttemptPayloadBuilder) BuildPayload(ctx context.Context, eventTy
 		CheckoutSession: session,
 	})
 }
+
+// MandatePayloadBuilder builds mandate.* payloads. Pass-through: the mandate snapshot is already in the message.
+type MandatePayloadBuilder struct {
+	services *Services
+}
+
+func NewMandatePayloadBuilder(services *Services) PayloadBuilder {
+	return &MandatePayloadBuilder{services: services}
+}
+
+func (b *MandatePayloadBuilder) BuildPayload(ctx context.Context, eventType types.WebhookEventName, data json.RawMessage) (json.RawMessage, error) {
+	var internal webhookDto.InternalMandateEvent
+	if err := json.Unmarshal(data, &internal); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Unable to unmarshal mandate event payload").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	if internal.Mandate.ID == "" || internal.Mandate.CustomerID == "" {
+		return nil, ierr.NewError("invalid data for mandate event").
+			WithHint("Please provide a valid mandate ID and customer ID").
+			WithReportableDetails(map[string]any{
+				"mandate_id":  internal.Mandate.ID,
+				"customer_id": internal.Mandate.CustomerID,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	return json.Marshal(webhookDto.NewMandateWebhookPayload(&internal, eventType))
+}

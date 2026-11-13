@@ -28,6 +28,7 @@ type RazorpayClient interface {
 	GetConnection(ctx context.Context) (*connection.Connection, error)
 	CreateCustomer(ctx context.Context, customerData map[string]interface{}) (map[string]interface{}, error)
 	UpdateCustomer(ctx context.Context, customerID string, customerData map[string]interface{}) (map[string]interface{}, error)
+	FetchCustomer(ctx context.Context, customerID string) (map[string]interface{}, error)
 	CreatePaymentLink(ctx context.Context, paymentLinkData map[string]interface{}) (map[string]interface{}, error)
 	CreateInvoice(ctx context.Context, invoiceData map[string]interface{}) (map[string]interface{}, error)
 	GetInvoice(ctx context.Context, invoiceID string) (map[string]interface{}, error)
@@ -289,15 +290,23 @@ func (c *Client) UpdateCustomer(ctx context.Context, customerID string, customer
 	}
 	updatedCustomer, err := razorpayClient.Customer.Edit(customerID, customerData, nil)
 	if err != nil {
-		return nil, ierr.NewError("failed to update customer in Razorpay").
-			WithHint("Unable to update customer in Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": customerID,
-				"error":       err.Error(),
-			}).
-			Mark(ierr.ErrInternal)
+		return nil, requestError(err, "failed to update customer in Razorpay", "Unable to update customer in Razorpay")
 	}
 	return updatedCustomer, nil
+}
+
+// FetchCustomer reads a customer from Razorpay.
+func (c *Client) FetchCustomer(ctx context.Context, customerID string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Customer.Fetch(customerID, nil, nil)
+	if err != nil {
+		return nil, requestError(err, "failed to fetch customer from Razorpay", "Unable to read the customer from Razorpay")
+	}
+	return result, nil
 }
 
 // CreatePaymentLink creates a payment link in Razorpay

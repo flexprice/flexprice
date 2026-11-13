@@ -168,6 +168,7 @@ type ProviderUPIDetails struct {
 
 // ProviderBankAccountDetails is the displayable part of a bank-account mandate.
 type ProviderBankAccountDetails struct {
+	Bank        string
 	IFSC        string
 	Last4       string
 	AccountType string
@@ -176,6 +177,7 @@ type ProviderBankAccountDetails struct {
 
 type ProviderRecurringPaymentDetails struct {
 	Status             types.RecurringPaymentStatus
+	FailureReason      string
 	AutoChargeableTill *time.Time
 	MaxAmount          *decimal.Decimal
 }

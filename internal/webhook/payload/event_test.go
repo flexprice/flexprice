@@ -9,6 +9,8 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -126,4 +128,36 @@ func TestPaymentAttemptPayloadBuilder_BuildPayload(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMandatePayloadBuilder_BuildPayload(t *testing.T) {
+	b := NewMandatePayloadBuilder(nil)
+	maxAmount := decimal.NewFromInt(1000)
+	internal := webhookDto.InternalMandateEvent{Mandate: webhookDto.Mandate{
+		ID:            "token_1",
+		CustomerID:    "cust_1",
+		Provider:      types.PaymentGatewayTypeRazorpay,
+		Type:          types.PaymentMethodTypeENACH,
+		Status:        "rejected",
+		FailureReason: lo.ToPtr("Rejected by bank"),
+		MaxAmount:     &maxAmount,
+		Currency:      "INR",
+		BankAccount:   &webhookDto.MandateBankAccount{Bank: "HDFC", IFSC: "HDFC0001", Last4: "4361"},
+	}}
+	data, err := json.Marshal(internal)
+	require.NoError(t, err)
+
+	out, err := b.BuildPayload(context.Background(), types.WebhookEventMandateRejected, data)
+	require.NoError(t, err)
+
+	var got webhookDto.MandateWebhookPayload
+	require.NoError(t, json.Unmarshal(out, &got))
+	assert.Equal(t, types.WebhookEventMandateRejected, got.EventType)
+	assert.Equal(t, internal.Mandate.ID, got.Mandate.ID)
+	assert.Equal(t, "Rejected by bank", lo.FromPtr(got.Mandate.FailureReason))
+	assert.True(t, maxAmount.Equal(lo.FromPtr(got.Mandate.MaxAmount)))
+	assert.Equal(t, internal.Mandate.BankAccount, got.Mandate.BankAccount)
+
+	_, err = b.BuildPayload(context.Background(), types.WebhookEventMandateRejected, []byte(`{"mandate":{"id":"token_1"}}`))
+	assert.Error(t, err, "a mandate without a customer is refused")
 }

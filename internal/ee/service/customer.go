@@ -333,10 +333,30 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 			"customer_id", cust.ID)
 		return &dto.CustomerResponse{Customer: cust}, nil
 	}
+
+	// TODO: Move these async via Temporal
 	s.syncCustomerUpdateToZoho(syncCtx, cust)
 	s.syncCustomerUpdateToStripe(syncCtx, &before, cust)
+	s.syncCustomerUpdateToRazorpay(syncCtx, cust)
 
 	return &dto.CustomerResponse{Customer: cust}, nil
+}
+
+// syncCustomerUpdateToRazorpay pushes the updated customer to its Razorpay customer. A Razorpay failure
+// never fails the update; the next registration link reports a mismatch.
+func (s *customerService) syncCustomerUpdateToRazorpay(ctx context.Context, cust *customer.Customer) {
+	if cust.Metadata["razorpay_customer_id"] == "" || s.IntegrationFactory == nil {
+		return
+	}
+
+	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
+	if err != nil {
+		s.Logger.Info(ctx, "razorpay integration unavailable, customer update not pushed to Razorpay", "customer_id", cust.ID, "error", err)
+		return
+	}
+	if err := razorpayIntegration.CustomerSvc.UpdateCustomerInRazorpay(ctx, cust); err != nil {
+		s.Logger.Error(ctx, "failed to push customer update to Razorpay", "error", err, "customer_id", cust.ID)
+	}
 }
 
 // syncCustomerUpdateToStripe runs in the request rather than async: a checkout taxed against the

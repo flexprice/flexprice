@@ -28,6 +28,8 @@ type RazorpayCustomerService interface {
 	SaveSetupLink(ctx context.Context, customerID, linkID string) error
 	GetSetupLink(ctx context.Context, customerID string) (*interfaces.SetupLinkResponse, error)
 	CancelSetupLink(ctx context.Context, customerID string) (*interfaces.SetupLinkResponse, error)
+	UpdateCustomerInRazorpay(ctx context.Context, c *customer.Customer) error
+	VerifyLinkCustomer(ctx context.Context, c *customer.Customer) (string, error)
 }
 
 // CustomerService handles Razorpay customer operations
@@ -452,4 +454,44 @@ func (s *CustomerService) setupLinkMapping(ctx context.Context, customerID strin
 			Mark(ierr.ErrNotFound)
 	}
 	return mappings[0], nil
+}
+
+// UpdateCustomerInRazorpay copies the customer's name, email and phone to its Razorpay customer.
+func (s *CustomerService) UpdateCustomerInRazorpay(ctx context.Context, c *customer.Customer) error {
+	razorpayCustomerID, err := s.GetRazorpayCustomerID(ctx, c.ID)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.client.UpdateCustomer(ctx, razorpayCustomerID, map[string]interface{}{
+		"name":    c.Name,
+		"email":   c.Email,
+		"contact": lo.FromPtr(c.Contact),
+	})
+	return err
+}
+
+// VerifyLinkCustomer returns the customer's Razorpay customer ID, refusing one whose email or phone differs:
+// Razorpay picks a registration link's customer by email and phone, so the link would land on another customer.
+func (s *CustomerService) VerifyLinkCustomer(ctx context.Context, c *customer.Customer) (string, error) {
+	razorpayCustomerID, err := s.GetRazorpayCustomerID(ctx, c.ID)
+	if err != nil {
+		return "", err
+	}
+
+	current, err := s.client.FetchCustomer(ctx, razorpayCustomerID)
+	if err != nil {
+		return "", err
+	}
+	if current["email"] == c.Email && current["contact"] == lo.FromPtr(c.Contact) {
+		return razorpayCustomerID, nil
+	}
+	return "", errLinkCustomerMismatch(c.ID, razorpayCustomerID)
+}
+
+func errLinkCustomerMismatch(customerID, razorpayCustomerID string) error {
+	return ierr.NewError("customer's email or phone doesn't match their Razorpay customer").
+		WithHint("Update the customer's email and phone to sync them to Razorpay, then try again. If another Razorpay customer already has them, resolve it in the Razorpay dashboard.").
+		WithReportableDetails(map[string]interface{}{"customer_id": customerID, "razorpay_customer_id": razorpayCustomerID}).
+		Mark(ierr.ErrValidation)
 }

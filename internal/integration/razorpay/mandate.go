@@ -72,11 +72,11 @@ func NormalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPay
 }
 
 func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
-	status := ""
+	status, failureReason := "", ""
 	if t.RecurringDetails != nil {
-		status = t.RecurringDetails.Status
+		status, failureReason = t.RecurringDetails.Status, t.RecurringDetails.FailureReason
 	}
-	out := &interfaces.ProviderRecurringPaymentDetails{Status: toRecurringPaymentStatus(status)}
+	out := &interfaces.ProviderRecurringPaymentDetails{Status: toRecurringPaymentStatus(status), FailureReason: failureReason}
 
 	if t.MaxAmount > 0 {
 		major := fromPaise(t.MaxAmount)
@@ -117,6 +117,7 @@ func (t Token) bankAccountDetails() *interfaces.ProviderBankAccountDetails {
 
 	accountNumber := t.BankDetails.AccountNumber
 	return &interfaces.ProviderBankAccountDetails{
+		Bank:        t.Bank,
 		IFSC:        t.BankDetails.IFSC,
 		Last4:       accountNumber[max(0, len(accountNumber)-4):],
 		AccountType: t.BankDetails.AccountType,
@@ -249,7 +250,7 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		linkReq.SubscriptionRegistration.MaxAmount = toPaise(*req.MaxAmount)
 	}
 
-	link, err := a.Svc.client.CreateAuthorizationLink(ctx, linkReq)
+	link, err := createCustomerLink(ctx, a.Svc.client, a.Svc.customerSvc, c, linkReq)
 	if err != nil {
 		return nil, err
 	}
@@ -335,4 +336,29 @@ func (a *CheckoutAdapter) HasAutoChargeableMethod(ctx context.Context, req inter
 	}
 	_, ok := selectAutoChargeToken(tokens, "", amount)
 	return ok, nil
+}
+
+// createCustomerLink creates a registration link only when Razorpay will attach it to the customer's own
+// Razorpay customer; one it still attaches elsewhere is cancelled.
+func createCustomerLink(ctx context.Context, client RazorpayClient, customerSvc RazorpayCustomerService, c *customer.Customer, req AuthorizationLinkRequest) (*AuthorizationLinkResponse, error) {
+	razorpayCustomerID, err := customerSvc.VerifyLinkCustomer(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+
+	link, err := client.CreateAuthorizationLink(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if link.CustomerID == razorpayCustomerID {
+		return link, nil
+	}
+
+	if _, err := client.CancelInvoice(ctx, link.ID); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Razorpay attached the link to another customer and it couldn't be cancelled").
+			WithReportableDetails(map[string]interface{}{"customer_id": c.ID, "link_id": link.ID}).
+			Mark(ierr.ErrInternal)
+	}
+	return nil, errLinkCustomerMismatch(c.ID, razorpayCustomerID)
 }

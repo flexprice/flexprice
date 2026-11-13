@@ -93,3 +93,39 @@ type PaymentAttemptWebhookPayload struct {
 	Attempt         *PaymentAttempt        `json:"attempt"`
 	CheckoutSession *CheckoutSession       `json:"checkout_session,omitempty"`
 }
+
+// InternalMandateEvent is what the publisher puts in WebhookEvent.Payload for mandate.* events.
+type InternalMandateEvent struct {
+	Mandate Mandate `json:"mandate"`
+}
+
+type Mandate struct {
+	ID            string                   `json:"id"`
+	CustomerID    string                   `json:"customer_id"`
+	Provider      types.PaymentGatewayType `json:"provider"`
+	Type          types.PaymentMethodType  `json:"type"`
+	Status        string                   `json:"status"`
+	FailureReason *string                  `json:"failure_reason"`
+	MaxAmount     *decimal.Decimal         `json:"max_amount,omitempty" swaggertype:"string"`
+	Currency      string                   `json:"currency"`
+	ExpiresAt     *time.Time               `json:"expires_at,omitempty"`
+	BankAccount   *MandateBankAccount      `json:"bank_account,omitempty"`
+}
+
+type MandateBankAccount struct {
+	Bank        string `json:"bank,omitempty"`
+	IFSC        string `json:"ifsc,omitempty"`
+	Last4       string `json:"last4,omitempty"`
+	AccountType string `json:"account_type,omitempty"`
+	AuthType    string `json:"auth_type,omitempty"`
+}
+
+// MandateWebhookPayload is the outbound payload for mandate.confirmed, mandate.rejected and mandate.cancelled.
+type MandateWebhookPayload struct {
+	EventType types.WebhookEventName `json:"event_type"`
+	Mandate   Mandate                `json:"mandate"`
+}
+
+func NewMandateWebhookPayload(internal *InternalMandateEvent, eventType types.WebhookEventName) *MandateWebhookPayload {
+	return &MandateWebhookPayload{EventType: eventType, Mandate: internal.Mandate}
+}

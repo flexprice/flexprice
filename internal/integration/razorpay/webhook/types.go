@@ -23,6 +23,11 @@ const (
 	EventPaymentLinkPaid      RazorpayEventType = "payment_link.paid"
 	EventPaymentLinkCancelled RazorpayEventType = "payment_link.cancelled"
 	EventPaymentLinkExpired   RazorpayEventType = "payment_link.expired"
+
+	// Mandate (saved token) events
+	EventTokenConfirmed RazorpayEventType = "token.confirmed"
+	EventTokenRejected  RazorpayEventType = "token.rejected"
+	EventTokenCancelled RazorpayEventType = "token.cancelled"
 )
 
 // RazorpayPaymentMethod represents the payment method used in Razorpay
@@ -53,6 +58,12 @@ type RazorpayWebhookPayload struct {
 	Payment     PayloadPayment     `json:"payment"`
 	PaymentLink PayloadPaymentLink `json:"payment_link"`
 	Refund      PayloadRefund      `json:"refund"`
+	Token       PayloadToken       `json:"token"`
+}
+
+// PayloadToken holds the raw token so it can go through razorpay.NormalizeRazorpayToken.
+type PayloadToken struct {
+	Entity map[string]interface{} `json:"entity"`
 }
 
 // PayloadPayment represents the payment entity in the webhook payload

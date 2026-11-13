@@ -48,6 +48,15 @@ type stubRazorpayCustomerSvc struct {
 	err       error
 	customer  *customer.Customer
 	savedLink string
+	syncErr   error
+}
+
+func (s *stubRazorpayCustomerSvc) UpdateCustomerInRazorpay(ctx context.Context, c *customer.Customer) error {
+	return nil
+}
+
+func (s *stubRazorpayCustomerSvc) VerifyLinkCustomer(ctx context.Context, c *customer.Customer) (string, error) {
+	return "cust_rzp", s.syncErr
 }
 
 func (s *stubRazorpayCustomerSvc) SaveSetupLink(ctx context.Context, customerID, linkID string) error {
@@ -438,12 +447,51 @@ func TestPaymentMethodAdapterRejectsManagement(t *testing.T) {
 
 type setupLinkClient struct {
 	RazorpayClient
-	req *AuthorizationLinkRequest
+	req          *AuthorizationLinkRequest
+	linkCustomer string
+	cancelled    []string
 }
 
 func (c *setupLinkClient) CreateAuthorizationLink(_ context.Context, req AuthorizationLinkRequest) (*AuthorizationLinkResponse, error) {
 	c.req = &req
-	return &AuthorizationLinkResponse{ID: "inv_link", ShortURL: "https://rzp.io/x", Status: "issued", ExpireBy: req.ExpireBy}, nil
+	return &AuthorizationLinkResponse{ID: "inv_link", ShortURL: "https://rzp.io/x", CustomerID: lo.CoalesceOrEmpty(c.linkCustomer, "cust_rzp"), Status: "issued", ExpireBy: req.ExpireBy}, nil
+}
+
+func (c *setupLinkClient) CancelInvoice(_ context.Context, invoiceID string) (*AuthorizationLinkResponse, error) {
+	c.cancelled = append(c.cancelled, invoiceID)
+	return &AuthorizationLinkResponse{ID: invoiceID, Status: "cancelled"}, nil
+}
+
+func TestCreateCustomerLink(t *testing.T) {
+	refused := ierr.NewError("refused").Mark(ierr.ErrValidation)
+	tests := []struct {
+		name          string
+		syncErr       error
+		linkCustomer  string
+		wantErr       bool
+		wantCreated   bool
+		wantCancelled []string
+	}{
+		{name: "link on our customer is kept", wantCreated: true},
+		{name: "mismatched customer creates no link", syncErr: refused, wantErr: true},
+		{name: "link on another customer is cancelled", linkCustomer: "cust_other", wantErr: true, wantCreated: true, wantCancelled: []string{"inv_link"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &setupLinkClient{linkCustomer: tt.linkCustomer}
+			link, err := createCustomerLink(context.Background(), client, &stubRazorpayCustomerSvc{syncErr: tt.syncErr}, &customer.Customer{ID: "cust_1"}, AuthorizationLinkRequest{})
+
+			assert.Equal(t, tt.wantCreated, client.req != nil)
+			assert.Equal(t, tt.wantCancelled, client.cancelled)
+			if tt.wantErr {
+				assert.True(t, ierr.IsValidation(err))
+				assert.Nil(t, link)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, "inv_link", link.ID)
+		})
+	}
 }
 
 func TestPaymentMethodAdapterCreateSetupLink(t *testing.T) {
@@ -484,7 +532,7 @@ func TestPaymentMethodAdapterCreateSetupLink(t *testing.T) {
 			require.NotNil(t, resp.ExpiresAt)
 
 			assert.Zero(t, client.req.Amount)
-			assert.Nil(t, client.req.Notes)
+			assert.Equal(t, map[string]interface{}{"flexprice_customer_id": "cust_1"}, client.req.Notes)
 			assert.Equal(t, resp.ExpiresAt.Unix(), client.req.ExpireBy)
 			assert.Equal(t, SubscriptionRegistration{Method: "emandate", MaxAmount: tt.wantMaxAmount}, client.req.SubscriptionRegistration)
 		})

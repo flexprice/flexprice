@@ -752,3 +752,33 @@ func WebhookEventCheckoutSessionExpired() {}
 // @Success 200 {object} webhookDto.RejectedEventWebhookPayload "Webhook payload"
 // @Router /webhook-events/event.rejected [post]
 func WebhookEventEventRejected() {}
+
+// WebhookEventMandateConfirmed godoc
+// @Summary mandate.confirmed
+// @Description Fired when the bank confirms a saved mandate (Razorpay eNACH). Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.MandateWebhookPayload "Webhook payload"
+// @Router /webhook-events/mandate.confirmed [post]
+func WebhookEventMandateConfirmed() {}
+
+// WebhookEventMandateRejected godoc
+// @Summary mandate.rejected
+// @Description Fired when the bank rejects a mandate; failure_reason carries the bank's reason. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.MandateWebhookPayload "Webhook payload"
+// @Router /webhook-events/mandate.rejected [post]
+func WebhookEventMandateRejected() {}
+
+// WebhookEventMandateCancelled godoc
+// @Summary mandate.cancelled
+// @Description Fired when a saved mandate is cancelled. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.MandateWebhookPayload "Webhook payload"
+// @Router /webhook-events/mandate.cancelled [post]
+func WebhookEventMandateCancelled() {}
