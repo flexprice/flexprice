@@ -29,6 +29,7 @@ const (
 	RefundTransitions  Name = "refund.transitions"
 	GatewayWebhooks    Name = "gateway.webhooks"
 	RawEvents          Name = "raw_events.processed"
+	EventsScopeDropped Name = "events.scope_dropped"
 
 	ActivityDropped            Name = "activity.dropped"
 	ActivityUncaptured         Name = "activity.uncaptured"
@@ -52,6 +53,7 @@ var catalog = map[Name]definition{
 	RefundTransitions:  {"Refund status changes by new status, including creation", "{transition}"},
 	GatewayWebhooks:    {"Inbound gateway webhooks by processing outcome; unhandled types are labelled other", "{webhook}"},
 	RawEvents:          {"Raw events handled per attempt by outcome (success, skipped, error); retried batches are counted again", "{event}"},
+	EventsScopeDropped: {"Events dropped by consumers because message and event scope differ, by consumer", "{event}"},
 
 	ActivityDropped:            {"Activity entries dropped before reaching Kafka, by reason", "{entry}"},
 	ActivityUncaptured:         {"Bulk writes on a logged entity that returned only a row count, by entity", "{write}"},
@@ -86,6 +88,7 @@ const (
 	KeyDestination   LabelKey = "destination"
 	KeyReason        LabelKey = "reason"
 	KeyEntity        LabelKey = "entity"
+	KeyConsumer      LabelKey = "consumer"
 )
 
 type Label struct {

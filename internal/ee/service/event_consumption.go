@@ -12,6 +12,8 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -148,6 +150,16 @@ func scopeConflict(a, b string) bool {
 	return a != "" && b != "" && a != b
 }
 
+// dropScopeMismatch logs and counts scope-mismatched events.
+func dropScopeMismatch(ctx context.Context, log *logger.Logger, consumer, msg string, count int, eventTenantID, eventEnvironmentID string, fields ...any) {
+	metrics.RecordCounter(ctx, metrics.EventsScopeDropped, int64(count), metrics.L(metrics.KeyConsumer, consumer))
+	log.Info(ctx, msg, append([]any{
+		"consumer", consumer,
+		"event_tenant_id", eventTenantID,
+		"event_environment_id", eventEnvironmentID,
+	}, fields...)...)
+}
+
 // withEventScope pins ctx to the tenant and environment the event is written under.
 func withEventScope(ctx context.Context, evt *events.Event) context.Context {
 	if evt.TenantID != "" {
@@ -179,8 +191,10 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 
 	if scopeConflict(types.GetTenantID(ctx), batch.TenantID) ||
 		scopeConflict(types.GetEnvironmentID(ctx), batch.EnvironmentID) {
-		s.Logger.Info(ctx, "dropping bulk event batch: message scope mismatch",
+		dropScopeMismatch(ctx, s.Logger, "events_bulk", "dropping bulk event batch: message scope mismatch",
+			len(batch.Events), batch.TenantID, batch.EnvironmentID,
 			"message_uuid", msg.UUID,
+			"batch_size", len(batch.Events),
 		)
 		return nil
 	}
@@ -211,7 +225,8 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 		}
 
 		if scopeConflict(evt.TenantID, tenantID) || scopeConflict(evt.EnvironmentID, environmentID) {
-			s.Logger.Info(ctx, "dropping bulk event: scope mismatch",
+			dropScopeMismatch(ctx, s.Logger, "events_bulk", "dropping bulk event: scope mismatch",
+				1, evt.TenantID, evt.EnvironmentID,
 				"event_id", evt.ID,
 				"message_uuid", msg.UUID,
 			)
@@ -387,7 +402,8 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 	}
 
 	if scopeConflict(event.TenantID, tenantID) || scopeConflict(event.EnvironmentID, environmentID) {
-		s.Logger.Info(ctx, "dropping event: scope mismatch",
+		dropScopeMismatch(ctx, s.Logger, "events", "dropping event: scope mismatch",
+			1, event.TenantID, event.EnvironmentID,
 			"event_id", event.ID,
 			"message_uuid", msg.UUID,
 		)
