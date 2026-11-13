@@ -85,7 +85,7 @@ func TestInMemoryCustomerDeletionStore_DuplicateCustomerRejected(t *testing.T) {
 	assert.Equal(t, "cdr_1", existing.ID)
 }
 
-func TestInMemoryCustomerDeletionStore_RetiredExternalIDRejected(t *testing.T) {
+func TestInMemoryCustomerDeletionStore_ReusedExternalIDAccepted(t *testing.T) {
 	ctx := deletionCtx("tenant_a", "env_a")
 	store := NewInMemoryCustomerDeletionStore()
 
@@ -93,9 +93,17 @@ func TestInMemoryCustomerDeletionStore_RetiredExternalIDRejected(t *testing.T) {
 	require.NoError(t, store.Create(ctx, request, categories))
 
 	reuse, reuseCategories := newSuppressedRequest(ctx, "cdr_2", "cust_2", "acme-1")
-	err := store.Create(ctx, reuse, reuseCategories)
-	require.Error(t, err)
-	assert.True(t, ierr.IsAlreadyExists(err))
+	reuse.RequestedAt = request.RequestedAt.Add(time.Hour)
+	require.NoError(t, store.Create(ctx, reuse, reuseCategories))
+
+	latest, err := store.GetByExternalID(ctx, "acme-1")
+	require.NoError(t, err)
+	assert.Equal(t, "cdr_2", latest.ID)
+	assert.Equal(t, "cust_2", latest.CustomerID)
+
+	first, err := store.GetByCustomerID(ctx, "cust_1")
+	require.NoError(t, err)
+	assert.Equal(t, "cdr_1", first.ID)
 }
 
 func TestInMemoryCustomerDeletionStore_GetByExternalID(t *testing.T) {

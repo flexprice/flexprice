@@ -36,14 +36,13 @@ func (CustomerDeletionRequest) Fields() []ent.Field {
 			NotEmpty().
 			Immutable().
 			Comment("Internal customer ID; stable across later redaction"),
-		// mutating this would release a retired key
 		field.String("external_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
 			NotEmpty().
 			Immutable().
-			Comment("Permanent, never cleared; tenant-facing key and never-reuse registry value"),
+			Comment("External ID as of the request; reusable afterwards, so not unique"),
 		field.String("state").
 			SchemaType(map[string]string{
 				"postgres": "varchar(30)",
@@ -88,9 +87,8 @@ func (CustomerDeletionRequest) Indexes() []ent.Index {
 		// Idempotency backstop: one open request per customer
 		index.Fields("tenant_id", "environment_id", "customer_id").
 			Unique(),
-		// No partial predicate: retirement is permanent
-		index.Fields("tenant_id", "environment_id", "external_id").
-			Unique(),
+		// Not unique: external IDs are reusable after erasure
+		index.Fields("tenant_id", "environment_id", "external_id"),
 		// Finding work to do
 		index.Fields("tenant_id", "environment_id", "state"),
 	}
