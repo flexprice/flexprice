@@ -66,7 +66,9 @@ type Customer struct {
 	ContactPersons []*schema.ContactPerson `json:"contact_persons,omitempty"`
 	// BillingEntityID holds the value of the "billing_entity_id" field.
 	BillingEntityID *string `json:"billing_entity_id,omitempty"`
-	selectValues    sql.SelectValues
+	// Settings holds the value of the "settings" field.
+	Settings     *types.SettingsOverride `json:"settings,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -74,7 +76,7 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case customer.FieldMetadata, customer.FieldContactPersons:
+		case customer.FieldMetadata, customer.FieldContactPersons, customer.FieldSettings:
 			values[i] = new([]byte)
 		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldContact, customer.FieldBillingCurrency, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone, customer.FieldTaxTreatment, customer.FieldBillingEntityID:
 			values[i] = new(sql.NullString)
@@ -246,6 +248,14 @@ func (_m *Customer) assignValues(columns []string, values []any) error {
 				_m.BillingEntityID = new(string)
 				*_m.BillingEntityID = value.String
 			}
+		case customer.FieldSettings:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field settings", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Settings); err != nil {
+					return fmt.Errorf("unmarshal field settings: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -356,6 +366,9 @@ func (_m *Customer) String() string {
 		builder.WriteString("billing_entity_id=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("settings=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Settings))
 	builder.WriteByte(')')
 	return builder.String()
 }

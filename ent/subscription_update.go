@@ -642,6 +642,18 @@ func (_u *SubscriptionUpdate) AddSyncedPriceSequence(v int64) *SubscriptionUpdat
 	return _u
 }
 
+// SetSettings sets the "settings" field.
+func (_u *SubscriptionUpdate) SetSettings(v *types.SettingsOverride) *SubscriptionUpdate {
+	_u.mutation.SetSettings(v)
+	return _u
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (_u *SubscriptionUpdate) ClearSettings() *SubscriptionUpdate {
+	_u.mutation.ClearSettings()
+	return _u
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (_u *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
 	_u.mutation.AddLineItemIDs(ids...)
@@ -1177,6 +1189,12 @@ func (_u *SubscriptionUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.AddedSyncedPriceSequence(); ok {
 		_spec.AddField(subscription.FieldSyncedPriceSequence, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.Settings(); ok {
+		_spec.SetField(subscription.FieldSettings, field.TypeJSON, value)
+	}
+	if _u.mutation.SettingsCleared() {
+		_spec.ClearField(subscription.FieldSettings, field.TypeJSON)
 	}
 	if _u.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -2146,6 +2164,18 @@ func (_u *SubscriptionUpdateOne) AddSyncedPriceSequence(v int64) *SubscriptionUp
 	return _u
 }
 
+// SetSettings sets the "settings" field.
+func (_u *SubscriptionUpdateOne) SetSettings(v *types.SettingsOverride) *SubscriptionUpdateOne {
+	_u.mutation.SetSettings(v)
+	return _u
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (_u *SubscriptionUpdateOne) ClearSettings() *SubscriptionUpdateOne {
+	_u.mutation.ClearSettings()
+	return _u
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (_u *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
 	_u.mutation.AddLineItemIDs(ids...)
@@ -2711,6 +2741,12 @@ func (_u *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscripti
 	}
 	if value, ok := _u.mutation.AddedSyncedPriceSequence(); ok {
 		_spec.AddField(subscription.FieldSyncedPriceSequence, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.Settings(); ok {
+		_spec.SetField(subscription.FieldSettings, field.TypeJSON, value)
+	}
+	if _u.mutation.SettingsCleared() {
+		_spec.ClearField(subscription.FieldSettings, field.TypeJSON)
 	}
 	if _u.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

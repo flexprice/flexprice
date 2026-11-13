@@ -876,6 +876,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 		ProrationBehavior:  req.ProrationBehavior,
 		Timezone:           currentSub.Timezone,
 		PaymentTerms:       currentSub.PaymentTerms,
+		Settings:           currentSub.Settings,
 		Workflow:           lo.ToPtr(types.TemporalSubscriptionCreationWorkflow),
 		Inheritance:        inheritance,
 		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{

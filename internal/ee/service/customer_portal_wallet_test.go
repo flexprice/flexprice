@@ -438,3 +438,13 @@ func (s *PortalWalletSuite) enableAutoCompletePurchasedCredit() {
 	setting.Status = types.StatusPublished
 	s.Require().NoError(s.GetStores().SettingsRepo.Create(s.ctx, setting))
 }
+
+func (s *PortalWalletSuite) TestUpdateCustomerIgnoresSettings() {
+	resp, err := s.svc.UpdateCustomer(s.ctx, dto.UpdateCustomerRequest{
+		Name:     lo.ToPtr("Renamed"),
+		Settings: &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{GracePeriodDays: lo.ToPtr(90)}},
+	})
+	s.Require().NoError(err)
+	s.Equal("Renamed", resp.Customer.Name)
+	s.Nil(resp.Customer.Settings)
+}

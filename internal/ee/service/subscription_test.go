@@ -11038,6 +11038,53 @@ func (s *SubscriptionServiceSuite) TestProcessOverdueSubscriptionInvoicesUsesEnv
 	s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus)
 }
 
+func (s *SubscriptionServiceSuite) TestProcessOverdueSubscriptionInvoicesUsesGraceOverrides() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+	grace := func(days int) *types.SettingsOverride {
+		return &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{GracePeriodDays: lo.ToPtr(days)}}
+	}
+
+	cust := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "grace-override-customer",
+		Name:       "Grace Override",
+		Settings:   grace(10),
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+
+	// Five days overdue is past the default 3-day grace.
+	tests := []struct {
+		name       string
+		customerID string
+		settings   *types.SettingsOverride
+		want       types.SubscriptionStatus
+	}{
+		{"subscription override extends grace", s.testData.customer.ID, grace(10), types.SubscriptionStatusIncomplete},
+		{"customer override extends grace", cust.ID, nil, types.SubscriptionStatusIncomplete},
+		{"subscription override beats customer", cust.ID, grace(1), types.SubscriptionStatusActive},
+	}
+
+	subIDs := make(map[string]string, len(tests))
+	for _, tt := range tests {
+		sub := s.createOverdueTestSubscription(ctx, types.PaymentBehaviorAllowIncomplete, types.SubscriptionStatusActive)
+		sub.CustomerID = tt.customerID
+		sub.Settings = tt.settings
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+		subIDs[tt.name] = sub.ID
+		s.createOverdueTestInvoice(ctx, sub.ID, types.InvoiceStatusFinalized, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), now.AddDate(0, 0, -5))
+	}
+
+	s.Require().NoError(s.service.ProcessOverdueSubscriptionInvoices(ctx))
+
+	for _, tt := range tests {
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, subIDs[tt.name])
+		s.Require().NoError(err)
+		s.Equal(tt.want, updated.SubscriptionStatus, tt.name)
+	}
+}
+
 func (s *SubscriptionServiceSuite) createOverdueTestSubscription(ctx context.Context, behavior types.PaymentBehavior, status types.SubscriptionStatus) *subscription.Subscription {
 	now := time.Now().UTC()
 	sub := &subscription.Subscription{
@@ -11169,6 +11216,62 @@ func (s *SubscriptionServiceSuite) TestProcessAutoCancellationSubscriptions() {
 		inv, err := s.GetStores().InvoiceRepo.Get(ctx, invIDs[tt.name])
 		s.Require().NoError(err)
 		s.Equal(tt.wantInvoice, inv.InvoiceStatus, tt.name)
+	}
+}
+
+func (s *SubscriptionServiceSuite) TestProcessAutoCancellationSubscriptionsUsesOverrides() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+
+	s.Require().NoError(s.GetStores().SettingsRepo.Create(ctx, &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeySubscriptionConfig,
+		Value:         map[string]interface{}{"grace_period_days": 3, "auto_cancellation_enabled": false},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}))
+
+	override := func(enabled *bool, graceDays *int) *types.SettingsOverride {
+		return &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{AutoCancellationEnabled: enabled, GracePeriodDays: graceDays}}
+	}
+	cust := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "auto-cancel-override-customer",
+		Name:       "Auto Cancel Override",
+		Settings:   override(lo.ToPtr(true), lo.ToPtr(15)),
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+
+	// Every invoice is ten days overdue; the environment has auto-cancellation off.
+	tests := []struct {
+		name       string
+		customerID string
+		settings   *types.SettingsOverride
+		want       types.SubscriptionStatus
+	}{
+		{"subscription override enables", s.testData.customer.ID, override(lo.ToPtr(true), nil), types.SubscriptionStatusCancelled},
+		{"customer override within its grace", cust.ID, nil, types.SubscriptionStatusActive},
+		{"subscription grace beats customer", cust.ID, override(nil, lo.ToPtr(5)), types.SubscriptionStatusCancelled},
+		{"no override keeps environment off", s.testData.customer.ID, nil, types.SubscriptionStatusActive},
+	}
+
+	subIDs := make(map[string]string, len(tests))
+	for _, tt := range tests {
+		sub := s.createOverdueTestSubscription(ctx, types.PaymentBehaviorAllowIncomplete, types.SubscriptionStatusActive)
+		sub.CustomerID = tt.customerID
+		sub.Settings = tt.settings
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+		subIDs[tt.name] = sub.ID
+		s.createOverdueTestInvoice(ctx, sub.ID, types.InvoiceStatusFinalized, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), now.AddDate(0, 0, -10))
+	}
+
+	s.Require().NoError(s.service.ProcessAutoCancellationSubscriptions(ctx))
+
+	for _, tt := range tests {
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, subIDs[tt.name])
+		s.Require().NoError(err)
+		s.Equal(tt.want, updated.SubscriptionStatus, tt.name)
 	}
 }
 

@@ -3112,6 +3112,16 @@ func SyncedPriceSequenceLTE(v int64) predicate.Subscription {
 	return predicate.Subscription(sql.FieldLTE(FieldSyncedPriceSequence, v))
 }
 
+// SettingsIsNil applies the IsNil predicate on the "settings" field.
+func SettingsIsNil() predicate.Subscription {
+	return predicate.Subscription(sql.FieldIsNull(FieldSettings))
+}
+
+// SettingsNotNil applies the NotNil predicate on the "settings" field.
+func SettingsNotNil() predicate.Subscription {
+	return predicate.Subscription(sql.FieldNotNull(FieldSettings))
+}
+
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.
 func HasLineItems() predicate.Subscription {
 	return predicate.Subscription(func(s *sql.Selector) {

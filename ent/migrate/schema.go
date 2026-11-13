@@ -597,7 +597,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{ConnectionsColumns[1], ConnectionsColumns[7], ConnectionsColumns[13], ConnectionsColumns[9]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "((status)::text = 'published'::text AND billing_entity_id IS NOT NULL)",
+					Where: "(((status)::text = 'published'::text) AND (billing_entity_id IS NOT NULL))",
 				},
 			},
 		},
@@ -1163,6 +1163,7 @@ var (
 		{Name: "tax_treatment", Type: field.TypeString, Default: "taxable", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "contact_persons", Type: field.TypeJSON, Nullable: true},
 		{Name: "billing_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "settings", Type: field.TypeJSON, Nullable: true},
 	}
 	// CustomersTable holds the schema information for the "customers" table.
 	CustomersTable = &schema.Table{
@@ -1203,6 +1204,14 @@ var (
 				Name:    "idx_customers_tenant_env_billing_entity",
 				Unique:  false,
 				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[23]},
+			},
+			{
+				Name:    "idx_customers_settings_override",
+				Unique:  false,
+				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((settings IS NOT NULL) AND ((status)::text = 'published'::text))",
+				},
 			},
 		},
 	}
@@ -2792,6 +2801,7 @@ var (
 		{Name: "subscription_type", Type: field.TypeString, Default: "standalone", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "auto_invoice_threshold", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,6)"}},
 		{Name: "synced_price_sequence", Type: field.TypeInt64, Default: "0"},
+		{Name: "settings", Type: field.TypeJSON, Nullable: true},
 		{Name: "invoicing_customer_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// SubscriptionsTable holds the schema information for the "subscriptions" table.
@@ -2802,7 +2812,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscriptions_customers_invoicing_customer",
-				Columns:    []*schema.Column{SubscriptionsColumns[46]},
+				Columns:    []*schema.Column{SubscriptionsColumns[47]},
 				RefColumns: []*schema.Column{CustomersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -2845,6 +2855,14 @@ var (
 				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(((status)::text = 'published'::text) AND ((subscription_status)::text = 'active'::text) AND ((payment_behavior)::text = ANY (ARRAY[('allow_incomplete'::character varying)::text, ('default_incomplete'::character varying)::text, ('error_if_incomplete'::character varying)::text])))",
+				},
+			},
+			{
+				Name:    "idx_subscriptions_settings_override",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((settings IS NOT NULL) AND ((status)::text = 'published'::text))",
 				},
 			},
 		},

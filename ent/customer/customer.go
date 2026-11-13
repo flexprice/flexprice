@@ -60,6 +60,8 @@ const (
 	FieldContactPersons = "contact_persons"
 	// FieldBillingEntityID holds the string denoting the billing_entity_id field in the database.
 	FieldBillingEntityID = "billing_entity_id"
+	// FieldSettings holds the string denoting the settings field in the database.
+	FieldSettings = "settings"
 	// Table holds the table name of the customer in the database.
 	Table = "customers"
 )
@@ -90,6 +92,7 @@ var Columns = []string{
 	FieldTaxTreatment,
 	FieldContactPersons,
 	FieldBillingEntityID,
+	FieldSettings,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

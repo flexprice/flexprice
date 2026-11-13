@@ -2122,6 +2122,10 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 		subscription.ProrationBehavior = *req.ProrationBehavior
 	}
 
+	if req.Settings != nil {
+		subscription.Settings = dto.NormalizeSettingsOverride(req.Settings)
+	}
+
 	if req.CancelAtPeriodEnd != nil {
 		subscription.CancelAtPeriodEnd = *req.CancelAtPeriodEnd
 		// Explicit false with no cancel_at clears a pending cancellation; gated on an existing
@@ -6086,37 +6090,39 @@ func (s *subscriptionService) processPendingCreditGrantsForSubscription(ctx cont
 func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.Context) error {
 	s.Logger.Info(ctx, "starting auto-cancellation processing")
 
-	// Get all tenant x environment combinations that have auto-cancellation enabled
-	enabledConfigs, err := s.SettingsRepo.GetAllTenantEnvSubscriptionSettings(ctx)
+	envs, err := s.SubRepo.ListEnvironmentsForAutoCancellation(ctx)
 	if err != nil {
-		s.Logger.Error(ctx, "failed to list subscription configs", "error", err)
+		s.Logger.Error(ctx, "failed to list environments for auto-cancellation", "error", err)
 		return err
 	}
 
-	if len(enabledConfigs) == 0 {
+	if len(envs) == 0 {
 		s.Logger.Info(ctx, "no tenants have auto-cancellation enabled, skipping processing")
 		return nil
 	}
 
 	s.Logger.Info(ctx, "found tenants with auto-cancellation enabled",
-		"tenant_count", len(enabledConfigs))
+		"tenant_count", len(envs))
 
 	totalCanceledCount := 0
 	totalFailedCount := 0
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 
 	// Process each tenant x environment combination
-	for _, tenantConfig := range enabledConfigs {
-		// Skip if auto-cancellation is not enabled
-		if !tenantConfig.AutoCancellationEnabled {
-			s.Logger.Debug(ctx, "auto-cancellation not enabled for tenant",
-				"tenant_id", tenantConfig.TenantID,
-				"environment_id", tenantConfig.EnvironmentID)
+	for _, env := range envs {
+		// Create a new context with tenant and environment IDs
+		tenantCtx := context.WithValue(ctx, types.CtxTenantID, env.TenantID)
+		tenantCtx = context.WithValue(tenantCtx, types.CtxEnvironmentID, env.EnvironmentID)
+
+		envConfig, err := GetSetting[types.SubscriptionConfig](settingsSvc, tenantCtx, types.SettingKeySubscriptionConfig)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to get subscription config for auto-cancellation",
+				"error", err,
+				"tenant_id", env.TenantID,
+				"environment_id", env.EnvironmentID)
 			continue
 		}
-
-		// Create a new context with tenant and environment IDs
-		tenantCtx := context.WithValue(ctx, types.CtxTenantID, tenantConfig.TenantID)
-		tenantCtx = context.WithValue(tenantCtx, types.CtxEnvironmentID, tenantConfig.EnvironmentID)
+		tenantConfig := &types.TenantEnvSubscriptionConfig{TenantID: env.TenantID, EnvironmentID: env.EnvironmentID, SubscriptionConfig: &envConfig}
 
 		s.Logger.Debug(ctx, "processing tenant",
 			"tenant_id", tenantConfig.TenantID,
@@ -6147,7 +6153,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 			"environment_id", tenantConfig.EnvironmentID,
 			"invoice_count", len(invoices))
 
-		// Filter invoices that are past grace period
+		// Grace is resolved per subscription below.
 		now := clock.Now()
 		eligibleInvoices := lo.Filter(invoices, func(inv *invoice.Invoice, _ int) bool {
 			// Must have a subscription ID
@@ -6163,31 +6169,15 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 				return false
 			}
 
-			// Calculate grace period end time: due_date + grace_period_days
-			gracePeriodEndTime := inv.DueDate.AddDate(0, 0, tenantConfig.GracePeriodDays)
-
-			// Check if current time is past grace period end
-			isPastGracePeriod := now.After(gracePeriodEndTime)
-
-			if isPastGracePeriod {
-				s.Logger.Debug(ctx, "found invoice past grace period",
-					"invoice_id", inv.ID,
-					"subscription_id", *inv.SubscriptionID,
-					"due_date", inv.DueDate,
-					"grace_period_end_time", gracePeriodEndTime,
-					"amount_remaining", inv.AmountRemaining,
-					"current_time", now)
-			}
-
-			return isPastGracePeriod
+			return !inv.DueDate.After(now)
 		})
 
-		overdueInvoicesBySub := lo.GroupBy(eligibleInvoices, func(inv *invoice.Invoice) string {
+		unpaidInvoicesBySub := lo.GroupBy(eligibleInvoices, func(inv *invoice.Invoice) string {
 			return lo.FromPtr(inv.SubscriptionID)
 		})
-		subscriptionIDs := lo.Keys(overdueInvoicesBySub)
+		subscriptionIDs := lo.Keys(unpaidInvoicesBySub)
 
-		s.Logger.Debug(ctx, "found subscriptions with invoices past grace period",
+		s.Logger.Debug(ctx, "found subscriptions with unpaid invoices",
 			"tenant_id", tenantConfig.TenantID,
 			"environment_id", tenantConfig.EnvironmentID,
 			"total_invoices", len(invoices),
@@ -6204,6 +6194,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 		filter := &types.SubscriptionFilter{
 			SubscriptionIDs:    subscriptionIDs,
 			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusIncomplete, types.SubscriptionStatusCancelled},
+			QueryFilter:        types.NewNoLimitQueryFilter(),
 		}
 
 		subscriptions, err := s.SubRepo.List(tenantCtx, filter)
@@ -6220,6 +6211,21 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 			"environment_id", tenantConfig.EnvironmentID,
 			"subscription_count", len(subscriptions))
 
+		customers, err := s.CustomerRepo.List(tenantCtx, &types.CustomerFilter{
+			CustomerIDs: lo.Uniq(lo.Map(subscriptions, func(sub *subscription.Subscription, _ int) string { return sub.CustomerID })),
+			QueryFilter: types.NewNoLimitQueryFilter(),
+		})
+		if err != nil {
+			s.Logger.Error(ctx, "failed to get customers for auto-cancellation",
+				"tenant_id", tenantConfig.TenantID,
+				"environment_id", tenantConfig.EnvironmentID,
+				"error", err)
+			continue
+		}
+		customerSettings := lo.SliceToMap(customers, func(c *customer.Customer) (string, *types.SettingsOverride) {
+			return c.ID, c.Settings
+		})
+
 		canceledCount := 0
 		failedCount := 0
 
@@ -6229,7 +6235,13 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 
 		// Void on Stripe, cancel, then void in Flexprice so a failed cancel retries next tick.
 		for _, sub := range subscriptions {
-			overdueInvoices := overdueInvoicesBySub[sub.ID]
+			config := resolveSubscriptionConfig(envConfig, customerSettings[sub.CustomerID], sub.Settings)
+			if !config.AutoCancellationEnabled {
+				continue
+			}
+			overdueInvoices := lo.Filter(unpaidInvoicesBySub[sub.ID], func(inv *invoice.Invoice, _ int) bool {
+				return now.After(inv.DueDate.AddDate(0, 0, config.GracePeriodDays))
+			})
 			if len(overdueInvoices) == 0 {
 				continue
 			}
@@ -6294,7 +6306,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 					"subscription_id", sub.ID,
 					"tenant_id", tenantConfig.TenantID,
 					"environment_id", tenantConfig.EnvironmentID,
-					"grace_period_days", tenantConfig.GracePeriodDays,
+					"grace_period_days", config.GracePeriodDays,
 					"reason", reason,
 				)
 
@@ -6319,7 +6331,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 				s.Logger.Info(ctx, "successfully auto-canceled subscription",
 					"subscription_id", sub.ID,
 					"reason", reason,
-					"grace_period_days", tenantConfig.GracePeriodDays,
+					"grace_period_days", config.GracePeriodDays,
 					"canceled_by", "auto_cancellation_system",
 					"tenant_id", tenantConfig.TenantID,
 					"environment_id", tenantConfig.EnvironmentID)
@@ -6340,7 +6352,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 	}
 
 	s.Logger.Info(ctx, "completed auto-cancellation processing for all tenants",
-		"total_tenants_processed", len(enabledConfigs),
+		"total_tenants_processed", len(envs),
 		"total_canceled", totalCanceledCount,
 		"total_failed", totalFailedCount)
 

@@ -397,6 +397,7 @@ func TestStartTrial(t *testing.T) {
 				"plan_id":              "plan_1",
 				"currency":             "usd",
 				"billing_period":       "MONTHLY",
+				"payment_behavior":     "allow_incomplete",
 			}},
 		},
 		{

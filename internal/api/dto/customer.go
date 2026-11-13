@@ -69,6 +69,9 @@ type CreateCustomerRequest struct {
 	// contact_persons are people at the customer; at most one may be primary
 	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive"`
 
+	// settings overrides the environment settings for this customer's subscriptions
+	Settings *types.SettingsOverride `json:"settings,omitempty"`
+
 	// metadata contains additional key-value pairs for storing extra information
 	Metadata map[string]string `json:"metadata,omitempty"`
 
@@ -135,6 +138,9 @@ type UpdateCustomerRequest struct {
 
 	// contact_persons replaces the customer's contact persons when provided; at most one may be primary
 	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive"`
+
+	// settings replaces the customer's setting overrides when provided; send {} to inherit the environment settings
+	Settings *types.SettingsOverride `json:"settings,omitempty"`
 
 	// metadata contains updated key-value pairs that will replace existing metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
@@ -235,6 +241,14 @@ func NormalizeBillingCurrency(code *string) *string {
 	return &trimmed
 }
 
+// NormalizeSettingsOverride returns nil when no override is set, so cleared overrides store as NULL.
+func NormalizeSettingsOverride(s *types.SettingsOverride) *types.SettingsOverride {
+	if s == nil || s.SubscriptionConfig == nil || lo.IsEmpty(*s.SubscriptionConfig) {
+		return nil
+	}
+	return s
+}
+
 func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Customer {
 	tz := r.Timezone
 	if tz == "" {
@@ -252,6 +266,7 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 		Contact:           r.Contact,
 		BillingCurrency:   NormalizeBillingCurrency(r.BillingCurrency),
 		ContactPersons:    r.ContactPersons,
+		Settings:          NormalizeSettingsOverride(r.Settings),
 		AddressLine1:      r.AddressLine1,
 		AddressLine2:      r.AddressLine2,
 		AddressCity:       r.AddressCity,

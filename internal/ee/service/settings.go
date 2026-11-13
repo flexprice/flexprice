@@ -262,6 +262,22 @@ func GetSetting[T any](s *settingsService, ctx context.Context, key types.Settin
 	return typedValue, nil
 }
 
+// resolveSubscriptionConfig applies each override's set fields onto the environment config; later overrides win.
+func resolveSubscriptionConfig(config types.SubscriptionConfig, overrides ...*types.SettingsOverride) types.SubscriptionConfig {
+	for _, o := range overrides {
+		if o == nil || o.SubscriptionConfig == nil {
+			continue
+		}
+		if o.SubscriptionConfig.GracePeriodDays != nil {
+			config.GracePeriodDays = *o.SubscriptionConfig.GracePeriodDays
+		}
+		if o.SubscriptionConfig.AutoCancellationEnabled != nil {
+			config.AutoCancellationEnabled = *o.SubscriptionConfig.AutoCancellationEnabled
+		}
+	}
+	return config
+}
+
 // UpdateSetting updates a setting value (creates if doesn't exist)
 //
 // WHEN TO USE:

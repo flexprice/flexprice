@@ -24524,6 +24524,9 @@
             "type": "string",
             "description": "onboarding_workflow_name is given if a custom onboarding workflow is to be triggered for this customer"
           },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
+          },
           "skip_onboarding_workflow": {
             "type": "boolean",
             "description": "skip_onboarding_workflow when true, prevents the customer onboarding workflow from being triggered\nThis is used internally when a customer is created via a workflow to prevent infinite loops\nDefault: false"
@@ -25652,6 +25655,9 @@
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
+          },
           "start_date": {
             "type": "string",
             "format": "date-time"
@@ -26426,6 +26432,9 @@
           "name": {
             "type": "string",
             "description": "Name is the name of the customer"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -32685,6 +32694,9 @@
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
+          },
           "start_date": {
             "type": "string",
             "description": "StartDate is the start date of the subscription",
@@ -32921,6 +32933,9 @@
           },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
           },
           "start_date": {
             "type": "string",
@@ -33961,6 +33976,9 @@
             "type": "string",
             "description": "name is the updated name or company name for the customer"
           },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
+          },
           "tax_treatment": {
             "$ref": "#/components/schemas/types.TaxTreatment"
           },
@@ -34441,6 +34459,9 @@
           },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
           },
           "status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"
@@ -35770,6 +35791,9 @@
           "name": {
             "type": "string",
             "description": "Name is the name of the customer"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -42508,6 +42532,28 @@
           "RevenueReportGroupByPOB"
         ],
         "x-speakeasy-name-override": "RevenueReportGroupBy"
+      },
+      "types.SettingsOverride": {
+        "type": "object",
+        "properties": {
+          "subscription_config": {
+            "$ref": "#/components/schemas/types.SubscriptionConfigOverride"
+          }
+        },
+        "x-speakeasy-name-override": "SettingsOverride"
+      },
+      "types.SubscriptionConfigOverride": {
+        "type": "object",
+        "properties": {
+          "auto_cancellation_enabled": {
+            "type": "boolean"
+          },
+          "grace_period_days": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "x-speakeasy-name-override": "SubscriptionConfigOverride"
       },
       "types.TenantInternalStatus": {
         "type": "string",

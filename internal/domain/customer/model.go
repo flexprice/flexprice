@@ -34,6 +34,9 @@ type Customer struct {
 
 	ContactPersons []*ContactPerson `db:"contact_persons" json:"contact_persons,omitempty" activity:"drop"`
 
+	// Settings overrides the environment's settings for this customer's subscriptions.
+	Settings *types.SettingsOverride `db:"settings" json:"settings,omitempty"`
+
 	// AddressLine1 is the first line of the customer's address
 	AddressLine1 string `db:"address_line1" json:"address_line1" activity:"drop"`
 
@@ -82,6 +85,7 @@ func FromEnt(c *ent.Customer) *Customer {
 		BillingCurrency:   c.BillingCurrency,
 		BillingEntityID:   c.BillingEntityID,
 		ContactPersons:    contactPersonsFromEnt(c.ContactPersons),
+		Settings:          c.Settings,
 		AddressLine1:      c.AddressLine1,
 		AddressLine2:      c.AddressLine2,
 		AddressCity:       c.AddressCity,
