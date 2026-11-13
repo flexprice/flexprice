@@ -75,7 +75,7 @@ func (r *userRepository) Create(ctx context.Context, user *domainUser.User) erro
 		SetSpanError(span, err)
 		var pqErr *pq.Error
 		if ent.IsConstraintError(err) && errors.As(err, &pqErr) &&
-			(pqErr.Constraint == entSchema.UserEmailLowerConstraint || pqErr.Constraint == "idx_user_email_unique") {
+			(pqErr.Constraint == entSchema.UserEmailLowerConstraint || pqErr.Constraint == entSchema.UserEmailConstraint) {
 			return ierr.WithError(err).
 				WithHint("A user with this email already exists").
 				Mark(ierr.ErrAlreadyExists)

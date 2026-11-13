@@ -11,6 +11,9 @@ import (
 // UserEmailLowerConstraint is created by hand in migrations/versioned/postgres.
 const UserEmailLowerConstraint = "idx_user_email_lower_unique"
 
+// UserEmailConstraint is the case-sensitive email index.
+const UserEmailConstraint = "idx_user_email_unique"
+
 // User holds the schema definition for the User entity.
 type User struct {
 	ent.Schema
@@ -58,7 +61,7 @@ func (User) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("email").
 			Unique().
-			StorageKey("idx_user_email_unique").
+			StorageKey(UserEmailConstraint).
 			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND (email IS NOT NULL) AND ((email)::text <> ''::text))")),
 		index.Fields("tenant_id", "status", "type").
 			StorageKey("idx_user_tenant_status"),
