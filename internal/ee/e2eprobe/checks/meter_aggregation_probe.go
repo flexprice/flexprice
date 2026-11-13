@@ -114,9 +114,13 @@ func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 		}
 	}
 	if checked == 0 {
+		p.logInfo(ctx, "meter-aggregation-probe: meter not on any customer's active subscription, skipping",
+			"event_name", eventName,
+			"run_id", p.runID)
 		return nil
 	}
 	return e2eprobe.Errorf(map[string]string{
+		"step":              "assert_meter_usage",
 		"event_name":        eventName,
 		"window":            window.String(),
 		"observed_sum":      "0.0000",
@@ -136,15 +140,12 @@ func (p *MeterAggregationProbe) customerUsage(
 	onSub, err := p.meterOnActiveSubscription(ctx, extCustID, meterID)
 	if err != nil {
 		return 0, false, e2eprobe.Errorf(map[string]string{
+			"step":                 "resolve_line_items",
 			"external_customer_id": extCustID,
 			"event_name":           eventName,
 		}, "resolve subscription line items for %s: %w", extCustID, err)
 	}
 	if !onSub {
-		p.logInfo(ctx, "meter-aggregation-probe: meter not on customer's active subscription, skipping",
-			"event_name", eventName,
-			"external_customer_id", extCustID,
-			"run_id", p.runID)
 		return 0, false, nil
 	}
 
@@ -155,6 +156,7 @@ func (p *MeterAggregationProbe) customerUsage(
 	})
 	if err != nil {
 		return 0, false, e2eprobe.Errorf(map[string]string{
+			"step":                 "analytics",
 			"external_customer_id": extCustID,
 			"event_name":           eventName,
 			"window":               window.String(),

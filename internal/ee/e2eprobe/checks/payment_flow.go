@@ -224,7 +224,11 @@ func (f *paymentFlow) credits(ctx context.Context) (decimal.Decimal, error) {
 	// A wallet created moments ago can 404 until the read replica catches up.
 	resp, err := f.client.Wallets().GetBalance(ctx, f.walletID)
 	for attempt := 0; attempt < walletReadRetries && isNotFound(err); attempt++ {
-		time.Sleep(f.opts.pollInterval())
+		select {
+		case <-ctx.Done():
+			return decimal.Zero, ctx.Err()
+		case <-time.After(f.opts.pollInterval()):
+		}
 		resp, err = f.client.Wallets().GetBalance(ctx, f.walletID)
 	}
 	if err != nil {
