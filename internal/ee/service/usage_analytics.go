@@ -152,20 +152,18 @@ func (s *usageAnalyticsService) GetBreakdown(ctx context.Context, req *dto.Usage
 	return resp, nil
 }
 
-// meterSet is the meters a request covers; nil means every meter.
-type meterSet map[string]bool
-
-func (m meterSet) includes(meterID string) bool {
-	return meterID != "" && (m == nil || m[meterID])
+// isRequestedMeter reports whether a meter is in the request's meters; nil meters means every meter.
+func isRequestedMeter(meters map[string]bool, meterID string) bool {
+	return meterID != "" && (meters == nil || meters[meterID])
 }
 
-// requestedMeters resolves meter_ids and feature_ids to one meter set.
-func (s *usageAnalyticsService) requestedMeters(ctx context.Context, q *usageanalytics.Query) (meterSet, error) {
+// requestedMeters resolves meter_ids and feature_ids to one meter set; nil means every meter.
+func (s *usageAnalyticsService) requestedMeters(ctx context.Context, q *usageanalytics.Query) (map[string]bool, error) {
 	if len(q.MeterIDs) == 0 && len(q.FeatureIDs) == 0 {
 		return nil, nil
 	}
 
-	ids := meterSet{}
+	ids := map[string]bool{}
 	for _, id := range q.MeterIDs {
 		ids[id] = true
 	}
@@ -336,7 +334,7 @@ func (s *usageAnalyticsService) addBilledLines(
 	billing *billingService,
 	cs billedSubscription,
 	seg usageanalytics.BillingPeriodSegment,
-	meters meterSet,
+	meters map[string]bool,
 	in *queryInputs,
 ) error {
 	// Billing gets every line: subscription-wide rules (grants, commitments) spread across all of them.
@@ -345,7 +343,7 @@ func (s *usageAnalyticsService) addBilledLines(
 		return err
 	}
 	hasUsageLine := lo.ContainsBy(items, func(li *subscription.SubscriptionLineItem) bool {
-		return li.PriceType == types.PRICE_TYPE_USAGE && meters.includes(li.MeterID)
+		return li.PriceType == types.PRICE_TYPE_USAGE && isRequestedMeter(meters, li.MeterID)
 	})
 	if !hasUsageLine {
 		return nil
@@ -373,12 +371,12 @@ func (s *usageAnalyticsService) addBilledLines(
 		li := itemByID[lo.FromPtr(c.SubscriptionLineItemID)]
 		if li == nil {
 			// A charge billing could not tie to a line still hides that meter's usage.
-			if meterID := lo.FromPtr(c.MeterID); meters.includes(meterID) {
+			if meterID := lo.FromPtr(c.MeterID); isRequestedMeter(meters, meterID) {
 				in.excluded[meterID] = excludedUnmatchedCharge
 			}
 			continue
 		}
-		if li.PriceType != types.PRICE_TYPE_USAGE || !meters.includes(li.MeterID) {
+		if li.PriceType != types.PRICE_TYPE_USAGE || !isRequestedMeter(meters, li.MeterID) {
 			continue
 		}
 		if reason := flatExclusion(cs.owner, li, in.meterByID[li.MeterID], c); reason != "" {
@@ -691,10 +689,11 @@ func usageItemIDs(item *dto.UsageAnalyticsItem, lineIDs []string, lineByID map[s
 			addons = append(addons, li.EntityID)
 		}
 	}
-	item.PriceIDs, item.PlanIDs, item.AddonIDs, item.SubscriptionIDs = sortedIDs(prices), sortedIDs(plans), sortedIDs(addons), sortedIDs(subs)
+	item.PriceIDs, item.PlanIDs, item.AddonIDs, item.SubscriptionIDs = distinctIDs(prices), distinctIDs(plans), distinctIDs(addons), distinctIDs(subs)
 }
 
-func sortedIDs(ids []string) []string {
+// distinctIDs returns the IDs without blanks or duplicates, sorted.
+func distinctIDs(ids []string) []string {
 	ids = lo.Uniq(lo.Compact(ids))
 	sort.Strings(ids)
 	return ids
@@ -706,14 +705,14 @@ func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []type
 	if len(want) == 0 {
 		return nil
 	}
-	priceIDs := sortedIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.PriceIDs }))
+	priceIDs := distinctIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.PriceIDs }))
 	priceByID := map[string]*price.Price{}
 	for _, li := range in.lineByID {
 		if li.Price != nil {
 			priceByID[li.PriceID] = li.Price
 		}
 	}
-	meterIDs := sortedIDs(lo.FilterMap(priceIDs, func(id string, _ int) (string, bool) {
+	meterIDs := distinctIDs(lo.FilterMap(priceIDs, func(id string, _ int) (string, bool) {
 		p := priceByID[id]
 		return lo.FromPtr(p).MeterID, p != nil
 	}))
@@ -728,7 +727,7 @@ func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []type
 	}
 	if want[types.ExpandSubscription] {
 		resp.Subscriptions = map[string]*dto.SubscriptionResponse{}
-		subIDs := sortedIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.SubscriptionIDs }))
+		subIDs := distinctIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.SubscriptionIDs }))
 		for _, id := range subIDs {
 			if sub := in.subByID[id]; sub != nil {
 				resp.Subscriptions[id] = &dto.SubscriptionResponse{Subscription: sub}
@@ -737,7 +736,7 @@ func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []type
 	}
 	if want[types.ExpandPlans] {
 		resp.Plans = map[string]*dto.PlanResponse{}
-		planIDs := sortedIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.PlanIDs }))
+		planIDs := distinctIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.PlanIDs }))
 		if len(planIDs) > 0 {
 			plans, err := s.PlanRepo.ListByIDs(ctx, planIDs)
 			if err != nil {
@@ -750,7 +749,7 @@ func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []type
 	}
 	if want[types.ExpandAddons] {
 		resp.Addons = map[string]*dto.AddonResponse{}
-		addonIDs := sortedIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.AddonIDs }))
+		addonIDs := distinctIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.AddonIDs }))
 		if len(addonIDs) > 0 {
 			filter := types.NewNoLimitAddonFilter()
 			filter.AddonIDs = addonIDs
