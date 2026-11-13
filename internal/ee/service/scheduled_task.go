@@ -93,7 +93,29 @@ func (s *scheduledTaskService) validateSource(ctx context.Context, req dto.Creat
 	if err := s.analytics.ValidateReportSource(ctx, req.SourceConfig.ReportKey, req.SourceConfig.ReportParams); err != nil {
 		return err
 	}
+	if err := checkReportGrain(req.SourceConfig.ReportKey, req.SourceConfig.ReportParams, req.Interval); err != nil {
+		return err
+	}
 	return checkReportRange(req.SourceConfig.ReportKey, intervalWindowDays(req.Interval))
+}
+
+// Partial buckets would repeat across runs.
+func checkReportGrain(key string, params *types.ReportParams, interval types.ScheduledTaskInterval) error {
+	if params == nil || params.Shape != string(types.ShapeTimeseries) {
+		return nil
+	}
+	grain := types.Grain(params.Grain)
+	if entry, ok := analytics.LookupReport(key); grain == "" && ok && len(entry.Grains) > 0 {
+		grain = entry.Grains[0]
+	}
+	grainDays := map[types.Grain]int{types.GrainWeek: 7, types.GrainMonth: 31}[grain]
+	windowDays := intervalWindowDays(interval)
+	if windowDays == 0 || grainDays <= windowDays {
+		return nil
+	}
+	return ierr.NewErrorf("grain %s is coarser than the %s interval", grain, interval).
+		WithHint("Choose a grain no coarser than the export interval").
+		Mark(ierr.ErrValidation)
 }
 
 // Longest window per interval.

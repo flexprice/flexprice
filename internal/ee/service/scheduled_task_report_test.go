@@ -247,6 +247,54 @@ func TestUpdateAndForceRun_EventsExportUnaffected(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestCheckReportGrain(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		shape    string
+		grain    string
+		interval types.ScheduledTaskInterval
+		wantErr  bool
+	}{
+		{"week grain daily", "invoice_total", "timeseries", "week", types.ScheduledTaskIntervalDaily, true},
+		{"month grain daily", "invoice_total", "timeseries", "month", types.ScheduledTaskIntervalDaily, true},
+		{"month grain weekly", "invoice_total", "timeseries", "month", types.ScheduledTaskIntervalWeekly, true},
+		{"default month grain weekly", "arpu", "timeseries", "", types.ScheduledTaskIntervalWeekly, true},
+		{"week grain weekly", "invoice_total", "timeseries", "week", types.ScheduledTaskIntervalWeekly, false},
+		{"day grain daily", "invoice_total", "timeseries", "day", types.ScheduledTaskIntervalDaily, false},
+		{"default day grain daily", "invoice_total", "timeseries", "", types.ScheduledTaskIntervalDaily, false},
+		{"month grain monthly", "invoice_total", "timeseries", "month", types.ScheduledTaskIntervalMonthly, false},
+		{"month grain manual", "invoice_total", "timeseries", "month", types.ScheduledTaskIntervalManual, false},
+		{"breakdown ignores grain", "invoice_total", "breakdown", "month", types.ScheduledTaskIntervalDaily, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkReportGrain(tt.key, &types.ReportParams{Shape: tt.shape, Grain: tt.grain}, tt.interval)
+			if tt.wantErr {
+				require.True(t, ierr.IsValidation(err), "got %v", err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestCreateReportExport_GrainCoarserThanIntervalRejected(t *testing.T) {
+	repo := &exportRepoFake{}
+	s := newExportService(repo, &exportTemporalFake{})
+	s.rbac = testRBAC(t)
+	s.analytics = &sourceValidatorFake{}
+	req := reportCreateReq()
+	req.Interval = types.ScheduledTaskIntervalDaily
+	req.Schedule = &types.ExportSchedule{Hour: 1, Timezone: "UTC"}
+	req.SourceConfig.ReportKey = "invoice_total"
+	req.SourceConfig.ReportParams.Grain = "week"
+
+	_, err := s.CreateScheduledTask(withRoles(exportCtx(), roleWithAnalytics), req)
+	require.True(t, ierr.IsValidation(err), "got %v", err)
+	require.Nil(t, repo.created)
+}
+
 func TestCreateReportExport_RangeCap(t *testing.T) {
 	one := 1
 	sched := func(iv types.ScheduledTaskInterval) *types.ExportSchedule {
