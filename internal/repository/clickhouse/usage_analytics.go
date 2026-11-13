@@ -99,7 +99,7 @@ func (r *usageAnalyticsRepository) run(ctx context.Context, params *usageanalyti
 			totalColumns                         map[string]string
 		)
 
-		targets := make([]any, 0, len(group)+12+2*len(q.Metrics))
+		var targets []any
 		for i := range group {
 			targets = append(targets, &group[i])
 		}
@@ -212,7 +212,7 @@ func (r *usageAnalyticsRepository) addPoints(ctx context.Context, params *usagea
 			group                         = make([]string, len(q.GroupBy))
 			window, amount, subtotal, qty string
 		)
-		targets := make([]any, 0, len(group)+4)
+		var targets []any
 		for i := range group {
 			targets = append(targets, &group[i])
 		}
