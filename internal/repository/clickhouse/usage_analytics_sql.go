@@ -166,9 +166,12 @@ type lineSlice struct {
 }
 
 // lineSlices cuts each line window, per customer, wherever another window on the same meter and
-// customer starts or ends. Where windows overlap, the slice of the lowest line ID that the line
-// filters keep is primary; with per-line counts every slice is primary.
+// customer starts or ends. Where windows overlap, the slice of the lowest line ID is primary; with
+// per-line counts every slice is primary.
 func lineSlices(q *usageanalytics.Query, lines []usageanalytics.LineWindow) []lineSlice {
+	// Lines the line filters drop price nothing, so they cannot count usage either.
+	lines = lo.Filter(lines, func(l usageanalytics.LineWindow, _ int) bool { return q.KeepsLine(l.LineItemID) })
+
 	// Group the windows by meter and customer; only windows in one group can overlap.
 	var keys []string
 	groups := map[string][]lineSlice{}
@@ -201,10 +204,8 @@ func lineSlices(q *usageanalytics.Query, lines []usageanalytics.LineWindow) []li
 				if from < w.start || to > w.end {
 					continue
 				}
-				wonByEarlier := lo.ContainsBy(windows[:i], func(e lineSlice) bool {
-					return e.start <= from && e.end >= to && q.KeepsLine(e.line.LineItemID)
-				})
-				primary := q.CountsPerLine() || (q.KeepsLine(w.line.LineItemID) && !wonByEarlier)
+				wonByEarlier := lo.ContainsBy(windows[:i], func(e lineSlice) bool { return e.start <= from && e.end >= to })
+				primary := q.CountsPerLine() || !wonByEarlier
 				out = append(out, lineSlice{line: w.line, customer: w.customer, start: from, end: to, primary: primary})
 			}
 		}
