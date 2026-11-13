@@ -162,6 +162,7 @@ func TestPushUsage_USDConversion(t *testing.T) {
 		{"inr_converted", "inr", "100000", map[string]decimal.Decimal{"inr": decimal.RequireFromString("0.012")}, "1200", "0.012"},
 		{"rounded_to_cents", "inr", "1234.56", map[string]decimal.Decimal{"inr": decimal.RequireFromString("0.0119")}, "14.69", "0.0119"},
 		{"currency_case_ignored", "EUR", "100", map[string]decimal.Decimal{"eur": decimal.RequireFromString("1.08")}, "108", "1.08"},
+		{"usd_total_kept_exact", "usd", "1.005", nil, "1.005", "1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -264,6 +265,42 @@ func TestPushUsage_USDRatesErrorReturned(t *testing.T) {
 	err := s.pushUsage(context.Background(), usageNow)
 	assert.ErrorIs(t, err, fc.usdRatesErr)
 	assert.Empty(t, allIngested(fc), "nothing is sent without rates")
+}
+
+func TestPushUsage_BillingTenantInvoiceNeedsNoRates(t *testing.T) {
+	hour := time.Date(2026, 10, 1, 11, 0, 0, 0, time.UTC)
+
+	fc := newFakeClient()
+	fc.usdRatesErr = errors.New("flexprice cloud down")
+	s, d := newTestService(fc)
+	s.Config.Billing.TenantID = "t_billing"
+
+	d.usage.AddEvents(&domainsb.TenantHourEvents{
+		TenantID:      "t1",
+		EnvironmentID: "env_1",
+		Hour:          hour,
+		Count:         1,
+	})
+	d.usage.AddInvoices(&domainsb.TenantHourInvoices{
+		TenantID:      "t1",
+		EnvironmentID: "env_1",
+		Currency:      "usd",
+		Hour:          hour,
+		InvoiceCount:  1,
+		Total:         decimal.RequireFromString("10"),
+	})
+	d.usage.AddInvoices(&domainsb.TenantHourInvoices{
+		TenantID:      "t_billing",
+		EnvironmentID: "env_b",
+		Currency:      "eur",
+		Hour:          hour,
+		InvoiceCount:  1,
+		Total:         decimal.RequireFromString("10"),
+	})
+
+	require.NoError(t, s.pushUsage(context.Background(), usageNow))
+	assert.Zero(t, fc.usdRateCalls, "the billing tenant's own invoices are never sent, so they need no rate")
+	assert.Len(t, allIngested(fc), 2)
 }
 
 func TestPushUsage_EnvironmentType(t *testing.T) {

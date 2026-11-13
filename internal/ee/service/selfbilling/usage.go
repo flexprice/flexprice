@@ -25,11 +25,10 @@ const (
 	// eventHourFormat keys an event to its UTC hour, so a re-sent hour reuses the same event ID.
 	eventHourFormat = "2006010215"
 
-	// usdCurrency is the currency Flexprice Cloud prices invoice value in.
 	usdCurrency = "usd"
 )
 
-// pushUsage re-sends the settled hours [to-lookback, to), to = floor(now-settle delay); deterministic IDs make Flexprice Cloud drop repeats.
+// pushUsage re-sends the settled hours [to-lookback, to), to = floor(now-settle delay); deterministic IDs keep a re-sent hour from counting twice.
 func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error {
 	to := now.UTC().Add(-usageSettleDelay).Truncate(time.Hour)
 	from := to.Add(-s.Config.Billing.UsageLookback())
@@ -62,7 +61,7 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 	// Flexprice Cloud's FX rates are read only when a row needs converting, so a USD-only push never depends on them.
 	usdRates := map[string]decimal.Decimal{usdCurrency: decimal.NewFromInt(1)}
 	needsRates := lo.SomeBy(invoices, func(inv *domainsb.TenantHourInvoices) bool {
-		return !types.IsMatchingCurrency(inv.Currency, usdCurrency)
+		return !s.Config.Billing.IsBillingTenant(inv.TenantID) && !types.IsMatchingCurrency(inv.Currency, usdCurrency)
 	})
 	if needsRates {
 		cloudRates, err := s.client.USDRates(ctx)
@@ -118,11 +117,14 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 			"region":                        region,
 		}
 
-		// A row without a rate still goes out with amount 0 and no usd_* fields, so Flexprice Cloud keeps it for reprocessing.
+		// A row without a rate still goes out with amount 0 and no usd_* fields, so Flexprice Cloud keeps its invoice amounts.
 		if usdRate, ok := usdRates[strings.ToLower(inv.Currency)]; ok {
-			usdAmount := types.RoundToCurrencyPrecision(inv.Total.Mul(usdRate), usdCurrency).String()
-			properties["amount"] = usdAmount
-			properties["usd_amount"] = usdAmount
+			usdAmount := inv.Total
+			if !types.IsMatchingCurrency(inv.Currency, usdCurrency) {
+				usdAmount = types.RoundToCurrencyPrecision(inv.Total.Mul(usdRate), usdCurrency)
+			}
+			properties["amount"] = usdAmount.String()
+			properties["usd_amount"] = usdAmount.String()
 			properties["usd_rate"] = usdRate.String()
 		} else {
 			missingRates = append(missingRates, currency)
