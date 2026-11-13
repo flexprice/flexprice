@@ -45,8 +45,7 @@ type loadedScope struct {
 	bucket       types.WindowSize
 	overagePrice *price.Price
 	amountOf     amountFn
-	accrualStart time.Time      // where the commitment period's capacity starts accruing
-	location     *time.Location // the commitment's timezone, loaded once for its active windows
+	accrualStart time.Time // where the commitment period's capacity starts accruing
 }
 
 // stackKey groups commitments that can share lines: same type and measurement, and bucket size for windows.
@@ -78,15 +77,6 @@ func (s *billingService) newCommitmentLoader(
 	}
 
 	svc := newCommitmentService(s.ServiceParams)
-	enabled, err := svc.IsEnabled(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if !enabled {
-		return l, nil
-	}
-
 	active, err := svc.ListOverlapping(ctx, sub.ID, periodStart, periodEnd)
 	if err != nil {
 		return nil, err
@@ -250,7 +240,6 @@ func (l *commitmentLoader) load(
 		overagePrice: overagePrice,
 		amountOf:     amountOf,
 		accrualStart: period.Start,
-		location:     c.Location(),
 	}
 	l.commitments = append(l.commitments, &stackedCommitment{
 		Commitment:     c,
@@ -682,7 +671,7 @@ func (l *commitmentLoader) holdsBucket(c *commitment.Commitment, start time.Time
 // coversBucket reports whether c's capacity applies to the bucket starting at start: its term holds the bucket and its
 // active windows hold the start.
 func (l *commitmentLoader) coversBucket(c *commitment.Commitment, start time.Time, bucket types.WindowSize) bool {
-	return l.holdsBucket(c, start, bucket) && c.ActiveWindows.Contains(start, l.scopeByCommitment[c.ID].location)
+	return l.holdsBucket(c, start, bucket) && c.ActiveWindows.Contains(start)
 }
 
 // bucketSpan returns the part of the period whose buckets it bills for line. While a commitment carries the line across
@@ -716,8 +705,7 @@ func (l *commitmentLoader) bucketSpan(stack *commitmentStack, line *usageLine, b
 // appliesAt reports whether the commitment's capacity applies at t: within its term, which ends with the subscription
 // when it is open-ended, and inside its active windows.
 func (l *commitmentLoader) appliesAt(c *commitment.Commitment, t time.Time) bool {
-	location := l.scopeByCommitment[c.ID].location
-	return !t.Before(c.StartDate) && !endReached(termEnd(l.sub, c), t) && c.ActiveWindows.Contains(t, location)
+	return !t.Before(c.StartDate) && !endReached(termEnd(l.sub, c), t) && c.ActiveWindows.Contains(t)
 }
 
 // windowOf returns the index of the window holding max(t, line start), or of the first window for an earlier one.

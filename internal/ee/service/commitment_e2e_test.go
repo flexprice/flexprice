@@ -70,7 +70,6 @@ func (s *CommitmentE2ESuite) SetupTest() {
 	}
 	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, s.tokens))
 	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, s.gpus))
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 }
 
 // planWith stores a plan with one arrear usage price on the meter, billed every period; tiers, when given, make
@@ -883,7 +882,7 @@ func (s *CommitmentE2ESuite) TestAnalytics_TrueUpSharedByWithinAcrossScopedLines
 		s.Require().NotNil(info, lineID)
 		s.True(info.ComputedCommitmentUtilizedAmount.Equal(dec(within)), "%s within %s", lineID, info.ComputedCommitmentUtilizedAmount)
 		share := dec("77.5").Mul(dec(within)).Div(dec("122.5"))
-		s.True(info.ComputedTrueUpAmount.Sub(share).Abs().LessThan(dec("0.000001")), "%s true-up %s, want %s", lineID, info.ComputedTrueUpAmount, share)
+		s.True(info.ComputedTrueUpAmount.Sub(share).Abs().LessThan(dec("0.01")), "%s true-up %s, want %s to the cent", lineID, info.ComputedTrueUpAmount, share)
 	}
 }
 

@@ -312,10 +312,7 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		f.invoiceRepo,
 		f.paymentRepo,
 		f.entityIntegrationMappingRepo,
-		f.locker,
 		f.logger,
-		paymentSvc,
-		f.lifecycle,
 	)
 
 	webhookHandler := razorpaywebhook.NewHandler(
@@ -1636,7 +1633,7 @@ func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.Pa
 		if err != nil {
 			return nil, err
 		}
-		return &razorpay.PaymentMethodAdapter{Client: i.Client, CustomerSvc: i.CustomerSvc, FlexCustomerSvc: customerSvc}, nil
+		return &razorpay.PaymentMethodAdapter{CustomerSvc: i.CustomerSvc}, nil
 	default:
 		return nil, ierr.NewError("saved payment methods are not supported for this provider").
 			WithHintf("%s cannot manage saved payment methods", gateway).

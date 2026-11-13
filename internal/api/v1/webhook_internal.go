@@ -93,6 +93,16 @@ func WebhookEventInvoiceUpdate() {}
 // @Router /webhook-events/invoice.payment.overdue [post]
 func WebhookEventInvoicePaymentOverdue() {}
 
+// WebhookEventInvoicePaymentFailed godoc
+// @Summary invoice.payment.failed
+// @Description Fired when a payment of an invoice does not succeed. `reason` is `payment_method_unavailable`, `provider_error` or `declined`; `is_auto_charge_attempt` is true when Flexprice charged the saved payment method. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.InvoicePaymentFailedWebhookPayload "Webhook payload"
+// @Router /webhook-events/invoice.payment.failed [post]
+func WebhookEventInvoicePaymentFailed() {}
+
 // WebhookEventInvoiceSyncSuccess godoc
 // @Summary invoice.sync.success
 // @Description Fired once per provider when an invoice is synced to that provider.

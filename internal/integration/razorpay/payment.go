@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/samber/lo"
@@ -829,6 +828,30 @@ func selectAutoChargeToken(
 	return nil, false
 }
 
+// SelectSavedToken returns the customer's Razorpay ID and a recurring token able to pay amount; token is nil when there is none.
+func (s *PaymentService) SelectSavedToken(
+	ctx context.Context,
+	customerID string,
+	amount decimal.Decimal,
+	preferred types.PaymentMethodType,
+) (razorpayCustomerID string, token *interfaces.ProviderPaymentMethod, err error) {
+	razorpayCustomerID, tokens, err := s.customerSvc.ListCustomerTokens(ctx, customerID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	token, ok := selectAutoChargeToken(tokens, preferred, amount)
+	if !ok {
+		s.logger.Info(ctx, "no usable Razorpay token",
+			"customer_id", customerID,
+			"amount", amount.String(),
+			"preferred_method", preferred,
+			"tokens_inspected", len(tokens))
+		return razorpayCustomerID, nil, nil
+	}
+	return razorpayCustomerID, token, nil
+}
+
 // ChargeSavedToken selects a confirmed token for an already-mapped Razorpay
 // customer and submits AutoCharge.
 func (s *PaymentService) ChargeSavedToken(
@@ -839,21 +862,13 @@ func (s *PaymentService) ChargeSavedToken(
 		return nil, false, nil
 	}
 
-	razorpayCustomerID, tokens, err := s.customerSvc.ListCustomerTokens(ctx, req.Customer.ID)
+	razorpayCustomerID, token, err := s.SelectSavedToken(ctx, req.Customer.ID, req.Amount, req.PreferredMethod)
 	if err != nil {
-		s.logger.Info(ctx, "charge saved token: list tokens failed",
-			"customer_id", req.Customer.ID, "invoice_id", req.InvoiceID, "error", err)
+		s.logger.Info(ctx, "list Razorpay tokens failed, no saved token to charge",
+			"customer_id", req.Customer.ID, "error", err)
 		return nil, false, nil
 	}
-
-	token, ok := selectAutoChargeToken(tokens, req.PreferredMethod, req.Amount)
-	if !ok {
-		s.logger.Info(ctx, "charge saved token: no usable token",
-			"customer_id", req.Customer.ID,
-			"invoice_id", req.InvoiceID,
-			"amount", req.Amount.String(),
-			"preferred_method", req.PreferredMethod,
-			"tokens_inspected", len(tokens))
+	if token == nil {
 		return nil, false, nil
 	}
 
@@ -887,9 +902,6 @@ func (s *PaymentService) ChargeSavedToken(
 	return result, true, nil
 }
 
-// errOrderNotCreated marks an AutoCharge failure before any debit could be sent.
-var errOrderNotCreated = errors.New("razorpay order not created")
-
 // AutoCharge charges a saved mandate token off-session. Razorpay doesn't dedupe order receipts,
 // so callers hold LockInvoiceCharge to keep an invoice from being charged twice.
 func (s *PaymentService) AutoCharge(ctx context.Context, req AutoChargeRequest) (*AutoChargeResult, error) {
@@ -914,7 +926,7 @@ func (s *PaymentService) AutoCharge(ctx context.Context, req AutoChargeRequest) 
 
 	order, err := s.client.CreateOrder(ctx, orderData)
 	if err != nil {
-		return nil, ierr.WithError(err).Mark(errOrderNotCreated)
+		return nil, err
 	}
 
 	orderID, ok := order["id"].(string)

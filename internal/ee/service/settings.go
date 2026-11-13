@@ -262,6 +262,22 @@ func GetSetting[T any](s *settingsService, ctx context.Context, key types.Settin
 	return typedValue, nil
 }
 
+// resolveSubscriptionConfig applies each override's set fields onto the environment config; later overrides win.
+func resolveSubscriptionConfig(config types.SubscriptionConfig, overrides ...*types.SettingsOverride) types.SubscriptionConfig {
+	for _, o := range overrides {
+		if o == nil || o.SubscriptionConfig == nil {
+			continue
+		}
+		if o.SubscriptionConfig.GracePeriodDays != nil {
+			config.GracePeriodDays = *o.SubscriptionConfig.GracePeriodDays
+		}
+		if o.SubscriptionConfig.AutoCancellationEnabled != nil {
+			config.AutoCancellationEnabled = *o.SubscriptionConfig.AutoCancellationEnabled
+		}
+	}
+	return config
+}
+
 // UpdateSetting updates a setting value (creates if doesn't exist)
 //
 // WHEN TO USE:
@@ -388,8 +404,6 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.CustomCurrencyConfig](s, ctx, key)
 	case types.SettingKeyTaxConfig:
 		return getSettingByKey[types.TaxConfig](s, ctx, key)
-	case types.SettingKeyCommitmentsV2:
-		return getSettingByKey[types.CommitmentsV2Config](s, ctx, key)
 	case types.SettingKeyRevenueRecognitionConfig:
 		return getSettingByKey[types.RevenueRecognitionConfig](s, ctx, key)
 	case types.SettingKeyBillingEntityConfig:
@@ -463,8 +477,6 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[*types.CustomCurrencyConfig](s, ctx, key, req)
 	case types.SettingKeyTaxConfig:
 		return s.updateBillingEntityGuardedSetting(ctx, key, req, updateSettingByKey[types.TaxConfig])
-	case types.SettingKeyCommitmentsV2:
-		return updateSettingByKey[types.CommitmentsV2Config](s, ctx, key, req)
 	case types.SettingKeyRevenueRecognitionConfig:
 		return updateSettingByKey[types.RevenueRecognitionConfig](s, ctx, key, req)
 	default:

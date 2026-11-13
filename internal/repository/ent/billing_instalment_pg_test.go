@@ -403,6 +403,29 @@ func TestInstalmentList_FiltersAndOrder(t *testing.T) {
 	})
 }
 
+// ListEnvironments finds the run's environment by a due instalment and skips it once nothing matches.
+func TestInstalmentListEnvironments_AcrossTenants(t *testing.T) {
+	f := newBillingTermFixture(t)
+	billOn := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	_, err := f.instalments.CreateMany(f.ctx, []*billingterm.Instalment{
+		f.instalment(f.ctx, "due", "cmt_"+f.runID, types.InstalmentStatusScheduled, billOn),
+	})
+	require.NoError(t, err)
+
+	env := types.TenantEnvironment{TenantID: types.DefaultTenantID, EnvironmentID: types.GetEnvironmentID(f.ctx)}
+	list := func(dueBy time.Time) []types.TenantEnvironment {
+		envs, err := f.instalments.ListEnvironments(context.Background(), &billingterm.InstalmentFilter{
+			Statuses:       []types.InstalmentStatus{types.InstalmentStatusScheduled},
+			BillOnOrBefore: &dueBy,
+		})
+		require.NoError(t, err)
+		return envs
+	}
+
+	require.Contains(t, list(billOn), env)
+	require.NotContains(t, list(billOn.AddDate(0, 0, -1)), env)
+}
+
 func TestTermArchive_HidesArchived(t *testing.T) {
 	f := newBillingTermFixture(t)
 	owner := "cmt_" + f.runID + "_1"

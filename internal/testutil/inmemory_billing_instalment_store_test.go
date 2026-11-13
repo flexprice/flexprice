@@ -373,3 +373,30 @@ func TestInMemoryBillingInstalmentStore_ListInvoiced(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{early.ID, otherOwner.ID, late.ID}, instalmentIDs(got))
 }
+
+func TestInMemoryBillingInstalmentStore_ListEnvironments(t *testing.T) {
+	f := newInstalmentFixture(t)
+	due := f.instalment("binst_due", "cmt_1", types.InstalmentStatusScheduled, f.start)
+	future := f.instalment("binst_future", "cmt_1", types.InstalmentStatusScheduled, f.start.AddDate(0, 2, 0))
+	future.EnvironmentID = "env_future"
+	invoiced := f.instalment("binst_invoiced", "cmt_1", types.InstalmentStatusInvoiced, f.start)
+	invoiced.EnvironmentID = "env_invoiced"
+	f.seed(t, due, future, invoiced)
+
+	otherTenant := types.SetEnvironmentID(types.SetTenantID(f.ctx, "tenant_2"), "env_2")
+	other := f.instalment("binst_other", "cmt_2", types.InstalmentStatusScheduled, f.start)
+	other.TenantID, other.EnvironmentID = "tenant_2", "env_2"
+	_, err := f.store.CreateMany(otherTenant, []*billingterm.Instalment{other})
+	require.NoError(t, err)
+
+	dueBy := f.start.AddDate(0, 1, 0)
+	envs, err := f.store.ListEnvironments(context.Background(), &billingterm.InstalmentFilter{
+		Statuses:       []types.InstalmentStatus{types.InstalmentStatusScheduled},
+		BillOnOrBefore: &dueBy,
+	})
+	require.NoError(t, err)
+	require.ElementsMatch(t, []types.TenantEnvironment{
+		{TenantID: "tenant_1", EnvironmentID: "env_1"},
+		{TenantID: "tenant_2", EnvironmentID: "env_2"},
+	}, envs)
+}

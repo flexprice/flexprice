@@ -137,6 +137,9 @@ type Subscription struct {
 	// PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
 	PaymentTerms *types.PaymentTerms `db:"payment_terms" json:"payment_terms,omitempty"`
 
+	// Settings overrides the customer's and environment's settings for this subscription.
+	Settings *types.SettingsOverride `db:"settings" json:"settings,omitempty"`
+
 	// SubscriptionType categorises the subscription within a customer hierarchy (standalone, parent, inherited).
 	SubscriptionType types.SubscriptionType `db:"subscription_type" json:"subscription_type"`
 
@@ -279,6 +282,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		InvoicingCustomerID:  sub.InvoicingCustomerID,
 		ParentSubscriptionID: sub.ParentSubscriptionID,
 		PaymentTerms:         sub.PaymentTerms,
+		Settings:             sub.Settings,
 		SubscriptionType:     types.SubscriptionType(sub.SubscriptionType),
 		AutoInvoiceThreshold: sub.AutoInvoiceThreshold,
 		SyncedPriceSequence:  sub.SyncedPriceSequence,

@@ -81,10 +81,6 @@ func (s *CommitmentServiceSuite) TestCheckPriceAttach_NoopCases() {
 	fixed := *p
 	fixed.Type = types.PRICE_TYPE_FIXED
 	s.Require().NoError(s.svc.CheckPriceAttach(s.GetContext(), sub, &fixed, at, nil))
-
-	// Disabled feature is a no-op.
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
-	s.Require().NoError(s.svc.CheckPriceAttach(s.GetContext(), sub, p, at, nil))
 }
 
 func (s *CommitmentServiceSuite) TestCheckPriceAttach_RejectsBucketMismatchForMeterScopedWindow() {
@@ -427,6 +423,52 @@ func (s *CommitmentServiceSuite) TestLineItemAdd_RejectsLegacyCommitmentInScope(
 			CommitmentType:   types.COMMITMENT_TYPE_AMOUNT,
 		})
 	s.requireValidation(err, "legacy line-item commitment")
+}
+
+// Legacy fields stay accepted on a line that no commitment covers, so both kinds coexist on one subscription.
+func (s *CommitmentServiceSuite) TestLineItemAdd_AllowsLegacyCommitmentOutOfScope() {
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterAPI.ID}
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	added, err := NewSubscriptionService(fullServiceParams(&s.BaseServiceTestSuite)).AddSubscriptionLineItem(s.GetContext(), s.fx.sub.ID,
+		dto.CreateSubscriptionLineItemRequest{
+			PriceID:          s.fx.priceOtherMeterInGroup.ID,
+			CommitmentAmount: lo.ToPtr(dec("50")),
+			CommitmentType:   types.COMMITMENT_TYPE_AMOUNT,
+		})
+	s.Require().NoError(err)
+	s.True(lo.FromPtr(added.CommitmentAmount).Equal(dec("50")), "got %v", added.CommitmentAmount)
+}
+
+// A line's existing legacy commitment can still be edited and removed while a commitment covers another line.
+func (s *CommitmentServiceSuite) TestLineItemUpdate_EditsAndRemovesExistingLegacyCommitment() {
+	ctx := s.GetContext()
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterAPI.ID}
+	_, err := s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+
+	line, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.fx.lineStorage.ID)
+	s.Require().NoError(err)
+	line.CommitmentAmount, line.CommitmentType = lo.ToPtr(dec("50")), types.COMMITMENT_TYPE_AMOUNT
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, line))
+
+	subSvc := NewSubscriptionService(fullServiceParams(&s.BaseServiceTestSuite))
+	edited, err := subSvc.UpdateSubscriptionLineItem(ctx, s.fx.lineStorage.ID, dto.UpdateSubscriptionLineItemRequest{
+		CommitmentAmount: lo.ToPtr(dec("80")),
+		CommitmentType:   types.COMMITMENT_TYPE_AMOUNT,
+		EffectiveFrom:    lo.ToPtr(s.fx.sub.StartDate.AddDate(0, 1, 0)),
+	})
+	s.Require().NoError(err)
+	s.True(lo.FromPtr(edited.CommitmentAmount).Equal(dec("80")), "got %v", edited.CommitmentAmount)
+
+	removed, err := subSvc.UpdateSubscriptionLineItem(ctx, edited.ID, dto.UpdateSubscriptionLineItemRequest{
+		CommitmentAmount: lo.ToPtr(decimal.Zero),
+	})
+	s.Require().NoError(err)
+	s.False(removed.HasAnyCommitment())
 }
 
 func (s *CommitmentServiceSuite) TestCheckPriceAttach_AllowsLineEndingBeforeCommitmentStart() {

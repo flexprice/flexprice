@@ -28,18 +28,13 @@ func instalmentBillAt(referencePoint types.InvoiceReferencePoint, periodStart, p
 }
 
 // dueInstalments returns the subscriptions' scheduled subscription-invoice instalments due by billAt that no termination
-// cancelled, in billing order, with their commitments by ID; none while commitments_v2 is off.
+// cancelled, in billing order, with their commitments by ID.
 func dueInstalments(
 	ctx context.Context,
 	params ServiceParams,
 	subscriptionIDs []string,
 	billAt time.Time,
 ) ([]*billingterm.Instalment, map[string]*commitment.Commitment, error) {
-	enabled, err := NewCommitmentService(params).IsEnabled(ctx)
-	if err != nil || !enabled {
-		return nil, nil, err
-	}
-
 	scheduled, err := params.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
 		OwnerType:       types.BillingTermOwnerCommitment,
 		SubscriptionIDs: subscriptionIDs,

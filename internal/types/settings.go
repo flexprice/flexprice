@@ -40,7 +40,6 @@ const (
 	SettingKeyRevenueAnalyticsConfig      SettingKey = "revenue_analytics_config"
 	SettingKeyUsageAlertConfig            SettingKey = "usage_alert_config"
 	SettingKeyTaxConfig                   SettingKey = "tax_config"
-	SettingKeyCommitmentsV2               SettingKey = "commitments_v2"
 	SettingKeyRevenueRecognitionConfig    SettingKey = "revenue_recognition_config"
 	SettingKeyBillingEntityConfig         SettingKey = "billing_entity_config"
 )
@@ -69,7 +68,6 @@ func (s *SettingKey) Validate() error {
 		SettingKeyRevenueAnalyticsConfig,
 		SettingKeyUsageAlertConfig,
 		SettingKeyTaxConfig,
-		SettingKeyCommitmentsV2,
 		SettingKeyRevenueRecognitionConfig,
 		SettingKeyBillingEntityConfig,
 	}
@@ -96,6 +94,17 @@ type DefaultSettingValue struct {
 type SubscriptionConfig struct {
 	GracePeriodDays         int  `json:"grace_period_days" validate:"required,min=1"`
 	AutoCancellationEnabled bool `json:"auto_cancellation_enabled"`
+}
+
+// SettingsOverride holds the environment settings a customer or subscription overrides; unset fields inherit.
+type SettingsOverride struct {
+	SubscriptionConfig *SubscriptionConfigOverride `json:"subscription_config,omitempty"`
+}
+
+// SubscriptionConfigOverride is the overridable subset of SubscriptionConfig.
+type SubscriptionConfigOverride struct {
+	GracePeriodDays         *int  `json:"grace_period_days,omitempty" validate:"omitempty,min=0"`
+	AutoCancellationEnabled *bool `json:"auto_cancellation_enabled,omitempty"`
 }
 
 // Validate implements SettingConfig interface
@@ -965,11 +974,6 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: map[string]interface{}{},
 			Description:  "Which external tax engine calculates tax, if any. Absent or disabled means the native engine",
 		},
-		SettingKeyCommitmentsV2: {
-			Key:          SettingKeyCommitmentsV2,
-			DefaultValue: map[string]interface{}{"enabled": false},
-			Description:  "Enable first-class commitments",
-		},
 		SettingKeyRevenueRecognitionConfig: {
 			Key:          SettingKeyRevenueRecognitionConfig,
 			DefaultValue: map[string]interface{}{"enabled": false},
@@ -1152,13 +1156,6 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return config.Validate()
 
-	case SettingKeyCommitmentsV2:
-		cfg, err := utils.ToStruct[CommitmentsV2Config](value)
-		if err != nil {
-			return err
-		}
-		return cfg.Validate()
-
 	case SettingKeyRevenueRecognitionConfig:
 		cfg, err := utils.ToStruct[RevenueRecognitionConfig](value)
 		if err != nil {
@@ -1312,15 +1309,6 @@ func validateSAMLConfig(value map[string]interface{}) error {
 // settings path calls. Putting rules here as well would mean two places to keep
 // in step.
 func (c SAMLConfig) Validate() error { return nil }
-
-// CommitmentsV2Config gates first-class commitments per environment.
-type CommitmentsV2Config struct {
-	Enabled bool `json:"enabled"`
-}
-
-func (c CommitmentsV2Config) Validate() error {
-	return nil
-}
 
 // RevenueRecognitionConfig gates every revenue recognition write per environment.
 type RevenueRecognitionConfig struct {

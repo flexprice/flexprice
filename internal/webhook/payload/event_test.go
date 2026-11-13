@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -160,4 +162,61 @@ func TestMandatePayloadBuilder_BuildPayload(t *testing.T) {
 
 	_, err = b.BuildPayload(context.Background(), types.WebhookEventMandateRejected, []byte(`{"mandate":{"id":"token_1"}}`))
 	assert.Error(t, err, "a mandate without a customer is refused")
+}
+
+type paymentFailedTestInvoiceService struct {
+	service.InvoiceService
+}
+
+func (paymentFailedTestInvoiceService) GetInvoice(_ context.Context, id string) (*dto.InvoiceResponse, error) {
+	return &dto.InvoiceResponse{Invoice: invoice.Invoice{ID: id}}, nil
+}
+
+func (paymentFailedTestInvoiceService) WithHostedInvoiceURLs(_ context.Context, _ ...*dto.InvoiceResponse) error {
+	return nil
+}
+
+func (paymentFailedTestInvoiceService) GetInvoicePDFUrl(_ context.Context, _ dto.InvoicePDFRequest) (string, error) {
+	return "https://pdf", nil
+}
+
+func TestInvoicePaymentFailedPayloadBuilder_BuildPayload(t *testing.T) {
+	tests := []struct {
+		name    string
+		event   webhookDto.InternalInvoicePaymentFailedEvent
+		wantErr bool
+	}{
+		{name: "builds the payload", event: webhookDto.InternalInvoicePaymentFailedEvent{
+			InvoiceID: "inv_01", TenantID: "tenant_01", Provider: types.SecretProviderRazorpay,
+			Reason: types.InvoicePaymentFailureReasonPaymentMethodUnavailable, IsAutoChargeAttempt: true,
+		}},
+		{name: "rejects a missing reason", event: webhookDto.InternalInvoicePaymentFailedEvent{
+			InvoiceID: "inv_01", TenantID: "tenant_01", Provider: types.SecretProviderRazorpay,
+		}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewInvoicePaymentFailedPayloadBuilder(&Services{InvoiceService: paymentFailedTestInvoiceService{}})
+			raw, err := json.Marshal(tt.event)
+			require.NoError(t, err)
+
+			out, err := builder.BuildPayload(context.Background(), types.WebhookEventInvoicePaymentFailed, raw)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			var got map[string]any
+			require.NoError(t, json.Unmarshal(out, &got))
+			assert.Equal(t, string(types.WebhookEventInvoicePaymentFailed), got["event_type"])
+			assert.Equal(t, "inv_01", got["invoice"].(map[string]any)["id"])
+			assert.Equal(t, "razorpay", got["provider"])
+			assert.Equal(t, "payment_method_unavailable", got["reason"])
+			assert.Equal(t, true, got["is_auto_charge_attempt"])
+			assert.Nil(t, got["payment_id"])
+			assert.Nil(t, got["error"])
+		})
+	}
 }

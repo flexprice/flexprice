@@ -45,6 +45,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 			return NewInvoiceSyncPayloadBuilder(f.services)
 		}
 	}
+	f.builders[types.WebhookEventInvoicePaymentFailed] = func() PayloadBuilder {
+		return NewInvoicePaymentFailedPayloadBuilder(f.services)
+	}
 
 	// Register refund builders
 	for _, e := range []types.WebhookEventName{

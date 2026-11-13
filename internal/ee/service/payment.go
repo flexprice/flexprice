@@ -1176,6 +1176,10 @@ func (s *paymentService) ListPaymentMethods(ctx context.Context, customerID stri
 	if _, err := s.CustomerRepo.Get(ctx, customerID); err != nil {
 		return nil, err
 	}
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
 
 	var requested []types.PaymentGatewayType
 	if req != nil {

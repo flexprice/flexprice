@@ -467,9 +467,6 @@ func NewRouter(
 			subscription.PUT("/lineitems/:id", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.UpdateSubscriptionLineItem)
 			subscription.DELETE("/lineitems/:id", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.DeleteSubscriptionLineItem)
 
-			subscription.POST("/temporal/schedule-update-billing-period", write(types.EntitySubscription, types.ActionWrite), handlers.ScheduledTask.ScheduleUpdateBillingPeriod)
-			subscription.POST("/temporal/schedule-draft-finalization", write(types.EntitySubscription, types.ActionWrite), handlers.ScheduledTask.ScheduleDraftFinalization)
-
 			// Trigger subscription billing workflow
 			subscription.POST("/temporal/:subscription_id/trigger-workflow", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.TriggerSubscriptionWorkflow)
 			subscription.POST("/temporal/:subscription_id/draft-and-compute", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.TriggerSubscriptionDraftAndComputeWorkflow)

@@ -3436,3 +3436,31 @@ func TestBillingModelChange_Rejects(t *testing.T) {
 	update := dto.UpdatePriceRequest{BillingModel: types.BILLING_MODEL_FLAT_FEE}
 	require.ErrorContains(t, update.ValidateAgainst(shapedPrice(pricingShapes["slab"], types.PRICE_UNIT_TYPE_FIAT)), "amount is required")
 }
+
+func (s *PriceServiceSuite) TestCreatePrice_FixedWithoutStartDateReturnsWarning() {
+	_ = s.planRepo.Create(s.ctx, &plan.Plan{ID: "plan-warn", Name: "Warn Plan", BaseModel: types.GetDefaultBaseModel(s.ctx)})
+	amount := decimal.RequireFromString("8000")
+	req := dto.CreatePriceRequest{
+		Amount:             &amount,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           "plan-warn",
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+	}
+
+	resp, err := s.priceService.CreatePrice(s.ctx, req)
+	s.Require().NoError(err)
+	s.True(resp.Price.StartDate.Equal(price.DefaultFixedPriceStartDate()))
+	s.Len(resp.Warnings, 1)
+
+	start := time.Date(2026, time.October, 21, 18, 30, 0, 0, time.UTC)
+	req.StartDate = &start
+	resp, err = s.priceService.CreatePrice(s.ctx, req)
+	s.Require().NoError(err)
+	s.True(resp.Price.StartDate.Equal(start))
+	s.Empty(resp.Warnings)
+}

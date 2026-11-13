@@ -16066,112 +16066,6 @@
         "x-codegen-request-body-name": "scheduled_task"
       }
     },
-    "/tasks/scheduled/schedule-draft-finalization": {
-      "post": {
-        "tags": [
-          "Scheduled Tasks"
-        ],
-        "summary": "Schedule draft finalization",
-        "description": "Triggers the draft invoice finalization workflow that scans computed draft invoices whose finalization delay has elapsed and finalizes them (assign invoice number, sync to vendors, attempt payment).",
-        "operationId": "scheduleDraftFinalization",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ]
-      }
-    },
-    "/tasks/scheduled/schedule-update-billing-period": {
-      "post": {
-        "tags": [
-          "Scheduled Tasks"
-        ],
-        "summary": "Schedule update billing period",
-        "description": "Use when you need to trigger a billing-period update workflow (e.g. to recalculate or sync billing windows).",
-        "operationId": "scheduleUpdateBillingPeriod",
-        "requestBody": {
-          "description": "Schedule Update Billing Period Request",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "x-codegen-request-body-name": "request"
-      }
-    },
     "/tasks/scheduled/{id}": {
       "get": {
         "tags": [
@@ -19563,6 +19457,27 @@
         }
       }
     },
+    "/webhook-events/invoice.payment.failed": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "invoice.payment.failed",
+        "description": "Fired when a payment of an invoice does not succeed. `reason` is `payment_method_unavailable`, `provider_error` or `declined`; `is_auto_charge_attempt` is true when Flexprice charged the saved payment method. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.InvoicePaymentFailedWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook-events/invoice.payment.overdue": {
       "post": {
         "tags": [
@@ -22004,7 +21919,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/LineItemCommitmentConfig"
             },
-            "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)"
+            "description": "Deprecated: use POST /commitments instead."
           },
           "metadata": {
             "type": "object",
@@ -22056,7 +21971,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/LineItemCommitmentConfig"
             },
-            "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)"
+            "description": "Deprecated: use POST /commitments instead."
           },
           "metadata": {
             "type": "object",
@@ -23615,9 +23530,6 @@
           "termination_invoice_id": {
             "type": "string"
           },
-          "timezone": {
-            "type": "string"
-          },
           "total_amount": {
             "type": "string"
           },
@@ -24489,9 +24401,6 @@
             "type": "string",
             "description": "SubscriptionID is required on POST /commitments and set server-side on inline commitments."
           },
-          "timezone": {
-            "type": "string"
-          },
           "type": {
             "$ref": "#/components/schemas/types.CommitmentType"
           },
@@ -24818,6 +24727,9 @@
           "onboarding_workflow_name": {
             "type": "string",
             "description": "onboarding_workflow_name is given if a custom onboarding workflow is to be triggered for this customer"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
           },
           "skip_onboarding_workflow": {
             "type": "boolean",
@@ -25707,31 +25619,36 @@
         "properties": {
           "commitment_amount": {
             "type": "number",
-            "description": "Commitment fields"
+            "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
           "commitment_overage_factor": {
-            "type": "number"
+            "type": "number",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_quantity": {
-            "type": "number"
+            "type": "number",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_time_buckets": {
             "type": "array",
+            "description": "Deprecated: use POST /commitments instead.",
             "items": {
               "$ref": "#/components/schemas/CommitmentBucketRequest"
             }
           },
           "commitment_true_up_enabled": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_type": {
             "$ref": "#/components/schemas/types.CommitmentType"
           },
           "commitment_windowed": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "display_name": {
             "type": "string"
@@ -25807,7 +25724,8 @@
             "$ref": "#/components/schemas/types.CollectionMethod"
           },
           "commitment_amount": {
-            "type": "string"
+            "type": "string",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
@@ -25840,7 +25758,8 @@
             "description": "CustomerID takes priority over ExternalCustomerID when both are provided."
           },
           "enable_true_up": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "end_date": {
             "type": "string",
@@ -25874,7 +25793,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/LineItemCommitmentConfig"
             },
-            "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id."
+            "description": "Deprecated: use POST /commitments instead."
           },
           "line_item_coupons": {
             "type": "object",
@@ -25906,7 +25825,8 @@
             }
           },
           "overage_factor": {
-            "type": "string"
+            "type": "string",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "override_entitlements": {
             "type": "array",
@@ -25938,6 +25858,9 @@
           },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
           },
           "start_date": {
             "type": "string",
@@ -26713,6 +26636,9 @@
           "name": {
             "type": "string",
             "description": "Name is the name of the customer"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -28265,7 +28191,8 @@
             }
           },
           "commitment_amount": {
-            "type": "string"
+            "type": "string",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
@@ -28284,7 +28211,8 @@
             }
           },
           "enable_true_up": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "external_customer_id": {
             "type": "string"
@@ -28294,7 +28222,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/LineItemCommitmentConfig"
             },
-            "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id."
+            "description": "Deprecated: use POST /commitments instead."
           },
           "line_item_coupons": {
             "type": "object",
@@ -28314,7 +28242,8 @@
             }
           },
           "overage_factor": {
-            "type": "string"
+            "type": "string",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "override_entitlements": {
             "type": "array",
@@ -30323,6 +30252,13 @@
           },
           "updated_by": {
             "type": "string"
+          },
+          "warnings": {
+            "type": "array",
+            "description": "Warnings lists defaults applied on create that the caller may want to set explicitly.",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -33003,6 +32939,9 @@
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
+          },
           "start_date": {
             "type": "string",
             "description": "StartDate is the start date of the subscription",
@@ -33239,6 +33178,9 @@
           },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
           },
           "start_date": {
             "type": "string",
@@ -34279,6 +34221,9 @@
             "type": "string",
             "description": "name is the updated name or company name for the customer"
           },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
+          },
           "tax_treatment": {
             "$ref": "#/components/schemas/types.TaxTreatment"
           },
@@ -34674,32 +34619,36 @@
           },
           "commitment_amount": {
             "type": "number",
-            "description": "Commitment fields"
+            "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
           "commitment_overage_factor": {
-            "type": "number"
+            "type": "number",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_quantity": {
-            "type": "number"
+            "type": "number",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_time_buckets": {
             "type": "array",
-            "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).",
+            "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).\n\nDeprecated: use POST /commitments instead.",
             "items": {
               "$ref": "#/components/schemas/CommitmentBucketRequest"
             }
           },
           "commitment_true_up_enabled": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_type": {
             "$ref": "#/components/schemas/types.CommitmentType"
           },
           "commitment_windowed": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Deprecated: use POST /commitments instead."
           },
           "effective_from": {
             "type": "string",
@@ -34755,6 +34704,9 @@
           },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
           },
           "status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"
@@ -35153,10 +35105,20 @@
             "type": "string",
             "description": "Commitment breakdown (only populated for windowed commitments)"
           },
+          "computed_commitment_utilized_quantity": {
+            "type": "string",
+            "description": "Usage units behind the commitment breakdown, for v2 commitments"
+          },
           "computed_overage_amount": {
             "type": "string"
           },
+          "computed_overage_quantity": {
+            "type": "string"
+          },
           "computed_true_up_amount": {
+            "type": "string"
+          },
+          "computed_true_up_quantity": {
             "type": "string"
           },
           "cost": {
@@ -36074,6 +36036,9 @@
           "name": {
             "type": "string",
             "description": "Name is the name of the customer"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/types.SettingsOverride"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -37048,17 +37013,28 @@
         "type": "object",
         "properties": {
           "amount": {
-            "type": "string"
+            "type": "string",
+            "description": "Amount is the commitment amount (v1), or computed_commitment_utilized_amount + computed_true_up_amount (v2)."
           },
           "computed_commitment_utilized_amount": {
             "type": "string"
           },
+          "computed_commitment_utilized_quantity": {
+            "type": "string",
+            "description": "Usage units behind the computed amounts: usage a billing-terms commitment covers counts as utilized at no\ncharge, and a quantity commitment's true-up counts its unused units."
+          },
           "computed_overage_amount": {
+            "type": "string"
+          },
+          "computed_overage_quantity": {
             "type": "string"
           },
           "computed_true_up_amount": {
             "type": "string",
             "description": "total_cost = computed_commitment_utilized_amount + computed_overage_amount + computed_true_up_amount"
+          },
+          "computed_true_up_quantity": {
+            "type": "string"
           },
           "duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
@@ -41075,6 +41051,7 @@
           "invoice.update.voided",
           "invoice.update",
           "invoice.payment.overdue",
+          "invoice.payment.failed",
           "invoice.sync.success",
           "invoice.sync.failed",
           "wallet.credit_balance.dropped",
@@ -41152,6 +41129,7 @@
           "WebhookEventInvoiceUpdateVoided",
           "WebhookEventInvoiceUpdate",
           "WebhookEventInvoicePaymentOverdue",
+          "WebhookEventInvoicePaymentFailed",
           "WebhookEventInvoiceSyncSuccess",
           "WebhookEventInvoiceSyncFailed",
           "WebhookEventWalletCreditBalanceDropped",
@@ -42600,6 +42578,20 @@
         },
         "x-speakeasy-name-override": "InvoiceBillingEntity"
       },
+      "types.InvoicePaymentFailureReason": {
+        "type": "string",
+        "enum": [
+          "payment_method_unavailable",
+          "provider_error",
+          "declined"
+        ],
+        "x-enum-varnames": [
+          "InvoicePaymentFailureReasonPaymentMethodUnavailable",
+          "InvoicePaymentFailureReasonProviderError",
+          "InvoicePaymentFailureReasonDeclined"
+        ],
+        "x-speakeasy-name-override": "InvoicePaymentFailureReason"
+      },
       "types.JournalDirection": {
         "type": "string",
         "enum": [
@@ -42795,6 +42787,28 @@
           "RevenueReportGroupByPOB"
         ],
         "x-speakeasy-name-override": "RevenueReportGroupBy"
+      },
+      "types.SettingsOverride": {
+        "type": "object",
+        "properties": {
+          "subscription_config": {
+            "$ref": "#/components/schemas/types.SubscriptionConfigOverride"
+          }
+        },
+        "x-speakeasy-name-override": "SettingsOverride"
+      },
+      "types.SubscriptionConfigOverride": {
+        "type": "object",
+        "properties": {
+          "auto_cancellation_enabled": {
+            "type": "boolean"
+          },
+          "grace_period_days": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "x-speakeasy-name-override": "SubscriptionConfigOverride"
       },
       "types.TenantInternalStatus": {
         "type": "string",
@@ -43516,6 +43530,32 @@
           },
           "subscription_line_item_id": {
             "type": "string"
+          }
+        }
+      },
+      "webhookDto.InvoicePaymentFailedWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/webhookDto.Invoice"
+          },
+          "is_auto_charge_attempt": {
+            "type": "boolean"
+          },
+          "payment_id": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.SecretProvider"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/types.InvoicePaymentFailureReason"
           }
         }
       },

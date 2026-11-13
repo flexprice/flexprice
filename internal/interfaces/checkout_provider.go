@@ -105,17 +105,17 @@ type AuthorizationLinkRequest struct {
 	// that cannot express CIT/MIT ignore it.
 	CustomerPresent bool
 	InvoiceID       string
-	CustomerID          string
-	PaymentID           string
-	Amount              decimal.Decimal
-	Currency            string
-	MaxAmount           *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
-	ExpiresAt           *time.Time
-	PreferredMethod     types.PaymentMethodType
-	SuccessURL          string
-	CancelURL           string
-	Metadata            map[string]string
-	LineItems           []CheckoutLineItem
+	CustomerID      string
+	PaymentID       string
+	Amount          decimal.Decimal
+	Currency        string
+	MaxAmount       *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
+	ExpiresAt       *time.Time
+	PreferredMethod types.PaymentMethodType
+	SuccessURL      string
+	CancelURL       string
+	Metadata        map[string]string
+	LineItems       []CheckoutLineItem
 }
 
 // HasAutoChargeableMethodRequest is the input for checking if a customer has

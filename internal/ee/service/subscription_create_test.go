@@ -366,7 +366,6 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_SessionCre
 // An abandoned checkout must not leave inline commitments published, and their keys must be reusable.
 func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_SessionFailureArchivesInlineCommitments() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	s.seedFixedPricePlan("plan_checkout_commitment", decimal.NewFromInt(50), 0)
 	usagePrice := &price.Price{
 		ID:                 "price_checkout_commitment_usage",
@@ -1234,7 +1233,6 @@ func (s *SubscriptionServiceSuite) TestArchiveDraftCheckoutSubscription_Cascades
 // terms, so the separate-invoice run has nothing left to bill for it.
 func (s *SubscriptionServiceSuite) TestArchiveDraftCheckoutSubscription_CancelsBillingTerms() {
 	ctx := s.GetContext()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	subService := s.service.(*subscriptionService)
 
 	req := s.inlineCommitmentRequest()
