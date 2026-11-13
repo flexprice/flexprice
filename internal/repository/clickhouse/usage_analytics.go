@@ -124,32 +124,14 @@ func (r *usageAnalyticsRepository) run(ctx context.Context, params *usageanalyti
 				Mark(ierr.ErrDatabase)
 		}
 
-		var parseErr error
-		dec := func(v string) decimal.Decimal {
-			d, err := decimal.NewFromString(v)
-			if err != nil && parseErr == nil {
-				parseErr = err
-			}
-			return d
-		}
-		decMap := func(m map[string]string) map[string]decimal.Decimal {
-			if m == nil {
-				return nil
-			}
-			out := make(map[string]decimal.Decimal, len(m))
-			for k, v := range m {
-				out[k] = dec(v)
-			}
-			return out
-		}
-
+		var p decimalParser
 		row := usageanalytics.Row{
 			Group:      group,
-			Amount:     dec(amount),
-			Subtotal:   dec(subtotal),
-			Quantity:   dec(qty),
+			Amount:     p.parse(amount),
+			Subtotal:   p.parse(subtotal),
+			Quantity:   p.parse(qty),
 			EventCount: events,
-			Columns:    decMap(columns),
+			Columns:    p.parseMap(columns),
 			Metrics:    make(map[string]usageanalytics.MetricValue, len(q.Metrics)),
 		}
 		if q.WithLineItemIDs {
@@ -165,14 +147,14 @@ func (r *usageAnalyticsRepository) run(ctx context.Context, params *usageanalyti
 			row.Metrics[m.Name()] = v
 		}
 		totals := usageanalytics.Row{
-			Amount:     dec(totalAmount),
-			Subtotal:   dec(totalSubtotal),
-			Quantity:   dec(totalQty),
+			Amount:     p.parse(totalAmount),
+			Subtotal:   p.parse(totalSubtotal),
+			Quantity:   p.parse(totalQty),
 			EventCount: totalEvents,
-			Columns:    decMap(totalColumns),
+			Columns:    p.parseMap(totalColumns),
 		}
-		if parseErr != nil {
-			return nil, ierr.WithError(parseErr).
+		if p.err != nil {
+			return nil, ierr.WithError(p.err).
 				WithHint("Failed to parse usage breakdown amounts").
 				Mark(ierr.ErrDatabase)
 		}
@@ -227,25 +209,20 @@ func (r *usageAnalyticsRepository) addPoints(ctx context.Context, params *usagea
 		if err != nil {
 			return ierr.WithError(err).WithHint("Failed to parse amount window").Mark(ierr.ErrDatabase)
 		}
-		start := usageanalytics.DateStart(day.Year(), day.Month(), day.Day(), q.Timezone)
-		c, err := decimal.NewFromString(amount)
-		if err != nil {
-			return ierr.WithError(err).WithHint("Failed to parse amount over time").Mark(ierr.ErrDatabase)
+		var p decimalParser
+		point := usageanalytics.Point{
+			WindowStart: usageanalytics.DateStart(day.Year(), day.Month(), day.Day(), q.Timezone),
+			Amount:      p.parse(amount),
+			Subtotal:    p.parse(subtotal),
+			Quantity:    p.parse(qty),
 		}
-		sub, err := decimal.NewFromString(subtotal)
-		if err != nil {
-			return ierr.WithError(err).WithHint("Failed to parse subtotal over time").Mark(ierr.ErrDatabase)
-		}
-		n, err := decimal.NewFromString(qty)
-		if err != nil {
-			return ierr.WithError(err).WithHint("Failed to parse usage over time").Mark(ierr.ErrDatabase)
+		if p.err != nil {
+			return ierr.WithError(p.err).WithHint("Failed to parse amount over time").Mark(ierr.ErrDatabase)
 		}
 
-		target := rowByGroup[groupID(group)]
-		if target == nil {
-			continue
+		if target := rowByGroup[groupID(group)]; target != nil {
+			target.Points = append(target.Points, point)
 		}
-		target.Points = append(target.Points, usageanalytics.Point{WindowStart: start, Amount: c, Subtotal: sub, Quantity: n})
 	}
 	if err := rows.Err(); err != nil {
 		return ierr.WithError(err).
@@ -265,4 +242,27 @@ func sortPoints(points []usageanalytics.Point) {
 
 func emptyUsageRow() usageanalytics.Row {
 	return usageanalytics.Row{Amount: decimal.Zero, Subtotal: decimal.Zero, Quantity: decimal.Zero}
+}
+
+// decimalParser parses the decimal strings ClickHouse returns (Decimal256 read via toString) and keeps
+// the first failure, so a row is checked once after all its fields are parsed.
+type decimalParser struct{ err error }
+
+func (p *decimalParser) parse(v string) decimal.Decimal {
+	d, err := decimal.NewFromString(v)
+	if err != nil && p.err == nil {
+		p.err = err
+	}
+	return d
+}
+
+func (p *decimalParser) parseMap(m map[string]string) map[string]decimal.Decimal {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]decimal.Decimal, len(m))
+	for k, v := range m {
+		out[k] = p.parse(v)
+	}
+	return out
 }
