@@ -399,7 +399,7 @@ func (s *PortalWalletSuite) TestAutoTopupRequiresWalletOwnership() {
 
 	_, err := s.svc.UpdateAutoTopup(other, s.walletID, &dto.PortalUpdateAutoTopupRequest{})
 	s.Error(err)
-	s.True(ierr.IsPermissionDenied(err))
+	s.True(ierr.IsNotFound(err))
 }
 
 // A customer-initiated top-up must never grant credits before the invoice is paid,
@@ -467,9 +467,9 @@ func (s *PortalWalletSuite) TestWalletReadsAuthorizeBeforeCompute() {
 			bal, err := s.svc.GetWallet(s.ctx, tc.walletID)
 			txs, txErr := s.svc.GetWalletTransactions(s.ctx, tc.walletID, types.NewWalletTransactionFilter())
 			if tc.wantErr {
-				s.Error(err)
+				s.True(ierr.IsNotFound(err), "got %v", err)
 				s.Nil(bal)
-				s.Error(txErr)
+				s.True(ierr.IsNotFound(txErr), "got %v", txErr)
 				s.Nil(txs)
 				return
 			}

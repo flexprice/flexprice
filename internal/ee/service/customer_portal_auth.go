@@ -10,7 +10,7 @@ import (
 )
 
 // authorizeWallet ensures the wallet belongs to the portal-session customer.
-// Without this a token holder could top up somebody else's wallet.
+// Another customer's wallet reads as not found.
 func (s *customerPortalService) authorizeWallet(ctx context.Context, walletID string) (*wallet.Wallet, error) {
 	customerID := types.GetCustomerID(ctx)
 	if customerID == "" {
@@ -21,9 +21,9 @@ func (s *customerPortalService) authorizeWallet(ctx context.Context, walletID st
 		return nil, err
 	}
 	if w.CustomerID != customerID {
-		return nil, ierr.NewError("wallet does not belong to this customer").
-			WithHint("You do not have access to this wallet").
-			Mark(ierr.ErrPermissionDenied)
+		return nil, ierr.NewError("wallet not found").
+			WithHint("Wallet not found").
+			Mark(ierr.ErrNotFound)
 	}
 
 	return w, nil
