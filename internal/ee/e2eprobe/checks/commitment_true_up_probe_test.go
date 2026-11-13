@@ -102,6 +102,7 @@ func TestCommitmentTrueUpProbe_OverLegWrongTotalFails(t *testing.T) {
 
 	p := NewCommitmentTrueUpProbe(fc, reg, "test-run", lg)
 	p.cursor = 1 // force over leg
+	p.previewSettleTimeout = 0
 	err := p.Run(context.Background())
 	if err == nil {
 		t.Fatalf("expected error when over-leg total deviates from $25.74, got nil")
