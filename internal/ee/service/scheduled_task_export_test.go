@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
+	"github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage"
@@ -53,6 +54,17 @@ func (r *exportRepoFake) UpdateSettings(_ context.Context, t *scheduledtask.Sche
 	cp := *t
 	r.settings = &cp
 	return r.settingsErr
+}
+
+type exportTaskRepoFake struct {
+	task.Repository
+	completed int
+	filter    *types.TaskFilter
+}
+
+func (r *exportTaskRepoFake) Count(_ context.Context, f *types.TaskFilter) (int, error) {
+	r.filter = f
+	return r.completed, nil
 }
 
 type exportConnRepoFake struct {
@@ -158,6 +170,7 @@ func exportCfg() *config.Configuration {
 func newExportService(repo *exportRepoFake, tc *exportTemporalFake) *scheduledTaskService {
 	return &scheduledTaskService{
 		repo:            repo,
+		taskRepo:        &exportTaskRepoFake{},
 		connectionRepo:  exportConnRepoFake{conn: managedS3Conn()},
 		temporalClient:  tc,
 		logger:          logger.NewNoopLogger(),
@@ -340,6 +353,45 @@ func TestUpdate_ScheduleUpdatesTemporalThenDB(t *testing.T) {
 	require.NotNil(t, repo.settings)
 	require.Equal(t, "nightly", repo.settings.Name)
 	require.Equal(t, kolkata(), repo.settings.Schedule)
+}
+
+func TestUpdate_TimezoneChangeAfterCompletedRun(t *testing.T) {
+	utc := &types.ExportSchedule{Hour: 9, Minute: 30, Timezone: "UTC"}
+	tests := []struct {
+		name      string
+		current   *types.ExportSchedule
+		next      *types.ExportSchedule
+		completed int
+		wantErr   bool
+	}{
+		{name: "legacy utc row to kolkata after run", current: nil, next: kolkata(), completed: 1, wantErr: true},
+		{name: "kolkata to utc after run", current: kolkata(), next: utc, completed: 2, wantErr: true},
+		{name: "legacy utc row to kolkata before any run", current: nil, next: kolkata()},
+		{name: "legacy utc row keeps utc after run", current: nil, next: utc, completed: 1},
+		{name: "same zone new hour after run", current: kolkata(), next: &types.ExportSchedule{Hour: 2, Timezone: "Asia/Kolkata"}, completed: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handle := &exportHandleFake{}
+			repo := &exportRepoFake{task: scheduledRow(tt.current)}
+			s := newExportService(repo, &exportTemporalFake{handle: handle})
+			tasks := &exportTaskRepoFake{completed: tt.completed}
+			s.taskRepo = tasks
+
+			_, err := s.UpdateScheduledTask(exportCtx(), "st_1", dto.UpdateScheduledTaskRequest{Schedule: tt.next})
+			if !tt.wantErr {
+				require.NoError(t, err)
+				require.NotNil(t, repo.settings)
+				return
+			}
+			require.Error(t, err)
+			require.True(t, ierr.IsValidation(err))
+			require.Nil(t, repo.settings)
+			require.Empty(t, handle.updates)
+			require.Equal(t, "st_1", tasks.filter.ScheduledTaskID)
+			require.Equal(t, types.TaskStatusCompleted, *tasks.filter.TaskStatus)
+		})
+	}
 }
 
 func TestUpdate_TemporalScheduleGoneStillSavesDB(t *testing.T) {

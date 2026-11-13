@@ -269,6 +269,9 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 		if err := types.ValidateExportSchedule(task.Interval, req.Schedule); err != nil {
 			return err
 		}
+		if err := s.checkTimezoneChange(ctx, task, req.Schedule); err != nil {
+			return err
+		}
 	}
 
 	previous := *task
@@ -304,6 +307,33 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 		return ierr.WithError(err).
 			WithHint("Failed to update scheduled task").
 			Mark(ierr.ErrDatabase)
+	}
+	return nil
+}
+
+// checkTimezoneChange blocks moving window edges after a completed run.
+func (s *scheduledTaskService) checkTimezoneChange(ctx context.Context, task *scheduledtask.ScheduledTask, next *types.ExportSchedule) error {
+	current := "UTC"
+	if task.Schedule != nil {
+		current = task.Schedule.Timezone
+	}
+	if next.Timezone == current {
+		return nil
+	}
+
+	completed := types.TaskStatusCompleted
+	runs, err := s.taskRepo.Count(ctx, &types.TaskFilter{ScheduledTaskID: task.ID, TaskStatus: &completed})
+	if err != nil {
+		return err
+	}
+	if runs > 0 {
+		return ierr.NewError("timezone cannot change after an export has run").
+			WithHint("Create a new export to use a different timezone.").
+			WithReportableDetails(map[string]interface{}{
+				"task_id":  task.ID,
+				"timezone": current,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 	return nil
 }

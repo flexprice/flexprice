@@ -1196,6 +1196,7 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 
 	scheduledTaskService := NewScheduledTaskService(
 		s.ScheduledTaskRepo,
+		s.TaskRepo,
 		s.ConnectionRepo,
 		temporalService.GetGlobalTemporalClient(),
 		s.Logger,

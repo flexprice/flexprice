@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
+	domainTask "github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage"
@@ -37,6 +38,7 @@ type ScheduledTaskService interface {
 
 type scheduledTaskService struct {
 	repo            scheduledtask.Repository
+	taskRepo        domainTask.Repository
 	connectionRepo  connection.Repository
 	temporalClient  temporalClient.TemporalClient
 	logger          *logger.Logger
@@ -46,6 +48,7 @@ type scheduledTaskService struct {
 
 func NewScheduledTaskService(
 	repo scheduledtask.Repository,
+	taskRepo domainTask.Repository,
 	connectionRepo connection.Repository,
 	temporalClient temporalClient.TemporalClient,
 	logger *logger.Logger,
@@ -54,6 +57,7 @@ func NewScheduledTaskService(
 ) ScheduledTaskService {
 	return &scheduledTaskService{
 		repo:            repo,
+		taskRepo:        taskRepo,
 		connectionRepo:  connectionRepo,
 		temporalClient:  temporalClient,
 		logger:          logger,
