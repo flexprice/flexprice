@@ -321,13 +321,13 @@ func TestListScheduledTasks_HidesReportSourceWithoutAnalyticsRead(t *testing.T) 
 	s.repo = repo
 	s.rbac = testRBAC(t)
 
-	resp, err := s.ListScheduledTasks(withRoles(exportCtx(), roleWithoutAnalytics), nil, "", "", "", "")
+	resp, err := s.ListScheduledTasks(withRoles(exportCtx(), roleWithoutAnalytics), nil, "", "", "", "", "", "")
 	require.NoError(t, err)
 	require.Len(t, resp.Items, 2)
 	require.Nil(t, resp.Items[0].SourceConfig)
 	require.Equal(t, types.ScheduledTaskEntityTypeReport, resp.Items[0].EntityType)
 
-	resp, err = s.ListScheduledTasks(withRoles(exportCtx(), roleWithAnalytics), nil, "", "", "", "")
+	resp, err = s.ListScheduledTasks(withRoles(exportCtx(), roleWithAnalytics), nil, "", "", "", "", "", "")
 	require.NoError(t, err)
 	require.NotNil(t, resp.Items[0].SourceConfig)
 	require.NotNil(t, repo.tasks[0].SourceConfig)

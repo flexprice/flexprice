@@ -72,7 +72,7 @@ func TestReportExporter_NeutralizesFormulaTextOnly(t *testing.T) {
 		},
 		Rows: [][]string{{"=HYPERLINK(1)", "-5"}, {"+a", "1"}, {"-b", "2"}, {"@c", "3"}, {"\tt", "4"}, {"\rr", "5"}, {"gpt-4", "-0.5"}},
 	}}
-	data, _, err := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport).
+	data, _, err := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport, nil).
 		PrepareData(context.Background(), reportRequest(types.ScheduledTaskEntityTypeReport))
 
 	require.NoError(t, err)
