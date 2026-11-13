@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -68,8 +69,10 @@ func (e *ReportExporter) PrepareData(ctx context.Context, request *dto.ExportReq
 	}
 
 	header := make([]string, 0, len(result.Columns))
-	for _, col := range result.Columns {
+	textCols := make([]bool, len(result.Columns))
+	for i, col := range result.Columns {
 		header = append(header, col.Name)
+		textCols[i] = col.Type != types.ColumnTypeDecimal && col.Role != types.ColumnRoleMetric
 	}
 
 	var buf bytes.Buffer
@@ -77,8 +80,30 @@ func (e *ReportExporter) PrepareData(ctx context.Context, request *dto.ExportReq
 	if err := w.Write(header); err != nil {
 		return nil, 0, ierr.WithError(err).WithHint("Failed to write CSV header").Mark(ierr.ErrSystem)
 	}
-	if err := w.WriteAll(result.Rows); err != nil {
+	out := make([]string, 0, len(result.Columns))
+	for _, row := range result.Rows {
+		out = out[:0]
+		for i, cell := range row {
+			if i < len(textCols) && textCols[i] {
+				cell = neutralizeFormula(cell)
+			}
+			out = append(out, cell)
+		}
+		if err := w.Write(out); err != nil {
+			return nil, 0, ierr.WithError(err).WithHint("Failed to write CSV rows").Mark(ierr.ErrSystem)
+		}
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
 		return nil, 0, ierr.WithError(err).WithHint("Failed to write CSV rows").Mark(ierr.ErrSystem)
 	}
 	return buf.Bytes(), len(result.Rows), nil
+}
+
+// Stops spreadsheets evaluating event-supplied text.
+func neutralizeFormula(cell string) string {
+	if cell != "" && strings.ContainsRune("=+-@\t\r", rune(cell[0])) {
+		return "'" + cell
+	}
+	return cell
 }

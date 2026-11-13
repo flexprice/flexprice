@@ -55,6 +55,21 @@ func TestReportExporter_PrepareDataCSV(t *testing.T) {
 	require.Equal(t, "report", exp.GetFilenamePrefix())
 }
 
+func TestReportExporter_NeutralizesFormulaTextOnly(t *testing.T) {
+	runner := &fakeRunner{result: &dto.AnalyticsQueryResult{
+		Columns: []*dto.AnalyticsColumn{
+			{Name: "model", Type: types.ColumnTypeString, Role: types.ColumnRoleDimension},
+			{Name: "total", Type: types.ColumnTypeDecimal, Role: types.ColumnRoleMetric},
+		},
+		Rows: [][]string{{"=HYPERLINK(1)", "-5"}, {"+a", "1"}, {"-b", "2"}, {"@c", "3"}, {"\tt", "4"}, {"\rr", "5"}, {"gpt-4", "-0.5"}},
+	}}
+	data, _, err := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport).
+		PrepareData(context.Background(), reportRequest(types.ScheduledTaskEntityTypeReport))
+
+	require.NoError(t, err)
+	require.Equal(t, "model,total\n'=HYPERLINK(1),-5\n'+a,1\n'-b,2\n'@c,3\n'\tt,4\n\"'\rr\",5\ngpt-4,-0.5\n", string(data))
+}
+
 func TestReportExporter_EmptyResultHeaderOnly(t *testing.T) {
 	runner := &fakeRunner{result: &dto.AnalyticsQueryResult{Columns: []*dto.AnalyticsColumn{{Name: "a"}}}}
 	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport)
