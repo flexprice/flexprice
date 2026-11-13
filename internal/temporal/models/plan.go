@@ -19,8 +19,8 @@ func (p *PriceSyncWorkflowInput) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if p.TenantID == "" || p.EnvironmentID == "" || p.UserID == "" {
-		return ierr.NewError("tenant ID, environment ID and user ID are required").
+	if p.TenantID == "" || p.EnvironmentID == "" {
+		return ierr.NewError("tenant ID and environment ID are required").
 			WithHint("Tenant ID and environment ID are required").
 			Mark(ierr.ErrValidation)
 	}
