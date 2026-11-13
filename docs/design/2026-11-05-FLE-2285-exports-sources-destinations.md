@@ -128,7 +128,7 @@ Task status: no new values. A new-style run is `COMPLETED` once the managed copy
 
 ### 2. Windows
 
-**Phase 1 as built.** Window = previous period (day, Monday-to-Monday week, calendar month; hourly = previous hour) ending at the latest period boundary at or before the scheduled start, in the schedule's timezone, converted to UTC instants. `manual` exports use the previous UTC day unless `/run` gives a window. Exports without a schedule keep today's windows. The report and view rules below are later phases.
+**Phase 1 as built.** Window = previous period (day, Monday-to-Monday week, calendar month; hourly = previous hour) ending at the latest period boundary at or before the scheduled start, in the schedule's timezone, converted to UTC instants. The weekly window is always the previous full ISO week (Monday to Monday) whatever `day_of_week` is: a Sunday run covers the week that ended six days earlier, not the week ending that day. `manual` exports use the previous UTC day unless `/run` gives a window. Exports without a schedule keep today's windows. The report and view rules below are later phases.
 
 The window is computed in the `details` step from the **scheduled start time** (no ingestion buffer; the fire time is the user's choice), never from wall clock, so catch-up runs after downtime get the correct historical window. It is stored on the `Task` on the first attempt; retries reuse it.
 
