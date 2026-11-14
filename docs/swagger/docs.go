@@ -18641,7 +18641,7 @@ const docTemplate = `{
                     }
                 },
                 "line_item_commitments": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -18697,7 +18697,7 @@ const docTemplate = `{
                     }
                 },
                 "line_item_commitments": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -22566,11 +22566,11 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "commitment_amount": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_duration": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.BillingPeriod"
@@ -22578,26 +22578,26 @@ const docTemplate = `{
                     ]
                 },
                 "commitment_overage_factor": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_quantity": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_time_buckets": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "commitment_type": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.CommitmentType"
@@ -22605,7 +22605,7 @@ const docTemplate = `{
                     ]
                 },
                 "commitment_windowed": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "display_name": {
@@ -22695,11 +22695,11 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.CollectionMethod"
                 },
                 "commitment_amount": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "string"
                 },
                 "commitment_duration": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.BillingPeriod"
@@ -22734,7 +22734,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "enable_true_up": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "end_date": {
@@ -22769,7 +22769,7 @@ const docTemplate = `{
                     ]
                 },
                 "line_item_commitments": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -22810,7 +22810,7 @@ const docTemplate = `{
                     }
                 },
                 "overage_factor": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "string"
                 },
                 "override_entitlements": {
@@ -25241,11 +25241,11 @@ const docTemplate = `{
                     }
                 },
                 "commitment_amount": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "string"
                 },
                 "commitment_duration": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.BillingPeriod"
@@ -25266,14 +25266,14 @@ const docTemplate = `{
                     }
                 },
                 "enable_true_up": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "external_customer_id": {
                     "type": "string"
                 },
                 "line_item_commitments": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -25297,7 +25297,7 @@ const docTemplate = `{
                     }
                 },
                 "overage_factor": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
                     "type": "string"
                 },
                 "override_entitlements": {
@@ -32014,11 +32014,11 @@ const docTemplate = `{
                     ]
                 },
                 "commitment_amount": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Commitment fields edit or remove a line's existing legacy commitment.\n\nDeprecated: rejected on a line without one; use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_duration": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.BillingPeriod"
@@ -32026,26 +32026,26 @@ const docTemplate = `{
                     ]
                 },
                 "commitment_overage_factor": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_quantity": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.",
                     "type": "number"
                 },
                 "commitment_time_buckets": {
-                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).\n\nDeprecated: use POST /commitments instead.",
+                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).\n\nDeprecated: rejected on a line without a legacy commitment; use POST /commitments instead.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "commitment_type": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.CommitmentType"
@@ -32053,7 +32053,7 @@ const docTemplate = `{
                     ]
                 },
                 "commitment_windowed": {
-                    "description": "Deprecated: use POST /commitments instead.",
+                    "description": "Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "effective_from": {

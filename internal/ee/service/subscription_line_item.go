@@ -37,7 +37,6 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 		return nil, err
 	}
 
-	req.ApplyDefaults()
 	// 2. Validate request (including date bounds when sub is passed)
 	if err := req.Validate(nil, sub); err != nil {
 		return nil, err
@@ -282,22 +281,14 @@ func (s *subscriptionService) resolvePriceAndLineItemParams(ctx context.Context,
 			EntityType:   types.SubscriptionLineItemEntityTypeSubscription,
 		}
 		resolvedReq = dto.CreateSubscriptionLineItemRequest{
-			PriceID:                 "", // set to createdPrice.ID inside tx
-			Quantity:                req.Quantity,
-			StartDate:               req.StartDate,
-			EndDate:                 req.EndDate,
-			Metadata:                req.Metadata,
-			DisplayName:             req.DisplayName,
-			SubscriptionPhaseID:     req.SubscriptionPhaseID,
-			SkipEntitlementCheck:    true,
-			CommitmentAmount:        req.CommitmentAmount,
-			CommitmentQuantity:      req.CommitmentQuantity,
-			CommitmentType:          req.CommitmentType,
-			CommitmentOverageFactor: req.CommitmentOverageFactor,
-			CommitmentTrueUpEnabled: req.CommitmentTrueUpEnabled,
-			CommitmentWindowed:      req.CommitmentWindowed,
-			CommitmentDuration:      req.CommitmentDuration,
-			CommitmentTimeBuckets:   req.CommitmentTimeBuckets,
+			PriceID:              "", // set to createdPrice.ID inside tx
+			Quantity:             req.Quantity,
+			StartDate:            req.StartDate,
+			EndDate:              req.EndDate,
+			Metadata:             req.Metadata,
+			DisplayName:          req.DisplayName,
+			SubscriptionPhaseID:  req.SubscriptionPhaseID,
+			SkipEntitlementCheck: true,
 		}
 		return nil, params, resolvedReq, true, &createPriceReq, nil
 	}
@@ -702,13 +693,18 @@ func replaceMetadataPreservingLineage(item *subscription.SubscriptionLineItem, m
 // UpdateSubscriptionLineItem updates a subscription line item by terminating the existing one and creating a new one
 // This method reuses existing service methods for creating and deleting line items
 func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.UpdateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
 	// Get the existing line item
 	existingLineItem, err := s.SubscriptionLineItemRepo.Get(ctx, lineItemID)
 	if err != nil {
+		return nil, err
+	}
+
+	// Checked before Validate so the legacy field rules don't hide the deprecation error.
+	if field := req.LegacyCommitmentField(); field != "" && !existingLineItem.HasAnyCommitment() {
+		return nil, dto.LegacyCommitmentError(field)
+	}
+
+	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -777,6 +773,9 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return findErr
 			} else if successor != nil {
 				return alreadyScheduledVersionError(lineItemID, successor.ID)
+			}
+			if field := req.LegacyCommitmentField(); field != "" && !locked.HasAnyCommitment() {
+				return dto.LegacyCommitmentError(field)
 			}
 
 			// Effective date must not be before the line item's start date (avoids end_date < start_date).

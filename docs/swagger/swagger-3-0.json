@@ -21715,7 +21715,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/LineItemCommitmentConfig"
             },
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "metadata": {
             "type": "object",
@@ -21767,7 +21767,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/LineItemCommitmentConfig"
             },
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "metadata": {
             "type": "object",
@@ -25415,36 +25415,36 @@
         "properties": {
           "commitment_amount": {
             "type": "number",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
           "commitment_overage_factor": {
             "type": "number",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "commitment_quantity": {
             "type": "number",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "commitment_time_buckets": {
             "type": "array",
-            "description": "Deprecated: use POST /commitments instead.",
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead.",
             "items": {
               "$ref": "#/components/schemas/CommitmentBucketRequest"
             }
           },
           "commitment_true_up_enabled": {
             "type": "boolean",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "commitment_type": {
             "$ref": "#/components/schemas/types.CommitmentType"
           },
           "commitment_windowed": {
             "type": "boolean",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "display_name": {
             "type": "string"
@@ -25521,7 +25521,7 @@
           },
           "commitment_amount": {
             "type": "string",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
@@ -25555,7 +25555,7 @@
           },
           "enable_true_up": {
             "type": "boolean",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "end_date": {
             "type": "string",
@@ -25589,7 +25589,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/LineItemCommitmentConfig"
             },
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "line_item_coupons": {
             "type": "object",
@@ -25622,7 +25622,7 @@
           },
           "overage_factor": {
             "type": "string",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "override_entitlements": {
             "type": "array",
@@ -27988,7 +27988,7 @@
           },
           "commitment_amount": {
             "type": "string",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
@@ -28008,7 +28008,7 @@
           },
           "enable_true_up": {
             "type": "boolean",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "external_customer_id": {
             "type": "string"
@@ -28018,7 +28018,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/LineItemCommitmentConfig"
             },
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "line_item_coupons": {
             "type": "object",
@@ -28039,7 +28039,7 @@
           },
           "overage_factor": {
             "type": "string",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: legacy commitments are rejected; use POST /commitments instead."
           },
           "override_entitlements": {
             "type": "array",
@@ -34363,36 +34363,36 @@
           },
           "commitment_amount": {
             "type": "number",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Commitment fields edit or remove a line's existing legacy commitment.\n\nDeprecated: rejected on a line without one; use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
           "commitment_overage_factor": {
             "type": "number",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead."
           },
           "commitment_quantity": {
             "type": "number",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead."
           },
           "commitment_time_buckets": {
             "type": "array",
-            "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).\n\nDeprecated: use POST /commitments instead.",
+            "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).\n\nDeprecated: rejected on a line without a legacy commitment; use POST /commitments instead.",
             "items": {
               "$ref": "#/components/schemas/CommitmentBucketRequest"
             }
           },
           "commitment_true_up_enabled": {
             "type": "boolean",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead."
           },
           "commitment_type": {
             "$ref": "#/components/schemas/types.CommitmentType"
           },
           "commitment_windowed": {
             "type": "boolean",
-            "description": "Deprecated: use POST /commitments instead."
+            "description": "Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead."
           },
           "effective_from": {
             "type": "string",

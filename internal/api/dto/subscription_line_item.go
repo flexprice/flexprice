@@ -100,21 +100,21 @@ type CreateSubscriptionLineItemRequest struct {
 	// ProrationBehavior controls mid-period charge creation. Defaults to none.
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentType types.CommitmentType `json:"commitment_type,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentTrueUpEnabled bool `json:"commitment_true_up_enabled,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentWindowed bool `json:"commitment_windowed,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: legacy commitments are rejected; use POST /commitments instead.
 	CommitmentTimeBuckets []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
@@ -157,23 +157,25 @@ type UpdateSubscriptionLineItemRequest struct {
 	// Metadata for the new line item
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	// Deprecated: use POST /commitments instead.
+	// Commitment fields edit or remove a line's existing legacy commitment.
+	//
+	// Deprecated: rejected on a line without one; use POST /commitments instead.
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentType types.CommitmentType `json:"commitment_type,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentTrueUpEnabled *bool `json:"commitment_true_up_enabled,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentWindowed *bool `json:"commitment_windowed,omitempty"`
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 	// Pointer so an explicit empty array can clear existing buckets (omission keeps them).
 	//
-	// Deprecated: use POST /commitments instead.
+	// Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
 	CommitmentTimeBuckets *[]CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
@@ -184,19 +186,6 @@ type LineItemParams struct {
 	Plan         *PlanResponse  // Optional, for plan-based line items
 	Addon        *AddonResponse // Optional, for addon-based line items
 	EntityType   types.SubscriptionLineItemEntityType
-}
-
-func (r *CreateSubscriptionLineItemRequest) ApplyDefaults() {
-	if r.CommitmentOverageFactor == nil && (r.HasCommitment() || len(r.CommitmentTimeBuckets) > 0) {
-		r.CommitmentOverageFactor = types.DefaultOverageFactor()
-	}
-}
-
-// HasCommitment returns true if the request has commitment configured
-func (r *CreateSubscriptionLineItemRequest) HasCommitment() bool {
-	hasAmountCommitment := r.CommitmentAmount != nil && r.CommitmentAmount.GreaterThan(decimal.Zero)
-	hasQuantityCommitment := r.CommitmentQuantity != nil && r.CommitmentQuantity.GreaterThan(decimal.Zero)
-	return hasAmountCommitment || hasQuantityCommitment
 }
 
 // HasCommitment returns true if the request has commitment configured
@@ -326,9 +315,8 @@ func (r *CreateSubscriptionLineItemRequest) Validate(linePrice *price.Price, sub
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate commitment fields if provided
-	if err := r.validateCommitmentFields(); err != nil {
-		return err
+	if field := r.legacyCommitmentField(); field != "" {
+		return LegacyCommitmentError(field)
 	}
 
 	// When using price (inline), full price validation is done in service after injecting subscription context
@@ -448,42 +436,28 @@ func validateCommitmentFieldsCommon(
 	return nil
 }
 
-// validateCommitmentFields validates commitment-related fields for create request
-func (r *CreateSubscriptionLineItemRequest) validateCommitmentFields() error {
-	// Use shared validation logic
-	err := validateCommitmentFieldsCommon(
-		r.CommitmentAmount,
-		r.CommitmentQuantity,
-		r.CommitmentType,
-		r.CommitmentOverageFactor,
-		true, // isCreateRequest
-	)
-	if err != nil {
-		return err
+// legacyCommitmentField names the first legacy commitment field set to a non-default value.
+func (r *CreateSubscriptionLineItemRequest) legacyCommitmentField() string {
+	switch {
+	case r.CommitmentAmount != nil && !r.CommitmentAmount.IsZero():
+		return "commitment_amount"
+	case r.CommitmentQuantity != nil && !r.CommitmentQuantity.IsZero():
+		return "commitment_quantity"
+	case r.CommitmentType != "":
+		return "commitment_type"
+	case r.CommitmentOverageFactor != nil && !r.CommitmentOverageFactor.Equal(decimal.NewFromInt(1)):
+		return "commitment_overage_factor"
+	case r.CommitmentTrueUpEnabled:
+		return "commitment_true_up_enabled"
+	case r.CommitmentWindowed:
+		return "commitment_windowed"
+	case r.CommitmentDuration != nil:
+		return "commitment_duration"
+	case len(r.CommitmentTimeBuckets) > 0:
+		return "commitment_time_buckets"
+	default:
+		return ""
 	}
-
-	// commitment_time_buckets only constrains the commitment-application window —
-	// it has no meaning unless commitment_windowed is true.
-	if len(r.CommitmentTimeBuckets) > 0 && !r.CommitmentWindowed {
-		return ierr.NewError("commitment_time_buckets requires commitment_windowed=true").
-			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
-			Mark(ierr.ErrValidation)
-	}
-	if err := validateTimeOfDayBuckets(r.CommitmentTimeBuckets); err != nil {
-		return err
-	}
-
-	// Auto-set commitment type if not provided (only for create requests)
-	if r.HasCommitment() && r.CommitmentType == "" {
-		hasAmountCommitment := r.CommitmentAmount != nil && r.CommitmentAmount.GreaterThan(decimal.Zero)
-		if hasAmountCommitment {
-			r.CommitmentType = types.COMMITMENT_TYPE_AMOUNT
-		} else {
-			r.CommitmentType = types.COMMITMENT_TYPE_QUANTITY
-		}
-	}
-
-	return nil
 }
 
 // ToSubscriptionLineItem converts the request to a domain subscription line item
@@ -618,6 +592,31 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 // Validate validates the delete subscription line item request
 func (r *DeleteSubscriptionLineItemRequest) Validate() error {
 	return nil
+}
+
+// LegacyCommitmentField names the first legacy commitment field set to a non-default value. The service accepts
+// these only on a line that already has a legacy commitment.
+func (r *UpdateSubscriptionLineItemRequest) LegacyCommitmentField() string {
+	switch {
+	case r.CommitmentAmount != nil && !r.CommitmentAmount.IsZero():
+		return "commitment_amount"
+	case r.CommitmentQuantity != nil && !r.CommitmentQuantity.IsZero():
+		return "commitment_quantity"
+	case r.CommitmentType != "":
+		return "commitment_type"
+	case r.CommitmentOverageFactor != nil && !r.CommitmentOverageFactor.Equal(decimal.NewFromInt(1)):
+		return "commitment_overage_factor"
+	case lo.FromPtr(r.CommitmentTrueUpEnabled):
+		return "commitment_true_up_enabled"
+	case lo.FromPtr(r.CommitmentWindowed):
+		return "commitment_windowed"
+	case r.CommitmentDuration != nil:
+		return "commitment_duration"
+	case r.CommitmentTimeBuckets != nil && len(*r.CommitmentTimeBuckets) > 0:
+		return "commitment_time_buckets"
+	default:
+		return ""
+	}
 }
 
 // Validate validates the update subscription line item request

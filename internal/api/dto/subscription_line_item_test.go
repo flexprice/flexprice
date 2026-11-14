@@ -2,12 +2,12 @@ package dto
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -392,73 +392,121 @@ func TestCreateSubscriptionLineItemRequest_Validate_CadenceDividesOrMultiplies(t
 	}
 }
 
-func TestCreateSubscriptionLineItemRequest_DefaultsCommitmentOverageFactor(t *testing.T) {
-	t.Run("defaults to 1.0 when omitted", func(t *testing.T) {
-		req := CreateSubscriptionLineItemRequest{
-			PriceID:          "price_test",
-			CommitmentAmount: lo.ToPtr(decimal.NewFromInt(100)),
-		}
-		req.ApplyDefaults()
-		if err := req.Validate(nil, nil); err != nil {
-			t.Fatalf("expected no error, got: %v", err)
-		}
-		if req.CommitmentOverageFactor == nil {
-			t.Fatal("expected commitment_overage_factor to be defaulted")
-		}
-		if !req.CommitmentOverageFactor.Equal(decimal.NewFromInt(1)) {
-			t.Fatalf("expected default of 1, got: %s", req.CommitmentOverageFactor)
-		}
-	})
+func TestCreateSubscriptionLineItemRequest_Validate_RejectsLegacyCommitment(t *testing.T) {
+	bucket := CommitmentBucketRequest{
+		ID:              "bkt_existing",
+		Start:           types.Bucket{Hour: 8},
+		End:             types.Bucket{Hour: 20},
+		CommitmentType:  types.COMMITMENT_TYPE_QUANTITY,
+		CommitmentValue: decimal.NewFromInt(10),
+	}
 
-	t.Run("keeps an explicit factor", func(t *testing.T) {
-		req := CreateSubscriptionLineItemRequest{
-			PriceID:                 "price_test",
-			CommitmentAmount:        lo.ToPtr(decimal.NewFromInt(100)),
-			CommitmentOverageFactor: lo.ToPtr(decimal.NewFromFloat(1.5)),
-		}
-		if err := req.Validate(nil, nil); err != nil {
-			t.Fatalf("expected no error, got: %v", err)
-		}
-		if !req.CommitmentOverageFactor.Equal(decimal.NewFromFloat(1.5)) {
-			t.Fatalf("expected 1.5, got: %s", req.CommitmentOverageFactor)
-		}
-	})
+	tests := []struct {
+		name      string
+		set       func(r *CreateSubscriptionLineItemRequest)
+		wantField string
+	}{
+		{name: "none", set: func(*CreateSubscriptionLineItemRequest) {}},
+		{name: "zero amount", set: func(r *CreateSubscriptionLineItemRequest) { r.CommitmentAmount = lo.ToPtr(decimal.Zero) }},
+		{name: "base overage factor", set: func(r *CreateSubscriptionLineItemRequest) {
+			r.CommitmentOverageFactor = lo.ToPtr(decimal.NewFromInt(1))
+		}},
+		{
+			name:      "amount",
+			set:       func(r *CreateSubscriptionLineItemRequest) { r.CommitmentAmount = lo.ToPtr(decimal.NewFromInt(100)) },
+			wantField: "commitment_amount",
+		},
+		{
+			name:      "quantity",
+			set:       func(r *CreateSubscriptionLineItemRequest) { r.CommitmentQuantity = lo.ToPtr(decimal.NewFromInt(10)) },
+			wantField: "commitment_quantity",
+		},
+		{
+			name:      "type",
+			set:       func(r *CreateSubscriptionLineItemRequest) { r.CommitmentType = types.COMMITMENT_TYPE_AMOUNT },
+			wantField: "commitment_type",
+		},
+		{
+			name: "overage factor",
+			set: func(r *CreateSubscriptionLineItemRequest) {
+				r.CommitmentOverageFactor = lo.ToPtr(decimal.NewFromFloat(1.5))
+			},
+			wantField: "commitment_overage_factor",
+		},
+		{
+			name:      "true-up",
+			set:       func(r *CreateSubscriptionLineItemRequest) { r.CommitmentTrueUpEnabled = true },
+			wantField: "commitment_true_up_enabled",
+		},
+		{
+			name:      "windowed",
+			set:       func(r *CreateSubscriptionLineItemRequest) { r.CommitmentWindowed = true },
+			wantField: "commitment_windowed",
+		},
+		{
+			name: "duration",
+			set: func(r *CreateSubscriptionLineItemRequest) {
+				r.CommitmentDuration = lo.ToPtr(types.BILLING_PERIOD_ANNUAL)
+			},
+			wantField: "commitment_duration",
+		},
+		{
+			name: "time buckets",
+			set: func(r *CreateSubscriptionLineItemRequest) {
+				r.CommitmentTimeBuckets = []CommitmentBucketRequest{bucket}
+			},
+			wantField: "commitment_time_buckets",
+		},
+	}
 
-	t.Run("still rejects a factor below 1.0", func(t *testing.T) {
-		req := CreateSubscriptionLineItemRequest{
-			PriceID:                 "price_test",
-			CommitmentAmount:        lo.ToPtr(decimal.NewFromInt(100)),
-			CommitmentOverageFactor: lo.ToPtr(decimal.NewFromFloat(0.5)),
-		}
-		err := req.Validate(nil, nil)
-		if err == nil {
-			t.Fatal("expected validation error, got nil")
-		}
-		if !strings.Contains(err.Error(), "commitment_overage_factor must be at least 1.0") {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := CreateSubscriptionLineItemRequest{PriceID: "price_test"}
+			tc.set(&req)
 
-	t.Run("defaults to 1.0 when only time buckets are set", func(t *testing.T) {
-		req := CreateSubscriptionLineItemRequest{
-			PriceID:            "price_test",
-			CommitmentWindowed: true,
-			CommitmentTimeBuckets: []CommitmentBucketRequest{{
-				ID:              "bkt_existing",
-				Start:           types.Bucket{Hour: 8},
-				End:             types.Bucket{Hour: 20},
-				CommitmentType:  types.COMMITMENT_TYPE_QUANTITY,
-				CommitmentValue: decimal.NewFromInt(10),
-			}},
-		}
-		req.ApplyDefaults()
-		if err := req.Validate(nil, nil); err != nil {
-			t.Fatalf("expected no error, got: %v", err)
-		}
-		if req.CommitmentOverageFactor == nil || !req.CommitmentOverageFactor.Equal(decimal.NewFromInt(1)) {
-			t.Fatalf("expected default of 1, got: %v", req.CommitmentOverageFactor)
-		}
-	})
+			err := req.Validate(nil, nil)
+			if tc.wantField == "" {
+				require.NoError(t, err)
+				return
+			}
+
+			require.Error(t, err)
+			require.True(t, ierr.IsValidation(err))
+			require.Contains(t, err.Error(), tc.wantField+" is deprecated")
+		})
+	}
+}
+
+func TestUpdateSubscriptionLineItemRequest_LegacyCommitmentField(t *testing.T) {
+	tests := []struct {
+		name string
+		req  UpdateSubscriptionLineItemRequest
+		want string
+	}{
+		{name: "none", req: UpdateSubscriptionLineItemRequest{}},
+		{name: "removal by zero amount", req: UpdateSubscriptionLineItemRequest{CommitmentAmount: lo.ToPtr(decimal.Zero)}},
+		{name: "false flags", req: UpdateSubscriptionLineItemRequest{
+			CommitmentTrueUpEnabled: lo.ToPtr(false),
+			CommitmentWindowed:      lo.ToPtr(false),
+			CommitmentTimeBuckets:   &[]CommitmentBucketRequest{},
+		}},
+		{
+			name: "amount",
+			req: UpdateSubscriptionLineItemRequest{
+				CommitmentAmount: lo.ToPtr(decimal.NewFromInt(100)),
+				CommitmentType:   types.COMMITMENT_TYPE_AMOUNT,
+			},
+			want: "commitment_amount",
+		},
+		{name: "true-up", req: UpdateSubscriptionLineItemRequest{CommitmentTrueUpEnabled: lo.ToPtr(true)}, want: "commitment_true_up_enabled"},
+		{name: "duration", req: UpdateSubscriptionLineItemRequest{CommitmentDuration: lo.ToPtr(types.BILLING_PERIOD_ANNUAL)}, want: "commitment_duration"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, tc.req.LegacyCommitmentField())
+		})
+	}
 }
 
 func TestCommitmentBucketRequest_ToTimeOfDayBucket_DefaultsOverageFactor(t *testing.T) {

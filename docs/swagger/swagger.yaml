@@ -954,7 +954,8 @@ definitions:
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: object
       metadata:
         additionalProperties: true
@@ -996,7 +997,8 @@ definitions:
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: object
       metadata:
         additionalProperties: true
@@ -3766,32 +3768,40 @@ definitions:
   CreateSubscriptionLineItemRequest:
     properties:
       commitment_amount:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: number
       commitment_duration:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
       commitment_overage_factor:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: number
       commitment_quantity:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: number
       commitment_time_buckets:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         items:
           $ref: '#/definitions/CommitmentBucketRequest'
         type: array
       commitment_true_up_enabled:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: boolean
       commitment_type:
         allOf:
         - $ref: '#/definitions/types.CommitmentType'
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
       commitment_windowed:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: boolean
       display_name:
         type: string
@@ -3855,12 +3865,14 @@ definitions:
       collection_method:
         $ref: '#/definitions/types.CollectionMethod'
       commitment_amount:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: string
       commitment_duration:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
       commitments:
         description: |-
           Commitments are created with the subscription. subscription_id, and entity_id on a subscription scope,
@@ -3884,7 +3896,8 @@ definitions:
           provided.
         type: string
       enable_true_up:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: boolean
       end_date:
         type: string
@@ -3921,7 +3934,8 @@ definitions:
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: object
       line_item_coupons:
         additionalProperties:
@@ -3948,7 +3962,8 @@ definitions:
           type: string
         type: object
       overage_factor:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: string
       override_entitlements:
         items:
@@ -5746,12 +5761,14 @@ definitions:
           $ref: '#/definitions/AddAddonToSubscriptionRequest'
         type: array
       commitment_amount:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: string
       commitment_duration:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
       coupons:
         description: 'Deprecated: use SubscriptionCoupons instead.'
         items:
@@ -5762,14 +5779,16 @@ definitions:
           $ref: '#/definitions/CreateCreditGrantRequest'
         type: array
       enable_true_up:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: boolean
       external_customer_id:
         type: string
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: object
       line_item_coupons:
         additionalProperties:
@@ -5784,7 +5803,8 @@ definitions:
           $ref: '#/definitions/CreateSubscriptionLineItemRequest'
         type: array
       overage_factor:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: legacy commitments are rejected; use POST /commitments
+          instead.'
         type: string
       override_entitlements:
         items:
@@ -10618,35 +10638,44 @@ definitions:
           BucketSize overrides the windowing used to turn this meter's usage into
           billable units for this line item. See CreatePriceRequest.BucketSize.
       commitment_amount:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: |-
+          Commitment fields edit or remove a line's existing legacy commitment.
+
+          Deprecated: rejected on a line without one; use POST /commitments instead.
         type: number
       commitment_duration:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: rejected on a line without a legacy commitment;
+          use POST /commitments instead.'
       commitment_overage_factor:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: rejected on a line without a legacy commitment;
+          use POST /commitments instead.'
         type: number
       commitment_quantity:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: rejected on a line without a legacy commitment;
+          use POST /commitments instead.'
         type: number
       commitment_time_buckets:
         description: |-
           Pointer so an explicit empty array can clear existing buckets (omission keeps them).
 
-          Deprecated: use POST /commitments instead.
+          Deprecated: rejected on a line without a legacy commitment; use POST /commitments instead.
         items:
           $ref: '#/definitions/CommitmentBucketRequest'
         type: array
       commitment_true_up_enabled:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: rejected on a line without a legacy commitment;
+          use POST /commitments instead.'
         type: boolean
       commitment_type:
         allOf:
         - $ref: '#/definitions/types.CommitmentType'
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: rejected on a line without a legacy commitment;
+          use POST /commitments instead.'
       commitment_windowed:
-        description: 'Deprecated: use POST /commitments instead.'
+        description: 'Deprecated: rejected on a line without a legacy commitment;
+          use POST /commitments instead.'
         type: boolean
       effective_from:
         description: EffectiveFrom for the existing line item (if not provided, defaults
