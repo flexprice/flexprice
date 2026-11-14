@@ -38,6 +38,55 @@ func NewRepository(client postgres.IClient, log *logger.Logger) Repository {
 	}
 }
 
+func (r *repository) Create(ctx context.Context, c *domainContract.Contract) error {
+	span := entRepo.StartRepositorySpan(ctx, "contract", "create", map[string]interface{}{
+		"contract_id": c.ID(),
+	})
+	defer entRepo.FinishSpan(span)
+
+	create := r.client.Writer(ctx).Contract.Create().
+		SetID(c.ID()).
+		SetTenantID(types.GetTenantID(ctx)).
+		SetEnvironmentID(types.GetEnvironmentID(ctx)).
+		SetStatus(string(c.Status())).
+		SetNillableTermStart(c.TermStart()).
+		SetNillableTermEnd(c.TermEnd()).
+		SetNillableEndedAt(c.EndedAt()).
+		SetContractStatus(string(c.ContractStatus())).
+		SetCreatedBy(types.GetUserID(ctx)).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetCreatedAt(c.CreatedAt()).
+		SetUpdatedAt(c.UpdatedAt())
+	if c.CustomerID() != "" {
+		create.SetCustomerID(c.CustomerID())
+	}
+	if c.Currency() != "" {
+		create.SetCurrency(c.Currency())
+	}
+	if c.Document() != nil {
+		create.SetDocument(c.Document())
+	}
+	if c.ExtractionStatus() != "" {
+		create.SetExtractionStatus(string(c.ExtractionStatus()))
+	}
+	if len(c.Extraction()) > 0 {
+		create.SetExtraction(c.Extraction())
+	}
+	if c.ExtractionError() != "" {
+		create.SetExtractionError(c.ExtractionError())
+	}
+
+	if _, err := create.Save(ctx); err != nil {
+		entRepo.SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to create contract").
+			Mark(ierr.ErrDatabase)
+	}
+
+	entRepo.SetSpanSuccess(span)
+	return nil
+}
+
 func (r *repository) CreateWithAssociation(ctx context.Context, c *domainContract.Contract, a *domainContract.Association) error {
 	span := entRepo.StartRepositorySpan(ctx, "contract", "create_with_association", map[string]interface{}{
 		"contract_id": c.ID(),
@@ -259,6 +308,26 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 		update.ClearEndedAt()
 	} else {
 		update.SetEndedAt(*c.EndedAt())
+	}
+	if c.Document() == nil {
+		update.ClearDocument()
+	} else {
+		update.SetDocument(c.Document())
+	}
+	if c.ExtractionStatus() == "" {
+		update.ClearExtractionStatus()
+	} else {
+		update.SetExtractionStatus(string(c.ExtractionStatus()))
+	}
+	if len(c.Extraction()) == 0 {
+		update.ClearExtraction()
+	} else {
+		update.SetExtraction(c.Extraction())
+	}
+	if c.ExtractionError() == "" {
+		update.ClearExtractionError()
+	} else {
+		update.SetExtractionError(c.ExtractionError())
 	}
 
 	if _, err := update.Save(ctx); err != nil {

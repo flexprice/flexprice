@@ -3,6 +3,8 @@
 package ent
 
 import (
+	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/contract"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Contract is the model entity for the Contract schema.
@@ -43,7 +46,15 @@ type Contract struct {
 	EndedAt *time.Time `json:"ended_at,omitempty"`
 	// ContractStatus holds the value of the "contract_status" field.
 	ContractStatus string `json:"contract_status,omitempty"`
-	selectValues   sql.SelectValues
+	// Document holds the value of the "document" field.
+	Document *types.ContractDocument `json:"document,omitempty"`
+	// ExtractionStatus holds the value of the "extraction_status" field.
+	ExtractionStatus *string `json:"extraction_status,omitempty"`
+	// Extraction holds the value of the "extraction" field.
+	Extraction jsontext.Value `json:"extraction,omitempty"`
+	// ExtractionError holds the value of the "extraction_error" field.
+	ExtractionError *string `json:"extraction_error,omitempty"`
+	selectValues    sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -51,7 +62,9 @@ func (*Contract) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case contract.FieldID, contract.FieldTenantID, contract.FieldStatus, contract.FieldCreatedBy, contract.FieldUpdatedBy, contract.FieldEnvironmentID, contract.FieldCustomerID, contract.FieldCurrency, contract.FieldContractStatus:
+		case contract.FieldDocument, contract.FieldExtraction:
+			values[i] = new([]byte)
+		case contract.FieldID, contract.FieldTenantID, contract.FieldStatus, contract.FieldCreatedBy, contract.FieldUpdatedBy, contract.FieldEnvironmentID, contract.FieldCustomerID, contract.FieldCurrency, contract.FieldContractStatus, contract.FieldExtractionStatus, contract.FieldExtractionError:
 			values[i] = new(sql.NullString)
 		case contract.FieldCreatedAt, contract.FieldUpdatedAt, contract.FieldTermStart, contract.FieldTermEnd, contract.FieldEndedAt:
 			values[i] = new(sql.NullTime)
@@ -157,6 +170,36 @@ func (_m *Contract) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ContractStatus = value.String
 			}
+		case contract.FieldDocument:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field document", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Document); err != nil {
+					return fmt.Errorf("unmarshal field document: %w", err)
+				}
+			}
+		case contract.FieldExtractionStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field extraction_status", values[i])
+			} else if value.Valid {
+				_m.ExtractionStatus = new(string)
+				*_m.ExtractionStatus = value.String
+			}
+		case contract.FieldExtraction:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field extraction", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Extraction); err != nil {
+					return fmt.Errorf("unmarshal field extraction: %w", err)
+				}
+			}
+		case contract.FieldExtractionError:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field extraction_error", values[i])
+			} else if value.Valid {
+				_m.ExtractionError = new(string)
+				*_m.ExtractionError = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -237,6 +280,22 @@ func (_m *Contract) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("contract_status=")
 	builder.WriteString(_m.ContractStatus)
+	builder.WriteString(", ")
+	builder.WriteString("document=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Document))
+	builder.WriteString(", ")
+	if v := _m.ExtractionStatus; v != nil {
+		builder.WriteString("extraction_status=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("extraction=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Extraction))
+	builder.WriteString(", ")
+	if v := _m.ExtractionError; v != nil {
+		builder.WriteString("extraction_error=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -1,10 +1,13 @@
 package schema
 
 import (
+	"encoding/json"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Contract holds the schema definition for the Contract entity.
@@ -35,14 +38,14 @@ func (Contract) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			Immutable().
-			NotEmpty(),
+			Optional(),
 
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(3)",
 			}).
 			Immutable().
-			NotEmpty(),
+			Optional(),
 
 		field.Time("term_start").
 			Optional().
@@ -61,6 +64,29 @@ func (Contract) Fields() []ent.Field {
 				"postgres": "varchar(20)",
 			}).
 			NotEmpty(),
+
+		field.JSON("document", &types.ContractDocument{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
+
+		field.String("extraction_status").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Optional().
+			Nillable(),
+
+		field.JSON("extraction", json.RawMessage{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
+
+		field.Text("extraction_error").
+			Optional().
+			Nillable(),
 	}
 }
 

@@ -4,15 +4,18 @@ package ent
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/contract"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ContractUpdate is the builder for updating Contract entities.
@@ -142,6 +145,76 @@ func (_u *ContractUpdate) SetNillableContractStatus(v *string) *ContractUpdate {
 	return _u
 }
 
+// SetDocument sets the "document" field.
+func (_u *ContractUpdate) SetDocument(v *types.ContractDocument) *ContractUpdate {
+	_u.mutation.SetDocument(v)
+	return _u
+}
+
+// ClearDocument clears the value of the "document" field.
+func (_u *ContractUpdate) ClearDocument() *ContractUpdate {
+	_u.mutation.ClearDocument()
+	return _u
+}
+
+// SetExtractionStatus sets the "extraction_status" field.
+func (_u *ContractUpdate) SetExtractionStatus(v string) *ContractUpdate {
+	_u.mutation.SetExtractionStatus(v)
+	return _u
+}
+
+// SetNillableExtractionStatus sets the "extraction_status" field if the given value is not nil.
+func (_u *ContractUpdate) SetNillableExtractionStatus(v *string) *ContractUpdate {
+	if v != nil {
+		_u.SetExtractionStatus(*v)
+	}
+	return _u
+}
+
+// ClearExtractionStatus clears the value of the "extraction_status" field.
+func (_u *ContractUpdate) ClearExtractionStatus() *ContractUpdate {
+	_u.mutation.ClearExtractionStatus()
+	return _u
+}
+
+// SetExtraction sets the "extraction" field.
+func (_u *ContractUpdate) SetExtraction(v jsontext.Value) *ContractUpdate {
+	_u.mutation.SetExtraction(v)
+	return _u
+}
+
+// AppendExtraction appends value to the "extraction" field.
+func (_u *ContractUpdate) AppendExtraction(v jsontext.Value) *ContractUpdate {
+	_u.mutation.AppendExtraction(v)
+	return _u
+}
+
+// ClearExtraction clears the value of the "extraction" field.
+func (_u *ContractUpdate) ClearExtraction() *ContractUpdate {
+	_u.mutation.ClearExtraction()
+	return _u
+}
+
+// SetExtractionError sets the "extraction_error" field.
+func (_u *ContractUpdate) SetExtractionError(v string) *ContractUpdate {
+	_u.mutation.SetExtractionError(v)
+	return _u
+}
+
+// SetNillableExtractionError sets the "extraction_error" field if the given value is not nil.
+func (_u *ContractUpdate) SetNillableExtractionError(v *string) *ContractUpdate {
+	if v != nil {
+		_u.SetExtractionError(*v)
+	}
+	return _u
+}
+
+// ClearExtractionError clears the value of the "extraction_error" field.
+func (_u *ContractUpdate) ClearExtractionError() *ContractUpdate {
+	_u.mutation.ClearExtractionError()
+	return _u
+}
+
 // Mutation returns the ContractMutation object of the builder.
 func (_u *ContractUpdate) Mutation() *ContractMutation {
 	return _u.mutation
@@ -223,6 +296,12 @@ func (_u *ContractUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(contract.FieldEnvironmentID, field.TypeString)
 	}
+	if _u.mutation.CustomerIDCleared() {
+		_spec.ClearField(contract.FieldCustomerID, field.TypeString)
+	}
+	if _u.mutation.CurrencyCleared() {
+		_spec.ClearField(contract.FieldCurrency, field.TypeString)
+	}
 	if value, ok := _u.mutation.TermStart(); ok {
 		_spec.SetField(contract.FieldTermStart, field.TypeTime, value)
 	}
@@ -243,6 +322,35 @@ func (_u *ContractUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.ContractStatus(); ok {
 		_spec.SetField(contract.FieldContractStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Document(); ok {
+		_spec.SetField(contract.FieldDocument, field.TypeJSON, value)
+	}
+	if _u.mutation.DocumentCleared() {
+		_spec.ClearField(contract.FieldDocument, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ExtractionStatus(); ok {
+		_spec.SetField(contract.FieldExtractionStatus, field.TypeString, value)
+	}
+	if _u.mutation.ExtractionStatusCleared() {
+		_spec.ClearField(contract.FieldExtractionStatus, field.TypeString)
+	}
+	if value, ok := _u.mutation.Extraction(); ok {
+		_spec.SetField(contract.FieldExtraction, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedExtraction(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, contract.FieldExtraction, value)
+		})
+	}
+	if _u.mutation.ExtractionCleared() {
+		_spec.ClearField(contract.FieldExtraction, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ExtractionError(); ok {
+		_spec.SetField(contract.FieldExtractionError, field.TypeString, value)
+	}
+	if _u.mutation.ExtractionErrorCleared() {
+		_spec.ClearField(contract.FieldExtractionError, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -378,6 +486,76 @@ func (_u *ContractUpdateOne) SetNillableContractStatus(v *string) *ContractUpdat
 	return _u
 }
 
+// SetDocument sets the "document" field.
+func (_u *ContractUpdateOne) SetDocument(v *types.ContractDocument) *ContractUpdateOne {
+	_u.mutation.SetDocument(v)
+	return _u
+}
+
+// ClearDocument clears the value of the "document" field.
+func (_u *ContractUpdateOne) ClearDocument() *ContractUpdateOne {
+	_u.mutation.ClearDocument()
+	return _u
+}
+
+// SetExtractionStatus sets the "extraction_status" field.
+func (_u *ContractUpdateOne) SetExtractionStatus(v string) *ContractUpdateOne {
+	_u.mutation.SetExtractionStatus(v)
+	return _u
+}
+
+// SetNillableExtractionStatus sets the "extraction_status" field if the given value is not nil.
+func (_u *ContractUpdateOne) SetNillableExtractionStatus(v *string) *ContractUpdateOne {
+	if v != nil {
+		_u.SetExtractionStatus(*v)
+	}
+	return _u
+}
+
+// ClearExtractionStatus clears the value of the "extraction_status" field.
+func (_u *ContractUpdateOne) ClearExtractionStatus() *ContractUpdateOne {
+	_u.mutation.ClearExtractionStatus()
+	return _u
+}
+
+// SetExtraction sets the "extraction" field.
+func (_u *ContractUpdateOne) SetExtraction(v jsontext.Value) *ContractUpdateOne {
+	_u.mutation.SetExtraction(v)
+	return _u
+}
+
+// AppendExtraction appends value to the "extraction" field.
+func (_u *ContractUpdateOne) AppendExtraction(v jsontext.Value) *ContractUpdateOne {
+	_u.mutation.AppendExtraction(v)
+	return _u
+}
+
+// ClearExtraction clears the value of the "extraction" field.
+func (_u *ContractUpdateOne) ClearExtraction() *ContractUpdateOne {
+	_u.mutation.ClearExtraction()
+	return _u
+}
+
+// SetExtractionError sets the "extraction_error" field.
+func (_u *ContractUpdateOne) SetExtractionError(v string) *ContractUpdateOne {
+	_u.mutation.SetExtractionError(v)
+	return _u
+}
+
+// SetNillableExtractionError sets the "extraction_error" field if the given value is not nil.
+func (_u *ContractUpdateOne) SetNillableExtractionError(v *string) *ContractUpdateOne {
+	if v != nil {
+		_u.SetExtractionError(*v)
+	}
+	return _u
+}
+
+// ClearExtractionError clears the value of the "extraction_error" field.
+func (_u *ContractUpdateOne) ClearExtractionError() *ContractUpdateOne {
+	_u.mutation.ClearExtractionError()
+	return _u
+}
+
 // Mutation returns the ContractMutation object of the builder.
 func (_u *ContractUpdateOne) Mutation() *ContractMutation {
 	return _u.mutation
@@ -489,6 +667,12 @@ func (_u *ContractUpdateOne) sqlSave(ctx context.Context) (_node *Contract, err 
 	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(contract.FieldEnvironmentID, field.TypeString)
 	}
+	if _u.mutation.CustomerIDCleared() {
+		_spec.ClearField(contract.FieldCustomerID, field.TypeString)
+	}
+	if _u.mutation.CurrencyCleared() {
+		_spec.ClearField(contract.FieldCurrency, field.TypeString)
+	}
 	if value, ok := _u.mutation.TermStart(); ok {
 		_spec.SetField(contract.FieldTermStart, field.TypeTime, value)
 	}
@@ -509,6 +693,35 @@ func (_u *ContractUpdateOne) sqlSave(ctx context.Context) (_node *Contract, err 
 	}
 	if value, ok := _u.mutation.ContractStatus(); ok {
 		_spec.SetField(contract.FieldContractStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Document(); ok {
+		_spec.SetField(contract.FieldDocument, field.TypeJSON, value)
+	}
+	if _u.mutation.DocumentCleared() {
+		_spec.ClearField(contract.FieldDocument, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ExtractionStatus(); ok {
+		_spec.SetField(contract.FieldExtractionStatus, field.TypeString, value)
+	}
+	if _u.mutation.ExtractionStatusCleared() {
+		_spec.ClearField(contract.FieldExtractionStatus, field.TypeString)
+	}
+	if value, ok := _u.mutation.Extraction(); ok {
+		_spec.SetField(contract.FieldExtraction, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedExtraction(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, contract.FieldExtraction, value)
+		})
+	}
+	if _u.mutation.ExtractionCleared() {
+		_spec.ClearField(contract.FieldExtraction, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ExtractionError(); ok {
+		_spec.SetField(contract.FieldExtractionError, field.TypeString, value)
+	}
+	if _u.mutation.ExtractionErrorCleared() {
+		_spec.ClearField(contract.FieldExtractionError, field.TypeString)
 	}
 	_node = &Contract{config: _u.config}
 	_spec.Assign = _node.assignValues

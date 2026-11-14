@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"sync"
@@ -18170,26 +18171,31 @@ func (m *ConnectionMutation) ResetEdge(name string) error {
 // ContractMutation represents an operation that mutates the Contract nodes in the graph.
 type ContractMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *string
-	tenant_id       *string
-	status          *string
-	created_at      *time.Time
-	updated_at      *time.Time
-	created_by      *string
-	updated_by      *string
-	environment_id  *string
-	customer_id     *string
-	currency        *string
-	term_start      *time.Time
-	term_end        *time.Time
-	ended_at        *time.Time
-	contract_status *string
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*Contract, error)
-	predicates      []predicate.Contract
+	op                Op
+	typ               string
+	id                *string
+	tenant_id         *string
+	status            *string
+	created_at        *time.Time
+	updated_at        *time.Time
+	created_by        *string
+	updated_by        *string
+	environment_id    *string
+	customer_id       *string
+	currency          *string
+	term_start        *time.Time
+	term_end          *time.Time
+	ended_at          *time.Time
+	contract_status   *string
+	document          **types.ContractDocument
+	extraction_status *string
+	extraction        *jsontext.Value
+	appendextraction  jsontext.Value
+	extraction_error  *string
+	clearedFields     map[string]struct{}
+	done              bool
+	oldValue          func(context.Context) (*Contract, error)
+	predicates        []predicate.Contract
 }
 
 var _ ent.Mutation = (*ContractMutation)(nil)
@@ -18618,9 +18624,22 @@ func (m *ContractMutation) OldCustomerID(ctx context.Context) (v string, err err
 	return oldValue.CustomerID, nil
 }
 
+// ClearCustomerID clears the value of the "customer_id" field.
+func (m *ContractMutation) ClearCustomerID() {
+	m.customer_id = nil
+	m.clearedFields[contract.FieldCustomerID] = struct{}{}
+}
+
+// CustomerIDCleared returns if the "customer_id" field was cleared in this mutation.
+func (m *ContractMutation) CustomerIDCleared() bool {
+	_, ok := m.clearedFields[contract.FieldCustomerID]
+	return ok
+}
+
 // ResetCustomerID resets all changes to the "customer_id" field.
 func (m *ContractMutation) ResetCustomerID() {
 	m.customer_id = nil
+	delete(m.clearedFields, contract.FieldCustomerID)
 }
 
 // SetCurrency sets the "currency" field.
@@ -18654,9 +18673,22 @@ func (m *ContractMutation) OldCurrency(ctx context.Context) (v string, err error
 	return oldValue.Currency, nil
 }
 
+// ClearCurrency clears the value of the "currency" field.
+func (m *ContractMutation) ClearCurrency() {
+	m.currency = nil
+	m.clearedFields[contract.FieldCurrency] = struct{}{}
+}
+
+// CurrencyCleared returns if the "currency" field was cleared in this mutation.
+func (m *ContractMutation) CurrencyCleared() bool {
+	_, ok := m.clearedFields[contract.FieldCurrency]
+	return ok
+}
+
 // ResetCurrency resets all changes to the "currency" field.
 func (m *ContractMutation) ResetCurrency() {
 	m.currency = nil
+	delete(m.clearedFields, contract.FieldCurrency)
 }
 
 // SetTermStart sets the "term_start" field.
@@ -18842,6 +18874,218 @@ func (m *ContractMutation) ResetContractStatus() {
 	m.contract_status = nil
 }
 
+// SetDocument sets the "document" field.
+func (m *ContractMutation) SetDocument(td *types.ContractDocument) {
+	m.document = &td
+}
+
+// Document returns the value of the "document" field in the mutation.
+func (m *ContractMutation) Document() (r *types.ContractDocument, exists bool) {
+	v := m.document
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDocument returns the old "document" field's value of the Contract entity.
+// If the Contract object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContractMutation) OldDocument(ctx context.Context) (v *types.ContractDocument, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDocument is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDocument requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDocument: %w", err)
+	}
+	return oldValue.Document, nil
+}
+
+// ClearDocument clears the value of the "document" field.
+func (m *ContractMutation) ClearDocument() {
+	m.document = nil
+	m.clearedFields[contract.FieldDocument] = struct{}{}
+}
+
+// DocumentCleared returns if the "document" field was cleared in this mutation.
+func (m *ContractMutation) DocumentCleared() bool {
+	_, ok := m.clearedFields[contract.FieldDocument]
+	return ok
+}
+
+// ResetDocument resets all changes to the "document" field.
+func (m *ContractMutation) ResetDocument() {
+	m.document = nil
+	delete(m.clearedFields, contract.FieldDocument)
+}
+
+// SetExtractionStatus sets the "extraction_status" field.
+func (m *ContractMutation) SetExtractionStatus(s string) {
+	m.extraction_status = &s
+}
+
+// ExtractionStatus returns the value of the "extraction_status" field in the mutation.
+func (m *ContractMutation) ExtractionStatus() (r string, exists bool) {
+	v := m.extraction_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExtractionStatus returns the old "extraction_status" field's value of the Contract entity.
+// If the Contract object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContractMutation) OldExtractionStatus(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExtractionStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExtractionStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExtractionStatus: %w", err)
+	}
+	return oldValue.ExtractionStatus, nil
+}
+
+// ClearExtractionStatus clears the value of the "extraction_status" field.
+func (m *ContractMutation) ClearExtractionStatus() {
+	m.extraction_status = nil
+	m.clearedFields[contract.FieldExtractionStatus] = struct{}{}
+}
+
+// ExtractionStatusCleared returns if the "extraction_status" field was cleared in this mutation.
+func (m *ContractMutation) ExtractionStatusCleared() bool {
+	_, ok := m.clearedFields[contract.FieldExtractionStatus]
+	return ok
+}
+
+// ResetExtractionStatus resets all changes to the "extraction_status" field.
+func (m *ContractMutation) ResetExtractionStatus() {
+	m.extraction_status = nil
+	delete(m.clearedFields, contract.FieldExtractionStatus)
+}
+
+// SetExtraction sets the "extraction" field.
+func (m *ContractMutation) SetExtraction(j jsontext.Value) {
+	m.extraction = &j
+	m.appendextraction = nil
+}
+
+// Extraction returns the value of the "extraction" field in the mutation.
+func (m *ContractMutation) Extraction() (r jsontext.Value, exists bool) {
+	v := m.extraction
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExtraction returns the old "extraction" field's value of the Contract entity.
+// If the Contract object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContractMutation) OldExtraction(ctx context.Context) (v jsontext.Value, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExtraction is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExtraction requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExtraction: %w", err)
+	}
+	return oldValue.Extraction, nil
+}
+
+// AppendExtraction adds j to the "extraction" field.
+func (m *ContractMutation) AppendExtraction(j jsontext.Value) {
+	m.appendextraction = append(m.appendextraction, j...)
+}
+
+// AppendedExtraction returns the list of values that were appended to the "extraction" field in this mutation.
+func (m *ContractMutation) AppendedExtraction() (jsontext.Value, bool) {
+	if len(m.appendextraction) == 0 {
+		return nil, false
+	}
+	return m.appendextraction, true
+}
+
+// ClearExtraction clears the value of the "extraction" field.
+func (m *ContractMutation) ClearExtraction() {
+	m.extraction = nil
+	m.appendextraction = nil
+	m.clearedFields[contract.FieldExtraction] = struct{}{}
+}
+
+// ExtractionCleared returns if the "extraction" field was cleared in this mutation.
+func (m *ContractMutation) ExtractionCleared() bool {
+	_, ok := m.clearedFields[contract.FieldExtraction]
+	return ok
+}
+
+// ResetExtraction resets all changes to the "extraction" field.
+func (m *ContractMutation) ResetExtraction() {
+	m.extraction = nil
+	m.appendextraction = nil
+	delete(m.clearedFields, contract.FieldExtraction)
+}
+
+// SetExtractionError sets the "extraction_error" field.
+func (m *ContractMutation) SetExtractionError(s string) {
+	m.extraction_error = &s
+}
+
+// ExtractionError returns the value of the "extraction_error" field in the mutation.
+func (m *ContractMutation) ExtractionError() (r string, exists bool) {
+	v := m.extraction_error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExtractionError returns the old "extraction_error" field's value of the Contract entity.
+// If the Contract object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContractMutation) OldExtractionError(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExtractionError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExtractionError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExtractionError: %w", err)
+	}
+	return oldValue.ExtractionError, nil
+}
+
+// ClearExtractionError clears the value of the "extraction_error" field.
+func (m *ContractMutation) ClearExtractionError() {
+	m.extraction_error = nil
+	m.clearedFields[contract.FieldExtractionError] = struct{}{}
+}
+
+// ExtractionErrorCleared returns if the "extraction_error" field was cleared in this mutation.
+func (m *ContractMutation) ExtractionErrorCleared() bool {
+	_, ok := m.clearedFields[contract.FieldExtractionError]
+	return ok
+}
+
+// ResetExtractionError resets all changes to the "extraction_error" field.
+func (m *ContractMutation) ResetExtractionError() {
+	m.extraction_error = nil
+	delete(m.clearedFields, contract.FieldExtractionError)
+}
+
 // Where appends a list predicates to the ContractMutation builder.
 func (m *ContractMutation) Where(ps ...predicate.Contract) {
 	m.predicates = append(m.predicates, ps...)
@@ -18876,7 +19120,7 @@ func (m *ContractMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ContractMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 17)
 	if m.tenant_id != nil {
 		fields = append(fields, contract.FieldTenantID)
 	}
@@ -18916,6 +19160,18 @@ func (m *ContractMutation) Fields() []string {
 	if m.contract_status != nil {
 		fields = append(fields, contract.FieldContractStatus)
 	}
+	if m.document != nil {
+		fields = append(fields, contract.FieldDocument)
+	}
+	if m.extraction_status != nil {
+		fields = append(fields, contract.FieldExtractionStatus)
+	}
+	if m.extraction != nil {
+		fields = append(fields, contract.FieldExtraction)
+	}
+	if m.extraction_error != nil {
+		fields = append(fields, contract.FieldExtractionError)
+	}
 	return fields
 }
 
@@ -18950,6 +19206,14 @@ func (m *ContractMutation) Field(name string) (ent.Value, bool) {
 		return m.EndedAt()
 	case contract.FieldContractStatus:
 		return m.ContractStatus()
+	case contract.FieldDocument:
+		return m.Document()
+	case contract.FieldExtractionStatus:
+		return m.ExtractionStatus()
+	case contract.FieldExtraction:
+		return m.Extraction()
+	case contract.FieldExtractionError:
+		return m.ExtractionError()
 	}
 	return nil, false
 }
@@ -18985,6 +19249,14 @@ func (m *ContractMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldEndedAt(ctx)
 	case contract.FieldContractStatus:
 		return m.OldContractStatus(ctx)
+	case contract.FieldDocument:
+		return m.OldDocument(ctx)
+	case contract.FieldExtractionStatus:
+		return m.OldExtractionStatus(ctx)
+	case contract.FieldExtraction:
+		return m.OldExtraction(ctx)
+	case contract.FieldExtractionError:
+		return m.OldExtractionError(ctx)
 	}
 	return nil, fmt.Errorf("unknown Contract field %s", name)
 }
@@ -19085,6 +19357,34 @@ func (m *ContractMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetContractStatus(v)
 		return nil
+	case contract.FieldDocument:
+		v, ok := value.(*types.ContractDocument)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDocument(v)
+		return nil
+	case contract.FieldExtractionStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExtractionStatus(v)
+		return nil
+	case contract.FieldExtraction:
+		v, ok := value.(jsontext.Value)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExtraction(v)
+		return nil
+	case contract.FieldExtractionError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExtractionError(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Contract field %s", name)
 }
@@ -19124,6 +19424,12 @@ func (m *ContractMutation) ClearedFields() []string {
 	if m.FieldCleared(contract.FieldEnvironmentID) {
 		fields = append(fields, contract.FieldEnvironmentID)
 	}
+	if m.FieldCleared(contract.FieldCustomerID) {
+		fields = append(fields, contract.FieldCustomerID)
+	}
+	if m.FieldCleared(contract.FieldCurrency) {
+		fields = append(fields, contract.FieldCurrency)
+	}
 	if m.FieldCleared(contract.FieldTermStart) {
 		fields = append(fields, contract.FieldTermStart)
 	}
@@ -19132,6 +19438,18 @@ func (m *ContractMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(contract.FieldEndedAt) {
 		fields = append(fields, contract.FieldEndedAt)
+	}
+	if m.FieldCleared(contract.FieldDocument) {
+		fields = append(fields, contract.FieldDocument)
+	}
+	if m.FieldCleared(contract.FieldExtractionStatus) {
+		fields = append(fields, contract.FieldExtractionStatus)
+	}
+	if m.FieldCleared(contract.FieldExtraction) {
+		fields = append(fields, contract.FieldExtraction)
+	}
+	if m.FieldCleared(contract.FieldExtractionError) {
+		fields = append(fields, contract.FieldExtractionError)
 	}
 	return fields
 }
@@ -19156,6 +19474,12 @@ func (m *ContractMutation) ClearField(name string) error {
 	case contract.FieldEnvironmentID:
 		m.ClearEnvironmentID()
 		return nil
+	case contract.FieldCustomerID:
+		m.ClearCustomerID()
+		return nil
+	case contract.FieldCurrency:
+		m.ClearCurrency()
+		return nil
 	case contract.FieldTermStart:
 		m.ClearTermStart()
 		return nil
@@ -19164,6 +19488,18 @@ func (m *ContractMutation) ClearField(name string) error {
 		return nil
 	case contract.FieldEndedAt:
 		m.ClearEndedAt()
+		return nil
+	case contract.FieldDocument:
+		m.ClearDocument()
+		return nil
+	case contract.FieldExtractionStatus:
+		m.ClearExtractionStatus()
+		return nil
+	case contract.FieldExtraction:
+		m.ClearExtraction()
+		return nil
+	case contract.FieldExtractionError:
+		m.ClearExtractionError()
 		return nil
 	}
 	return fmt.Errorf("unknown Contract nullable field %s", name)
@@ -19211,6 +19547,18 @@ func (m *ContractMutation) ResetField(name string) error {
 		return nil
 	case contract.FieldContractStatus:
 		m.ResetContractStatus()
+		return nil
+	case contract.FieldDocument:
+		m.ResetDocument()
+		return nil
+	case contract.FieldExtractionStatus:
+		m.ResetExtractionStatus()
+		return nil
+	case contract.FieldExtraction:
+		m.ResetExtraction()
+		return nil
+	case contract.FieldExtractionError:
+		m.ResetExtractionError()
 		return nil
 	}
 	return fmt.Errorf("unknown Contract field %s", name)

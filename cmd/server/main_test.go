@@ -7,11 +7,16 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/agents/openrouter"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	"github.com/flexprice/flexprice/internal/logger"
+	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
+	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"go.temporal.io/api/serviceerror"
 	sdkclient "go.temporal.io/sdk/client"
@@ -112,4 +117,22 @@ func TestServiceParamsProviders(t *testing.T) {
 			assert.NotNil(t, params.SelfBilling, "self-billing is always wired; it is a no-op unless configured")
 		})
 	}
+}
+
+func TestContractIngestServiceProviders(t *testing.T) {
+	var ingest contractsvc.ContractIngestService
+	app := fxtest.New(t,
+		fx.Supply(&config.Configuration{}, logger.NewNoopLogger()),
+		fx.Provide(
+			func() contractRepo.Repository { return testutil.NewInMemoryContractStore() },
+			func() storage.Resolver { return nil },
+			openrouter.NewClient,
+			provideContractExtractionService,
+			contractsvc.NewContractIngestService,
+		),
+		fx.Populate(&ingest),
+	)
+	app.RequireStart().RequireStop()
+
+	assert.NotNil(t, ingest)
 }

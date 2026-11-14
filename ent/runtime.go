@@ -749,14 +749,6 @@ func init() {
 	contractDescEnvironmentID := contractMixinFields1[0].Descriptor()
 	// contract.DefaultEnvironmentID holds the default value on creation for the environment_id field.
 	contract.DefaultEnvironmentID = contractDescEnvironmentID.Default.(string)
-	// contractDescCustomerID is the schema descriptor for customer_id field.
-	contractDescCustomerID := contractFields[1].Descriptor()
-	// contract.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
-	contract.CustomerIDValidator = contractDescCustomerID.Validators[0].(func(string) error)
-	// contractDescCurrency is the schema descriptor for currency field.
-	contractDescCurrency := contractFields[2].Descriptor()
-	// contract.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
-	contract.CurrencyValidator = contractDescCurrency.Validators[0].(func(string) error)
 	// contractDescContractStatus is the schema descriptor for contract_status field.
 	contractDescContractStatus := contractFields[6].Descriptor()
 	// contract.ContractStatusValidator is a validator for the "contract_status" field. It is called by the builders before save.

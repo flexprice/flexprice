@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -210,4 +211,29 @@ func (s *ContractServiceSuite) TestGetContractsFilters() {
 			s.Equal(len(tt.wantIDs), resp.Pagination.Total)
 		})
 	}
+}
+
+func (s *ContractServiceSuite) TestExtractionOnlyOnGetContract() {
+	now := time.Now().UTC()
+	uploaded := domainContract.NewBuilder(nil).
+		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT)).
+		WithContractStatus(types.ContractStatusDraft).
+		WithStatus(types.StatusPublished).
+		WithExtractionStatus(types.ContractExtractionStatusCompleted).
+		WithExtraction(json.RawMessage(`{"model":"test/model"}`)).
+		WithCreatedAt(now).
+		WithUpdatedAt(now).
+		Build()
+	s.Require().NoError(s.contractRepo.Create(s.ctx, uploaded))
+
+	list, err := s.contractService.GetContracts(s.ctx, contractRepo.NewFilter())
+	s.Require().NoError(err)
+	s.Require().Len(list.Items, 1)
+	s.Nil(list.Items[0].Extraction)
+	s.Equal(types.ContractExtractionStatusCompleted, list.Items[0].ExtractionStatus)
+
+	got, err := s.contractService.GetContract(s.ctx, uploaded.ID())
+	s.Require().NoError(err)
+	s.JSONEq(`{"model":"test/model"}`, string(got.Extraction))
+	s.Equal(types.ContractExtractionStatusCompleted, got.ExtractionStatus)
 }

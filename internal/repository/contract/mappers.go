@@ -23,6 +23,10 @@ func FromEnt(e *ent.Contract) *domainContract.Contract {
 		WithStatus(types.Status(e.Status)).
 		WithCreatedAt(e.CreatedAt).
 		WithUpdatedAt(e.UpdatedAt).
+		WithDocument(e.Document).
+		WithExtractionStatus(types.ContractExtractionStatus(lo.FromPtr(e.ExtractionStatus))).
+		WithExtraction(e.Extraction).
+		WithExtractionError(lo.FromPtr(e.ExtractionError)).
 		Build()
 }
 
