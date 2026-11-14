@@ -6,7 +6,9 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -601,4 +603,48 @@ func (s *PaymentLifecycleSuite) TestFullLifecycle_Invoice() {
 	payment, err = s.GetStores().PaymentRepo.Get(ctx, id)
 	s.NoError(err)
 	s.Equal(types.PaymentStatusSucceeded, payment.PaymentStatus)
+}
+
+func (s *PaymentLifecycleSuite) TestLockInvoiceCharge_InFlightCharges() {
+	razorpay := string(types.PaymentGatewayTypeRazorpay)
+	tests := []struct {
+		name     string
+		method   types.PaymentMethodType
+		gateway  *string
+		status   types.PaymentStatus
+		inFlight bool
+	}{
+		{name: "pending razorpay card charge", method: types.PaymentMethodTypeCard, gateway: &razorpay, status: types.PaymentStatusPending, inFlight: true},
+		{name: "processing charge", method: types.PaymentMethodTypeCard, gateway: &razorpay, status: types.PaymentStatusProcessing, inFlight: true},
+		{name: "pending payment link", method: types.PaymentMethodTypePaymentLink, gateway: &razorpay, status: types.PaymentStatusPending},
+		{name: "initiated razorpay upi charge", method: types.PaymentMethodTypeUPI, gateway: &razorpay, status: types.PaymentStatusInitiated},
+		{name: "pending stripe card charge", method: types.PaymentMethodTypeCard, status: types.PaymentStatusPending},
+	}
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			invoiceID := "inv_lock_" + string(rune('a'+i))
+			s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, &payment.Payment{
+				ID:                "pay_" + invoiceID,
+				IdempotencyKey:    "pay_" + invoiceID,
+				DestinationType:   types.PaymentDestinationTypeInvoice,
+				DestinationID:     invoiceID,
+				PaymentMethodType: tt.method,
+				PaymentGateway:    tt.gateway,
+				Amount:            decimal.NewFromInt(10),
+				Currency:          "inr",
+				PaymentStatus:     tt.status,
+				EnvironmentID:     types.GetEnvironmentID(ctx),
+				BaseModel:         types.GetDefaultBaseModel(ctx),
+			}))
+
+			lock, err := payments.LockInvoiceCharge(ctx, s.GetLocker(), s.GetStores().PaymentRepo, types.GetEnvironmentID(ctx), invoiceID, "")
+			if tt.inFlight {
+				s.True(ierr.IsAlreadyExists(err))
+				return
+			}
+			s.Require().NoError(err)
+			s.NoError(lock.Release(ctx))
+		})
+	}
 }

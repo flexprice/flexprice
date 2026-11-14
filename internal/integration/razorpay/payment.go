@@ -977,7 +977,7 @@ func (s *PaymentService) handleExistingOrder(ctx context.Context, req AutoCharge
 		return s.submitRecurringPayment(ctx, req, orderID)
 	case "attempted", "paid":
 		// Payment was already submitted or fully captured. Return AlreadySubmitted so the
-		// caller marks the FlexPrice payment as PROCESSING and lets the webhook reconcile.
+		// caller marks the FlexPrice payment as PENDING and lets the webhook reconcile.
 		s.logger.Info(ctx, "razorpay order already attempted/paid, returning AlreadySubmitted",
 			"invoice_id", req.InvoiceID,
 			"order_id", orderID,
