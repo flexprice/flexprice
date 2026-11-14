@@ -347,15 +347,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		return nil
 	}
 
-	// A redelivered decline finds the payment already FAILED and was reported the first time.
-	reportAutoChargeDecline := paymentRecord.PaymentStatus != types.PaymentStatusFailed &&
-		paymentRecord.Metadata[types.MetadataKeyPaymentTrigger] == types.PaymentTriggerInvoiceAutoCharge
-
-	// Build error message
-	errorMsg := "Payment failed"
-	if payment.ErrorDescription != "" {
-		errorMsg = payment.ErrorDescription
-	}
+	errorMsg := lo.CoalesceOrEmpty(payment.ErrorDescription, "Payment failed")
 
 	if paymentRecord.PaymentMethodType == types.PaymentMethodTypePaymentLink {
 		session, err := h.findCheckoutSessionForPayment(ctx, flexpricePaymentID, services)
@@ -392,58 +384,16 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		}
 	}
 
-	// Update payment status to failed
-	paymentStatus := string(types.PaymentStatusFailed)
-	now := clock.Now()
-
-	// Determine payment method ID based on payment method type
-	paymentMethodID := getPaymentMethodID(payment)
-
-	updateReq := dto.UpdatePaymentRequest{
-		PaymentStatus:    &paymentStatus,
-		FailedAt:         &now,
-		ErrorMessage:     &errorMsg,
-		GatewayPaymentID: &payment.ID, // Set Razorpay payment ID even for failed payments
-	}
-
-	// Set payment_method_id if available
-	if paymentMethodID != "" {
-		updateReq.PaymentMethodID = &paymentMethodID
-	}
-
-	h.logger.Info(ctx, "updating failed payment with gateway details",
-		"flexprice_payment_id", flexpricePaymentID,
-		"razorpay_payment_id", payment.ID,
-		"payment_method", payment.Method,
-		"payment_method_id", paymentMethodID,
-		"error_code", payment.ErrorCode)
-
-	_, err = services.PaymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq)
-	if err != nil {
+	if err := h.paymentSvc.MarkPaymentFailed(ctx, paymentRecord, razorpay.PaymentFailure{
+		RazorpayPaymentID: payment.ID,
+		PaymentMethodID:   getPaymentMethodID(payment),
+		Message:           payment.ErrorDescription,
+	}, services.PaymentService, services.InvoiceService); err != nil {
 		h.logger.Error(ctx, "failed to update payment to failed",
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
-		return nil // Don't return error - webhook should always succeed
 	}
-
-	h.logger.Info(ctx, "updated payment to failed",
-		"flexprice_payment_id", flexpricePaymentID,
-		"razorpay_payment_id", payment.ID,
-		"error_code", payment.ErrorCode,
-		"error_description", payment.ErrorDescription)
-
-	if reportAutoChargeDecline {
-		services.InvoiceService.PublishInvoicePaymentFailed(ctx, webhookDto.InternalInvoicePaymentFailedEvent{
-			InvoiceID:           paymentRecord.DestinationID,
-			Provider:            types.SecretProviderRazorpay,
-			Reason:              types.InvoicePaymentFailureReasonDeclined,
-			PaymentID:           flexpricePaymentID,
-			Error:               errorMsg,
-			IsAutoChargeAttempt: true,
-		})
-	}
-
 	return nil
 }
 

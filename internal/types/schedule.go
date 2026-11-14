@@ -24,6 +24,7 @@ const (
 	ScheduleIDOutboundWebhookStaleRetry               ScheduleID = "webhook-stale-retry"
 	ScheduleIDPaddleInvoicePullSync                   ScheduleID = "paddle-invoice-pull-sync"
 	ScheduleIDMoyasarAuthPaymentSettlement            ScheduleID = "moyasar-auth-payment-settlement"
+	ScheduleIDRazorpayPaymentStatusSync               ScheduleID = "razorpay-payment-status-sync"
 	ScheduleIDCheckoutSessionExpiry                   ScheduleID = "checkout-session-expiry"
 	ScheduleIDMarketplaceUsageSnapshot                ScheduleID = "marketplace-usage-snapshot"
 	ScheduleIDMarketplaceUsageReport                  ScheduleID = "marketplace-usage-report"
@@ -58,6 +59,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDOutboundWebhookStaleRetry,
 		ScheduleIDPaddleInvoicePullSync,
 		ScheduleIDMoyasarAuthPaymentSettlement,
+		ScheduleIDRazorpayPaymentStatusSync,
 		ScheduleIDCheckoutSessionExpiry,
 		ScheduleIDMarketplaceUsageSnapshot,
 		ScheduleIDMarketplaceUsageReport,
