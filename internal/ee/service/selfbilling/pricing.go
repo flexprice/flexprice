@@ -47,6 +47,7 @@ func (c *remoteClient) summaryPlan(ctx context.Context, extID string) (*remoteSu
 		plan, err := c.subscribedPlan(ctx, details, clock.Now())
 		return &remoteSubscription{
 			id:       sub.id,
+			planID:   sub.planID,
 			status:   types.SubscriptionStatus(lo.FromPtr(details.SubscriptionStatus)),
 			trialEnd: details.TrialEnd,
 		}, plan, err
@@ -56,8 +57,30 @@ func (c *remoteClient) summaryPlan(ctx context.Context, extID string) (*remoteSu
 		WithHint("The subscription changed; reload the billing summary").Mark(ierr.ErrInvalidOperation)
 }
 
+// offeredPlan is the default plan's offer: what a tenant with no live subscription is shown.
 func (c *remoteClient) offeredPlan(ctx context.Context) (*dto.SelfBillingPlanResponse, error) {
-	resp, err := c.sdk.Plans.GetPlan(ctx, c.planID)
+	return c.offeredPlanByID(ctx, c.defaultPlanID)
+}
+
+// offeredPlans is every plan a tenant may buy at checkout, in configured order; known is an offer already loaded.
+func (c *remoteClient) offeredPlans(ctx context.Context, known *dto.SelfBillingPlanResponse) ([]*dto.SelfBillingPlanResponse, error) {
+	out := make([]*dto.SelfBillingPlanResponse, 0, len(c.planIDs))
+	for _, id := range c.planIDs {
+		if known != nil && known.ID == id {
+			out = append(out, known)
+			continue
+		}
+		plan, err := c.offeredPlanByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, plan)
+	}
+	return out, nil
+}
+
+func (c *remoteClient) offeredPlanByID(ctx context.Context, planID string) (*dto.SelfBillingPlanResponse, error) {
+	resp, err := c.sdk.Plans.GetPlan(ctx, planID)
 	if err != nil {
 		return nil, cloudErr(err)
 	}

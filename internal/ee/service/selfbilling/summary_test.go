@@ -116,3 +116,21 @@ func TestPortalSession_UsesOwnCustomer(t *testing.T) {
 	assert.Equal(t, "https://portal.test", got.URL)
 	assert.Equal(t, []string{"us:t1"}, fc.portalExtIDs)
 }
+
+func TestSummary_PassesThroughOfferedPlans(t *testing.T) {
+	fc := newFakeClient()
+	s, d := newTestService(fc)
+	seedTenant(t, d, "t1", types.TenantInternalStatusTrialing)
+	fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", planID: "plan_1", status: types.SubscriptionStatusTrialing}
+	fc.summaries["us:t1"] = &remoteSummary{
+		subscription: fc.subs["us:t1"],
+		plan:         &dto.SelfBillingPlanResponse{ID: "plan_1"},
+		plans:        []*dto.SelfBillingPlanResponse{{ID: "plan_1"}, {ID: "plan_2"}},
+	}
+
+	got, err := s.Summary(tenantCtx("t1"), "t1")
+	require.NoError(t, err)
+	require.Len(t, got.Plans, 2)
+	assert.Equal(t, "plan_1", got.Plans[0].ID)
+	assert.Equal(t, "plan_2", got.Plans[1].ID)
+}

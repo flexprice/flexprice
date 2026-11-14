@@ -31254,6 +31254,10 @@
           "name": {
             "type": "string"
           },
+          "plan_id": {
+            "type": "string",
+            "description": "PlanID is the offered plan to buy; empty means the default plan, or a negotiated trial's own plan."
+          },
           "tax_id": {
             "type": "string"
           }
@@ -31363,6 +31367,13 @@
           },
           "plan": {
             "$ref": "#/components/schemas/SelfBillingPlanResponse"
+          },
+          "plans": {
+            "type": "array",
+            "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.",
+            "items": {
+              "$ref": "#/components/schemas/SelfBillingPlanResponse"
+            }
           },
           "status": {
             "$ref": "#/components/schemas/types.TenantInternalStatus"

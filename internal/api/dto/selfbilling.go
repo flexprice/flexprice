@@ -26,6 +26,8 @@ type SelfBillingCheckoutRequest struct {
 	Country    string `json:"address_country" validate:"required,len=2"`
 	PostalCode string `json:"address_postal_code" validate:"required"`
 	TaxID      string `json:"tax_id"`
+	// PlanID is the offered plan to buy; empty means the default plan, or a negotiated trial's own plan.
+	PlanID string `json:"plan_id,omitempty"`
 }
 
 // Validate checks the request's struct tags.
@@ -63,6 +65,8 @@ type SelfBillingSummaryResponse struct {
 	Invoices           []SelfBillingInvoice          `json:"invoices"`
 	Usage              *CustomerUsageSummaryResponse `json:"usage,omitempty"`
 	Plan               *SelfBillingPlanResponse      `json:"plan"`
+	// Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.
+	Plans []*SelfBillingPlanResponse `json:"plans,omitempty"`
 }
 
 // SelfBillingPlanResponse describes subscribed terms, or the configured offer when there is no current subscription.

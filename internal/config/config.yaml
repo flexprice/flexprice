@@ -413,7 +413,10 @@ billing:
   region: ""
   api_host: ""
   api_key: ""
-  plan_id: ""
+  # The plan every new tenant's trial starts on; must be one of plan_ids.
+  default_plan_id: ""
+  # Every plan a tenant may buy at checkout, the default included (FLEXPRICE_BILLING_PLAN_IDS=plan_a,plan_b)
+  plan_ids: []
   dashboard_url: ""
   payment_provider: "stripe"
   usage_lookback_hours: 6

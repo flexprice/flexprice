@@ -133,7 +133,7 @@ func TestRemoteSummary_OfferedPlanFiltersPrices(t *testing.T) {
 func TestRemoteSummary_SubscriptionOverrides(t *testing.T) {
 	for _, status := range []types.SubscriptionStatus{
 		types.SubscriptionStatusTrialing, types.SubscriptionStatusActive,
-		types.SubscriptionStatusIncomplete, types.SubscriptionStatusPaused, types.SubscriptionStatusDraft,
+		types.SubscriptionStatusIncomplete, types.SubscriptionStatusPaused,
 	} {
 		t.Run(string(status), func(t *testing.T) {
 			f := newFakeCloud(map[string]string{

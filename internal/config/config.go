@@ -909,8 +909,11 @@ type BillingConfig struct {
 	Region        string `mapstructure:"region"`
 	APIHost       string `mapstructure:"api_host"`
 	APIKey        string `mapstructure:"api_key"`
-	PlanID        string `mapstructure:"plan_id"`
-	DashboardURL  string `mapstructure:"dashboard_url"`
+	// DefaultPlanID is the plan every new tenant's trial starts on; it must be one of PlanIDs.
+	DefaultPlanID string `mapstructure:"default_plan_id"`
+	// PlanIDs are every plan a tenant may buy at checkout, the default included.
+	PlanIDs      []string `mapstructure:"plan_ids"`
+	DashboardURL string   `mapstructure:"dashboard_url"`
 
 	// PaymentProvider is the provider of Flexprice Cloud's trial-end checkout; empty means stripe.
 	PaymentProvider types.CheckoutPaymentProvider `mapstructure:"payment_provider"`
@@ -937,7 +940,7 @@ func (c BillingConfig) IsSelfBillingEnabled() bool {
 	return c.Enabled &&
 		c.Region != "" &&
 		c.APIKey != "" &&
-		c.PlanID != "" &&
+		c.DefaultPlanID != "" &&
 		c.DashboardURL != "" &&
 		c.CheckoutProvider().Validate() == nil &&
 		c.hasSecureAPIHost()
@@ -1294,6 +1297,14 @@ func NewConfig() (*Configuration, error) {
 		return nil, fmt.Errorf("unable to decode into config struct, %v", err)
 	}
 
+	// billing.plan_id was renamed; a deployment still setting it would otherwise turn self-billing off silently.
+	if v.IsSet("billing.plan_id") || os.Getenv("FLEXPRICE_BILLING_PLAN_ID") != "" {
+		return nil, fmt.Errorf("billing.plan_id (FLEXPRICE_BILLING_PLAN_ID) was renamed to billing.default_plan_id (FLEXPRICE_BILLING_DEFAULT_PLAN_ID)")
+	}
+	if cfg.Billing.Enabled && cfg.Billing.DefaultPlanID != "" && !slices.Contains(cfg.Billing.PlanIDs, cfg.Billing.DefaultPlanID) {
+		return nil, fmt.Errorf("billing.default_plan_id %q must be one of billing.plan_ids", cfg.Billing.DefaultPlanID)
+	}
+
 	// Step 6: Parse API keys from env var (JSON string override).
 	// We read the OS env var directly instead of via Viper because the value is a JSON
 	// string — Viper/mapstructure would try to decode it as a map and panic during
@@ -1403,7 +1414,7 @@ const (
 // A non-local deployment booting with any of these for an ENABLED feature is running on a
 // public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
 var placeholderSecrets = map[string]bool{
-	"": true, // unset
+	"":             true, // unset
 	"super_secret": true,
 	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
 	"<supabase service key>":                                   true,

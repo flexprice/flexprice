@@ -159,12 +159,12 @@ func TestReportsConfig_Enabled(t *testing.T) {
 
 func TestBillingConfig_IsSelfBillingEnabled(t *testing.T) {
 	full := BillingConfig{
-		Enabled:      true,
-		Region:       "us",
-		APIHost:      "https://api.flexprice.io/v1",
-		APIKey:       "sk",
-		PlanID:       "plan_1",
-		DashboardURL: "https://us.app.flexprice.io",
+		Enabled:       true,
+		Region:        "us",
+		APIHost:       "https://api.flexprice.io/v1",
+		APIKey:        "sk",
+		DefaultPlanID: "plan_1",
+		DashboardURL:  "https://us.app.flexprice.io",
 	}
 	with := func(mut func(*BillingConfig)) BillingConfig {
 		c := full
@@ -182,7 +182,7 @@ func TestBillingConfig_IsSelfBillingEnabled(t *testing.T) {
 		{"no host", with(func(c *BillingConfig) { c.APIHost = "" }), false},
 		{"no key", with(func(c *BillingConfig) { c.APIKey = "" }), false},
 		{"no region", with(func(c *BillingConfig) { c.Region = "" }), false},
-		{"no plan", with(func(c *BillingConfig) { c.PlanID = "" }), false},
+		{"no plan", with(func(c *BillingConfig) { c.DefaultPlanID = "" }), false},
 		{"no dashboard", with(func(c *BillingConfig) { c.DashboardURL = "" }), false},
 		{"plain http host", with(func(c *BillingConfig) { c.APIHost = "http://api.flexprice.io/v1" }), false},
 		{"relative host", with(func(c *BillingConfig) { c.APIHost = "api.flexprice.io/v1" }), false},
@@ -245,4 +245,30 @@ func TestBillingConfig_HasSecureZapierWebhookURL(t *testing.T) {
 			assert.Equal(t, tt.want, BillingConfig{ZapierWebhookURL: tt.url}.HasSecureZapierWebhookURL())
 		})
 	}
+}
+
+// TestBillingPlanIDs_FromEnv proves a comma-separated FLEXPRICE_BILLING_PLAN_IDS becomes the list of offered plans,
+// and that a default plan outside that list stops startup.
+func TestBillingPlanIDs_FromEnv(t *testing.T) {
+	t.Setenv("FLEXPRICE_BILLING_ENABLED", "true")
+	t.Setenv("FLEXPRICE_BILLING_DEFAULT_PLAN_ID", "plan_1")
+	t.Setenv("FLEXPRICE_BILLING_PLAN_IDS", "plan_1,plan_2")
+
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.Equal(t, []string{"plan_1", "plan_2"}, cfg.Billing.PlanIDs)
+
+	t.Setenv("FLEXPRICE_BILLING_DEFAULT_PLAN_ID", "plan_3")
+	_, err = NewConfig()
+	assert.ErrorContains(t, err, "default_plan_id")
+}
+
+// TestBillingPlanID_RenamedKeyStopsStartup proves the old FLEXPRICE_BILLING_PLAN_ID fails loudly rather than turning self-billing off.
+func TestBillingPlanID_RenamedKeyStopsStartup(t *testing.T) {
+	t.Setenv("FLEXPRICE_BILLING_PLAN_ID", "plan_1")
+
+	_, err := NewConfig()
+	assert.ErrorContains(t, err, "renamed to billing.default_plan_id")
 }

@@ -18,11 +18,17 @@ type billingClient interface {
 	// StartTrial subscribes the customer to the self-serve plan unless it already has a subscription on any plan; created reports a new subscription.
 	StartTrial(ctx context.Context, extID string) (created bool, err error)
 
-	// LatestSubscription returns the newest non-cancelled subscription on any plan, else the newest cancelled one, else nil.
+	// LatestSubscription returns the newest live (not draft or cancelled) subscription on any plan, else the newest cancelled one, else nil.
 	LatestSubscription(ctx context.Context, extID string) (*remoteSubscription, error)
 
 	// UpdateBillingDetails sets the customer's address and tax ID, keeping its other metadata.
 	UpdateBillingDetails(ctx context.Context, extID string, details billingDetails) error
+
+	// StartPlanCheckout opens one checkout that creates a subscription on in.planID, activated once paid.
+	StartPlanCheckout(ctx context.Context, in checkoutInput) (*remoteCheckout, error)
+
+	// EndTrials cancels the customer's self-serve trials without an invoice, voiding the invoice of one that already ended unpaid.
+	EndTrials(ctx context.Context, extID string) error
 
 	// StartTrialEndCheckout gates the trial's end behind a configured checkout provider on Flexprice Cloud, resuming an open one.
 	StartTrialEndCheckout(ctx context.Context, in checkoutInput) (*remoteCheckout, error)
@@ -72,13 +78,16 @@ func (d billingDetails) hasAddress() bool {
 
 type remoteSubscription struct {
 	id       string
+	planID   string
 	status   types.SubscriptionStatus
 	trialEnd *time.Time
 }
 
 type checkoutInput struct {
-	extID          string
+	extID string
+	// subscriptionID is the tenant's current subscription; planID, the plan a plan checkout buys.
 	subscriptionID string
+	planID         string
 	successURL     string
 	failureURL     string
 }
@@ -99,8 +108,10 @@ type portalSession struct {
 type remoteSummary struct {
 	subscription *remoteSubscription
 	plan         *dto.SelfBillingPlanResponse
-	invoices     []remoteInvoice
-	usage        *dto.CustomerUsageSummaryResponse
+	// plans are the plans on offer, while one can be bought.
+	plans    []*dto.SelfBillingPlanResponse
+	invoices []remoteInvoice
+	usage    *dto.CustomerUsageSummaryResponse
 }
 
 type remoteInvoice struct {
