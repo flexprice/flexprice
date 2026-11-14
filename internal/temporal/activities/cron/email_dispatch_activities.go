@@ -29,5 +29,5 @@ func (a *EmailDispatchActivities) DispatchEmailsActivity(ctx context.Context) (*
 		a.logger.Error(ctx, "DispatchEmailsActivity failed", "error", err)
 		return nil, err
 	}
-	return &cronModels.EmailDispatchWorkflowResult{Sent: res.Sent, Failed: res.Failed, Deferred: res.Deferred}, nil
+	return &cronModels.EmailDispatchWorkflowResult{Sent: res.Sent, Failed: res.Failed, Skipped: res.Skipped, Deferred: res.Deferred}, nil
 }
