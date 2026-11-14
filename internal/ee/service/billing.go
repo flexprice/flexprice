@@ -1729,7 +1729,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	var calculationResult *dto.BillingCalculationResult
 	var metadata types.Metadata = make(types.Metadata)
-	var description string
 
 	switch referencePoint {
 	case types.ReferencePointPeriodStart:
@@ -1760,8 +1759,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		if err != nil {
 			return nil, err
 		}
-
-		description = fmt.Sprintf("Invoice for advance charges - subscription %s", sub.ID)
 
 	case types.ReferencePointPeriodEnd:
 		// Include both arrear charges for current period and advance charges for next period
@@ -1835,8 +1832,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Invoice for subscription %s", sub.ID)
-
 	case types.ReferencePointPreview, types.ReferencePointRevenueFacts:
 		// Both include current-period arrear and next-period advance without
 		// filtering already-invoiced items; usage reads meter_usage (FINAL).
@@ -1881,7 +1876,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Preview invoice for subscription %s", sub.ID)
 		metadata[types.MetadataKeyIsPreview] = types.MetadataValueTrue
 
 	case types.ReferencePointInternalPreview:
@@ -1920,7 +1914,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Preview invoice for subscription %s", sub.ID)
 		metadata[types.MetadataKeyIsPreview] = types.MetadataValueTrue
 
 	case types.ReferencePointCancel:
@@ -1958,8 +1951,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Invoice for subscription %s", sub.ID)
-
 	default:
 		return nil, ierr.NewError("invalid reference point").
 			WithHint(fmt.Sprintf("Reference point '%s' is not supported", referencePoint)).
@@ -1975,7 +1966,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		Result:         calculationResult,
 		PeriodStart:    periodStart,
 		PeriodEnd:      periodEnd,
-		Description:    description,
 		Metadata:       metadata,
 		ReferencePoint: referencePoint,
 	})

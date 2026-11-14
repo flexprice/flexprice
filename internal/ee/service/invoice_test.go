@@ -758,6 +758,30 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_AsyncRevenueFactFlipErrorDoesN
 	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
 }
 
+func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_PreservesMemo() {
+	for _, memo := range []string{"", "Thanks for your business.\nPO-12345"} {
+		s.Run(memo, func() {
+			ctx := s.GetContext()
+			resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+				CustomerID:    s.testData.customer.ID,
+				InvoiceType:   types.InvoiceTypeOneOff,
+				Currency:      "usd",
+				AmountDue:     decimal.NewFromInt(100),
+				Total:         decimal.NewFromInt(100),
+				Subtotal:      decimal.NewFromInt(100),
+				BillingReason: types.InvoiceBillingReasonManual,
+				Description:   memo,
+			})
+			s.Require().NoError(err)
+			s.Equal(memo, resp.Description)
+			s.Equal(types.InvoiceStatusFinalized, resp.InvoiceStatus)
+			stored, err := s.invoiceRepo.Get(ctx, resp.ID)
+			s.Require().NoError(err)
+			s.Equal(memo, stored.Description)
+		})
+	}
+}
+
 func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_PublishesFinalizedSystemEventWhenCreated() {
 	ctx := s.GetContext()
 	rec := &recordingWebhookPublisher{inner: s.GetWebhookPublisher()}
