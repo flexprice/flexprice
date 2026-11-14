@@ -2,20 +2,18 @@ package contract
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
 
-	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/ee/agents/openrouter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/stretchr/testify/require"
 )
 
-func newTestService(client openrouter.OpenRouterClient, customers CustomerFinder) *ContractExtractionService {
-	return NewContractExtractionService(client, customers, logger.NewNoopLogger()).(*ContractExtractionService)
+func newTestService(client openrouter.OpenRouterClient, _ any) *ContractExtractionService {
+	return NewContractExtractionService(client, logger.NewNoopLogger()).(*ContractExtractionService)
 }
 
 func TestExtract_PDF(t *testing.T) {
@@ -94,34 +92,4 @@ func TestExtract_Errors(t *testing.T) {
 			require.Len(t, tt.or.requests, tt.calls)
 		})
 	}
-}
-
-func TestEnrich_Northwind(t *testing.T) {
-	customers := &fakeCustomers{rows: []*customer.Customer{{ID: "cust_1", Name: "Northwind Health", Email: "billing@northwindhealth.org"}}}
-	r := northwind()
-	require.NoError(t, newTestService(&fakeOpenRouter{}, customers).Enrich(context.Background(), r))
-
-	require.Equal(t, &extraction.CustomerMatch{Status: CustomerMatchExisting, CustomerID: "cust_1", Name: "Northwind Health",
-		MatchedOn: []string{MatchedOnLegalName, MatchedOnEmailDomain}}, r.CustomerMatch)
-
-	require.Equal(t, "2027-10-31", r.Derived.EndDate.Value)
-	require.True(t, r.Derived.EndDate.Derived)
-	require.Equal(t, "2027-09-01", r.Derived.NoticeDeadline.Value)
-	require.Equal(t, 84, r.Derived.NoticeDeadline.Confidence)
-	require.Len(t, r.Derived.InvoiceSchedules, 1)
-	require.Equal(t, "46000.00", r.Derived.InvoiceSchedules[0].AmountPerInvoice)
-	require.Equal(t, []string{"2026-11-01", "2027-02-01", "2027-05-01", "2027-08-01"}, r.Derived.InvoiceSchedules[0].Dates)
-
-	require.Equal(t, &extraction.ToCheck{Total: 12, Customer: 0, Charges: 7, Billing: 5}, r.ToCheck)
-}
-
-func TestEnrich_ResultSurvivesJSONRoundTrip(t *testing.T) {
-	r := northwind()
-	require.NoError(t, newTestService(&fakeOpenRouter{}, nil).Enrich(context.Background(), r))
-	b, err := json.Marshal(r)
-	require.NoError(t, err)
-	var back extraction.Result
-	require.NoError(t, json.Unmarshal(b, &back))
-	require.Equal(t, r.ToCheck, back.ToCheck)
-	require.Equal(t, CustomerMatchNew, back.CustomerMatch.Status)
 }
