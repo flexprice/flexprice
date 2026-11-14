@@ -454,7 +454,7 @@ func applyDeliveryEvent(cur *emaillog.EmailLog, ev email.DeliveryEvent) *emaillo
 	return b.Build()
 }
 
-// transition changes an email log under a row lock, so the delivery workflow and delivery events
+// transition changes an email log under a row lock, so the email dispatcher and delivery events
 // cannot overwrite each other. change returns nil to leave the email as it is.
 func (s *emailNotificationService) transition(ctx context.Context, id string, change func(*emaillog.EmailLog) *emaillog.EmailLog) error {
 	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
