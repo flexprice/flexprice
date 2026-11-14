@@ -69,6 +69,7 @@ func (l *PaymentLifecycle) InitiatePayment(ctx context.Context, params InitiateP
 		Amount:            params.Amount,
 		Currency:          strings.ToUpper(params.Currency),
 		ProcessPayment:    false,
+		IdempotencyKey:    params.IdempotencyKey,
 	}
 
 	payment, err := l.paymentService.CreatePayment(ctx, req)
