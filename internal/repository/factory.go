@@ -57,6 +57,7 @@ import (
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/usageanalytics"
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -356,6 +357,11 @@ func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 
 func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
 	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
+}
+
+// NewUsageAnalyticsRepository returns the ClickHouse repository that prices meter_usage events for usage analytics.
+func NewUsageAnalyticsRepository(p RepositoryParams) usageanalytics.Repository {
+	return clickhouseRepo.NewUsageAnalyticsRepository(p.ClickHouseDB, p.Logger)
 }
 
 func NewActivityRepository(p RepositoryParams) domainActivity.Repository {

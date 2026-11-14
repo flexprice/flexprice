@@ -1635,6 +1635,20 @@ func (s *billingService) attachPricesToLineItems(ctx context.Context, lineItems 
 	return nil
 }
 
+// periodLineItems returns the line items billed in the period starting at periodStart, with prices attached.
+// Line items loaded via GetWithLineItems are filtered by sub.CurrentPeriodStart, so historical periods
+// (recalculation, past invoices) reload them by the invoice's period start.
+func (s *billingService) periodLineItems(ctx context.Context, subscriptionID string, periodStart time.Time) ([]*subscription.SubscriptionLineItem, error) {
+	lineItems, err := listActiveLineItems(ctx, s.SubscriptionLineItemRepo, subscriptionID, periodStart)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.attachPricesToLineItems(ctx, lineItems); err != nil {
+		return nil, err
+	}
+	return lineItems, nil
+}
+
 func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	ctx context.Context,
 	params *dto.PrepareSubscriptionInvoiceRequestParams,

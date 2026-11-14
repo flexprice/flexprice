@@ -262,6 +262,8 @@ func NewRouter(
 			meterUsage.POST("/properties/values", observe(types.EntityEvent), handlers.MeterUsage.GetPropertyValues)
 		}
 
+		v1Private.POST("/usage/analytics", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.QueryUsage)
+
 		// Analytics query + view endpoints
 		analytics := v1Private.Group("/analytics")
 		{

@@ -3138,3 +3138,33 @@ func TestNextBillingDate_CalendarLocalMidnights(t *testing.T) {
 		})
 	}
 }
+
+func TestBillingPeriodsIn(t *testing.T) {
+	d := func(m time.Month, day int) time.Time { return time.Date(2026, m, day, 0, 0, 0, 0, time.UTC) }
+	monthly, err := NewBillingPeriodGrid(d(time.January, 15), BILLING_PERIOD_MONTHLY, 1, "UTC")
+	require.NoError(t, err)
+	quarterly, err := NewBillingPeriodGrid(d(time.January, 1), BILLING_PERIOD_QUARTER, 1, "UTC")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		grid       *billingPeriodGrid
+		start, end time.Time
+		want       []Period
+	}{
+		{"inside one period", monthly, d(time.October, 20), d(time.October, 25),
+			[]Period{{d(time.October, 15), d(time.November, 15)}}},
+		{"across anchors", monthly, d(time.October, 1), d(time.December, 1),
+			[]Period{{d(time.September, 15), d(time.October, 15)}, {d(time.October, 15), d(time.November, 15)}, {d(time.November, 15), d(time.December, 15)}}},
+		{"ends on an anchor", monthly, d(time.October, 15), d(time.November, 15),
+			[]Period{{d(time.October, 15), d(time.November, 15)}}},
+		{"quarterly", quarterly, d(time.October, 10), d(time.October, 25),
+			[]Period{{d(time.October, 1), time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)}}},
+		{"empty range", monthly, d(time.October, 20), d(time.October, 20), nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, BillingPeriodsIn(tt.grid, tt.start, tt.end))
+		})
+	}
+}

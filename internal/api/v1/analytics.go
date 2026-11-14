@@ -17,11 +17,35 @@ import (
 type AnalyticsHandler struct {
 	svc        service.AnalyticsService
 	revenueSvc interfaces.RevenueService
+	usageSvc   service.UsageAnalyticsService
 	log        *logger.Logger
 }
 
-func NewAnalyticsHandler(svc service.AnalyticsService, revenueSvc interfaces.RevenueService, log *logger.Logger) *AnalyticsHandler {
-	return &AnalyticsHandler{svc: svc, revenueSvc: revenueSvc, log: log}
+func NewAnalyticsHandler(svc service.AnalyticsService, revenueSvc interfaces.RevenueService, usageSvc service.UsageAnalyticsService, log *logger.Logger) *AnalyticsHandler {
+	return &AnalyticsHandler{svc: svc, revenueSvc: revenueSvc, usageSvc: usageSvc, log: log}
+}
+
+// QueryUsage returns a customer's billed amount grouped by event properties.
+// Private beta: left out of the public API docs.
+func (h *AnalyticsHandler) QueryUsage(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req dto.UsageAnalyticsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	res, err := h.usageSvc.GetBreakdown(ctx, &req)
+	if err != nil {
+		h.log.Error(ctx, "failed to query usage analytics", "error", err, "external_customer_id", req.ExternalCustomerID)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
 }
 
 // Query runs an ad-hoc analytics query against a view definition.
