@@ -14,6 +14,8 @@ func FromEnt(e *ent.Contract) *domainContract.Contract {
 	}
 	return domainContract.NewBuilder(nil).
 		WithID(e.ID).
+		WithTenantID(e.TenantID).
+		WithEnvironmentID(e.EnvironmentID).
 		WithCustomerID(e.CustomerID).
 		WithCurrency(e.Currency).
 		WithTermStart(e.TermStart).

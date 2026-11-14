@@ -1,7 +1,5 @@
 package extraction
 
-import "github.com/flexprice/flexprice/internal/ee/agents/openrouter"
-
 type ExtractRequest struct {
 	FileName  string
 	MediaType string
@@ -16,15 +14,32 @@ type Term struct {
 	Quote      string   `json:"quote"`
 	Options    []string `json:"options"`
 	Note       string   `json:"note"`
+	Boxes      []Box    `json:"boxes,omitempty"`
 	Derived    bool     `json:"derived,omitempty"`
+}
+
+type Box struct {
+	Page   int     `json:"page"`
+	Left   float64 `json:"left"`
+	Top    float64 `json:"top"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
 }
 
 func (t Term) IsSet() bool { return t.Value != "" }
 
 type Extraction struct {
-	Result *Result           `json:"result"`
-	Model  string            `json:"model"`
-	Usage  *openrouter.Usage `json:"usage"`
+	Result *Result `json:"result"`
+	Model  string  `json:"model"`
+	JobID  string  `json:"job_id,omitempty"`
+	Usage  *Usage  `json:"usage"`
+}
+
+type Usage struct {
+	Pages           int      `json:"pages"`
+	Fields          int      `json:"fields"`
+	Credits         *float64 `json:"credits,omitempty"`
+	DurationSeconds float64  `json:"duration_seconds"`
 }
 
 type Result struct {
