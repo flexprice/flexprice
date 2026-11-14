@@ -16,7 +16,6 @@ import (
 	cronActivities "github.com/flexprice/flexprice/internal/temporal/activities/cron"
 	customerActivities "github.com/flexprice/flexprice/internal/temporal/activities/customer"
 	dlqActivities "github.com/flexprice/flexprice/internal/temporal/activities/dlq"
-	emailActivities "github.com/flexprice/flexprice/internal/temporal/activities/email"
 	environmentActivities "github.com/flexprice/flexprice/internal/temporal/activities/environment"
 	eventsActivities "github.com/flexprice/flexprice/internal/temporal/activities/events"
 	exportActivities "github.com/flexprice/flexprice/internal/temporal/activities/export"
@@ -72,6 +71,7 @@ type cronActivityBundle struct {
 	revenueRecognition           *cronActivities.RevenueRecognitionActivities
 	selfBillingHourly            *cronActivities.SelfBillingHourlyActivities
 	commitment                   *cronActivities.CommitmentCronActivities
+	emailDispatch                *cronActivities.EmailDispatchActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -311,7 +311,6 @@ func RegisterWorkflowsAndActivities(
 	envActivities := environmentActivities.NewEnvironmentActivities(params)
 
 	beActivities := billingEntityActivities.NewBillingEntityActivities(params)
-	emailActs := emailActivities.NewEmailActivities(params)
 
 	// Reprocess raw events activities
 	rawEventsReprocessingService := service.NewRawEventsReprocessingService(params)
@@ -359,11 +358,12 @@ func RegisterWorkflowsAndActivities(
 		revenueRecognition:           cronActivities.NewRevenueRecognitionActivities(params.JournalService, params.Logger),
 		selfBillingHourly:            cronActivities.NewSelfBillingHourlyActivities(selfbilling.New(params), params.Logger),
 		commitment:                   cronActivities.NewCommitmentCronActivities(service.NewCommitmentService(params), params.Logger),
+		emailDispatch:                cronActivities.NewEmailDispatchActivities(service.NewEmailNotificationService(params), params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, addonActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessRawEventsActivities, replayDLQActivities, envActivities, beActivities, emailActs, cronBundle, alertActs, marketplaceFlushActivities)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, addonActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessRawEventsActivities, replayDLQActivities, envActivities, beActivities, cronBundle, alertActs, marketplaceFlushActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -412,7 +412,6 @@ func buildWorkerConfig(
 	replayDLQActivities *dlqActivities.ReplayDLQActivities,
 	envActivities *environmentActivities.EnvironmentActivities,
 	beActivities *billingEntityActivities.BillingEntityActivities,
-	emailActs *emailActivities.EmailActivities,
 	cron *cronActivityBundle,
 	alertActs *alertActivities.AlertActivities,
 	marketplaceFlushActivities *marketplaceActivities.FlushActivities,
@@ -567,7 +566,6 @@ func buildWorkerConfig(
 			workflows.PrepareProcessedEventsWorkflow,
 			workflows.EnvironmentCloneWorkflow,
 			workflows.BillingEntityEnableWorkflow,
-			workflows.SendEmailWorkflow,
 			workflows.UsageAlertWorkflow,
 		)
 		activitiesList = append(activitiesList,
@@ -583,8 +581,6 @@ func buildWorkerConfig(
 			beActivities.AssignBillingEntityCustomers,
 			beActivities.AssignBillingEntityInvoices,
 			beActivities.CompleteBillingEntityEnable,
-			emailActs.DeliverEmail,
-			emailActs.MarkEmailFailed,
 			alertActs.SpendAndEntitlementAlertsActivity,
 			alertActs.WalletAlertsActivity,
 		)
@@ -620,6 +616,7 @@ func buildWorkerConfig(
 			cronWorkflows.RevenueRecognitionBackfillWorkflow,
 			cronWorkflows.SelfBillingHourlyWorkflow,
 			cronWorkflows.BillingInstalmentsDueWorkflow,
+			cronWorkflows.EmailDispatchWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -644,6 +641,7 @@ func buildWorkerConfig(
 			cron.revenueRecognition.BackfillRevenueActivity,
 			cron.selfBillingHourly.SelfBillingHourlyActivity,
 			cron.commitment.BillDueInstalmentsActivity,
+			cron.emailDispatch.DispatchEmailsActivity,
 		)
 
 	case types.TemporalTaskQueueBilling:

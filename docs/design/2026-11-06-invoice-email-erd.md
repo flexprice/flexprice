@@ -42,14 +42,14 @@ The send path must stay generic: custom domains (Phase 2), receipts, payment fai
 
 ## Architecture
 
-Auto and manual sends share one service, one workflow and one adapter. No new runtime component: API, consumer and Temporal worker only.
+Auto and manual sends share one service, one dispatcher and one adapter. No new runtime component: API, consumer and Temporal worker only.
 
 ```mermaid
 flowchart TD
   A["invoice.update.finalized<br>(auto-send on)"] --> S
   M["POST /invoices/{id}/email"] --> S
   S["SendInvoiceEmail<br>insert email_log (queued)"] --> W
-  W["SendInvoiceEmailWorkflow<br>render, fetch PDF, Provider.Send"] --> X["Resend"]
+  W["EmailDispatchWorkflow (every minute)<br>render, fetch PDF, Provider.Send"] --> X["Resend"]
   X --> I["Customer inbox"]
   X -->|webhooks| H["/v1/webhooks/email/resend"]
   H --> L["email_log status"]
@@ -133,7 +133,7 @@ Handler rules:
 - Never log webhook bodies (customer emails; staging sees prod events).
 - No event 72 h after `sent`: UI shows "No delivery confirmation". No polling.
 
-**Activity log:** register `email_log` in `internal/activity/entities.go`; each status update sets `activity.WithAction`. Actions: `created`, `skipped`, `sent`, `delivered`, `bounced`, `complained`, `failed`, `suppressed` (not `delivery_delayed`). `skipped` rows carry `status_reason`; with auto-send off nothing is written. The actor on `created` is `created_by`; status updates from webhooks and the workflow use `system`. `customer_id` links every entry to the customer's timeline. The snapshot drops `to_addresses`, `cc_addresses`, `status_reason` and `metadata` (`activity:"drop"`), as it does for customer contact data.
+**Activity log:** register `email_log` in `internal/activity/entities.go`; each status update sets `activity.WithAction`. Actions: `created`, `skipped`, `sent`, `delivered`, `bounced`, `complained`, `failed`, `suppressed` (not `delivery_delayed`). `skipped` rows carry `status_reason`; with auto-send off nothing is written. The actor on `created` is `created_by`; status updates from webhooks and the dispatcher use `system`. `customer_id` links every entry to the customer's timeline. The snapshot drops `to_addresses`, `cc_addresses`, `status_reason` and `metadata` (`activity:"drop"`), as it does for customer contact data.
 
 ## APIs and UI
 
@@ -165,8 +165,8 @@ A one-column copy of the hosted invoice page, with its labels and states.
 - **Hosted link:** issued at finalization. If `hosted_invoice.base_url` is empty or no active token exists, the email has no button. Invoices synced to Stripe use Stripe's hosted URL, as the page does.
 - **Paid at finalization** (auto-charged): Paid badge, `Paid <date> with <method>`, same subject.
 - **PDF:** same source order as `GetInvoicePDFUrl` (invoice `invoice_pdf_url`, then billing provider, then Flexprice's stored PDF), factored into one helper. Attach Flexprice's stored PDF, rendering and uploading it first if missing (never re-render a stored one: it freezes tax numbers). An invoice's own `invoice_pdf_url` is shown as a link; billing-provider PDFs (expiring links) and stored PDFs over Resend's 40 MB cap are not attached, noted in `metadata`.
-- PDF bytes are fetched and sent inside one activity, never passed through Temporal payloads.
-- `attach_invoice_pdf: false` sends no PDF. A PDF that cannot be produced is retried for about 30 s, then the email goes without it (`metadata.pdf = unavailable`); it never blocks the email.
+- PDF bytes are fetched and sent inside the dispatch activity, never passed through Temporal payloads.
+- `attach_invoice_pdf: false` sends no PDF. An email whose PDF is not ready waits up to 10 minutes, then goes without it (`metadata.pdf = unavailable`); it never blocks the email.
 
 ## One-time setup
 
@@ -201,9 +201,9 @@ type Provider interface {
 ```
 
 - Resend adapter sends with `Idempotency-Key = email_log.id`, tags (tenant, environment, email id, region) and our own `Message-ID: <email_log.id@mail.flexprice.io>`.
-- Service `internal/ee/service/email_notification.go`: `SendInvoiceEmail` loads invoice, customer, tenant and setting, inserts `queued`, starts the workflow.
-- Workflow retries 429/5xx; 4xx marks `failed`.
-- One generic `SendEmailWorkflow` (id `wf_send_email_<email_log_id>`) delivers every email; a composer per `template_key` builds its content.
+- Service `internal/ee/service/email_notification.go`: `SendInvoiceEmail` loads invoice, customer, tenant and setting and inserts `queued`; nothing else happens in the request.
+- `EmailDispatchWorkflow` (Temporal schedule, every minute, one run at a time) lists environments with queued emails, takes one email from each in turn (manual sends first, then oldest) and sends at most `email.send_rate_per_second`. A composer per `template_key` builds each email's content.
+- An email that cannot be sent now stays `queued` and nothing is written: a 429 ends the run, three provider errors in a row end it, a PDF not ready waits. 4xx marks `failed`, and so does an email still queued after 24 hours.
 - Auto trigger in the integration-events dispatch list; the one-auto-email index stops redelivery from double-sending.
 - Everything ships behind `email.enabled` plus a set `email.provider`; with no provider, customer emails stay off.
 
@@ -213,7 +213,7 @@ type Provider interface {
 |---|---|---|
 | Unit, fake `Provider` | Nothing | Setting validation, From/Reply-To, skip rules, status rank |
 | Webhook handler | Signed fixtures in `testdata/` | Signature, region drop, forward-only, unknown id |
-| Docker, `provider: local` | Nothing | Finalize / Send → workflow → `email_log` → activity log |
+| Docker, `provider: local` | Nothing | Finalize / Send → dispatcher → `email_log` → activity log |
 | Real Resend | API key + tunnel | Real send, PDF, delivery events via `delivered@`, `bounced@`, `complained@`, `suppressed@resend.dev` |
 
 Real-Resend runs send only to the `@resend.dev` test addresses, never from the root `flexprice.io`, and the temporary tunnel webhook is deleted afterwards.

@@ -149,3 +149,15 @@ type SelfBillingHourlyWorkflowInput struct{}
 
 // BillingInstalmentsDueWorkflowInput is the input for BillingInstalmentsDueWorkflow.
 type BillingInstalmentsDueWorkflowInput struct{}
+
+// ===================== Email Dispatch =====================
+
+// EmailDispatchWorkflowInput is the input for EmailDispatchWorkflow.
+type EmailDispatchWorkflowInput struct{}
+
+// EmailDispatchWorkflowResult counts what one dispatch run did.
+type EmailDispatchWorkflowResult struct {
+	Sent     int `json:"sent"`
+	Failed   int `json:"failed"`
+	Deferred int `json:"deferred"`
+}
