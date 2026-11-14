@@ -25,6 +25,10 @@ func TestSanitizeTerm(t *testing.T) {
 			want: extraction.Term{Value: "QUARTERLY", Confidence: 90, Page: 1, Options: []string{}}},
 		{name: "enum invalid cleared", in: extraction.Term{Value: "fortnightly", Confidence: 90, Page: 1, Quote: "q"}, allowed: billingPeriods,
 			want: extraction.Term{Options: []string{}, Note: `Read as "fortnightly", which is not an allowed value.`}},
+		{name: "missing clears boxes", in: extraction.Term{Confidence: 80, Page: 4, Quote: "q", Boxes: []extraction.Box{{Page: 4, Width: 0.1, Height: 0.1}}},
+			want: extraction.Term{Options: []string{}}},
+		{name: "enum invalid clears boxes", in: extraction.Term{Value: "fortnightly", Confidence: 90, Page: 1, Quote: "q", Boxes: []extraction.Box{{Page: 1, Width: 0.2, Height: 0.1}}}, allowed: billingPeriods,
+			want: extraction.Term{Options: []string{}, Note: `Read as "fortnightly", which is not an allowed value.`}},
 		{name: "derived flag dropped", in: extraction.Term{Value: "x", Confidence: 90, Page: 1, Derived: true}, want: extraction.Term{Value: "x", Confidence: 90, Page: 1, Options: []string{}}},
 	}
 	for _, tt := range tests {

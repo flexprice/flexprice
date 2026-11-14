@@ -44,6 +44,16 @@ const (
 )
 
 const (
+	BillingPeriodMonthly    = "MONTHLY"
+	BillingPeriodQuarterly  = "QUARTERLY"
+	BillingPeriodHalfYearly = "HALF_YEARLY"
+	BillingPeriodAnnual     = "ANNUAL"
+	BillingPeriodWeekly     = "WEEKLY"
+	BillingPeriodDaily      = "DAILY"
+	BillingPeriodOneTime    = "ONETIME"
+)
+
+const (
 	TierModeGraduated = "graduated"
 	TierModeVolume    = "volume"
 	TierModeUnknown   = "unknown"
@@ -57,5 +67,6 @@ var (
 	billingTimings = []string{BillingTimingAdvance, BillingTimingArrears}
 	tierModes      = []string{TierModeGraduated, TierModeVolume, TierModeUnknown}
 
-	billingPeriods = []string{"MONTHLY", "QUARTERLY", "HALF_YEARLY", "ANNUAL", "WEEKLY", "DAILY", "ONETIME"}
+	billingPeriods = []string{BillingPeriodMonthly, BillingPeriodQuarterly, BillingPeriodHalfYearly, BillingPeriodAnnual,
+		BillingPeriodWeekly, BillingPeriodDaily, BillingPeriodOneTime}
 )

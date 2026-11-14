@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/stretchr/testify/mock"
@@ -113,6 +114,22 @@ func TestContractExtractionWorkflow_RetriesThenMarksFailed(t *testing.T) {
 	env.OnActivity(ActivityMarkContractExtractionFailed, mock.Anything, mock.MatchedBy(func(in models.MarkContractExtractionFailedInput) bool {
 		return in.ContractID == contractExtractionInput.ContractID && in.Reason == "AI provider rate limit exceeded. Wait and retry."
 	})).Return(nil).Once()
+
+	env.ExecuteWorkflow(ContractExtractionWorkflow, contractExtractionInput)
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.Error(t, env.GetWorkflowError())
+	env.AssertExpectations(t)
+	env.AssertNotCalled(t, ActivityMatchContractCustomer, mock.Anything, mock.Anything)
+}
+
+func TestContractExtractionWorkflow_CancelStillMarksFailed(t *testing.T) {
+	env := contractExtractionEnv()
+	env.OnActivity(ActivityExtractContract, mock.Anything, contractExtractionInput).After(time.Hour).Return(nil)
+	env.OnActivity(ActivityMarkContractExtractionFailed, mock.Anything, mock.MatchedBy(func(in models.MarkContractExtractionFailedInput) bool {
+		return in.ContractID == contractExtractionInput.ContractID
+	})).Return(nil).Once()
+	env.RegisterDelayedCallback(env.CancelWorkflow, time.Minute)
 
 	env.ExecuteWorkflow(ContractExtractionWorkflow, contractExtractionInput)
 

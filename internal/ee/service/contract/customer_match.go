@@ -83,19 +83,25 @@ func (c *contractIngestService) findCustomer(ctx context.Context, cust extractio
 	if err != nil {
 		return nil, err
 	}
-	return c.verify(ctx, req, res), nil
+	return c.verify(ctx, req, res)
 }
 
 // verify re-reads every candidate and re-checks the evidence that can be checked, lowering the score
-// of claims that do not hold, then decides the status from the thresholds.
-func (c *contractIngestService) verify(ctx context.Context, req *customermatch.MatchRequest, res *customermatch.MatchResult) *extraction.CustomerMatch {
+// of claims that do not hold, then decides the status from the thresholds. A candidate is linked
+// automatically only when every claim it makes holds.
+func (c *contractIngestService) verify(ctx context.Context, req *customermatch.MatchRequest, res *customermatch.MatchResult) (*extraction.CustomerMatch, error) {
 	candidates := []extraction.MatchCandidate{}
+	unsupported := map[string]bool{}
 	for _, cand := range res.Candidates {
 		record, err := c.directory.Get(ctx, cand.CustomerID)
-		if err != nil || record == nil {
+		if ierr.IsNotFound(err) {
 			continue
 		}
+		if err != nil {
+			return nil, err
+		}
 		evidence, dropped := c.checkEvidence(req, record, cand.Evidence)
+		unsupported[record.ID] = dropped > 0 || len(evidence) == 0
 		confidence := max(0, cand.Confidence-dropped*unverifiedEvidencePenalty)
 		if confidence < c.possibleThreshold() {
 			continue
@@ -114,24 +120,24 @@ func (c *contractIngestService) verify(ctx context.Context, req *customermatch.M
 	match := &extraction.CustomerMatch{Status: CustomerMatchNew, Candidates: candidates, Model: res.Model, Steps: res.Steps}
 	if len(candidates) == 0 {
 		match.Reason = "No existing customer matched"
-		return match
+		return match, nil
 	}
 
 	top := candidates[0]
 	clearWinner := len(candidates) == 1 || candidates[1].Confidence < top.Confidence-runnerUpMargin
-	if top.CustomerID == res.BestCustomerID && top.Confidence >= c.existingThreshold() && clearWinner {
+	if top.CustomerID == res.BestCustomerID && top.Confidence >= c.existingThreshold() && clearWinner && !unsupported[top.CustomerID] {
 		match.Status = CustomerMatchExisting
 		match.CustomerID = top.CustomerID
 		match.Name = top.Name
 		match.Confidence = top.Confidence
 		match.MatchedOn = top.MatchedOn
 		match.Reason = top.Reason
-		return match
+		return match, nil
 	}
 	match.Status = CustomerMatchPossible
 	match.Confidence = top.Confidence
 	match.Reason = "More than one customer could match, or the best match is not certain"
-	return match
+	return match, nil
 }
 
 // checkEvidence keeps the evidence that holds against the stored customer and counts the claims that do not.
@@ -158,9 +164,21 @@ func (c *contractIngestService) evidenceHolds(req *customermatch.MatchRequest, r
 	case customermatch.EvidenceEmailDomain:
 		domain := c.directory.companyDomain(req.BillingEmail)
 		return domain != "" && domain == c.directory.companyDomain(record.Email)
+	case customermatch.EvidenceAddress:
+		return c.addressMatches(req.BillingAddress, record)
 	default:
 		return true
 	}
+}
+
+// addressMatches reports whether the contract address names the stored customer's city as whole words.
+// A customer with no stored city cannot support an address claim.
+func (c *contractIngestService) addressMatches(address string, record *customermatch.CustomerRecord) bool {
+	city := c.directory.normalizeName(record.City)
+	if city == "" {
+		return false
+	}
+	return strings.Contains(" "+c.directory.normalizeName(address)+" ", " "+city+" ")
 }
 
 func (c *contractIngestService) loadExtraction(ctx context.Context, contractID string) (*domainContract.Contract, *extraction.Extraction, error) {
