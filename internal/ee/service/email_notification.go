@@ -173,7 +173,7 @@ func (s *emailNotificationService) findInvoiceEmailReplay(ctx context.Context, i
 }
 
 func (s *emailNotificationService) SendAutoInvoiceEmail(ctx context.Context, invoiceID string) error {
-	if !s.Config.Email.Enabled {
+	if !s.Config.Email.IsProviderConfigured() {
 		return nil
 	}
 	cfg, err := s.settings(ctx)
