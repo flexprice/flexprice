@@ -3,15 +3,19 @@ package models
 import "time"
 
 // RevenueRecognitionInput is the input for RevenueRecognitionWorkflow. Since overrides the billing window's start
-// derived from the scheduled time, for manual reruns.
+// derived from the scheduled time, for manual reruns. TenantID and EnvironmentID, when set, limit the run to them.
 type RevenueRecognitionInput struct {
-	Since *time.Time `json:"since,omitempty"`
+	Since         *time.Time `json:"since,omitempty"`
+	TenantID      string     `json:"tenant_id,omitempty"`
+	EnvironmentID string     `json:"environment_id,omitempty"`
 }
 
 // RecognizeRevenueActivityInput is one run: billing changed since Since, revenue recognized as of AsOf.
 type RecognizeRevenueActivityInput struct {
-	Since time.Time `json:"since"`
-	AsOf  time.Time `json:"as_of"`
+	Since         time.Time `json:"since"`
+	AsOf          time.Time `json:"as_of"`
+	TenantID      string    `json:"tenant_id,omitempty"`
+	EnvironmentID string    `json:"environment_id,omitempty"`
 }
 
 // RevenueRecognitionBackfillInput names the one environment RevenueRecognitionBackfillWorkflow rebuilds.

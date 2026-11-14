@@ -940,6 +940,16 @@ func TestRunRecognition(t *testing.T) {
 		require.Equal(t, []string{"2026-01-31"}, recognized(t, store))
 	})
 
+	t.Run("a scoped run covers only its tenant and environment", func(t *testing.T) {
+		s, store := newRun(t, true)
+		require.NoError(t, s.RunRecognition(ctx, RecognitionRunRequest{AsOf: feb1, EnvironmentID: "env_other", OnProgress: func(RecognitionCursor) { t.Fatal("other environment") }}))
+		require.NoError(t, s.RunRecognition(ctx, RecognitionRunRequest{AsOf: feb1, TenantID: "tenant_other", OnProgress: func(RecognitionCursor) { t.Fatal("other tenant") }}))
+		require.Empty(t, recognized(t, store))
+
+		require.NoError(t, s.RunRecognition(ctx, RecognitionRunRequest{AsOf: feb1, TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx), OnProgress: func(RecognitionCursor) {}}))
+		require.Equal(t, []string{"2026-01-31"}, recognized(t, store))
+	})
+
 	t.Run("a disabled environment is skipped", func(t *testing.T) {
 		s, store := newRun(t, false)
 		require.NoError(t, s.RunRecognition(ctx, RecognitionRunRequest{AsOf: feb1, OnProgress: func(RecognitionCursor) { t.Fatal("disabled") }}))

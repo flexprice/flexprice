@@ -7,38 +7,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
-// UpdateRevenueRecognitionConfigRequest turns revenue recognition on or off for one environment; Backfill also starts
-// a backfill when enabling.
-type UpdateRevenueRecognitionConfigRequest struct {
-	TenantID      string `json:"tenant_id"`
-	EnvironmentID string `json:"environment_id"`
-	Enabled       bool   `json:"enabled"`
-	Backfill      bool   `json:"backfill"`
-}
-
-func (r *UpdateRevenueRecognitionConfigRequest) Validate() error {
-	if r == nil {
-		return ierr.NewError("request is required").Mark(ierr.ErrValidation)
-	}
-	if err := validateEnvironmentTarget(&r.TenantID, &r.EnvironmentID); err != nil {
-		return err
-	}
-	if r.Backfill && !r.Enabled {
-		return ierr.NewError("backfill requires enabled").
-			WithHint("A backfill only runs while revenue recognition is enabled").
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
-// RevenueRecognitionConfigResponse is the environment's setting and, when one was started, its backfill.
-type RevenueRecognitionConfigResponse struct {
-	TenantID      string                         `json:"tenant_id"`
-	EnvironmentID string                         `json:"environment_id"`
-	Enabled       bool                           `json:"enabled"`
-	Backfill      *RevenueRecognitionBackfillRun `json:"backfill,omitempty"`
-}
-
 // StartRevenueRecognitionBackfillRequest names the environment to rebuild from history.
 type StartRevenueRecognitionBackfillRequest struct {
 	TenantID      string `json:"tenant_id"`
@@ -52,8 +20,29 @@ func (r *StartRevenueRecognitionBackfillRequest) Validate() error {
 	return validateEnvironmentTarget(&r.TenantID, &r.EnvironmentID)
 }
 
-// RevenueRecognitionBackfillRun reports a background backfill.
-type RevenueRecognitionBackfillRun struct {
+// StartRevenueRecognitionRunRequest starts a recognition run: every enabled environment, one tenant's, or one environment.
+// Since overrides how far back changed billing is posted.
+type StartRevenueRecognitionRunRequest struct {
+	TenantID      string     `json:"tenant_id"`
+	EnvironmentID string     `json:"environment_id"`
+	Since         *time.Time `json:"since"`
+}
+
+func (r *StartRevenueRecognitionRunRequest) Validate() error {
+	if r == nil {
+		return ierr.NewError("request is required").Mark(ierr.ErrValidation)
+	}
+	r.TenantID, r.EnvironmentID = strings.TrimSpace(r.TenantID), strings.TrimSpace(r.EnvironmentID)
+	if r.EnvironmentID != "" && r.TenantID == "" {
+		return ierr.NewError("tenant_id is required with environment_id").
+			WithHint("Provide the tenant the environment belongs to").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// RevenueRecognitionRun reports a background backfill or recognition run.
+type RevenueRecognitionRun struct {
 	WorkflowID string       `json:"workflow_id"`
 	RunID      string       `json:"run_id"`
 	Status     ReplayStatus `json:"status"`
