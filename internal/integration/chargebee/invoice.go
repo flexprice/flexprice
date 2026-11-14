@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -44,6 +45,7 @@ type InvoiceServiceParams struct {
 	PriceRepo                    price.Repository
 	PlanSyncSvc                  ChargebeePlanSyncService
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
+	PaymentService               interfaces.PaymentService
 	Logger                       *logger.Logger
 }
 
@@ -933,12 +935,7 @@ func (s *InvoiceService) ProcessChargebeePaymentFromWebhook(
 		return nil
 	}
 
-	// Step 3: Create payment record in FlexPrice using repository
-	conn, err := s.Client.GetConnection(ctx)
-	if err != nil {
-		return err
-	}
-
+	// Step 3: Create payment record in FlexPrice
 	now := clock.Now()
 	methodType, mapped := paymentMethodTypeFor(enum.PaymentMethod(req.PaymentMethod))
 	if !mapped {
@@ -953,6 +950,7 @@ func (s *InvoiceService) ProcessChargebeePaymentFromWebhook(
 		Amount:            req.Amount,
 		Currency:          req.Currency,
 		PaymentMethodType: methodType,
+		PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeChargebee),
 		DestinationType:   types.PaymentDestinationTypeInvoice,
 		DestinationID:     req.FlexpriceInvoiceID,
 		ProcessPayment:    false, // Already processed by Chargebee
@@ -964,23 +962,15 @@ func (s *InvoiceService) ProcessChargebeePaymentFromWebhook(
 		},
 	}
 
-	paymentModel, err := createPaymentReq.ToPayment(ctx)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to convert payment request to domain model",
-			"error", err,
-			"flexprice_invoice_id", req.FlexpriceInvoiceID)
-		return ierr.WithError(err).
-			WithHint("Failed to create payment record").
-			Mark(ierr.ErrValidation)
+	paymentModel, err := s.PaymentService.CreatePayment(ctx, &createPaymentReq)
+	if err == nil {
+		// Chargebee has already captured it, so the payment is recorded as succeeded.
+		paymentModel, err = s.PaymentService.UpdatePayment(ctx, paymentModel.ID, dto.UpdatePaymentRequest{
+			PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
+			GatewayPaymentID: &req.ChargebeeTransactionID,
+			SucceededAt:      &now,
+		})
 	}
-
-	// Set gateway payment ID and succeeded status
-	paymentModel.GatewayPaymentID = &req.ChargebeeTransactionID
-	paymentModel.ConnectionID = lo.ToPtr(conn.ID)
-	paymentModel.PaymentStatus = types.PaymentStatusSucceeded
-	paymentModel.SucceededAt = &now
-
-	err = s.PaymentRepo.Create(ctx, paymentModel)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to create payment record",
 			"error", err,

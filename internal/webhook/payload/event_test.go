@@ -8,9 +8,12 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -70,8 +73,11 @@ func (s *attemptTestPaymentService) GetAttempt(_ context.Context, id string) (*d
 		Metadata: types.Metadata{"error_reason": "incorrect_card_details"}}, nil
 }
 
-func (s *attemptTestPaymentService) ListPayments(_ context.Context, _ *types.PaymentFilter) (*dto.ListPaymentsResponse, error) {
-	return &dto.ListPaymentsResponse{Items: s.payments}, nil
+func (s *attemptTestPaymentService) GetStoredPayment(_ context.Context, _ string) (*dto.PaymentResponse, error) {
+	if len(s.payments) == 0 {
+		return nil, ierr.NewError("payment not found").Mark(ierr.ErrNotFound)
+	}
+	return s.payments[0], nil
 }
 
 type attemptTestCheckoutService struct {
@@ -84,8 +90,10 @@ func (s *attemptTestCheckoutService) List(_ context.Context, _ *types.CheckoutSe
 }
 
 func TestPaymentAttemptPayloadBuilder_BuildPayload(t *testing.T) {
-	payment := &dto.PaymentResponse{ID: "pay_01", DestinationID: "inv_01"}
-	session := &dto.CheckoutSessionResponse{ID: "chk_01", CustomerID: "cust_01"}
+	payment := &dto.PaymentResponse{ID: "pay_01", DestinationID: "inv_01", GatewayTrackingID: lo.ToPtr("plink_01"),
+		Amount: decimal.NewFromInt(500), Currency: "inr"}
+	// List returns sessions without a payment block; the builder fills it from the payment.
+	session := &dto.CheckoutSessionResponse{ID: "chk_01", CustomerID: "cust_01", Metadata: types.Metadata{"order": "o_1"}}
 
 	tests := []struct {
 		name     string
@@ -118,11 +126,16 @@ func TestPaymentAttemptPayloadBuilder_BuildPayload(t *testing.T) {
 			require.NoError(t, json.Unmarshal(out, &got))
 			attempt := got["attempt"].(map[string]any)
 			assert.Equal(t, "inv_01", got["payment"].(map[string]any)["destination_id"])
+			assert.Equal(t, "plink_01", got["payment"].(map[string]any)["gateway_tracking_id"])
 			assert.Equal(t, "attempt_02", attempt["id"])
 			assert.Equal(t, "incorrect_card_details", attempt["metadata"].(map[string]any)["error_reason"])
 			assert.NotContains(t, attempt, "tenant_id")
 			if tt.sessions != nil {
-				assert.Equal(t, "cust_01", got["checkout_session"].(map[string]any)["customer_id"])
+				checkout := got["checkout_session"].(map[string]any)
+				assert.Equal(t, "cust_01", checkout["customer_id"])
+				assert.Equal(t, "500", checkout["amount"])
+				assert.Equal(t, "inr", checkout["currency"])
+				assert.Equal(t, "o_1", checkout["metadata"].(map[string]any)["order"])
 			} else {
 				assert.NotContains(t, got, "checkout_session")
 			}

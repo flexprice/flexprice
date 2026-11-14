@@ -1232,7 +1232,7 @@ func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtFinalization() {
 	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
 
 	finalizeStart := time.Now().UTC()
-	processor := &paymentProcessor{ServiceParams: s.service.(*invoiceService).ServiceParams}
+	processor := NewPaymentProcessorService(s.service.(*invoiceService).ServiceParams).(*paymentProcessor)
 	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
 
 	got, err := s.invoiceRepo.Get(ctx, draft.ID)
@@ -1279,7 +1279,7 @@ func (s *InvoiceServiceSuite) TestPaidDraftFinalizesWhenDatingFails() {
 	}
 	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
 
-	processor := &paymentProcessor{ServiceParams: s.service.(*invoiceService).ServiceParams}
+	processor := NewPaymentProcessorService(s.service.(*invoiceService).ServiceParams).(*paymentProcessor)
 	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
 
 	got, err := s.invoiceRepo.Get(ctx, draft.ID)

@@ -373,6 +373,33 @@ func (s *PaymentServiceSuite) TestSyncPaymentStatusFromGateway_CheckoutStillFetc
 	s.Error(err, "the missing gateway connection must be consulted even for a checkout payment")
 }
 
+func (s *PaymentServiceSuite) TestGetStoredPayment_ArchivedWithoutGatewaySync() {
+	ctx := s.GetContext()
+	svc := s.service.(*paymentService)
+	svc.IntegrationFactory = s.GetIntegrationFactory()
+	p := &payment.Payment{
+		ID:              "pay_stored",
+		DestinationType: types.PaymentDestinationTypeInvoice, DestinationID: s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentStatus:     types.PaymentStatusPending,
+		Amount:            decimal.NewFromFloat(100), Currency: "usd",
+		PaymentGateway:    lo.ToPtr(string(types.PaymentGatewayTypeRazorpay)),
+		GatewayTrackingID: lo.ToPtr("plink_stored"),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	p.Status = types.StatusArchived
+	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, p))
+
+	_, syncErr := svc.syncPaymentStatusFromGateway(ctx, p)
+	s.Require().Error(syncErr, "the sync would consult the missing gateway connection")
+
+	got, err := svc.GetStoredPayment(ctx, p.ID)
+	s.Require().NoError(err)
+	s.Equal(types.PaymentStatusPending, got.PaymentStatus)
+	s.Equal("plink_stored", lo.FromPtr(got.GatewayTrackingID))
+	s.Equal(s.testData.invoice.InvoiceNumber, got.InvoiceNumber)
+}
+
 // TestCreatePayment_CustomerDestination_ValidatesCustomer covers the VAPT fix:
 // CUSTOMER destination must now verify the customer exists in this tenant/env,
 // so bogus/foreign customer_ids fail-fast at CreatePayment rather than producing
@@ -904,4 +931,102 @@ func (s *PaymentServiceSuite) TestRecordAttempt_FailedPublishesAttemptFailed() {
 	s.Equal(1, stored.AttemptNumber)
 	s.Equal("pay_rzp_001", lo.FromPtr(stored.GatewayAttemptID))
 	s.Equal("incorrect_card_details", stored.Metadata["error_reason"])
+}
+
+// TestPaymentEvents_PublishedPerPath pins the exact payment webhook sequence of each path.
+func (s *PaymentServiceSuite) TestPaymentEvents_PublishedPerPath() {
+	ctx := s.GetContext()
+	rec := &recordingWebhookPublisher{inner: s.GetWebhookPublisher()}
+	svc := s.service.(*paymentService)
+	svc.WebhookPublisher = rec
+
+	create := func(amount int64, method types.PaymentMethodType, process bool) string {
+		req := &dto.CreatePaymentRequest{
+			DestinationType:   types.PaymentDestinationTypeInvoice,
+			DestinationID:     s.testData.invoice.ID,
+			PaymentMethodType: method,
+			Amount:            decimal.NewFromInt(amount),
+			Currency:          "usd",
+			ProcessPayment:    process,
+		}
+		if method == types.PaymentMethodTypePaymentLink {
+			req.PaymentGateway = lo.ToPtr(types.PaymentGatewayTypeStripe)
+		}
+		resp, err := s.service.CreatePayment(ctx, req)
+		s.Require().NoError(err)
+		return resp.ID
+	}
+	update := func(id string, statuses ...types.PaymentStatus) {
+		for _, status := range statuses {
+			_, err := s.service.UpdatePayment(ctx, id, dto.UpdatePaymentRequest{PaymentStatus: lo.ToPtr(string(status))})
+			s.Require().NoError(err)
+		}
+	}
+
+	tests := []struct {
+		name string
+		run  func() string
+		want []types.WebhookEventName
+	}{
+		{
+			name: "link created without processing",
+			run:  func() string { return create(11, types.PaymentMethodTypePaymentLink, false) },
+			want: []types.WebhookEventName{types.WebhookEventPaymentCreated},
+		},
+		{
+			name: "link paid at the gateway",
+			run: func() string {
+				id := create(12, types.PaymentMethodTypePaymentLink, false)
+				update(id, types.PaymentStatusSucceeded)
+				return id
+			},
+			want: []types.WebhookEventName{types.WebhookEventPaymentCreated, types.WebhookEventPaymentSuccess, types.WebhookEventPaymentUpdated},
+		},
+		{
+			name: "link declined at the gateway",
+			run: func() string {
+				id := create(13, types.PaymentMethodTypePaymentLink, false)
+				update(id, types.PaymentStatusFailed)
+				return id
+			},
+			want: []types.WebhookEventName{types.WebhookEventPaymentCreated, types.WebhookEventPaymentFailed, types.WebhookEventPaymentUpdated},
+		},
+		{
+			name: "refunded after success",
+			run: func() string {
+				id := create(14, types.PaymentMethodTypePaymentLink, false)
+				update(id, types.PaymentStatusSucceeded, types.PaymentStatusRefunded)
+				return id
+			},
+			want: []types.WebhookEventName{types.WebhookEventPaymentCreated, types.WebhookEventPaymentSuccess, types.WebhookEventPaymentUpdated, types.WebhookEventPaymentUpdated},
+		},
+		{
+			name: "same request twice returns the first payment",
+			run: func() string {
+				id := create(17, types.PaymentMethodTypePaymentLink, false)
+				s.Equal(id, create(17, types.PaymentMethodTypePaymentLink, false))
+				return id
+			},
+			want: []types.WebhookEventName{types.WebhookEventPaymentCreated},
+		},
+		{
+			name: "card recorded without processing",
+			run:  func() string { return create(15, types.PaymentMethodTypeCard, false) },
+			want: []types.WebhookEventName{types.WebhookEventPaymentCreated},
+		},
+		{
+			name: "offline processed inline",
+			run:  func() string { return create(16, types.PaymentMethodTypeOffline, true) },
+			want: []types.WebhookEventName{types.WebhookEventPaymentCreated, types.WebhookEventPaymentPending, types.WebhookEventPaymentSuccess},
+		},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			id := tt.run()
+			got := lo.FilterMap(rec.events, func(ev *types.WebhookEvent, _ int) (types.WebhookEventName, bool) {
+				return ev.EventName, ev.EntityID == id
+			})
+			s.Equal(tt.want, got)
+		})
+	}
 }
