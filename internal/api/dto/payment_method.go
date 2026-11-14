@@ -182,12 +182,13 @@ type ListPaymentMethodsRequest struct {
 }
 
 // setupIntentMethodTypes lists the payment_method_types each provider can set up.
-func setupIntentMethodTypes(provider types.SecretProvider) []string {
+// SetupIntentMethodTypes are the payment methods a setup intent can save at provider.
+func SetupIntentMethodTypes(provider types.SecretProvider) []string {
 	switch provider {
 	case types.SecretProviderRazorpay:
 		return []string{"enach"}
 	default:
-		return []string{"card", "us_bank_account", "sepa_debit"}
+		return []string{"card"}
 	}
 }
 
@@ -200,10 +201,10 @@ func (r *CreateSetupIntentRequest) Validate() error {
 	}
 
 	switch r.Provider {
-	case types.SecretProviderStripe, types.SecretProviderMoyasar, types.SecretProviderRazorpay:
+	case types.SecretProviderStripe, types.SecretProviderMoyasar, types.SecretProviderRazorpay, types.SecretProviderChargebee:
 	default:
 		return errors.NewError("unsupported payment provider").
-			WithHint("Supported providers: stripe, moyasar, razorpay").
+			WithHint("Supported providers: stripe, moyasar, razorpay, chargebee").
 			WithReportableDetails(map[string]interface{}{
 				"provider": r.Provider,
 			}).
@@ -223,7 +224,7 @@ func (r *CreateSetupIntentRequest) Validate() error {
 			Mark(errors.ErrValidation)
 	}
 
-	allowedTypes := setupIntentMethodTypes(r.Provider)
+	allowedTypes := SetupIntentMethodTypes(r.Provider)
 	for _, paymentMethodType := range r.PaymentMethodTypes {
 		if !lo.Contains(allowedTypes, paymentMethodType) {
 			return errors.NewError("unsupported payment method type").
@@ -403,6 +404,7 @@ type SavedUPIDetails struct {
 }
 
 type SavedBankAccountDetails struct {
+	Bank        string `json:"bank,omitempty"`
 	IFSC        string `json:"ifsc,omitempty"`
 	Last4       string `json:"last4,omitempty"`
 	AccountType string `json:"account_type,omitempty"`

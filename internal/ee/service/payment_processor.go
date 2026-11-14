@@ -153,7 +153,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		switch {
 		case !lo.Contains(dto.AllowedMethodsPerGateway(gateway), paymentObj.PaymentMethodType):
 			processErr = ierr.NewErrorf("%s payments are not supported on this payment gateway", paymentObj.PaymentMethodType).
-				WithHint("CARD supports stripe (default) and razorpay; UPI and ENACH support razorpay only").
+				WithHint("CARD supports stripe (default) and razorpay. UPI and ENACH support razorpay only").
 				Mark(ierr.ErrValidation)
 		case gateway == types.PaymentGatewayTypeRazorpay:
 			processErr = p.handleRazorpayTokenCharge(ctx, paymentObj)
@@ -439,6 +439,7 @@ func (p *paymentProcessor) handleRazorpayTokenCharge(ctx context.Context, paymen
 		Currency:           paymentObj.Currency,
 		FlexPricePaymentID: paymentObj.ID,
 		PreferredMethod:    paymentObj.PaymentMethodType,
+		TokenID:            paymentObj.PaymentMethodID,
 	})
 	if err != nil {
 		return err

@@ -85,7 +85,9 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 	case types.SecretProviderMoyasar:
 		h.createMoyasarSetupIntent(c, customerID, &req)
 	case types.SecretProviderRazorpay:
-		h.createRazorpaySetupIntent(c, customerID, &req)
+		h.createAdapterSetupIntent(c, customerID, &req, types.PaymentGatewayTypeRazorpay)
+	case types.SecretProviderChargebee:
+		h.createAdapterSetupIntent(c, customerID, &req, types.PaymentGatewayTypeChargebee)
 	case types.SecretProviderStripe:
 		h.createStripeSetupIntent(c, customerID, &req)
 	default:
@@ -158,18 +160,24 @@ func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID
 	})
 }
 
-func (h *SetupIntentHandler) createRazorpaySetupIntent(c *gin.Context, customerID string, req *dto.CreateSetupIntentRequest) {
+// createAdapterSetupIntent creates the setup link through the gateway's payment-method adapter, as the customer portal does.
+func (h *SetupIntentHandler) createAdapterSetupIntent(c *gin.Context, customerID string, req *dto.CreateSetupIntentRequest, gateway types.PaymentGatewayType) {
 	ctx := c.Request.Context()
 
-	provider, err := h.integrationFactory.GetPaymentMethodProvider(ctx, types.PaymentGatewayTypeRazorpay, h.customerService)
+	provider, err := h.integrationFactory.GetPaymentMethodProvider(ctx, gateway, h.customerService)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	link, err := provider.CreateSetupLink(ctx, interfaces.SetupLinkRequest{CustomerID: customerID, MaxAmount: req.MaxAmount})
+	link, err := provider.CreateSetupLink(ctx, interfaces.SetupLinkRequest{
+		CustomerID: customerID,
+		ReturnURL:  req.SuccessURL,
+		MaxAmount:  req.MaxAmount,
+		SetDefault: req.SetDefault,
+	})
 	if err != nil {
-		h.log.Error(ctx, "Failed to create Razorpay mandate setup link", "customer_id", customerID, "error", err)
+		h.log.Error(ctx, "Failed to create setup link", "provider", gateway, "customer_id", customerID, "error", err)
 		c.Error(err)
 		return
 	}

@@ -2,6 +2,7 @@ package razorpay
 
 import (
 	"context"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -54,9 +55,9 @@ func (a *PaymentMethodAdapter) CreateSetupLink(ctx context.Context, req interfac
 	if err != nil {
 		return nil, err
 	}
-	if c.Email == "" || lo.FromPtr(c.Contact) == "" {
-		return nil, ierr.NewError("customer needs an email and a phone number to set up a bank mandate").
-			WithHint("Add an email and a phone number to the customer; Razorpay requires both for eNACH").
+	if missing := missingMandateContact(c); missing != "" {
+		return nil, ierr.NewErrorf("customer has no %s", missing).
+			WithHintf("Add %s to the customer. Razorpay needs an email and a phone number to set up a mandate.", missing).
 			WithReportableDetails(map[string]interface{}{"customer_id": req.CustomerID}).
 			Mark(ierr.ErrValidation)
 	}
@@ -66,8 +67,6 @@ func (a *PaymentMethodAdapter) CreateSetupLink(ctx context.Context, req interfac
 		Currency:                 "INR",
 		Description:              "Bank account mandate (eNACH)",
 		ExpireBy:                 clock.Now().Add(enachSetupLinkExpiry).Unix(),
-		EmailNotify:              true,
-		SMSNotify:                true,
 		Notes:                    map[string]interface{}{"flexprice_customer_id": req.CustomerID},
 		SubscriptionRegistration: SubscriptionRegistration{Method: "emandate"},
 	}
@@ -83,6 +82,20 @@ func (a *PaymentMethodAdapter) CreateSetupLink(ctx context.Context, req interfac
 		return nil, err
 	}
 	return link.toSetupLink(), nil
+}
+
+// missingMandateContact names what the customer lacks for a mandate: "an email", "a phone number", or both.
+func missingMandateContact(c *customer.Customer) string {
+	switch noEmail, noPhone := c.Email == "", lo.FromPtr(c.Contact) == ""; {
+	case noEmail && noPhone:
+		return "an email and a phone number"
+	case noEmail:
+		return "an email"
+	case noPhone:
+		return "a phone number"
+	default:
+		return ""
+	}
 }
 
 func errMandateManagedAtCheckout() error {

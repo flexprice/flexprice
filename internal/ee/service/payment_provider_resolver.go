@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"sort"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -76,7 +77,15 @@ func (s *PaymentProviderResolver) ListProviders(ctx context.Context, customerID 
 	out := make([]ProviderCapabilities, 0, len(usable))
 	for _, gw := range usable {
 		caps := lo.Map(gatewayCapabilities[gw], func(c types.IntegrationCapabilityType, _ int) types.IntegrationCapability {
-			return types.IntegrationCapability{Type: c}
+			capability := types.IntegrationCapability{Type: c}
+			switch c {
+			case types.IntegrationCapabilityAddPaymentMethod:
+				capability.AddPaymentMethodOptions = &types.AddPaymentMethodOptions{
+					PaymentMethodTypes: dto.SetupIntentMethodTypes(types.SecretProvider(gw)),
+					SetsDefault:        gw == types.PaymentGatewayTypeStripe,
+				}
+			}
+			return capability
 		})
 		out = append(out, ProviderCapabilities{Gateway: gw, Capabilities: caps})
 	}

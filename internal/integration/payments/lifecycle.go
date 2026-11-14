@@ -643,19 +643,24 @@ func ChargeInFlight(ctx context.Context, paymentRepo payment.Repository, invoice
 	}
 
 	return lo.ContainsBy(pymnts, func(p *payment.Payment) bool {
-		if p.ID == excludeID || !p.PaymentMethodType.IsSavedMethod() {
-			return false
-		}
-		switch p.PaymentStatus {
-		case types.PaymentStatusPending, types.PaymentStatusProcessing:
-			return true
-		case types.PaymentStatusInitiated:
-			// An INITIATED payment never sent to the gateway (process_payment false) is not a debit.
-			return lo.FromPtr(p.GatewayPaymentID) != "" || lo.FromPtr(p.GatewayTrackingID) != ""
-		default:
-			return false
-		}
+		return p.ID != excludeID && IsChargeInFlight(p)
 	}), nil
+}
+
+// IsChargeInFlight reports whether p is a saved-method debit the gateway may still settle.
+func IsChargeInFlight(p *payment.Payment) bool {
+	if !p.PaymentMethodType.IsSavedMethod() {
+		return false
+	}
+	switch p.PaymentStatus {
+	case types.PaymentStatusPending, types.PaymentStatusProcessing:
+		return true
+	case types.PaymentStatusInitiated:
+		// An INITIATED payment never sent to the gateway (process_payment false) is not a debit.
+		return lo.FromPtr(p.GatewayPaymentID) != "" || lo.FromPtr(p.GatewayTrackingID) != ""
+	default:
+		return false
+	}
 }
 
 func errChargeInFlight(invoiceID string) error {

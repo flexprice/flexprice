@@ -403,12 +403,7 @@ func (r *CreatePaymentRequest) validateSavedMethodCharge() error {
 	switch {
 	case !lo.Contains(AllowedMethodsPerGateway(gateway), r.PaymentMethodType):
 		return ierr.NewErrorf("%s payments are not supported on this payment gateway", r.PaymentMethodType).
-			WithHint("CARD supports stripe (default) and razorpay; UPI and ENACH support razorpay only").
-			WithReportableDetails(details).
-			Mark(ierr.ErrValidation)
-	case gateway == types.PaymentGatewayTypeRazorpay && r.PaymentMethodID != "":
-		return ierr.NewError("payment_method_id is not supported for razorpay charges").
-			WithHint("Omit payment_method_id; the customer's active Razorpay mandate for this method is used").
+			WithHint("CARD supports stripe (default) and razorpay. UPI and ENACH support razorpay only").
 			WithReportableDetails(details).
 			Mark(ierr.ErrValidation)
 	case gateway == types.PaymentGatewayTypeRazorpay && r.DestinationType != types.PaymentDestinationTypeInvoice:

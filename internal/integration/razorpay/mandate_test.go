@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -537,4 +538,49 @@ func TestPaymentMethodAdapterCreateSetupLink(t *testing.T) {
 			assert.Equal(t, SubscriptionRegistration{Method: "emandate", MaxAmount: tt.wantMaxAmount}, client.req.SubscriptionRegistration)
 		})
 	}
+}
+
+func TestMissingMandateContact(t *testing.T) {
+	tests := []struct {
+		name    string
+		email   string
+		contact *string
+		want    string
+	}{
+		{name: "both present", email: "a@example.com", contact: lo.ToPtr("9000090000")},
+		{name: "no phone", email: "a@example.com", want: "a phone number"},
+		{name: "no email", contact: lo.ToPtr("9000090000"), want: "an email"},
+		{name: "neither", want: "an email and a phone number"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, missingMandateContact(&customer.Customer{Email: tt.email, Contact: tt.contact}))
+		})
+	}
+}
+
+func TestSelectSavedTokenHonoursChosenMandate(t *testing.T) {
+	enach := func(id string, created time.Time) *interfaces.ProviderPaymentMethod {
+		max := decimal.NewFromInt(1000)
+		return &interfaces.ProviderPaymentMethod{
+			GatewayMethodID: id, Method: types.PaymentMethodTypeENACH, Active: true, CreatedAt: created,
+			Recurring: &interfaces.ProviderRecurringPaymentDetails{Status: types.RecurringPaymentStatusActive, MaxAmount: &max},
+		}
+	}
+	svc := &PaymentService{customerSvc: &stubRazorpayCustomerSvc{tokens: []*interfaces.ProviderPaymentMethod{
+		enach("token_old", time.Unix(1, 0)), enach("token_new", time.Unix(2, 0)),
+	}}, logger: logger.NewNoopLogger()}
+	ctx := context.Background()
+
+	_, picked, err := svc.SelectSavedToken(ctx, "cust_1", decimal.NewFromInt(10), types.PaymentMethodTypeENACH, "")
+	require.NoError(t, err)
+	assert.Equal(t, "token_new", picked.GatewayMethodID, "without a choice, the newest usable mandate")
+
+	_, picked, err = svc.SelectSavedToken(ctx, "cust_1", decimal.NewFromInt(10), types.PaymentMethodTypeENACH, "token_old")
+	require.NoError(t, err)
+	assert.Equal(t, "token_old", picked.GatewayMethodID, "the chosen mandate is charged")
+
+	_, picked, err = svc.SelectSavedToken(ctx, "cust_1", decimal.NewFromInt(10), types.PaymentMethodTypeENACH, "token_gone")
+	require.NoError(t, err)
+	assert.Nil(t, picked, "an unknown mandate is not swapped for another")
 }

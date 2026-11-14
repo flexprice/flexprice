@@ -1167,6 +1167,13 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 	return dto.NewPaymentResponse(p), nil
 }
 
+func (s *paymentService) ListPaymentIntegrations(ctx context.Context, customerID string) (*dto.IntegrationsResponse, error) {
+	if _, err := s.CustomerRepo.Get(ctx, customerID); err != nil {
+		return nil, err
+	}
+	return listPaymentIntegrations(ctx, s.ServiceParams, customerID)
+}
+
 func (s *paymentService) ListPaymentMethods(ctx context.Context, customerID string, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error) {
 	if customerID == "" {
 		return nil, ierr.NewError("customer_id is required").
@@ -1300,6 +1307,7 @@ func toSavedPaymentMethod(
 
 	if m.BankAccount != nil {
 		out.BankAccount = &dto.SavedBankAccountDetails{
+			Bank:        m.BankAccount.Bank,
 			IFSC:        m.BankAccount.IFSC,
 			Last4:       m.BankAccount.Last4,
 			AccountType: m.BankAccount.AccountType,

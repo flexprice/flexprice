@@ -721,8 +721,17 @@ func (h *Handler) handleTokenEvent(ctx context.Context, event *RazorpayWebhookEv
 		return nil
 	}
 
+	// Also confirms the customer named in the link notes belongs to this environment.
+	cust, err := services.CustomerService.GetCustomer(ctx, customerID)
+	if err != nil {
+		h.logger.Info(ctx, "Flexprice customer for Razorpay token not found, skipping", "token_id", token.GatewayMethodID, "customer_id", customerID, "error", err)
+		return nil
+	}
+
 	eventName := mandateEvents[RazorpayEventType(event.Event)]
-	payload, err := json.Marshal(webhookDto.InternalMandateEvent{Mandate: toMandate(token, customerID, eventName)})
+	mandate := toMandate(token, customerID, eventName)
+	mandate.ExternalCustomerID = cust.ExternalID
+	payload, err := json.Marshal(webhookDto.InternalMandateEvent{Mandate: mandate})
 	if err != nil {
 		h.logger.Error(ctx, "failed to marshal mandate webhook payload", "error", err, "token_id", token.GatewayMethodID)
 		return nil
@@ -778,6 +787,12 @@ func toMandate(token *interfaces.ProviderPaymentMethod, customerID string, event
 	}
 	if b := token.BankAccount; b != nil {
 		mandate.BankAccount = &webhookDto.MandateBankAccount{Bank: b.Bank, IFSC: b.IFSC, Last4: b.Last4, AccountType: b.AccountType, AuthType: b.AuthType}
+	}
+	if c := token.Card; c != nil {
+		mandate.Card = &webhookDto.MandateCard{Brand: c.Brand, Last4: c.Last4, ExpMonth: c.ExpMonth, ExpYear: c.ExpYear}
+	}
+	if u := token.UPI; u != nil {
+		mandate.UPI = &webhookDto.MandateUPI{VPA: u.VPA}
 	}
 	return mandate
 }

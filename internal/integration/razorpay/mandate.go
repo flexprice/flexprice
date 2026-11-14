@@ -232,9 +232,6 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		Amount:      toPaise(req.Amount),
 		Currency:    strings.ToUpper(req.Currency),
 		Description: "Subscription authorization",
-		Receipt:     req.InvoiceID,
-		EmailNotify: true,
-		SMSNotify:   true,
 		Notes: map[string]interface{}{
 			"flexprice_customer_id": req.CustomerID,
 			"flexprice_payment_id":  req.PaymentID,

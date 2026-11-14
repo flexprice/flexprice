@@ -94,7 +94,7 @@ func (s *PortalPaymentMethodSuite) TestGetIntegrationsReportsCapabilities() {
 		{Type: types.IntegrationCapabilityPaymentMethodManagement},
 		{Type: types.IntegrationCapabilitySetDefaultMethod},
 		{Type: types.IntegrationCapabilityListPaymentMethods},
-		{Type: types.IntegrationCapabilityAddPaymentMethod},
+		{Type: types.IntegrationCapabilityAddPaymentMethod, AddPaymentMethodOptions: &types.AddPaymentMethodOptions{PaymentMethodTypes: []string{"card"}, SetsDefault: true}},
 		{Type: types.IntegrationCapabilityDeletePaymentMethod},
 	}, byProvider[types.PaymentGatewayTypeStripe])
 	s.ElementsMatch([]dto.IntegrationCapability{
@@ -104,7 +104,7 @@ func (s *PortalPaymentMethodSuite) TestGetIntegrationsReportsCapabilities() {
 		{Type: types.IntegrationCapabilityPaymentMethodManagement},
 		{Type: types.IntegrationCapabilitySetDefaultMethod},
 		{Type: types.IntegrationCapabilityListPaymentMethods},
-		{Type: types.IntegrationCapabilityAddPaymentMethod},
+		{Type: types.IntegrationCapabilityAddPaymentMethod, AddPaymentMethodOptions: &types.AddPaymentMethodOptions{PaymentMethodTypes: []string{"card"}}},
 		{Type: types.IntegrationCapabilityDeletePaymentMethod},
 	}, byProvider[types.PaymentGatewayTypeChargebee])
 }
@@ -375,6 +375,18 @@ func (s *PortalPaymentMethodSuite) TestAddPaymentMethodRejectsUnconnectedProvide
 
 	_, err := s.svc.AddPaymentMethod(s.ctx, &dto.PortalAddPaymentMethodRequest{
 		PaymentProvider: types.PaymentGatewayTypeChargebee,
+	})
+	s.Error(err)
+	s.True(ierr.IsValidation(err))
+}
+
+// A method the provider's setup cannot save is refused before any gateway call.
+func (s *PortalPaymentMethodSuite) TestAddPaymentMethodRejectsUnsupportedMethodType() {
+	s.connect(types.SecretProviderChargebee)
+
+	_, err := s.svc.AddPaymentMethod(s.ctx, &dto.PortalAddPaymentMethodRequest{
+		PaymentProvider:   types.PaymentGatewayTypeChargebee,
+		PaymentMethodType: "enach",
 	})
 	s.Error(err)
 	s.True(ierr.IsValidation(err))

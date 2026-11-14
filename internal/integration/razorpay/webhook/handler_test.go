@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -627,6 +628,18 @@ func (customerMappingStore) List(_ context.Context, f *types.EntityIntegrationMa
 	return nil, nil
 }
 
+// knownCustomers resolves the customers a token event names; any other id is not found.
+type knownCustomers struct {
+	interfaces.CustomerService
+}
+
+func (knownCustomers) GetCustomer(_ context.Context, id string) (*dto.CustomerResponse, error) {
+	if id == "cust_notes" || id == "cust_mapped" {
+		return &dto.CustomerResponse{Customer: &customer.Customer{ID: id, ExternalID: "ext_" + id}}, nil
+	}
+	return nil, ierr.NewError("customer not found").Mark(ierr.ErrNotFound)
+}
+
 func TestHandleTokenEvent(t *testing.T) {
 	token := func(extra string) map[string]interface{} {
 		var raw map[string]interface{}
@@ -664,6 +677,11 @@ func TestHandleTokenEvent(t *testing.T) {
 			wantFailReason: "Rejected by bank",
 		},
 		{
+			name:  "a customer outside this environment is skipped",
+			event: EventTokenConfirmed,
+			token: token(`, "recurring_details": {"status": "confirmed"}, "notes": {"flexprice_customer_id": "cust_elsewhere"}`),
+		},
+		{
 			name:  "no customer is skipped",
 			event: EventTokenCancelled,
 			token: token(`, "recurring_details": {"status": "cancelled"}`),
@@ -677,7 +695,7 @@ func TestHandleTokenEvent(t *testing.T) {
 			event := &RazorpayWebhookEvent{Event: string(tt.event)}
 			event.Payload.Token.Entity = tt.token
 
-			require.NoError(t, h.HandleWebhookEvent(context.Background(), event, "env_1", &ServiceDependencies{WebhookPublisher: pub}))
+			require.NoError(t, h.HandleWebhookEvent(context.Background(), event, "env_1", &ServiceDependencies{WebhookPublisher: pub, CustomerService: knownCustomers{}}))
 
 			if tt.wantEvent == "" {
 				assert.Empty(t, pub.events)
@@ -692,6 +710,7 @@ func TestHandleTokenEvent(t *testing.T) {
 			m := payload.Mandate
 			assert.Equal(t, "token_1", m.ID)
 			assert.Equal(t, tt.wantCustomer, m.CustomerID)
+			assert.Equal(t, "ext_"+tt.wantCustomer, m.ExternalCustomerID)
 			assert.Equal(t, types.PaymentMethodTypeENACH, m.Type)
 			assert.Equal(t, tt.wantStatus, m.Status)
 			assert.Equal(t, tt.wantFailReason, lo.FromPtr(m.FailureReason))

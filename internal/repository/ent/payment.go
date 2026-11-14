@@ -829,6 +829,9 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.DestinationID != nil {
 		query = query.Where(payment.DestinationID(*f.DestinationID))
 	}
+	if len(f.DestinationIDs) > 0 {
+		query = query.Where(payment.DestinationIDIn(f.DestinationIDs...))
+	}
 
 	// Apply payment method type filter if specified
 	if f.PaymentMethodType != nil {

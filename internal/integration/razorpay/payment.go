@@ -49,6 +49,7 @@ type ChargeSavedTokenRequest struct {
 	Currency           string
 	FlexPricePaymentID string
 	PreferredMethod    types.PaymentMethodType // empty = Card, UPI, then ENACH
+	TokenID            string                  // charge this mandate only; empty picks the newest usable one
 }
 
 // PaymentLinkStatus captures the fields the FlexPrice sync path needs from a
@@ -830,15 +831,22 @@ func selectAutoChargeToken(
 }
 
 // SelectSavedToken returns the customer's Razorpay ID and a recurring token able to pay amount; token is nil when there is none.
+// A tokenID limits the choice to that mandate.
 func (s *PaymentService) SelectSavedToken(
 	ctx context.Context,
 	customerID string,
 	amount decimal.Decimal,
 	preferred types.PaymentMethodType,
+	tokenID string,
 ) (razorpayCustomerID string, token *interfaces.ProviderPaymentMethod, err error) {
 	razorpayCustomerID, tokens, err := s.customerSvc.ListCustomerTokens(ctx, customerID)
 	if err != nil {
 		return "", nil, err
+	}
+	if tokenID != "" {
+		tokens = lo.Filter(tokens, func(t *interfaces.ProviderPaymentMethod, _ int) bool {
+			return t != nil && t.GatewayMethodID == tokenID
+		})
 	}
 
 	token, ok := selectAutoChargeToken(tokens, preferred, amount)
@@ -863,7 +871,7 @@ func (s *PaymentService) ChargeSavedToken(
 		return nil, false, nil
 	}
 
-	razorpayCustomerID, token, err := s.SelectSavedToken(ctx, req.Customer.ID, req.Amount, req.PreferredMethod)
+	razorpayCustomerID, token, err := s.SelectSavedToken(ctx, req.Customer.ID, req.Amount, req.PreferredMethod, req.TokenID)
 	if err != nil {
 		s.logger.Info(ctx, "list Razorpay tokens failed, no saved token to charge",
 			"customer_id", req.Customer.ID, "error", err)

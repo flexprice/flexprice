@@ -5830,6 +5830,19 @@ definitions:
     - external_customer_id
     - plan_id
     type: object
+  InFlightCharge:
+    properties:
+      amount:
+        type: string
+      payment_gateway:
+        type: string
+      payment_id:
+        type: string
+      payment_method_type:
+        $ref: '#/definitions/types.PaymentMethodType'
+      payment_status:
+        $ref: '#/definitions/types.PaymentStatus'
+    type: object
   IngestEventRequest:
     properties:
       customer_id:
@@ -5880,6 +5893,13 @@ definitions:
       start_date:
         type: string
     type: object
+  IntegrationCapability:
+    properties:
+      add_payment_method_options:
+        $ref: '#/definitions/types.AddPaymentMethodOptions'
+      type:
+        $ref: '#/definitions/types.IntegrationCapabilityType'
+    type: object
   IntegrationConfigEntry:
     properties:
       base_config:
@@ -5894,6 +5914,13 @@ definitions:
       integrations:
         items:
           $ref: '#/definitions/IntegrationConfigEntry'
+        type: array
+    type: object
+  IntegrationsResponse:
+    properties:
+      payment_integrations:
+        items:
+          $ref: '#/definitions/PaymentIntegration'
         type: array
     type: object
   InvoiceCoupon:
@@ -6234,6 +6261,11 @@ definitions:
         description: idempotency_key is a unique key used to prevent duplicate invoice
           creation when retrying API calls
         type: string
+      in_flight_charge:
+        allOf:
+        - $ref: '#/definitions/InFlightCharge'
+        description: in_flight_charge is a saved-method debit submitted for this invoice
+          that the gateway has not settled yet
       invoice_number:
         description: invoice_number is the human-readable invoice number displayed
           to customers (e.g., INV-2024-001)
@@ -6897,6 +6929,15 @@ definitions:
     properties:
       stripe:
         $ref: '#/definitions/StripePaymentGatewayOptions'
+    type: object
+  PaymentIntegration:
+    properties:
+      capabilities:
+        items:
+          $ref: '#/definitions/IntegrationCapability'
+        type: array
+      provider:
+        $ref: '#/definitions/types.PaymentGatewayType'
     type: object
   PaymentResponse:
     properties:
@@ -7990,6 +8031,8 @@ definitions:
       account_type:
         type: string
       auth_type:
+        type: string
+      bank:
         type: string
       ifsc:
         type: string
@@ -16307,6 +16350,19 @@ definitions:
       start:
         $ref: '#/definitions/types.Bucket'
     type: object
+  types.AddPaymentMethodOptions:
+    properties:
+      payment_method_types:
+        description: PaymentMethodTypes are the methods it sets up, e.g. ["enach"]
+          for Razorpay.
+        items:
+          type: string
+        type: array
+      sets_default:
+        description: SetsDefault reports whether it can make the saved method the
+          default (Stripe only).
+        type: boolean
+    type: object
   types.AddonPriceOverrideRef:
     properties:
       override_price_id:
@@ -16517,6 +16573,28 @@ definitions:
     - InstalmentStatusScheduled
     - InstalmentStatusInvoiced
     - InstalmentStatusCancelled
+  types.IntegrationCapabilityType:
+    enum:
+    - checkout
+    - auto_charge
+    - set_default_method
+    - payment_link
+    - payment_method_management
+    - invoice_sync
+    - list_payment_methods
+    - add_payment_method
+    - delete_payment_method
+    type: string
+    x-enum-varnames:
+    - IntegrationCapabilityCheckout
+    - IntegrationCapabilityAutoCharge
+    - IntegrationCapabilitySetDefaultMethod
+    - IntegrationCapabilityPaymentLink
+    - IntegrationCapabilityPaymentMethodManagement
+    - IntegrationCapabilityInvoiceSync
+    - IntegrationCapabilityListPaymentMethods
+    - IntegrationCapabilityAddPaymentMethod
+    - IntegrationCapabilityDeletePaymentMethod
   types.InvoiceBillingEntity:
     properties:
       billing_details:
@@ -17211,11 +17289,15 @@ definitions:
     properties:
       bank_account:
         $ref: '#/definitions/webhookDto.MandateBankAccount'
+      card:
+        $ref: '#/definitions/webhookDto.MandateCard'
       currency:
         type: string
       customer_id:
         type: string
       expires_at:
+        type: string
+      external_customer_id:
         type: string
       failure_reason:
         type: string
@@ -17229,6 +17311,8 @@ definitions:
         type: string
       type:
         $ref: '#/definitions/types.PaymentMethodType'
+      upi:
+        $ref: '#/definitions/webhookDto.MandateUPI'
     type: object
   webhookDto.MandateBankAccount:
     properties:
@@ -17241,6 +17325,22 @@ definitions:
       ifsc:
         type: string
       last4:
+        type: string
+    type: object
+  webhookDto.MandateCard:
+    properties:
+      brand:
+        type: string
+      exp_month:
+        type: integer
+      exp_year:
+        type: integer
+      last4:
+        type: string
+    type: object
+  webhookDto.MandateUPI:
+    properties:
+      vpa:
         type: string
     type: object
   webhookDto.MandateWebhookPayload:
@@ -20840,6 +20940,39 @@ paths:
       summary: Get customer invoice summary
       tags:
       - Invoices
+  /customers/{id}/payment-integrations:
+    get:
+      description: 'Use to learn which connected gateways can serve this customer
+        and what each can do: check out, auto-charge, list methods, add a method (with
+        the method types it sets up, e.g. enach for Razorpay), set a default.'
+      operationId: listCustomerPaymentIntegrations
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/IntegrationsResponse'
+        "404":
+          description: Customer not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List customer payment integrations
+      tags:
+      - Customers
+      x-scope: read
   /customers/{id}/payment-methods:
     get:
       description: Use when you need a customer's saved payment methods across every
@@ -23083,6 +23216,12 @@ paths:
       - in: query
         name: destination_id
         type: string
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: destination_ids
+        type: array
       - in: query
         name: destination_type
         type: string

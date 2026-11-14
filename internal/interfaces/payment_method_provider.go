@@ -28,6 +28,7 @@ type SetupLinkRequest struct {
 	CustomerID string // FlexPrice customer id; the adapter resolves the gateway one
 	ReturnURL  string
 	MaxAmount  *decimal.Decimal // per-debit ceiling; nil uses the provider default
+	SetDefault bool             // make the saved method the default, where the provider supports it
 }
 
 // SetupLinkResponse is the hosted page the customer is sent to.

@@ -236,6 +236,7 @@ type PaymentFilter struct {
 	PaymentIDs        []string `form:"payment_ids"`
 	DestinationType   *string  `form:"destination_type"`
 	DestinationID     *string  `form:"destination_id"`
+	DestinationIDs    []string `form:"destination_ids"`
 	PaymentMethodType *string  `form:"payment_method_type"`
 	PaymentStatus     *string  `form:"payment_status"`
 	PaymentGateway    *string  `form:"payment_gateway"`

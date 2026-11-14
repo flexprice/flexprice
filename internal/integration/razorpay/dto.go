@@ -186,9 +186,8 @@ type AuthorizationLinkRequest struct {
 	Amount                   int64                    `json:"amount"`
 	Currency                 string                   `json:"currency"`
 	Description              string                   `json:"description"`
-	Receipt                  string                   `json:"receipt,omitempty"`
 	ExpireBy                 int64                    `json:"expire_by,omitempty"`
-	EmailNotify              bool                     `json:"email_notify"`
+	EmailNotify              bool                     `json:"email_notify"` // off: the merchant shares the link
 	SMSNotify                bool                     `json:"sms_notify"`
 	Notes                    map[string]interface{}   `json:"notes,omitempty"`
 	SubscriptionRegistration SubscriptionRegistration `json:"subscription_registration"`

@@ -76,6 +76,10 @@ type PortalTopUpWalletResponse struct {
 // endpoint. Read AddPaymentMethodResponse.Action for what to do next.
 type PortalAddPaymentMethodRequest struct {
 	PaymentProvider types.PaymentGatewayType `json:"payment_provider" binding:"required"`
+	// PaymentMethodType is what to set up, one of the provider's add_payment_method payment_method_types. Omitted, the provider's own.
+	PaymentMethodType string `json:"payment_method_type,omitempty"`
+	// SetDefault makes the saved method the default where the provider supports it. Omitted, true.
+	SetDefault *bool `json:"set_default,omitempty"`
 	RedirectionParams
 }
 

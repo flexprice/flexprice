@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"math"
 	"sort"
 	"strconv"
@@ -1042,7 +1043,31 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 
 	response.WithTaxes(appliedTaxes.Items)
 
+	if err := s.attachInFlightCharges(ctx, []*dto.InvoiceResponse{response}); err != nil {
+		return nil, err
+	}
+
 	return response, nil
+}
+
+// attachInFlightCharges marks each invoice with the saved-method debit still waiting on the gateway, if any.
+func (s *invoiceService) attachInFlightCharges(ctx context.Context, items []*dto.InvoiceResponse) error {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationIDs = lo.Map(items, func(r *dto.InvoiceResponse, _ int) string { return r.ID })
+	pymnts, err := s.PaymentRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	inFlight := lo.KeyBy(lo.Filter(pymnts, func(p *payment.Payment, _ int) bool { return payments.IsChargeInFlight(p) }),
+		func(p *payment.Payment) string { return p.DestinationID })
+	for _, r := range items {
+		if p, ok := inFlight[r.ID]; ok {
+			r.WithInFlightCharge(p)
+		}
+	}
+	return nil
 }
 
 // getBulkUsageAnalyticsForInvoice fetches analytics for all line items in a single ClickHouse call
@@ -1358,6 +1383,10 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		for _, inv := range items {
 			inv.WithTaxes(taxesByInvoice[inv.ID])
 		}
+	}
+
+	if err := s.attachInFlightCharges(ctx, items); err != nil {
+		return nil, err
 	}
 
 	return &dto.ListInvoicesResponse{
@@ -2292,7 +2321,7 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		IsAutoChargeAttempt: true,
 	}
 
-	razorpayCustomerID, token, err := razorpaySvc.SelectSavedToken(ctx, inv.CustomerID, inv.AmountRemaining, "")
+	razorpayCustomerID, token, err := razorpaySvc.SelectSavedToken(ctx, inv.CustomerID, inv.AmountRemaining, "", "")
 	if err != nil {
 		s.Logger.Info(ctx, "list Razorpay tokens failed, sending the invoice instead",
 			"invoice_id", inv.ID, "customer_id", inv.CustomerID, "error", err)

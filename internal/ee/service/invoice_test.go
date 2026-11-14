@@ -848,6 +848,17 @@ func (s *InvoiceServiceSuite) TestVoidInvoice_RefusedWhileDebitInFlight() {
 	}
 	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, pymnt))
 
+	got, err := s.service.GetInvoice(ctx, resp.ID)
+	s.Require().NoError(err)
+	s.Require().NotNil(got.InFlightCharge)
+	s.Equal(pymnt.ID, got.InFlightCharge.PaymentID)
+	s.Equal(types.PaymentMethodTypeENACH, got.InFlightCharge.PaymentMethodType)
+
+	listed, err := s.service.ListInvoices(ctx, &types.InvoiceFilter{QueryFilter: types.NewDefaultQueryFilter(), InvoiceIDs: []string{resp.ID}})
+	s.Require().NoError(err)
+	s.Require().Len(listed.Items, 1)
+	s.Require().NotNil(listed.Items[0].InFlightCharge)
+
 	_, err = s.service.VoidInvoice(ctx, resp.ID, dto.InvoiceVoidRequest{})
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err))
@@ -855,6 +866,10 @@ func (s *InvoiceServiceSuite) TestVoidInvoice_RefusedWhileDebitInFlight() {
 
 	pymnt.PaymentStatus = types.PaymentStatusFailed
 	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, pymnt))
+
+	got, err = s.service.GetInvoice(ctx, resp.ID)
+	s.Require().NoError(err)
+	s.Nil(got.InFlightCharge, "a failed debit is no longer in flight")
 
 	_, err = s.service.VoidInvoice(ctx, resp.ID, dto.InvoiceVoidRequest{})
 	s.Require().NoError(err)

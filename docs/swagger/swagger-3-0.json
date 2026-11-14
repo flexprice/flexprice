@@ -6169,6 +6169,65 @@
         ]
       }
     },
+    "/customers/{id}/payment-integrations": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "List customer payment integrations",
+        "description": "Use to learn which connected gateways can serve this customer and what each can do: check out, auto-charge, list methods, add a method (with the method types it sets up, e.g. enach for Razorpay), set a default.",
+        "operationId": "listCustomerPaymentIntegrations",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Customer ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/customers/{id}/payment-methods": {
       "get": {
         "tags": [
@@ -9607,6 +9666,18 @@
             "in": "query",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "destination_ids",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           {
@@ -28296,6 +28367,26 @@
           }
         }
       },
+      "InFlightCharge": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "payment_gateway": {
+            "type": "string"
+          },
+          "payment_id": {
+            "type": "string"
+          },
+          "payment_method_type": {
+            "$ref": "#/components/schemas/types.PaymentMethodType"
+          },
+          "payment_status": {
+            "$ref": "#/components/schemas/types.PaymentStatus"
+          }
+        }
+      },
       "IngestEventRequest": {
         "required": [
           "event_name",
@@ -28368,6 +28459,17 @@
           }
         }
       },
+      "IntegrationCapability": {
+        "type": "object",
+        "properties": {
+          "add_payment_method_options": {
+            "$ref": "#/components/schemas/types.AddPaymentMethodOptions"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.IntegrationCapabilityType"
+          }
+        }
+      },
       "IntegrationConfigEntry": {
         "type": "object",
         "properties": {
@@ -28389,6 +28491,17 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/IntegrationConfigEntry"
+            }
+          }
+        }
+      },
+      "IntegrationsResponse": {
+        "type": "object",
+        "properties": {
+          "payment_integrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentIntegration"
             }
           }
         }
@@ -28810,6 +28923,9 @@
           "idempotency_key": {
             "type": "string",
             "description": "idempotency_key is a unique key used to prevent duplicate invoice creation when retrying API calls"
+          },
+          "in_flight_charge": {
+            "$ref": "#/components/schemas/InFlightCharge"
           },
           "invoice_number": {
             "type": "string",
@@ -29698,6 +29814,20 @@
         "properties": {
           "stripe": {
             "$ref": "#/components/schemas/StripePaymentGatewayOptions"
+          }
+        }
+      },
+      "PaymentIntegration": {
+        "type": "object",
+        "properties": {
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntegrationCapability"
+            }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.PaymentGatewayType"
           }
         }
       },
@@ -31170,6 +31300,9 @@
             "type": "string"
           },
           "auth_type": {
+            "type": "string"
+          },
+          "bank": {
             "type": "string"
           },
           "ifsc": {
@@ -42256,6 +42389,23 @@
         },
         "x-speakeasy-name-override": "ActiveWindow"
       },
+      "types.AddPaymentMethodOptions": {
+        "type": "object",
+        "properties": {
+          "payment_method_types": {
+            "type": "array",
+            "description": "PaymentMethodTypes are the methods it sets up, e.g. [\"enach\"] for Razorpay.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sets_default": {
+            "type": "boolean",
+            "description": "SetsDefault reports whether it can make the saved method the default (Stripe only)."
+          }
+        },
+        "x-speakeasy-name-override": "AddPaymentMethodOptions"
+      },
       "types.AddonPriceOverrideRef": {
         "type": "object",
         "properties": {
@@ -42562,6 +42712,32 @@
           "InstalmentStatusCancelled"
         ],
         "x-speakeasy-name-override": "InstalmentStatus"
+      },
+      "types.IntegrationCapabilityType": {
+        "type": "string",
+        "enum": [
+          "checkout",
+          "auto_charge",
+          "set_default_method",
+          "payment_link",
+          "payment_method_management",
+          "invoice_sync",
+          "list_payment_methods",
+          "add_payment_method",
+          "delete_payment_method"
+        ],
+        "x-enum-varnames": [
+          "IntegrationCapabilityCheckout",
+          "IntegrationCapabilityAutoCharge",
+          "IntegrationCapabilitySetDefaultMethod",
+          "IntegrationCapabilityPaymentLink",
+          "IntegrationCapabilityPaymentMethodManagement",
+          "IntegrationCapabilityInvoiceSync",
+          "IntegrationCapabilityListPaymentMethods",
+          "IntegrationCapabilityAddPaymentMethod",
+          "IntegrationCapabilityDeletePaymentMethod"
+        ],
+        "x-speakeasy-name-override": "IntegrationCapabilityType"
       },
       "types.InvoiceBillingEntity": {
         "type": "object",
@@ -43593,6 +43769,9 @@
           "bank_account": {
             "$ref": "#/components/schemas/webhookDto.MandateBankAccount"
           },
+          "card": {
+            "$ref": "#/components/schemas/webhookDto.MandateCard"
+          },
           "currency": {
             "type": "string"
           },
@@ -43602,6 +43781,9 @@
           "expires_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "external_customer_id": {
+            "type": "string"
           },
           "failure_reason": {
             "type": "string"
@@ -43620,6 +43802,9 @@
           },
           "type": {
             "$ref": "#/components/schemas/types.PaymentMethodType"
+          },
+          "upi": {
+            "$ref": "#/components/schemas/webhookDto.MandateUPI"
           }
         }
       },
@@ -43639,6 +43824,31 @@
             "type": "string"
           },
           "last4": {
+            "type": "string"
+          }
+        }
+      },
+      "webhookDto.MandateCard": {
+        "type": "object",
+        "properties": {
+          "brand": {
+            "type": "string"
+          },
+          "exp_month": {
+            "type": "integer"
+          },
+          "exp_year": {
+            "type": "integer"
+          },
+          "last4": {
+            "type": "string"
+          }
+        }
+      },
+      "webhookDto.MandateUPI": {
+        "type": "object",
+        "properties": {
+          "vpa": {
             "type": "string"
           }
         }

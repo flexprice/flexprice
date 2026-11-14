@@ -100,16 +100,30 @@ type InternalMandateEvent struct {
 }
 
 type Mandate struct {
-	ID            string                   `json:"id"`
-	CustomerID    string                   `json:"customer_id"`
-	Provider      types.PaymentGatewayType `json:"provider"`
-	Type          types.PaymentMethodType  `json:"type"`
-	Status        string                   `json:"status"`
-	FailureReason *string                  `json:"failure_reason"`
-	MaxAmount     *decimal.Decimal         `json:"max_amount,omitempty" swaggertype:"string"`
-	Currency      string                   `json:"currency"`
-	ExpiresAt     *time.Time               `json:"expires_at,omitempty"`
-	BankAccount   *MandateBankAccount      `json:"bank_account,omitempty"`
+	ID                 string                   `json:"id"`
+	CustomerID         string                   `json:"customer_id"`
+	ExternalCustomerID string                   `json:"external_customer_id"`
+	Provider           types.PaymentGatewayType `json:"provider"`
+	Type               types.PaymentMethodType  `json:"type"`
+	Status             string                   `json:"status"`
+	FailureReason      *string                  `json:"failure_reason"`
+	MaxAmount          *decimal.Decimal         `json:"max_amount,omitempty" swaggertype:"string"`
+	Currency           string                   `json:"currency"`
+	ExpiresAt          *time.Time               `json:"expires_at,omitempty"`
+	BankAccount        *MandateBankAccount      `json:"bank_account,omitempty"`
+	Card               *MandateCard             `json:"card,omitempty"`
+	UPI                *MandateUPI              `json:"upi,omitempty"`
+}
+
+type MandateCard struct {
+	Brand    string `json:"brand,omitempty"`
+	Last4    string `json:"last4,omitempty"`
+	ExpMonth int    `json:"exp_month,omitempty"`
+	ExpYear  int    `json:"exp_year,omitempty"`
+}
+
+type MandateUPI struct {
+	VPA string `json:"vpa,omitempty"`
 }
 
 type MandateBankAccount struct {
