@@ -3,7 +3,9 @@ package contract
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -62,7 +64,7 @@ func (s *storeCustomerService) GetCustomers(ctx context.Context, filter *types.C
 func seedCustomers(t *testing.T, ctx context.Context, store *testutil.InMemoryCustomerStore) {
 	t.Helper()
 	rows := []*customer.Customer{
-		{ID: "cust_nw", Name: "Northwind Health", Email: "ap@northwindhealth.org"},
+		{ID: "cust_nw", Name: "Northwind Health", Email: "ap@northwindhealth.org", AddressCity: "Seattle"},
 		{ID: "cust_nw_eu", Name: "Northwind Health Europe", Email: "eu@northwind.eu"},
 		{ID: "cust_old", Name: "Northwind Old", Email: "old@northwindhealth.org", BaseModel: types.BaseModel{Status: types.StatusArchived}},
 		{ID: "cust_gmail", Name: "Solo Founder", Email: "solo@gmail.com"},
@@ -130,6 +132,20 @@ func TestMatchCustomer_Statuses(t *testing.T) {
 				candidate("cust_nw_eu", 95, customermatch.EvidenceExactName, customermatch.EvidenceEmailExact),
 			}},
 			wantStatus: CustomerMatchPossible, wantConf: 65, wantCands: []string{"cust_nw_eu"}, wantCheck: 1,
+		},
+		{
+			name: "a sole candidate whose every claim fails is not linked",
+			result: &customermatch.MatchResult{BestCustomerID: "cust_nw_eu", Candidates: []customermatch.Candidate{
+				candidate("cust_nw_eu", 100, customermatch.EvidenceEmailExact),
+			}},
+			wantStatus: CustomerMatchPossible, wantConf: 85, wantCands: []string{"cust_nw_eu"}, wantCheck: 1,
+		},
+		{
+			name: "an address claim without a stored city is dropped",
+			result: &customermatch.MatchResult{BestCustomerID: "cust_nw_eu", Candidates: []customermatch.Candidate{
+				candidate("cust_nw_eu", 99, customermatch.EvidenceNameVariant, customermatch.EvidenceAddress),
+			}},
+			wantStatus: CustomerMatchPossible, wantConf: 84, wantCands: []string{"cust_nw_eu"}, wantCheck: 1,
 		},
 		{
 			name: "no best answer stays possible",
@@ -235,6 +251,29 @@ func TestMatchCustomer_ProviderErrorIsReturnedForRetry(t *testing.T) {
 	require.Equal(t, &extraction.CustomerMatch{Status: CustomerMatchUnavailable, Reason: "The AI provider is rate limiting requests"}, match)
 }
 
+// failingCustomerService fails every customer read, as a database outage would.
+type failingCustomerService struct {
+	interfaces.CustomerService
+}
+
+func (s *failingCustomerService) GetCustomer(context.Context, string) (*dto.CustomerResponse, error) {
+	return nil, ierr.NewError("connection refused").Mark(ierr.ErrDatabase)
+}
+
+func TestMatchCustomer_LookupFailureIsReturnedForRetry(t *testing.T) {
+	ctx := testutil.SetupContext()
+	f := newIngestFixture()
+	f.matcher.result = &customermatch.MatchResult{BestCustomerID: "cust_nw", Candidates: []customermatch.Candidate{
+		candidate("cust_nw", 95, customermatch.EvidenceExactName),
+	}}
+	id := extractedContract(t, ctx, f)
+	f.svc.directory = newCustomerDirectory(&failingCustomerService{})
+
+	require.Error(t, f.svc.MatchCustomer(ctx, id))
+	match, _ := storedMatch(t, ctx, f, id)
+	require.Equal(t, CustomerMatchPending, match.Status)
+}
+
 func TestMatchCustomer_NoCustomerDetails(t *testing.T) {
 	ctx := testutil.SetupContext()
 	f := newIngestFixture()
@@ -313,6 +352,33 @@ func TestCustomerDirectory(t *testing.T) {
 	none, err := d.SearchByName(other, "northwind", 10)
 	require.NoError(t, err)
 	require.Empty(t, none, "other environments see nothing")
+}
+
+func TestCustomerDirectory_ExactMatchesAreNotCrowdedOut(t *testing.T) {
+	ctx := testutil.SetupContext()
+	store := testutil.NewInMemoryCustomerStore()
+	rows := []*customer.Customer{}
+	for i := range directoryPageSize + 5 {
+		rows = append(rows, &customer.Customer{ID: fmt.Sprintf("cust_x%02d", i), Name: "Lookalike", Email: fmt.Sprintf("xap%02d@example.com.au", i)})
+	}
+	rows = append(rows,
+		&customer.Customer{ID: "cust_ap", Name: "Example", Email: "ap@example.com"},
+		&customer.Customer{ID: "cust_billing", Name: "Example Billing", Email: "billing@example.com"})
+	for i, c := range rows {
+		c.TenantID, c.EnvironmentID, c.Status = types.GetTenantID(ctx), types.GetEnvironmentID(ctx), types.StatusPublished
+		c.CreatedAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(len(rows)-i) * time.Minute)
+		require.NoError(t, store.Create(ctx, c))
+	}
+	d := newCustomerDirectory(&storeCustomerService{store: store})
+
+	byEmail, err := d.SearchByEmail(ctx, "ap@example.com", 1)
+	require.NoError(t, err)
+	require.Equal(t, []string{"cust_ap"}, recordIDs(byEmail))
+
+	byDomain, err := d.SearchByEmail(ctx, "example.com", 1)
+	require.NoError(t, err)
+	require.Len(t, byDomain, 1)
+	require.Contains(t, []string{"cust_ap", "cust_billing"}, byDomain[0].ID)
 }
 
 func recordIDs(records []customermatch.CustomerRecord) []string {

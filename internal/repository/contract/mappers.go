@@ -27,7 +27,7 @@ func FromEnt(e *ent.Contract) *domainContract.Contract {
 		WithUpdatedAt(e.UpdatedAt).
 		WithDocument(e.Document).
 		WithExtractionStatus(types.ContractExtractionStatus(lo.FromPtr(e.ExtractionStatus))).
-		WithExtraction(e.Extraction).
+		WithExtraction(e.Extraction.Raw()).
 		WithExtractionError(lo.FromPtr(e.ExtractionError)).
 		Build()
 }

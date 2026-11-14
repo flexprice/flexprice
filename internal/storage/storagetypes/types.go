@@ -61,6 +61,8 @@ type Storage interface {
 	UploadStream(ctx context.Context, req *StreamUploadRequest) (*UploadResponse, error)
 	Download(ctx context.Context, key string) ([]byte, error)
 	Exists(ctx context.Context, key string) (bool, error)
+	// Delete removes the object at key. Deleting a missing object is not an error.
+	Delete(ctx context.Context, key string) error
 	PresignGet(ctx context.Context, key string, duration time.Duration) (string, error)
 	ValidateConnection(ctx context.Context) error
 	// ValidateWrite writes an empty object at key to prove the credentials can write to the bucket.
