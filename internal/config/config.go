@@ -1300,6 +1300,7 @@ func NewConfig() (*Configuration, error) {
 	// Customer email sender defaults, for deploys whose config.yaml (a Helm ConfigMap) predates these keys.
 	v.SetDefault("email.sender_domain", "mail.flexprice.io")
 	v.SetDefault("email.sender_local_part", "invoices")
+	v.SetDefault("email.send_rate_per_second", 8)
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
