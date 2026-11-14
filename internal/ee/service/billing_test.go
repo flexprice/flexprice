@@ -675,6 +675,32 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 	}
 }
 
+func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest_DoesNotGenerateMemo() {
+	for _, referencePoint := range []types.InvoiceReferencePoint{
+		types.ReferencePointPeriodStart,
+		types.ReferencePointPeriodEnd,
+		types.ReferencePointPreview,
+		types.ReferencePointInternalPreview,
+		types.ReferencePointRevenueFacts,
+		types.ReferencePointCancel,
+	} {
+		s.Run(string(referencePoint), func() {
+			sub, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(s.GetContext(), s.testData.subscription.ID)
+			s.Require().NoError(err)
+			req, err := s.service.PrepareSubscriptionInvoiceRequest(s.GetContext(), &dto.PrepareSubscriptionInvoiceRequestParams{
+				Subscription:   sub,
+				PeriodStart:    sub.CurrentPeriodStart,
+				PeriodEnd:      sub.CurrentPeriodEnd,
+				ReferencePoint: referencePoint,
+			})
+			s.Require().NoError(err)
+			s.Require().NotEmpty(req.LineItems)
+			s.Empty(req.Description)
+			s.Equal(sub.ID, *req.SubscriptionID)
+		})
+	}
+}
+
 func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest_IncludesHistoricalLineItemsWhenSubscriptionAdvanced() {
 	ctx := s.GetContext()
 	oldStart := s.testData.subscription.CurrentPeriodStart
