@@ -27,7 +27,7 @@ type billingClient interface {
 	// StartPlanCheckout opens one checkout that creates a subscription on in.planID, activated once paid.
 	StartPlanCheckout(ctx context.Context, in checkoutInput) (*remoteCheckout, error)
 
-	// EndTrials cancels the customer's self-serve trials without an invoice.
+	// EndTrials cancels the customer's self-serve trials without an invoice, voiding the invoice of one that already ended unpaid.
 	EndTrials(ctx context.Context, extID string) error
 
 	// StartTrialEndCheckout gates the trial's end behind a configured checkout provider on Flexprice Cloud, resuming an open one.

@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -334,18 +335,24 @@ func TestStartCheckout_PlanRejected(t *testing.T) {
 		name          string
 		planID        string
 		currentPlanID string
+		remoteStatus  types.SubscriptionStatus // "" = trialing
 		wantKind      func(error) bool
 		wantNoWrites  bool
 	}{
 		{name: "plan_not_offered", planID: "plan_enterprise", currentPlanID: "plan_1", wantKind: ierr.IsValidation, wantNoWrites: true},
 		{name: "enterprise_trial_keeps_its_plan", planID: "plan_2", currentPlanID: "plan_enterprise", wantKind: ierr.IsInvalidOperation},
+		{name: "paid_subscription_keeps_its_plan", planID: "plan_2", currentPlanID: "plan_1", remoteStatus: types.SubscriptionStatusActive, wantKind: ierr.IsInvalidOperation},
+		{name: "unpaid_subscription_keeps_its_plan", planID: "plan_2", currentPlanID: "plan_1", remoteStatus: types.SubscriptionStatusIncomplete, wantKind: ierr.IsInvalidOperation},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fc := newFakeClient()
 			s, d := newTestService(fc)
 			seedTenant(t, d, "t1", types.TenantInternalStatusTrialing)
-			fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", planID: tt.currentPlanID, status: types.SubscriptionStatusTrialing}
+			fc.subs["us:t1"] = &remoteSubscription{
+				id: "sub_us:t1", planID: tt.currentPlanID,
+				status: lo.CoalesceOrEmpty(tt.remoteStatus, types.SubscriptionStatusTrialing),
+			}
 
 			req := checkoutReq
 			req.PlanID = tt.planID
@@ -353,6 +360,7 @@ func TestStartCheckout_PlanRejected(t *testing.T) {
 			require.Error(t, err)
 			assert.True(t, tt.wantKind(err), "got %v", err)
 			assert.Empty(t, fc.opened)
+			assert.Empty(t, fc.portalExtIDs)
 			_, saved := fc.billingUpdate("us:t1")
 			assert.Equal(t, !tt.wantNoWrites, saved)
 		})

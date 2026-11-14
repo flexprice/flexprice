@@ -31256,7 +31256,7 @@
           },
           "plan_id": {
             "type": "string",
-            "description": "PlanID is the offered plan to buy; empty means the default plan."
+            "description": "PlanID is the offered plan to buy; empty means the default plan, or a negotiated trial's own plan."
           },
           "tax_id": {
             "type": "string"

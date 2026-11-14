@@ -26,7 +26,7 @@ type SelfBillingCheckoutRequest struct {
 	Country    string `json:"address_country" validate:"required,len=2"`
 	PostalCode string `json:"address_postal_code" validate:"required"`
 	TaxID      string `json:"tax_id"`
-	// PlanID is the offered plan to buy; empty means the default plan.
+	// PlanID is the offered plan to buy; empty means the default plan, or a negotiated trial's own plan.
 	PlanID string `json:"plan_id,omitempty"`
 }
 

@@ -81,6 +81,15 @@ func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string,
 		failureURL:     s.Config.Billing.DashboardURL + checkoutFailurePath,
 	}
 
+	// A paid or unpaid subscription is not changed here: the plans are offered only while one can be bought.
+	if (sub.status == types.SubscriptionStatusActive || sub.status == types.SubscriptionStatusIncomplete) &&
+		req.PlanID != "" && req.PlanID != sub.planID {
+		return nil, ierr.NewErrorf("flexprice cloud subscription %s is %s; its plan cannot change at checkout", sub.id, sub.status).
+			WithHint("Your plan cannot be changed here; contact support").
+			WithReportableDetails(map[string]any{"subscription_id": sub.id, "status": sub.status, "plan_id": req.PlanID}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
 	var co *remoteCheckout
 	switch sub.status {
 	case types.SubscriptionStatusActive:

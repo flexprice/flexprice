@@ -28665,7 +28665,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "plan_id": {
-                    "description": "PlanID is the offered plan to buy; empty means the default plan.",
+                    "description": "PlanID is the offered plan to buy; empty means the default plan, or a negotiated trial's own plan.",
                     "type": "string"
                 },
                 "tax_id": {

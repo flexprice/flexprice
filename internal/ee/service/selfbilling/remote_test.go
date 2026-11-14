@@ -75,6 +75,7 @@ type fakeCloud struct {
 	modifications []map[string]any // ExecuteSubscriptionModify request bodies
 	cancelled     []string
 	subCancels    []map[string]any // CancelSubscription request bodies, with the subscription id under "id"
+	voided        []string         // VoidInvoice ids
 	portals       []string
 	bulkIngests   []map[string]any // IngestEventsBulk request bodies
 	fxQueries     []map[string]any // QueryFXRates request bodies
@@ -259,7 +260,16 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 				_, _ = w.Write([]byte(notFoundBody))
 				return
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"items": f.invoices})
+			items := f.invoices
+			if subID, ok := body["subscription_id"].(string); ok {
+				items = lo.Filter(items, func(inv map[string]any, _ int) bool { return inv["subscription_id"] == subID })
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
+
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/invoices/") && strings.HasSuffix(r.URL.Path, "/void"):
+			id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/invoices/"), "/void")
+			f.voided = append(f.voided, id)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "invoice_status": "VOIDED"})
 
 		case r.Method == http.MethodGet && r.URL.Path == pathCustomerUsage:
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -1025,6 +1035,27 @@ func TestEndTrials(t *testing.T) {
 	assert.Equal(t, "s_trial", f.subCancels[0]["id"])
 	assert.Equal(t, "immediate", f.subCancels[0]["cancellation_type"])
 	assert.Equal(t, "skip", f.subCancels[0]["cancel_immediately_invoice_policy"])
+	assert.Empty(t, f.voided)
+}
+
+// A trial that ended while the plan checkout was open is incomplete; its unpaid trial-end invoice goes with it.
+func TestEndTrials_TrialThatEndedUnpaid(t *testing.T) {
+	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+	f.subs["in:t1"] = []map[string]any{
+		{"id": "s_trial", "plan_id": "plan_1", "subscription_status": "incomplete"},
+		{"id": "s_paid", "plan_id": "plan_2", "subscription_status": "active"},
+	}
+	f.invoices = []map[string]any{
+		{"id": "inv_trial_end", "subscription_id": "s_trial", "invoice_status": "FINALIZED", "payment_status": "PENDING", "total": "199"},
+		{"id": "inv_paid", "subscription_id": "s_paid", "invoice_status": "FINALIZED", "payment_status": "SUCCEEDED", "total": "499"},
+	}
+	c := newTestRemoteClientWith(t, f, config.BillingConfig{PlanIDs: []string{"plan_1", "plan_2"}})
+
+	require.NoError(t, c.EndTrials(context.Background(), "in:t1"))
+
+	assert.Equal(t, []string{"inv_trial_end"}, f.voided)
+	require.Len(t, f.subCancels, 1)
+	assert.Equal(t, "s_trial", f.subCancels[0]["id"])
 }
 
 func TestRemoteClient_SummaryOffersPlansWhileOneCanBeBought(t *testing.T) {

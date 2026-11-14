@@ -144,10 +144,11 @@ func (c *remoteClient) StartPlanCheckout(ctx context.Context, in checkoutInput) 
 }
 
 // EndTrials cancels the customer's trials on self-serve plans, without an invoice, once a paid subscription replaced them.
+// A trial that ended while the plan checkout was open is incomplete by now: its unpaid trial-end invoice is voided too.
 func (c *remoteClient) EndTrials(ctx context.Context, extID string) error {
 	resp, err := c.sdk.Subscriptions.QuerySubscription(ctx, sdktypes.SubscriptionFilter{
 		ExternalCustomerID: lo.ToPtr(extID),
-		SubscriptionStatus: []sdktypes.SubscriptionStatus{sdktypes.SubscriptionStatusTrialing},
+		SubscriptionStatus: []sdktypes.SubscriptionStatus{sdktypes.SubscriptionStatusTrialing, sdktypes.SubscriptionStatusIncomplete},
 	})
 	if isNotFound(err) {
 		return nil
@@ -163,7 +164,31 @@ func (c *remoteClient) EndTrials(ctx context.Context, extID string) error {
 		if !lo.Contains(c.planIDs, lo.FromPtr(sub.PlanID)) {
 			continue
 		}
-		_, err := c.sdk.Subscriptions.CancelSubscription(ctx, lo.FromPtr(sub.ID), sdktypes.CancelSubscriptionRequest{
+		id := lo.FromPtr(sub.ID)
+
+		if lo.FromPtr(sub.SubscriptionStatus) == sdktypes.SubscriptionStatusIncomplete {
+			invoices, err := c.sdk.Invoices.QueryInvoice(ctx, sdktypes.InvoiceFilter{
+				ExternalCustomerID: lo.ToPtr(extID),
+				SubscriptionID:     lo.ToPtr(id),
+				InvoiceStatus:      []sdktypes.InvoiceStatus{sdktypes.InvoiceStatusFinalized},
+			})
+			if err != nil {
+				return cloudErr(err)
+			}
+			if invoices.ListInvoicesResponse == nil {
+				return unreadablePricing()
+			}
+			for _, inv := range invoices.ListInvoicesResponse.Items {
+				if lo.FromPtr(inv.PaymentStatus) == sdktypes.PaymentStatusSucceeded {
+					continue
+				}
+				if _, err := c.sdk.Invoices.VoidInvoice(ctx, lo.FromPtr(inv.ID)); err != nil {
+					return cloudErr(err)
+				}
+			}
+		}
+
+		_, err := c.sdk.Subscriptions.CancelSubscription(ctx, id, sdktypes.CancelSubscriptionRequest{
 			CancellationType:               sdktypes.CancellationTypeImmediate,
 			CancelImmediatelyInvoicePolicy: lo.ToPtr(sdktypes.CancelImmediatelyInvoicePolicySkip),
 			Reason:                         lo.ToPtr("self_billing_plan_purchased"),
