@@ -20,8 +20,9 @@ const (
 	emailSendDeadline = 24 * time.Hour
 	// emailDispatchWindow bounds one dispatch run's sends: send_rate_per_second × this window.
 	emailDispatchWindow = 50 * time.Second
-	// emailProviderFailureLimit is how many provider outage errors in a row end a dispatch run.
-	emailProviderFailureLimit = 3
+	// emailProviderFailureLimit is how many provider outage errors in a row end a dispatch run; high
+	// enough that a few emails failing on their own cannot hold up the rest of the queue.
+	emailProviderFailureLimit = 20
 )
 
 // errAttachmentNotReady marks an email whose attachment is still being produced.
@@ -31,6 +32,7 @@ var errAttachmentNotReady = cerrors.New("email attachment not ready")
 type EmailDispatchResult struct {
 	Sent     int
 	Failed   int
+	Skipped  int
 	Deferred int
 }
 
@@ -39,6 +41,7 @@ type deliveryOutcome int
 const (
 	deliverySent deliveryOutcome = iota
 	deliveryFailed
+	deliverySkipped
 	deliveryDeferred
 	// deliveryProviderDown counts toward ending the run; deliveryRateLimited ends it at once.
 	deliveryProviderDown
@@ -81,6 +84,8 @@ func (s *emailNotificationService) DispatchEmails(ctx context.Context) (*EmailDi
 			providerFailures = 0
 		case deliveryFailed:
 			res.Failed++
+		case deliverySkipped:
+			res.Skipped++
 		case deliveryDeferred:
 			res.Deferred++
 		case deliveryProviderDown:
@@ -99,8 +104,22 @@ func (s *emailNotificationService) DispatchEmails(ctx context.Context) (*EmailDi
 	return res, nil
 }
 
-// dispatchOne sends one queued email, gives up on it past the send deadline, or leaves it queued.
+// dispatchOne sends one queued email, skips it once the environment has turned emails off, gives up on
+// it past the send deadline, or leaves it queued.
 func (s *emailNotificationService) dispatchOne(ctx context.Context, e *emaillog.EmailLog) deliveryOutcome {
+	cfg, err := GetSetting[types.EmailNotificationConfig](NewSettingsService(s.ServiceParams).(*settingsService), ctx, types.SettingKeyEmailNotificationConfig)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to read email settings", "error", err, "email_log_id", e.ID)
+		return deliveryDeferred
+	}
+	if !cfg.Enabled {
+		if err := s.skipQueued(ctx, e.ID, "Emails were turned off for this environment before this email was sent"); err != nil {
+			s.Logger.Error(ctx, "failed to skip queued email", "error", err, "email_log_id", e.ID)
+			return deliveryDeferred
+		}
+		return deliverySkipped
+	}
+
 	age := clock.Now().Sub(e.CreatedAt)
 	if age >= emailSendDeadline {
 		if err := s.MarkEmailFailed(ctx, e.ID, "The email could not be sent within 24 hours"); err != nil {
@@ -110,12 +129,27 @@ func (s *emailNotificationService) dispatchOne(ctx context.Context, e *emaillog.
 		return deliveryFailed
 	}
 
-	err := s.DeliverEmail(ctx, e.ID, age >= emailAttachmentWait)
+	err = s.DeliverEmail(ctx, e.ID, age >= emailAttachmentWait)
 	outcome := classifyDelivery(err)
 	if outcome == deliveryDeferred && !cerrors.Is(err, errAttachmentNotReady) {
 		s.Logger.Error(ctx, "email delivery deferred", "error", err, "email_log_id", e.ID)
 	}
 	return outcome
+}
+
+// skipQueued records that a queued email will not be sent.
+func (s *emailNotificationService) skipQueued(ctx context.Context, emailLogID string, reason string) error {
+	e, err := s.EmailLogRepo.Get(ctx, emailLogID)
+	if err != nil {
+		return err
+	}
+	if e.DeliveryStatus != types.EmailDeliveryStatusQueued {
+		return nil
+	}
+	return s.EmailLogRepo.Update(ctx, emaillog.NewEmailLogBuilder(e).
+		WithDeliveryStatus(types.EmailDeliveryStatusSkipped).
+		WithStatusReason(reason).
+		Build())
 }
 
 // classifyDelivery maps DeliverEmail's result to what the dispatch run does next.
