@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
-	"github.com/flexprice/flexprice/internal/ee/agents/reducto"
+	"github.com/flexprice/flexprice/internal/ee/agents/providers/reducto"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 )

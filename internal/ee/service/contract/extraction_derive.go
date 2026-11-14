@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
-	contractagent "github.com/flexprice/flexprice/internal/ee/agents/extraction/contract"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
+	contractagent "github.com/flexprice/flexprice/internal/ee/agents/services/extraction/contract"
 	"github.com/shopspring/decimal"
 )
 

@@ -13,8 +13,24 @@ const (
 )
 
 const (
-	RoleSystem = "system"
-	RoleUser   = "user"
+	RoleSystem    = "system"
+	RoleUser      = "user"
+	RoleAssistant = "assistant"
+	RoleTool      = "tool"
+)
+
+const ToolTypeFunction = "function"
+
+const (
+	ToolChoiceAuto     = "auto"
+	ToolChoiceRequired = "required"
+	ToolChoiceNone     = "none"
+)
+
+const (
+	FinishReasonStop      = "stop"
+	FinishReasonToolCalls = "tool_calls"
+	FinishReasonLength    = "length"
 )
 
 const (
