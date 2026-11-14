@@ -1185,6 +1185,8 @@ type EmailConfig struct {
 	SenderDomain    string            `mapstructure:"sender_domain" validate:"omitempty"`
 	SenderLocalPart string            `mapstructure:"sender_local_part" validate:"omitempty"`
 	RegionTag       string            `mapstructure:"region_tag" validate:"omitempty"`
+	// SendRatePerSecond caps how many emails this deployment hands to the provider each second.
+	SendRatePerSecond int `mapstructure:"send_rate_per_second" validate:"omitempty,min=1"`
 }
 
 type ResendEmailConfig struct {
@@ -1298,6 +1300,7 @@ func NewConfig() (*Configuration, error) {
 	// Customer email sender defaults, for deploys whose config.yaml (a Helm ConfigMap) predates these keys.
 	v.SetDefault("email.sender_domain", "mail.flexprice.io")
 	v.SetDefault("email.sender_local_part", "invoices")
+	v.SetDefault("email.send_rate_per_second", 8)
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
@@ -1497,6 +1500,9 @@ func (c Configuration) validateEmail() error {
 	}
 	if strings.TrimSpace(c.Email.SenderDomain) == "" || strings.TrimSpace(c.Email.SenderLocalPart) == "" {
 		return fmt.Errorf("email.sender_domain and email.sender_local_part are required (mode %q)", c.Deployment.Mode)
+	}
+	if c.Email.SendRatePerSecond < 1 {
+		return fmt.Errorf("email.send_rate_per_second must be at least 1 (mode %q)", c.Deployment.Mode)
 	}
 	switch types.EmailProvider(c.Email.Provider) {
 	case types.EmailProviderLocal:

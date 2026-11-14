@@ -611,6 +611,7 @@ email:
   sender_domain: "mail.flexprice.io"
   sender_local_part: "invoices"
   region_tag: "" # us | ca | in | staging; delivery events tagged with another region are dropped
+  send_rate_per_second: 8 # emails handed to the provider per second; Resend allows 10 requests/s per team, shared by every deployment on it
 
 rbac:
   roles_config_path: "internal/config/rbac/roles.json" # Path to the roles.json file
