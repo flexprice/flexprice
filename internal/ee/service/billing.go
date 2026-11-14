@@ -1688,8 +1688,16 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	isPreview := lo.Contains([]types.InvoiceReferencePoint{
 		types.ReferencePointPreview, types.ReferencePointInternalPreview, types.ReferencePointRevenueFacts,
 	}, referencePoint)
-	if !isPreview {
-		if err := refreshSubscriptionEntitlementGrantUsage(ctx, s.ServiceParams, sub, periodStart, periodEnd, asOf); err != nil {
+	if !isPreview && s.EntitlementGrantRepo != nil {
+		cust, err := s.CustomerRepo.Get(ctx, sub.CustomerID)
+		if err != nil {
+			return nil, err
+		}
+		// Grant windows are evaluated in the current period, which after rollover is the next one.
+		invoicePeriodSub := *sub
+		invoicePeriodSub.CurrentPeriodStart = periodStart
+		invoicePeriodSub.CurrentPeriodEnd = periodEnd
+		if err := NewAlertService(s.ServiceParams).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{&invoicePeriodSub}, asOf); err != nil {
 			return nil, err
 		}
 	}

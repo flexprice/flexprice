@@ -143,13 +143,12 @@ func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrant_EvaluateTotalsE
 	s.seedMeterUsage(fx.extID, fx.storeMeter, first.Add(time.Minute), 5) // $5
 
 	at := fx.sub.CurrentPeriodStart.Add(2 * time.Hour)
-	grants, meta, err := s.grantService.EnsureGrantsForSubscriptions(s.GetContext(),
+	grants, _, err := s.grantService.EnsureGrantsForSubscriptions(s.GetContext(),
 		s.customerOf(fx.sub), []*subscription.Subscription{fx.sub}, at)
 	s.Require().NoError(err)
 	s.Require().Len(grants, 1)
 
-	s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(
-		s.GetContext(), s.customerOf(fx.sub), meta, grants, at))
+	s.Require().NoError(s.evalAlertService().EvaluateAndAlertEntitlementGrants(s.GetContext(), s.customerOf(fx.sub), []*subscription.Subscription{fx.sub}, at))
 
 	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), grants[0].ID)
 	s.Require().NoError(err)
