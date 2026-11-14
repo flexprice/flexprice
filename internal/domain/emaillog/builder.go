@@ -14,7 +14,7 @@ type emailLogBuilder struct {
 // NewEmailLogBuilder starts from a copy of e (or an empty email log when e is nil).
 func NewEmailLogBuilder(e *EmailLog) *emailLogBuilder {
 	if e == nil {
-		return &emailLogBuilder{e: &EmailLog{}}
+		return &emailLogBuilder{e: &EmailLog{Metadata: types.Metadata{}}}
 	}
 
 	cp := *e
