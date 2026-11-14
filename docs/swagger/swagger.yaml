@@ -15436,6 +15436,11 @@ definitions:
     - checkout.session.completed
     - checkout.session.failed
     - checkout.session.expired
+    - mandate.confirmed
+    - mandate.rejected
+    - mandate.cancelled
+    - mandate.setup_attempt_failed
+    - mandate.setup_expired
     - event.rejected
     type: string
     x-enum-varnames:
@@ -15511,6 +15516,11 @@ definitions:
     - WebhookEventCheckoutSessionCompleted
     - WebhookEventCheckoutSessionFailed
     - WebhookEventCheckoutSessionExpired
+    - WebhookEventMandateConfirmed
+    - WebhookEventMandateRejected
+    - WebhookEventMandateCancelled
+    - WebhookEventMandateSetupAttemptFailed
+    - WebhookEventMandateSetupExpired
     - WebhookEventEventRejected
   types.WindowSize:
     enum:
@@ -17278,6 +17288,73 @@ definitions:
         $ref: '#/definitions/types.WebhookEventName'
       invoice:
         $ref: '#/definitions/webhookDto.Invoice'
+    type: object
+  webhookDto.Mandate:
+    properties:
+      bank_account:
+        $ref: '#/definitions/webhookDto.MandateBankAccount'
+      card:
+        $ref: '#/definitions/webhookDto.MandateCard'
+      currency:
+        type: string
+      customer_id:
+        type: string
+      expires_at:
+        type: string
+      external_customer_id:
+        type: string
+      failure_reason:
+        type: string
+      id:
+        type: string
+      max_amount:
+        type: string
+      provider:
+        $ref: '#/definitions/types.PaymentGatewayType'
+      setup_intent_id:
+        type: string
+      status:
+        type: string
+      type:
+        $ref: '#/definitions/types.PaymentMethodType'
+      upi:
+        $ref: '#/definitions/webhookDto.MandateUPI'
+    type: object
+  webhookDto.MandateBankAccount:
+    properties:
+      account_type:
+        type: string
+      auth_type:
+        type: string
+      bank:
+        type: string
+      ifsc:
+        type: string
+      last4:
+        type: string
+    type: object
+  webhookDto.MandateCard:
+    properties:
+      brand:
+        type: string
+      exp_month:
+        type: integer
+      exp_year:
+        type: integer
+      last4:
+        type: string
+    type: object
+  webhookDto.MandateUPI:
+    properties:
+      vpa:
+        type: string
+    type: object
+  webhookDto.MandateWebhookPayload:
+    properties:
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      mandate:
+        $ref: '#/definitions/webhookDto.Mandate'
     type: object
   webhookDto.Meter:
     properties:
@@ -28849,6 +28926,86 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.voided
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.cancelled:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a saved mandate is cancelled. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.cancelled
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.confirmed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when the bank confirms a saved mandate (Razorpay eNACH).
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.confirmed
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.rejected:
+    post:
+      consumes:
+      - application/json
+      description: Fired when the bank rejects a mandate; failure_reason carries the
+        bank's reason. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.rejected
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.setup_attempt_failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a customer's mandate authorisation fails; failure_reason
+        carries the reason. The customer can retry the same link until it expires.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.setup_attempt_failed
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.setup_expired:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a mandate setup link expires before the customer authorises
+        it. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.setup_expired
       tags:
       - Webhook Events
   /webhook-events/payment.attempt.failed:

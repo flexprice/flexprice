@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
+	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
@@ -962,7 +963,7 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		case types.PaymentGatewayTypeStripe:
 			newStatus, err = s.fetchStripePaymentStatus(gatewayCtx, gatewayPaymentID)
 		case types.PaymentGatewayTypeRazorpay:
-			newStatus, err = s.fetchRazorpayPaymentStatus(gatewayCtx, gatewayPaymentID)
+			return s.syncRazorpayPayment(gatewayCtx, p, gatewayPaymentID)
 		case types.PaymentGatewayTypeMoyasar:
 			newStatus, err = s.fetchMoyasarPaymentStatus(gatewayCtx, gatewayPaymentID)
 		default:
@@ -1048,16 +1049,36 @@ func (s *paymentService) fetchStripePaymentStatus(ctx context.Context, gatewayPa
 	return integrations.StripePaymentStatus(resp.Status).ToFlexpricePaymentStatus()
 }
 
-func (s *paymentService) fetchRazorpayPaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, error) {
+// syncRazorpayPayment applies Razorpay's status; a decline takes the same path as the payment.failed webhook.
+func (s *paymentService) syncRazorpayPayment(ctx context.Context, p *payment.Payment, gatewayPaymentID string) (*payment.Payment, error) {
 	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
-		return "", err
+		return p, err
 	}
-	rawStatus, err := razorpayIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
+
+	gatewayPayment, err := razorpayIntegration.Client.FetchPayment(ctx, gatewayPaymentID)
 	if err != nil {
-		return "", err
+		return p, err
 	}
-	return integrations.RazorpayPaymentStatus(rawStatus).ToFlexpricePaymentStatus()
+
+	rawStatus, _ := gatewayPayment["status"].(string)
+	newStatus, err := integrations.RazorpayPaymentStatus(rawStatus).ToFlexpricePaymentStatus()
+	if err != nil {
+		return p, err
+	}
+	if newStatus != types.PaymentStatusFailed {
+		return s.applyGatewayPaymentStatus(ctx, p, newStatus, "")
+	}
+
+	message, _ := gatewayPayment["error_description"].(string)
+	if err := razorpayIntegration.PaymentSvc.MarkPaymentFailed(ctx, dto.NewPaymentResponse(p), razorpay.PaymentFailure{
+		RazorpayPaymentID: gatewayPaymentID,
+		Message:           message,
+	}, s, NewInvoiceService(s.ServiceParams)); err != nil {
+		return p, err
+	}
+
+	return s.PaymentRepo.Get(ctx, p.ID)
 }
 
 // fetchRazorpayPaymentLinkStatus reconciles a payment record against a Razorpay

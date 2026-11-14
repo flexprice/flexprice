@@ -16471,6 +16471,121 @@
                 }
             }
         },
+        "/webhook-events/mandate.cancelled": {
+            "post": {
+                "description": "Fired when a saved mandate is cancelled. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.cancelled",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.confirmed": {
+            "post": {
+                "description": "Fired when the bank confirms a saved mandate (Razorpay eNACH). Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.confirmed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.rejected": {
+            "post": {
+                "description": "Fired when the bank rejects a mandate; failure_reason carries the bank's reason. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.rejected",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.setup_attempt_failed": {
+            "post": {
+                "description": "Fired when a customer's mandate authorisation fails; failure_reason carries the reason. The customer can retry the same link until it expires. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.setup_attempt_failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.setup_expired": {
+            "post": {
+                "description": "Fired when a mandate setup link expires before the customer authorises it. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.setup_expired",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/payment.attempt.failed": {
             "post": {
                 "description": "Fired when one charge attempt is declined and the payment stays open for retry. Doc-only for parsing.",
@@ -37665,6 +37780,11 @@
                 "checkout.session.completed",
                 "checkout.session.failed",
                 "checkout.session.expired",
+                "mandate.confirmed",
+                "mandate.rejected",
+                "mandate.cancelled",
+                "mandate.setup_attempt_failed",
+                "mandate.setup_expired",
                 "event.rejected"
             ],
             "x-enum-varnames": [
@@ -37740,6 +37860,11 @@
                 "WebhookEventCheckoutSessionCompleted",
                 "WebhookEventCheckoutSessionFailed",
                 "WebhookEventCheckoutSessionExpired",
+                "WebhookEventMandateConfirmed",
+                "WebhookEventMandateRejected",
+                "WebhookEventMandateCancelled",
+                "WebhookEventMandateSetupAttemptFailed",
+                "WebhookEventMandateSetupExpired",
                 "WebhookEventEventRejected"
             ]
         },
@@ -40128,6 +40253,109 @@
                 },
                 "invoice": {
                     "$ref": "#/definitions/webhookDto.Invoice"
+                }
+            }
+        },
+        "webhookDto.Mandate": {
+            "type": "object",
+            "properties": {
+                "bank_account": {
+                    "$ref": "#/definitions/webhookDto.MandateBankAccount"
+                },
+                "card": {
+                    "$ref": "#/definitions/webhookDto.MandateCard"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "external_customer_id": {
+                    "type": "string"
+                },
+                "failure_reason": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "max_amount": {
+                    "type": "string"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.PaymentGatewayType"
+                },
+                "setup_intent_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.PaymentMethodType"
+                },
+                "upi": {
+                    "$ref": "#/definitions/webhookDto.MandateUPI"
+                }
+            }
+        },
+        "webhookDto.MandateBankAccount": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "auth_type": {
+                    "type": "string"
+                },
+                "bank": {
+                    "type": "string"
+                },
+                "ifsc": {
+                    "type": "string"
+                },
+                "last4": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.MandateCard": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "exp_month": {
+                    "type": "integer"
+                },
+                "exp_year": {
+                    "type": "integer"
+                },
+                "last4": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.MandateUPI": {
+            "type": "object",
+            "properties": {
+                "vpa": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.MandateWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "mandate": {
+                    "$ref": "#/definitions/webhookDto.Mandate"
                 }
             }
         },

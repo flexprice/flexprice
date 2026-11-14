@@ -127,6 +127,7 @@ func setupChargebeeWebhookHandler(t *testing.T, webhookUsername, webhookPassword
 		nil, // db
 		nil, // webhookService
 		service.NewBillingEntityService(service.ServiceParams{SettingsRepo: testutil.NewInMemorySettingsStore()}),
+		nil, // webhookPublisher
 	)
 }
 
