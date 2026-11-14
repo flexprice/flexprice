@@ -19,5 +19,14 @@ const (
 func (t IntegrationCapabilityType) String() string { return string(t) }
 
 type IntegrationCapability struct {
-	Type IntegrationCapabilityType `json:"type"`
+	Type                    IntegrationCapabilityType `json:"type"`
+	AddPaymentMethodOptions *AddPaymentMethodOptions  `json:"add_payment_method_options,omitempty"`
+}
+
+// AddPaymentMethodOptions describes what add_payment_method sets up at a gateway.
+type AddPaymentMethodOptions struct {
+	// PaymentMethodTypes are the methods it sets up, e.g. ["enach"] for Razorpay.
+	PaymentMethodTypes []string `json:"payment_method_types"`
+	// SetsDefault reports whether it can make the saved method the default (Stripe only).
+	SetsDefault bool `json:"sets_default"`
 }

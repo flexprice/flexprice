@@ -1,7 +1,10 @@
 package service
 
 import (
+	"strings"
+
 	"context"
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -46,9 +49,16 @@ func (s *customerPortalService) AddPaymentMethod(ctx context.Context, req *dto.P
 		returnURL = *req.SuccessURL
 	}
 
+	if req.PaymentMethodType != "" && !lo.Contains(dto.SetupIntentMethodTypes(types.SecretProvider(gw)), req.PaymentMethodType) {
+		return nil, ierr.NewErrorf("%s cannot set up %s", gw, req.PaymentMethodType).
+			WithHintf("Choose one of: %s", strings.Join(dto.SetupIntentMethodTypes(types.SecretProvider(gw)), ", ")).
+			Mark(ierr.ErrValidation)
+	}
+
 	link, err := provider.CreateSetupLink(ctx, interfaces.SetupLinkRequest{
 		CustomerID: customerID,
 		ReturnURL:  returnURL,
+		SetDefault: lo.FromPtrOr(req.SetDefault, true),
 	})
 	if err != nil {
 		return nil, err

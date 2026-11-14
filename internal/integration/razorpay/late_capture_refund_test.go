@@ -29,11 +29,12 @@ func (grantingLocker) AcquireLock(context.Context, string, time.Duration) (cache
 
 type lateCaptureClient struct {
 	RazorpayClient
-	refunds int
+	refunds      int
+	refundStatus string
 }
 
 func (c *lateCaptureClient) FetchPayment(context.Context, string) (map[string]interface{}, error) {
-	return map[string]interface{}{"status": "captured"}, nil
+	return map[string]interface{}{"status": "captured", "refund_status": c.refundStatus}, nil
 }
 
 func (c *lateCaptureClient) RefundPayment(context.Context, string, int64, string) (map[string]interface{}, error) {
@@ -43,8 +44,9 @@ func (c *lateCaptureClient) RefundPayment(context.Context, string, int64, string
 
 type lateCapturePayments struct {
 	interfaces.PaymentService
-	status  types.PaymentStatus
-	updates []types.PaymentStatus
+	status   types.PaymentStatus
+	updates  []types.PaymentStatus
+	metadata types.Metadata
 }
 
 func (p *lateCapturePayments) GetPayment(context.Context, string) (*dto.PaymentResponse, error) {
@@ -52,6 +54,12 @@ func (p *lateCapturePayments) GetPayment(context.Context, string) (*dto.PaymentR
 }
 
 func (p *lateCapturePayments) UpdatePayment(_ context.Context, _ string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error) {
+	if req.Metadata != nil {
+		p.metadata = *req.Metadata
+	}
+	if req.PaymentStatus == nil {
+		return &dto.PaymentResponse{ID: "pay_fp", PaymentStatus: p.status}, nil
+	}
 	target := types.PaymentStatus(lo.FromPtr(req.PaymentStatus))
 	if err := p.status.ValidateTransitionTo(target); err != nil {
 		return nil, err
@@ -66,16 +74,24 @@ func TestRefundLateCapturedPayment(t *testing.T) {
 		name        string
 		status      types.PaymentStatus
 		wantUpdates []types.PaymentStatus
+		wantStatus  types.PaymentStatus
 	}{
 		{
 			name:        "pending checkout payment records the capture before the refund",
 			status:      types.PaymentStatusPending,
 			wantUpdates: []types.PaymentStatus{types.PaymentStatusSucceeded, types.PaymentStatusRefunded},
+			wantStatus:  types.PaymentStatusRefunded,
 		},
 		{
 			name:        "payment already synced to succeeded is only refunded",
 			status:      types.PaymentStatusSucceeded,
 			wantUpdates: []types.PaymentStatus{types.PaymentStatusRefunded},
+			wantStatus:  types.PaymentStatusRefunded,
+		},
+		{
+			name:       "failed payment is refunded and stays failed",
+			status:     types.PaymentStatusFailed,
+			wantStatus: types.PaymentStatusFailed,
 		},
 	}
 
@@ -90,7 +106,19 @@ func TestRefundLateCapturedPayment(t *testing.T) {
 
 			assert.Equal(t, 1, client.refunds)
 			assert.Equal(t, tt.wantUpdates, payments.updates)
-			assert.Equal(t, types.PaymentStatusRefunded, payments.status)
+			assert.Equal(t, tt.wantStatus, payments.status)
+			assert.Equal(t, "rfnd_1", payments.metadata["razorpay_refund_id"])
 		})
 	}
+}
+
+func TestRefundLateCapturedPayment_RepeatKeepsRefundID(t *testing.T) {
+	client := &lateCaptureClient{refundStatus: "full"}
+	payments := &lateCapturePayments{status: types.PaymentStatusFailed, metadata: types.Metadata{"razorpay_refund_id": "rfnd_1"}}
+	svc := &PaymentService{client: client, locker: grantingLocker{}, logger: logger.NewNoopLogger()}
+
+	require.NoError(t, svc.RefundLateCapturedPayment(context.Background(), "pay_fp", "pay_rzp", payments))
+
+	assert.Zero(t, client.refunds)
+	assert.Equal(t, "rfnd_1", payments.metadata["razorpay_refund_id"])
 }

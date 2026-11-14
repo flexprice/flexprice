@@ -610,7 +610,7 @@ func (l *PaymentLifecycle) validateInitiateParams(params InitiatePaymentParams) 
 const invoiceChargeLockTTL = 15 * time.Minute
 
 // LockInvoiceCharge takes the per-invoice charge lock and returns an ErrAlreadyExists error
-// when a charge other than paymentID is PROCESSING. Hold it until the charge is submitted.
+// when another saved-method charge is in flight. Hold it until the charge is submitted.
 func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo payment.Repository, environmentID, invoiceID, paymentID string) (cache.Lock, error) {
 	key := fmt.Sprintf("razorpay:autocharge:%s:%s:%s", types.GetTenantID(ctx), environmentID, invoiceID)
 	lock, err := locker.AcquireLock(ctx, key, invoiceChargeLockTTL)
@@ -621,13 +621,8 @@ func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo pay
 		return nil, errChargeInFlight(invoiceID)
 	}
 
-	filter := types.NewNoLimitPaymentFilter()
-	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
-	filter.DestinationID = lo.ToPtr(invoiceID)
-	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusProcessing))
-	filter.Limit = lo.ToPtr(2)
-	inFlight, err := paymentRepo.List(ctx, filter)
-	if err == nil && lo.ContainsBy(inFlight, func(p *payment.Payment) bool { return p.ID != paymentID }) {
+	inFlight, err := ChargeInFlight(ctx, paymentRepo, invoiceID, paymentID)
+	if err == nil && inFlight {
 		err = errChargeInFlight(invoiceID)
 	}
 	if err != nil {
@@ -635,6 +630,37 @@ func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo pay
 		return nil, err
 	}
 	return lock, nil
+}
+
+// ChargeInFlight reports whether a saved-method payment other than excludeID is still open on the invoice.
+func ChargeInFlight(ctx context.Context, paymentRepo payment.Repository, invoiceID, excludeID string) (bool, error) {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	pymnts, err := paymentRepo.List(ctx, filter)
+	if err != nil {
+		return false, err
+	}
+
+	return lo.ContainsBy(pymnts, func(p *payment.Payment) bool {
+		return p.ID != excludeID && IsChargeInFlight(p)
+	}), nil
+}
+
+// IsChargeInFlight reports whether p is a saved-method debit the gateway may still settle.
+func IsChargeInFlight(p *payment.Payment) bool {
+	if !p.PaymentMethodType.IsSavedMethod() {
+		return false
+	}
+	switch p.PaymentStatus {
+	case types.PaymentStatusPending, types.PaymentStatusProcessing:
+		return true
+	case types.PaymentStatusInitiated:
+		// An INITIATED payment never sent to the gateway (process_payment false) is not a debit.
+		return lo.FromPtr(p.GatewayPaymentID) != "" || lo.FromPtr(p.GatewayTrackingID) != ""
+	default:
+		return false
+	}
 }
 
 func errChargeInFlight(invoiceID string) error {

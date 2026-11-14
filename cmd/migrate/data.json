@@ -161,6 +161,18 @@
             "description": "Fired when a payment is awaiting processing"
         },
         {
+            "name": "mandate.confirmed",
+            "description": "Fired when the bank confirms a saved mandate"
+        },
+        {
+            "name": "mandate.rejected",
+            "description": "Fired when the bank rejects a mandate, with the bank's reason"
+        },
+        {
+            "name": "mandate.cancelled",
+            "description": "Fired when a saved mandate is cancelled"
+        },
+        {
             "name": "payment.success",
             "description": "Fired when a payment is successful"
         },

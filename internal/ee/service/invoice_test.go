@@ -821,6 +821,60 @@ func (s *InvoiceServiceSuite) TestInvoiceTransitionsCounted() {
 	s.Equal(voidedBefore+1, count(types.InvoiceStatusVoided))
 }
 
+func (s *InvoiceServiceSuite) TestVoidInvoice_RefusedWhileDebitInFlight() {
+	ctx := s.GetContext()
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		Currency:      "usd",
+		AmountDue:     decimal.NewFromFloat(100),
+		Total:         decimal.NewFromFloat(100),
+		Subtotal:      decimal.NewFromFloat(100),
+		BillingReason: types.InvoiceBillingReasonManual,
+	})
+	s.Require().NoError(err)
+
+	pymnt := &payment.Payment{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
+		IdempotencyKey:    "enach_debit_" + resp.ID,
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     resp.ID,
+		PaymentMethodType: types.PaymentMethodTypeENACH,
+		PaymentStatus:     types.PaymentStatusProcessing,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "usd",
+		EnvironmentID:     types.GetEnvironmentID(ctx),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, pymnt))
+
+	got, err := s.service.GetInvoice(ctx, resp.ID)
+	s.Require().NoError(err)
+	s.Require().NotNil(got.InFlightCharge)
+	s.Equal(pymnt.ID, got.InFlightCharge.PaymentID)
+	s.Equal(types.PaymentMethodTypeENACH, got.InFlightCharge.PaymentMethodType)
+
+	listed, err := s.service.ListInvoices(ctx, &types.InvoiceFilter{QueryFilter: types.NewDefaultQueryFilter(), InvoiceIDs: []string{resp.ID}})
+	s.Require().NoError(err)
+	s.Require().Len(listed.Items, 1)
+	s.Require().NotNil(listed.Items[0].InFlightCharge)
+
+	_, err = s.service.VoidInvoice(ctx, resp.ID, dto.InvoiceVoidRequest{})
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err))
+	s.Contains(err.Error(), "a payment is in progress")
+
+	pymnt.PaymentStatus = types.PaymentStatusFailed
+	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, pymnt))
+
+	got, err = s.service.GetInvoice(ctx, resp.ID)
+	s.Require().NoError(err)
+	s.Nil(got.InFlightCharge, "a failed debit is no longer in flight")
+
+	_, err = s.service.VoidInvoice(ctx, resp.ID, dto.InvoiceVoidRequest{})
+	s.Require().NoError(err)
+}
+
 // A zero-charge cycle draft counts as skipped once; recomputing a still-skipped invoice adds nothing.
 func (s *InvoiceServiceSuite) TestInvoiceSkipCountedOnce() {
 	r := metricstest.Install(s.T())

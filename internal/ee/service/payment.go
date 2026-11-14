@@ -199,7 +199,7 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	// their own IdempotencyKey to opt out (installments, etc).
 	// Card and UPI invoice charges are guarded by the per-invoice charge lock, so each request is its own payment.
 	if p.IdempotencyKey == "" && req.ProcessPayment && p.DestinationType == types.PaymentDestinationTypeInvoice &&
-		(p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI) {
+		p.PaymentMethodType.IsSavedMethod() {
 		p.IdempotencyKey = p.ID
 	}
 	if p.IdempotencyKey == "" {
@@ -1167,6 +1167,13 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 	return dto.NewPaymentResponse(p), nil
 }
 
+func (s *paymentService) ListPaymentIntegrations(ctx context.Context, customerID string) (*dto.IntegrationsResponse, error) {
+	if _, err := s.CustomerRepo.Get(ctx, customerID); err != nil {
+		return nil, err
+	}
+	return listPaymentIntegrations(ctx, s.ServiceParams, customerID)
+}
+
 func (s *paymentService) ListPaymentMethods(ctx context.Context, customerID string, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error) {
 	if customerID == "" {
 		return nil, ierr.NewError("customer_id is required").
@@ -1296,6 +1303,16 @@ func toSavedPaymentMethod(
 
 	if m.UPI != nil {
 		out.UPI = &dto.SavedUPIDetails{VPA: m.UPI.VPA}
+	}
+
+	if m.BankAccount != nil {
+		out.BankAccount = &dto.SavedBankAccountDetails{
+			Bank:        m.BankAccount.Bank,
+			IFSC:        m.BankAccount.IFSC,
+			Last4:       m.BankAccount.Last4,
+			AccountType: m.BankAccount.AccountType,
+			AuthType:    m.BankAccount.AuthType,
+		}
 	}
 
 	if m.Recurring != nil {

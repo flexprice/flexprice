@@ -91,11 +91,12 @@ type CheckoutLineItem struct {
 
 // CheckoutProviderResponse is the unified output from all checkout provider adapters.
 type CheckoutProviderResponse struct {
-	ProviderSessionID       string              // stored in EntityIntegrationMapping
-	NextAction              types.PaymentAction // type + URL for the customer
-	ProviderPaymentIntentID string              // charge/intent ID, stored after payment confirmation
-	ExpiresAt               *time.Time          // nil if provider doesn't return expiry
-	ProviderMetadata        map[string]string   // debug data only, not for business logic
+	ProviderSessionID       string                  // stored in EntityIntegrationMapping
+	NextAction              types.PaymentAction     // type + URL for the customer
+	ProviderPaymentIntentID string                  // charge/intent ID, stored after payment confirmation
+	ExpiresAt               *time.Time              // nil if provider doesn't return expiry
+	ProviderMetadata        map[string]string       // debug data only, not for business logic
+	PaymentMethod           types.PaymentMethodType // method a saved-method charge used
 }
 
 // AuthorizationLinkRequest is the unified input for mandate/authorization
@@ -105,17 +106,17 @@ type AuthorizationLinkRequest struct {
 	// that cannot express CIT/MIT ignore it.
 	CustomerPresent bool
 	InvoiceID       string
-	CustomerID          string
-	PaymentID           string
-	Amount              decimal.Decimal
-	Currency            string
-	MaxAmount           *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
-	ExpiresAt           *time.Time
-	PreferredMethod     types.PaymentMethodType
-	SuccessURL          string
-	CancelURL           string
-	Metadata            map[string]string
-	LineItems           []CheckoutLineItem
+	CustomerID      string
+	PaymentID       string
+	Amount          decimal.Decimal
+	Currency        string
+	MaxAmount       *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
+	ExpiresAt       *time.Time
+	PreferredMethod types.PaymentMethodType
+	SuccessURL      string
+	CancelURL       string
+	Metadata        map[string]string
+	LineItems       []CheckoutLineItem
 }
 
 // HasAutoChargeableMethodRequest is the input for checking if a customer has
@@ -136,6 +137,7 @@ type ProviderPaymentMethod struct {
 	// Card is set only for card methods; nil for UPI, ACH and the rest.
 	Card                *ProviderCardDetails
 	UPI                 *ProviderUPIDetails
+	BankAccount         *ProviderBankAccountDetails
 	Recurring           *ProviderRecurringPaymentDetails
 	InstantlyChargeable bool
 	// IsDefault is the gateway's own default/primary flag, which is what decides
@@ -165,8 +167,18 @@ type ProviderUPIDetails struct {
 	VPA string
 }
 
+// ProviderBankAccountDetails is the displayable part of a bank-account mandate.
+type ProviderBankAccountDetails struct {
+	Bank        string
+	IFSC        string
+	Last4       string
+	AccountType string
+	AuthType    string
+}
+
 type ProviderRecurringPaymentDetails struct {
 	Status             types.RecurringPaymentStatus
+	FailureReason      string
 	AutoChargeableTill *time.Time
 	MaxAmount          *decimal.Decimal
 }

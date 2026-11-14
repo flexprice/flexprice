@@ -319,6 +319,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_ExpiredSession_Refun
 	}
 	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
 	event.Payload.Payment.Entity.ID = "pay_rzp_001"
+	event.Payload.Payment.Entity.Amount = 50000
 	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
 
 	err := s.handler.handlePaymentCaptured(s.ctx, event, s.services)
@@ -334,6 +335,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedSession_Refund
 	}
 	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
 	event.Payload.Payment.Entity.ID = "pay_rzp_001"
+	event.Payload.Payment.Entity.Amount = 50000
 	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
 
 	err := s.handler.handlePaymentCaptured(s.ctx, event, s.services)
@@ -501,6 +503,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_SyncedPaymentStillCo
 	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusSucceeded
 	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
 	event.Payload.Payment.Entity.ID = "pay_rzp_checkout"
+	event.Payload.Payment.Entity.Amount = 50000
 	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
 
 	s.Require().NoError(s.handler.handlePaymentCaptured(s.ctx, event, s.services))
@@ -571,6 +574,32 @@ func TestHandleWebhookEvent_UnhandledTypeCountedAsOther(t *testing.T) {
 	require.NoError(t, h.HandleWebhookEvent(types.SetEnvironmentID(types.SetTenantID(context.Background(), "ten_gw_rzp"), "env_gw"), &RazorpayWebhookEvent{Event: "attacker.chosen"}, "env_gw", nil))
 
 	require.Equal(t, int64(1), r.Sum("gateway.webhooks", map[string]string{"tenant_id": "ten_gw_rzp", "provider": "razorpay", "event_type": "other", "outcome": "ignored"}))
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_ZeroAmountIsIgnored() {
+	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	event.Payload.Payment.Entity.ID = "pay_rzp_reg"
+	event.Payload.Payment.Entity.Amount = 0
+
+	s.NoError(s.handler.handlePaymentCaptured(s.ctx, event, s.services))
+
+	s.Zero(s.paymentSvc.getCalls)
+	s.Empty(s.paymentSvc.updateCalls)
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedPaymentIsRefundedAndStaysFailed() {
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
+	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	event.Payload.Payment.Entity.ID = "pay_rzp_late"
+	event.Payload.Payment.Entity.Amount = 50000
+	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+
+	s.NoError(s.handler.handlePaymentCaptured(s.ctx, event, s.services))
+
+	s.Equal([]string{"pay_rzp_late"}, s.client.refundCalls)
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
+	s.Require().Len(s.paymentSvc.updateCalls, 1)
+	s.Equal("rfnd_test001", (*s.paymentSvc.updateCalls[0].Metadata)["razorpay_refund_id"])
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_AutoChargeDeclinePublishesInvoicePaymentFailed() {

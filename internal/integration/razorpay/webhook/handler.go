@@ -124,6 +124,11 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		"status", payment.Status,
 	)
 
+	// A ₹0 capture is a mandate registration, not a charge.
+	if payment.Amount == 0 {
+		return nil
+	}
+
 	// Get FlexPrice payment ID from notes
 	flexpricePaymentID, ok := payment.Notes["flexprice_payment_id"].(string)
 	if !ok || flexpricePaymentID == "" {
@@ -181,6 +186,17 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID,
 			"status", paymentRecord.PaymentStatus)
+		return nil
+	}
+
+	// We already gave up on this payment, so the late capture is refunded rather than applied.
+	if paymentRecord.PaymentStatus == types.PaymentStatusFailed {
+		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, payment.ID, services.PaymentService); err != nil {
+			h.logger.Error(ctx, "failed to refund payment captured after it failed",
+				"error", err,
+				"flexprice_payment_id", flexpricePaymentID,
+				"razorpay_payment_id", payment.ID)
+		}
 		return nil
 	}
 
