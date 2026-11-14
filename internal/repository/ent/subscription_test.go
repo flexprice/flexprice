@@ -51,13 +51,99 @@ func newSubscriptionTestRepository(t *testing.T) (context.Context, postgres.ICli
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
 	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "trial_test_tenant"), "trial_test_env")
-	table := *migrate.SubscriptionsTable
-	table.ForeignKeys = nil
-	require.NoError(t, migrate.Create(ctx, client.Schema, []*schema.Table{&table}, migrate.WithForeignKeys(false)))
+	tables := make([]*schema.Table, 0, 2)
+	for _, source := range []*schema.Table{migrate.SubscriptionsTable, migrate.CustomersTable} {
+		table := schema.NewTable(source.Name)
+		for _, column := range source.Columns {
+			table.AddColumn(column)
+		}
+		table.PrimaryKey = source.PrimaryKey
+		table.Indexes = source.Indexes
+		table.Annotation = source.Annotation
+		tables = append(tables, table)
+	}
+	require.NoError(t, migrate.Create(ctx, client.Schema, tables, migrate.WithForeignKeys(false)))
 	log := logger.NewNoopLogger()
 	database := postgres.NewClient(&postgres.EntClients{Writer: client, Reader: client}, log, nil)
 	repo := NewSubscriptionRepository(database, log, newFakeRedisCache()).(*subscriptionRepository)
 	return ctx, database, repo
+}
+
+func TestSubscriptionList_CustomerNameSort(t *testing.T) {
+	ctx, database, repo := newSubscriptionTestRepository(t)
+	client := database.Writer(ctx)
+	otherTenant := types.SetTenantID(ctx, "other_tenant")
+	otherEnvironment := types.SetEnvironmentID(ctx, "other_environment")
+	for _, c := range []struct {
+		id, name string
+		ctx      context.Context
+	}{
+		{"alpha", "Alpha", ctx},
+		{"alpha_upper", "ALPHA", ctx},
+		{"beta", "beta", ctx},
+		{"zulu", "Zulu", ctx},
+		{"cross_tenant", "Aardvark", otherTenant},
+		{"cross_env", "Aardvark", otherEnvironment},
+	} {
+		_, err := client.Customer.Create().SetID(c.id).SetExternalID(c.id).SetName(c.name).
+			SetTenantID(types.GetTenantID(c.ctx)).SetEnvironmentID(types.GetEnvironmentID(c.ctx)).
+			SetCreatedBy("test").SetUpdatedBy("test").Save(ctx)
+		require.NoError(t, err)
+	}
+	for _, row := range []struct {
+		id, customer string
+		ctx          context.Context
+	}{
+		{"sub_a", "zulu", ctx},
+		{"sub_b", "beta", ctx},
+		{"sub_c", "alpha", ctx},
+		{"sub_d", "alpha", ctx},
+		{"sub_e", "alpha_upper", ctx},
+		{"sub_missing", "missing", ctx},
+		{"sub_cross_tenant", "cross_tenant", ctx},
+		{"sub_cross_env", "cross_env", ctx},
+		{"hidden_tenant", "zulu", otherTenant},
+		{"hidden_env", "zulu", otherEnvironment},
+	} {
+		sub := subscriptionTestFixture(row.ctx, row.id, types.SubscriptionStatusActive, nil, nil)
+		sub.CustomerID = row.customer
+		require.NoError(t, repo.Create(row.ctx, sub))
+	}
+	for _, tc := range []struct {
+		name      string
+		direction types.SortDirection
+		want      []string
+	}{
+		{"ascending", types.SortDirectionAsc, []string{"sub_cross_env", "sub_cross_tenant", "sub_missing", "sub_c", "sub_d", "sub_e", "sub_b", "sub_a"}},
+		{"descending", types.SortDirectionDesc, []string{"sub_a", "sub_b", "sub_e", "sub_d", "sub_c", "sub_missing", "sub_cross_tenant", "sub_cross_env"}},
+		{"default direction", "", []string{"sub_cross_env", "sub_cross_tenant", "sub_missing", "sub_c", "sub_d", "sub_e", "sub_b", "sub_a"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idDirection := tc.direction
+			if idDirection == "" {
+				idDirection = types.SortDirectionAsc
+			}
+			filter := types.NewSubscriptionFilter()
+			filter.Limit = lo.ToPtr(2)
+			filter.Sort = []*types.SortCondition{
+				{Field: "customer_name", Direction: tc.direction},
+				{Field: "id", Direction: idDirection},
+			}
+			var ids []string
+			for offset := 0; offset < len(tc.want); offset += 2 {
+				filter.Offset = lo.ToPtr(offset)
+				page, err := repo.List(ctx, filter)
+				require.NoError(t, err)
+				for _, sub := range page {
+					ids = append(ids, sub.ID)
+				}
+			}
+			require.Equal(t, tc.want, ids)
+			count, err := repo.Count(ctx, filter)
+			require.NoError(t, err)
+			require.Equal(t, len(tc.want), count)
+		})
+	}
 }
 
 func TestSubscriptionUpdate_PersistsTrialBounds(t *testing.T) {

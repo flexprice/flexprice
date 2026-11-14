@@ -13,6 +13,22 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: flexprice_test
+          POSTGRES_PASSWORD: flexprice_test
+          POSTGRES_DB: flexprice_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U flexprice_test -d flexprice_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FLEXPRICE_TEST_POSTGRES_DSN: postgres://flexprice_test:flexprice_test@localhost:5432/flexprice_test?sslmode=disable
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

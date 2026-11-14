@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/samber/lo"
@@ -13,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/coupon"
 	"github.com/flexprice/flexprice/ent/couponassociation"
+	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
@@ -679,11 +681,37 @@ func (o SubscriptionQueryOptions) ApplyStatusFilter(query SubscriptionQuery, sta
 }
 
 func (o SubscriptionQueryOptions) ApplySortFilter(query SubscriptionQuery, field string, order string) SubscriptionQuery {
+	if field == "customer_name" {
+		return query.Order(subscriptionCustomerNameOrder(order))
+	}
 	orderFunc := ent.Desc
 	if order == "asc" {
 		orderFunc = ent.Asc
 	}
 	return query.Order(orderFunc(o.GetFieldName(field)))
+}
+
+func subscriptionCustomerNameOrder(direction string) subscription.OrderOption {
+	return func(s *sql.Selector) {
+		c := sql.Table(customer.Table).As("sort_customer")
+		name := sql.Select(c.C(customer.FieldName)).From(c).Where(sql.And(
+			sql.ColumnsEQ(c.C(customer.FieldID), s.C(subscription.FieldCustomerID)),
+			sql.ColumnsEQ(c.C(customer.FieldTenantID), s.C(subscription.FieldTenantID)),
+			sql.ColumnsEQ(c.C(customer.FieldEnvironmentID), s.C(subscription.FieldEnvironmentID)),
+		))
+		// A scoped scalar lookup preserves rows without a customer and avoids
+		// ambiguous subscription columns in subsequent sort conditions.
+		s.OrderExprFunc(func(b *sql.Builder) {
+			b.WriteString("LOWER(COALESCE(").Wrap(func(b *sql.Builder) {
+				b.Join(name)
+			}).WriteString(", '')) COLLATE \"C\"")
+			if direction == string(types.SortDirectionDesc) {
+				b.WriteString(" DESC")
+			} else {
+				b.WriteString(" ASC")
+			}
+		})
+	}
 }
 
 func (o SubscriptionQueryOptions) ApplyPaginationFilter(query SubscriptionQuery, limit int, offset int) SubscriptionQuery {
@@ -851,10 +879,17 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 	}
 
 	// Apply sorts using the generic function
-	if f.Sort != nil {
+	for _, condition := range f.Sort {
+		if condition == nil {
+			continue
+		}
+		if condition.Field == "customer_name" {
+			query = query.Order(subscriptionCustomerNameOrder(string(condition.Direction)))
+			continue
+		}
 		query, err = dsl.ApplySorts[SubscriptionQuery, subscription.OrderOption](
 			query,
-			f.Sort,
+			[]*types.SortCondition{condition},
 			o.GetFieldResolver,
 			func(o dsl.OrderFunc) subscription.OrderOption { return subscription.OrderOption(o) },
 		)
