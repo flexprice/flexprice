@@ -3100,6 +3100,16 @@ func (s *billingService) GetCustomerEntitlementsForSubscriptions(ctx context.Con
 		SubscriptionID: subscriptions[0].ID,
 	})
 
+	if req != nil && req.RefreshGrants && s.Config.EntitlementGrants.RefreshOnRead {
+		cust, err := s.CustomerRepo.Get(ctx, customerID)
+		if err == nil {
+			err = NewAlertService(s.ServiceParams).EvaluateAndAlertEntitlementGrants(ctx, cust, subscriptions, clock.Now())
+		}
+		if err != nil {
+			s.Logger.Error(ctx, "entitlement grant refresh before read failed; returning stored usage",
+				"error", err, "customer_id", customerID)
+		}
+	}
 	s.attachGrantState(ctx, aggregatedFeatures, subscriptions)
 
 	// Build final response

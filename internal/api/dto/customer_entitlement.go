@@ -27,6 +27,8 @@ import (
 type GetCustomerEntitlementsRequest struct {
 	FeatureIDs      []string `json:"feature_ids,omitempty" form:"feature_ids"`
 	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
+	// RefreshGrants evaluates entitlement grants before returning their usage. Used by the UI.
+	RefreshGrants bool `json:"refresh_grants,omitempty" form:"refresh_grants"`
 }
 
 func (r *GetCustomerEntitlementsRequest) Validate() error {
