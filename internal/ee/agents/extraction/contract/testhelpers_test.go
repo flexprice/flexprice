@@ -3,14 +3,11 @@ package contract
 import (
 	"context"
 	"encoding/json"
-	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
-	"strings"
 	"testing"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
+
 	"github.com/flexprice/flexprice/internal/ee/agents/openrouter"
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,26 +30,6 @@ func (f *fakeOpenRouter) Complete(_ context.Context, req *openrouter.Request) (*
 func (f *fakeOpenRouter) DefaultModel() string { return f.model }
 
 func (f *fakeOpenRouter) IsConfigured() bool { return true }
-
-type fakeCustomers struct {
-	rows    []*customer.Customer
-	filters []*types.CustomerFilter
-}
-
-func (f *fakeCustomers) GetCustomers(_ context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error) {
-	f.filters = append(f.filters, filter)
-	resp := &dto.ListCustomersResponse{}
-	for _, c := range f.rows {
-		if filter.Email != "" && !strings.EqualFold(c.Email, filter.Email) {
-			continue
-		}
-		if len(filter.Filters) > 0 && !strings.Contains(strings.ToLower(c.Name), strings.ToLower(*filter.Filters[0].Value.String)) {
-			continue
-		}
-		resp.Items = append(resp.Items, &dto.CustomerResponse{Customer: c})
-	}
-	return resp, nil
-}
 
 func read(value string, confidence, page int, quote string) extraction.Term {
 	return extraction.Term{Value: value, Confidence: confidence, Page: page, Quote: quote, Options: []string{}}

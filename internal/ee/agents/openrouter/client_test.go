@@ -53,7 +53,7 @@ func TestComplete_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Bearer sk-test", gotAuth)
 	require.Equal(t, `{"ok":true}`, resp.Content)
-	require.Equal(t, Usage{PromptTokens: 10, CompletionTokens: 5, CostUSD: 0.0123}, resp.Usage)
+	require.Equal(t, &Usage{PromptTokens: 10, CompletionTokens: 5, CostUSD: 0.0123}, resp.Usage)
 
 	require.NotNil(t, got.Provider)
 	require.Equal(t, dataCollectionDeny, got.Provider.DataCollection)

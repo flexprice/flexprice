@@ -21,7 +21,6 @@ type Term struct {
 
 func (t Term) IsSet() bool { return t.Value != "" }
 
-
 type Extraction struct {
 	Result *Result           `json:"result"`
 	Model  string            `json:"model"`
