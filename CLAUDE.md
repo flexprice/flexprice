@@ -201,6 +201,7 @@ flexprice/
 5. Create API handler in `internal/api/v1/<entity>.go`
 6. Register route in `internal/api/router.go`
 7. Add Swagger annotations
+8. Extend or add an integration journey covering the endpoint (see below)
 
 ### Ent Schema Changes
 
@@ -260,6 +261,21 @@ When billing entities are enabled, each connection belongs to one billing entity
 **Scope before any connection or provider use.** Before `IntegrationFactory.Get*`, `connectionRepo.GetByProvider`, or anything that builds a provider client, put the owning entity in ctx with `BillingEntityService.ScopeToCustomer`, `ScopeToInvoice`, `ScopeToSubscription`, `ScopeToPayment` or `ScopeToConnection` (webhooks). Scope once at the service entry point and pass that ctx down. Never fall back to the default entity or the first connection.
 
 **Off mode hides a missing scope.** `ScopeTo*` returns ctx unchanged while billing entities are off, so give every new provider or connection path a test with billing entities enabled and an owned connection.
+
+## Integration Journeys (API-level tests)
+
+YAML-defined customer workflows in `integration-testing-suite/journeys/` run
+against live targets through the published Go SDK. **When you add or change an
+API endpoint or billing behavior, update the journeys in the same PR** — the
+same way you'd add unit tests. Authoring guide:
+`integration-testing-suite/CLAUDE.md`.
+
+```bash
+make journeys-validate          # static validation (no network/secrets) — must pass
+make journeys-ops               # list every SDK operation callable from YAML
+make journeys-coverage          # SDK operations with no journey coverage yet
+make journeys-run TAGS=sanity   # live run (needs FLEXPRICE_API_KEY or FLEXPRICE_TARGETS)
+```
 
 ## Testing Conventions
 
