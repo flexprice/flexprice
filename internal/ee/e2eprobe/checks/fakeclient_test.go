@@ -533,6 +533,8 @@ type fakeEvents struct {
 	anaErr    error
 	// analyticsItems, when set, is returned in GetUsageAnalytics responses.
 	analyticsItems []types.UsageAnalyticItem
+	// analyticsByCustomer, when it has the request's external customer, overrides analyticsItems.
+	analyticsByCustomer map[string][]types.UsageAnalyticItem
 
 	// analyticsEcho makes GetUsageAnalytics append an item whose points carry
 	// the timestamps of the events ingested so far — the shape a real bucketed
@@ -551,7 +553,7 @@ func (f *fakeEvents) Ingest(_ context.Context, req types.IngestEventRequest) (*d
 	f.ingested = append(f.ingested, req)
 	return &dtos.IngestEventResponse{}, nil
 }
-func (f *fakeEvents) GetUsageAnalytics(_ context.Context, _ types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
+func (f *fakeEvents) GetUsageAnalytics(_ context.Context, req types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.analytics++
@@ -559,6 +561,11 @@ func (f *fakeEvents) GetUsageAnalytics(_ context.Context, _ types.GetUsageAnalyt
 		return nil, f.anaErr
 	}
 	items := f.analyticsItems
+	if req.ExternalCustomerID != nil {
+		if byCust, ok := f.analyticsByCustomer[*req.ExternalCustomerID]; ok {
+			items = byCust
+		}
+	}
 	if f.analyticsEcho {
 		points := make([]types.UsageAnalyticPoint, 0, len(f.ingested))
 		for _, ev := range f.ingested {

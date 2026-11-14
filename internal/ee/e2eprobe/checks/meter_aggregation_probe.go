@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -18,10 +19,8 @@ import (
 // aggregation pipeline is broken for that meter (e.g., CEL expression
 // failing, ClickHouse mat-view stale, meter config drift).
 //
-// Each tick picks one meter from the seed list (round-robin via cursor)
-// and a rotating customer; asserts aggregated usage > 0 in the lookback
-// window. A single probe tick covers one meter, so all 8 meters get
-// exercised over 8 ticks.
+// Each tick picks one meter (round-robin via cursor) and asserts that at
+// least one ingest customer shows aggregated usage > 0 in the lookback window.
 type MeterAggregationProbe struct {
 	client    e2eprobe.Client
 	reg       e2eprobe.Registry
@@ -38,9 +37,7 @@ func NewMeterAggregationProbe(c e2eprobe.Client, r e2eprobe.Registry, runID stri
 func (p *MeterAggregationProbe) Name() string        { return "meter-aggregation-probe" }
 func (p *MeterAggregationProbe) Kind() e2eprobe.Kind { return e2eprobe.KindProbe }
 
-// meterAggLookback is the lookback window for aggregation. Events ingest at
-// 5/sec across 8 meters, so each meter sees ~37 events per minute. A 30-min
-// window should show hundreds of events per meter if aggregation is healthy.
+// meterAggLookback is the lookback window for aggregation.
 const meterAggLookback = 30 * time.Minute
 
 // meterAggStartupGrace is how long the probe stays silent after boot before
@@ -77,9 +74,11 @@ func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 	if len(eventNames) == 0 {
 		return nil
 	}
-	idx := atomic.AddInt64(&p.cursor, 1)
-	eventName := eventNames[int(idx)%len(eventNames)]
-	extCustID := customers[int(idx)%len(customers)]
+	idx := int(atomic.AddInt64(&p.cursor, 1))
+	eventName := eventNames[idx%len(eventNames)]
+	// Advance the starting customer once per meter cycle so every meter is
+	// paired with every customer, whatever the two list lengths are.
+	first := (idx / len(eventNames)) % len(customers)
 
 	end := time.Now().UTC()
 	// Never look further back than the probe has actually been running.
@@ -91,25 +90,63 @@ func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 	}
 	start := end.Add(-window)
 
+	// A sparse meter (e.g. a filtered one) can read zero for one customer by
+	// chance, so only a meter that reads zero for every customer fails.
+	checked := 0
+	for i := range customers {
+		extCustID := customers[(first+i)%len(customers)]
+		sum, onSub, err := p.customerUsage(ctx, extCustID, eventName, seeds.MeterIDs[eventName], start, end, window)
+		if err != nil {
+			return err
+		}
+		if !onSub {
+			continue
+		}
+		checked++
+		if sum > 0 {
+			p.logDebug(ctx, "meter-aggregation-probe: observed non-zero aggregated usage",
+				"event_name", eventName,
+				"external_customer_id", extCustID,
+				"window", window.String(),
+				"observed_sum", fmt.Sprintf("%.4f", sum),
+				"run_id", p.runID)
+			return nil
+		}
+	}
+	if checked == 0 {
+		p.logInfo(ctx, "meter-aggregation-probe: meter not on any customer's active subscription, skipping",
+			"event_name", eventName,
+			"run_id", p.runID)
+		return nil
+	}
+	return e2eprobe.Errorf(map[string]string{
+		"step":              "assert_meter_usage",
+		"event_name":        eventName,
+		"window":            window.String(),
+		"observed_sum":      "0.0000",
+		"customers_checked": strconv.Itoa(checked),
+	}, "meter %s has zero aggregated usage for all %d checked customers over %s window (event_ingest_driver should have produced events; aggregation pipeline may be broken)",
+		eventName, checked, window)
+}
+
+// customerUsage returns the meter's aggregated usage for one customer, and
+// false when the meter is not on the customer's active subscription.
+func (p *MeterAggregationProbe) customerUsage(
+	ctx context.Context, extCustID, eventName, meterID string, start, end time.Time, window time.Duration,
+) (float64, bool, error) {
 	// Usage analytics only returns meters carried by the customer's active
-	// subscription line items (see meterUsageService.activeSubscriptionMeterIDs).
-	// Line items snapshot the plan at subscription-create time, so a meter
-	// seeded after the persistent subs were created reports nothing until
-	// seed-ensure's plan price sync lands. That's a seed-drift window, not a
-	// broken aggregation pipeline — skip instead of paging.
-	onSub, err := p.meterOnActiveSubscription(ctx, extCustID, seeds.MeterIDs[eventName])
+	// subscription line items. A meter seeded after the subs were created
+	// reports nothing until seed-ensure's plan price sync lands, so skip it.
+	onSub, err := p.meterOnActiveSubscription(ctx, extCustID, meterID)
 	if err != nil {
-		return e2eprobe.Errorf(map[string]string{
+		return 0, false, e2eprobe.Errorf(map[string]string{
+			"step":                 "resolve_line_items",
 			"external_customer_id": extCustID,
 			"event_name":           eventName,
 		}, "resolve subscription line items for %s: %w", extCustID, err)
 	}
 	if !onSub {
-		p.logInfo(ctx, "meter-aggregation-probe: meter not on customer's active subscription, skipping",
-			"event_name", eventName,
-			"external_customer_id", extCustID,
-			"run_id", p.runID)
-		return nil
+		return 0, false, nil
 	}
 
 	resp, err := p.client.Events().GetUsageAnalytics(ctx, types.GetUsageAnalyticsRequest{
@@ -118,30 +155,14 @@ func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 		EndTime:            &end,
 	})
 	if err != nil {
-		return e2eprobe.Errorf(map[string]string{
+		return 0, false, e2eprobe.Errorf(map[string]string{
+			"step":                 "analytics",
 			"external_customer_id": extCustID,
 			"event_name":           eventName,
 			"window":               window.String(),
 		}, "analytics for %s/%s: %w", extCustID, eventName, err)
 	}
-
-	sum := extractAnalyticsSum(resp, eventName)
-	if sum > 0 {
-		p.logDebug(ctx, "meter-aggregation-probe: observed non-zero aggregated usage",
-			"event_name", eventName,
-			"external_customer_id", extCustID,
-			"window", window.String(),
-			"observed_sum", fmt.Sprintf("%.4f", sum),
-			"run_id", p.runID)
-		return nil
-	}
-	return e2eprobe.Errorf(map[string]string{
-		"external_customer_id": extCustID,
-		"event_name":           eventName,
-		"window":               window.String(),
-		"observed_sum":         fmt.Sprintf("%.4f", sum),
-	}, "meter %s has zero aggregated usage over %s window (event_ingest_driver should have produced events; aggregation pipeline may be broken)",
-		eventName, window)
+	return extractAnalyticsSum(resp, eventName), true, nil
 }
 
 // meterOnActiveSubscription reports whether meterID appears on any line item
