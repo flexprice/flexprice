@@ -11603,7 +11603,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when listing or searching subscriptions (e.g. admin view or customer subscription list). Returns a paginated list; supports filtering by customer, plan, status.",
+                "description": "Use when listing or searching subscriptions (e.g. admin view or customer subscription list). Returns a paginated list; supports filtering by customer, plan, status. Sort by customer_name for case-insensitive customer name ordering; use id as a secondary sort for stable pagination.",
                 "consumes": [
                     "application/json"
                 ],
