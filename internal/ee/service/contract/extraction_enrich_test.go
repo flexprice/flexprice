@@ -1,40 +1,15 @@
 package contract
 
 import (
-	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/customer"
-	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
-	contractagent "github.com/flexprice/flexprice/internal/ee/agents/extraction/contract"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
+	contractagent "github.com/flexprice/flexprice/internal/ee/agents/services/extraction/contract"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
 )
-
-type fakeCustomers struct {
-	rows    []*customer.Customer
-	filters []*types.CustomerFilter
-}
-
-func (f *fakeCustomers) GetCustomers(_ context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error) {
-	f.filters = append(f.filters, filter)
-	resp := &dto.ListCustomersResponse{}
-	for _, c := range f.rows {
-		if filter.Email != "" && !strings.EqualFold(c.Email, filter.Email) {
-			continue
-		}
-		if len(filter.Filters) > 0 && !strings.Contains(strings.ToLower(c.Name), strings.ToLower(*filter.Filters[0].Value.String)) {
-			continue
-		}
-		resp.Items = append(resp.Items, &dto.CustomerResponse{Customer: c})
-	}
-	return resp, nil
-}
 
 func read(value string, confidence, page int, quote string) extraction.Term {
 	return extraction.Term{Value: value, Confidence: confidence, Page: page, Quote: quote, Options: []string{}}
@@ -168,39 +143,7 @@ func TestNormalizeName(t *testing.T) {
 		"":                       "",
 	}
 	for in, want := range tests {
-		require.Equal(t, want, enricher().normalizeName(in), in)
-	}
-}
-
-func TestMatchCustomer(t *testing.T) {
-	rows := []*customer.Customer{
-		{ID: "c_email", Name: "Something Else", Email: "ap@acme.com"},
-		{ID: "c_name", Name: "Globex Corporation", Email: "finance@globex.io"},
-		{ID: "c_gmail", Name: "Solo Founder", Email: "solo@gmail.com"},
-	}
-	tests := []struct {
-		name string
-		in   extraction.Customer
-		want *extraction.CustomerMatch
-	}{
-		{name: "exact email wins", in: extraction.Customer{LegalName: read("Acme Inc.", 99, 1, "q"), BillingEmail: read("AP@acme.com", 90, 1, "q")},
-			want: &extraction.CustomerMatch{Status: CustomerMatchExisting, CustomerID: "c_email", Name: "Something Else", MatchedOn: []string{MatchedOnEmail}}},
-		{name: "legal name with domain", in: extraction.Customer{LegalName: read("Globex Corp", 99, 1, "q"), BillingEmail: read("ap@globex.io", 90, 1, "q")},
-			want: &extraction.CustomerMatch{Status: CustomerMatchExisting, CustomerID: "c_name", Name: "Globex Corporation", MatchedOn: []string{MatchedOnLegalName, MatchedOnEmailDomain}}},
-		{name: "legal name only", in: extraction.Customer{LegalName: read("Globex", 99, 1, "q")},
-			want: &extraction.CustomerMatch{Status: CustomerMatchExisting, CustomerID: "c_name", Name: "Globex Corporation", MatchedOn: []string{MatchedOnLegalName}}},
-		{name: "domain alone never matches", in: extraction.Customer{LegalName: read("Globex Labs", 99, 1, "q"), BillingEmail: read("x@globex.io", 90, 1, "q")},
-			want: &extraction.CustomerMatch{Status: CustomerMatchNew}},
-		{name: "partial name is not a match", in: extraction.Customer{LegalName: read("Globex Holdings", 99, 1, "q")},
-			want: &extraction.CustomerMatch{Status: CustomerMatchNew}},
-		{name: "nothing extracted", in: extraction.Customer{}, want: &extraction.CustomerMatch{Status: CustomerMatchNew}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := enricher().matchCustomer(context.Background(), &fakeCustomers{rows: rows}, tt.in)
-			require.NoError(t, err)
-			require.Equal(t, tt.want, got)
-		})
+		require.Equal(t, want, newCustomerDirectory(nil).normalizeName(in), in)
 	}
 }
 

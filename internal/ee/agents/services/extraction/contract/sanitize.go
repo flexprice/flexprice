@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
 	"github.com/samber/lo"
 )
 

@@ -82,6 +82,7 @@ type Configuration struct {
 	Gemini                 GeminiConfig                 `mapstructure:"gemini" validate:"omitempty"`
 	OpenRouter             OpenRouterConfig             `mapstructure:"openrouter" validate:"omitempty"`
 	Reducto                ReductoConfig                `mapstructure:"reducto" validate:"omitempty"`
+	CustomerMatch          CustomerMatchConfig          `mapstructure:"customer_match" validate:"omitempty"`
 	Whop                   WhopConfig                   `mapstructure:"whop" validate:"omitempty"`
 	Onboarding             OnboardingConfig             `mapstructure:"onboarding" validate:"omitempty"`
 	ChatSupport            ChatSupportConfig            `mapstructure:"chat_support" validate:"omitempty"`
@@ -149,6 +150,16 @@ type ReductoConfig struct {
 	APIKey         string `mapstructure:"api_key" validate:"omitempty"`
 	BaseURL        string `mapstructure:"base_url" validate:"omitempty"`
 	TimeoutSeconds int    `mapstructure:"timeout_seconds" validate:"omitempty"`
+}
+
+type CustomerMatchConfig struct {
+	Enabled           bool   `mapstructure:"enabled"`
+	Model             string `mapstructure:"model" validate:"omitempty"`
+	MaxSteps          int    `mapstructure:"max_steps" validate:"omitempty"`
+	MaxToolCalls      int    `mapstructure:"max_tool_calls" validate:"omitempty"`
+	TimeoutSeconds    int    `mapstructure:"timeout_seconds" validate:"omitempty"`
+	ExistingThreshold int    `mapstructure:"existing_threshold" validate:"omitempty"`
+	PossibleThreshold int    `mapstructure:"possible_threshold" validate:"omitempty"`
 }
 
 type CacheConfig struct {
