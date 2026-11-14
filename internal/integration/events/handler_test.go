@@ -106,23 +106,28 @@ func (f *fakeTemporalService) ExecuteWorkflow(_ context.Context, _ types.Tempora
 	return fakeWorkflowRun{}, nil
 }
 
-func TestExecuteWorkflow_StartErrors(t *testing.T) {
+func TestRunTriggers_WorkflowStartErrors(t *testing.T) {
+	alreadyRunning := ierr.NewError("already started").Mark(ierr.ErrAlreadyExists)
 	tests := []struct {
 		name     string
 		startErr error
-		wantErr  bool
+		opts     []DispatchOption
+		wantErrs int
 	}{
 		{name: "started"},
-		{name: "already running is a skip", startErr: ierr.NewError("already started").Mark(ierr.ErrAlreadyExists)},
-		{name: "other failure is retried", startErr: ierr.NewError("temporal down").Mark(ierr.ErrInternal), wantErr: true},
+		{name: "already running is skipped automatically", startErr: alreadyRunning},
+		{name: "already running is reported to a manual sync", startErr: alreadyRunning, opts: []DispatchOption{Manual()}, wantErrs: 1},
+		{name: "other failure is retried", startErr: ierr.NewError("temporal down").Mark(ierr.ErrInternal), wantErrs: 1},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			temporalSvc := &fakeTemporalService{err: tc.startErr}
-			err := executeWorkflow(context.Background(), temporalSvc, testLogger(), types.TemporalRazorpayInvoiceSyncWorkflow, nil, types.SecretProviderRazorpay, "inv_1")
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("wantErr %v, got %v", tc.wantErr, err)
+			trigger := providerTrigger{types.SecretProviderRazorpay, func() error {
+				return executeWorkflow(context.Background(), temporalSvc, testLogger(), types.TemporalRazorpayInvoiceSyncWorkflow, nil, types.SecretProviderRazorpay, "inv_1")
+			}}
+			if errs := runTriggers([]providerTrigger{trigger}, resolveDispatchOptions(tc.opts)); len(errs) != tc.wantErrs {
+				t.Fatalf("want %d errors, got %v", tc.wantErrs, errs)
 			}
 		})
 	}

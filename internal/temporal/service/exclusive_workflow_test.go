@@ -50,6 +50,11 @@ func TestExecuteWorkflowExclusiveID(t *testing.T) {
 			invoiceModels.ProcessInvoiceWorkflowInput{InvoiceID: "inv_1", TenantID: "tenant_1", EnvironmentID: "env_1"},
 			"wf_process_invoice_inv_1", true,
 		},
+		{
+			"razorpay invoice sync", types.TemporalRazorpayInvoiceSyncWorkflow,
+			&models.RazorpayInvoiceSyncWorkflowInput{InvoiceID: "inv_1", CustomerID: "cust_1", TenantID: "tenant_1", EnvironmentID: "env_1"},
+			"wf_razorpay_invoice_sync_inv_1", true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
