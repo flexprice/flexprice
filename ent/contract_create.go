@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/contract"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ContractCreate is the builder for creating a Contract entity.
@@ -116,9 +118,25 @@ func (_c *ContractCreate) SetCustomerID(v string) *ContractCreate {
 	return _c
 }
 
+// SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
+func (_c *ContractCreate) SetNillableCustomerID(v *string) *ContractCreate {
+	if v != nil {
+		_c.SetCustomerID(*v)
+	}
+	return _c
+}
+
 // SetCurrency sets the "currency" field.
 func (_c *ContractCreate) SetCurrency(v string) *ContractCreate {
 	_c.mutation.SetCurrency(v)
+	return _c
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (_c *ContractCreate) SetNillableCurrency(v *string) *ContractCreate {
+	if v != nil {
+		_c.SetCurrency(*v)
+	}
 	return _c
 }
 
@@ -167,6 +185,46 @@ func (_c *ContractCreate) SetNillableEndedAt(v *time.Time) *ContractCreate {
 // SetContractStatus sets the "contract_status" field.
 func (_c *ContractCreate) SetContractStatus(v string) *ContractCreate {
 	_c.mutation.SetContractStatus(v)
+	return _c
+}
+
+// SetDocument sets the "document" field.
+func (_c *ContractCreate) SetDocument(v *types.ContractDocument) *ContractCreate {
+	_c.mutation.SetDocument(v)
+	return _c
+}
+
+// SetExtractionStatus sets the "extraction_status" field.
+func (_c *ContractCreate) SetExtractionStatus(v string) *ContractCreate {
+	_c.mutation.SetExtractionStatus(v)
+	return _c
+}
+
+// SetNillableExtractionStatus sets the "extraction_status" field if the given value is not nil.
+func (_c *ContractCreate) SetNillableExtractionStatus(v *string) *ContractCreate {
+	if v != nil {
+		_c.SetExtractionStatus(*v)
+	}
+	return _c
+}
+
+// SetExtraction sets the "extraction" field.
+func (_c *ContractCreate) SetExtraction(v jsontext.Value) *ContractCreate {
+	_c.mutation.SetExtraction(v)
+	return _c
+}
+
+// SetExtractionError sets the "extraction_error" field.
+func (_c *ContractCreate) SetExtractionError(v string) *ContractCreate {
+	_c.mutation.SetExtractionError(v)
+	return _c
+}
+
+// SetNillableExtractionError sets the "extraction_error" field if the given value is not nil.
+func (_c *ContractCreate) SetNillableExtractionError(v *string) *ContractCreate {
+	if v != nil {
+		_c.SetExtractionError(*v)
+	}
 	return _c
 }
 
@@ -247,22 +305,6 @@ func (_c *ContractCreate) check() error {
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Contract.updated_at"`)}
-	}
-	if _, ok := _c.mutation.CustomerID(); !ok {
-		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "Contract.customer_id"`)}
-	}
-	if v, ok := _c.mutation.CustomerID(); ok {
-		if err := contract.CustomerIDValidator(v); err != nil {
-			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "Contract.customer_id": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.Currency(); !ok {
-		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "Contract.currency"`)}
-	}
-	if v, ok := _c.mutation.Currency(); ok {
-		if err := contract.CurrencyValidator(v); err != nil {
-			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Contract.currency": %w`, err)}
-		}
 	}
 	if _, ok := _c.mutation.ContractStatus(); !ok {
 		return &ValidationError{Name: "contract_status", err: errors.New(`ent: missing required field "Contract.contract_status"`)}
@@ -358,6 +400,22 @@ func (_c *ContractCreate) createSpec() (*Contract, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ContractStatus(); ok {
 		_spec.SetField(contract.FieldContractStatus, field.TypeString, value)
 		_node.ContractStatus = value
+	}
+	if value, ok := _c.mutation.Document(); ok {
+		_spec.SetField(contract.FieldDocument, field.TypeJSON, value)
+		_node.Document = value
+	}
+	if value, ok := _c.mutation.ExtractionStatus(); ok {
+		_spec.SetField(contract.FieldExtractionStatus, field.TypeString, value)
+		_node.ExtractionStatus = &value
+	}
+	if value, ok := _c.mutation.Extraction(); ok {
+		_spec.SetField(contract.FieldExtraction, field.TypeJSON, value)
+		_node.Extraction = value
+	}
+	if value, ok := _c.mutation.ExtractionError(); ok {
+		_spec.SetField(contract.FieldExtractionError, field.TypeString, value)
+		_node.ExtractionError = &value
 	}
 	return _node, _spec
 }

@@ -2,8 +2,9 @@ package openrouter
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -111,13 +112,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body an
 		if httpErr, ok := httpclient.IsHTTPError(err); ok {
 			return c.upstreamError(method, endpoint, httpErr.StatusCode)
 		}
-		return ierr.WithError(err).
-			WithHint("Unable to reach the AI provider").
-			WithReportableDetails(map[string]interface{}{
-				"method":   method,
-				"endpoint": endpoint,
-			}).
-			Mark(ierr.ErrHTTPClient)
+		return c.transportError(method, endpoint, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return c.upstreamError(method, endpoint, resp.StatusCode)
@@ -141,14 +136,6 @@ func (c *Client) privacyProvider(zdr bool) *Provider {
 	return p
 }
 
-func PDFDataURL(pdf []byte) string {
-	return DataURL("application/pdf", pdf)
-}
-
-func DataURL(mediaType string, data []byte) string {
-	return "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(data)
-}
-
 func (c *Client) upstreamError(method, endpoint string, status int) error {
 	details := map[string]interface{}{"method": method, "endpoint": endpoint, "status": status}
 	b := ierr.NewError("openrouter api request failed").WithReportableDetails(details)
@@ -167,4 +154,28 @@ func (c *Client) upstreamError(method, endpoint string, status int) error {
 	default:
 		return b.WithHintf("AI provider returned status %d", status).Mark(ierr.ErrHTTPClient)
 	}
+}
+
+// transportError reports a failure before any HTTP status arrived; it does not wrap err so the
+// generic transport hints underneath do not reach the user.
+func (c *Client) transportError(method, endpoint string, err error) error {
+	details := map[string]interface{}{"method": method, "endpoint": endpoint, "cause": err.Error()}
+	if c.isTimeout(err) {
+		return ierr.NewError("openrouter request timed out").
+			WithHint("The AI model took too long to respond. Try again, or use a faster model.").
+			WithReportableDetails(details).
+			Mark(ierr.ErrHTTPClient)
+	}
+	return ierr.NewError("openrouter request failed").
+		WithHint("Unable to reach the AI provider").
+		WithReportableDetails(details).
+		Mark(ierr.ErrHTTPClient)
+}
+
+func (c *Client) isTimeout(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }

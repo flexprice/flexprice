@@ -32,7 +32,7 @@ func TestExtract_PDF(t *testing.T) {
 
 	req := or.requests[0]
 	require.Equal(t, "test/model", req.Model)
-	require.NotNil(t, req.Temperature)
+	require.Nil(t, req.Temperature, "temperature is not sent: reasoning-model endpoints reject it under require_parameters")
 	require.Equal(t, openrouter.ResponseFormatJSONSchema, req.ResponseFormat.Type)
 	require.True(t, req.ResponseFormat.JSONSchema.Strict)
 	user := req.Messages[1].Content

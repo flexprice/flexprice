@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
+	"github.com/flexprice/flexprice/internal/logger"
 
 	"github.com/flexprice/flexprice/internal/ee/agents/openrouter"
 	"github.com/stretchr/testify/require"
@@ -110,4 +111,8 @@ func modelOutput(t *testing.T, r *extraction.Result) string {
 	b, err := json.Marshal(r)
 	require.NoError(t, err)
 	return string(b)
+}
+
+func extractor() *ContractExtractionService {
+	return NewContractExtractionService(&fakeOpenRouter{}, logger.NewNoopLogger()).(*ContractExtractionService)
 }
