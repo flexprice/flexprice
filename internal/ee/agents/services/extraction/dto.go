@@ -53,7 +53,6 @@ type Result struct {
 	Credits       []Credit       `json:"credits"`
 	ServiceLevels []ServiceLevel `json:"service_levels"`
 	Doubts        []string       `json:"doubts"`
-
 	CustomerMatch *CustomerMatch `json:"customer_match,omitempty"`
 	Derived       *Derived       `json:"derived,omitempty"`
 	ToCheck       *ToCheck       `json:"to_check,omitempty"`
@@ -132,10 +131,24 @@ type ServiceLevel struct {
 }
 
 type CustomerMatch struct {
-	Status     string   `json:"status"`
-	CustomerID string   `json:"customer_id,omitempty"`
-	Name       string   `json:"name,omitempty"`
+	Status     string           `json:"status"`
+	CustomerID string           `json:"customer_id,omitempty"`
+	Name       string           `json:"name,omitempty"`
+	Confidence int              `json:"confidence,omitempty"`
+	MatchedOn  []string         `json:"matched_on,omitempty"`
+	Reason     string           `json:"reason,omitempty"`
+	Candidates []MatchCandidate `json:"candidates,omitempty"`
+	Model      string           `json:"model,omitempty"`
+	Steps      int              `json:"steps,omitempty"`
+}
+
+type MatchCandidate struct {
+	CustomerID string   `json:"customer_id"`
+	Name       string   `json:"name"`
+	Email      string   `json:"email,omitempty"`
+	Confidence int      `json:"confidence"`
 	MatchedOn  []string `json:"matched_on,omitempty"`
+	Reason     string   `json:"reason,omitempty"`
 }
 
 type Derived struct {

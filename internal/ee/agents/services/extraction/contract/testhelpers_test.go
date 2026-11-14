@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/flexprice/flexprice/internal/ee/agents/reducto"
+	"github.com/flexprice/flexprice/internal/ee/agents/providers/reducto"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/stretchr/testify/require"
 )

@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
 )
 
 const (
@@ -38,6 +38,10 @@ func (c *contractIngestService) countToCheck(r *extraction.Result, threshold int
 		}
 		tc.Total++
 	})
+	if r.CustomerMatch != nil && r.CustomerMatch.Status == CustomerMatchPossible {
+		tc.Customer++
+		tc.Total++
+	}
 	return tc
 }
 

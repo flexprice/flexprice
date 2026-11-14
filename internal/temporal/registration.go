@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/flexprice/flexprice/internal/ee/service"
+	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
 	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
@@ -79,6 +80,7 @@ func RegisterWorkflowsAndActivities(
 	temporalService temporalService.TemporalService,
 	params service.ServiceParams,
 	webhookService *webhook.WebhookService,
+	contractIngest contractsvc.ContractIngestService,
 ) error {
 	// Create workflow tracking activity (follows standard activity pattern)
 	workflowTrackingActivities := workflowActivities.NewWorkflowTrackingActivities(
@@ -296,7 +298,7 @@ func RegisterWorkflowsAndActivities(
 		params.Logger,
 	)
 	contractExtractionActivities := contractActivities.NewExtractionActivities(
-		params.ContractIngestService,
+		contractIngest,
 		params.Logger,
 	)
 
@@ -478,6 +480,8 @@ func buildWorkerConfig(
 			tabsInvoiceSyncActivities.SyncInvoiceToTabs,
 			contractExtractionActivities.ExtractContract,
 			contractExtractionActivities.MarkContractExtractionFailed,
+			contractExtractionActivities.MatchContractCustomer,
+			contractExtractionActivities.MarkCustomerMatchUnavailable,
 			invoiceActs.PublishInvoiceSyncWebhookActivity,
 			stripeCustomerSyncActivities.SyncCustomerToStripe,
 			razorpayCustomerSyncActivities.SyncCustomerToRazorpay,

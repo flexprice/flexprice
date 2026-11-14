@@ -9,8 +9,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
-	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
-	contractagent "github.com/flexprice/flexprice/internal/ee/agents/extraction/contract"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
+	contractagent "github.com/flexprice/flexprice/internal/ee/agents/services/extraction/contract"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage"
@@ -131,6 +131,8 @@ type ingestFixture struct {
 	store     *memStorage
 	starter   *fakeStarter
 	extractor *fakeExtractor
+	matcher   *fakeMatcher
+	customers *testutil.InMemoryCustomerStore
 }
 
 func newIngestFixture() *ingestFixture {
@@ -138,13 +140,18 @@ func newIngestFixture() *ingestFixture {
 		contracts: testutil.NewInMemoryContractStore(),
 		store:     newMemStorage(),
 		starter:   &fakeStarter{},
+		matcher:   &fakeMatcher{configured: true},
+		customers: testutil.NewInMemoryCustomerStore(),
 		extractor: &fakeExtractor{out: &extraction.Extraction{
 			Result: northwind(), Model: "test/model",
 			Usage: &extraction.Usage{Pages: 4, Fields: 61, DurationSeconds: 8},
 		}},
 	}
-	cfg := &config.Configuration{FlexpriceS3Imports: config.FlexpriceS3ImportsConfig{KeyPrefix: "/imports/"}}
-	svc := NewContractIngestService(f.contracts, &memResolver{store: f.store}, f.extractor, cfg, logger.NewNoopLogger()).(*contractIngestService)
+	cfg := &config.Configuration{
+		FlexpriceS3Imports: config.FlexpriceS3ImportsConfig{KeyPrefix: "/imports/"},
+		CustomerMatch:      config.CustomerMatchConfig{Enabled: true},
+	}
+	svc := NewContractIngestService(f.contracts, &memResolver{store: f.store}, f.extractor, f.matcher, &storeCustomerService{store: f.customers}, cfg, logger.NewNoopLogger()).(*contractIngestService)
 	svc.starter = f.starter
 	f.svc = svc
 	return f
@@ -252,7 +259,7 @@ func TestProcess_StoresExtraction(t *testing.T) {
 	require.Equal(t, 4, got.Usage.Pages)
 	require.Equal(t, "Northwind Health, Inc.", got.Result.Customer.LegalName.Value)
 	require.Equal(t, &extraction.ToCheck{Total: 12, Customer: 0, Charges: 7, Billing: 5}, got.Result.ToCheck)
-	require.Nil(t, got.Result.CustomerMatch)
+	require.Equal(t, &extraction.CustomerMatch{Status: CustomerMatchPending}, got.Result.CustomerMatch)
 	require.Equal(t, "2027-10-31", got.Result.Derived.EndDate.Value)
 
 	require.NoError(t, f.svc.Process(ctx, c.ID()))

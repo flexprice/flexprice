@@ -7,9 +7,12 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/ee/agents/reducto"
+	"github.com/flexprice/flexprice/internal/ee/agents/providers/openrouter"
+	"github.com/flexprice/flexprice/internal/ee/agents/providers/reducto"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/customermatch"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	"github.com/flexprice/flexprice/internal/storage"
@@ -62,7 +65,7 @@ func TestStartTemporalWorkerStopsAfterScheduleFailure(t *testing.T) {
 	temporalSvc := &startupRollbackTemporalService{}
 	temporalClient := failingScheduleTemporalClient{}
 	lc := fxtest.NewLifecycle(t)
-	startTemporalWorker(lc, logger.NewNoopLogger(), temporalClient, temporalSvc, service.ServiceParams{}, nil)
+	startTemporalWorker(lc, logger.NewNoopLogger(), temporalClient, temporalSvc, service.ServiceParams{}, nil, nil)
 
 	err := lc.Start(context.Background())
 	if !errors.Is(err, errEnsureSchedules) {
@@ -126,8 +129,11 @@ func TestContractIngestServiceProviders(t *testing.T) {
 		fx.Provide(
 			func() contractRepo.Repository { return testutil.NewInMemoryContractStore() },
 			func() storage.Resolver { return nil },
+			func() interfaces.CustomerService { return nil },
 			reducto.NewClient,
+			openrouter.NewClient,
 			provideContractExtractionService,
+			customermatch.NewCustomerMatchService,
 			contractsvc.NewContractIngestService,
 		),
 		fx.Populate(&ingest),

@@ -12,9 +12,11 @@ import (
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/config"
 	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
-	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
-	contractagent "github.com/flexprice/flexprice/internal/ee/agents/extraction/contract"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/customermatch"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
+	contractagent "github.com/flexprice/flexprice/internal/ee/agents/services/extraction/contract"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	"github.com/flexprice/flexprice/internal/storage"
@@ -34,6 +36,8 @@ type ContractIngestService interface {
 	Upload(ctx context.Context, req *UploadRequest) (*domainContract.Contract, error)
 	Process(ctx context.Context, contractID string) error
 	MarkFailed(ctx context.Context, contractID, reason string) error
+	MatchCustomer(ctx context.Context, contractID string) error
+	MarkCustomerMatchUnavailable(ctx context.Context, contractID, reason string) error
 }
 
 type UploadRequest struct {
@@ -49,6 +53,8 @@ type contractIngestService struct {
 	contracts       contractRepo.Repository
 	storage         storage.Resolver
 	extractor       extraction.ExtractionServiceInterface
+	matcher         customermatch.CustomerMatchServiceInterface
+	directory       *customerDirectory
 	config          *config.Configuration
 	logger          *logger.Logger
 	starter         WorkflowStarter
@@ -59,6 +65,8 @@ func NewContractIngestService(
 	contracts contractRepo.Repository,
 	storageResolver storage.Resolver,
 	extractor extraction.ExtractionServiceInterface,
+	matcher customermatch.CustomerMatchServiceInterface,
+	customers interfaces.CustomerService,
 	cfg *config.Configuration,
 	logger *logger.Logger,
 ) ContractIngestService {
@@ -66,6 +74,8 @@ func NewContractIngestService(
 		contracts:       contracts,
 		storage:         storageResolver,
 		extractor:       extractor,
+		matcher:         matcher,
+		directory:       newCustomerDirectory(customers),
 		config:          cfg,
 		logger:          logger,
 		reviewThreshold: DefaultReviewThreshold,
@@ -178,6 +188,7 @@ func (c *contractIngestService) Process(ctx context.Context, contractID string) 
 	if err := c.enrich(out.Result); err != nil {
 		return err
 	}
+	out.Result.CustomerMatch = c.initialMatch()
 
 	raw, err := json.Marshal(out)
 	if err != nil {

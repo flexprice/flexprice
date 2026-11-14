@@ -607,6 +607,15 @@ openrouter:
   timeout_seconds: 300
   zdr: true
 
+customer_match:
+  enabled: true
+  model: "openai/gpt-4.1-mini"
+  max_steps: 8
+  max_tool_calls: 12
+  timeout_seconds: 60
+  existing_threshold: 85
+  possible_threshold: 40
+
 whop:
   base_url: "" # "https://sandbox-api.whop.com" - for sandbox whop testing
 

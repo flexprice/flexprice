@@ -87,7 +87,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body an
 	apiKey := strings.TrimSpace(c.config.APIKey)
 	if apiKey == "" {
 		return ierr.NewError("openrouter api key not configured").
-			WithHint("AI contract extraction is not configured on this server").
+			WithHint("AI features are not configured on this server").
 			Mark(ierr.ErrServiceUnavailable)
 	}
 
