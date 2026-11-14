@@ -19,8 +19,6 @@ type SettingsService interface {
 	// ListTenantSettings returns tenant_config, saml_config when this deployment offers SAML,
 	// and every setting of the environment when environmentID is set.
 	ListTenantSettings(ctx context.Context, tenantID, environmentID string) (*admindto.ListSettingsResponse, error)
-	// GetTenantSetting returns one setting; environmentID is required for keys set per environment.
-	GetTenantSetting(ctx context.Context, tenantID, environmentID string, key types.SettingKey) (*admindto.SettingResponse, error)
 	// UpdateTenantSetting replaces a setting's value, refusing it when the setting changed since req.UpdatedAt.
 	UpdateTenantSetting(ctx context.Context, tenantID, environmentID string, key types.SettingKey, req admindto.UpdateSettingRequest) (*admindto.SettingResponse, error)
 }
@@ -100,27 +98,6 @@ func (s *settingsService) ListTenantSettings(ctx context.Context, tenantID, envi
 		found = append(found, setting)
 	}
 	return admindto.NewListSettingsResponse(found), nil
-}
-
-func (s *settingsService) GetTenantSetting(ctx context.Context, tenantID, environmentID string, key types.SettingKey) (*admindto.SettingResponse, error) {
-	if err := key.Validate(); err != nil {
-		return nil, err
-	}
-	if key == types.SettingKeySAMLConfig && (s.Config == nil || !s.Config.Auth.SAML.Enabled) {
-		return nil, ierr.NewError("saml is not enabled for this deployment").
-			WithHint("SAML single sign-on is not available on this deployment").
-			Mark(ierr.ErrNotFound)
-	}
-
-	ctx, err := settingContext(ctx, s.ServiceParams, tenantID, environmentID, key)
-	if err != nil {
-		return nil, err
-	}
-	setting, err := s.settings.GetSettingByKeyUnchecked(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	return admindto.NewSettingResponse(setting), nil
 }
 
 func (s *settingsService) UpdateTenantSetting(ctx context.Context, tenantID, environmentID string, key types.SettingKey, req admindto.UpdateSettingRequest) (*admindto.SettingResponse, error) {

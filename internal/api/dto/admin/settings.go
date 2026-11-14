@@ -95,10 +95,12 @@ func NewTenantConfigResponse(tenantID string, cfg types.TenantConfig) *TenantCon
 	}
 }
 
-// UpdateSettingRequest is a setting's whole value. UpdatedAt is the updated_at last read, empty when nothing was stored.
+// UpdateSettingRequest is a setting's whole value. EnvironmentID is required for settings kept per environment.
+// UpdatedAt is the updated_at last read, empty when nothing was stored.
 type UpdateSettingRequest struct {
-	Value     map[string]interface{} `json:"value"`
-	UpdatedAt string                 `json:"updated_at"`
+	EnvironmentID string                 `json:"environment_id"`
+	Value         map[string]interface{} `json:"value"`
+	UpdatedAt     string                 `json:"updated_at"`
 }
 
 func (r *UpdateSettingRequest) Validate() error {

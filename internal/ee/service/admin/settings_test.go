@@ -398,41 +398,6 @@ func TestListTenantSettingsForEnvironment(t *testing.T) {
 	})
 }
 
-func TestGetTenantSetting(t *testing.T) {
-	tests := []struct {
-		name          string
-		environmentID string
-		key           types.SettingKey
-		wantErr       func(error) bool
-	}{
-		{name: "a tenant-wide key needs no environment", key: types.SettingKeyTenantConfig},
-		{name: "an environment key is read from the environment", environmentID: revrecEnvironmentID, key: types.SettingKeyRevenueAnalyticsConfig},
-		{name: "an environment key without an environment", key: types.SettingKeyInvoiceConfig, wantErr: ierr.IsValidation},
-		{name: "an unknown key", environmentID: revrecEnvironmentID, key: "no_such_key", wantErr: ierr.IsValidation},
-		{name: "saml_config while SAML is off", key: types.SettingKeySAMLConfig, wantErr: ierr.IsNotFound},
-		{name: "an environment of another tenant", environmentID: "env_other", key: types.SettingKeyInvoiceConfig, wantErr: ierr.IsNotFound},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			d := newSettingsTestDeps(t)
-			d.withEnvironment(t, settingsTenantID, revrecEnvironmentID)
-			d.withEnvironment(t, "tenant_other", "env_other")
-
-			resp, err := newTestSettingsService(d.params).GetTenantSetting(context.Background(), settingsTenantID, tt.environmentID, tt.key)
-
-			if tt.wantErr != nil {
-				require.Error(t, err)
-				assert.True(t, tt.wantErr(err))
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.key, resp.Key)
-			assert.True(t, resp.IsDefault)
-		})
-	}
-}
-
 func TestUpdateTenantSetting(t *testing.T) {
 	changed := time.Date(2026, 10, 9, 8, 15, 0, 0, time.UTC)
 
@@ -449,8 +414,10 @@ func TestUpdateTenantSetting(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.False(t, resp.IsDefault)
-		got, err := svc.GetTenantSetting(context.Background(), settingsTenantID, revrecEnvironmentID, types.SettingKeyCustomerPortalConfig)
+		list, err := svc.ListTenantSettings(context.Background(), settingsTenantID, revrecEnvironmentID)
 		require.NoError(t, err)
+		got, ok := lo.Find(list.Items, func(item *admindto.SettingResponse) bool { return item.Key == types.SettingKeyCustomerPortalConfig })
+		require.True(t, ok)
 		body, err := json.Marshal(got.Value["sections"])
 		require.NoError(t, err)
 		assert.JSONEq(t, `[{"id": "usage", "enabled": true, "tabs": [{"id": "graph", "type": "usage_graph", "enabled": true}]}]`, string(body))
@@ -494,23 +461,34 @@ func TestUpdateTenantSetting(t *testing.T) {
 	})
 
 	refused := []struct {
-		name    string
-		key     types.SettingKey
-		req     admindto.UpdateSettingRequest
-		wantErr func(error) bool
+		name          string
+		key           types.SettingKey
+		environmentID string // empty uses revrecEnvironmentID
+		noEnvironment bool
+		req           admindto.UpdateSettingRequest
+		wantErr       func(error) bool
 	}{
 		{name: "billing_entity_config", key: types.SettingKeyBillingEntityConfig,
 			req: admindto.UpdateSettingRequest{Value: map[string]interface{}{"mode": "enabled"}}, wantErr: ierr.IsValidation},
 		{name: "an empty value", key: types.SettingKeyTenantConfig, wantErr: ierr.IsValidation},
 		{name: "an unknown key", key: "no_such_key",
 			req: admindto.UpdateSettingRequest{Value: map[string]interface{}{"x": 1}}, wantErr: ierr.IsValidation},
+		{name: "an environment setting without an environment", key: types.SettingKeyInvoiceConfig, noEnvironment: true,
+			req: admindto.UpdateSettingRequest{Value: map[string]interface{}{"prefix": "X"}}, wantErr: ierr.IsValidation},
+		{name: "another tenant's environment", key: types.SettingKeyInvoiceConfig, environmentID: "env_other",
+			req: admindto.UpdateSettingRequest{Value: map[string]interface{}{"prefix": "X"}}, wantErr: ierr.IsNotFound},
 	}
 	for _, tt := range refused {
 		t.Run("refuses "+tt.name, func(t *testing.T) {
 			d := newSettingsTestDeps(t)
 			d.withEnvironment(t, settingsTenantID, revrecEnvironmentID)
+			d.withEnvironment(t, "tenant_other", "env_other")
+			environmentID := lo.Ternary(tt.environmentID != "", tt.environmentID, revrecEnvironmentID)
+			if tt.noEnvironment {
+				environmentID = ""
+			}
 
-			resp, err := newTestSettingsService(d.params).UpdateTenantSetting(context.Background(), settingsTenantID, revrecEnvironmentID, tt.key, tt.req)
+			resp, err := newTestSettingsService(d.params).UpdateTenantSetting(context.Background(), settingsTenantID, environmentID, tt.key, tt.req)
 
 			require.Error(t, err)
 			assert.True(t, tt.wantErr(err))

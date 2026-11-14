@@ -46,16 +46,6 @@ func (h *SettingsHandler) ListTenantSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-func (h *SettingsHandler) GetTenantSetting(c *gin.Context) {
-	resp, err := h.service.GetTenantSetting(c.Request.Context(), c.Param("tenant_id"), c.Query("environment_id"), types.SettingKey(c.Param("key")))
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
-}
-
 func (h *SettingsHandler) UpdateTenantSetting(c *gin.Context) {
 	var req admin.UpdateSettingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -65,7 +55,7 @@ func (h *SettingsHandler) UpdateTenantSetting(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.UpdateTenantSetting(c.Request.Context(), c.Param("tenant_id"), c.Query("environment_id"), types.SettingKey(c.Param("key")), req)
+	resp, err := h.service.UpdateTenantSetting(c.Request.Context(), c.Param("tenant_id"), req.EnvironmentID, types.SettingKey(c.Param("key")), req)
 	if err != nil {
 		c.Error(err)
 		return
