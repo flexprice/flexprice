@@ -10,6 +10,8 @@ import (
 // Contract is the accounting agreement a subscription establishes.
 type Contract struct {
 	id               string
+	tenantID         string
+	environmentID    string
 	customerID       string
 	currency         string
 	termStart        *time.Time
@@ -30,6 +32,20 @@ func (c *Contract) ID() string {
 		return ""
 	}
 	return c.id
+}
+
+func (c *Contract) TenantID() string {
+	if c == nil {
+		return ""
+	}
+	return c.tenantID
+}
+
+func (c *Contract) EnvironmentID() string {
+	if c == nil {
+		return ""
+	}
+	return c.environmentID
 }
 
 func (c *Contract) CustomerID() string {
@@ -139,6 +155,16 @@ func NewBuilder(c *Contract) *Builder {
 
 func (b *Builder) WithID(id string) *Builder {
 	b.contract.id = id
+	return b
+}
+
+func (b *Builder) WithTenantID(tenantID string) *Builder {
+	b.contract.tenantID = tenantID
+	return b
+}
+
+func (b *Builder) WithEnvironmentID(environmentID string) *Builder {
+	b.contract.environmentID = environmentID
 	return b
 }
 
