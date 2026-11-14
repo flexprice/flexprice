@@ -138,7 +138,7 @@ func (s *emailNotificationService) ListInvoiceEmails(ctx context.Context, invoic
 
 // queue checks the sender and recipients, records the email as queued and starts its delivery.
 func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail) (*emaillog.EmailLog, error) {
-	if !s.Config.Email.Enabled {
+	if !s.Config.Email.IsProviderConfigured() {
 		return nil, ierr.NewError("customer emails are disabled").
 			WithHint("Emails to customers are not enabled in this deployment").
 			Mark(ierr.ErrInvalidOperation)
