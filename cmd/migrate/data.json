@@ -25,6 +25,10 @@
             "description": "Fired when an entity's (like a commitment's) billing terms are replaced"
         },
         {
+            "name": "checkout.session.cancelled",
+            "description": "The Checkout Session was cancelled through the API before payment. All draft records have been cleaned up."
+        },
+        {
             "name": "checkout.session.completed",
             "description": "Payment was confirmed. The subscription is now active and the invoice is finalized."
         },
@@ -171,6 +175,14 @@
         {
             "name": "mandate.cancelled",
             "description": "Fired when a saved mandate is cancelled"
+        },
+        {
+            "name": "mandate.setup_attempt_failed",
+            "description": "Fired when the customer's attempt to authorise a mandate setup link fails. The customer can retry the same link until it expires"
+        },
+        {
+            "name": "mandate.setup_expired",
+            "description": "Fired when a mandate setup link expires without being authorised"
         },
         {
             "name": "payment.success",

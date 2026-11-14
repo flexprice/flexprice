@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/flexprice/flexprice/internal/webhook/publisher"
 	"github.com/shopspring/decimal"
 )
 
@@ -358,6 +359,7 @@ type ServiceDependencies struct {
 	CreditAdjustmentService         CreditAdjustmentService
 	CheckoutSessionService          CheckoutSessionService
 	RefundService                   RefundService
+	WebhookPublisher                publisher.WebhookPublisher
 	DB                              postgres.IClient
 }
 

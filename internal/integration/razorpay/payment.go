@@ -32,6 +32,13 @@ type AutoChargeRequest struct {
 	Email              string          // Customer email — sent alongside contact for Razorpay-side validation
 }
 
+// PaymentFailure is a Razorpay decline to apply to a Flexprice payment.
+type PaymentFailure struct {
+	RazorpayPaymentID string
+	PaymentMethodID   string
+	Message           string
+}
+
 // AutoChargeResult is the output of PaymentService.AutoCharge.
 type AutoChargeResult struct {
 	RazorpayPaymentID string // may be empty if the payment was already in-flight (AlreadySubmitted=true)
@@ -945,6 +952,20 @@ func isOrderAlreadyProcessingError(err error) bool {
 }
 
 const refundLockTTL = 15 * time.Minute
+
+// MarkPaymentFailed moves a payment to FAILED with Razorpay's reason; the payment.failed webhook and the gateway sync share it.
+func (s *PaymentService) MarkPaymentFailed(ctx context.Context, p *dto.PaymentResponse, failure PaymentFailure, paymentService interfaces.PaymentService) error {
+	message := lo.CoalesceOrEmpty(failure.Message, "Payment failed")
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusFailed)),
+		FailedAt:         lo.ToPtr(clock.Now()),
+		ErrorMessage:     &message,
+		GatewayPaymentID: &failure.RazorpayPaymentID,
+		PaymentMethodID:  lo.EmptyableToPtr(failure.PaymentMethodID),
+	}
+	_, err := paymentService.UpdatePayment(ctx, p.ID, updateReq)
+	return err
+}
 
 // Full refund when payment lands after checkout expired or failed.
 func (s *PaymentService) RefundLateCapturedPayment(
