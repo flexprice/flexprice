@@ -19759,6 +19759,48 @@
         }
       }
     },
+    "/webhook-events/mandate.setup_attempt_failed": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "mandate.setup_attempt_failed",
+        "description": "Fired when a customer's mandate authorisation fails; failure_reason carries the reason. The customer can retry the same link until it expires. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.MandateWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/mandate.setup_expired": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "mandate.setup_expired",
+        "description": "Fired when a mandate setup link expires before the customer authorises it. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.MandateWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook-events/payment.attempt.failed": {
       "post": {
         "tags": [
@@ -41210,6 +41252,8 @@
           "mandate.confirmed",
           "mandate.rejected",
           "mandate.cancelled",
+          "mandate.setup_attempt_failed",
+          "mandate.setup_expired",
           "event.rejected"
         ],
         "x-enum-varnames": [
@@ -41288,6 +41332,8 @@
           "WebhookEventMandateConfirmed",
           "WebhookEventMandateRejected",
           "WebhookEventMandateCancelled",
+          "WebhookEventMandateSetupAttemptFailed",
+          "WebhookEventMandateSetupExpired",
           "WebhookEventEventRejected"
         ],
         "x-speakeasy-name-override": "WebhookEventName"
@@ -43796,6 +43842,9 @@
           },
           "provider": {
             "$ref": "#/components/schemas/types.PaymentGatewayType"
+          },
+          "setup_intent_id": {
+            "type": "string"
           },
           "status": {
             "type": "string"

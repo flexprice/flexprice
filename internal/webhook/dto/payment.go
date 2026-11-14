@@ -101,6 +101,7 @@ type InternalMandateEvent struct {
 
 type Mandate struct {
 	ID                 string                   `json:"id"`
+	SetupIntentID      string                   `json:"setup_intent_id,omitempty"`
 	CustomerID         string                   `json:"customer_id"`
 	ExternalCustomerID string                   `json:"external_customer_id"`
 	Provider           types.PaymentGatewayType `json:"provider"`
@@ -134,7 +135,7 @@ type MandateBankAccount struct {
 	AuthType    string `json:"auth_type,omitempty"`
 }
 
-// MandateWebhookPayload is the outbound payload for mandate.confirmed, mandate.rejected and mandate.cancelled.
+// MandateWebhookPayload is the outbound payload for every mandate.* event.
 type MandateWebhookPayload struct {
 	EventType types.WebhookEventName `json:"event_type"`
 	Mandate   Mandate                `json:"mandate"`

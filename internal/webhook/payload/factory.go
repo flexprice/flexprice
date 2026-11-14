@@ -232,7 +232,7 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	}
 
 	// mandate builders
-	for _, event := range []types.WebhookEventName{types.WebhookEventMandateConfirmed, types.WebhookEventMandateRejected, types.WebhookEventMandateCancelled} {
+	for _, event := range []types.WebhookEventName{types.WebhookEventMandateConfirmed, types.WebhookEventMandateRejected, types.WebhookEventMandateCancelled, types.WebhookEventMandateSetupAttemptFailed, types.WebhookEventMandateSetupExpired} {
 		f.builders[event] = func() PayloadBuilder {
 			return NewMandatePayloadBuilder(f.services)
 		}

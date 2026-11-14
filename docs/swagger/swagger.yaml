@@ -15439,6 +15439,8 @@ definitions:
     - mandate.confirmed
     - mandate.rejected
     - mandate.cancelled
+    - mandate.setup_attempt_failed
+    - mandate.setup_expired
     - event.rejected
     type: string
     x-enum-varnames:
@@ -15517,6 +15519,8 @@ definitions:
     - WebhookEventMandateConfirmed
     - WebhookEventMandateRejected
     - WebhookEventMandateCancelled
+    - WebhookEventMandateSetupAttemptFailed
+    - WebhookEventMandateSetupExpired
     - WebhookEventEventRejected
   types.WindowSize:
     enum:
@@ -17307,6 +17311,8 @@ definitions:
         type: string
       provider:
         $ref: '#/definitions/types.PaymentGatewayType'
+      setup_intent_id:
+        type: string
       status:
         type: string
       type:
@@ -28967,6 +28973,39 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.MandateWebhookPayload'
       summary: mandate.rejected
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.setup_attempt_failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a customer's mandate authorisation fails; failure_reason
+        carries the reason. The customer can retry the same link until it expires.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.setup_attempt_failed
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.setup_expired:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a mandate setup link expires before the customer authorises
+        it. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.setup_expired
       tags:
       - Webhook Events
   /webhook-events/payment.attempt.failed:

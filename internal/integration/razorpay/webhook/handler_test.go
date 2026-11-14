@@ -6,6 +6,7 @@ package webhook
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/flexprice/flexprice/internal/metrics/metricstest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -616,7 +617,7 @@ func (p *recordingPublisher) PublishWebhook(_ context.Context, event *types.Webh
 
 func (p *recordingPublisher) Close() error { return nil }
 
-// customerMappingStore maps one Razorpay customer to a Flexprice customer.
+// customerMappingStore maps one Razorpay customer and one setup link to Flexprice customers.
 type customerMappingStore struct {
 	webhookTestMappingStore
 }
@@ -624,6 +625,10 @@ type customerMappingStore struct {
 func (customerMappingStore) List(_ context.Context, f *types.EntityIntegrationMappingFilter) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
 	if len(f.ProviderEntityIDs) == 1 && f.ProviderEntityIDs[0] == "cust_rzp" {
 		return []*entityintegrationmapping.EntityIntegrationMapping{{EntityID: "cust_mapped"}}, nil
+	}
+	if f.EntityType == types.IntegrationEntityTypePaymentMethodSetup &&
+		(len(f.ProviderEntityIDs) == 1 && f.ProviderEntityIDs[0] == "inv_link" || f.EntityID == "cust_notes") {
+		return []*entityintegrationmapping.EntityIntegrationMapping{{EntityID: "cust_notes", ProviderEntityID: "inv_link"}}, nil
 	}
 	return nil, nil
 }
@@ -658,14 +663,16 @@ func TestHandleTokenEvent(t *testing.T) {
 		wantCustomer   string
 		wantStatus     string
 		wantFailReason string
+		wantSetupLink  string
 	}{
 		{
-			name:         "confirmed, customer from link notes",
-			event:        EventTokenConfirmed,
-			token:        token(`, "recurring_details": {"status": "confirmed"}, "notes": {"flexprice_customer_id": "cust_notes"}`),
-			wantEvent:    types.WebhookEventMandateConfirmed,
-			wantCustomer: "cust_notes",
-			wantStatus:   "confirmed",
+			name:          "confirmed, customer from link notes",
+			event:         EventTokenConfirmed,
+			token:         token(`, "recurring_details": {"status": "confirmed"}, "notes": {"flexprice_customer_id": "cust_notes"}`),
+			wantEvent:     types.WebhookEventMandateConfirmed,
+			wantCustomer:  "cust_notes",
+			wantStatus:    "confirmed",
+			wantSetupLink: "inv_link",
 		},
 		{
 			name:           "rejected, customer from Razorpay customer id",
@@ -709,6 +716,7 @@ func TestHandleTokenEvent(t *testing.T) {
 			require.NoError(t, json.Unmarshal(pub.events[0].Payload, &payload))
 			m := payload.Mandate
 			assert.Equal(t, "token_1", m.ID)
+			assert.Equal(t, tt.wantSetupLink, m.SetupIntentID)
 			assert.Equal(t, tt.wantCustomer, m.CustomerID)
 			assert.Equal(t, "ext_"+tt.wantCustomer, m.ExternalCustomerID)
 			assert.Equal(t, types.PaymentMethodTypeENACH, m.Type)
@@ -716,6 +724,74 @@ func TestHandleTokenEvent(t *testing.T) {
 			assert.Equal(t, tt.wantFailReason, lo.FromPtr(m.FailureReason))
 			assert.Equal(t, "1000", m.MaxAmount.String())
 			assert.Equal(t, &webhookDto.MandateBankAccount{Bank: "HDFC", IFSC: "HDFC0001", Last4: "1234", AccountType: "savings", AuthType: "netbanking"}, m.BankAccount)
+		})
+	}
+}
+
+func TestHandleSetupEvents(t *testing.T) {
+	// A real eNACH authorisation failure, with personal data masked.
+	setupFailure := `{"entity": "event", "event": "payment.failed", "payload": {"payment": {"entity": {
+		"id": "pay_1", "amount": 0, "currency": "INR", "status": "failed", "method": "emandate",
+		"invoice_id": "inv_link", "order_id": "order_1", "token_id": "token_1", "customer_id": "cust_rzp_x",
+		"notes": {"flexprice_customer_id": "%s"},
+		"error_code": "BAD_REQUEST_ERROR", "error_reason": "invalid_bank_account",
+		"error_description": "Your Aadhaar number does not match your bank account details. Please verify and update your information."}}}}`
+	expired := `{"entity": "event", "event": "invoice.expired", "payload": {"invoice": {"entity": {"id": "%s", "status": "expired"}}}}`
+
+	tests := []struct {
+		name     string
+		body     string
+		want     *webhookDto.Mandate
+		wantName types.WebhookEventName
+	}{
+		{
+			name:     "setup attempt failed",
+			body:     fmt.Sprintf(setupFailure, "cust_notes"),
+			wantName: types.WebhookEventMandateSetupAttemptFailed,
+			want: &webhookDto.Mandate{
+				ID: "token_1", SetupIntentID: "inv_link", CustomerID: "cust_notes", ExternalCustomerID: "ext_cust_notes",
+				Provider: types.PaymentGatewayTypeRazorpay, Type: types.PaymentMethodTypeENACH, Status: "setup_attempt_failed",
+				FailureReason: lo.ToPtr("Your Aadhaar number does not match your bank account details. Please verify and update your information."),
+				Currency:      "INR",
+			},
+		},
+		{
+			name: "setup attempt for a customer outside this environment is skipped",
+			body: fmt.Sprintf(setupFailure, "cust_elsewhere"),
+		},
+		{
+			name:     "setup link expired",
+			body:     fmt.Sprintf(expired, "inv_link"),
+			wantName: types.WebhookEventMandateSetupExpired,
+			want: &webhookDto.Mandate{
+				SetupIntentID: "inv_link", CustomerID: "cust_notes", ExternalCustomerID: "ext_cust_notes",
+				Provider: types.PaymentGatewayTypeRazorpay, Type: types.PaymentMethodTypeENACH, Status: "setup_expired", Currency: "INR",
+			},
+		},
+		{
+			name: "an expired invoice that is not a setup link is skipped",
+			body: fmt.Sprintf(expired, "inv_other"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var event RazorpayWebhookEvent
+			require.NoError(t, json.Unmarshal([]byte(tt.body), &event))
+			pub := &recordingPublisher{}
+			h := NewHandler(nil, nil, customerMappingStore{}, nil, logger.NewNoopLogger())
+
+			require.NoError(t, h.HandleWebhookEvent(context.Background(), &event, "env_1", &ServiceDependencies{WebhookPublisher: pub, CustomerService: knownCustomers{}}))
+
+			if tt.want == nil {
+				assert.Empty(t, pub.events)
+				return
+			}
+			require.Len(t, pub.events, 1)
+			assert.Equal(t, tt.wantName, pub.events[0].EventName)
+			var payload webhookDto.InternalMandateEvent
+			require.NoError(t, json.Unmarshal(pub.events[0].Payload, &payload))
+			assert.Equal(t, *tt.want, payload.Mandate)
 		})
 	}
 }

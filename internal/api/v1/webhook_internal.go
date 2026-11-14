@@ -792,3 +792,23 @@ func WebhookEventMandateRejected() {}
 // @Success 200 {object} webhookDto.MandateWebhookPayload "Webhook payload"
 // @Router /webhook-events/mandate.cancelled [post]
 func WebhookEventMandateCancelled() {}
+
+// WebhookEventMandateSetupAttemptFailed godoc
+// @Summary mandate.setup_attempt_failed
+// @Description Fired when a customer's mandate authorisation fails; failure_reason carries the reason. The customer can retry the same link until it expires. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.MandateWebhookPayload "Webhook payload"
+// @Router /webhook-events/mandate.setup_attempt_failed [post]
+func WebhookEventMandateSetupAttemptFailed() {}
+
+// WebhookEventMandateSetupExpired godoc
+// @Summary mandate.setup_expired
+// @Description Fired when a mandate setup link expires before the customer authorises it. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.MandateWebhookPayload "Webhook payload"
+// @Router /webhook-events/mandate.setup_expired [post]
+func WebhookEventMandateSetupExpired() {}

@@ -238,11 +238,14 @@ const (
 	WebhookEventCheckoutSessionExpired   WebhookEventName = "checkout.session.expired"
 )
 
-// mandate webhook event names, fired when a gateway confirms, rejects or cancels a saved mandate
+// mandate webhook event names, fired when a gateway confirms, rejects or cancels a saved mandate,
+// or when a mandate setup attempt fails or its link expires
 const (
-	WebhookEventMandateConfirmed WebhookEventName = "mandate.confirmed"
-	WebhookEventMandateRejected  WebhookEventName = "mandate.rejected"
-	WebhookEventMandateCancelled WebhookEventName = "mandate.cancelled"
+	WebhookEventMandateConfirmed          WebhookEventName = "mandate.confirmed"
+	WebhookEventMandateRejected           WebhookEventName = "mandate.rejected"
+	WebhookEventMandateCancelled          WebhookEventName = "mandate.cancelled"
+	WebhookEventMandateSetupAttemptFailed WebhookEventName = "mandate.setup_attempt_failed"
+	WebhookEventMandateSetupExpired       WebhookEventName = "mandate.setup_expired"
 )
 
 // event (usage ingestion) webhook event names

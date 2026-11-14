@@ -85,6 +85,8 @@ sequenceDiagram
 | `mandate.confirmed`                        | `token.confirmed`   | New. Forwarded, nothing stored           |
 | `mandate.rejected`                         | `token.rejected`    | New. Forwarded with the bank's reason    |
 | `mandate.cancelled`                        | `token.cancelled`   | New. Forwarded                           |
+| `mandate.setup_attempt_failed`             | ₹0 `payment.failed` | New. Not terminal; the link can be retried |
+| `mandate.setup_expired`                    | `invoice.expired`   | New. Only for the customer's current setup link |
 | `payment.pending`                          | Debit submitted     | Existing                                 |
 | `payment.success`                          | `payment.captured`  | Existing                                 |
 | `payment.failed`                           | `payment.failed`    | Existing. Carries the bank's failure reason |

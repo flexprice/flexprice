@@ -16544,6 +16544,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/mandate.setup_attempt_failed": {
+            "post": {
+                "description": "Fired when a customer's mandate authorisation fails; failure_reason carries the reason. The customer can retry the same link until it expires. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.setup_attempt_failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.setup_expired": {
+            "post": {
+                "description": "Fired when a mandate setup link expires before the customer authorises it. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.setup_expired",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/payment.attempt.failed": {
             "post": {
                 "description": "Fired when one charge attempt is declined and the payment stays open for retry. Doc-only for parsing.",
@@ -38773,6 +38819,8 @@ const docTemplate = `{
                 "mandate.confirmed",
                 "mandate.rejected",
                 "mandate.cancelled",
+                "mandate.setup_attempt_failed",
+                "mandate.setup_expired",
                 "event.rejected"
             ],
             "x-enum-varnames": [
@@ -38851,6 +38899,8 @@ const docTemplate = `{
                 "WebhookEventMandateConfirmed",
                 "WebhookEventMandateRejected",
                 "WebhookEventMandateCancelled",
+                "WebhookEventMandateSetupAttemptFailed",
+                "WebhookEventMandateSetupExpired",
                 "WebhookEventEventRejected"
             ]
         },
@@ -41330,6 +41380,9 @@ const docTemplate = `{
                 },
                 "provider": {
                     "$ref": "#/definitions/types.PaymentGatewayType"
+                },
+                "setup_intent_id": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"

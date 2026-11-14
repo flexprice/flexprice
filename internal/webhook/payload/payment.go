@@ -129,7 +129,7 @@ func (b *MandatePayloadBuilder) BuildPayload(ctx context.Context, eventType type
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	if internal.Mandate.ID == "" || internal.Mandate.CustomerID == "" {
+	if (internal.Mandate.ID == "" && internal.Mandate.SetupIntentID == "") || internal.Mandate.CustomerID == "" {
 		return nil, ierr.NewError("invalid data for mandate event").
 			WithHint("Please provide a valid mandate ID and customer ID").
 			WithReportableDetails(map[string]any{
