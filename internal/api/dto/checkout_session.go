@@ -352,14 +352,15 @@ type ListCheckoutSessionsResponse = types.ListResponse[*CheckoutSessionResponse]
 
 // ToCheckoutSessionResponse maps a domain session to its API response.
 //
-// PaymentAction is derived from ProviderResult; the raw ProviderResult is never
+// PaymentAction is derived from ProviderResult and only shown while the session is open,
+// so a finished session never hands out a payable URL. The raw ProviderResult is never
 // exposed because it holds gateway session identifiers. Configuration, Result and
 // PaymentProviderConfig are likewise internal and have no field here.
 func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessionResponse {
 	if s == nil {
 		return nil
 	}
-	return &CheckoutSessionResponse{
+	resp := &CheckoutSessionResponse{
 		ID:                s.ID,
 		CustomerID:        s.CustomerID,
 		Action:            s.Action,
@@ -378,7 +379,10 @@ func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessi
 		Metadata:          s.Metadata,
 		CreatedAt:         s.CreatedAt,
 		UpdatedAt:         s.UpdatedAt,
-		PaymentAction:     s.ProviderResult.ToProviderResult().PaymentAction(),
 		Terminal:          s.CheckoutStatus.IsTerminal(),
 	}
+	if !resp.Terminal {
+		resp.PaymentAction = s.ProviderResult.ToProviderResult().PaymentAction()
+	}
+	return resp
 }

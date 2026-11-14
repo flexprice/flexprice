@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -13,6 +14,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -28,6 +30,13 @@ const (
 	chargeModeAutoCharge  = "auto_charge"
 	chargeModeAuthLink    = "auth_link"
 	chargeModePaymentLink = "payment_link"
+)
+
+// A caller waits up to ~5s for a concurrent completion of the same session.
+const (
+	checkoutSessionLockTTL           = 2 * time.Minute
+	checkoutSessionLockAttempts      = 10
+	checkoutSessionLockRetryInterval = 500 * time.Millisecond
 )
 
 type CheckoutSessionService = interfaces.CheckoutSessionService
@@ -121,8 +130,12 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 	session := req.ToCheckoutSession(ctx, customer.ID)
 
 	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
-		// TODO: on ErrAlreadyExists (idempotency key conflict), consider fetching and returning
-		// the existing session transparently (HTTP 200) instead of propagating 409
+		// A retry with the same idempotency key gets the session it already created.
+		if ierr.IsAlreadyExists(err) && session.IdempotencyKey != nil {
+			if existing, getErr := s.CheckoutSessionRepo.GetByIdempotencyKey(ctx, *session.IdempotencyKey); getErr == nil {
+				return s.toPollableResponse(ctx, existing, false), nil
+			}
+		}
 		return nil, err
 	}
 
@@ -325,6 +338,7 @@ func (s *checkoutSessionService) Cancel(ctx context.Context, id string) (*dto.Ch
 		return s.toPollableResponse(ctx, session, false), nil
 	}
 
+	session.CancelledAt = lo.ToPtr(clock.Now())
 	if err := s.cleanupCheckoutSession(ctx, session, nil); err != nil {
 		return nil, err
 	}
@@ -382,7 +396,7 @@ func (s *checkoutSessionService) voidCheckoutInvoiceIfPartiallyPaid(ctx context.
 }
 
 // cleanupCheckoutSession terminates the session and publishes checkout.session.failed
-// (reason set) or checkout.session.expired (no reason).
+// (reason set) or checkout.session.expired (no reason), plus checkout.session.cancelled after a cancel.
 func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error {
 	terminated, err := s.terminateCheckoutSession(ctx, session, reason)
 	if err != nil || !terminated {
@@ -395,11 +409,52 @@ func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, ses
 	} else {
 		s.publishCheckoutEvent(ctx, resp, types.WebhookEventCheckoutSessionExpired)
 	}
+	if session.CancelledAt != nil {
+		s.publishCheckoutEvent(ctx, resp, types.WebhookEventCheckoutSessionCancelled)
+	}
 	return nil
+}
+
+// lockCheckoutSession serializes completion and teardown of a session. Without a locker it
+// proceeds unlocked; a Redis failure is returned so the caller retries. Release is never nil.
+func (s *checkoutSessionService) lockCheckoutSession(ctx context.Context, sessionID string) (func(), error) {
+	lockKey := cache.GenerateKey(ctx, cache.PrefixCheckoutSessionLock, sessionID)
+	lock, err := cache.AcquireLockWithRetry(ctx, s.Locker, lockKey,
+		checkoutSessionLockTTL, checkoutSessionLockAttempts, checkoutSessionLockRetryInterval)
+	switch {
+	case err != nil:
+		return nil, ierr.WithError(err).
+			WithHintf("session %s could not be locked, retry shortly", sessionID).
+			Mark(ierr.ErrServiceUnavailable)
+	case lock != nil && !lock.AcquiredSuccessfully():
+		return nil, ierr.NewError("checkout session is being updated by another request").
+			WithHintf("session %s is busy, retry shortly", sessionID).
+			Mark(ierr.ErrServiceUnavailable)
+	case lock != nil:
+		return func() { _ = lock.Release(ctx) }, nil
+	}
+	return func() {}, nil
 }
 
 // terminate cleans up a checkout session without webhook publishing.
 func (s *checkoutSessionService) terminateCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) (bool, error) {
+	if session.CheckoutStatus.IsTerminal() {
+		return false, nil
+	}
+
+	release, err := s.lockCheckoutSession(ctx, session.ID)
+	if err != nil {
+		return false, err
+	}
+	defer release()
+
+	// A completion may have finished while we waited for the lock.
+	fresh, err := s.CheckoutSessionRepo.Get(types.WithForceWriter(ctx), session.ID)
+	if err != nil {
+		return false, err
+	}
+	cancelledAt := session.CancelledAt
+	*session = *fresh
 	if session.CheckoutStatus.IsTerminal() {
 		return false, nil
 	}
@@ -417,13 +472,13 @@ func (s *checkoutSessionService) terminateCheckoutSession(ctx context.Context, s
 		terminalAction = activity.CheckoutSessionFailed
 	}
 
-	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.cleanupCheckoutResources(txCtx, session, reason); err != nil {
 			return err
 		}
 
 		txCtx = activity.WithAction(txCtx, session.ID, terminalAction)
-		claimed, err := s.CheckoutSessionRepo.MarkTerminal(txCtx, session.ID, status, failureReason)
+		claimed, err := s.CheckoutSessionRepo.MarkTerminal(txCtx, session.ID, status, failureReason, cancelledAt)
 		if err != nil {
 			return err
 		}
@@ -443,27 +498,13 @@ func (s *checkoutSessionService) terminateCheckoutSession(ctx context.Context, s
 
 	session.CheckoutStatus = status
 	session.FailureReason = failureReason
+	session.CancelledAt = cancelledAt
 	metrics.RecordCounter(ctx, metrics.CheckoutSessions, 1, checkoutMetricLabels(session, status)...)
 	return true, nil
 }
 
 func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error {
 	cfg := session.Configuration.ToCheckoutConfiguration()
-
-	if cfg.WalletTopupParams != nil && cfg.WalletTopupParams.WalletTransactionID != "" {
-		failReason := "checkout session expired before payment"
-		if reason != nil {
-			failReason = reason.Error()
-		}
-		if err := NewWalletService(s.ServiceParams).FailPurchasedCreditTransaction(ctx, cfg.WalletTopupParams.WalletTransactionID, failReason); err != nil {
-			if ierr.IsInvalidOperation(err) {
-				return ierr.NewError("checkout session already in terminal state").
-					WithHintf("session %s was claimed by another process", session.ID).
-					Mark(ierr.ErrAlreadyExists)
-			}
-			return err
-		}
-	}
 
 	subID := ""
 	if cfg.CreateSubscriptionParams != nil {
@@ -481,6 +522,45 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 		}
 		if invoiceID == "" {
 			invoiceID = res.InvoiceID
+		}
+	}
+
+	failReason := "checkout session expired before payment"
+	if reason != nil {
+		failReason = reason.Error()
+	}
+
+	if paymentID != "" {
+		p, err := s.PaymentRepo.Get(ctx, paymentID)
+		if err != nil && !ierr.IsNotFound(err) {
+			return err
+		}
+		// After expiry a paid session is still expired; the payment is refunded as a late capture.
+		if p.IsPaymentPaid() && clock.Now().Before(session.ExpiresAt) {
+			return ierr.NewError("checkout payment already succeeded").
+				WithHintf("session %s has been paid and cannot be cancelled or expired", session.ID).
+				Mark(ierr.ErrInvalidOperation)
+		}
+		// An unpaid payment is marked failed before it is archived below.
+		if p != nil && p.PaymentStatus.ValidateTransitionTo(types.PaymentStatusFailed) == nil {
+			if _, err := NewPaymentService(s.ServiceParams).UpdatePayment(ctx, paymentID, dto.UpdatePaymentRequest{
+				PaymentStatus: lo.ToPtr(string(types.PaymentStatusFailed)),
+				FailedAt:      lo.ToPtr(clock.Now()),
+				ErrorMessage:  lo.ToPtr(failReason),
+			}); err != nil {
+				return err
+			}
+		}
+	}
+
+	if cfg.WalletTopupParams != nil && cfg.WalletTopupParams.WalletTransactionID != "" {
+		if err := NewWalletService(s.ServiceParams).FailPurchasedCreditTransaction(ctx, cfg.WalletTopupParams.WalletTransactionID, failReason); err != nil {
+			if ierr.IsInvalidOperation(err) {
+				return ierr.NewError("checkout session already in terminal state").
+					WithHintf("session %s was claimed by another process", session.ID).
+					Mark(ierr.ErrAlreadyExists)
+			}
+			return err
 		}
 	}
 
@@ -577,7 +657,8 @@ func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, 
 	result := &types.CheckoutSessionCleanupResult{}
 
 	for {
-		sessions, err := s.CheckoutSessionRepo.ListExpiredCheckoutSessions(ctx, cutoff, cleanupExpiredBatchSize, 0)
+		// Failed sessions stay listed ahead of unprocessed ones, so skip past them.
+		sessions, err := s.CheckoutSessionRepo.ListExpiredCheckoutSessions(ctx, cutoff, cleanupExpiredBatchSize, result.Failed)
 		if err != nil {
 			return result, err
 		}
@@ -586,6 +667,8 @@ func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, 
 			result.Total++
 			sessCtx := context.WithValue(ctx, types.CtxTenantID, sess.TenantID)
 			sessCtx = context.WithValue(sessCtx, types.CtxEnvironmentID, sess.EnvironmentID)
+
+			s.flagIfPaidAtGateway(sessCtx, sess)
 			if err := s.cleanupCheckoutSession(sessCtx, sess, nil); err != nil {
 				s.Logger.Error(ctx, "failed to cleanup expired checkout session",
 					"session_id", sess.ID, "error", err)
@@ -610,10 +693,29 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 			Mark(ierr.ErrValidation)
 	}
 
-	// Fetch session for completeCheckoutAction context (subscription/invoice/payment IDs).
-	session, err := s.CheckoutSessionRepo.Get(ctx, sessionID)
+	// Side effects run before the claim, so concurrent completions must not overlap.
+	release, err := s.lockCheckoutSession(ctx, sessionID)
 	if err != nil {
 		return err
+	}
+	release = sync.OnceFunc(release)
+	defer release()
+
+	// Writer read: the replica may not show a completion or teardown committed under this lock.
+	session, err := s.CheckoutSessionRepo.Get(types.WithForceWriter(ctx), sessionID)
+	if err != nil {
+		return err
+	}
+
+	// Past expiry the session is expired, never completed; a payment it took is a late capture.
+	if !session.CheckoutStatus.IsTerminal() && clock.Now().After(session.ExpiresAt) {
+		release() // cleanup takes the lock itself
+		if err := s.cleanupCheckoutSession(ctx, session, nil); err != nil {
+			return err
+		}
+		return ierr.NewError("checkout session expired").
+			WithHintf("session %s expired at %s and cannot be completed", sessionID, session.ExpiresAt).
+			Mark(ierr.ErrAlreadyExists)
 	}
 
 	// Fast-path guard: already in a terminal state — nothing to do.

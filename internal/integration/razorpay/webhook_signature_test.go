@@ -8,8 +8,10 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	rzperrors "github.com/razorpay/razorpay-go/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,5 +66,23 @@ func TestVerifyWebhookSignature(t *testing.T) {
 			err := client.VerifyWebhookSignature(ctx, payload, tt.sig)
 			require.Equal(t, tt.wantErr, err != nil)
 		})
+	}
+}
+
+func TestRazorpayErr(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		validation bool
+	}{
+		{"bad request", &rzperrors.BadRequestError{Message: "The contact field is required for recurring links"}, true},
+		{"rate limited", &rzperrors.BadRequestError{Message: "Too many requests"}, false},
+		{"empty reason", &rzperrors.BadRequestError{}, false},
+		{"server error", &rzperrors.ServerError{Message: "boom"}, false},
+	}
+	for _, tt := range tests {
+		err := razorpayErr(tt.err, "Unable to reach Razorpay")
+		require.Equal(t, tt.validation, ierr.IsValidation(err), tt.name)
+		require.Contains(t, err.Error(), tt.err.Error(), tt.name)
 	}
 }

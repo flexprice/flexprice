@@ -15355,6 +15355,7 @@ definitions:
     - checkout.session.completed
     - checkout.session.failed
     - checkout.session.expired
+    - checkout.session.cancelled
     - event.rejected
     type: string
     x-enum-varnames:
@@ -15430,6 +15431,7 @@ definitions:
     - WebhookEventCheckoutSessionCompleted
     - WebhookEventCheckoutSessionFailed
     - WebhookEventCheckoutSessionExpired
+    - WebhookEventCheckoutSessionCancelled
     - WebhookEventEventRejected
   types.WindowSize:
     enum:
@@ -28126,6 +28128,22 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.BillingTermsWebhookPayload'
       summary: billing_terms.updated
+      tags:
+      - Webhook Events
+  /webhook-events/checkout.session.cancelled:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a Checkout Session is cancelled through the API, alongside
+        checkout.session.expired. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
+      summary: checkout.session.cancelled
       tags:
       - Webhook Events
   /webhook-events/checkout.session.completed:

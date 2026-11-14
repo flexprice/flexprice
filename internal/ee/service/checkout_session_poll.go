@@ -199,3 +199,24 @@ func (s *checkoutSessionService) resolveCheckoutProvider(
 		NewInvoiceService(s.ServiceParams),
 	)
 }
+
+// flagIfPaidAtGateway logs an expiring session whose payment went through but whose
+// webhook never landed, so the payment can be refunded.
+func (s *checkoutSessionService) flagIfPaidAtGateway(ctx context.Context, session *domainCheckout.CheckoutSession) {
+	if session.CheckoutPaymentID == nil {
+		return
+	}
+	state, err := s.fetchProviderPaymentState(ctx, session)
+	if err != nil {
+		s.Logger.Info(ctx, "could not check expiring checkout session with gateway",
+			"session_id", session.ID, "error", err)
+		return
+	}
+	if state != nil && (state.Status == types.PaymentStatusSucceeded || state.Status == types.PaymentStatusOverpaid) {
+		s.Logger.Error(ctx, "checkout session paid at gateway but expired, refund required",
+			"error", "paid after expiry",
+			"session_id", session.ID,
+			"payment_id", *session.CheckoutPaymentID,
+			"gateway_payment_id", state.GatewayPaymentID)
+	}
+}
