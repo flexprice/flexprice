@@ -143,6 +143,15 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 			WithHint("Emails to customers are not enabled in this deployment").
 			Mark(ierr.ErrInvalidOperation)
 	}
+	cfg, err := GetSetting[types.EmailNotificationConfig](NewSettingsService(s.ServiceParams).(*settingsService), ctx, types.SettingKeyEmailNotificationConfig)
+	if err != nil {
+		return nil, err
+	}
+	if !cfg.Enabled {
+		return nil, ierr.NewError("emails are disabled for this environment").
+			WithHint("Enable emails in this environment's settings to send them").
+			Mark(ierr.ErrInvalidOperation)
+	}
 
 	to := normalizeRecipients(out.to)
 	if len(to) == 0 {
