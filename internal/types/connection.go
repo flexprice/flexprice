@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"net/url"
+	"regexp"
 	"strings"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -241,10 +242,8 @@ func (q *QuickBooksConnectionMetadata) Validate() error {
 			WithHint("QuickBooks OAuth client secret is required").
 			Mark(ierr.ErrValidation)
 	}
-	if q.RealmID == "" {
-		return ierr.NewError("realm_id is required").
-			WithHint("QuickBooks Company ID (realm ID) is required").
-			Mark(ierr.ErrValidation)
+	if err := ValidateQuickBooksRealmID(q.RealmID); err != nil {
+		return err
 	}
 	if q.Environment != "sandbox" && q.Environment != "production" {
 		return ierr.NewError("environment must be 'sandbox' or 'production'").
@@ -335,24 +334,44 @@ func (z *ZohoBooksConnectionMetadata) Validate() error {
 			WithHint("Zoho Books refresh token is required after OAuth completion").
 			Mark(ierr.ErrValidation)
 	}
-	if z.OrganizationID == "" {
-		return ierr.NewError("organization_id is required").
-			WithHint("Zoho Books organization_id is required for API calls").
+	if err := ValidateZohoOrganizationID(z.OrganizationID); err != nil {
+		return err
+	}
+
+	// Empty until OAuth completes.
+	if z.AccountsURL != "" {
+		if err := ValidateZohoEndpoint(strings.TrimRight(z.AccountsURL, "/"), "accounts_server"); err != nil {
+			return err
+		}
+	}
+	if z.APIDomain != "" {
+		if err := ValidateZohoEndpoint(strings.TrimRight(z.APIDomain, "/"), "api_domain"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+var numericIDPattern = regexp.MustCompile(`^[0-9]{1,32}$`)
+
+// ValidateQuickBooksRealmID requires a numeric QuickBooks company ID.
+func ValidateQuickBooksRealmID(id string) error {
+	if !numericIDPattern.MatchString(id) {
+		return ierr.NewError("realm_id must be numeric").
+			WithHint("QuickBooks Company ID (realm ID) must contain digits only").
 			Mark(ierr.ErrValidation)
 	}
+	return nil
+}
 
-	// accounts_server and api_domain are stored and then re-read as the host for
-	// every subsequent token refresh and API call, which send this connection's
-	// client_id and client_secret. They are only ever Zoho datacenter endpoints,
-	// so restrict them to Zoho domains rather than accepting any host supplied
-	// when the connection is created.
-	if err := validateZohoEndpoint(z.AccountsURL, "accounts_server"); err != nil {
-		return err
+// ValidateZohoOrganizationID requires a numeric Zoho Books organization ID.
+func ValidateZohoOrganizationID(id string) error {
+	if !numericIDPattern.MatchString(id) {
+		return ierr.NewError("organization_id must be numeric").
+			WithHint("Zoho Books organization_id must contain digits only").
+			Mark(ierr.ErrValidation)
 	}
-	if err := validateZohoEndpoint(z.APIDomain, "api_domain"); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -368,6 +387,7 @@ var zohoEndpointSuffixes = []string{
 	".zoho.com.cn",
 	".zoho.sa",
 	".zoho.uk",
+	".zoho.ae",
 	".zohocloud.ca",
 	".zohoapis.com",
 	".zohoapis.eu",
@@ -377,20 +397,12 @@ var zohoEndpointSuffixes = []string{
 	".zohoapis.com.cn",
 	".zohoapis.sa",
 	".zohoapis.uk",
+	".zohoapis.ca",
+	".zohoapis.ae",
 	".zohoapiscloud.ca",
 }
 
-// ValidateZohoEndpoint restricts a client-supplied Zoho URL to an https Zoho
-// domain. Callers performing the OAuth token exchange must apply this to the
-// accounts_server before sending client_id/client_secret to it, so those
-// credentials cannot be exfiltrated to an attacker-chosen host.
-//
-// Unlike the internal check, this enforces a bare-origin invariant: the value is
-// concatenated with a fixed OAuth path (e.g. accounts_server + "/oauth/v2/token"),
-// so any path, query, fragment, or userinfo component would change which URL is
-// actually reached — a query would swallow the OAuth path, a fragment would strip
-// the OAuth query, and userinfo would send credentials to a different authority.
-// It also rejects an empty value.
+// ValidateZohoEndpoint requires a non-empty bare https origin on a Zoho domain.
 func ValidateZohoEndpoint(raw, field string) error {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -400,7 +412,7 @@ func ValidateZohoEndpoint(raw, field string) error {
 	}
 
 	u, err := url.Parse(trimmed)
-	if err != nil {
+	if err != nil || !u.IsAbs() || u.Scheme != "https" {
 		return ierr.NewError(field+" must be a valid https URL").
 			WithHintf("Zoho Books %s must be an https URL", field).
 			Mark(ierr.ErrValidation)
@@ -408,24 +420,6 @@ func ValidateZohoEndpoint(raw, field string) error {
 	if u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
 		return ierr.NewError(field+" must be a bare origin").
 			WithHintf("Zoho Books %s must be a scheme and host only, with no path, query, fragment, or credentials", field).
-			Mark(ierr.ErrValidation)
-	}
-
-	return validateZohoEndpoint(trimmed, field)
-}
-
-// validateZohoEndpoint checks a Zoho-supplied URL is https and served from a
-// Zoho domain. An empty value is allowed: these fields are populated by the
-// token exchange and are absent before OAuth completes.
-func validateZohoEndpoint(raw, field string) error {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || !u.IsAbs() || u.Scheme != "https" {
-		return ierr.NewError(field+" must be a valid https URL").
-			WithHintf("Zoho Books %s must be an https URL", field).
 			Mark(ierr.ErrValidation)
 	}
 

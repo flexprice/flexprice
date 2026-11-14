@@ -8,13 +8,20 @@ func TestValidateZohoEndpoint(t *testing.T) {
 		url     string
 		wantErr bool
 	}{
-		{"empty is allowed before oauth completes", "", false},
 		{"zoho com accounts", "https://accounts.zoho.com", false},
 		{"zoho eu accounts", "https://accounts.zoho.eu", false},
 		{"zoho api domain default", "https://www.zohoapis.com", false},
 		{"zoho in api domain", "https://www.zohoapis.in", false},
 		{"zoho com au", "https://accounts.zoho.com.au", false},
 		{"bare zoho domain", "https://zoho.com", false},
+		{"zoho ca api domain", "https://www.zohoapis.ca", false},
+		{"zoho ae api domain", "https://www.zohoapis.ae", false},
+		{"zoho ae accounts", "https://accounts.zoho.ae", false},
+		{"lookalike ae accounts rejected", "https://evilzoho.ae", true},
+		{"zoho ca api domain no www", "https://zohoapis.ca", false},
+		{"lookalike ca rejected", "https://evilzohoapis.ca", true},
+		{"lookalike ae rejected", "https://evilzohoapis.ae", true},
+		{"ca suffix on attacker host rejected", "https://x.zohoapis.ca.evil.com", true},
 
 		// A host chosen at connection creation would otherwise receive this
 		// connection's client_id and client_secret on every token refresh.
@@ -27,7 +34,7 @@ func TestValidateZohoEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateZohoEndpoint(tt.url, "accounts_server")
+			err := ValidateZohoEndpoint(tt.url, "accounts_server")
 			if tt.wantErr && err == nil {
 				t.Fatalf("expected %q to be rejected, got nil error", tt.url)
 			}
