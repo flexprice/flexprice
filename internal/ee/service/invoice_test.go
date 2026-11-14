@@ -4198,24 +4198,24 @@ func (s *VoidPaymentLinksSuite) TestVoid_LeavesNonLinkAndSettledPaymentsAlone() 
 	s.Empty(s.provider.expired)
 }
 
-func (s *VoidPaymentLinksSuite) TestVoid_ProviderErrorDoesNotFailVoid() {
+func (s *VoidPaymentLinksSuite) TestVoid_ProviderErrorLeavesPaymentPending() {
 	s.seedInvoice()
 	s.seedPayment("pay_1", types.PaymentStatusPending, types.PaymentMethodTypePaymentLink, "cs_1")
 	s.provider.expireErr = ierr.NewError("stripe down").Mark(ierr.ErrHTTPClient)
 
 	s.void(dto.InvoiceVoidRequest{})
 
-	s.Equal(types.PaymentStatusVoided, s.payment("pay_1").PaymentStatus)
+	s.Equal(types.PaymentStatusPending, s.payment("pay_1").PaymentStatus)
 }
 
-func (s *VoidPaymentLinksSuite) TestVoid_NotImplementedProviderStillVoidsPayment() {
+func (s *VoidPaymentLinksSuite) TestVoid_NotImplementedProviderLeavesPaymentPending() {
 	s.seedInvoice()
 	s.seedPayment("pay_1", types.PaymentStatusPending, types.PaymentMethodTypePaymentLink, "hp_1")
 	s.provider.expireErr = ierr.NewError("not implemented").Mark(ierr.ErrNotImplemented)
 
 	s.void(dto.InvoiceVoidRequest{})
 
-	s.Equal(types.PaymentStatusVoided, s.payment("pay_1").PaymentStatus)
+	s.Equal(types.PaymentStatusPending, s.payment("pay_1").PaymentStatus)
 }
 
 func (s *VoidPaymentLinksSuite) TestVoid_InTransactionClosesLinksAfterCommit() {
