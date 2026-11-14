@@ -30,6 +30,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/emaillog"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
@@ -1237,6 +1238,79 @@ func init() {
 	customer.DefaultTaxTreatment = types.TaxTreatment(customerDescTaxTreatment.Default.(string))
 	// customer.TaxTreatmentValidator is a validator for the "tax_treatment" field. It is called by the builders before save.
 	customer.TaxTreatmentValidator = customerDescTaxTreatment.Validators[0].(func(string) error)
+	emaillogMixin := schema.EmailLog{}.Mixin()
+	emaillogMixinFields0 := emaillogMixin[0].Fields()
+	_ = emaillogMixinFields0
+	emaillogMixinFields1 := emaillogMixin[1].Fields()
+	_ = emaillogMixinFields1
+	emaillogFields := schema.EmailLog{}.Fields()
+	_ = emaillogFields
+	// emaillogDescTenantID is the schema descriptor for tenant_id field.
+	emaillogDescTenantID := emaillogMixinFields0[0].Descriptor()
+	// emaillog.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	emaillog.TenantIDValidator = emaillogDescTenantID.Validators[0].(func(string) error)
+	// emaillogDescStatus is the schema descriptor for status field.
+	emaillogDescStatus := emaillogMixinFields0[1].Descriptor()
+	// emaillog.DefaultStatus holds the default value on creation for the status field.
+	emaillog.DefaultStatus = emaillogDescStatus.Default.(string)
+	// emaillogDescCreatedAt is the schema descriptor for created_at field.
+	emaillogDescCreatedAt := emaillogMixinFields0[2].Descriptor()
+	// emaillog.DefaultCreatedAt holds the default value on creation for the created_at field.
+	emaillog.DefaultCreatedAt = emaillogDescCreatedAt.Default.(func() time.Time)
+	// emaillogDescUpdatedAt is the schema descriptor for updated_at field.
+	emaillogDescUpdatedAt := emaillogMixinFields0[3].Descriptor()
+	// emaillog.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	emaillog.DefaultUpdatedAt = emaillogDescUpdatedAt.Default.(func() time.Time)
+	// emaillog.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	emaillog.UpdateDefaultUpdatedAt = emaillogDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// emaillogDescEnvironmentID is the schema descriptor for environment_id field.
+	emaillogDescEnvironmentID := emaillogMixinFields1[0].Descriptor()
+	// emaillog.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	emaillog.DefaultEnvironmentID = emaillogDescEnvironmentID.Default.(string)
+	// emaillogDescEntityType is the schema descriptor for entity_type field.
+	emaillogDescEntityType := emaillogFields[1].Descriptor()
+	// emaillog.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	emaillog.EntityTypeValidator = emaillogDescEntityType.Validators[0].(func(string) error)
+	// emaillogDescEntityID is the schema descriptor for entity_id field.
+	emaillogDescEntityID := emaillogFields[2].Descriptor()
+	// emaillog.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	emaillog.EntityIDValidator = emaillogDescEntityID.Validators[0].(func(string) error)
+	// emaillogDescCustomerID is the schema descriptor for customer_id field.
+	emaillogDescCustomerID := emaillogFields[3].Descriptor()
+	// emaillog.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	emaillog.CustomerIDValidator = emaillogDescCustomerID.Validators[0].(func(string) error)
+	// emaillogDescTemplateKey is the schema descriptor for template_key field.
+	emaillogDescTemplateKey := emaillogFields[4].Descriptor()
+	// emaillog.TemplateKeyValidator is a validator for the "template_key" field. It is called by the builders before save.
+	emaillog.TemplateKeyValidator = emaillogDescTemplateKey.Validators[0].(func(string) error)
+	// emaillogDescTrigger is the schema descriptor for trigger field.
+	emaillogDescTrigger := emaillogFields[5].Descriptor()
+	// emaillog.TriggerValidator is a validator for the "trigger" field. It is called by the builders before save.
+	emaillog.TriggerValidator = emaillogDescTrigger.Validators[0].(func(string) error)
+	// emaillogDescFromAddress is the schema descriptor for from_address field.
+	emaillogDescFromAddress := emaillogFields[6].Descriptor()
+	// emaillog.FromAddressValidator is a validator for the "from_address" field. It is called by the builders before save.
+	emaillog.FromAddressValidator = emaillogDescFromAddress.Validators[0].(func(string) error)
+	// emaillogDescReplyTo is the schema descriptor for reply_to field.
+	emaillogDescReplyTo := emaillogFields[7].Descriptor()
+	// emaillog.ReplyToValidator is a validator for the "reply_to" field. It is called by the builders before save.
+	emaillog.ReplyToValidator = emaillogDescReplyTo.Validators[0].(func(string) error)
+	// emaillogDescCcAddresses is the schema descriptor for cc_addresses field.
+	emaillogDescCcAddresses := emaillogFields[9].Descriptor()
+	// emaillog.DefaultCcAddresses holds the default value on creation for the cc_addresses field.
+	emaillog.DefaultCcAddresses = emaillogDescCcAddresses.Default.([]string)
+	// emaillogDescProvider is the schema descriptor for provider field.
+	emaillogDescProvider := emaillogFields[11].Descriptor()
+	// emaillog.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	emaillog.ProviderValidator = emaillogDescProvider.Validators[0].(func(string) error)
+	// emaillogDescDeliveryStatus is the schema descriptor for delivery_status field.
+	emaillogDescDeliveryStatus := emaillogFields[13].Descriptor()
+	// emaillog.DeliveryStatusValidator is a validator for the "delivery_status" field. It is called by the builders before save.
+	emaillog.DeliveryStatusValidator = emaillogDescDeliveryStatus.Validators[0].(func(string) error)
+	// emaillogDescMetadata is the schema descriptor for metadata field.
+	emaillogDescMetadata := emaillogFields[17].Descriptor()
+	// emaillog.DefaultMetadata holds the default value on creation for the metadata field.
+	emaillog.DefaultMetadata = emaillogDescMetadata.Default.(types.Metadata)
 	entitlementMixin := schema.Entitlement{}.Mixin()
 	entitlementMixinFields0 := entitlementMixin[0].Fields()
 	_ = entitlementMixinFields0

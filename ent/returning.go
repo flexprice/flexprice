@@ -34,6 +34,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/emaillog"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
@@ -1708,6 +1709,68 @@ func scanReturningCustomer(rows *sql.Rows) ([]*Customer, error) {
 	var out []*Customer
 	for rows.Next() {
 		node := &Customer{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*EmailLog.
+func (_u *EmailLogUpdate) SaveReturning(ctx context.Context) ([]*EmailLog, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *EmailLogUpdate) sqlSaveReturning(ctx context.Context) ([]*EmailLog, error) {
+	var out []*EmailLog
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", emaillog.Table, emaillog.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningEmailLog(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*EmailLog.
+func (_d *EmailLogDelete) ExecReturning(ctx context.Context) ([]*EmailLog, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *EmailLogDelete) sqlExecReturning(ctx context.Context) ([]*EmailLog, error) {
+	var out []*EmailLog
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", emaillog.Table, emaillog.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningEmailLog(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningEmailLog(rows *sql.Rows) ([]*EmailLog, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*EmailLog
+	for rows.Next() {
+		node := &EmailLog{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

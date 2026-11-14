@@ -152,6 +152,9 @@ const (
 	UUID_PREFIX_BILLING_INSTALMENT = "binst"
 	UUID_PREFIX_BILLING_ENTITY     = "be"
 
+	// UUID_PREFIX_EMAIL_LOG prefixes customer email log ids, also used as the provider idempotency key.
+	UUID_PREFIX_EMAIL_LOG = "email"
+
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"
 	UUID_PREFIX_RUN      = "run"
