@@ -14,15 +14,13 @@ import (
 	"github.com/flexprice/flexprice/internal/email/emailtypes"
 	"github.com/flexprice/flexprice/internal/email/render"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/temporal/models"
-	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
 
 // EmailNotificationService sends emails to customers and records each one in email_log.
 type EmailNotificationService interface {
-	// SendInvoiceEmail queues the email for a finalized invoice and starts its delivery.
+	// SendInvoiceEmail queues the email for a finalized invoice; DispatchEmails sends it.
 	SendInvoiceEmail(ctx context.Context, invoiceID string, req *dto.SendInvoiceEmailRequest) (*dto.EmailLogResponse, error)
 
 	// ListInvoiceEmails returns the emails sent for an invoice, newest first.
@@ -35,6 +33,9 @@ type EmailNotificationService interface {
 
 	// MarkEmailFailed records that delivery gave up on a queued email.
 	MarkEmailFailed(ctx context.Context, emailLogID string, reason string) error
+
+	// DispatchEmails sends queued emails from every environment at the deployment's send rate.
+	DispatchEmails(ctx context.Context) (*EmailDispatchResult, error)
 }
 
 type emailNotificationService struct {
@@ -136,7 +137,7 @@ func (s *emailNotificationService) ListInvoiceEmails(ctx context.Context, invoic
 	return &resp, nil
 }
 
-// queue checks the sender and recipients, records the email as queued and starts its delivery.
+// queue checks the sender and recipients and records the email as queued for DispatchEmails.
 func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail) (*emaillog.EmailLog, error) {
 	if !s.Config.Email.IsProviderConfigured() {
 		return nil, ierr.NewError("customer emails are disabled").
@@ -190,20 +191,6 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 	if err := s.EmailLogRepo.Create(ctx, e); err != nil {
-		return nil, err
-	}
-
-	_, err = temporalservice.GetGlobalTemporalService().ExecuteWorkflow(ctx, types.TemporalSendEmailWorkflow, models.SendEmailWorkflowInput{
-		EmailLogID:    e.ID,
-		TenantID:      e.TenantID,
-		EnvironmentID: e.EnvironmentID,
-		UserID:        types.GetUserID(ctx),
-	})
-	if err != nil {
-		s.Logger.Error(ctx, "failed to start email delivery", "error", err, "email_log_id", e.ID)
-		if markErr := s.MarkEmailFailed(ctx, e.ID, "Delivery could not be started"); markErr != nil {
-			s.Logger.Error(ctx, "failed to mark email failed", "error", markErr, "email_log_id", e.ID)
-		}
 		return nil, err
 	}
 

@@ -175,6 +175,14 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     models.BillingInstalmentsDueWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
+		{
+			// Always declared; a no-op unless customer emails are on (email.enabled and email.provider).
+			ID:        types.ScheduleIDEmailDispatch,
+			Interval:  1 * time.Minute,
+			Workflow:  cronWorkflows.EmailDispatchWorkflow,
+			Input:     models.EmailDispatchWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
 	}
 }
 

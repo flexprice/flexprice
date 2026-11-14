@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	cerrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -76,7 +77,7 @@ func (s *emailNotificationService) composeInvoiceEmail(ctx context.Context, e *e
 	default:
 		if err := attachInvoicePDF(ctx, invoiceSvc.(*invoiceService), &inv.Invoice, &view, composed); err != nil {
 			if !allowMissingAttachments {
-				return nil, ierr.WithError(err).WithHint("The invoice PDF is not ready yet").Mark(ierr.ErrServiceUnavailable)
+				return nil, cerrors.Mark(ierr.WithError(err).WithHint("The invoice PDF is not ready yet").Mark(ierr.ErrServiceUnavailable), errAttachmentNotReady)
 			}
 			s.Logger.Info(ctx, "sending invoice email without its pdf", "email_log_id", e.ID, "invoice_id", inv.ID, "reason", err.Error())
 			composed.metadata[emailMetaPDF] = emailPDFUnavailable
