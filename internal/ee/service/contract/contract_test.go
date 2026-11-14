@@ -217,6 +217,8 @@ func (s *ContractServiceSuite) TestExtractionOnlyOnGetContract() {
 	now := time.Now().UTC()
 	uploaded := domainContract.NewBuilder(nil).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT)).
+		WithTenantID(types.GetTenantID(s.ctx)).
+		WithEnvironmentID(types.GetEnvironmentID(s.ctx)).
 		WithContractStatus(types.ContractStatusDraft).
 		WithStatus(types.StatusPublished).
 		WithExtractionStatus(types.ContractExtractionStatusCompleted).
@@ -234,6 +236,8 @@ func (s *ContractServiceSuite) TestExtractionOnlyOnGetContract() {
 
 	got, err := s.contractService.GetContract(s.ctx, uploaded.ID())
 	s.Require().NoError(err)
+	s.Equal(uploaded.TenantID(), got.TenantID)
+	s.Equal(uploaded.EnvironmentID(), got.EnvironmentID)
 	s.JSONEq(`{"model":"test/model"}`, string(got.Extraction))
 	s.Equal(types.ContractExtractionStatusCompleted, got.ExtractionStatus)
 }

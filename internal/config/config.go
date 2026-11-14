@@ -80,6 +80,7 @@ type Configuration struct {
 	WebhookRetryJob        WebhookRetryJobConfig        `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                 GeminiConfig                 `mapstructure:"gemini" validate:"omitempty"`
 	OpenRouter             OpenRouterConfig             `mapstructure:"openrouter" validate:"omitempty"`
+	Reducto                ReductoConfig                `mapstructure:"reducto" validate:"omitempty"`
 	Whop                   WhopConfig                   `mapstructure:"whop" validate:"omitempty"`
 	Onboarding             OnboardingConfig             `mapstructure:"onboarding" validate:"omitempty"`
 	ChatSupport            ChatSupportConfig            `mapstructure:"chat_support" validate:"omitempty"`
@@ -141,6 +142,12 @@ type OpenRouterConfig struct {
 	PDFEngine      string `mapstructure:"pdf_engine" validate:"omitempty"`
 	TimeoutSeconds int    `mapstructure:"timeout_seconds" validate:"omitempty"`
 	ZDR            bool   `mapstructure:"zdr"`
+}
+
+type ReductoConfig struct {
+	APIKey         string `mapstructure:"api_key" validate:"omitempty"`
+	BaseURL        string `mapstructure:"base_url" validate:"omitempty"`
+	TimeoutSeconds int    `mapstructure:"timeout_seconds" validate:"omitempty"`
 }
 
 type CacheConfig struct {

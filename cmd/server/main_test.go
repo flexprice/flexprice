@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/ee/agents/openrouter"
+	"github.com/flexprice/flexprice/internal/ee/agents/reducto"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -126,7 +126,7 @@ func TestContractIngestServiceProviders(t *testing.T) {
 		fx.Provide(
 			func() contractRepo.Repository { return testutil.NewInMemoryContractStore() },
 			func() storage.Resolver { return nil },
-			openrouter.NewClient,
+			reducto.NewClient,
 			provideContractExtractionService,
 			contractsvc.NewContractIngestService,
 		),

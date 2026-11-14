@@ -2,24 +2,22 @@ package contract
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
-	"github.com/flexprice/flexprice/internal/ee/agents/openrouter"
+	"github.com/flexprice/flexprice/internal/ee/agents/reducto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/samber/lo"
 )
 
 type ContractExtractionService struct {
-	client openrouter.OpenRouterClient
+	client reducto.ReductoClient
 	logger *logger.Logger
 	schema json.RawMessage
 }
 
-func NewContractExtractionService(client openrouter.OpenRouterClient, logger *logger.Logger) extraction.ExtractionServiceInterface {
+func NewContractExtractionService(client reducto.ReductoClient, logger *logger.Logger) extraction.ExtractionServiceInterface {
 	s := &ContractExtractionService{
 		client: client,
 		logger: logger,
@@ -32,43 +30,35 @@ func (s *ContractExtractionService) Extract(ctx context.Context, req *extraction
 	if err := s.validateRequest(req); err != nil {
 		return nil, err
 	}
-	model := strings.TrimSpace(req.Model)
-	if model == "" {
-		model = s.client.DefaultModel()
+
+	upload, err := s.client.Upload(ctx, s.fileName(req.FileName), req.MediaType, req.Data)
+	if err != nil {
+		return nil, err
 	}
-	if model == "" {
-		return nil, ierr.NewError("no extraction model configured").
-			WithHint("Set openrouter.model in the server configuration").
-			Mark(ierr.ErrServiceUnavailable)
+	resp, err := s.client.Extract(ctx, s.extractRequest(upload.FileID))
+	if err != nil {
+		return nil, err
 	}
 
-	orReq := s.buildRequest(model, req)
-	var usage *openrouter.Usage
-	for attempt := 1; attempt <= maxParseAttempts; attempt++ {
-		resp, err := s.client.Complete(ctx, orReq)
-		if err != nil {
-			return nil, err
-		}
-		usage = s.addUsage(usage, resp.Usage)
-
-		result, perr := s.parseResult(resp.Content)
-		if perr == nil {
-			s.sanitize(result)
-			logged := lo.FromPtr(usage)
-			s.logger.Info(ctx, "contract extracted",
-				"model", resp.Model,
-				"charges", len(result.Charges),
-				"prompt_tokens", logged.PromptTokens,
-				"completion_tokens", logged.CompletionTokens,
-				"cost_usd", logged.CostUSD)
-			return &extraction.Extraction{Result: result, Model: resp.Model, Usage: usage}, nil
-		}
-		s.logger.Info(ctx, "contract extraction output invalid", "attempt", attempt, "finish_reason", resp.FinishReason)
-		if attempt == maxParseAttempts {
-			return nil, perr
-		}
+	result, err := s.toResult(resp.Result)
+	if err != nil {
+		return nil, err
 	}
-	return nil, ierr.NewError("contract extraction failed").Mark(ierr.ErrInternal)
+	s.sanitize(result)
+
+	usage := s.usage(resp)
+	s.logger.Info(ctx, "contract extracted",
+		"job_id", resp.JobID,
+		"charges", len(result.Charges),
+		"pages", usage.Pages,
+		"fields", usage.Fields,
+		"duration_seconds", usage.DurationSeconds)
+	return &extraction.Extraction{
+		Result: result,
+		Model:  s.model(resp),
+		JobID:  resp.JobID,
+		Usage:  usage,
+	}, nil
 }
 
 func (s *ContractExtractionService) validateRequest(req *extraction.ExtractRequest) error {
@@ -87,77 +77,39 @@ func (s *ContractExtractionService) validateRequest(req *extraction.ExtractReque
 	}
 }
 
-func (s *ContractExtractionService) buildRequest(model string, req *extraction.ExtractRequest) *openrouter.Request {
-	file := openrouter.ContentPart{Type: openrouter.ContentTypeImageURL, ImageURL: &openrouter.ImageURL{URL: s.dataURL(req.MediaType, req.Data)}}
-	if req.MediaType == MediaTypePDF {
-		file = openrouter.ContentPart{Type: openrouter.ContentTypeFile, File: &openrouter.FilePart{Filename: s.fileName(req.FileName), FileData: s.dataURL(req.MediaType, req.Data)}}
-	}
-	return &openrouter.Request{
-		Model: model,
-		Messages: []openrouter.Message{
-			{Role: openrouter.RoleSystem, Content: []openrouter.ContentPart{{Type: openrouter.ContentTypeText, Text: systemPrompt}}},
-			{Role: openrouter.RoleUser, Content: []openrouter.ContentPart{{Type: openrouter.ContentTypeText, Text: userPrompt}, file}},
+func (s *ContractExtractionService) extractRequest(fileID string) *reducto.ExtractRequest {
+	return &reducto.ExtractRequest{
+		Input: fileID,
+		Instructions: reducto.Instructions{
+			Schema:       s.schema,
+			SystemPrompt: systemPrompt,
 		},
-		ResponseFormat: &openrouter.ResponseFormat{
-			Type:       openrouter.ResponseFormatJSONSchema,
-			JSONSchema: &openrouter.JSONSchema{Name: schemaName, Strict: true, Schema: s.schema},
+		Settings: &reducto.ExtractSettings{
+			Citations: &reducto.CitationSettings{Enabled: true},
 		},
 	}
+}
+
+func (s *ContractExtractionService) usage(resp *reducto.ExtractResponse) *extraction.Usage {
+	u := &extraction.Usage{DurationSeconds: resp.Duration}
+	if resp.Usage != nil {
+		u.Pages = resp.Usage.NumPages
+		u.Fields = resp.Usage.NumFields
+		u.Credits = resp.Usage.Credits
+	}
+	return u
+}
+
+func (s *ContractExtractionService) model(resp *reducto.ExtractResponse) string {
+	if resp.Usage != nil && resp.Usage.ExtractMode != "" {
+		return extractModelPrefix + resp.Usage.ExtractMode
+	}
+	return strings.TrimSuffix(extractModelPrefix, "/")
 }
 
 func (s *ContractExtractionService) fileName(name string) string {
 	if n := strings.TrimSpace(name); n != "" {
 		return n
 	}
-	return "contract.pdf"
-}
-
-func (s *ContractExtractionService) addUsage(a, b *openrouter.Usage) *openrouter.Usage {
-	if a == nil {
-		return b
-	}
-	if b == nil {
-		return a
-	}
-	return &openrouter.Usage{
-		PromptTokens:     a.PromptTokens + b.PromptTokens,
-		CompletionTokens: a.CompletionTokens + b.CompletionTokens,
-		CostUSD:          a.CostUSD + b.CostUSD,
-	}
-}
-
-func (s *ContractExtractionService) parseResult(content string) (*extraction.Result, error) {
-	text := s.jsonObjectText(content)
-	if text == "" {
-		return nil, ierr.NewError("model output is not JSON").
-			WithHint("The AI model returned an unreadable result").
-			Mark(ierr.ErrHTTPClient)
-	}
-	var result extraction.Result
-	if err := json.Unmarshal([]byte(text), &result); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("The AI model returned a result in the wrong shape").
-			Mark(ierr.ErrHTTPClient)
-	}
-	return &result, nil
-}
-
-func (s *ContractExtractionService) jsonObjectText(content string) string {
-	t := strings.TrimSpace(content)
-	if strings.HasPrefix(t, "```") {
-		t = strings.TrimPrefix(strings.TrimPrefix(t, "```json"), "```")
-		t = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(t), "```"))
-	}
-	if json.Valid([]byte(t)) {
-		return t
-	}
-	start, end := strings.Index(t, "{"), strings.LastIndex(t, "}")
-	if start >= 0 && end > start && json.Valid([]byte(t[start:end+1])) {
-		return t[start : end+1]
-	}
-	return ""
-}
-
-func (s *ContractExtractionService) dataURL(mediaType string, data []byte) string {
-	return "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(data)
+	return defaultFileName
 }

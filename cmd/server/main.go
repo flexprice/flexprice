@@ -20,7 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/dynamodb"
 	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
 	contractagent "github.com/flexprice/flexprice/internal/ee/agents/extraction/contract"
-	"github.com/flexprice/flexprice/internal/ee/agents/openrouter"
+	"github.com/flexprice/flexprice/internal/ee/agents/reducto"
 	"github.com/flexprice/flexprice/internal/ee/analytics"
 	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
@@ -343,7 +343,7 @@ func main() {
 			service.NewAddonService,
 			service.NewProductService,
 			contractsvc.NewContractService,
-			openrouter.NewClient,
+			reducto.NewClient,
 			provideContractExtractionService,
 			contractsvc.NewContractIngestService,
 			pobsvc.NewPerformanceObligationService,
@@ -939,6 +939,6 @@ func provideBillingEntityScope(s service.BillingEntityService) interfaces.Billin
 	return s
 }
 
-func provideContractExtractionService(client openrouter.OpenRouterClient, log *logger.Logger) extraction.ExtractionServiceInterface {
+func provideContractExtractionService(client reducto.ReductoClient, log *logger.Logger) extraction.ExtractionServiceInterface {
 	return contractagent.NewContractExtractionService(client, log)
 }

@@ -48,7 +48,7 @@ func TestSanitize_ResultShape(t *testing.T) {
 	require.NotNil(t, r.Doubts)
 }
 
-func TestResponseSchema_StrictShape(t *testing.T) {
+func TestResponseSchema_Shape(t *testing.T) {
 	var root map[string]any
 	require.NoError(t, json.Unmarshal(extractor().schema, &root))
 
@@ -56,15 +56,13 @@ func TestResponseSchema_StrictShape(t *testing.T) {
 	walk = func(path string, node map[string]any) {
 		switch node["type"] {
 		case "object":
-			require.Equal(t, false, node["additionalProperties"], path)
-			props := node["properties"].(map[string]any)
-			required := node["required"].([]any)
-			require.Len(t, required, len(props), "every property must be required at %s", path)
-			for k, v := range props {
+			for k, v := range node["properties"].(map[string]any) {
 				walk(path+"."+k, v.(map[string]any))
 			}
 		case "array":
 			walk(path+"[]", node["items"].(map[string]any))
+		default:
+			require.NotEmpty(t, node["description"], "every leaf needs a description at %s", path)
 		}
 	}
 	walk("$", root)

@@ -11,7 +11,6 @@ import (
 	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
 	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
 	contractagent "github.com/flexprice/flexprice/internal/ee/agents/extraction/contract"
-	"github.com/flexprice/flexprice/internal/ee/agents/openrouter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage"
@@ -141,7 +140,7 @@ func newIngestFixture() *ingestFixture {
 		starter:   &fakeStarter{},
 		extractor: &fakeExtractor{out: &extraction.Extraction{
 			Result: northwind(), Model: "test/model",
-			Usage: &openrouter.Usage{PromptTokens: 10, CompletionTokens: 5, CostUSD: 0.01},
+			Usage: &extraction.Usage{Pages: 4, Fields: 61, DurationSeconds: 8},
 		}},
 	}
 	cfg := &config.Configuration{FlexpriceS3Imports: config.FlexpriceS3ImportsConfig{KeyPrefix: "/imports/"}}
@@ -162,6 +161,8 @@ func TestUpload_CreatesPendingContractAndEnqueues(t *testing.T) {
 	require.Equal(t, types.StatusPublished, c.Status())
 	require.Equal(t, types.ContractExtractionStatusPending, c.ExtractionStatus())
 	require.Empty(t, c.CustomerID())
+	require.Equal(t, types.DefaultTenantID, c.TenantID())
+	require.Equal(t, "env_sandbox", c.EnvironmentID())
 
 	doc := c.Document()
 	require.Equal(t, "imports/contracts/"+types.DefaultTenantID+"/env_sandbox/"+c.ID()+".pdf", doc.Key)
@@ -175,6 +176,8 @@ func TestUpload_CreatesPendingContractAndEnqueues(t *testing.T) {
 	stored, err := f.contracts.GetByID(ctx, c.ID())
 	require.NoError(t, err)
 	require.Equal(t, types.ContractExtractionStatusPending, stored.ExtractionStatus())
+	require.Equal(t, types.DefaultTenantID, stored.TenantID())
+	require.Equal(t, "env_sandbox", stored.EnvironmentID())
 	require.Equal(t, []models.ContractExtractionWorkflowInput{{ContractID: c.ID()}}, f.starter.inputs)
 }
 
@@ -246,7 +249,7 @@ func TestProcess_StoresExtraction(t *testing.T) {
 	var got extraction.Extraction
 	require.NoError(t, json.Unmarshal(stored.Extraction(), &got))
 	require.Equal(t, "test/model", got.Model)
-	require.Equal(t, 0.01, got.Usage.CostUSD)
+	require.Equal(t, 4, got.Usage.Pages)
 	require.Equal(t, "Northwind Health, Inc.", got.Result.Customer.LegalName.Value)
 	require.Equal(t, &extraction.ToCheck{Total: 12, Customer: 0, Charges: 7, Billing: 5}, got.Result.ToCheck)
 	require.Nil(t, got.Result.CustomerMatch)
