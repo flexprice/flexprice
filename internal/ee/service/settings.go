@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"maps"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -34,6 +35,10 @@ type SettingsService interface {
 	// UpdateSettingByKey updates a setting with partial values (merges with existing)
 	// Use this for API endpoints that accept partial updates
 	UpdateSettingByKey(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error)
+
+	// UpdateSettingByKeyUnchecked is UpdateSettingByKey for Flexprice operators: it also writes the
+	// fields tenants may not change, and reads the result back without caller checks.
+	UpdateSettingByKeyUnchecked(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error)
 
 	// DeleteSettingByKey deletes a setting by key
 	DeleteSettingByKey(ctx context.Context, key types.SettingKey) error
@@ -108,12 +113,17 @@ func requireSuperAdminToReadSAMLConfig(ctx context.Context, key types.SettingKey
 // rejectAPIReadOnlySetting refuses any settings API write or delete of a key only Flexprice changes.
 // To protect some fields of a key the API may still write, use apiImmutableSettingFields.
 func rejectAPIReadOnlySetting(key types.SettingKey) error {
-	if key != types.SettingKeyBillingEntityConfig {
-		return nil
+	switch key {
+	case types.SettingKeyBillingEntityConfig:
+		return ierr.NewError("billing_entity_config cannot be changed through the settings API").
+			WithHint("The billing entities mode changes only by enabling billing entities").
+			Mark(ierr.ErrValidation)
+	case types.SettingKeyRevenueRecognitionConfig:
+		return ierr.NewError("revenue_recognition_config cannot be changed through the settings API").
+			WithHint("Revenue recognition is turned on or off by Flexprice").
+			Mark(ierr.ErrValidation)
 	}
-	return ierr.NewError("billing_entity_config cannot be changed through the settings API").
-		WithHint("The billing entities mode changes only by enabling billing entities").
-		Mark(ierr.ErrValidation)
+	return nil
 }
 
 // apiImmutableSettingFields lists the fields of a setting that the settings API
@@ -139,6 +149,14 @@ func apiImmutableSettingFields(key types.SettingKey) []string {
 		return []string{types.UsageAlertConfigFieldScheduleDelaySeconds, types.UsageAlertConfigFieldStaleAfterSeconds}
 	}
 	return nil
+}
+
+// operatorWriteKey marks a ctx whose setting write comes from UpdateSettingByKeyUnchecked.
+type operatorWriteKey struct{}
+
+func isOperatorWrite(ctx context.Context) bool {
+	operator, _ := ctx.Value(operatorWriteKey{}).(bool)
+	return operator
 }
 
 // mergePreservingImmutableFields applies a partial update over the stored value
@@ -406,6 +424,8 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.TaxConfig](s, ctx, key)
 	case types.SettingKeyRevenueRecognitionConfig:
 		return getSettingByKey[types.RevenueRecognitionConfig](s, ctx, key)
+	case types.SettingKeyRevenueAnalyticsConfig:
+		return getSettingByKey[types.RevenueAnalyticsConfig](s, ctx, key)
 	case types.SettingKeyBillingEntityConfig:
 		return getSettingByKey[types.BillingEntityConfig](s, ctx, key)
 	default:
@@ -430,8 +450,11 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	if err := s.requireSAMLEnabled(key); err != nil {
 		return nil, err
 	}
-	if err := rejectAPIReadOnlySetting(key); err != nil {
-		return nil, err
+	// Operators may write the keys only Flexprice changes; billing_entity_config is refused by the switch below.
+	if !isOperatorWrite(ctx) {
+		if err := rejectAPIReadOnlySetting(key); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := req.Validate(key); err != nil {
@@ -484,6 +507,10 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 			WithHintf("Unknown setting key: %s", key).
 			Mark(ierr.ErrValidation)
 	}
+}
+
+func (s *settingsService) UpdateSettingByKeyUnchecked(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error) {
+	return s.UpdateSettingByKey(context.WithValue(ctx, operatorWriteKey{}, true), key, req)
 }
 
 // DeleteSettingByKey deletes a setting by key
@@ -583,7 +610,11 @@ func updateSettingByKey[T types.SettingConfig](s *settingsService, ctx context.C
 	}
 
 	// Merge request values with current values
-	currentMap = mergePreservingImmutableFields(key, currentMap, req.Value)
+	if isOperatorWrite(ctx) {
+		maps.Copy(currentMap, req.Value)
+	} else {
+		currentMap = mergePreservingImmutableFields(key, currentMap, req.Value)
+	}
 
 	// Convert merged map back to typed struct for validation
 	merged, err := utils.ToStruct[T](currentMap)
@@ -597,6 +628,9 @@ func updateSettingByKey[T types.SettingConfig](s *settingsService, ctx context.C
 	}
 
 	// Return updated setting
+	if isOperatorWrite(ctx) {
+		return s.GetSettingByKeyUnchecked(ctx, key)
+	}
 	return s.GetSettingByKey(ctx, key)
 }
 
