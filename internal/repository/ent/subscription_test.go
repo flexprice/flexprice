@@ -51,11 +51,18 @@ func newSubscriptionTestRepository(t *testing.T) (context.Context, postgres.ICli
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
 	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "trial_test_tenant"), "trial_test_env")
-	table := *migrate.SubscriptionsTable
-	table.ForeignKeys = nil
-	customers := *migrate.CustomersTable
-	customers.ForeignKeys = nil
-	require.NoError(t, migrate.Create(ctx, client.Schema, []*schema.Table{&table, &customers}, migrate.WithForeignKeys(false)))
+	tables := make([]*schema.Table, 0, 2)
+	for _, source := range []*schema.Table{migrate.SubscriptionsTable, migrate.CustomersTable} {
+		table := schema.NewTable(source.Name)
+		for _, column := range source.Columns {
+			table.AddColumn(column)
+		}
+		table.PrimaryKey = source.PrimaryKey
+		table.Indexes = source.Indexes
+		table.Annotation = source.Annotation
+		tables = append(tables, table)
+	}
+	require.NoError(t, migrate.Create(ctx, client.Schema, tables, migrate.WithForeignKeys(false)))
 	log := logger.NewNoopLogger()
 	database := postgres.NewClient(&postgres.EntClients{Writer: client, Reader: client}, log, nil)
 	repo := NewSubscriptionRepository(database, log, newFakeRedisCache()).(*subscriptionRepository)
