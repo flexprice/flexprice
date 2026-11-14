@@ -1,66 +1,78 @@
 package contract
 
 import (
-	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
+	"strconv"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
 	"github.com/samber/lo"
 )
 
-const (
-	stepUpload   = "upload"
-	stepCustomer = "customer"
-	stepCharges  = "charges"
-	stepBilling  = "billing"
-)
+type termVisitor func(path string, t *extraction.Term, allowed []string)
 
-type termVisitor func(step string, t *extraction.Term, allowed []string)
+// ForEachTerm calls fn for every model-filled term with its JSON path, e.g. "customer.legal_name" or "charges[0].billing_period".
+func ForEachTerm(r *extraction.Result, fn func(path string, t *extraction.Term)) {
+	if r == nil {
+		return
+	}
+	eachTerm(r, func(path string, t *extraction.Term, _ []string) { fn(path, t) })
+}
 
 func eachTerm(r *extraction.Result, visit termVisitor) {
-	visit(stepUpload, &r.ContractType, contractTypes)
+	visit("contract_type", &r.ContractType, contractTypes)
 
 	c := &r.Customer
-	for _, t := range []*extraction.Term{&c.LegalName, &c.BillingAddress, &c.PrimaryContact, &c.BillingEmail} {
-		visit(stepCustomer, t, nil)
-	}
+	visit("customer.legal_name", &c.LegalName, nil)
+	visit("customer.billing_address", &c.BillingAddress, nil)
+	visit("customer.primary_contact", &c.PrimaryContact, nil)
+	visit("customer.billing_email", &c.BillingEmail, nil)
 
 	ct := &r.Term
-	for _, t := range []*extraction.Term{&ct.SignedDate, &ct.EffectiveDate, &ct.TermMonths, &ct.RenewalTermMonths,
-		&ct.NoticeDays, &ct.RenewalPriceChange, &ct.Cancellation} {
-		visit(stepBilling, t, nil)
-	}
-	visit(stepBilling, &ct.AutoRenew, []string{"true", "false"})
+	visit("term.signed_date", &ct.SignedDate, nil)
+	visit("term.effective_date", &ct.EffectiveDate, nil)
+	visit("term.term_months", &ct.TermMonths, nil)
+	visit("term.auto_renew", &ct.AutoRenew, []string{"true", "false"})
+	visit("term.renewal_term_months", &ct.RenewalTermMonths, nil)
+	visit("term.notice_days", &ct.NoticeDays, nil)
+	visit("term.renewal_price_change", &ct.RenewalPriceChange, nil)
+	visit("term.cancellation", &ct.Cancellation, nil)
 
 	b := &r.Billing
-	for _, t := range []*extraction.Term{&b.Structure, &b.Currency, &b.InvoiceDay, &b.PaymentTerms, &b.LateFee, &b.Tax} {
-		visit(stepBilling, t, nil)
-	}
+	visit("billing.structure", &b.Structure, nil)
+	visit("billing.currency", &b.Currency, nil)
+	visit("billing.invoice_day", &b.InvoiceDay, nil)
+	visit("billing.payment_terms", &b.PaymentTerms, nil)
+	visit("billing.late_fee", &b.LateFee, nil)
+	visit("billing.tax", &b.Tax, nil)
 
 	for i := range r.Charges {
-		ch := &r.Charges[i]
-		for _, t := range []*extraction.Term{&ch.Name, &ch.Amount, &ch.IncludedQuantity, &ch.Unit, &ch.Trigger, &ch.RevenueRecognition} {
-			visit(stepCharges, t, nil)
-		}
-		visit(stepCharges, &ch.AmountPeriod, billingPeriods)
-		visit(stepBilling, &ch.BillingPeriod, billingPeriods)
-		visit(stepBilling, &ch.BillingTiming, billingTimings)
-		visit(stepCharges, &ch.TierMode, tierModes)
+		ch, p := &r.Charges[i], "charges["+strconv.Itoa(i)+"]."
+		visit(p+"name", &ch.Name, nil)
+		visit(p+"amount", &ch.Amount, nil)
+		visit(p+"amount_period", &ch.AmountPeriod, billingPeriods)
+		visit(p+"billing_period", &ch.BillingPeriod, billingPeriods)
+		visit(p+"billing_timing", &ch.BillingTiming, billingTimings)
+		visit(p+"included_quantity", &ch.IncludedQuantity, nil)
+		visit(p+"unit", &ch.Unit, nil)
+		visit(p+"tier_mode", &ch.TierMode, tierModes)
+		visit(p+"trigger", &ch.Trigger, nil)
+		visit(p+"revenue_recognition", &ch.RevenueRecognition, nil)
 	}
 	for i := range r.Commitments {
-		cm := &r.Commitments[i]
-		for _, t := range []*extraction.Term{&cm.Amount, &cm.Covers, &cm.Shortfall} {
-			visit(stepCharges, t, nil)
-		}
-		visit(stepCharges, &cm.Period, billingPeriods)
+		cm, p := &r.Commitments[i], "commitments["+strconv.Itoa(i)+"]."
+		visit(p+"amount", &cm.Amount, nil)
+		visit(p+"period", &cm.Period, billingPeriods)
+		visit(p+"covers", &cm.Covers, nil)
+		visit(p+"shortfall", &cm.Shortfall, nil)
 	}
 	for i := range r.Credits {
-		cr := &r.Credits[i]
-		for _, t := range []*extraction.Term{&cr.Amount, &cr.Kind, &cr.Expiry} {
-			visit(stepCharges, t, nil)
-		}
+		cr, p := &r.Credits[i], "credits["+strconv.Itoa(i)+"]."
+		visit(p+"amount", &cr.Amount, nil)
+		visit(p+"kind", &cr.Kind, nil)
+		visit(p+"expiry", &cr.Expiry, nil)
 	}
 	for i := range r.ServiceLevels {
-		visit(stepCharges, &r.ServiceLevels[i].Description, nil)
+		visit("service_levels["+strconv.Itoa(i)+"].description", &r.ServiceLevels[i].Description, nil)
 	}
 }
 
