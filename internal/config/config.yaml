@@ -604,7 +604,7 @@ email:
   reply_to: "" # Reply-to address for emails
   calendar_url: "" # Calendar booking URL for onboarding
   zapier_webhook_url: "" # Zapier webhook URL for user signup (set via FLEXPRICE_EMAIL_ZAPIER_WEBHOOK_URL environment variable)
-  provider: "local" # resend | local (local writes rendered emails to disk instead of sending)
+  provider: "" # resend | local; empty turns customer emails off (local writes them to disk, local runs only)
   resend:
     api_key: "" # FLEXPRICE_EMAIL_RESEND_API_KEY
     webhook_secret: "" # Signing secret of this region's Resend webhook (FLEXPRICE_EMAIL_RESEND_WEBHOOK_SECRET)

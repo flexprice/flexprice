@@ -203,7 +203,7 @@ type Provider interface {
 - Service `internal/ee/service/email_notification.go`: `SendInvoiceEmail` loads invoice, customer, tenant and setting, inserts `queued`, starts the workflow.
 - Workflow retries 429/5xx; 4xx marks `failed`.
 - Auto trigger in the integration-events dispatch list, workflow id `invoice-email-auto-<invoice_id>` so redelivery never double-sends.
-- Everything ships behind `email.enabled`.
+- Everything ships behind `email.enabled` plus a set `email.provider`; with no provider, customer emails stay off.
 
 ## Testing
 

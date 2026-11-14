@@ -1192,6 +1192,11 @@ type ResendEmailConfig struct {
 	WebhookSecret string `mapstructure:"webhook_secret" validate:"omitempty"`
 }
 
+// IsProviderConfigured reports whether customer emails are on: email.enabled and a provider set.
+func (c EmailConfig) IsProviderConfigured() bool {
+	return c.Enabled && c.Provider != ""
+}
+
 type CheckoutConfig struct {
 	BaseURL string `mapstructure:"base_url" validate:"required,url"`
 }
@@ -1475,7 +1480,39 @@ func NewValidatedConfig() (*Configuration, error) {
 	if err := cfg.validateSAMLDependencies(); err != nil {
 		return nil, err
 	}
+	if err := cfg.validateEmail(); err != nil {
+		return nil, err
+	}
 	return cfg, nil
+}
+
+// validateEmail rejects a customer-email provider that cannot work in this deployment. It applies
+// only when customer emails are on, so a deployment without them cannot be taken down by it.
+func (c Configuration) validateEmail() error {
+	if !c.Email.IsProviderConfigured() {
+		return nil
+	}
+	switch types.EmailProvider(c.Email.Provider) {
+	case types.EmailProviderLocal:
+		if os.Getenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS") != "true" {
+			return fmt.Errorf("email.provider local writes emails to disk and is only for local runs (mode %q): set email.provider to resend", c.Deployment.Mode)
+		}
+	case types.EmailProviderResend:
+		var missing []string
+		for _, f := range []struct{ value, name string }{
+			{c.Email.Resend.APIKey, "email.resend.api_key (FLEXPRICE_EMAIL_RESEND_API_KEY)"},
+			{c.Email.Resend.WebhookSecret, "email.resend.webhook_secret (FLEXPRICE_EMAIL_RESEND_WEBHOOK_SECRET)"},
+			{c.Email.RegionTag, "email.region_tag (FLEXPRICE_EMAIL_REGION_TAG)"},
+		} {
+			if strings.TrimSpace(f.value) == "" {
+				missing = append(missing, f.name)
+			}
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("email.provider resend needs %s (mode %q)", strings.Join(missing, ", "), c.Deployment.Mode)
+		}
+	}
+	return nil
 }
 
 // validateCriticalSecrets rejects secrets that sign tokens or grant access.
