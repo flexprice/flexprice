@@ -1280,6 +1280,14 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[20], EmailLogsColumns[3]},
 			},
+			{
+				Name:    "idx_email_log_queued",
+				Unique:  false,
+				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "delivery_status = 'queued'",
+				},
+			},
 		},
 	}
 	// EntitlementsColumns holds the columns for the "entitlements" table.
