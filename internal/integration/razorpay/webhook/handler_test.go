@@ -241,7 +241,6 @@ func (s *WebhookCheckoutBranchingSuite) SetupTest() {
 		// Needed by handlePaymentCaptured's standalone fallback, which reconciles
 		// the invoice; a nil InvoiceService would panic here.
 		InvoiceService: webhookTestInvoiceService{},
-		RefundService:  &fakeRefundService{},
 	}
 }
 

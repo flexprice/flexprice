@@ -979,11 +979,6 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
-	paid := checkoutSession.PaymentStatus == stripeapi.CheckoutSessionPaymentStatusPaid
-	if paid && services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, piID) {
-		return nil
-	}
-
 	// Get payment intent if it exists
 	var paymentIntent *stripeapi.PaymentIntent
 	if piID != "" {
@@ -1004,10 +999,6 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"event_id", event.ID)
-		// The invoice may have been voided after the check above.
-		if paid {
-			services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, piID)
-		}
 		return nil
 	}
 

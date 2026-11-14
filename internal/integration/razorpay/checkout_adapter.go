@@ -145,7 +145,7 @@ func (a *CheckoutAdapter) ExpirePaymentLink(
 			return &interfaces.ExpirePaymentLinkResponse{}, nil
 		}
 		if link, getErr := a.Svc.GetPaymentLinkStatus(ctx, handle); getErr == nil && isClosedStatus(link.Status) {
-			return closedLink(link.Status, link.RazorpayPaymentID), nil
+			return closedLink(link.Status), nil
 		}
 		return nil, err
 
@@ -155,7 +155,7 @@ func (a *CheckoutAdapter) ExpirePaymentLink(
 			return &interfaces.ExpirePaymentLinkResponse{}, nil
 		}
 		if inv, getErr := a.Svc.GetInvoiceStatus(ctx, handle); getErr == nil && isClosedStatus(inv.Status) {
-			return closedLink(inv.Status, inv.RazorpayPaymentID), nil
+			return closedLink(inv.Status), nil
 		}
 		return nil, err
 
@@ -166,12 +166,9 @@ func (a *CheckoutAdapter) ExpirePaymentLink(
 	}
 }
 
-// closedLink describes a link that can no longer be paid; a paid one carries its payment.
-func closedLink(status, razorpayPaymentID string) *interfaces.ExpirePaymentLinkResponse {
-	if status != "paid" {
-		return &interfaces.ExpirePaymentLinkResponse{}
-	}
-	return &interfaces.ExpirePaymentLinkResponse{AlreadyPaid: true, GatewayPaymentID: razorpayPaymentID}
+// closedLink describes a link that can no longer be paid.
+func closedLink(status string) *interfaces.ExpirePaymentLinkResponse {
+	return &interfaces.ExpirePaymentLinkResponse{AlreadyPaid: status == "paid"}
 }
 
 // isClosedStatus reports whether a payment link or invoice can no longer be paid.

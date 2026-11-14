@@ -150,12 +150,6 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 	paymentAmount := decimal.NewFromInt(transaction.Amount).
 		Shift(-types.GetCurrencyPrecision(transaction.CurrencyCode))
 
-	// A capture already recorded is left to ProcessChargebeePaymentFromWebhook.
-	if exists, err := services.PaymentService.PaymentExistsByGatewayPaymentID(ctx, transaction.ID); err == nil && !exists &&
-		services.RefundService.RefundUnrecordedCaptureOnVoidedInvoice(ctx, flexpriceInvoiceID, transaction.ID, paymentAmount) {
-		return nil
-	}
-
 	err = h.invoiceSvc.ProcessChargebeePaymentFromWebhook(ctx, chargebee.ChargebeeWebhookPaymentRequest{
 		FlexpriceInvoiceID:     flexpriceInvoiceID,
 		ChargebeeTransactionID: transaction.ID,
@@ -327,10 +321,6 @@ func (h *Handler) settleLinkedPayment(
 	// payment ids simply is not ours to settle.
 	if _, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID); err != nil {
 		return false, nil
-	}
-
-	if services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, chargebeeTransactionID) {
-		return true, nil
 	}
 
 	// Settlement books the payment's own amount and does not check it against

@@ -4061,8 +4061,6 @@ func (s *VoidPaymentLinksSuite) SetupTest() {
 		TenantRepo:                 stores.TenantRepo,
 		UserRepo:                   stores.UserRepo,
 		AuthRepo:                   stores.AuthRepo,
-		// The wallet fallback for a refund logs a balance alert.
-		AlertLogsRepo: stores.AlertLogsRepo,
 	}
 	s.svc = NewInvoiceService(s.params)
 }
@@ -4177,20 +4175,15 @@ func (s *VoidPaymentLinksSuite) TestVoid_LinkNeverCreatedSkipsGateway() {
 	s.Empty(s.provider.expired)
 }
 
-func (s *VoidPaymentLinksSuite) TestVoid_RefundsLinkPaidBeforeVoid() {
+func (s *VoidPaymentLinksSuite) TestVoid_LeavesLinkPaidBeforeVoidToWebhook() {
 	s.seedInvoice()
 	s.seedPayment("pay_1", types.PaymentStatusPending, types.PaymentMethodTypePaymentLink, "cs_1")
-	s.provider.paidWith = "pi_paid"
+	s.provider.alreadyPaid = true
 
 	s.void(dto.InvoiceVoidRequest{})
 
-	p := s.payment("pay_1")
-	s.Equal(types.PaymentStatusSucceeded, p.PaymentStatus)
-	s.Equal("pi_paid", lo.FromPtr(p.GatewayPaymentID))
-	rows, err := s.GetStores().RefundRepo.ListByInvoice(s.GetContext(), "inv_vpl")
-	s.Require().NoError(err)
-	s.Require().NotEmpty(rows)
-	s.Equal("pay_1", lo.FromPtr(rows[0].PaymentID))
+	s.Equal([]string{"cs_1"}, s.provider.expired)
+	s.Equal(types.PaymentStatusPending, s.payment("pay_1").PaymentStatus)
 }
 
 func (s *VoidPaymentLinksSuite) TestVoid_LeavesNonLinkAndSettledPaymentsAlone() {

@@ -268,12 +268,9 @@ func (a *CheckoutAdapter) ExpirePaymentLink(ctx context.Context, req interfaces.
 	case stripeapi.CheckoutSessionStatusExpired:
 		return &interfaces.ExpirePaymentLinkResponse{}, nil
 	case stripeapi.CheckoutSessionStatusComplete:
-		resp := &interfaces.ExpirePaymentLinkResponse{}
-		if session.PaymentStatus == stripeapi.CheckoutSessionPaymentStatusPaid && session.PaymentIntent != nil {
-			resp.AlreadyPaid = true
-			resp.GatewayPaymentID = session.PaymentIntent.ID
-		}
-		return resp, nil
+		return &interfaces.ExpirePaymentLinkResponse{
+			AlreadyPaid: session.PaymentStatus == stripeapi.CheckoutSessionPaymentStatusPaid,
+		}, nil
 	}
 	return nil, expireErr
 }

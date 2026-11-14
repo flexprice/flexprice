@@ -184,10 +184,6 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
-	if services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, payment.ID) {
-		return nil
-	}
-
 	// Standalone payment (no checkout session) — update status and reconcile directly.
 	paymentStatus := string(types.PaymentStatusSucceeded)
 	now := clock.Now()
@@ -232,8 +228,6 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
-		// The invoice may have been voided after the check above.
-		services.RefundService.RefundCaptureOnVoidedInvoice(ctx, flexpricePaymentID, payment.ID)
 		return nil // Don't return error - webhook should always succeed
 	}
 

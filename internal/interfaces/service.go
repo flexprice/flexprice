@@ -344,13 +344,6 @@ type RefundService interface {
 	GetRefundByGatewayRefundID(ctx context.Context, gateway, gatewayRefundID string) (*dto.RefundResponse, error)
 	Settle(ctx context.Context, req *dto.SettleRefundRequest) error
 	Fail(ctx context.Context, refundID, reason string) error
-	// RefundCaptureOnVoidedInvoice sends money captured for a voided invoice back to the
-	// customer: to the gateway when the payment allows it, otherwise or on failure to the
-	// wallet. It returns false when the capture should be settled as usual.
-	RefundCaptureOnVoidedInvoice(ctx context.Context, paymentID, gatewayPaymentID string) bool
-	// RefundUnrecordedCaptureOnVoidedInvoice credits the wallet for money captured against a
-	// voided invoice with no Flexprice payment behind it. It returns false when the invoice is not voided.
-	RefundUnrecordedCaptureOnVoidedInvoice(ctx context.Context, invoiceID, gatewayPaymentID string, amount decimal.Decimal) bool
 }
 
 type ServiceDependencies struct {

@@ -46,8 +46,6 @@ type CheckoutProvider interface {
 // ExpirePaymentLinkResponse reports a link the customer paid before it could be closed.
 type ExpirePaymentLinkResponse struct {
 	AlreadyPaid bool
-	// GatewayPaymentID is the captured payment, when the gateway reports one.
-	GatewayPaymentID string
 }
 
 // ExpirePaymentLinkRequest identifies the hosted link to close.

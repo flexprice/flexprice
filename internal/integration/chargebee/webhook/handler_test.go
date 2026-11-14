@@ -211,7 +211,7 @@ func (s *ChargebeeWebhookCheckoutSuite) SetupTest() {
 		Currency:      "USD",
 		PaymentStatus: types.PaymentStatusSucceeded,
 	}}
-	s.services = &ServiceDependencies{CheckoutSessionService: s.checkoutSvc, PaymentService: s.paymentSvc, RefundService: &fakeRefundService{}}
+	s.services = &ServiceDependencies{CheckoutSessionService: s.checkoutSvc, PaymentService: s.paymentSvc}
 }
 
 func (s *ChargebeeWebhookCheckoutSuite) seedSession(status types.CheckoutStatus) *dto.CheckoutSessionResponse {

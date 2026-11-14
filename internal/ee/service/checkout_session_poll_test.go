@@ -70,8 +70,8 @@ type fakeCheckoutProvider struct {
 	// expired records the tracking ids passed to ExpirePaymentLink; expireErr fails the call.
 	expired   []string
 	expireErr error
-	// paidWith makes ExpirePaymentLink report the link as already paid with this payment.
-	paidWith string
+	// alreadyPaid makes ExpirePaymentLink report the link as already paid.
+	alreadyPaid bool
 }
 
 func (f *fakeCheckoutProvider) ExpirePaymentLink(_ context.Context, req interfaces.ExpirePaymentLinkRequest) (*interfaces.ExpirePaymentLinkResponse, error) {
@@ -81,7 +81,7 @@ func (f *fakeCheckoutProvider) ExpirePaymentLink(_ context.Context, req interfac
 	if f.expireErr != nil {
 		return nil, f.expireErr
 	}
-	return &interfaces.ExpirePaymentLinkResponse{AlreadyPaid: f.paidWith != "", GatewayPaymentID: f.paidWith}, nil
+	return &interfaces.ExpirePaymentLinkResponse{AlreadyPaid: f.alreadyPaid}, nil
 }
 
 func (f *fakeCheckoutProvider) FetchPaymentState(

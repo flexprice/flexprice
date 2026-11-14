@@ -1678,14 +1678,6 @@ func (f *Factory) refundProviderFor(gateway types.PaymentGatewayType) func(conte
 			}
 			return &chargebee.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
 		}
-	case types.PaymentGatewayTypeStripe:
-		return func(ctx context.Context) (interfaces.RefundProvider, error) {
-			i, err := f.GetStripeIntegration(ctx)
-			if err != nil {
-				return nil, err
-			}
-			return &stripe.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
-		}
 	default:
 		return nil
 	}

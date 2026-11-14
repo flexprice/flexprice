@@ -147,7 +147,7 @@ func TestExpirePaymentLink_AlreadyClosedIsNil(t *testing.T) {
 	}
 }
 
-func TestExpirePaymentLink_PaidReportsCapturedPayment(t *testing.T) {
+func TestExpirePaymentLink_PaidReportsAlreadyPaid(t *testing.T) {
 	tests := map[string]map[string]interface{}{
 		"plink_x": {"status": "paid", "payments": []interface{}{
 			map[string]interface{}{"payment_id": "pay_cap", "status": "captured"},
@@ -160,7 +160,6 @@ func TestExpirePaymentLink_PaidReportsCapturedPayment(t *testing.T) {
 			resp, err := newExpireAdapter(c).ExpirePaymentLink(context.Background(), interfaces.ExpirePaymentLinkRequest{GatewayTrackingID: handle})
 			require.NoError(t, err)
 			assert.True(t, resp.AlreadyPaid)
-			assert.Equal(t, "pay_cap", resp.GatewayPaymentID)
 		})
 	}
 }

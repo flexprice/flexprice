@@ -1341,8 +1341,8 @@ func errInvoiceVoided(invoiceID string) error {
 		Mark(ierr.ErrValidation)
 }
 
-// VoidOpenPaymentLinks closes every unpaid payment link on a voided invoice; a link the
-// customer already paid is refunded instead. Links owned by a checkout session are left to that session.
+// VoidOpenPaymentLinks closes every unpaid payment link on a voided invoice. A link the customer
+// already paid is left to its gateway webhook; links owned by a checkout session are left to that session.
 func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID string) error {
 	var open []*payment.Payment
 	for _, status := range []types.PaymentStatus{types.PaymentStatusInitiated, types.PaymentStatusPending} {
@@ -1369,8 +1369,9 @@ func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID str
 		if session != nil {
 			continue
 		}
-		if paid := s.closeProviderLink(ctx, invoiceID, p); paid != nil {
-			NewRefundService(s.ServiceParams).RefundCaptureOnVoidedInvoice(ctx, p.ID, paid.GatewayPaymentID)
+		if s.closeProviderLink(ctx, invoiceID, p) {
+			s.Logger.Info(ctx, "payment link was paid before the invoice was voided, leaving it to the gateway webhook",
+				"invoice_id", invoiceID, "payment_id", p.ID)
 			continue
 		}
 		if _, err := s.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{
@@ -1384,25 +1385,23 @@ func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID str
 	return nil
 }
 
-// closeProviderLink closes the gateway-hosted link and returns the gateway's report when the
-// customer already paid it. Failures are logged, never returned.
-func (s *paymentService) closeProviderLink(ctx context.Context, invoiceID string, p *payment.Payment) *interfaces.ExpirePaymentLinkResponse {
+// closeProviderLink closes the gateway-hosted link and reports whether the customer already
+// paid it. Failures are logged, never returned.
+func (s *paymentService) closeProviderLink(ctx context.Context, invoiceID string, p *payment.Payment) bool {
 	if lo.FromPtr(p.GatewayTrackingID) == "" {
-		return nil
+		return false
 	}
 	gateway := lo.FromPtr(p.PaymentGateway)
 	checkoutProvider, ok := types.CheckoutProviderFromGateway(types.PaymentGatewayType(gateway))
 	if !ok {
 		s.Logger.Info(ctx, "payment link cannot be expired on this gateway",
 			"invoice_id", invoiceID, "payment_id", p.ID, "gateway", gateway)
-		return nil
+		return false
 	}
 	resp, err := s.expireOnGateway(ctx, invoiceID, p, checkoutProvider)
 	switch {
 	case err == nil:
-		if resp != nil && resp.AlreadyPaid {
-			return resp
-		}
+		return resp != nil && resp.AlreadyPaid
 	case ierr.IsNotImplemented(err):
 		s.Logger.Info(ctx, "gateway cannot expire payment links",
 			"invoice_id", invoiceID, "payment_id", p.ID, "gateway", gateway)
@@ -1410,7 +1409,7 @@ func (s *paymentService) closeProviderLink(ctx context.Context, invoiceID string
 		s.Logger.Error(ctx, "failed to expire payment link on gateway",
 			"error", err, "invoice_id", invoiceID, "payment_id", p.ID, "gateway", gateway)
 	}
-	return nil
+	return false
 }
 
 func (s *paymentService) expireOnGateway(ctx context.Context, invoiceID string, p *payment.Payment, checkoutProvider types.CheckoutPaymentProvider) (*interfaces.ExpirePaymentLinkResponse, error) {
