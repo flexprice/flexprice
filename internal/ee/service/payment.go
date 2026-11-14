@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
+	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
@@ -199,7 +200,7 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	// their own IdempotencyKey to opt out (installments, etc).
 	// Card and UPI invoice charges are guarded by the per-invoice charge lock, so each request is its own payment.
 	if p.IdempotencyKey == "" && req.ProcessPayment && p.DestinationType == types.PaymentDestinationTypeInvoice &&
-		(p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI) {
+		p.PaymentMethodType.IsSavedMethod() {
 		p.IdempotencyKey = p.ID
 	}
 	if p.IdempotencyKey == "" {
@@ -962,7 +963,7 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		case types.PaymentGatewayTypeStripe:
 			newStatus, err = s.fetchStripePaymentStatus(gatewayCtx, gatewayPaymentID)
 		case types.PaymentGatewayTypeRazorpay:
-			newStatus, err = s.fetchRazorpayPaymentStatus(gatewayCtx, gatewayPaymentID)
+			return s.syncRazorpayPayment(gatewayCtx, p, gatewayPaymentID)
 		case types.PaymentGatewayTypeMoyasar:
 			newStatus, err = s.fetchMoyasarPaymentStatus(gatewayCtx, gatewayPaymentID)
 		default:
@@ -1048,16 +1049,36 @@ func (s *paymentService) fetchStripePaymentStatus(ctx context.Context, gatewayPa
 	return integrations.StripePaymentStatus(resp.Status).ToFlexpricePaymentStatus()
 }
 
-func (s *paymentService) fetchRazorpayPaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, error) {
+// syncRazorpayPayment applies Razorpay's status; a decline takes the same path as the payment.failed webhook.
+func (s *paymentService) syncRazorpayPayment(ctx context.Context, p *payment.Payment, gatewayPaymentID string) (*payment.Payment, error) {
 	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
-		return "", err
+		return p, err
 	}
-	rawStatus, err := razorpayIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
+
+	gatewayPayment, err := razorpayIntegration.Client.FetchPayment(ctx, gatewayPaymentID)
 	if err != nil {
-		return "", err
+		return p, err
 	}
-	return integrations.RazorpayPaymentStatus(rawStatus).ToFlexpricePaymentStatus()
+
+	rawStatus, _ := gatewayPayment["status"].(string)
+	newStatus, err := integrations.RazorpayPaymentStatus(rawStatus).ToFlexpricePaymentStatus()
+	if err != nil {
+		return p, err
+	}
+	if newStatus != types.PaymentStatusFailed {
+		return s.applyGatewayPaymentStatus(ctx, p, newStatus, "")
+	}
+
+	message, _ := gatewayPayment["error_description"].(string)
+	if err := razorpayIntegration.PaymentSvc.MarkPaymentFailed(ctx, dto.NewPaymentResponse(p), razorpay.PaymentFailure{
+		RazorpayPaymentID: gatewayPaymentID,
+		Message:           message,
+	}, s, NewInvoiceService(s.ServiceParams)); err != nil {
+		return p, err
+	}
+
+	return s.PaymentRepo.Get(ctx, p.ID)
 }
 
 // fetchRazorpayPaymentLinkStatus reconciles a payment record against a Razorpay
@@ -1165,6 +1186,13 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 
 	// Webhook event intentionally omitted — the gateway webhook will drive payment lifecycle updates.
 	return dto.NewPaymentResponse(p), nil
+}
+
+func (s *paymentService) ListPaymentIntegrations(ctx context.Context, customerID string) (*dto.IntegrationsResponse, error) {
+	if _, err := s.CustomerRepo.Get(ctx, customerID); err != nil {
+		return nil, err
+	}
+	return listPaymentIntegrations(ctx, s.ServiceParams, customerID)
 }
 
 func (s *paymentService) ListPaymentMethods(ctx context.Context, customerID string, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error) {
@@ -1296,6 +1324,16 @@ func toSavedPaymentMethod(
 
 	if m.UPI != nil {
 		out.UPI = &dto.SavedUPIDetails{VPA: m.UPI.VPA}
+	}
+
+	if m.BankAccount != nil {
+		out.BankAccount = &dto.SavedBankAccountDetails{
+			Bank:        m.BankAccount.Bank,
+			IFSC:        m.BankAccount.IFSC,
+			Last4:       m.BankAccount.Last4,
+			AccountType: m.BankAccount.AccountType,
+			AuthType:    m.BankAccount.AuthType,
+		}
 	}
 
 	if m.Recurring != nil {

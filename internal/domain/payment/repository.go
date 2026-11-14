@@ -28,10 +28,11 @@ func IsIdempotencyKeyConflict(err error) bool {
 // ScopedPayment identifies a payment along with its tenant/environment so a
 // cron running outside any tenant scope can re-establish context per payment.
 type ScopedPayment struct {
-	PaymentID        string
-	TenantID         string
-	EnvironmentID    string
-	GatewayPaymentID string
+	PaymentID         string
+	TenantID          string
+	EnvironmentID     string
+	GatewayPaymentID  string
+	PaymentMethodType types.PaymentMethodType
 }
 
 // Repository defines the interface for payment persistence

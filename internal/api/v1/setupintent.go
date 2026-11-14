@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
+	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -73,11 +75,7 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	provider := types.SecretProviderStripe
-	if req.Provider == types.SecretProviderMoyasar {
-		provider = types.SecretProviderMoyasar
-	}
-	if err := h.entityScope.RequireProviderConnected(ctx, provider); err != nil {
+	if err := h.entityScope.RequireProviderConnected(ctx, req.Provider); err != nil {
 		c.Error(err)
 		return
 	}
@@ -86,9 +84,22 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 	switch req.Provider {
 	case types.SecretProviderMoyasar:
 		h.createMoyasarSetupIntent(c, customerID, &req)
-	default:
+	case types.SecretProviderRazorpay:
+		h.createAdapterSetupIntent(c, customerID, &req, types.PaymentGatewayTypeRazorpay)
+	case types.SecretProviderChargebee:
+		h.createAdapterSetupIntent(c, customerID, &req, types.PaymentGatewayTypeChargebee)
+	case types.SecretProviderStripe:
 		h.createStripeSetupIntent(c, customerID, &req)
+	default:
+		c.Error(errUnsupportedSetupProvider(req.Provider))
 	}
+}
+
+func errUnsupportedSetupProvider(provider types.SecretProvider) error {
+	return ierr.NewError("unsupported payment provider").
+		WithHint("Unsupported payment provider").
+		WithReportableDetails(map[string]interface{}{"provider": provider}).
+		Mark(ierr.ErrValidation)
 }
 
 func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID string, req *dto.CreateSetupIntentRequest) {
@@ -147,6 +158,114 @@ func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID
 		CustomerID:  customerID,
 		CheckoutURL: checkoutURL,
 	})
+}
+
+// createAdapterSetupIntent creates the setup link through the gateway's payment-method adapter, as the customer portal does.
+func (h *SetupIntentHandler) createAdapterSetupIntent(c *gin.Context, customerID string, req *dto.CreateSetupIntentRequest, gateway types.PaymentGatewayType) {
+	ctx := c.Request.Context()
+
+	provider, err := h.integrationFactory.GetPaymentMethodProvider(ctx, gateway, h.customerService)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	link, err := provider.CreateSetupLink(ctx, interfaces.SetupLinkRequest{
+		CustomerID: customerID,
+		ReturnURL:  req.SuccessURL,
+		MaxAmount:  req.MaxAmount,
+		SetDefault: req.SetDefault,
+	})
+	if err != nil {
+		h.log.Error(ctx, "Failed to create setup link", "provider", gateway, "customer_id", customerID, "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, toSetupIntentResponse(customerID, link))
+}
+
+// @Summary Get setup intent
+// @ID getSetupIntent
+// @Description Returns the live state of the customer's latest setup link. Razorpay only.
+// @Tags Payments
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Customer ID"
+// @Param provider query string true "Payment provider" Enums(razorpay)
+// @Success 200 {object} dto.SetupIntentResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Router /payments/customers/{id}/setup/intent [get]
+func (h *SetupIntentHandler) GetSetupIntent(c *gin.Context) {
+	switch provider := types.SecretProvider(c.Query("provider")); provider {
+	case types.SecretProviderRazorpay:
+		h.handleRazorpaySetupLink(c, razorpay.RazorpayCustomerService.GetSetupLink)
+	default:
+		c.Error(errUnsupportedSetupProvider(provider))
+	}
+}
+
+// @Summary Cancel setup intent
+// @ID cancelSetupIntent
+// @Description Cancels the customer's latest setup link if it hasn't been completed. Razorpay only.
+// @Tags Payments
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Customer ID"
+// @Param provider query string true "Payment provider" Enums(razorpay)
+// @Success 200 {object} dto.SetupIntentResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @x-scope "delete"
+// @Router /payments/customers/{id}/setup/intent/cancel [post]
+func (h *SetupIntentHandler) CancelSetupIntent(c *gin.Context) {
+	switch provider := types.SecretProvider(c.Query("provider")); provider {
+	case types.SecretProviderRazorpay:
+		h.handleRazorpaySetupLink(c, razorpay.RazorpayCustomerService.CancelSetupLink)
+	default:
+		c.Error(errUnsupportedSetupProvider(provider))
+	}
+}
+
+func (h *SetupIntentHandler) handleRazorpaySetupLink(c *gin.Context, call func(razorpay.RazorpayCustomerService, context.Context, string) (*interfaces.SetupLinkResponse, error)) {
+	customerID := c.Param("id")
+
+	ctx, err := h.entityScope.ScopeToCustomer(c.Request.Context(), customerID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	if err := h.entityScope.RequireProviderConnected(ctx, types.SecretProviderRazorpay); err != nil {
+		c.Error(err)
+		return
+	}
+
+	rp, err := h.integrationFactory.GetRazorpayIntegration(ctx)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	link, err := call(rp.CustomerSvc, ctx, customerID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, toSetupIntentResponse(customerID, link))
+}
+
+func toSetupIntentResponse(customerID string, link *interfaces.SetupLinkResponse) dto.SetupIntentResponse {
+	resp := dto.SetupIntentResponse{
+		SetupIntentID: link.ProviderSessionID,
+		CheckoutURL:   link.URL,
+		Status:        link.Status,
+		CustomerID:    customerID,
+		CreatedAt:     link.CreatedAt.Unix(),
+	}
+	if link.ExpiresAt != nil {
+		resp.ExpiresAt = link.ExpiresAt.Unix()
+	}
+	return resp
 }
 
 func (h *SetupIntentHandler) createStripeSetupIntent(c *gin.Context, customerID string, req *dto.CreateSetupIntentRequest) {

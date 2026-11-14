@@ -60,6 +60,8 @@ type fakeCheckoutProvider struct {
 
 	// charged makes TryAutoChargingSavedMethod report a submitted saved-method charge.
 	charged bool
+	// chargedMethod is the method that charge reports using.
+	chargedMethod types.PaymentMethodType
 	// onCharge runs inside TryAutoChargingSavedMethod, standing in for a webhook that beats the response.
 	onCharge func(req interfaces.AuthorizationLinkRequest)
 	// chargeErr fails the charge call after onCharge, as a timeout after the gateway charged would.
@@ -113,7 +115,7 @@ func (f *fakeCheckoutProvider) TryAutoChargingSavedMethod(_ context.Context, req
 	if f.chargeErr != nil {
 		return nil, false, f.chargeErr
 	}
-	return &interfaces.CheckoutProviderResponse{ProviderSessionID: "order_charged"}, true, nil
+	return &interfaces.CheckoutProviderResponse{ProviderSessionID: "order_charged", PaymentMethod: f.chargedMethod}, true, nil
 }
 func (f *fakeCheckoutProvider) HasAutoChargeableMethod(context.Context, interfaces.HasAutoChargeableMethodRequest) (bool, error) {
 	return false, nil
@@ -841,13 +843,51 @@ func (s *CheckoutPollSuite) TestSavedMethodChargeExtendsSessionPastSettlement() 
 			_, err = s.svc.callCheckoutProvider(ctx, session, dto.NewPaymentResponse(payment))
 			s.Require().NoError(err)
 
-			settlement := provider.SavedMethodSettlement()
+			settlement := provider.SavedMethodSettlement("")
 			if settlement == 0 {
 				s.Equal(linkExpiry, session.ExpiresAt, "an instant charge keeps the link-sized expiry")
 				return
 			}
 			s.False(session.ExpiresAt.Before(time.Now().UTC().Add(settlement-time.Minute)),
 				"the session must outlive the debit it is waiting on")
+		})
+	}
+}
+
+func (s *CheckoutPollSuite) TestENACHCheckoutDebitsMandateOrRefuses() {
+	tests := []struct {
+		name    string
+		charged bool
+	}{
+		{name: "no mandate is refused without a link"},
+		{name: "a mandate picked without a preferred method waits 7 days", charged: true},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.provider.charged = tt.charged
+			s.provider.chargedMethod = types.PaymentMethodTypeENACH
+			cfg := &types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodChargeAutomatically}
+			if !tt.charged {
+				cfg.PaymentMethod = types.PaymentMethodTypeENACH
+			}
+			session := s.seedSession(types.CheckoutStatusInitiated, "", "")
+			session.PaymentProvider = types.CheckoutPaymentProviderRazorpay
+			session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(cfg)
+			payment, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+			s.Require().NoError(err)
+
+			result, err := s.svc.callCheckoutProvider(ctx, session, dto.NewPaymentResponse(payment))
+
+			if !tt.charged {
+				s.True(ierr.IsInvalidOperation(err), "got %v", err)
+				s.Nil(result)
+				return
+			}
+			s.Require().NoError(err)
+			s.Equal("order_charged", result.ProviderSessionID)
+			s.False(session.ExpiresAt.Before(time.Now().UTC().Add(7*24*time.Hour-time.Minute)),
+				"an eNACH debit can take up to 7 days to settle")
 		})
 	}
 }

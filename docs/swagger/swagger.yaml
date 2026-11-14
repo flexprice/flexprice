@@ -5830,6 +5830,19 @@ definitions:
     - external_customer_id
     - plan_id
     type: object
+  InFlightCharge:
+    properties:
+      amount:
+        type: string
+      payment_gateway:
+        type: string
+      payment_id:
+        type: string
+      payment_method_type:
+        $ref: '#/definitions/types.PaymentMethodType'
+      payment_status:
+        $ref: '#/definitions/types.PaymentStatus'
+    type: object
   IngestEventRequest:
     properties:
       customer_id:
@@ -5880,6 +5893,13 @@ definitions:
       start_date:
         type: string
     type: object
+  IntegrationCapability:
+    properties:
+      add_payment_method_options:
+        $ref: '#/definitions/types.AddPaymentMethodOptions'
+      type:
+        $ref: '#/definitions/types.IntegrationCapabilityType'
+    type: object
   IntegrationConfigEntry:
     properties:
       base_config:
@@ -5894,6 +5914,13 @@ definitions:
       integrations:
         items:
           $ref: '#/definitions/IntegrationConfigEntry'
+        type: array
+    type: object
+  IntegrationsResponse:
+    properties:
+      payment_integrations:
+        items:
+          $ref: '#/definitions/PaymentIntegration'
         type: array
     type: object
   InvoiceCoupon:
@@ -6234,6 +6261,11 @@ definitions:
         description: idempotency_key is a unique key used to prevent duplicate invoice
           creation when retrying API calls
         type: string
+      in_flight_charge:
+        allOf:
+        - $ref: '#/definitions/InFlightCharge'
+        description: in_flight_charge is a saved-method debit submitted for this invoice
+          that the gateway has not settled yet
       invoice_number:
         description: invoice_number is the human-readable invoice number displayed
           to customers (e.g., INV-2024-001)
@@ -6897,6 +6929,15 @@ definitions:
     properties:
       stripe:
         $ref: '#/definitions/StripePaymentGatewayOptions'
+    type: object
+  PaymentIntegration:
+    properties:
+      capabilities:
+        items:
+          $ref: '#/definitions/IntegrationCapability'
+        type: array
+      provider:
+        $ref: '#/definitions/types.PaymentGatewayType'
     type: object
   PaymentResponse:
     properties:
@@ -7985,6 +8026,19 @@ definitions:
       pob_id:
         type: string
     type: object
+  SavedBankAccountDetails:
+    properties:
+      account_type:
+        type: string
+      auth_type:
+        type: string
+      bank:
+        type: string
+      ifsc:
+        type: string
+      last4:
+        type: string
+    type: object
   SavedCardDetails:
     properties:
       brand:
@@ -7998,6 +8052,8 @@ definitions:
     type: object
   SavedPaymentMethod:
     properties:
+      bank_account:
+        $ref: '#/definitions/SavedBankAccountDetails'
       can_auto_charge:
         description: |-
           Capability, not permission: could this be charged with nobody present.
@@ -8270,6 +8326,27 @@ definitions:
         type: string
       usage:
         $ref: '#/definitions/CustomerUsageSummaryResponse'
+    type: object
+  SetupIntentResponse:
+    properties:
+      checkout_session_id:
+        type: string
+      checkout_url:
+        type: string
+      client_secret:
+        type: string
+      created_at:
+        type: integer
+      customer_id:
+        type: string
+      expires_at:
+        type: integer
+      setup_intent_id:
+        type: string
+      status:
+        type: string
+      usage:
+        type: string
     type: object
   SourceUsageItem:
     properties:
@@ -13329,6 +13406,7 @@ definitions:
     - price
     - invoice_line_item
     - subscription_line_item
+    - payment_method_setup
     type: string
     x-enum-varnames:
     - IntegrationEntityTypeCustomer
@@ -13343,6 +13421,7 @@ definitions:
     - IntegrationEntityTypePrice
     - IntegrationEntityTypeInvoiceLineItem
     - IntegrationEntityTypeSubscriptionLineItem
+    - IntegrationEntityTypePaymentMethodSetup
   types.InvoiceBillingReason:
     enum:
     - SUBSCRIPTION_CREATE
@@ -13816,6 +13895,7 @@ definitions:
     - CREDITS
     - PAYMENT_LINK
     - UPI
+    - ENACH
     type: string
     x-enum-varnames:
     - PaymentMethodTypeCard
@@ -13824,6 +13904,7 @@ definitions:
     - PaymentMethodTypeCredits
     - PaymentMethodTypePaymentLink
     - PaymentMethodTypeUPI
+    - PaymentMethodTypeENACH
   types.PaymentStatus:
     enum:
     - INITIATED
@@ -15355,6 +15436,11 @@ definitions:
     - checkout.session.completed
     - checkout.session.failed
     - checkout.session.expired
+    - mandate.confirmed
+    - mandate.rejected
+    - mandate.cancelled
+    - mandate.setup_attempt_failed
+    - mandate.setup_expired
     - event.rejected
     type: string
     x-enum-varnames:
@@ -15430,6 +15516,11 @@ definitions:
     - WebhookEventCheckoutSessionCompleted
     - WebhookEventCheckoutSessionFailed
     - WebhookEventCheckoutSessionExpired
+    - WebhookEventMandateConfirmed
+    - WebhookEventMandateRejected
+    - WebhookEventMandateCancelled
+    - WebhookEventMandateSetupAttemptFailed
+    - WebhookEventMandateSetupExpired
     - WebhookEventEventRejected
   types.WindowSize:
     enum:
@@ -16263,6 +16354,19 @@ definitions:
       start:
         $ref: '#/definitions/types.Bucket'
     type: object
+  types.AddPaymentMethodOptions:
+    properties:
+      payment_method_types:
+        description: PaymentMethodTypes are the methods it sets up, e.g. ["enach"]
+          for Razorpay.
+        items:
+          type: string
+        type: array
+      sets_default:
+        description: SetsDefault reports whether it can make the saved method the
+          default (Stripe only).
+        type: boolean
+    type: object
   types.AddonPriceOverrideRef:
     properties:
       override_price_id:
@@ -16473,6 +16577,28 @@ definitions:
     - InstalmentStatusScheduled
     - InstalmentStatusInvoiced
     - InstalmentStatusCancelled
+  types.IntegrationCapabilityType:
+    enum:
+    - checkout
+    - auto_charge
+    - set_default_method
+    - payment_link
+    - payment_method_management
+    - invoice_sync
+    - list_payment_methods
+    - add_payment_method
+    - delete_payment_method
+    type: string
+    x-enum-varnames:
+    - IntegrationCapabilityCheckout
+    - IntegrationCapabilityAutoCharge
+    - IntegrationCapabilitySetDefaultMethod
+    - IntegrationCapabilityPaymentLink
+    - IntegrationCapabilityPaymentMethodManagement
+    - IntegrationCapabilityInvoiceSync
+    - IntegrationCapabilityListPaymentMethods
+    - IntegrationCapabilityAddPaymentMethod
+    - IntegrationCapabilityDeletePaymentMethod
   types.InvoiceBillingEntity:
     properties:
       billing_details:
@@ -17162,6 +17288,73 @@ definitions:
         $ref: '#/definitions/types.WebhookEventName'
       invoice:
         $ref: '#/definitions/webhookDto.Invoice'
+    type: object
+  webhookDto.Mandate:
+    properties:
+      bank_account:
+        $ref: '#/definitions/webhookDto.MandateBankAccount'
+      card:
+        $ref: '#/definitions/webhookDto.MandateCard'
+      currency:
+        type: string
+      customer_id:
+        type: string
+      expires_at:
+        type: string
+      external_customer_id:
+        type: string
+      failure_reason:
+        type: string
+      id:
+        type: string
+      max_amount:
+        type: string
+      provider:
+        $ref: '#/definitions/types.PaymentGatewayType'
+      setup_intent_id:
+        type: string
+      status:
+        type: string
+      type:
+        $ref: '#/definitions/types.PaymentMethodType'
+      upi:
+        $ref: '#/definitions/webhookDto.MandateUPI'
+    type: object
+  webhookDto.MandateBankAccount:
+    properties:
+      account_type:
+        type: string
+      auth_type:
+        type: string
+      bank:
+        type: string
+      ifsc:
+        type: string
+      last4:
+        type: string
+    type: object
+  webhookDto.MandateCard:
+    properties:
+      brand:
+        type: string
+      exp_month:
+        type: integer
+      exp_year:
+        type: integer
+      last4:
+        type: string
+    type: object
+  webhookDto.MandateUPI:
+    properties:
+      vpa:
+        type: string
+    type: object
+  webhookDto.MandateWebhookPayload:
+    properties:
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      mandate:
+        $ref: '#/definitions/webhookDto.Mandate'
     type: object
   webhookDto.Meter:
     properties:
@@ -20753,6 +20946,39 @@ paths:
       summary: Get customer invoice summary
       tags:
       - Invoices
+  /customers/{id}/payment-integrations:
+    get:
+      description: 'Use to learn which connected gateways can serve this customer
+        and what each can do: check out, auto-charge, list methods, add a method (with
+        the method types it sets up, e.g. enach for Razorpay), set a default.'
+      operationId: listCustomerPaymentIntegrations
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/IntegrationsResponse'
+        "404":
+          description: Customer not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List customer payment integrations
+      tags:
+      - Customers
+      x-scope: read
   /customers/{id}/payment-methods:
     get:
       description: Use when you need a customer's saved payment methods across every
@@ -22996,6 +23222,12 @@ paths:
       - in: query
         name: destination_id
         type: string
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: destination_ids
+        type: array
       - in: query
         name: destination_type
         type: string
@@ -23265,6 +23497,83 @@ paths:
       summary: Process payment
       tags:
       - Payments
+  /payments/customers/{id}/setup/intent:
+    get:
+      description: Returns the live state of the customer's latest setup link. Razorpay
+        only.
+      operationId: getSetupIntent
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payment provider
+        enum:
+        - razorpay
+        in: query
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SetupIntentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get setup intent
+      tags:
+      - Payments
+  /payments/customers/{id}/setup/intent/cancel:
+    post:
+      description: Cancels the customer's latest setup link if it hasn't been completed.
+        Razorpay only.
+      operationId: cancelSetupIntent
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payment provider
+        enum:
+        - razorpay
+        in: query
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SetupIntentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Cancel setup intent
+      tags:
+      - Payments
+      x-scope: delete
   /performance_obligations/{id}:
     get:
       description: Use when you need to load a single performance obligation with
@@ -28617,6 +28926,86 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.voided
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.cancelled:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a saved mandate is cancelled. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.cancelled
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.confirmed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when the bank confirms a saved mandate (Razorpay eNACH).
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.confirmed
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.rejected:
+    post:
+      consumes:
+      - application/json
+      description: Fired when the bank rejects a mandate; failure_reason carries the
+        bank's reason. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.rejected
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.setup_attempt_failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a customer's mandate authorisation fails; failure_reason
+        carries the reason. The customer can retry the same link until it expires.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.setup_attempt_failed
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.setup_expired:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a mandate setup link expires before the customer authorises
+        it. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.setup_expired
       tags:
       - Webhook Events
   /webhook-events/payment.attempt.failed:
