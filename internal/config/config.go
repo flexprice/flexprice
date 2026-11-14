@@ -1295,6 +1295,9 @@ func NewConfig() (*Configuration, error) {
 	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
 	v.SetDefault("logging.provider_calls_enabled", true)
+	// Customer email sender defaults, for deploys whose config.yaml (a Helm ConfigMap) predates these keys.
+	v.SetDefault("email.sender_domain", "mail.flexprice.io")
+	v.SetDefault("email.sender_local_part", "invoices")
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
@@ -1492,6 +1495,9 @@ func (c Configuration) validateEmail() error {
 	if !c.Email.IsProviderConfigured() {
 		return nil
 	}
+	if strings.TrimSpace(c.Email.SenderDomain) == "" || strings.TrimSpace(c.Email.SenderLocalPart) == "" {
+		return fmt.Errorf("email.sender_domain and email.sender_local_part are required (mode %q)", c.Deployment.Mode)
+	}
 	switch types.EmailProvider(c.Email.Provider) {
 	case types.EmailProviderLocal:
 		if os.Getenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS") != "true" {
@@ -1511,6 +1517,8 @@ func (c Configuration) validateEmail() error {
 		if len(missing) > 0 {
 			return fmt.Errorf("email.provider resend needs %s (mode %q)", strings.Join(missing, ", "), c.Deployment.Mode)
 		}
+	default:
+		return fmt.Errorf("unsupported email.provider %q (mode %q): use resend or local", c.Email.Provider, c.Deployment.Mode)
 	}
 	return nil
 }

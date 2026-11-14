@@ -254,12 +254,16 @@ func TestValidateEmail(t *testing.T) {
 	resend.Email.Resend.APIKey = "re_key"
 	resend.Email.Resend.WebhookSecret = "whsec_secret"
 	resend.Email.RegionTag = "us"
+	resend.Email.SenderDomain = "mail.flexprice.io"
+	resend.Email.SenderLocalPart = "invoices"
 	assert.NoError(t, resend.validateEmail())
 
 	for name, clear := range map[string]func(*Configuration){
 		"no api key":        func(c *Configuration) { c.Email.Resend.APIKey = "" },
 		"no webhook secret": func(c *Configuration) { c.Email.Resend.WebhookSecret = " " },
 		"no region tag":     func(c *Configuration) { c.Email.RegionTag = "" },
+		"no sender domain":  func(c *Configuration) { c.Email.SenderDomain = "" },
+		"unknown provider":  func(c *Configuration) { c.Email.Provider = "sendgrid" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := resend
@@ -271,6 +275,8 @@ func TestValidateEmail(t *testing.T) {
 	local := Configuration{}
 	local.Email.Enabled = true
 	local.Email.Provider = "local"
+	local.Email.SenderDomain = "mail.flexprice.io"
+	local.Email.SenderLocalPart = "invoices"
 	t.Setenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS", "")
 	assert.Error(t, local.validateEmail(), "local provider must not start outside local runs")
 	t.Setenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS", "true")
