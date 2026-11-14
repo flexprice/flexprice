@@ -57,9 +57,9 @@ type EmailProvider string
 
 const (
 	EmailProviderResend EmailProvider = "resend"
-	EmailProviderLog    EmailProvider = "log"
+	EmailProviderLocal  EmailProvider = "local"
 )
 
 func (p EmailProvider) Validate() error {
-	return validateEnum("provider", p, []EmailProvider{EmailProviderResend, EmailProviderLog})
+	return validateEnum("provider", p, []EmailProvider{EmailProviderResend, EmailProviderLocal})
 }

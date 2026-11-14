@@ -1180,7 +1180,7 @@ type EmailConfig struct {
 	ZapierWebhookURL string `mapstructure:"zapier_webhook_url" validate:"omitempty"`
 
 	// Customer invoice emails.
-	Provider        string            `mapstructure:"provider" validate:"omitempty,oneof=resend log"`
+	Provider        string            `mapstructure:"provider" validate:"omitempty,oneof=resend local"`
 	Resend          ResendEmailConfig `mapstructure:"resend"`
 	SenderDomain    string            `mapstructure:"sender_domain" validate:"omitempty"`
 	SenderLocalPart string            `mapstructure:"sender_local_part" validate:"omitempty"`

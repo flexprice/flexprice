@@ -3,8 +3,8 @@ package email
 import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/email/emailtypes"
-	"github.com/flexprice/flexprice/internal/email/logbackend"
-	"github.com/flexprice/flexprice/internal/email/resendbackend"
+	"github.com/flexprice/flexprice/internal/email/local"
+	"github.com/flexprice/flexprice/internal/email/resend"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -23,15 +23,15 @@ type (
 func NewProvider(cfg *config.Configuration, log *logger.Logger) (Provider, error) {
 	switch types.EmailProvider(cfg.Email.Provider) {
 	case types.EmailProviderResend:
-		return resendbackend.New(resendbackend.Config{
+		return resend.New(resend.Config{
 			APIKey:        cfg.Email.Resend.APIKey,
 			WebhookSecret: cfg.Email.Resend.WebhookSecret,
 		})
-	case types.EmailProviderLog, "":
-		return logbackend.New(log), nil
+	case types.EmailProviderLocal, "":
+		return local.New(log), nil
 	default:
 		return nil, ierr.NewErrorf("unsupported email provider: %s", cfg.Email.Provider).
-			WithHint("Set email.provider to resend or log").
+			WithHint("Set email.provider to resend or local").
 			Mark(ierr.ErrValidation)
 	}
 }
