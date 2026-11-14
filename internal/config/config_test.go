@@ -256,6 +256,7 @@ func TestValidateEmail(t *testing.T) {
 	resend.Email.RegionTag = "us"
 	resend.Email.SenderDomain = "mail.flexprice.io"
 	resend.Email.SenderLocalPart = "invoices"
+	resend.Email.SendRatePerSecond = 8
 	assert.NoError(t, resend.validateEmail())
 
 	for name, clear := range map[string]func(*Configuration){
@@ -264,6 +265,7 @@ func TestValidateEmail(t *testing.T) {
 		"no region tag":     func(c *Configuration) { c.Email.RegionTag = "" },
 		"no sender domain":  func(c *Configuration) { c.Email.SenderDomain = "" },
 		"unknown provider":  func(c *Configuration) { c.Email.Provider = "sendgrid" },
+		"no send rate":      func(c *Configuration) { c.Email.SendRatePerSecond = 0 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := resend
@@ -277,6 +279,7 @@ func TestValidateEmail(t *testing.T) {
 	local.Email.Provider = "local"
 	local.Email.SenderDomain = "mail.flexprice.io"
 	local.Email.SenderLocalPart = "invoices"
+	local.Email.SendRatePerSecond = 8
 	t.Setenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS", "")
 	assert.Error(t, local.validateEmail(), "local provider must not start outside local runs")
 	t.Setenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS", "true")

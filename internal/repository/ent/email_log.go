@@ -3,6 +3,9 @@ package ent
 import (
 	"context"
 	"errors"
+	"fmt"
+
+	"entgo.io/ent/dialect/sql"
 
 	"github.com/lib/pq"
 
@@ -170,6 +173,59 @@ func (r *emailLogRepository) Count(ctx context.Context, filter *types.EmailLogFi
 	}
 	SetSpanSuccess(span)
 	return count, nil
+}
+
+func (r *emailLogRepository) ListEnvironmentsWithQueuedEmails(ctx context.Context) ([]types.TenantEnvironment, error) {
+	span := StartRepositorySpan(ctx, "email_log", "list_environments_with_queued", nil)
+	defer FinishSpan(span)
+
+	var envs []types.TenantEnvironment
+	err := r.client.Reader(ctx).EmailLog.Query().
+		Where(
+			emaillog.Status(string(types.StatusPublished)),
+			emaillog.DeliveryStatus(types.EmailDeliveryStatusQueued),
+		).
+		GroupBy(emaillog.FieldTenantID, emaillog.FieldEnvironmentID).
+		Scan(ctx, &envs)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list environments with queued emails").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return envs, nil
+}
+
+func (r *emailLogRepository) ListQueued(ctx context.Context, limit int) ([]*domainEmailLog.EmailLog, error) {
+	span := StartRepositorySpan(ctx, "email_log", "list_queued", map[string]interface{}{"limit": limit})
+	defer FinishSpan(span)
+
+	rows, err := r.client.Reader(ctx).EmailLog.Query().
+		Where(
+			emaillog.TenantID(types.GetTenantID(ctx)),
+			emaillog.EnvironmentID(types.GetEnvironmentID(ctx)),
+			emaillog.Status(string(types.StatusPublished)),
+			emaillog.DeliveryStatus(types.EmailDeliveryStatusQueued),
+		).
+		Order(
+			func(s *sql.Selector) {
+				s.OrderExpr(sql.Expr(fmt.Sprintf("CASE WHEN %s = '%s' THEN 0 ELSE 1 END", s.C(emaillog.FieldTrigger), types.EmailTriggerManual)))
+			},
+			ent.Asc(emaillog.FieldCreatedAt),
+		).
+		Limit(limit).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list queued emails").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainEmailLog.FromEntList(rows), nil
 }
 
 func (r *emailLogRepository) notFoundOrDatabase(err error, hint string, details map[string]any) error {

@@ -19,4 +19,10 @@ type Repository interface {
 
 	List(ctx context.Context, filter *types.EmailLogFilter) ([]*EmailLog, error)
 	Count(ctx context.Context, filter *types.EmailLogFilter) (int, error)
+
+	// ListEnvironmentsWithQueuedEmails returns, across all tenants, every environment holding a queued email.
+	ListEnvironmentsWithQueuedEmails(ctx context.Context) ([]types.TenantEnvironment, error)
+
+	// ListQueued returns up to limit queued emails of the environment in ctx, manual sends first, then oldest first.
+	ListQueued(ctx context.Context, limit int) ([]*EmailLog, error)
 }
