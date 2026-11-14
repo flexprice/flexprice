@@ -1,4 +1,4 @@
-package resendbackend
+package resend
 
 import (
 	"context"

@@ -178,7 +178,7 @@ A compact copy of the hosted invoice page, rendered from `HostedInvoiceResponse`
 ```yaml
 email:
   enabled: true
-  provider: resend          # log for local runs
+  provider: resend          # local for local runs
   resend:
     api_key: ${FLEXPRICE_EMAIL_RESEND_API_KEY}
     webhook_secret: ${FLEXPRICE_EMAIL_RESEND_WEBHOOK_SECRET}
@@ -195,7 +195,7 @@ email:
 type Provider interface {
     Send(ctx context.Context, msg OutboundEmail) (SendResult, error)
     ParseEvents(ctx context.Context, body []byte, hdr http.Header) ([]DeliveryEvent, error)
-    Name() types.EmailProvider // "resend" | "log"
+    Name() types.EmailProvider // "resend" | "local"
 }
 ```
 
@@ -211,7 +211,7 @@ type Provider interface {
 |---|---|---|
 | Unit, fake `Provider` | Nothing | Setting validation, From/Reply-To, skip rules, status rank |
 | Webhook handler | Signed fixtures in `testdata/` | Signature, region drop, forward-only, unknown id |
-| Docker, `provider: log` | Nothing | Finalize / Send → workflow → `email_log` → activity log |
+| Docker, `provider: local` | Nothing | Finalize / Send → workflow → `email_log` → activity log |
 | Real Resend | API key + tunnel | Real send, PDF, delivery events via `delivered@`, `bounced@`, `complained@`, `suppressed@resend.dev` |
 
 Real-Resend runs send only to the `@resend.dev` test addresses, never from the root `flexprice.io`, and the temporary tunnel webhook is deleted afterwards.

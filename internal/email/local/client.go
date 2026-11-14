@@ -1,4 +1,4 @@
-package logbackend
+package local
 
 import (
 	"context"
@@ -24,7 +24,7 @@ func New(log *logger.Logger) emailtypes.Provider {
 }
 
 func (b *backend) Name() types.EmailProvider {
-	return types.EmailProviderLog
+	return types.EmailProviderLocal
 }
 
 func (b *backend) Send(ctx context.Context, msg emailtypes.OutboundEmail) (emailtypes.SendResult, error) {
@@ -38,10 +38,10 @@ func (b *backend) Send(ctx context.Context, msg emailtypes.OutboundEmail) (email
 	}
 
 	b.log.Info(ctx, "email written to disk instead of sent", "email_log_id", msg.IdempotencyKey, "path", path, "attachments", len(msg.Attachments))
-	return emailtypes.SendResult{ProviderMessageID: "log_" + msg.IdempotencyKey}, nil
+	return emailtypes.SendResult{ProviderMessageID: "local_" + msg.IdempotencyKey}, nil
 }
 
-type logEvent struct {
+type localEvent struct {
 	ProviderMessageID string                    `json:"provider_message_id"`
 	Region            string                    `json:"region"`
 	Status            types.EmailDeliveryStatus `json:"status"`
@@ -50,7 +50,7 @@ type logEvent struct {
 
 // ParseEvents accepts one unsigned event, so local runs can simulate delivery outcomes.
 func (b *backend) ParseEvents(_ context.Context, body []byte, _ http.Header) ([]emailtypes.DeliveryEvent, error) {
-	var e logEvent
+	var e localEvent
 	if err := json.Unmarshal(body, &e); err != nil {
 		return nil, ierr.WithError(err).WithHint("Malformed email event").Mark(ierr.ErrValidation)
 	}
