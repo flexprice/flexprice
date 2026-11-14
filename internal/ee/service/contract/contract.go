@@ -101,7 +101,9 @@ func (s *contractService) GetContracts(ctx context.Context, filter *contractRepo
 	}
 
 	return &dto.ListContractsResponse{
-		Items:      lo.Map(contracts, func(c *domainContract.Contract, _ int) *dto.ContractResponse { return dto.NewContractResponse(c) }),
+		Items: lo.Map(contracts, func(c *domainContract.Contract, _ int) *dto.ContractResponse {
+			return dto.NewContractResponse(c).WithoutExtraction()
+		}),
 		Pagination: types.NewPaginationResponse(count, filter.GetLimit(), filter.GetOffset()),
 	}, nil
 }

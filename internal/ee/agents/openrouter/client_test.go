@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	cerrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
@@ -31,7 +32,7 @@ func pdfRequest() *Request {
 			Role: RoleUser,
 			Content: []ContentPart{
 				{Type: ContentTypeText, Text: "extract"},
-				{Type: ContentTypeFile, File: &FilePart{Filename: "c.pdf", FileData: PDFDataURL([]byte("%PDF-1.4"))}},
+				{Type: ContentTypeFile, File: &FilePart{Filename: "c.pdf", FileData: "data:application/pdf;base64,JVBERi0xLjQ="}},
 			},
 		}},
 	}
@@ -106,4 +107,18 @@ func TestComplete_Errors(t *testing.T) {
 			require.True(t, tt.matches(err), "unexpected error kind: %v", err)
 		})
 	}
+}
+
+func TestComplete_TimeoutHasOwnHint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+	}))
+	t.Cleanup(srv.Close)
+	c := newClient(config.OpenRouterConfig{APIKey: "k", BaseURL: srv.URL},
+		httpclient.NewClientWithConfig(httpclient.ClientConfig{Timeout: 50 * time.Millisecond}), logger.NewNoopLogger())
+
+	_, err := c.Complete(context.Background(), pdfRequest())
+	require.Error(t, err)
+	require.True(t, ierr.IsHTTPClient(err))
+	require.Equal(t, []string{"The AI model took too long to respond. Try again, or use a faster model."}, cerrors.GetAllHints(err))
 }
