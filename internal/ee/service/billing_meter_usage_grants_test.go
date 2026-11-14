@@ -1260,3 +1260,32 @@ func (s *EntitlementGrantSuite) TestEvaluate_AlertFailureDoesNotBlock() {
 	stored := s.listSubscriptionGrants(sub)[0]
 	s.True(decimal.NewFromInt(120).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
 }
+
+// A read with refresh_grants opens and measures the subscription's grants only when the config allows it.
+func (s *EntitlementGrantSuite) TestCustomerEntitlementsRead_RefreshGrantsFollowsConfig() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	// The read evaluates at the real clock, and this fixture's period starts now.
+	s.seedMeterUsage(cust.ExternalID, m.ID, sub.CurrentPeriodStart, 60)
+	billing := s.subGrantBilling()
+	read := func() {
+		_, err := billing.GetCustomerEntitlementsForSubscriptions(ctx, cust.ID, []*subscription.Subscription{sub},
+			&dto.GetCustomerEntitlementsRequest{RefreshGrants: true})
+		s.Require().NoError(err)
+	}
+	listGrants := func() []*entitlementgrant.EntitlementGrant {
+		grants, err := s.GetStores().EntitlementGrantRepo.List(ctx, types.NewNoLimitEntitlementGrantFilter().WithSubscriptionIDs(sub.ID))
+		s.Require().NoError(err)
+		return grants
+	}
+
+	billing.Config.EntitlementGrants.RefreshOnRead = false
+	read()
+	s.Empty(listGrants(), "disabled in config: the read changes nothing")
+
+	billing.Config.EntitlementGrants.RefreshOnRead = true
+	read()
+	grants := listGrants()
+	s.Require().Len(grants, 1)
+	s.True(decimal.NewFromInt(60).Equal(grants[0].Usage), "stored usage: got %s", grants[0].Usage)
+}

@@ -7270,6 +7270,16 @@ func (s *subscriptionService) aggregateSubscriptionEntitlements(ctx context.Cont
 		}
 	}
 
+	if req != nil && req.RefreshGrants && s.Config.EntitlementGrants.RefreshOnRead {
+		cust, err := s.CustomerRepo.Get(ctx, sub.CustomerID)
+		if err == nil {
+			err = NewAlertService(s.ServiceParams).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, clock.Now())
+		}
+		if err != nil {
+			s.Logger.Error(ctx, "entitlement grant refresh before read failed; returning stored usage",
+				"error", err, "subscription_id", sub.ID)
+		}
+	}
 	grantStates, err := NewEntitlementGrantService(s.ServiceParams).
 		GrantStateByFeature(ctx, sub, clock.Now())
 	if err != nil {
