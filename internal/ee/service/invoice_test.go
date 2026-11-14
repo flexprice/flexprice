@@ -765,7 +765,6 @@ func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_PreservesMemo() {
 			resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
 				CustomerID:    s.testData.customer.ID,
 				InvoiceType:   types.InvoiceTypeOneOff,
-				InvoiceStatus: lo.ToPtr(types.InvoiceStatusDraft),
 				Currency:      "usd",
 				AmountDue:     decimal.NewFromInt(100),
 				Total:         decimal.NewFromInt(100),
@@ -775,7 +774,7 @@ func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_PreservesMemo() {
 			})
 			s.Require().NoError(err)
 			s.Equal(memo, resp.Description)
-			s.Require().NoError(s.service.FinalizeInvoice(ctx, resp.ID, dto.FinalizeInvoiceRequest{}))
+			s.Equal(types.InvoiceStatusFinalized, resp.InvoiceStatus)
 			stored, err := s.invoiceRepo.Get(ctx, resp.ID)
 			s.Require().NoError(err)
 			s.Equal(memo, stored.Description)
