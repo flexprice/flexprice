@@ -165,6 +165,11 @@ func (pa *PaymentAttempt) Validate() error {
 	return nil
 }
 
+// IsPaymentPaid reports whether the payment captured money (succeeded or overpaid).
+func (p *Payment) IsPaymentPaid() bool {
+	return p != nil && (p.PaymentStatus == types.PaymentStatusSucceeded || p.PaymentStatus == types.PaymentStatusOverpaid)
+}
+
 // TableName returns the table name for the payment
 func (p *Payment) TableName() string {
 	return "payments"

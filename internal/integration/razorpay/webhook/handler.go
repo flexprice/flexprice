@@ -378,6 +378,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 						"session_id", session.ID,
 						"flexprice_payment_id", flexpricePaymentID,
 						"razorpay_payment_id", payment.ID)
+					return err
 				}
 			}
 

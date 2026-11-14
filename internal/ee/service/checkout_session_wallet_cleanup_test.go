@@ -1,9 +1,12 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/metrics/metricstest"
@@ -342,4 +345,66 @@ func (s *WalletServiceSuite) TestCheckoutSessionStatusCountedOnce() {
 
 	s.Equal(completedBefore+1, count(types.CheckoutStatusCompleted))
 	s.Equal(expiredBefore+1, count(types.CheckoutStatusExpired))
+}
+
+func (s *WalletServiceSuite) TestCancelCheckoutSession_RejectsOverpaid() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+
+	_, session := s.seedPayFirstTopupSession("cancel-overpaid", decimal.NewFromInt(100), nil)
+	p, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+	s.Require().NoError(err)
+	p.PaymentStatus = types.PaymentStatusOverpaid
+	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, p))
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	_, err = checkoutSvc.Cancel(ctx, session.ID)
+	s.True(ierr.IsInvalidOperation(err))
+
+	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusPending, stored.CheckoutStatus)
+}
+
+func (s *WalletServiceSuite) TestCompleteCheckoutSession_PastExpiryExpires() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+
+	txID, session := s.seedPayFirstTopupSession("complete-past-expiry", decimal.NewFromInt(100), nil)
+	session.ExpiresAt = time.Now().UTC().Add(-time.Minute)
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	err := checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_late_001"})
+	s.True(ierr.IsAlreadyExists(err))
+
+	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusExpired, stored.CheckoutStatus)
+	tx, err := s.GetStores().WalletRepo.GetTransactionByID(ctx, txID)
+	s.Require().NoError(err)
+	s.Equal(types.TransactionStatusFailed, tx.TxStatus)
+}
+
+type failingLocker struct{}
+
+func (failingLocker) AcquireLock(context.Context, string, time.Duration) (cache.Lock, error) {
+	return nil, errors.New("redis unavailable")
+}
+
+func (s *WalletServiceSuite) TestCompleteCheckoutSession_LockErrorIsRetryable() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+
+	txID, session := s.seedPayFirstTopupSession("complete-lock-error", decimal.NewFromInt(100), nil)
+	params := s.buildServiceParams()
+	params.Locker = failingLocker{}
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	err := checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_lock_001"})
+	s.True(ierr.IsServiceUnavailable(err))
+
+	tx, err := s.GetStores().WalletRepo.GetTransactionByID(ctx, txID)
+	s.Require().NoError(err)
+	s.Equal(types.TransactionStatusPending, tx.TxStatus)
 }

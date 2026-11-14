@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -414,16 +415,17 @@ func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, ses
 	return nil
 }
 
-// lockCheckoutSession serializes completion and teardown of a session. Without a locker,
-// or when Redis fails, it proceeds unlocked; the returned release is never nil.
+// lockCheckoutSession serializes completion and teardown of a session. Without a locker it
+// proceeds unlocked; a Redis failure is returned so the caller retries. Release is never nil.
 func (s *checkoutSessionService) lockCheckoutSession(ctx context.Context, sessionID string) (func(), error) {
 	lockKey := cache.GenerateKey(ctx, cache.PrefixCheckoutSessionLock, sessionID)
 	lock, err := cache.AcquireLockWithRetry(ctx, s.Locker, lockKey,
 		checkoutSessionLockTTL, checkoutSessionLockAttempts, checkoutSessionLockRetryInterval)
 	switch {
 	case err != nil:
-		s.Logger.Info(ctx, "checkout session lock unavailable, proceeding without it",
-			"session_id", sessionID, "error", err)
+		return nil, ierr.WithError(err).
+			WithHintf("session %s could not be locked, retry shortly", sessionID).
+			Mark(ierr.ErrServiceUnavailable)
 	case lock != nil && !lock.AcquiredSuccessfully():
 		return nil, ierr.NewError("checkout session is being updated by another request").
 			WithHintf("session %s is busy, retry shortly", sessionID).
@@ -534,7 +536,7 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 			return err
 		}
 		// After expiry a paid session is still expired; the payment is refunded as a late capture.
-		if p != nil && p.PaymentStatus == types.PaymentStatusSucceeded && clock.Now().Before(session.ExpiresAt) {
+		if p.IsPaymentPaid() && clock.Now().Before(session.ExpiresAt) {
 			return ierr.NewError("checkout payment already succeeded").
 				WithHintf("session %s has been paid and cannot be cancelled or expired", session.ID).
 				Mark(ierr.ErrInvalidOperation)
@@ -691,31 +693,29 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 			Mark(ierr.ErrValidation)
 	}
 
-	// Past expiry the session is expired, never completed; a payment it took is a late capture.
-	expiring, err := s.CheckoutSessionRepo.Get(ctx, sessionID)
-	if err != nil {
-		return err
-	}
-	if !expiring.CheckoutStatus.IsTerminal() && clock.Now().After(expiring.ExpiresAt) {
-		if err := s.cleanupCheckoutSession(ctx, expiring, nil); err != nil {
-			return err
-		}
-		return ierr.NewError("checkout session expired").
-			WithHintf("session %s expired at %s and cannot be completed", sessionID, expiring.ExpiresAt).
-			Mark(ierr.ErrAlreadyExists)
-	}
-
 	// Side effects run before the claim, so concurrent completions must not overlap.
 	release, err := s.lockCheckoutSession(ctx, sessionID)
 	if err != nil {
 		return err
 	}
+	release = sync.OnceFunc(release)
 	defer release()
 
-	// Fetch session for completeCheckoutAction context (subscription/invoice/payment IDs).
-	session, err := s.CheckoutSessionRepo.Get(ctx, sessionID)
+	// Writer read: the replica may not show a completion or teardown committed under this lock.
+	session, err := s.CheckoutSessionRepo.Get(types.WithForceWriter(ctx), sessionID)
 	if err != nil {
 		return err
+	}
+
+	// Past expiry the session is expired, never completed; a payment it took is a late capture.
+	if !session.CheckoutStatus.IsTerminal() && clock.Now().After(session.ExpiresAt) {
+		release() // cleanup takes the lock itself
+		if err := s.cleanupCheckoutSession(ctx, session, nil); err != nil {
+			return err
+		}
+		return ierr.NewError("checkout session expired").
+			WithHintf("session %s expired at %s and cannot be completed", sessionID, session.ExpiresAt).
+			Mark(ierr.ErrAlreadyExists)
 	}
 
 	// Fast-path guard: already in a terminal state — nothing to do.
