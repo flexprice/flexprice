@@ -22,12 +22,18 @@ type DispatchOption func(*dispatchOptions)
 
 type dispatchOptions struct {
 	onlyProvider types.SecretProvider
+	manual       bool
 }
 
 // OnlyProvider limits a dispatch to one provider: a push the user chose for one
 // connection must not also reach every other connected provider.
 func OnlyProvider(provider types.SecretProvider) DispatchOption {
 	return func(o *dispatchOptions) { o.onlyProvider = provider }
+}
+
+// Manual marks a user-requested dispatch: a sync already running is reported, not skipped.
+func Manual() DispatchOption {
+	return func(o *dispatchOptions) { o.manual = true }
 }
 
 func resolveDispatchOptions(opts []DispatchOption) dispatchOptions {
@@ -52,7 +58,9 @@ func runTriggers(triggers []providerTrigger, o dispatchOptions) []error {
 		if o.onlyProvider != "" && trigger.provider != o.onlyProvider {
 			continue
 		}
-		if err := trigger.run(); err != nil {
+		err := trigger.run()
+		// An automatic dispatch skips a sync that is already running instead of retrying it.
+		if err != nil && !(ierr.IsAlreadyExists(err) && !o.manual) {
 			errs = append(errs, err)
 		}
 	}
@@ -420,6 +428,14 @@ func executeWorkflow(
 	invoiceID string,
 ) error {
 	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, workflowType, input)
+	if ierr.IsAlreadyExists(err) {
+		log.Info(ctx, "integration_events: workflow already running",
+			"provider", provider,
+			"workflow_type", workflowType,
+			"invoice_id", invoiceID,
+		)
+		return err
+	}
 	if err != nil {
 		log.Error(ctx, "integration_events: failed to start workflow",
 			"provider", provider,
