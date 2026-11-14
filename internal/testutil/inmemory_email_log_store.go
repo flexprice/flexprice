@@ -38,6 +38,10 @@ func (s *InMemoryEmailLogStore) Get(ctx context.Context, id string) (*emaillog.E
 	return s.InMemoryStore.Get(ctx, id)
 }
 
+func (s *InMemoryEmailLogStore) GetForUpdate(ctx context.Context, id string) (*emaillog.EmailLog, error) {
+	return s.InMemoryStore.Get(ctx, id)
+}
+
 func (s *InMemoryEmailLogStore) Update(ctx context.Context, e *emaillog.EmailLog) error {
 	return s.InMemoryStore.Update(ctx, e.ID, e)
 }
@@ -100,6 +104,15 @@ func emailLogFilterFn(ctx context.Context, e *emaillog.EmailLog, filter interfac
 		return false
 	}
 	if f.EntityType != "" && e.EntityType != f.EntityType {
+		return false
+	}
+	if len(f.CustomerIDs) > 0 && !lo.Contains(f.CustomerIDs, e.CustomerID) {
+		return false
+	}
+	if len(f.DeliveryStatuses) > 0 && !lo.Contains(f.DeliveryStatuses, e.DeliveryStatus) {
+		return false
+	}
+	if len(f.Triggers) > 0 && !lo.Contains(f.Triggers, e.Trigger) {
 		return false
 	}
 	return len(f.EntityIDs) == 0 || lo.Contains(f.EntityIDs, e.EntityID)

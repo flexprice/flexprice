@@ -106,6 +106,14 @@ type EntityIntegrationMappingService interface {
 	DelinkIntegrationMapping(ctx context.Context, req dto.DelinkIntegrationMappingRequest) (*dto.SuccessResponse, error)
 }
 
+// InvoiceEmailSender emails invoices to customers. Implemented by the email notification service;
+// declared here so the integration-events consumer can trigger it without importing the service.
+type InvoiceEmailSender interface {
+	// SendAutoInvoiceEmail emails a finalized invoice when the environment's auto-send setting covers
+	// invoices. A second call for the same invoice is a no-op.
+	SendAutoInvoiceEmail(ctx context.Context, invoiceID string) error
+}
+
 // RevenueService writes and maintains revenue_facts rows and serves their
 // analytics reads. Implemented by internal/ee/service/revenue; declared here
 // so the service layer can invoke the invoice-side hooks without importing

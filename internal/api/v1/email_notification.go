@@ -1,12 +1,14 @@
 package v1
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -83,4 +85,50 @@ func (h *EmailNotificationHandler) ListInvoiceEmails(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// QueryEmailMessages godoc
+// @Summary Search emails
+// @ID queryEmailMessage
+// @Description Use when reviewing emails sent to customers, for example every bounced email this month or every email to one customer. Filter by delivery status, trigger, customer, document and date. Newest first; paginated.
+// @Tags Invoices
+// @x-scope "read"
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param filter body types.EmailLogFilter true "Filter"
+// @Success 200 {object} dto.ListEmailLogsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /email-messages/search [post]
+func (h *EmailNotificationHandler) QueryEmailMessages(c *gin.Context) {
+	var filter types.EmailLogFilter
+	if err := c.ShouldBindJSON(&filter); err != nil {
+		c.Error(ierr.WithError(err).WithHint("Invalid filter parameters").Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.emailNotificationService.ListEmails(c.Request.Context(), &filter)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// HandleDeliveryWebhook receives delivery events from the email provider. One URL serves every
+// tenant: the tenant comes from the signed event, and request bodies are never stored.
+func (h *EmailNotificationHandler) HandleDeliveryWebhook(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.Error(ierr.WithError(err).WithHint("Failed to read request body").Mark(ierr.ErrValidation))
+		return
+	}
+
+	provider := types.EmailProvider(c.Param("provider"))
+	if err := h.emailNotificationService.HandleDeliveryWebhook(c.Request.Context(), provider, body, c.Request.Header); err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Webhook processed successfully"})
 }

@@ -16522,6 +16522,49 @@ definitions:
     - EmailDeliveryStatusFailed
     - EmailDeliveryStatusSuppressed
     - EmailDeliveryStatusSkipped
+  types.EmailLogFilter:
+    properties:
+      customer_ids:
+        items:
+          type: string
+        type: array
+      delivery_statuses:
+        items:
+          $ref: '#/definitions/types.EmailDeliveryStatus'
+        type: array
+      end_time:
+        type: string
+      entity_ids:
+        items:
+          type: string
+        type: array
+      entity_type:
+        $ref: '#/definitions/types.SystemEntityType'
+      expand:
+        type: string
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        type: string
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      triggers:
+        items:
+          $ref: '#/definitions/types.EmailTrigger'
+        type: array
+    type: object
   types.EmailProvider:
     enum:
     - resend
@@ -16794,6 +16837,7 @@ definitions:
     - commitment
     - billing_term
     - billing_instalment
+    - email_log
     type: string
     x-enum-varnames:
     - SystemEntityTypeFeature
@@ -16813,6 +16857,7 @@ definitions:
     - SystemEntityTypeCommitment
     - SystemEntityTypeBillingTerm
     - SystemEntityTypeBillingInstalment
+    - SystemEntityTypeEmailLog
   types.TenantInternalStatus:
     enum:
     - trialing
@@ -21283,6 +21328,42 @@ paths:
       summary: Get Customer Wallets
       tags:
       - Wallets
+  /email-messages/search:
+    post:
+      consumes:
+      - application/json
+      description: Use when reviewing emails sent to customers, for example every
+        bounced email this month or every email to one customer. Filter by delivery
+        status, trigger, customer, document and date. Newest first; paginated.
+      operationId: queryEmailMessage
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.EmailLogFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListEmailLogsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Search emails
+      tags:
+      - Invoices
+      x-scope: read
   /entitlements:
     post:
       consumes:

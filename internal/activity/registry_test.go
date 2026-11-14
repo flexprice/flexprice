@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/emaillog"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/payment"
@@ -45,6 +46,7 @@ var entColumns = map[types.SystemEntityType][]string{
 	types.SystemEntityTypeFeature:           feature.Columns,
 	types.SystemEntityTypeBillingTerm:       billingterm.Columns,
 	types.SystemEntityTypeBillingInstalment: billinginstalment.Columns,
+	types.SystemEntityTypeEmailLog:          emaillog.Columns,
 }
 
 // bareRow returns an empty ent row for the registration, as a RETURNING write produces (no edges).
@@ -56,6 +58,7 @@ func bareRow(t *testing.T, name string) any {
 		"PaymentMethod": &ent.PaymentMethod{ID: "x"}, "Refund": &ent.Refund{ID: "x"}, "CheckoutSession": &ent.CheckoutSession{ID: "x"},
 		"Plan": &ent.Plan{ID: "x"}, "Price": &ent.Price{ID: "x"}, "Feature": &ent.Feature{ID: "x"},
 		"BillingTerm": &ent.BillingTerm{ID: "x"}, "BillingInstalment": &ent.BillingInstalment{ID: "x"},
+		"EmailLog": &ent.EmailLog{ID: "x"},
 	}
 	row, ok := rows[name]
 	require.True(t, ok, name)
@@ -92,7 +95,7 @@ func TestRegistry_ActionNames(t *testing.T) {
 			require.Regexp(t, shape, action)
 			prefix, verb, _ := strings.Cut(string(action), ".")
 			require.Equal(t, string(entityType), prefix, action)
-			pastTense := slices.ContainsFunc(strings.Split(verb, "_"), func(w string) bool { return strings.HasSuffix(w, "ed") || w == "paid" })
+			pastTense := slices.ContainsFunc(strings.Split(verb, "_"), func(w string) bool { return strings.HasSuffix(w, "ed") || w == "paid" || w == "sent" })
 			require.True(t, pastTense, "%s is not past tense", action)
 			require.False(t, seen[action], "duplicate %s", action)
 			seen[action] = true

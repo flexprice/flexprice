@@ -105,6 +105,50 @@ func (r *emailLogRepository) Get(ctx context.Context, id string) (*domainEmailLo
 	return domainEmailLog.FromEnt(row), nil
 }
 
+func (r *emailLogRepository) GetForUpdate(ctx context.Context, id string) (*domainEmailLog.EmailLog, error) {
+	span := StartRepositorySpan(ctx, "email_log", "get_for_update", map[string]interface{}{"email_log_id": id})
+	defer FinishSpan(span)
+
+	client := r.client.Writer(ctx)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	lockQuery := `SELECT id FROM email_logs WHERE id = $1 AND tenant_id = $2 AND environment_id = $3 FOR UPDATE`
+	rows, err := client.QueryContext(ctx, lockQuery, id, tenantID, environmentID)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to lock email log").Mark(ierr.ErrDatabase)
+	}
+	// Must be drained and closed before reusing the connection for the load below.
+	hasRow := rows.Next()
+	rowErr := rows.Err()
+	rows.Close() // #nosec G104 -- best-effort, error non-fatal
+	if rowErr != nil {
+		SetSpanError(span, rowErr)
+		return nil, ierr.WithError(rowErr).WithHint("Failed to lock email log").Mark(ierr.ErrDatabase)
+	}
+	if !hasRow {
+		return nil, ierr.NewError("email log not found").
+			WithHint("Email log was not found").
+			WithReportableDetails(map[string]any{"email_log_id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	row, err := client.EmailLog.Query().
+		Where(
+			emaillog.ID(id),
+			emaillog.TenantID(tenantID),
+			emaillog.EnvironmentID(environmentID),
+		).
+		Only(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, r.notFoundOrDatabase(err, "Email log was not found", map[string]any{"email_log_id": id})
+	}
+	SetSpanSuccess(span)
+	return domainEmailLog.FromEnt(row), nil
+}
+
 func (r *emailLogRepository) Update(ctx context.Context, e *domainEmailLog.EmailLog) error {
 	span := StartRepositorySpan(ctx, "email_log", "update", map[string]interface{}{"email_log_id": e.ID})
 	defer FinishSpan(span)
@@ -289,6 +333,15 @@ func (o EmailLogQueryOptions) applyEntityQueryOptions(f *types.EmailLogFilter, q
 	}
 	if len(f.EntityIDs) > 0 {
 		query = query.Where(emaillog.EntityIDIn(f.EntityIDs...))
+	}
+	if len(f.CustomerIDs) > 0 {
+		query = query.Where(emaillog.CustomerIDIn(f.CustomerIDs...))
+	}
+	if len(f.DeliveryStatuses) > 0 {
+		query = query.Where(emaillog.DeliveryStatusIn(f.DeliveryStatuses...))
+	}
+	if len(f.Triggers) > 0 {
+		query = query.Where(emaillog.TriggerIn(f.Triggers...))
 	}
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil {

@@ -14,6 +14,9 @@ type Repository interface {
 
 	Get(ctx context.Context, id string) (*EmailLog, error)
 
+	// GetForUpdate reads an email log and locks its row until the surrounding transaction ends.
+	GetForUpdate(ctx context.Context, id string) (*EmailLog, error)
+
 	// Update saves the delivery fields: provider message id, status, reason, timestamps and metadata.
 	Update(ctx context.Context, e *EmailLog) error
 

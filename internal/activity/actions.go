@@ -78,3 +78,14 @@ const (
 const (
 	FeatureArchived Action = "feature.archived"
 )
+
+// EmailLog
+const (
+	EmailLogSkipped    Action = "email_log.skipped"
+	EmailLogSent       Action = "email_log.sent"
+	EmailLogDelivered  Action = "email_log.delivered"
+	EmailLogBounced    Action = "email_log.bounced"
+	EmailLogComplained Action = "email_log.complained"
+	EmailLogFailed     Action = "email_log.failed"
+	EmailLogSuppressed Action = "email_log.suppressed"
+)

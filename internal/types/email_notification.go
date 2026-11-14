@@ -1,5 +1,7 @@
 package types
 
+import "github.com/samber/lo"
+
 // EmailDeliveryStatus is where one sent email stands, from queued to its final outcome.
 type EmailDeliveryStatus string
 
@@ -27,6 +29,36 @@ func (s EmailDeliveryStatus) Validate() error {
 		EmailDeliveryStatusSuppressed,
 		EmailDeliveryStatusSkipped,
 	})
+}
+
+// emailDeliveryProgress orders the statuses an email moves through on its way to the inbox.
+var emailDeliveryProgress = []EmailDeliveryStatus{
+	EmailDeliveryStatusQueued,
+	EmailDeliveryStatusSent,
+	EmailDeliveryStatusDeliveryDelayed,
+	EmailDeliveryStatusDelivered,
+	EmailDeliveryStatusComplained,
+}
+
+// IsFinal reports a status that never changes again.
+func (s EmailDeliveryStatus) IsFinal() bool {
+	return s == EmailDeliveryStatusBounced || s == EmailDeliveryStatusFailed ||
+		s == EmailDeliveryStatusSuppressed || s == EmailDeliveryStatusSkipped
+}
+
+// CanMoveTo reports whether next may replace s: statuses only move forward, any non-final status
+// may end as bounced, failed or suppressed, and final statuses never change.
+func (s EmailDeliveryStatus) CanMoveTo(next EmailDeliveryStatus) bool {
+	if s.IsFinal() {
+		return false
+	}
+	if next == EmailDeliveryStatusSkipped {
+		return s == EmailDeliveryStatusQueued
+	}
+	if next.IsFinal() {
+		return true
+	}
+	return lo.IndexOf(emailDeliveryProgress, next) > lo.IndexOf(emailDeliveryProgress, s)
 }
 
 // EmailTrigger says whether an email was sent automatically or by a user.
@@ -69,8 +101,11 @@ type EmailLogFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	EntityType SystemEntityType `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
-	EntityIDs  []string         `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
+	EntityType       SystemEntityType      `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
+	EntityIDs        []string              `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
+	CustomerIDs      []string              `json:"customer_ids,omitempty" form:"customer_ids" validate:"omitempty"`
+	DeliveryStatuses []EmailDeliveryStatus `json:"delivery_statuses,omitempty" form:"delivery_statuses" validate:"omitempty"`
+	Triggers         []EmailTrigger        `json:"triggers,omitempty" form:"triggers" validate:"omitempty"`
 }
 
 func NewEmailLogFilter() *EmailLogFilter {
@@ -85,6 +120,16 @@ func (f *EmailLogFilter) Validate() error {
 	}
 	if f.TimeRangeFilter != nil {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, s := range f.DeliveryStatuses {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, t := range f.Triggers {
+		if err := t.Validate(); err != nil {
 			return err
 		}
 	}
