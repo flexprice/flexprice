@@ -26820,6 +26820,9 @@ const docTemplate = `{
         "PaymentGatewayOptions": {
             "type": "object",
             "properties": {
+                "razorpay": {
+                    "$ref": "#/definitions/RazorpayPaymentGatewayOptions"
+                },
                 "stripe": {
                     "$ref": "#/definitions/StripePaymentGatewayOptions"
                 }
@@ -27581,6 +27584,15 @@ const docTemplate = `{
                 },
                 "provider": {
                     "$ref": "#/definitions/types.PaymentGatewayType"
+                }
+            }
+        },
+        "RazorpayPaymentGatewayOptions": {
+            "type": "object",
+            "properties": {
+                "notify_customer": {
+                    "description": "NotifyCustomer lets Razorpay SMS/email the payment link to the customer.",
+                    "type": "boolean"
                 }
             }
         },
@@ -34391,6 +34403,10 @@ const docTemplate = `{
                 },
                 "max_mandate_limit": {
                     "type": "string"
+                },
+                "notify_customer": {
+                    "description": "NotifyCustomer lets the gateway email/SMS the payment link to the customer.",
+                    "type": "boolean"
                 },
                 "payment_method": {
                     "$ref": "#/definitions/types.PaymentMethodType"

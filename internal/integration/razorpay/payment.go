@@ -2,7 +2,6 @@ package razorpay
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -20,6 +19,9 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/types/integrations"
 )
+
+// razorpayNoteMaxLen is the longest note value Razorpay accepts.
+const razorpayNoteMaxLen = 255
 
 // AutoChargeRequest is the input for PaymentService.AutoCharge.
 type AutoChargeRequest struct {
@@ -217,80 +219,25 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	// Razorpay expects amounts in smallest currency unit
 	amountInSmallestUnit := req.Amount.Mul(decimal.NewFromInt(100)).IntPart()
 
-	// Build notes with metadata and line items
-	notes := map[string]interface{}{
-		"flexprice_invoice_id":  req.InvoiceID,
-		"flexprice_customer_id": req.CustomerID,
-		"flexprice_payment_id":  req.PaymentID,
-		"payment_source":        "flexprice",
-	}
-
-	// Add all line items to notes with name as key and amount as value
-	if len(invoiceResp.LineItems) > 0 {
-		for i, item := range invoiceResp.LineItems {
-			// Get display name with fallback
-			itemName := fmt.Sprintf("Item %d", i+1)
-			if item.DisplayName != nil && *item.DisplayName != "" {
-				itemName = *item.DisplayName
-			} else if item.PlanDisplayName != nil && *item.PlanDisplayName != "" {
-				itemName = *item.PlanDisplayName
-			}
-
-			// Add line item with amount in the format "name: amount currency"
-			notes[itemName] = fmt.Sprintf("%s %s", item.Amount.StringFixed(2), strings.ToUpper(item.Currency))
-		}
-
-		s.logger.Info(ctx, "added line items to notes",
-			"invoice_id", req.InvoiceID,
-			"line_items_count", len(invoiceResp.LineItems))
-	}
-
-	// Add custom metadata if provided
+	// Metadata, then flexprice keys last so routing keys can't be overwritten.
+	notes := make(map[string]string)
 	for k, v := range req.Metadata {
-		notes[k] = v
+		notes[k] = lo.Substring(v, 0, razorpayNoteMaxLen)
 	}
 
-	// Build a clean, concise description with customer name, plan name and invoice number
-	// Format: "Customer Name - Plan Name - Invoice Number"
-	var descriptionWithLineItems string
+	notes["flexprice_invoice_id"] = req.InvoiceID
+	notes["flexprice_customer_id"] = req.CustomerID
+	notes["flexprice_payment_id"] = req.PaymentID
+	notes["payment_source"] = "flexprice"
 
-	// Get customer name
-	customerName := flexpriceCustomer.Name
-
-	// Get invoice number for reference
 	invoiceNumber := DefaultInvoiceLabel
 	if invoiceResp.InvoiceNumber != nil && *invoiceResp.InvoiceNumber != "" {
 		invoiceNumber = *invoiceResp.InvoiceNumber
 	}
-
-	// Build description based on line items
-	if len(invoiceResp.LineItems) > 0 {
-		if len(invoiceResp.LineItems) == 1 {
-			// Single item: "Customer Name - Plan Name - Invoice Number"
-			item := invoiceResp.LineItems[0]
-			itemName := DefaultItemName
-			if item.DisplayName != nil && *item.DisplayName != "" {
-				itemName = *item.DisplayName
-			} else if item.PlanDisplayName != nil && *item.PlanDisplayName != "" {
-				itemName = *item.PlanDisplayName
-			}
-			descriptionWithLineItems = fmt.Sprintf("%s | %s | %s", customerName, itemName, invoiceNumber)
-		} else {
-			// Multiple items: "Customer Name - Plan Name +X more - Invoice Number"
-			item := invoiceResp.LineItems[0]
-			itemName := DefaultItemName
-			if item.DisplayName != nil && *item.DisplayName != "" {
-				itemName = *item.DisplayName
-			} else if item.PlanDisplayName != nil && *item.PlanDisplayName != "" {
-				itemName = *item.PlanDisplayName
-			}
-			remainingCount := len(invoiceResp.LineItems) - 1
-			descriptionWithLineItems = fmt.Sprintf("%s | %s +%d more | %s", customerName, itemName, remainingCount, invoiceNumber)
-		}
-	} else {
-		// No line items, use customer name with generic payment label and invoice number
-		descriptionWithLineItems = fmt.Sprintf("%s | Payment | %s", customerName, invoiceNumber)
-	}
+	itemNames := lo.Map(invoiceResp.LineItems, func(item *dto.InvoiceLineItemResponse, _ int) string {
+		return lineItemName(&item.InvoiceLineItem)
+	})
+	descriptionWithLineItems := linkDescription(flexpriceCustomer.Name, itemNames) + " | " + invoiceNumber
 
 	s.logger.Info(ctx, "formatted payment description",
 		"invoice_id", req.InvoiceID,
@@ -316,22 +263,16 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		"description": descriptionWithLineItems,
 		"customer":    customerInfo,
 		"notify": map[string]interface{}{
-			"sms":   true,
-			"email": true,
+			"sms":   req.NotifyCustomer,
+			"email": req.NotifyCustomer,
 		},
-		"reminder_enable": true,
+		"reminder_enable": req.NotifyCustomer,
 		"notes":           notes,
 	}
 
 	// expire_by closes the link at a known time so the session can outlive it.
 	if req.ExpiresAt != nil {
-		expireBy := *req.ExpiresAt
-		// Clamp past the floor, not onto it: Razorpay checks the bound on receipt, so a
-		// timestamp sitting exactly on it is already stale by then.
-		if minExpireBy := clock.Now().Add(razorpayMinExpireByBuffer + razorpayExpireBySafetyMargin); expireBy.Before(minExpireBy) {
-			expireBy = minExpireBy
-		}
-		paymentLinkData["expire_by"] = expireBy.Unix()
+		paymentLinkData["expire_by"] = clampExpireBy(*req.ExpiresAt).Unix()
 	}
 
 	// Razorpay only supports a single callback_url (unlike Stripe's success_url and cancel_url)

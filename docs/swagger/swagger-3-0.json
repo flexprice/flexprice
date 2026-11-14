@@ -29492,6 +29492,9 @@
       "PaymentGatewayOptions": {
         "type": "object",
         "properties": {
+          "razorpay": {
+            "$ref": "#/components/schemas/RazorpayPaymentGatewayOptions"
+          },
           "stripe": {
             "$ref": "#/components/schemas/StripePaymentGatewayOptions"
           }
@@ -30258,6 +30261,15 @@
           },
           "provider": {
             "$ref": "#/components/schemas/types.PaymentGatewayType"
+          }
+        }
+      },
+      "RazorpayPaymentGatewayOptions": {
+        "type": "object",
+        "properties": {
+          "notify_customer": {
+            "type": "boolean",
+            "description": "NotifyCustomer lets Razorpay SMS/email the payment link to the customer."
           }
         }
       },
@@ -36690,6 +36702,10 @@
           },
           "max_mandate_limit": {
             "type": "string"
+          },
+          "notify_customer": {
+            "type": "boolean",
+            "description": "NotifyCustomer lets the gateway email/SMS the payment link to the customer."
           },
           "payment_method": {
             "$ref": "#/components/schemas/types.PaymentMethodType"
