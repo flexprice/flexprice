@@ -5,31 +5,22 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
 	"github.com/flexprice/flexprice/internal/ee/agents/openrouter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type ContractExtractionService struct {
-	client          openrouter.OpenRouterClient
-	customers       CustomerFinder
-	logger          *logger.Logger
-	reviewThreshold int
+	client openrouter.OpenRouterClient
+	logger *logger.Logger
 }
 
-type CustomerFinder interface {
-	GetCustomers(ctx context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error)
-}
-
-func NewContractExtractionService(client openrouter.OpenRouterClient, customers CustomerFinder, logger *logger.Logger) extraction.ExtractionServiceInterface {
+func NewContractExtractionService(client openrouter.OpenRouterClient, logger *logger.Logger) extraction.ExtractionServiceInterface {
 	return &ContractExtractionService{
-		client:          client,
-		customers:       customers,
-		logger:          logger,
-		reviewThreshold: DefaultReviewThreshold,
+		client: client,
+		logger: logger,
 	}
 }
 
@@ -59,12 +50,13 @@ func (s *ContractExtractionService) Extract(ctx context.Context, req *extraction
 		result, perr := parseResult(resp.Content)
 		if perr == nil {
 			sanitize(result)
+			logged := lo.FromPtr(usage)
 			s.logger.Info(ctx, "contract extracted",
 				"model", resp.Model,
 				"charges", len(result.Charges),
-				"prompt_tokens", usage.PromptTokens,
-				"completion_tokens", usage.CompletionTokens,
-				"cost_usd", usage.CostUSD)
+				"prompt_tokens", logged.PromptTokens,
+				"completion_tokens", logged.CompletionTokens,
+				"cost_usd", logged.CostUSD)
 			return &extraction.Extraction{Result: result, Model: resp.Model, Usage: usage}, nil
 		}
 		s.logger.Info(ctx, "contract extraction output invalid", "attempt", attempt, "finish_reason", resp.FinishReason)
@@ -73,20 +65,6 @@ func (s *ContractExtractionService) Extract(ctx context.Context, req *extraction
 		}
 	}
 	return nil, ierr.NewError("contract extraction failed").Mark(ierr.ErrInternal)
-}
-
-func (s *ContractExtractionService) Enrich(ctx context.Context, result *extraction.Result) error {
-	if result == nil {
-		return ierr.NewError("result is required").Mark(ierr.ErrValidation)
-	}
-	match, err := s.matchCustomer(ctx, result.Customer)
-	if err != nil {
-		return err
-	}
-	result.CustomerMatch = match
-	result.Derived = derive(result)
-	result.ToCheck = countToCheck(result, s.reviewThreshold)
-	return nil
 }
 
 func validateRequest(req *extraction.ExtractRequest) error {
