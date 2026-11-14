@@ -568,6 +568,9 @@ usage_alerts:
   spend_alerts_enabled: true
   entitlement_alerts_enabled: true
 
+entitlement_grants:
+  refresh_on_read: true # entitlement reads with refresh_grants=true evaluate grants first
+
 wallet_balance_alert:
   enabled: true
   topic: "wallet_alert"
