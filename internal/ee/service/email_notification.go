@@ -488,6 +488,8 @@ func deliveryAction(status types.EmailDeliveryStatus) (activity.Action, bool) {
 		return activity.EmailLogFailed, true
 	case types.EmailDeliveryStatusSuppressed:
 		return activity.EmailLogSuppressed, true
+	case types.EmailDeliveryStatusSkipped:
+		return activity.EmailLogSkipped, true
 	default:
 		return "", false
 	}

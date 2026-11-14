@@ -49,8 +49,11 @@ func (s EmailDeliveryStatus) IsFinal() bool {
 // CanMoveTo reports whether next may replace s: statuses only move forward, any non-final status
 // may end as bounced, failed or suppressed, and final statuses never change.
 func (s EmailDeliveryStatus) CanMoveTo(next EmailDeliveryStatus) bool {
-	if s.IsFinal() || next == EmailDeliveryStatusSkipped {
+	if s.IsFinal() {
 		return false
+	}
+	if next == EmailDeliveryStatusSkipped {
+		return s == EmailDeliveryStatusQueued
 	}
 	if next.IsFinal() {
 		return true

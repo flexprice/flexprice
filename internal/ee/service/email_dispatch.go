@@ -107,7 +107,7 @@ func (s *emailNotificationService) DispatchEmails(ctx context.Context) (*EmailDi
 // dispatchOne sends one queued email, skips it once the environment has turned emails off, gives up on
 // it past the send deadline, or leaves it queued.
 func (s *emailNotificationService) dispatchOne(ctx context.Context, e *emaillog.EmailLog) deliveryOutcome {
-	cfg, err := GetSetting[types.EmailNotificationConfig](NewSettingsService(s.ServiceParams).(*settingsService), ctx, types.SettingKeyEmailNotificationConfig)
+	cfg, err := s.settings(ctx)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to read email settings", "error", err, "email_log_id", e.ID)
 		return deliveryDeferred
@@ -139,17 +139,15 @@ func (s *emailNotificationService) dispatchOne(ctx context.Context, e *emaillog.
 
 // skipQueued records that a queued email will not be sent.
 func (s *emailNotificationService) skipQueued(ctx context.Context, emailLogID string, reason string) error {
-	e, err := s.EmailLogRepo.Get(ctx, emailLogID)
-	if err != nil {
-		return err
-	}
-	if e.DeliveryStatus != types.EmailDeliveryStatusQueued {
-		return nil
-	}
-	return s.EmailLogRepo.Update(ctx, emaillog.NewEmailLogBuilder(e).
-		WithDeliveryStatus(types.EmailDeliveryStatusSkipped).
-		WithStatusReason(reason).
-		Build())
+	return s.transition(ctx, emailLogID, func(cur *emaillog.EmailLog) *emaillog.EmailLog {
+		if !cur.DeliveryStatus.CanMoveTo(types.EmailDeliveryStatusSkipped) {
+			return nil
+		}
+		return emaillog.NewEmailLogBuilder(cur).
+			WithDeliveryStatus(types.EmailDeliveryStatusSkipped).
+			WithStatusReason(reason).
+			Build()
+	})
 }
 
 // classifyDelivery maps DeliverEmail's result to what the dispatch run does next.

@@ -23,7 +23,8 @@ func TestEmailDeliveryStatus_CanMoveTo(t *testing.T) {
 		{EmailDeliveryStatusBounced, EmailDeliveryStatusDelivered, false},
 		{EmailDeliveryStatusFailed, EmailDeliveryStatusSuppressed, false},
 		{EmailDeliveryStatusSkipped, EmailDeliveryStatusSent, false},
-		{EmailDeliveryStatusQueued, EmailDeliveryStatusSkipped, false},
+		{EmailDeliveryStatusQueued, EmailDeliveryStatusSkipped, true},
+		{EmailDeliveryStatusSent, EmailDeliveryStatusSkipped, false},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.from)+"->"+string(tt.to), func(t *testing.T) {
