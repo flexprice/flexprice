@@ -2353,7 +2353,7 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		return false, err
 	}
 	// A reused payment that already moved on was charged or reported by an earlier run.
-	if pymnt.PaymentStatus != types.PaymentStatusInitiated && pymnt.PaymentStatus != types.PaymentStatusPending {
+	if pymnt.PaymentStatus != types.PaymentStatusInitiated {
 		return true, nil
 	}
 
@@ -2389,14 +2389,14 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		return false, nil
 	}
 
-	processing := string(types.PaymentStatusProcessing)
+	pending := string(types.PaymentStatusPending)
 	if _, err := paymentSvc.UpdatePayment(ctx, pymnt.ID, dto.UpdatePaymentRequest{
-		PaymentStatus:    &processing,
+		PaymentStatus:    &pending,
 		GatewayPaymentID: lo.EmptyableToPtr(result.RazorpayPaymentID),
 		Amount:           &freshInv.AmountRemaining,
 	}); err != nil {
 		// The charge is submitted; the Razorpay webhook reconciles via flexprice_payment_id.
-		s.Logger.Error(ctx, "failed to mark auto-charge payment as processing",
+		s.Logger.Error(ctx, "failed to mark auto-charge payment as pending",
 			"error", err,
 			"invoice_id", inv.ID,
 			"payment_id", pymnt.ID)

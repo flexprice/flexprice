@@ -610,7 +610,7 @@ func (l *PaymentLifecycle) validateInitiateParams(params InitiatePaymentParams) 
 const invoiceChargeLockTTL = 15 * time.Minute
 
 // LockInvoiceCharge takes the per-invoice charge lock and returns an ErrAlreadyExists error
-// when a charge other than paymentID is PROCESSING. Hold it until the charge is submitted.
+// when a charge other than paymentID is in flight. Hold it until the charge is submitted.
 func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo payment.Repository, environmentID, invoiceID, paymentID string) (cache.Lock, error) {
 	key := fmt.Sprintf("razorpay:autocharge:%s:%s:%s", types.GetTenantID(ctx), environmentID, invoiceID)
 	lock, err := locker.AcquireLock(ctx, key, invoiceChargeLockTTL)
@@ -624,10 +624,8 @@ func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo pay
 	filter := types.NewNoLimitPaymentFilter()
 	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
 	filter.DestinationID = lo.ToPtr(invoiceID)
-	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusProcessing))
-	filter.Limit = lo.ToPtr(2)
-	inFlight, err := paymentRepo.List(ctx, filter)
-	if err == nil && lo.ContainsBy(inFlight, func(p *payment.Payment) bool { return p.ID != paymentID }) {
+	existing, err := paymentRepo.List(ctx, filter)
+	if err == nil && lo.ContainsBy(existing, func(p *payment.Payment) bool { return p.ID != paymentID && p.IsChargeInFlight() }) {
 		err = errChargeInFlight(invoiceID)
 	}
 	if err != nil {

@@ -165,6 +165,19 @@ func (pa *PaymentAttempt) Validate() error {
 	return nil
 }
 
+// SettlesByWebhook reports whether the payment is a saved-method charge whose outcome the gateway sends by webhook.
+// Like a link, it is INITIATED until the gateway has it and PENDING until the webhook settles it.
+func (p *Payment) SettlesByWebhook() bool {
+	return p != nil && p.PaymentGateway != nil && *p.PaymentGateway == string(types.PaymentGatewayTypeRazorpay) &&
+		(p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI)
+}
+
+// IsChargeInFlight reports whether a charge was submitted to the gateway and awaits its outcome.
+func (p *Payment) IsChargeInFlight() bool {
+	return p != nil && (p.PaymentStatus == types.PaymentStatusProcessing ||
+		(p.PaymentStatus == types.PaymentStatusPending && p.SettlesByWebhook()))
+}
+
 // TableName returns the table name for the payment
 func (p *Payment) TableName() string {
 	return "payments"
