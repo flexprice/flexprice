@@ -47,5 +47,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS "idx_email_log_auto_once"
 CREATE INDEX IF NOT EXISTS "emaillog_tenant_id_environment_id_delivery_status_created_at"
   ON "email_logs" ("tenant_id","environment_id","delivery_status","created_at");
 
+-- The email dispatcher finds environments with queued emails without scanning every email sent.
+CREATE INDEX IF NOT EXISTS "idx_email_log_queued"
+  ON "email_logs" ("tenant_id","environment_id","created_at")
+  WHERE delivery_status = 'queued';
+
 -- migrate:down
 DROP TABLE IF EXISTS "email_logs";

@@ -137,5 +137,9 @@ func (EmailLog) Indexes() []ent.Index {
 			StorageKey(Idx_email_log_auto_once).
 			Annotations(entsql.IndexWhere("\"trigger\" = 'auto'")),
 		index.Fields("tenant_id", "environment_id", "delivery_status", "created_at"),
+		// The email dispatcher finds environments with queued emails without scanning every email sent.
+		index.Fields("tenant_id", "environment_id", "created_at").
+			StorageKey("idx_email_log_queued").
+			Annotations(entsql.IndexWhere("delivery_status = 'queued'")),
 	}
 }
