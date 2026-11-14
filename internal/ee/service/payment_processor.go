@@ -277,7 +277,7 @@ func (p *paymentProcessor) closeLinkIfInvoiceVoided(ctx context.Context, payment
 	if inv.InvoiceStatus != types.InvoiceStatusVoided {
 		return paymentObj, nil
 	}
-	if err := NewPaymentService(p.ServiceParams).(*paymentService).VoidOpenPaymentLinks(ctx, inv.ID); err != nil {
+	if err := NewPaymentService(p.ServiceParams).(*paymentService).voidOpenPaymentLinks(ctx, inv.ID); err != nil {
 		p.Logger.Error(ctx, "failed to close payment link created on a voided invoice",
 			"error", err, "payment_id", paymentObj.ID, "invoice_id", inv.ID)
 	}

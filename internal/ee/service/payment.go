@@ -1341,9 +1341,9 @@ func errInvoiceVoided(invoiceID string) error {
 		Mark(ierr.ErrValidation)
 }
 
-// VoidOpenPaymentLinks closes every unpaid payment link on a voided invoice. A link the customer
+// voidOpenPaymentLinks closes every unpaid payment link on a voided invoice. A link the customer
 // already paid is left to its gateway webhook; links owned by a checkout session are left to that session.
-func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID string) error {
+func (s *paymentService) voidOpenPaymentLinks(ctx context.Context, invoiceID string) error {
 	var open []*payment.Payment
 	for _, status := range []types.PaymentStatus{types.PaymentStatusInitiated, types.PaymentStatusPending} {
 		filter := types.NewNoLimitPaymentFilter()

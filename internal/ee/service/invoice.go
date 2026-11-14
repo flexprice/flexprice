@@ -1950,7 +1950,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	// Gateway links are expired only once the void is committed.
 	closeLinksCtx := types.WithoutDBTransaction(ctx)
 	closeLinks := func() {
-		if err := NewPaymentService(s.ServiceParams).(*paymentService).VoidOpenPaymentLinks(closeLinksCtx, inv.ID); err != nil {
+		if err := NewPaymentService(s.ServiceParams).(*paymentService).voidOpenPaymentLinks(closeLinksCtx, inv.ID); err != nil {
 			s.Logger.Error(closeLinksCtx, "failed to close payment links on void",
 				"error", err,
 				"invoice_id", inv.ID)
