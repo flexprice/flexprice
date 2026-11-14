@@ -98,6 +98,10 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 				return err
 			}
 
+			if inv.InvoiceStatus == types.InvoiceStatusVoided {
+				return errInvoiceVoided(inv.ID)
+			}
+
 			if err := invoices.requireFreshDraft(txCtx, inv); err != nil {
 				return err
 			}
@@ -246,11 +250,41 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		}
 	}
 
+	// Checked even when saving the link failed: the link exists at the gateway either way.
+	if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink &&
+		paymentObj.DestinationType == types.PaymentDestinationTypeInvoice &&
+		lo.FromPtr(paymentObj.GatewayTrackingID) != "" {
+		if closed, err := p.closeLinkIfInvoiceVoided(ctx, paymentObj); err != nil {
+			return closed, err
+		}
+	}
+
 	if processErr != nil {
 		return paymentObj, processErr
 	}
 
 	return paymentObj, nil
+}
+
+// closeLinkIfInvoiceVoided closes a link whose invoice was voided while the link was being created.
+func (p *paymentProcessor) closeLinkIfInvoiceVoided(ctx context.Context, paymentObj *payment.Payment) (*payment.Payment, error) {
+	inv, err := p.InvoiceRepo.Get(ctx, paymentObj.DestinationID)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to recheck invoice after creating payment link",
+			"error", err, "payment_id", paymentObj.ID, "invoice_id", paymentObj.DestinationID)
+		return paymentObj, nil
+	}
+	if inv.InvoiceStatus != types.InvoiceStatusVoided {
+		return paymentObj, nil
+	}
+	if err := NewPaymentService(p.ServiceParams).(*paymentService).voidOpenPaymentLinks(ctx, inv.ID); err != nil {
+		p.Logger.Error(ctx, "failed to close payment link created on a voided invoice",
+			"error", err, "payment_id", paymentObj.ID, "invoice_id", inv.ID)
+	}
+	if refreshed, err := p.PaymentRepo.Get(ctx, paymentObj.ID); err == nil {
+		paymentObj = refreshed
+	}
+	return paymentObj, errInvoiceVoided(inv.ID)
 }
 
 func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment) error {

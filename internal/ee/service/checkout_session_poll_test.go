@@ -57,6 +57,8 @@ type fakeCheckoutProvider struct {
 	// linkRequests records what callCheckoutProvider asked for, so a test can assert on
 	// the expiry we send rather than recomputing it.
 	linkRequests []interfaces.CheckoutProviderRequest
+	// onCreateLink runs inside CreatePaymentLink, standing in for a void that lands mid-call.
+	onCreateLink func()
 
 	// charged makes TryAutoChargingSavedMethod report a submitted saved-method charge.
 	charged bool
@@ -64,6 +66,22 @@ type fakeCheckoutProvider struct {
 	onCharge func(req interfaces.AuthorizationLinkRequest)
 	// chargeErr fails the charge call after onCharge, as a timeout after the gateway charged would.
 	chargeErr error
+
+	// expired records the tracking ids passed to ExpirePaymentLink; expireErr fails the call.
+	expired   []string
+	expireErr error
+	// alreadyPaid makes ExpirePaymentLink report the link as already paid.
+	alreadyPaid bool
+}
+
+func (f *fakeCheckoutProvider) ExpirePaymentLink(_ context.Context, req interfaces.ExpirePaymentLinkRequest) (*interfaces.ExpirePaymentLinkResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.expired = append(f.expired, req.GatewayTrackingID)
+	if f.expireErr != nil {
+		return nil, f.expireErr
+	}
+	return &interfaces.ExpirePaymentLinkResponse{AlreadyPaid: f.alreadyPaid}, nil
 }
 
 func (f *fakeCheckoutProvider) FetchPaymentState(
@@ -89,6 +107,9 @@ func (f *fakeCheckoutProvider) CreatePaymentLink(_ context.Context, req interfac
 	f.mu.Lock()
 	f.linkRequests = append(f.linkRequests, req)
 	f.mu.Unlock()
+	if f.onCreateLink != nil {
+		f.onCreateLink()
+	}
 	return &interfaces.CheckoutProviderResponse{
 		ProviderSessionID: "plink_created",
 		NextAction: types.PaymentAction{

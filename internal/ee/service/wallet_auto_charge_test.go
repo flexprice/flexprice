@@ -164,6 +164,10 @@ func (p *stubAutoChargeCheckoutProvider) FetchPaymentState(context.Context, inte
 	return nil, nil
 }
 
+func (p *stubAutoChargeCheckoutProvider) ExpirePaymentLink(context.Context, interfaces.ExpirePaymentLinkRequest) (*interfaces.ExpirePaymentLinkResponse, error) {
+	return &interfaces.ExpirePaymentLinkResponse{}, nil
+}
+
 func (s *WalletAutoChargeSuite) TestFetchGatewayWithAutoChargeSupport_Success() {
 	s.connect(types.SecretProviderChargebee)
 	provider := &stubAutoChargeCheckoutProvider{hasMethod: true}
