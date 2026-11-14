@@ -118,7 +118,7 @@ func NewHandler(deps Deps) Handler {
 func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 	cfg := h.deps.Config.IntegrationEvents
 	// Customer emails ride this consumer too; each vendor-sync dispatch checks IntegrationEvents.Enabled itself.
-	if !cfg.Enabled && !h.deps.Config.Email.Enabled {
+	if !cfg.Enabled && !h.deps.Config.Email.IsProviderConfigured() {
 		h.deps.Logger.Info(context.Background(), "integration_events: handler disabled by configuration, skipping registration")
 		return
 	}

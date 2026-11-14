@@ -249,7 +249,7 @@ func DispatchInvoiceVendorSync(
 }
 
 // DispatchInvoiceAutoEmail emails a finalized invoice to the customer when the environment's
-// auto-send setting covers invoices. It is gated by email.enabled, not by integration events.
+// auto-send setting covers invoices. It is gated by a configured email provider, not by integration events.
 func DispatchInvoiceAutoEmail(
 	ctx context.Context,
 	cfg *config.Configuration,
@@ -258,7 +258,7 @@ func DispatchInvoiceAutoEmail(
 	event *types.WebhookEvent,
 	msgUUID string,
 ) error {
-	if cfg == nil || !cfg.Email.Enabled {
+	if cfg == nil || !cfg.Email.IsProviderConfigured() {
 		return nil
 	}
 
