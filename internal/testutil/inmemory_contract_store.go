@@ -28,6 +28,10 @@ func associationKey(entityType types.RevRecEntityType, entityID string) string {
 	return string(entityType) + ":" + entityID
 }
 
+func (s *InMemoryContractStore) Create(ctx context.Context, c *contract.Contract) error {
+	return s.InMemoryStore.Create(ctx, c.ID(), contract.NewBuilder(c).Build())
+}
+
 func (s *InMemoryContractStore) CreateWithAssociation(ctx context.Context, c *contract.Contract, a *contract.Association) error {
 	a = contract.NewAssociationBuilder(a).WithContractID(c.ID()).Build()
 	if err := s.associations.Create(ctx, associationKey(a.EntityType(), a.EntityID()), a); err != nil {

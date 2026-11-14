@@ -53,6 +53,11 @@ func (f *fakeStorage) Exists(ctx context.Context, key string) (bool, error) {
 	return ok, nil
 }
 
+func (f *fakeStorage) Delete(ctx context.Context, key string) error {
+	delete(f.objects, key)
+	return nil
+}
+
 func (f *fakeStorage) PresignGet(ctx context.Context, key string, d time.Duration) (string, error) {
 	return "https://example.com/" + key, nil
 }

@@ -14,6 +14,8 @@ func FromEnt(e *ent.Contract) *domainContract.Contract {
 	}
 	return domainContract.NewBuilder(nil).
 		WithID(e.ID).
+		WithTenantID(e.TenantID).
+		WithEnvironmentID(e.EnvironmentID).
 		WithCustomerID(e.CustomerID).
 		WithCurrency(e.Currency).
 		WithTermStart(e.TermStart).
@@ -23,6 +25,10 @@ func FromEnt(e *ent.Contract) *domainContract.Contract {
 		WithStatus(types.Status(e.Status)).
 		WithCreatedAt(e.CreatedAt).
 		WithUpdatedAt(e.UpdatedAt).
+		WithDocument(e.Document).
+		WithExtractionStatus(types.ContractExtractionStatus(lo.FromPtr(e.ExtractionStatus))).
+		WithExtraction(e.Extraction.Raw()).
+		WithExtractionError(lo.FromPtr(e.ExtractionError)).
 		Build()
 }
 

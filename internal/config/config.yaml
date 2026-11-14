@@ -594,6 +594,28 @@ gemini:
   api_key: ""
   model: "gemini-2.5-flash-lite"
 
+reducto:
+  api_key: "" # Set via FLEXPRICE_REDUCTO_API_KEY
+  base_url: "https://platform.reducto.ai"
+  timeout_seconds: 300
+
+openrouter:
+  api_key: ""
+  base_url: "https://openrouter.ai/api/v1"
+  model: "google/gemini-2.5-pro"
+  pdf_engine: ""
+  timeout_seconds: 300
+  zdr: true
+
+customer_match:
+  enabled: true
+  model: "openai/gpt-4.1-mini"
+  max_steps: 8
+  max_tool_calls: 12
+  timeout_seconds: 60
+  existing_threshold: 85
+  possible_threshold: 40
+
 whop:
   base_url: "" # "https://sandbox-api.whop.com" - for sandbox whop testing
 

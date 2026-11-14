@@ -544,6 +544,10 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		if input, ok := params.(models.TabsInvoiceSyncWorkflowInput); ok {
 			return input.InvoiceID
 		}
+	case types.TemporalContractExtractionWorkflow:
+		if input, ok := params.(models.ContractExtractionWorkflowInput); ok {
+			return input.ContractID
+		}
 	case types.TemporalHubSpotInvoiceSyncWorkflow:
 		if input, ok := params.(models.HubSpotInvoiceSyncWorkflowInput); ok {
 			return input.InvoiceID
@@ -733,6 +737,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildZohoBooksInvoiceMarkPaidInput(ctx, tenantID, environmentID, params)
 	case types.TemporalTabsInvoiceSyncWorkflow:
 		return s.buildTabsInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalContractExtractionWorkflow:
+		return s.buildContractExtractionInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalStripeCustomerSyncWorkflow:
 		return s.buildStripeCustomerSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalRazorpayCustomerSyncWorkflow:
@@ -1228,6 +1234,27 @@ func (s *temporalService) buildTabsInvoiceSyncInput(_ context.Context, tenantID,
 	return nil, errors.NewError("invalid input for Tabs invoice sync workflow").
 		WithHint("Provide TabsInvoiceSyncWorkflowInput with invoice_id").
 		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildContractExtractionInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
+	var input models.ContractExtractionWorkflowInput
+	switch p := params.(type) {
+	case models.ContractExtractionWorkflowInput:
+		input = p
+	case *models.ContractExtractionWorkflowInput:
+		input = *p
+	default:
+		return nil, errors.NewError("invalid input for contract extraction workflow").
+			WithHint("Provide ContractExtractionWorkflowInput with contract_id").
+			Mark(errors.ErrValidation)
+	}
+	input.TenantID = tenantID
+	input.EnvironmentID = environmentID
+	input.UserID = userID
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+	return input, nil
 }
 
 func (s *temporalService) buildStripeCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {

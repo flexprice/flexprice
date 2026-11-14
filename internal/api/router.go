@@ -393,6 +393,7 @@ func NewRouter(
 
 		contract := v1Private.Group("/contracts")
 		{
+			contract.POST("/upload", write(types.EntityAI, types.ActionWrite), handlers.Contract.UploadContract)
 			contract.POST("/search", handlers.Contract.QueryContracts)
 			contract.GET("/:id", handlers.Contract.GetContract)
 		}

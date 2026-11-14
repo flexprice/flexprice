@@ -311,6 +311,17 @@ func (c *client) Exists(ctx context.Context, key string) (bool, error) {
 	return true, nil
 }
 
+func (c *client) Delete(ctx context.Context, key string) error {
+	_, err := c.s3.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(c.cfg.Bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return ierr.WithError(err).WithHint("failed to delete object").Mark(ierr.ErrHTTPClient)
+	}
+	return nil
+}
+
 func (c *client) PresignGet(ctx context.Context, key string, duration time.Duration) (string, error) {
 	if duration == 0 {
 		duration = defaultPresignExpiry
