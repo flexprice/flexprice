@@ -102,6 +102,8 @@ func (c *contractIngestService) Upload(ctx context.Context, req *UploadRequest) 
 	now := clock.Now()
 	contract := domainContract.NewBuilder(nil).
 		WithID(id).
+		WithTenantID(types.GetTenantID(ctx)).
+		WithEnvironmentID(types.GetEnvironmentID(ctx)).
 		WithContractStatus(types.ContractStatusDraft).
 		WithStatus(types.StatusPublished).
 		WithDocument(&types.ContractDocument{

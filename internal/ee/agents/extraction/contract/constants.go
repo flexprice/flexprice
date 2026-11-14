@@ -1,10 +1,13 @@
 package contract
 
 const (
-	schemaName = "contract_extraction"
+	maxConfidence = 100
 
-	maxParseAttempts = 2
-	maxConfidence    = 100
+	highLabelConfidence = 90
+	lowLabelConfidence  = 50
+
+	extractModelPrefix = "reducto/"
+	defaultFileName    = "contract.pdf"
 )
 
 const (

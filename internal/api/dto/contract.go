@@ -11,6 +11,8 @@ import (
 
 type ContractResponse struct {
 	ID               string                         `json:"id"`
+	TenantID         string                         `json:"tenant_id"`
+	EnvironmentID    string                         `json:"environment_id"`
 	CustomerID       string                         `json:"customer_id"`
 	Currency         string                         `json:"currency"`
 	TermStart        *time.Time                     `json:"term_start,omitempty"`
@@ -40,6 +42,8 @@ func NewContractResponse(c *contract.Contract) *ContractResponse {
 	}
 	return &ContractResponse{
 		ID:               c.ID(),
+		TenantID:         c.TenantID(),
+		EnvironmentID:    c.EnvironmentID(),
 		CustomerID:       c.CustomerID(),
 		Currency:         c.Currency(),
 		TermStart:        c.TermStart(),
