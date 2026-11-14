@@ -256,7 +256,9 @@ func (tc ToolChoice) MarshalJSON() ([]byte, error) {
 }
 
 func (tc *ToolChoice) UnmarshalJSON(data []byte) error {
-	if json.Unmarshal(data, &tc.Mode) == nil {
+	var mode string
+	if json.Unmarshal(data, &mode) == nil {
+		*tc = ToolChoice{Mode: mode}
 		return nil
 	}
 	var forced struct {

@@ -4,7 +4,6 @@ package ent
 
 import (
 	"context"
-	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"sync"
@@ -18189,8 +18188,7 @@ type ContractMutation struct {
 	contract_status   *string
 	document          **types.ContractDocument
 	extraction_status *string
-	extraction        *jsontext.Value
-	appendextraction  jsontext.Value
+	extraction        **types.ContractExtraction
 	extraction_error  *string
 	clearedFields     map[string]struct{}
 	done              bool
@@ -18973,13 +18971,12 @@ func (m *ContractMutation) ResetExtractionStatus() {
 }
 
 // SetExtraction sets the "extraction" field.
-func (m *ContractMutation) SetExtraction(j jsontext.Value) {
-	m.extraction = &j
-	m.appendextraction = nil
+func (m *ContractMutation) SetExtraction(te *types.ContractExtraction) {
+	m.extraction = &te
 }
 
 // Extraction returns the value of the "extraction" field in the mutation.
-func (m *ContractMutation) Extraction() (r jsontext.Value, exists bool) {
+func (m *ContractMutation) Extraction() (r *types.ContractExtraction, exists bool) {
 	v := m.extraction
 	if v == nil {
 		return
@@ -18990,7 +18987,7 @@ func (m *ContractMutation) Extraction() (r jsontext.Value, exists bool) {
 // OldExtraction returns the old "extraction" field's value of the Contract entity.
 // If the Contract object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ContractMutation) OldExtraction(ctx context.Context) (v jsontext.Value, err error) {
+func (m *ContractMutation) OldExtraction(ctx context.Context) (v *types.ContractExtraction, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldExtraction is only allowed on UpdateOne operations")
 	}
@@ -19004,23 +19001,9 @@ func (m *ContractMutation) OldExtraction(ctx context.Context) (v jsontext.Value,
 	return oldValue.Extraction, nil
 }
 
-// AppendExtraction adds j to the "extraction" field.
-func (m *ContractMutation) AppendExtraction(j jsontext.Value) {
-	m.appendextraction = append(m.appendextraction, j...)
-}
-
-// AppendedExtraction returns the list of values that were appended to the "extraction" field in this mutation.
-func (m *ContractMutation) AppendedExtraction() (jsontext.Value, bool) {
-	if len(m.appendextraction) == 0 {
-		return nil, false
-	}
-	return m.appendextraction, true
-}
-
 // ClearExtraction clears the value of the "extraction" field.
 func (m *ContractMutation) ClearExtraction() {
 	m.extraction = nil
-	m.appendextraction = nil
 	m.clearedFields[contract.FieldExtraction] = struct{}{}
 }
 
@@ -19033,7 +19016,6 @@ func (m *ContractMutation) ExtractionCleared() bool {
 // ResetExtraction resets all changes to the "extraction" field.
 func (m *ContractMutation) ResetExtraction() {
 	m.extraction = nil
-	m.appendextraction = nil
 	delete(m.clearedFields, contract.FieldExtraction)
 }
 
@@ -19372,7 +19354,7 @@ func (m *ContractMutation) SetField(name string, value ent.Value) error {
 		m.SetExtractionStatus(v)
 		return nil
 	case contract.FieldExtraction:
-		v, ok := value.(jsontext.Value)
+		v, ok := value.(*types.ContractExtraction)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

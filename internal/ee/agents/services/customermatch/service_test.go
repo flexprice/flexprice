@@ -44,6 +44,7 @@ type fakeDirectory struct {
 	customers []CustomerRecord
 	nameCalls []string
 	err       error
+	emailErr  error
 }
 
 func (d *fakeDirectory) SearchByName(_ context.Context, query string, limit int) ([]CustomerRecord, error) {
@@ -61,6 +62,9 @@ func (d *fakeDirectory) SearchByName(_ context.Context, query string, limit int)
 }
 
 func (d *fakeDirectory) SearchByEmail(_ context.Context, value string, _ int) ([]CustomerRecord, error) {
+	if d.emailErr != nil {
+		return nil, d.emailErr
+	}
 	var out []CustomerRecord
 	for _, c := range d.customers {
 		if c.Email == value || strings.HasSuffix(c.Email, "@"+value) {
@@ -76,7 +80,7 @@ func (d *fakeDirectory) Get(_ context.Context, id string) (*CustomerRecord, erro
 			return &c, nil
 		}
 	}
-	return nil, errors.New("not found")
+	return nil, ierr.NewError("not found").Mark(ierr.ErrNotFound)
 }
 
 func directory() *fakeDirectory {
@@ -187,12 +191,58 @@ func TestMatch_ForcesSubmitWhenToolBudgetIsSpent(t *testing.T) {
 func TestMatch_StopsAfterMaxStepsWithOneForcedSubmit(t *testing.T) {
 	llm := &fakeLLM{configured: true}
 
-	res, err := newService(llm, config.CustomerMatchConfig{Model: "m", MaxSteps: 3}).Match(context.Background(), request(), directory())
-	require.NoError(t, err)
+	_, err := newService(llm, config.CustomerMatchConfig{Model: "m", MaxSteps: 3}).Match(context.Background(), request(), directory())
+	require.Error(t, err, "a run that never submits is not a no-match answer")
 	require.Len(t, llm.requests, 4)
 	require.Equal(t, toolSubmitMatch, llm.requests[3].ToolChoice.Function)
-	require.Empty(t, res.Candidates)
 	require.Equal(t, submitReminder, llm.requests[1].Messages[len(llm.requests[1].Messages)-1].Content[0].Text)
+}
+
+func TestMatch_ForcedSubmitAfterMaxStepsIsKept(t *testing.T) {
+	llm := &fakeLLM{configured: true, replies: []*openrouter.Response{
+		{Model: "test/model", Content: "thinking"},
+		toolReply(submit(nil)),
+	}}
+
+	res, err := newService(llm, config.CustomerMatchConfig{Model: "m", MaxSteps: 1}).Match(context.Background(), request(), directory())
+	require.NoError(t, err)
+	require.Len(t, llm.requests, 2)
+	require.Empty(t, res.Candidates)
+}
+
+func TestMatch_MalformedSubmissionIsAnError(t *testing.T) {
+	llm := &fakeLLM{configured: true, replies: []*openrouter.Response{
+		toolReply(openrouter.ToolCall{ID: "s", Function: openrouter.ToolCallFunction{Name: toolSubmitMatch, Arguments: "{not json"}}),
+	}}
+
+	_, err := newService(llm, config.CustomerMatchConfig{Model: "m"}).Match(context.Background(), request(), directory())
+	require.Error(t, err)
+}
+
+func TestMatch_ParallelCallsStayWithinTheLookupBudget(t *testing.T) {
+	llm := &fakeLLM{configured: true, replies: []*openrouter.Response{
+		toolReply(
+			call("c1", toolSearchByName, nameSearchArgs{Query: "Supp"}),
+			call("c2", toolSearchByName, nameSearchArgs{Query: "mayer"}),
+			call("c3", toolSearchByName, nameSearchArgs{Query: "North"}),
+		),
+		toolReply(submit(nil)),
+	}}
+	dir := directory()
+
+	res, err := newService(llm, config.CustomerMatchConfig{Model: "m", MaxToolCalls: 1}).Match(context.Background(), request(), dir)
+	require.NoError(t, err)
+	require.Equal(t, 1, res.ToolCalls)
+	require.Equal(t, []string{"Supp"}, dir.nameCalls)
+	results := map[string]string{}
+	for _, m := range llm.requests[1].Messages {
+		if m.Role == openrouter.RoleTool {
+			results[m.ToolCallID] = m.Content[0].Text
+		}
+	}
+	require.Len(t, results, 3, "every call gets a result")
+	require.Contains(t, results["c2"], "budget used up")
+	require.Contains(t, results["c3"], "budget used up")
 }
 
 func TestMatch_ToolProblemsGoBackToTheModel(t *testing.T) {
@@ -221,7 +271,7 @@ func TestMatch_ToolProblemsGoBackToTheModel(t *testing.T) {
 	require.Contains(t, results["c4"], "unknown tool")
 }
 
-func TestMatch_SearchFailureIsReportedToTheModel(t *testing.T) {
+func TestMatch_SearchFailureAbortsTheRun(t *testing.T) {
 	llm := &fakeLLM{configured: true, replies: []*openrouter.Response{
 		toolReply(call("c1", toolSearchByName, nameSearchArgs{Query: "Supp"})),
 		toolReply(submit(nil)),
@@ -230,10 +280,25 @@ func TestMatch_SearchFailureIsReportedToTheModel(t *testing.T) {
 	dir.err = errors.New("db down")
 
 	_, err := newService(llm, config.CustomerMatchConfig{Model: "m"}).Match(context.Background(), request(), dir)
+	require.Error(t, err)
+	require.True(t, ierr.IsDatabase(err))
+	require.Len(t, llm.requests, 1, "a failed lookup is never sent to the model as an empty result")
+}
+
+func TestMatch_RefusedSearchGoesBackToTheModel(t *testing.T) {
+	llm := &fakeLLM{configured: true, replies: []*openrouter.Response{
+		toolReply(call("c1", toolSearchByEmail, emailSearchArgs{EmailOrDomain: "gmail.com"})),
+		toolReply(submit(nil)),
+	}}
+	dir := directory()
+	dir.emailErr = ierr.NewError("unsupported email domain").
+		WithHint("Search a company domain, not a free mail provider").
+		Mark(ierr.ErrValidation)
+
+	_, err := newService(llm, config.CustomerMatchConfig{Model: "m"}).Match(context.Background(), request(), dir)
 	require.NoError(t, err)
 	msgs := llm.requests[1].Messages
-	require.Contains(t, msgs[len(msgs)-1].Content[0].Text, "search failed")
-	require.NotContains(t, msgs[len(msgs)-1].Content[0].Text, "db down")
+	require.Contains(t, msgs[len(msgs)-1].Content[0].Text, "free mail provider")
 }
 
 func TestMatch_Errors(t *testing.T) {

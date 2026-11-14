@@ -131,7 +131,7 @@ func (s *ContractExtractionService) sanitizeTerm(t *extraction.Term, allowed []s
 	t.Confidence = min(max(t.Confidence, 0), maxConfidence)
 	t.Page = max(t.Page, 0)
 	if t.Value == "" && len(t.Options) == 0 {
-		t.Confidence, t.Page, t.Quote = 0, 0, ""
+		t.Confidence, t.Page, t.Quote, t.Boxes = 0, 0, "", nil
 	}
 }
 

@@ -128,6 +128,9 @@ func (c *contractIngestService) Upload(ctx context.Context, req *UploadRequest) 
 		WithUpdatedAt(now).
 		Build()
 	if err := c.contracts.Create(ctx, contract); err != nil {
+		if delErr := store.Delete(ctx, key); delErr != nil {
+			c.logger.Error(ctx, "contract upload cleanup failed", "error", delErr, "contract_id", id, "key", key)
+		}
 		return nil, err
 	}
 

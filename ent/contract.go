@@ -4,7 +4,6 @@ package ent
 
 import (
 	"encoding/json"
-	"encoding/json/jsontext"
 	"fmt"
 	"strings"
 	"time"
@@ -51,7 +50,7 @@ type Contract struct {
 	// ExtractionStatus holds the value of the "extraction_status" field.
 	ExtractionStatus *string `json:"extraction_status,omitempty"`
 	// Extraction holds the value of the "extraction" field.
-	Extraction jsontext.Value `json:"extraction,omitempty"`
+	Extraction *types.ContractExtraction `json:"extraction,omitempty"`
 	// ExtractionError holds the value of the "extraction_error" field.
 	ExtractionError *string `json:"extraction_error,omitempty"`
 	selectValues    sql.SelectValues

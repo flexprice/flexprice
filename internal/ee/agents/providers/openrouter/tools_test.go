@@ -77,6 +77,16 @@ func TestToolChoice_JSON(t *testing.T) {
 	}
 }
 
+func TestToolChoice_DecodingAModeClearsAForcedFunction(t *testing.T) {
+	choice := ToolChoice{Function: "submit"}
+	require.NoError(t, json.Unmarshal([]byte(`"none"`), &choice))
+	require.Equal(t, ToolChoice{Mode: ToolChoiceNone}, choice)
+
+	b, err := json.Marshal(choice)
+	require.NoError(t, err)
+	require.JSONEq(t, `"none"`, string(b))
+}
+
 func TestMessage_RoundTrip(t *testing.T) {
 	for _, m := range toolRequest().Messages {
 		b, err := json.Marshal(m)

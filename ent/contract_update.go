@@ -4,14 +4,12 @@ package ent
 
 import (
 	"context"
-	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/contract"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -178,14 +176,8 @@ func (_u *ContractUpdate) ClearExtractionStatus() *ContractUpdate {
 }
 
 // SetExtraction sets the "extraction" field.
-func (_u *ContractUpdate) SetExtraction(v jsontext.Value) *ContractUpdate {
+func (_u *ContractUpdate) SetExtraction(v *types.ContractExtraction) *ContractUpdate {
 	_u.mutation.SetExtraction(v)
-	return _u
-}
-
-// AppendExtraction appends value to the "extraction" field.
-func (_u *ContractUpdate) AppendExtraction(v jsontext.Value) *ContractUpdate {
-	_u.mutation.AppendExtraction(v)
 	return _u
 }
 
@@ -337,11 +329,6 @@ func (_u *ContractUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Extraction(); ok {
 		_spec.SetField(contract.FieldExtraction, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedExtraction(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, contract.FieldExtraction, value)
-		})
 	}
 	if _u.mutation.ExtractionCleared() {
 		_spec.ClearField(contract.FieldExtraction, field.TypeJSON)
@@ -519,14 +506,8 @@ func (_u *ContractUpdateOne) ClearExtractionStatus() *ContractUpdateOne {
 }
 
 // SetExtraction sets the "extraction" field.
-func (_u *ContractUpdateOne) SetExtraction(v jsontext.Value) *ContractUpdateOne {
+func (_u *ContractUpdateOne) SetExtraction(v *types.ContractExtraction) *ContractUpdateOne {
 	_u.mutation.SetExtraction(v)
-	return _u
-}
-
-// AppendExtraction appends value to the "extraction" field.
-func (_u *ContractUpdateOne) AppendExtraction(v jsontext.Value) *ContractUpdateOne {
-	_u.mutation.AppendExtraction(v)
 	return _u
 }
 
@@ -708,11 +689,6 @@ func (_u *ContractUpdateOne) sqlSave(ctx context.Context) (_node *Contract, err 
 	}
 	if value, ok := _u.mutation.Extraction(); ok {
 		_spec.SetField(contract.FieldExtraction, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedExtraction(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, contract.FieldExtraction, value)
-		})
 	}
 	if _u.mutation.ExtractionCleared() {
 		_spec.ClearField(contract.FieldExtraction, field.TypeJSON)

@@ -59,6 +59,12 @@ func (m *memStorage) Exists(_ context.Context, key string) (bool, error) {
 	return ok, nil
 }
 
+func (m *memStorage) Delete(_ context.Context, key string) error {
+	delete(m.objects, key)
+	delete(m.types, key)
+	return nil
+}
+
 func (m *memStorage) PresignGet(context.Context, string, time.Duration) (string, error) {
 	return "", nil
 }
@@ -219,6 +225,27 @@ func TestUpload_StorageFailureCreatesNothing(t *testing.T) {
 	n, err := f.contracts.Count(ctx, nil)
 	require.NoError(t, err)
 	require.Zero(t, n)
+	require.Empty(t, f.starter.inputs)
+}
+
+// failingCreateRepo fails every contract insert.
+type failingCreateRepo struct {
+	*testutil.InMemoryContractStore
+}
+
+func (r *failingCreateRepo) Create(context.Context, *domainContract.Contract) error {
+	return ierr.NewError("insert failed").Mark(ierr.ErrDatabase)
+}
+
+func TestUpload_CreateFailureRemovesStoredFile(t *testing.T) {
+	ctx := testutil.SetupContext()
+	f := newIngestFixture()
+	f.svc.contracts = &failingCreateRepo{InMemoryContractStore: f.contracts}
+
+	_, err := f.svc.Upload(ctx, &UploadRequest{FileName: "c.pdf", Data: pdfBytes})
+
+	require.True(t, ierr.IsDatabase(err))
+	require.Empty(t, f.store.objects)
 	require.Empty(t, f.starter.inputs)
 }
 

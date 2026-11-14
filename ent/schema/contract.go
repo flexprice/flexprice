@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"encoding/json"
-
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -78,7 +76,7 @@ func (Contract) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
-		field.JSON("extraction", json.RawMessage{}).
+		field.JSON("extraction", &types.ContractExtraction{}).
 			Optional().
 			SchemaType(map[string]string{
 				"postgres": "jsonb",

@@ -12,12 +12,15 @@ import (
 
 const dateLayout = "2006-01-02"
 
+// maxTermMonths is the longest contract term dates are derived for; longer terms are left for review.
+const maxTermMonths = 120
+
 func (c *contractIngestService) derive(r *extraction.Result) *extraction.Derived {
 	d := &extraction.Derived{InvoiceSchedules: []extraction.InvoiceSchedule{}}
 
 	start, startOK := c.parseDate(r.Term.EffectiveDate.Value)
 	months, monthsOK := c.parseInt(r.Term.TermMonths.Value)
-	if !startOK || !monthsOK || months <= 0 {
+	if !startOK || !monthsOK || months <= 0 || months > maxTermMonths {
 		return d
 	}
 	end := c.addMonths(start, months).AddDate(0, 0, -1)
@@ -39,11 +42,11 @@ func (c *contractIngestService) invoiceSchedule(index int, ch extraction.Charge,
 	if ch.Kind != contractagent.ChargeKindRecurringFixed || ch.BillingTiming.Value == contractagent.BillingTimingArrears {
 		return extraction.InvoiceSchedule{}, false
 	}
-	every, ok := periodMonths[ch.BillingPeriod.Value]
+	every, ok := c.periodMonths(ch.BillingPeriod.Value)
 	if !ok {
 		return extraction.InvoiceSchedule{}, false
 	}
-	quotedOver, ok := periodMonths[ch.AmountPeriod.Value]
+	quotedOver, ok := c.periodMonths(ch.AmountPeriod.Value)
 	if !ok {
 		quotedOver = every
 	}
@@ -63,6 +66,20 @@ func (c *contractIngestService) invoiceSchedule(index int, ch extraction.Charge,
 		AmountPerInvoice: perInvoice.Round(2).StringFixed(2),
 		Dates:            dates,
 	}, true
+}
+
+func (c *contractIngestService) periodMonths(period string) (int, bool) {
+	switch period {
+	case contractagent.BillingPeriodMonthly:
+		return 1, true
+	case contractagent.BillingPeriodQuarterly:
+		return 3, true
+	case contractagent.BillingPeriodHalfYearly:
+		return 6, true
+	case contractagent.BillingPeriodAnnual:
+		return 12, true
+	}
+	return 0, false
 }
 
 func (c *contractIngestService) addMonths(t time.Time, months int) time.Time {

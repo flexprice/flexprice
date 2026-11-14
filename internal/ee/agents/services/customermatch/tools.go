@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+
+	cerrors "github.com/cockroachdb/errors"
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/ee/agents/providers/openrouter"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 )
 
@@ -87,12 +90,20 @@ func (s *CustomerMatchService) str(description string) map[string]any {
 	return map[string]any{"type": "string", "description": description}
 }
 
-// runTool executes one lookup tool and returns its JSON result. Bad arguments and lookup failures go back
-// to the model as an error result so it can try again; only a cancelled context aborts the run.
+// runTool executes one lookup tool and returns its JSON result. Bad arguments, refused searches and unknown
+// customers go back to the model so it can try again. A failed lookup aborts the run, so it is never
+// mistaken for "no customer matched".
 func (s *CustomerMatchService) runTool(ctx context.Context, call openrouter.ToolCall, directory CustomerDirectory, seen map[string]bool) (string, error) {
-	out := s.dispatch(ctx, call, directory)
-	if err := ctx.Err(); err != nil {
-		return "", err
+	out, err := s.dispatch(ctx, call, directory)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return "", ierr.WithError(ctxErr).
+			WithHint("Customer matching took too long").
+			Mark(ierr.ErrHTTPClient)
+	}
+	if err != nil {
+		return "", ierr.WithError(err).
+			WithHint("Customer lookup failed").
+			Mark(ierr.ErrDatabase)
 	}
 	for _, c := range out.Customers {
 		seen[c.ID] = true
@@ -104,48 +115,55 @@ func (s *CustomerMatchService) runTool(ctx context.Context, call openrouter.Tool
 	return string(b), nil
 }
 
-func (s *CustomerMatchService) dispatch(ctx context.Context, call openrouter.ToolCall, directory CustomerDirectory) toolOutput {
+func (s *CustomerMatchService) dispatch(ctx context.Context, call openrouter.ToolCall, directory CustomerDirectory) (toolOutput, error) {
 	switch call.Function.Name {
 	case toolSearchByName:
 		var args nameSearchArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
-			return toolOutput{Error: "invalid arguments"}
+			return toolOutput{Error: "invalid arguments"}, nil
 		}
 		query := strings.TrimSpace(args.Query)
 		if len([]rune(query)) < minQueryLength || len([]rune(query)) > maxQueryLength {
-			return toolOutput{Error: "query must be 2 to 100 characters"}
+			return toolOutput{Error: "query must be 2 to 100 characters"}, nil
 		}
 		return s.listOutput(directory.SearchByName(ctx, query, s.limit(args.Limit)))
 	case toolSearchByEmail:
 		var args emailSearchArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
-			return toolOutput{Error: "invalid arguments"}
+			return toolOutput{Error: "invalid arguments"}, nil
 		}
 		value := strings.ToLower(strings.TrimSpace(args.EmailOrDomain))
 		if value == "" || len(value) > maxQueryLength {
-			return toolOutput{Error: "email_or_domain is required"}
+			return toolOutput{Error: "email_or_domain is required"}, nil
 		}
 		return s.listOutput(directory.SearchByEmail(ctx, value, maxSearchLimit))
 	case toolGetCustomer:
 		var args getCustomerArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil || strings.TrimSpace(args.CustomerID) == "" {
-			return toolOutput{Error: "customer_id is required"}
+			return toolOutput{Error: "customer_id is required"}, nil
 		}
 		record, err := directory.Get(ctx, strings.TrimSpace(args.CustomerID))
-		if err != nil || record == nil {
-			return toolOutput{Error: "customer not found"}
+		if ierr.IsNotFound(err) || (err == nil && record == nil) {
+			return toolOutput{Error: "customer not found"}, nil
 		}
-		return toolOutput{Customer: record}
+		if err != nil {
+			return toolOutput{}, err
+		}
+		return toolOutput{Customer: record}, nil
 	default:
-		return toolOutput{Error: "unknown tool " + call.Function.Name}
+		return toolOutput{Error: "unknown tool " + call.Function.Name}, nil
 	}
 }
 
-func (s *CustomerMatchService) listOutput(records []CustomerRecord, err error) toolOutput {
-	if err != nil {
-		return toolOutput{Error: "search failed, try a different query"}
+// listOutput turns a refused search into a message for the model and returns any other failure.
+func (s *CustomerMatchService) listOutput(records []CustomerRecord, err error) (toolOutput, error) {
+	if ierr.IsValidation(err) {
+		return toolOutput{Error: "search refused: " + cerrors.FlattenHints(err)}, nil
 	}
-	return toolOutput{Customers: records, Count: lo.ToPtr(len(records))}
+	if err != nil {
+		return toolOutput{}, err
+	}
+	return toolOutput{Customers: records, Count: lo.ToPtr(len(records))}, nil
 }
 
 func (s *CustomerMatchService) limit(requested int) int {

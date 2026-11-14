@@ -105,6 +105,15 @@ func TestDerive(t *testing.T) {
 		require.False(t, d.EndDate.IsSet())
 		require.Empty(t, d.InvoiceSchedules)
 	})
+	t.Run("term longer than supported derives nothing", func(t *testing.T) {
+		r := base()
+		r.Term.TermMonths = read("100000000", 90, 1, "q")
+		r.Charges = []extraction.Charge{{Kind: contractagent.ChargeKindRecurringFixed, Amount: read("100", 90, 1, "q"),
+			BillingPeriod: read("MONTHLY", 90, 1, "q"), BillingTiming: read("advance", 90, 1, "q")}}
+		d := enricher().derive(r)
+		require.False(t, d.EndDate.IsSet())
+		require.Empty(t, d.InvoiceSchedules)
+	})
 	schedule := func(period, quoted, timing, amount string) []extraction.InvoiceSchedule {
 		r := base()
 		r.Charges = []extraction.Charge{{Kind: contractagent.ChargeKindRecurringFixed, Name: read("Fee", 90, 1, "q"), Amount: read(amount, 90, 1, "q"),
@@ -141,10 +150,14 @@ func TestNormalizeName(t *testing.T) {
 		"The Co":                 "the",
 		"  Initech, L.L.C.  ":    "initech",
 		"":                       "",
+		"Acme 東京":                "acme 東京",
+		"Müller & Söhne GmbH":    "müller söhne",
 	}
 	for in, want := range tests {
 		require.Equal(t, want, newCustomerDirectory(nil).normalizeName(in), in)
 	}
+	d := newCustomerDirectory(nil)
+	require.NotEqual(t, d.normalizeName("Acme 東京"), d.normalizeName("Acme 大阪"))
 }
 
 func TestNeedsCheck(t *testing.T) {

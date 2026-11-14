@@ -42,12 +42,14 @@ func ContractExtractionWorkflow(ctx workflow.Context, input models.ContractExtra
 	}
 	logger.Error("Contract extraction failed", "contract_id", input.ContractID, "error", err)
 
-	failCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+	// Disconnected so the failed status is still written when the workflow is cancelled.
+	disconnected, _ := workflow.NewDisconnectedContext(ctx)
+	failCtx := workflow.WithActivityOptions(disconnected, workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
 	})
 	markInput := models.MarkContractExtractionFailedInput{ContractExtractionWorkflowInput: input, Reason: failureReason(err)}
-	if markErr := workflow.ExecuteActivity(failCtx, ActivityMarkContractExtractionFailed, markInput).Get(ctx, nil); markErr != nil {
+	if markErr := workflow.ExecuteActivity(failCtx, ActivityMarkContractExtractionFailed, markInput).Get(failCtx, nil); markErr != nil {
 		logger.Error("Marking contract extraction failed did not succeed", "contract_id", input.ContractID, "error", markErr)
 	}
 	return err
@@ -72,12 +74,13 @@ func matchCustomer(ctx workflow.Context, input models.ContractExtractionWorkflow
 	}
 	logger.Error("Contract customer match failed", "contract_id", input.ContractID, "error", err)
 
-	markCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+	disconnected, _ := workflow.NewDisconnectedContext(ctx)
+	markCtx := workflow.WithActivityOptions(disconnected, workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
 	})
 	markInput := models.MarkCustomerMatchUnavailableInput{ContractExtractionWorkflowInput: input, Reason: failureReason(err)}
-	if markErr := workflow.ExecuteActivity(markCtx, ActivityMarkCustomerMatchUnavailable, markInput).Get(ctx, nil); markErr != nil {
+	if markErr := workflow.ExecuteActivity(markCtx, ActivityMarkCustomerMatchUnavailable, markInput).Get(markCtx, nil); markErr != nil {
 		logger.Error("Marking customer match unavailable did not succeed", "contract_id", input.ContractID, "error", markErr)
 	}
 }

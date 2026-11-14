@@ -5,7 +5,6 @@ package customermatch
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/agents/providers/openrouter"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
@@ -48,7 +48,7 @@ func (d *evalDirectory) SearchByEmail(_ context.Context, value string, limit int
 		return d.filter(limit, func(c CustomerRecord) bool { return strings.EqualFold(c.Email, value) }), nil
 	}
 	if lo.Contains([]string{"gmail.com", "outlook.com", "yahoo.com", "hotmail.com"}, value) {
-		return nil, errors.New("free mail domain")
+		return nil, ierr.NewError("free mail domain").WithHint("Search a company domain, not a free mail provider").Mark(ierr.ErrValidation)
 	}
 	return d.filter(limit, func(c CustomerRecord) bool { return strings.HasSuffix(strings.ToLower(c.Email), "@"+value) }), nil
 }
@@ -59,7 +59,7 @@ func (d *evalDirectory) Get(_ context.Context, id string) (*CustomerRecord, erro
 			return &c, nil
 		}
 	}
-	return nil, errors.New("not found")
+	return nil, ierr.NewError("not found").Mark(ierr.ErrNotFound)
 }
 
 func (d *evalDirectory) filter(limit int, keep func(CustomerRecord) bool) []CustomerRecord {
@@ -122,6 +122,7 @@ func TestEval(t *testing.T) {
 		mark := "PASS"
 		if !ok {
 			mark = "FAIL"
+			t.Errorf("%s: want best %s, got %s", tc.Name, lo.Ternary(want == "", "none", want), lo.Ternary(res.BestCustomerID == "", "none", res.BestCustomerID))
 		} else {
 			passed++
 		}

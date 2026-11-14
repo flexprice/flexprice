@@ -4,7 +4,6 @@ package ent
 
 import (
 	"context"
-	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -209,7 +208,7 @@ func (_c *ContractCreate) SetNillableExtractionStatus(v *string) *ContractCreate
 }
 
 // SetExtraction sets the "extraction" field.
-func (_c *ContractCreate) SetExtraction(v jsontext.Value) *ContractCreate {
+func (_c *ContractCreate) SetExtraction(v *types.ContractExtraction) *ContractCreate {
 	_c.mutation.SetExtraction(v)
 	return _c
 }

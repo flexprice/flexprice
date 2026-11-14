@@ -22,6 +22,9 @@ const (
 	toolSubmitMatch   = "submit_match"
 )
 
+// budgetSpentOutput answers a lookup the model asked for after the lookup budget was used up.
+const budgetSpentOutput = `{"error":"lookup budget used up, call submit_match now"}`
+
 const (
 	EvidenceExactName     = "exact_name"
 	EvidenceNameVariant   = "name_variant"

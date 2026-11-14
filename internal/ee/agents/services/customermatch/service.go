@@ -79,8 +79,14 @@ func (s *CustomerMatchService) Match(ctx context.Context, req *MatchRequest, dir
 		}
 	}
 
-	if _, err := s.step(ctx, run, directory, openrouter.ToolChoice{Function: toolSubmitMatch}); err != nil {
+	done, err := s.step(ctx, run, directory, openrouter.ToolChoice{Function: toolSubmitMatch})
+	if err != nil {
 		return nil, err
+	}
+	if !done {
+		return nil, ierr.NewError("model did not submit a customer match").
+			WithHint("The AI did not finish matching the customer").
+			Mark(ierr.ErrHTTPClient)
 	}
 	return s.finish(ctx, run), nil
 }
@@ -116,15 +122,17 @@ func (s *CustomerMatchService) step(ctx context.Context, run *matchRun, director
 	run.messages = append(run.messages, openrouter.Message{Role: openrouter.RoleAssistant, ToolCalls: resp.ToolCalls})
 	for _, call := range resp.ToolCalls {
 		if call.Function.Name == toolSubmitMatch {
-			s.applySubmission(run, call.Function.Arguments)
+			if err := s.applySubmission(run, call.Function.Arguments); err != nil {
+				return false, err
+			}
 			return true, nil
 		}
-		run.result.ToolCalls++
-		output, err := s.runTool(ctx, call, directory, run.seen)
-		if err != nil {
-			return false, ierr.WithError(err).
-				WithHint("Customer matching took too long").
-				Mark(ierr.ErrHTTPClient)
+		output := budgetSpentOutput
+		if run.result.ToolCalls < s.maxToolCalls {
+			run.result.ToolCalls++
+			if output, err = s.runTool(ctx, call, directory, run.seen); err != nil {
+				return false, err
+			}
 		}
 		run.messages = append(run.messages, openrouter.Message{
 			Role:       openrouter.RoleTool,
@@ -136,10 +144,12 @@ func (s *CustomerMatchService) step(ctx context.Context, run *matchRun, director
 }
 
 // applySubmission keeps only candidates the tools actually returned, so the model cannot invent ids.
-func (s *CustomerMatchService) applySubmission(run *matchRun, arguments string) {
+func (s *CustomerMatchService) applySubmission(run *matchRun, arguments string) error {
 	var sub submission
 	if err := json.Unmarshal([]byte(arguments), &sub); err != nil {
-		return
+		return ierr.WithError(err).
+			WithHint("The AI returned an invalid customer match").
+			Mark(ierr.ErrHTTPClient)
 	}
 
 	byID := map[string]Candidate{}
@@ -174,6 +184,7 @@ func (s *CustomerMatchService) applySubmission(run *matchRun, arguments string) 
 			run.result.BestCustomerID = best
 		}
 	}
+	return nil
 }
 
 func (s *CustomerMatchService) finish(ctx context.Context, run *matchRun) *MatchResult {

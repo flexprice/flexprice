@@ -70,7 +70,7 @@ func (r *repository) Create(ctx context.Context, c *domainContract.Contract) err
 		create.SetExtractionStatus(string(c.ExtractionStatus()))
 	}
 	if len(c.Extraction()) > 0 {
-		create.SetExtraction(c.Extraction())
+		create.SetExtraction(types.NewContractExtraction(c.Extraction()))
 	}
 	if c.ExtractionError() != "" {
 		create.SetExtractionError(c.ExtractionError())
@@ -322,7 +322,7 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 	if len(c.Extraction()) == 0 {
 		update.ClearExtraction()
 	} else {
-		update.SetExtraction(c.Extraction())
+		update.SetExtraction(types.NewContractExtraction(c.Extraction()))
 	}
 	if c.ExtractionError() == "" {
 		update.ClearExtractionError()
