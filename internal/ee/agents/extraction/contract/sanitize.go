@@ -10,15 +10,7 @@ import (
 
 type termVisitor func(path string, t *extraction.Term, allowed []string)
 
-// ForEachTerm calls fn for every model-filled term with its JSON path, e.g. "customer.legal_name" or "charges[0].billing_period".
-func ForEachTerm(r *extraction.Result, fn func(path string, t *extraction.Term)) {
-	if r == nil {
-		return
-	}
-	eachTerm(r, func(path string, t *extraction.Term, _ []string) { fn(path, t) })
-}
-
-func eachTerm(r *extraction.Result, visit termVisitor) {
+func (s *ContractExtractionService) eachTerm(r *extraction.Result, visit termVisitor) {
 	visit("contract_type", &r.ContractType, contractTypes)
 
 	c := &r.Customer
@@ -76,8 +68,8 @@ func eachTerm(r *extraction.Result, visit termVisitor) {
 	}
 }
 
-func sanitize(r *extraction.Result) {
-	eachTerm(r, func(_ string, t *extraction.Term, allowed []string) { sanitizeTerm(t, allowed) })
+func (s *ContractExtractionService) sanitize(r *extraction.Result) {
+	s.eachTerm(r, func(_ string, t *extraction.Term, allowed []string) { s.sanitizeTerm(t, allowed) })
 
 	for i := range r.Documents {
 		d := &r.Documents[i]
@@ -98,15 +90,27 @@ func sanitize(r *extraction.Result) {
 		}
 	}
 
-	r.Documents = nonNil(r.Documents)
-	r.Charges = nonNil(r.Charges)
-	r.Commitments = nonNil(r.Commitments)
-	r.Credits = nonNil(r.Credits)
-	r.ServiceLevels = nonNil(r.ServiceLevels)
-	r.Doubts = nonNil(r.Doubts)
+	if r.Documents == nil {
+		r.Documents = []extraction.Document{}
+	}
+	if r.Charges == nil {
+		r.Charges = []extraction.Charge{}
+	}
+	if r.Commitments == nil {
+		r.Commitments = []extraction.Commitment{}
+	}
+	if r.Credits == nil {
+		r.Credits = []extraction.Credit{}
+	}
+	if r.ServiceLevels == nil {
+		r.ServiceLevels = []extraction.ServiceLevel{}
+	}
+	if r.Doubts == nil {
+		r.Doubts = []string{}
+	}
 }
 
-func sanitizeTerm(t *extraction.Term, allowed []string) {
+func (s *ContractExtractionService) sanitizeTerm(t *extraction.Term, allowed []string) {
 	t.Value = strings.TrimSpace(t.Value)
 	t.Quote = strings.TrimSpace(t.Quote)
 	t.Note = strings.TrimSpace(t.Note)
@@ -115,7 +119,7 @@ func sanitizeTerm(t *extraction.Term, allowed []string) {
 	t.Derived = false
 
 	if len(allowed) > 0 && t.Value != "" {
-		if v, ok := matchAllowed(t.Value, allowed); ok {
+		if v, ok := s.matchAllowed(t.Value, allowed); ok {
 			t.Value = v
 		} else {
 			t.Note = strings.TrimSpace(t.Note + " Read as \"" + t.Value + "\", which is not an allowed value.")
@@ -131,18 +135,11 @@ func sanitizeTerm(t *extraction.Term, allowed []string) {
 	}
 }
 
-func matchAllowed(v string, allowed []string) (string, bool) {
+func (s *ContractExtractionService) matchAllowed(v string, allowed []string) (string, bool) {
 	for _, a := range allowed {
 		if strings.EqualFold(v, a) {
 			return a, true
 		}
 	}
 	return "", false
-}
-
-func nonNil[T any](s []T) []T {
-	if s == nil {
-		return []T{}
-	}
-	return s
 }

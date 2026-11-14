@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 
@@ -15,17 +16,20 @@ import (
 type ContractExtractionService struct {
 	client openrouter.OpenRouterClient
 	logger *logger.Logger
+	schema json.RawMessage
 }
 
 func NewContractExtractionService(client openrouter.OpenRouterClient, logger *logger.Logger) extraction.ExtractionServiceInterface {
-	return &ContractExtractionService{
+	s := &ContractExtractionService{
 		client: client,
 		logger: logger,
 	}
+	s.schema = s.responseSchema()
+	return s
 }
 
 func (s *ContractExtractionService) Extract(ctx context.Context, req *extraction.ExtractRequest) (*extraction.Extraction, error) {
-	if err := validateRequest(req); err != nil {
+	if err := s.validateRequest(req); err != nil {
 		return nil, err
 	}
 	model := strings.TrimSpace(req.Model)
@@ -38,18 +42,18 @@ func (s *ContractExtractionService) Extract(ctx context.Context, req *extraction
 			Mark(ierr.ErrServiceUnavailable)
 	}
 
-	orReq := buildRequest(model, req)
+	orReq := s.buildRequest(model, req)
 	var usage *openrouter.Usage
 	for attempt := 1; attempt <= maxParseAttempts; attempt++ {
 		resp, err := s.client.Complete(ctx, orReq)
 		if err != nil {
 			return nil, err
 		}
-		usage = addUsage(usage, resp.Usage)
+		usage = s.addUsage(usage, resp.Usage)
 
-		result, perr := parseResult(resp.Content)
+		result, perr := s.parseResult(resp.Content)
 		if perr == nil {
-			sanitize(result)
+			s.sanitize(result)
 			logged := lo.FromPtr(usage)
 			s.logger.Info(ctx, "contract extracted",
 				"model", resp.Model,
@@ -67,7 +71,7 @@ func (s *ContractExtractionService) Extract(ctx context.Context, req *extraction
 	return nil, ierr.NewError("contract extraction failed").Mark(ierr.ErrInternal)
 }
 
-func validateRequest(req *extraction.ExtractRequest) error {
+func (s *ContractExtractionService) validateRequest(req *extraction.ExtractRequest) error {
 	if req == nil || len(req.Data) == 0 {
 		return ierr.NewError("file is required").
 			WithHint("Upload a contract file").
@@ -83,12 +87,11 @@ func validateRequest(req *extraction.ExtractRequest) error {
 	}
 }
 
-func buildRequest(model string, req *extraction.ExtractRequest) *openrouter.Request {
-	file := openrouter.ContentPart{Type: openrouter.ContentTypeImageURL, ImageURL: &openrouter.ImageURL{URL: openrouter.DataURL(req.MediaType, req.Data)}}
+func (s *ContractExtractionService) buildRequest(model string, req *extraction.ExtractRequest) *openrouter.Request {
+	file := openrouter.ContentPart{Type: openrouter.ContentTypeImageURL, ImageURL: &openrouter.ImageURL{URL: s.dataURL(req.MediaType, req.Data)}}
 	if req.MediaType == MediaTypePDF {
-		file = openrouter.ContentPart{Type: openrouter.ContentTypeFile, File: &openrouter.FilePart{Filename: fileName(req.FileName), FileData: openrouter.PDFDataURL(req.Data)}}
+		file = openrouter.ContentPart{Type: openrouter.ContentTypeFile, File: &openrouter.FilePart{Filename: s.fileName(req.FileName), FileData: s.dataURL(req.MediaType, req.Data)}}
 	}
-	temperature := 0.0
 	return &openrouter.Request{
 		Model: model,
 		Messages: []openrouter.Message{
@@ -97,20 +100,19 @@ func buildRequest(model string, req *extraction.ExtractRequest) *openrouter.Requ
 		},
 		ResponseFormat: &openrouter.ResponseFormat{
 			Type:       openrouter.ResponseFormatJSONSchema,
-			JSONSchema: &openrouter.JSONSchema{Name: schemaName, Strict: true, Schema: ResponseSchema()},
+			JSONSchema: &openrouter.JSONSchema{Name: schemaName, Strict: true, Schema: s.schema},
 		},
-		Temperature: &temperature,
 	}
 }
 
-func fileName(name string) string {
+func (s *ContractExtractionService) fileName(name string) string {
 	if n := strings.TrimSpace(name); n != "" {
 		return n
 	}
 	return "contract.pdf"
 }
 
-func addUsage(a, b *openrouter.Usage) *openrouter.Usage {
+func (s *ContractExtractionService) addUsage(a, b *openrouter.Usage) *openrouter.Usage {
 	if a == nil {
 		return b
 	}
@@ -124,8 +126,8 @@ func addUsage(a, b *openrouter.Usage) *openrouter.Usage {
 	}
 }
 
-func parseResult(content string) (*extraction.Result, error) {
-	text := jsonObjectText(content)
+func (s *ContractExtractionService) parseResult(content string) (*extraction.Result, error) {
+	text := s.jsonObjectText(content)
 	if text == "" {
 		return nil, ierr.NewError("model output is not JSON").
 			WithHint("The AI model returned an unreadable result").
@@ -140,7 +142,7 @@ func parseResult(content string) (*extraction.Result, error) {
 	return &result, nil
 }
 
-func jsonObjectText(content string) string {
+func (s *ContractExtractionService) jsonObjectText(content string) string {
 	t := strings.TrimSpace(content)
 	if strings.HasPrefix(t, "```") {
 		t = strings.TrimPrefix(strings.TrimPrefix(t, "```json"), "```")
@@ -154,4 +156,8 @@ func jsonObjectText(content string) string {
 		return t[start : end+1]
 	}
 	return ""
+}
+
+func (s *ContractExtractionService) dataURL(mediaType string, data []byte) string {
+	return "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(data)
 }

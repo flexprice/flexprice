@@ -18,6 +18,9 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/dynamodb"
+	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
+	contractagent "github.com/flexprice/flexprice/internal/ee/agents/extraction/contract"
+	"github.com/flexprice/flexprice/internal/ee/agents/openrouter"
 	"github.com/flexprice/flexprice/internal/ee/analytics"
 	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
@@ -347,6 +350,9 @@ func main() {
 			service.NewAddonService,
 			service.NewProductService,
 			contractsvc.NewContractService,
+			openrouter.NewClient,
+			provideContractExtractionService,
+			contractsvc.NewContractIngestService,
 			pobsvc.NewPerformanceObligationService,
 			accountingperiodsvc.NewAccountingPeriodService,
 			journalsvc.NewJournalService,
@@ -449,6 +455,7 @@ func provideHandlers(
 	addonService service.AddonService,
 	productService service.ProductService,
 	contractService contractsvc.ContractService,
+	contractIngestService contractsvc.ContractIngestService,
 	pobService pobsvc.PerformanceObligationService,
 	accountingPeriodService accountingperiodsvc.AccountingPeriodService,
 	journalService journalsvc.JournalService,
@@ -528,7 +535,7 @@ func provideHandlers(
 		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, temporalService, logger),
 		Product:                  v1.NewProductHandler(productService, logger),
-		Contract:                 v1.NewContractHandler(contractService, logger),
+		Contract:                 v1.NewContractHandler(contractService, contractIngestService, logger),
 		PerformanceObligation:    v1.NewPerformanceObligationHandler(pobService, logger),
 		AccountingPeriod:         v1.NewAccountingPeriodHandler(accountingPeriodService, logger),
 		JournalEntry:             v1.NewJournalEntryHandler(journalService, logger),
@@ -960,4 +967,8 @@ func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.Rev
 
 func provideBillingEntityScope(s service.BillingEntityService) interfaces.BillingEntityScope {
 	return s
+}
+
+func provideContractExtractionService(client openrouter.OpenRouterClient, log *logger.Logger) extraction.ExtractionServiceInterface {
+	return contractagent.NewContractExtractionService(client, log)
 }

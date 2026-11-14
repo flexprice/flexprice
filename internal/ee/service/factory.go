@@ -163,6 +163,7 @@ type ServiceParams struct {
 	BillingInstalmentRepo        billingterm.InstalmentRepository
 	ProductRepo                  productRepo.Repository
 	ContractService              contractsvc.ContractService
+	ContractIngestService        contractsvc.ContractIngestService
 	POBService                   pobsvc.PerformanceObligationService
 	JournalRepo                  journalRepo.Repository
 	JournalService               journalsvc.JournalService
@@ -295,6 +296,7 @@ func NewServiceParams(
 	billingInstalmentRepo billingterm.InstalmentRepository,
 	productRepo productRepo.Repository,
 	contractService contractsvc.ContractService,
+	contractIngestService contractsvc.ContractIngestService,
 	pobService pobsvc.PerformanceObligationService,
 	journalRepo journalRepo.Repository,
 	journalService journalsvc.JournalService,
@@ -390,6 +392,7 @@ func NewServiceParams(
 		BillingInstalmentRepo:        billingInstalmentRepo,
 		ProductRepo:                  productRepo,
 		ContractService:              contractService,
+		ContractIngestService:        contractIngestService,
 		POBService:                   pobService,
 		JournalRepo:                  journalRepo,
 		JournalService:               journalService,

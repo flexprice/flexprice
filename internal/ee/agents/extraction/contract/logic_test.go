@@ -30,7 +30,7 @@ func TestSanitizeTerm(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.in
-			sanitizeTerm(&got, tt.allowed)
+			extractor().sanitizeTerm(&got, tt.allowed)
 			require.Equal(t, tt.want, got)
 		})
 	}
@@ -38,7 +38,7 @@ func TestSanitizeTerm(t *testing.T) {
 
 func TestSanitize_ResultShape(t *testing.T) {
 	r := &extraction.Result{Documents: []extraction.Document{{Type: "SOW", PageStart: -1}, {Type: "brochure"}}, Charges: []extraction.Charge{{Kind: "Subscription"}}}
-	sanitize(r)
+	extractor().sanitize(r)
 	require.Equal(t, DocumentTypeOther, r.Documents[0].Type)
 	require.Equal(t, 0, r.Documents[0].PageStart)
 	require.Equal(t, DocumentTypeOther, r.Documents[1].Type)
@@ -50,7 +50,7 @@ func TestSanitize_ResultShape(t *testing.T) {
 
 func TestResponseSchema_StrictShape(t *testing.T) {
 	var root map[string]any
-	require.NoError(t, json.Unmarshal(ResponseSchema(), &root))
+	require.NoError(t, json.Unmarshal(extractor().schema, &root))
 
 	var walk func(path string, node map[string]any)
 	walk = func(path string, node map[string]any) {
