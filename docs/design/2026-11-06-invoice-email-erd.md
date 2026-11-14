@@ -203,7 +203,7 @@ type Provider interface {
 - Resend adapter sends with `Idempotency-Key = email_log.id`, tags (tenant, environment, email id, region) and our own `Message-ID: <email_log.id@mail.flexprice.io>`.
 - Service `internal/ee/service/email_notification.go`: `SendInvoiceEmail` loads invoice, customer, tenant and setting and inserts `queued`; nothing else happens in the request.
 - `EmailDispatchWorkflow` (Temporal schedule, every minute, one run at a time) lists environments with queued emails, takes one email from each in turn (manual sends first, then oldest) and sends at most `email.send_rate_per_second`. A composer per `template_key` builds each email's content.
-- An email that cannot be sent now stays `queued` and nothing is written: a 429 ends the run, three provider errors in a row end it, a PDF not ready waits. 4xx marks `failed`, and so does an email still queued after 24 hours.
+- An email that cannot be sent now stays `queued` and nothing is written: a 429 ends the run, 20 provider errors in a row end it, a PDF not ready waits. 4xx marks `failed`, and so does an email still queued after 24 hours. An email queued before the environment turned emails off is marked `skipped`.
 - Auto trigger in the integration-events dispatch list; the one-auto-email index stops redelivery from double-sending.
 - Everything ships behind `email.enabled` plus a set `email.provider`; with no provider, customer emails stay off.
 

@@ -159,5 +159,6 @@ type EmailDispatchWorkflowInput struct{}
 type EmailDispatchWorkflowResult struct {
 	Sent     int `json:"sent"`
 	Failed   int `json:"failed"`
+	Skipped  int `json:"skipped"`
 	Deferred int `json:"deferred"`
 }

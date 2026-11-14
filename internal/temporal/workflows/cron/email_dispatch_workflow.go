@@ -33,6 +33,6 @@ func EmailDispatchWorkflow(ctx workflow.Context, _ cronModels.EmailDispatchWorkf
 		return nil, err
 	}
 
-	log.Info("EmailDispatchWorkflow completed", "sent", result.Sent, "failed", result.Failed, "deferred", result.Deferred)
+	log.Info("EmailDispatchWorkflow completed", "sent", result.Sent, "failed", result.Failed, "skipped", result.Skipped, "deferred", result.Deferred)
 	return &result, nil
 }
