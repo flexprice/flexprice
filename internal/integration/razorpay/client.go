@@ -719,15 +719,14 @@ func (c *Client) CancelPaymentLink(ctx context.Context, paymentLinkID string) (m
 	return result, nil
 }
 
-// CancelInvoice cancels an issued invoice. The SDK has no Invoice.Cancel, so this
-// goes through the raw request client.
+// CancelInvoice cancels an issued invoice. SDK: Invoice.Cancel.
 func (c *Client) CancelInvoice(ctx context.Context, invoiceID string) (map[string]interface{}, error) {
 	rc, err := c.sdkClient(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := rc.Request.Post("/v1/invoices/"+invoiceID+"/cancel", nil, nil)
+	result, err := rc.Invoice.Cancel(invoiceID, nil, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to cancel Razorpay invoice", "error", err, "invoice_id", invoiceID)
 		return nil, ierr.NewError("failed to cancel Razorpay invoice").
