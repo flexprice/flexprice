@@ -90,9 +90,10 @@ func (s *attemptTestCheckoutService) List(_ context.Context, _ *types.CheckoutSe
 }
 
 func TestPaymentAttemptPayloadBuilder_BuildPayload(t *testing.T) {
-	payment := &dto.PaymentResponse{ID: "pay_01", DestinationID: "inv_01", GatewayTrackingID: lo.ToPtr("plink_01")}
-	session := &dto.CheckoutSessionResponse{ID: "chk_01", CustomerID: "cust_01", Metadata: types.Metadata{"order": "o_1"},
-		Payment: &dto.CheckoutPaymentBlock{ID: "pay_01", Amount: decimal.NewFromInt(500), Currency: "inr"}}
+	payment := &dto.PaymentResponse{ID: "pay_01", DestinationID: "inv_01", GatewayTrackingID: lo.ToPtr("plink_01"),
+		Amount: decimal.NewFromInt(500), Currency: "inr"}
+	// List returns sessions without a payment block; the builder fills it from the payment.
+	session := &dto.CheckoutSessionResponse{ID: "chk_01", CustomerID: "cust_01", Metadata: types.Metadata{"order": "o_1"}}
 
 	tests := []struct {
 		name     string

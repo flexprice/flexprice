@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -93,7 +94,10 @@ func (b *PaymentAttemptPayloadBuilder) BuildPayload(ctx context.Context, eventTy
 
 	var session *webhookDto.CheckoutSession
 	if sessions != nil && len(sessions.Items) > 0 {
-		session = webhookDto.NewCheckoutSession(sessions.Items[0])
+		item := sessions.Items[0]
+		// List leaves the payment block empty; the session's amount comes from this payment.
+		item.Payment = &dto.CheckoutPaymentBlock{ID: payment.ID, Status: payment.PaymentStatus, Amount: payment.Amount, Currency: payment.Currency}
+		session = webhookDto.NewCheckoutSession(item)
 	}
 
 	return json.Marshal(webhookDto.PaymentAttemptWebhookPayload{
