@@ -18,9 +18,11 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/dynamodb"
-	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
-	contractagent "github.com/flexprice/flexprice/internal/ee/agents/extraction/contract"
-	"github.com/flexprice/flexprice/internal/ee/agents/reducto"
+	"github.com/flexprice/flexprice/internal/ee/agents/providers/openrouter"
+	"github.com/flexprice/flexprice/internal/ee/agents/providers/reducto"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/customermatch"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
+	contractagent "github.com/flexprice/flexprice/internal/ee/agents/services/extraction/contract"
 	"github.com/flexprice/flexprice/internal/ee/analytics"
 	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
@@ -351,7 +353,9 @@ func main() {
 			service.NewProductService,
 			contractsvc.NewContractService,
 			reducto.NewClient,
+			openrouter.NewClient,
 			provideContractExtractionService,
+			customermatch.NewCustomerMatchService,
 			contractsvc.NewContractIngestService,
 			pobsvc.NewPerformanceObligationService,
 			accountingperiodsvc.NewAccountingPeriodService,
@@ -703,6 +707,7 @@ func startServer(
 	activityConsumer *activity.Consumer,
 	emailNotificationService service.EmailNotificationService,
 	params service.ServiceParams,
+	contractIngest contractsvc.ContractIngestService,
 ) {
 	mode := cfg.Deployment.Mode
 	if mode == "" {
@@ -719,7 +724,7 @@ func startServer(
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, true)
 		startRouter(lc, router, log)
-		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
+		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService, contractIngest)
 
 		// Registered last so fx's reverse-order stop drains HTTP before deps close.
 		startAPIServer(lc, r, cfg, log)
@@ -737,7 +742,7 @@ func startServer(
 		// consumed and delivered via Svix/native in the same process.
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, false)
 		startRouter(lc, router, log)
-		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
+		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService, contractIngest)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal(context.Background(), "Kafka consumer required for consumer mode")
@@ -760,6 +765,7 @@ func startTemporalWorker(
 	temporalService temporalservice.TemporalService,
 	params service.ServiceParams,
 	webhookService *webhook.WebhookService,
+	contractIngest contractsvc.ContractIngestService,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) (err error) {
@@ -780,7 +786,7 @@ func startTemporalWorker(
 			}
 
 			// Register workflows and activities first (this creates the workers)
-			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params, webhookService); err != nil {
+			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params, webhookService, contractIngest); err != nil {
 				return fmt.Errorf("failed to register workflows and activities: %w", err)
 			}
 

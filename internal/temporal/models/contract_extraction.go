@@ -26,3 +26,8 @@ type MarkContractExtractionFailedInput struct {
 	ContractExtractionWorkflowInput
 	Reason string `json:"reason"`
 }
+
+type MarkCustomerMatchUnavailableInput struct {
+	ContractExtractionWorkflowInput
+	Reason string `json:"reason"`
+}

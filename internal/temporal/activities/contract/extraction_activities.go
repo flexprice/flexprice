@@ -14,6 +14,7 @@ import (
 
 const (
 	errTypeContractExtraction = "ContractExtractionError"
+	errTypeCustomerMatch      = "ContractCustomerMatchError"
 	defaultFailureReason      = "Contract extraction failed"
 )
 
@@ -57,6 +58,43 @@ func (a *ExtractionActivities) MarkContractExtractionFailed(ctx context.Context,
 		a.logger.Error(ctx, "MarkContractExtractionFailed activity failed", "error", err, "contract_id", input.ContractID)
 		if ierr.IsNotFound(err) {
 			return temporal.NewNonRetryableApplicationError(reason(err), errTypeContractExtraction, err)
+		}
+		return err
+	}
+	return nil
+}
+
+func (a *ExtractionActivities) MatchContractCustomer(ctx context.Context, input models.ContractExtractionWorkflowInput) error {
+	if err := input.Validate(); err != nil {
+		return temporal.NewNonRetryableApplicationError(reason(err), errTypeCustomerMatch, err)
+	}
+	ctx = withScope(ctx, input)
+
+	if err := a.ingest.MatchCustomer(ctx, input.ContractID); err != nil {
+		a.logger.Error(ctx, "MatchContractCustomer activity failed",
+			"error", err,
+			"contract_id", input.ContractID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
+		if isPermanent(err) || ierr.IsServiceUnavailable(err) {
+			return temporal.NewNonRetryableApplicationError(reason(err), errTypeCustomerMatch, err)
+		}
+		return temporal.NewApplicationErrorWithCause(reason(err), errTypeCustomerMatch, err)
+	}
+	return nil
+}
+
+func (a *ExtractionActivities) MarkCustomerMatchUnavailable(ctx context.Context, input models.MarkCustomerMatchUnavailableInput) error {
+	if err := input.Validate(); err != nil {
+		return temporal.NewNonRetryableApplicationError(reason(err), errTypeCustomerMatch, err)
+	}
+	ctx = withScope(ctx, input.ContractExtractionWorkflowInput)
+
+	if err := a.ingest.MarkCustomerMatchUnavailable(ctx, input.ContractID, input.Reason); err != nil {
+		a.logger.Error(ctx, "MarkCustomerMatchUnavailable activity failed", "error", err, "contract_id", input.ContractID)
+		if ierr.IsNotFound(err) {
+			return temporal.NewNonRetryableApplicationError(reason(err), errTypeCustomerMatch, err)
 		}
 		return err
 	}

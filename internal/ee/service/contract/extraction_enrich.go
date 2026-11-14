@@ -1,25 +1,23 @@
 package contract
 
 import (
-	"context"
-
-	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/ee/agents/extraction"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/types"
 )
 
 const DefaultReviewThreshold = 90
 
 const (
-	CustomerMatchExisting = "existing"
-	CustomerMatchNew      = "new"
+	CustomerMatchPending     = "pending"
+	CustomerMatchExisting    = "existing"
+	CustomerMatchPossible    = "possible"
+	CustomerMatchNew         = "new"
+	CustomerMatchUnavailable = "unavailable"
 )
 
 const (
-	MatchedOnEmail       = "billing_email"
-	MatchedOnLegalName   = "legal_name"
-	MatchedOnEmailDomain = "email_domain"
+	DefaultExistingThreshold = 85
+	DefaultPossibleThreshold = 40
 )
 
 const maxConfidence = 100
@@ -33,10 +31,6 @@ var genericEmailDomains = map[string]bool{
 
 var legalSuffixes = []string{"incorporated", "inc", "llc", "l.l.c", "ltd", "limited", "corp", "corporation",
 	"co", "company", "plc", "gmbh", "pvt", "private", "llp", "lp", "sa", "ag", "bv", "pty"}
-
-type CustomerFinder interface {
-	GetCustomers(ctx context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error)
-}
 
 // enrich adds the derived dates and review counts to an extracted result.
 func (c *contractIngestService) enrich(result *extraction.Result) error {
