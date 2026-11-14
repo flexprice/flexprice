@@ -2,7 +2,6 @@ package razorpay
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -220,30 +219,10 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	// Razorpay expects amounts in smallest currency unit
 	amountInSmallestUnit := req.Amount.Mul(decimal.NewFromInt(100)).IntPart()
 
-	// Metadata, then line items, then flexprice keys last so routing keys can't be overwritten.
+	// Metadata, then flexprice keys last so routing keys can't be overwritten.
 	notes := make(map[string]string)
 	for k, v := range req.Metadata {
 		notes[k] = lo.Substring(v, 0, razorpayNoteMaxLen)
-	}
-
-	// Add all line items to notes with name as key and amount as value
-	if len(invoiceResp.LineItems) > 0 {
-		for i, item := range invoiceResp.LineItems {
-			// Get display name with fallback
-			itemName := fmt.Sprintf("Item %d", i+1)
-			if item.DisplayName != nil && *item.DisplayName != "" {
-				itemName = *item.DisplayName
-			} else if item.PlanDisplayName != nil && *item.PlanDisplayName != "" {
-				itemName = *item.PlanDisplayName
-			}
-
-			// Add line item with amount in the format "name: amount currency"
-			notes[itemName] = lo.Substring(fmt.Sprintf("%s %s", item.Amount.StringFixed(2), strings.ToUpper(item.Currency)), 0, razorpayNoteMaxLen)
-		}
-
-		s.logger.Info(ctx, "added line items to notes",
-			"invoice_id", req.InvoiceID,
-			"line_items_count", len(invoiceResp.LineItems))
 	}
 
 	notes["flexprice_invoice_id"] = req.InvoiceID

@@ -204,6 +204,18 @@ func (s *PaymentServiceSuite) TestCreatePaymentLink_TaxIDCollection() {
 		s.Require().Error(err)
 		s.True(ierr.IsValidation(err), "expected validation-class error, got: %v", err)
 	})
+
+	s.Run("rejected_with_options_for_another_gateway", func() {
+		req := baseReq()
+		req.GatewayOptions = &dto.PaymentGatewayOptions{
+			Stripe:   &dto.StripePaymentGatewayOptions{TaxIDCollectionEnabled: lo.ToPtr(true)},
+			Razorpay: &dto.RazorpayPaymentGatewayOptions{NotifyCustomer: true},
+		}
+
+		_, err := s.service.CreatePayment(ctx, req)
+		s.Require().Error(err)
+		s.True(ierr.IsValidation(err), "expected validation-class error, got: %v", err)
+	})
 }
 
 func (s *PaymentServiceSuite) TestPaymentProcessor_PaymentLinkFlow() {

@@ -47,7 +47,9 @@ func (o *PaymentGatewayOptions) Validate(paymentMethodType types.PaymentMethodTy
 		return nil
 	}
 	if o.Stripe != nil {
-		return validateGatewayOptions(types.PaymentGatewayTypeStripe, paymentMethodType, paymentGateway)
+		if err := validateGatewayOptions(types.PaymentGatewayTypeStripe, paymentMethodType, paymentGateway); err != nil {
+			return err
+		}
 	}
 	if o.Razorpay != nil {
 		return validateGatewayOptions(types.PaymentGatewayTypeRazorpay, paymentMethodType, paymentGateway)
