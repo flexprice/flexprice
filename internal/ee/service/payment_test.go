@@ -818,6 +818,33 @@ func (s *PaymentServiceSuite) TestProcessPaymentCountsOutcome() {
 	s.Equal(before+1, r.Sum("payment.transitions", match))
 }
 
+// A webhook-settled charge already at the gateway (PENDING) or in flight (PROCESSING) is not charged again.
+func (s *PaymentServiceSuite) TestProcessPayment_RejectsSubmittedWebhookCharge() {
+	processor := NewPaymentProcessorService(ServiceParams{
+		Logger:          s.GetLogger(),
+		Config:          s.GetConfig(),
+		DB:              s.GetDB(),
+		PaymentRepo:     s.GetStores().PaymentRepo,
+		InvoiceRepo:     s.GetStores().InvoiceRepo,
+		CustomerRepo:    s.GetStores().CustomerRepo,
+		TenantRepo:      s.GetStores().TenantRepo,
+		EnvironmentRepo: s.GetStores().EnvironmentRepo,
+		SettingsRepo:    s.GetStores().SettingsRepo,
+	})
+	for _, status := range []types.PaymentStatus{types.PaymentStatusPending, types.PaymentStatusProcessing} {
+		s.Run(string(status), func() {
+			p := s.newMetricsPayment("pay_submitted_"+string(status), string(types.PaymentGatewayTypeRazorpay), types.PaymentMethodTypeUPI, status)
+
+			_, err := processor.ProcessPayment(s.GetContext(), p.ID)
+			s.True(ierr.IsInvalidOperation(err))
+
+			got, err := s.GetStores().PaymentRepo.Get(s.GetContext(), p.ID)
+			s.Require().NoError(err)
+			s.Equal(status, got.PaymentStatus)
+		})
+	}
+}
+
 // Creation counts as the first transition; checkout payments carry the checkout marker.
 func (s *PaymentServiceSuite) TestPaymentCreationCountedWithCheckoutLabel() {
 	r := metricstest.Install(s.T())

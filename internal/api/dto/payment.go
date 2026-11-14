@@ -329,6 +329,9 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 	if r.PaymentGateway != nil {
 		p.PaymentGateway = lo.ToPtr(string(*r.PaymentGateway))
 	}
+	if p.SettlesByWebhook() {
+		p.PaymentStatus = types.PaymentStatusInitiated
+	}
 
 	if r.PaymentMethodType == types.PaymentMethodTypeOffline {
 		p.TrackAttempts = false

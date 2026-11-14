@@ -66,6 +66,17 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 				}).
 				Mark(ierr.ErrInvalidOperation)
 		}
+	} else if paymentObj.SettlesByWebhook() {
+		// PENDING means the gateway already has the charge; processing it again would charge twice.
+		if paymentObj.PaymentStatus != types.PaymentStatusInitiated {
+			return paymentObj, ierr.NewError("payment is not in initiated state").
+				WithHint("This charge has already been submitted to the gateway").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id": paymentObj.ID,
+					"status":     paymentObj.PaymentStatus,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
 	} else {
 		// If payment is not in pending state, return error
 		if paymentObj.PaymentStatus != types.PaymentStatusPending {
@@ -206,7 +217,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			p.publishSystemEvent(ctx, types.WebhookEventPaymentFailed, paymentObj.ID)
 		}
 	} else if settledByWebhook {
-		paymentObj.PaymentStatus = types.PaymentStatusProcessing
+		paymentObj.PaymentStatus = types.PaymentStatusPending
 		paymentObj.SucceededAt = nil
 	} else {
 		// For payment links, keep as pending until external payment completion
