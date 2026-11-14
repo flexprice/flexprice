@@ -19,7 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/types/integrations"
-	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
 // AutoChargeRequest is the input for PaymentService.AutoCharge.
@@ -32,13 +31,6 @@ type AutoChargeRequest struct {
 	FlexPricePaymentID string          // FlexPrice payment.ID — embedded in Razorpay notes for webhook reconciliation
 	Contact            string          // Customer contact number — required by Razorpay for recurring/token-based charges
 	Email              string          // Customer email — sent alongside contact for Razorpay-side validation
-}
-
-// PaymentFailure is a Razorpay decline to apply to a Flexprice payment.
-type PaymentFailure struct {
-	RazorpayPaymentID string
-	PaymentMethodID   string
-	Message           string
 }
 
 // AutoChargeResult is the output of PaymentService.AutoCharge.
@@ -1019,37 +1011,6 @@ func isOrderAlreadyProcessingError(err error) bool {
 }
 
 const refundLockTTL = 15 * time.Minute
-
-// MarkPaymentFailed moves a payment to FAILED with Razorpay's reason; the payment.failed webhook and the gateway sync share it.
-func (s *PaymentService) MarkPaymentFailed(ctx context.Context, p *dto.PaymentResponse, failure PaymentFailure, paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) error {
-	// A redelivered decline finds the payment already FAILED and was reported the first time.
-	reportAutoChargeDecline := p.PaymentStatus != types.PaymentStatusFailed &&
-		p.Metadata[types.MetadataKeyPaymentTrigger] == types.PaymentTriggerInvoiceAutoCharge
-
-	message := lo.CoalesceOrEmpty(failure.Message, "Payment failed")
-	updateReq := dto.UpdatePaymentRequest{
-		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusFailed)),
-		FailedAt:         lo.ToPtr(clock.Now()),
-		ErrorMessage:     &message,
-		GatewayPaymentID: &failure.RazorpayPaymentID,
-		PaymentMethodID:  lo.EmptyableToPtr(failure.PaymentMethodID),
-	}
-	if _, err := paymentService.UpdatePayment(ctx, p.ID, updateReq); err != nil {
-		return err
-	}
-
-	if reportAutoChargeDecline {
-		invoiceService.PublishInvoicePaymentFailed(ctx, webhookDto.InternalInvoicePaymentFailedEvent{
-			InvoiceID:           p.DestinationID,
-			Provider:            types.SecretProviderRazorpay,
-			Reason:              types.InvoicePaymentFailureReasonDeclined,
-			PaymentID:           p.ID,
-			Error:               message,
-			IsAutoChargeAttempt: true,
-		})
-	}
-	return nil
-}
 
 // Full refund when payment lands after checkout expired or failed.
 func (s *PaymentService) RefundLateCapturedPayment(

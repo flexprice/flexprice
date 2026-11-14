@@ -63,7 +63,6 @@ type cronActivityBundle struct {
 	webhookOutboundRetry         *cronActivities.WebhookOutboundRetryActivities
 	paddleInvoicePullSync        *cronActivities.PaddleInvoicePullSyncActivities
 	moyasarAuthPaymentSettlement *cronActivities.MoyasarAuthPaymentSettlementActivities
-	razorpayPaymentStatusSync    *cronActivities.RazorpayPaymentStatusSyncActivities
 	checkoutSessionExpiry        *cronActivities.CheckoutSessionExpiryActivities
 	marketplaceSnapshot          *marketplaceActivities.SnapshotActivities
 	marketplaceReport            *marketplaceActivities.ReportActivities
@@ -350,7 +349,6 @@ func RegisterWorkflowsAndActivities(
 		webhookOutboundRetry:         cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
 		paddleInvoicePullSync:        cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
 		moyasarAuthPaymentSettlement: cronActivities.NewMoyasarAuthPaymentSettlementActivities(params.IntegrationFactory, params.PaymentRepo, entityScope, params.Logger),
-		razorpayPaymentStatusSync:    cronActivities.NewRazorpayPaymentStatusSyncActivities(params.PaymentRepo, service.NewPaymentService(params), params.Logger),
 		checkoutSessionExpiry:        cronActivities.NewCheckoutSessionExpiryActivities(service.NewCheckoutSessionService(params), params.Logger),
 		marketplaceSnapshot:          marketplaceSnapshotActivities,
 		marketplaceReport:            marketplaceReportActivities,
@@ -607,7 +605,6 @@ func buildWorkerConfig(
 			cronWorkflows.AutoInvoiceThresholdBillingWorkflow,
 			cronWorkflows.PaddleInvoicePullSyncCronWorkflow,
 			cronWorkflows.MoyasarAuthPaymentSettlementWorkflow,
-			cronWorkflows.RazorpayPaymentStatusSyncWorkflow,
 			cronWorkflows.CheckoutSessionExpiryWorkflow,
 			cronWorkflows.MarketplaceUsageSnapshotWorkflow,
 			cronWorkflows.MarketplaceUsageReportWorkflow,
@@ -631,7 +628,6 @@ func buildWorkerConfig(
 			cron.paddleInvoicePullSync.FetchAndTriggerPaddleInvoicePullSyncActivity,
 			cron.moyasarAuthPaymentSettlement.ReconcilePendingAuthPaymentsActivity,
 			cron.moyasarAuthPaymentSettlement.VoidOrRefundSucceededAuthPaymentsActivity,
-			cron.razorpayPaymentStatusSync.SyncRazorpayInFlightPaymentsActivity,
 			cron.checkoutSessionExpiry.ExpireCheckoutSessionsActivity,
 			cron.marketplaceSnapshot.MarketplaceUsageSnapshotActivity,
 			cron.marketplaceReport.MarketplaceUsageReportActivity,

@@ -114,13 +114,6 @@ type MoyasarAuthPaymentSettlementWorkflowResult struct {
 	VoidRefund MoyasarVoidOrRefundResult     `json:"void_refund"`
 }
 
-// RazorpayPaymentStatusSyncResult captures metrics for the Razorpay in-flight payment sync.
-type RazorpayPaymentStatusSyncResult struct {
-	Total   int `json:"total"`
-	Settled int `json:"settled"`
-	Errors  int `json:"errors"`
-}
-
 // ===================== Auto invoice threshold billing =====================
 
 // AutoInvoiceThresholdBillingWorkflowInput is the input for AutoInvoiceThresholdBillingWorkflow.

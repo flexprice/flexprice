@@ -102,13 +102,6 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{
-			ID:        types.ScheduleIDRazorpayPaymentStatusSync,
-			Interval:  time.Hour,
-			Workflow:  cronWorkflows.RazorpayPaymentStatusSyncWorkflow,
-			Input:     struct{}{},
-			TaskQueue: types.TemporalTaskQueueCron,
-		},
-		{
 			ID:        types.ScheduleIDCheckoutSessionExpiry,
 			Interval:  30 * time.Minute,
 			Workflow:  cronWorkflows.CheckoutSessionExpiryWorkflow,

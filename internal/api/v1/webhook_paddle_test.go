@@ -82,7 +82,6 @@ func setupPaddleWebhookHandler(t *testing.T, connRepo connection.Repository) *We
 		nil,
 		nil,
 		service.NewBillingEntityService(service.ServiceParams{SettingsRepo: testutil.NewInMemorySettingsStore()}),
-		nil,
 	)
 }
 

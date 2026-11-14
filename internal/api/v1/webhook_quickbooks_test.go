@@ -75,7 +75,7 @@ func setupQuickBooksWebhookHandler(t *testing.T, verifierToken string) *WebhookH
 	)
 
 	billingEntitySvc := service.NewBillingEntityService(service.ServiceParams{EnvironmentRepo: testutil.NewInMemoryEnvironmentStore(), SettingsRepo: testutil.NewInMemorySettingsStore()})
-	return NewWebhookHandler(cfg, nil, log, factory, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, billingEntitySvc, nil)
+	return NewWebhookHandler(cfg, nil, log, factory, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, billingEntitySvc)
 }
 
 func quickBooksSignature(token, body string) string {

@@ -2136,14 +2136,6 @@ var (
 				},
 			},
 			{
-				Name:    "idx_in_flight_gateway_payments",
-				Unique:  false,
-				Columns: []*schema.Column{PaymentsColumns[13], PaymentsColumns[19]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "(((status)::text = 'published'::text) AND ((payment_status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('PROCESSING'::character varying)::text])))",
-				},
-			},
-			{
 				Name:    "idx_tenant_environment_payment_idempotency_key_unique",
 				Unique:  true,
 				Columns: []*schema.Column{PaymentsColumns[1], PaymentsColumns[7], PaymentsColumns[8]},

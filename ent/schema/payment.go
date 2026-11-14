@@ -154,10 +154,6 @@ func (Payment) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "payment_gateway", "gateway_payment_id").
 			StorageKey("idx_tenant_gateway_payment").
 			Annotations(entsql.IndexWhere("((payment_gateway IS NOT NULL) AND (gateway_payment_id IS NOT NULL))")),
-		// Cross-tenant settlement crons list in-flight payments by gateway.
-		index.Fields("payment_gateway", "payment_status").
-			StorageKey("idx_in_flight_gateway_payments").
-			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND ((payment_status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('PROCESSING'::character varying)::text])))")),
 		// Scoped per (tenant, environment) so different tenants can reuse the
 		// same caller-supplied key without colliding.
 		index.Fields("tenant_id", "environment_id", "idempotency_key").
