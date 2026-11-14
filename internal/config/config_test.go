@@ -260,3 +260,38 @@ func TestBillingPlanIDs_FromEnv(t *testing.T) {
 	assert.Equal(t, []string{"plan_1", "plan_2"}, cfg.Billing.PlanIDs)
 	assert.Equal(t, "plan_1", cfg.Billing.DefaultPlanID)
 }
+
+func TestValidateEmail(t *testing.T) {
+	resend := Configuration{}
+	resend.Email.Enabled = true
+	resend.Email.Provider = "resend"
+	resend.Email.Resend.APIKey = "re_key"
+	resend.Email.Resend.WebhookSecret = "whsec_secret"
+	resend.Email.RegionTag = "us"
+	assert.NoError(t, resend.validateEmail())
+
+	for name, clear := range map[string]func(*Configuration){
+		"no api key":        func(c *Configuration) { c.Email.Resend.APIKey = "" },
+		"no webhook secret": func(c *Configuration) { c.Email.Resend.WebhookSecret = " " },
+		"no region tag":     func(c *Configuration) { c.Email.RegionTag = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := resend
+			clear(&cfg)
+			assert.Error(t, cfg.validateEmail())
+		})
+	}
+
+	local := Configuration{}
+	local.Email.Enabled = true
+	local.Email.Provider = "local"
+	t.Setenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS", "")
+	assert.Error(t, local.validateEmail(), "local provider must not start outside local runs")
+	t.Setenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS", "true")
+	assert.NoError(t, local.validateEmail())
+
+	// email.enabled without a provider leaves customer emails off and requires nothing.
+	off := Configuration{}
+	off.Email.Enabled = true
+	assert.NoError(t, off.validateEmail())
+}
