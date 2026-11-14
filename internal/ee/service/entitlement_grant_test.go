@@ -79,6 +79,11 @@ func (s *EntitlementGrantSuite) buildServiceParams() ServiceParams {
 		BillingInstalmentRepo:    stores.BillingInstalmentRepo,
 		AddonRepo:                stores.AddonRepo,
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
+		CouponRepo:               stores.CouponRepo,
+		CouponAssociationRepo:    stores.CouponAssociationRepo,
+		TaxRateRepo:              stores.TaxRateRepo,
+		TaxAssociationRepo:       stores.TaxAssociationRepo,
+		TaxAppliedRepo:           stores.TaxAppliedRepo,
 		MeterUsageRepo:           stores.MeterUsageRepo,
 		MeterUsageCheckpointRepo: stores.MeterUsageCheckpointRepo,
 		WebhookPublisher:         s.GetWebhookPublisher(),
@@ -1641,14 +1646,13 @@ func (s *EntitlementGrantSuite) TestEvaluate_OverQuota_FlipsExhaustedAndFiresAle
 	s.seedMeterUsage(cust.ExternalID, "meter-quantity", first.Add(15*time.Minute), 50)
 
 	at := sub.CurrentPeriodStart.Add(2 * time.Hour)
-	grants, meta, err := s.grantService.EnsureGrantsForSubscriptions(s.GetContext(), cust, []*subscription.Subscription{sub}, at)
+	grants, _, err := s.grantService.EnsureGrantsForSubscriptions(s.GetContext(), cust, []*subscription.Subscription{sub}, at)
 	s.Require().NoError(err)
 	s.Require().Len(grants, 1)
 	g := grants[0]
 	s.True(g.ValidFrom.Equal(first))
 
-	s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(
-		s.GetContext(), cust, meta, []*entitlementgrant.EntitlementGrant{g}, at))
+	s.Require().NoError(s.evalAlertService().EvaluateAndAlertEntitlementGrants(s.GetContext(), cust, []*subscription.Subscription{sub}, at))
 
 	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), g.ID)
 	s.Require().NoError(err)
@@ -1678,12 +1682,11 @@ func (s *EntitlementGrantSuite) TestEvaluate_ExactQuota_FlipsExhaustedAndRecords
 	s.seedMeterUsage(cust.ExternalID, "meter-quantity", first, 100)
 
 	at := sub.CurrentPeriodStart.Add(2 * time.Hour)
-	grants, meta, err := s.grantService.EnsureGrantsForSubscriptions(s.GetContext(), cust, []*subscription.Subscription{sub}, at)
+	grants, _, err := s.grantService.EnsureGrantsForSubscriptions(s.GetContext(), cust, []*subscription.Subscription{sub}, at)
 	s.Require().NoError(err)
 	s.Require().Len(grants, 1)
 
-	s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(
-		s.GetContext(), cust, meta, grants, at))
+	s.Require().NoError(s.evalAlertService().EvaluateAndAlertEntitlementGrants(s.GetContext(), cust, []*subscription.Subscription{sub}, at))
 
 	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), grants[0].ID)
 	s.Require().NoError(err)
@@ -1700,13 +1703,12 @@ func (s *EntitlementGrantSuite) TestEvaluate_UnderQuota_StaysActiveNoAlert() {
 	s.seedMeterUsage(cust.ExternalID, "meter-quantity", sub.CurrentPeriodStart.Add(30*time.Minute), 40)
 
 	at := sub.CurrentPeriodStart.Add(2 * time.Hour)
-	grants, meta, err := s.grantService.EnsureGrantsForSubscriptions(s.GetContext(), cust, []*subscription.Subscription{sub}, at)
+	grants, _, err := s.grantService.EnsureGrantsForSubscriptions(s.GetContext(), cust, []*subscription.Subscription{sub}, at)
 	s.Require().NoError(err)
 	s.Require().Len(grants, 1)
 	g := grants[0]
 
-	s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(
-		s.GetContext(), cust, meta, []*entitlementgrant.EntitlementGrant{g}, at))
+	s.Require().NoError(s.evalAlertService().EvaluateAndAlertEntitlementGrants(s.GetContext(), cust, []*subscription.Subscription{sub}, at))
 
 	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), g.ID)
 	s.Require().NoError(err)

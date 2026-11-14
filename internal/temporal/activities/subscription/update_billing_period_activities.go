@@ -224,19 +224,22 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 	}, nil
 }
 
-// refreshEntitlementGrantsAfterRollover refreshes each customer once when any of the
-// advanced subscriptions holds a NEVER-meter grant, so a quiet period still opens its allowance.
+// refreshEntitlementGrantsAfterRollover evaluates the new period of each advanced subscription that
+// holds a NEVER-meter grant, so a quiet period still opens its allowance.
 func (s *BillingActivities) refreshEntitlementGrantsAfterRollover(ctx context.Context, subs ...*subscription.Subscription) {
 	if s.serviceParams.EntitlementGrantRepo == nil {
 		return
 	}
-	refreshed := make(map[string]bool, len(subs))
+	alertService := service.NewAlertService(s.serviceParams)
 	for _, sub := range subs {
-		if refreshed[sub.CustomerID] || !s.hasNeverResetGrant(ctx, sub) {
+		if !s.hasNeverResetGrant(ctx, sub) {
 			continue
 		}
-		refreshed[sub.CustomerID] = true
-		if err := service.NewAlertService(s.serviceParams).RefreshEntitlementGrantsForCustomer(ctx, sub.CustomerID); err != nil {
+		cust, err := s.serviceParams.CustomerRepo.Get(ctx, sub.CustomerID)
+		if err == nil {
+			err = alertService.EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, clock.Now())
+		}
+		if err != nil {
 			s.logger.Error(ctx, "entitlement grant refresh after rollover failed",
 				"error", err, "subscription_id", sub.ID)
 		}

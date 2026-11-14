@@ -534,45 +534,6 @@ func (s *entitlementGrantService) measureSubscriptionEntitlementGrantWindows(ctx
 	return nil
 }
 
-// refreshSubscriptionEntitlementGrantUsage measures each subscription entitlement grant window in the period up to `at` and
-// stores it, so billing does not read usage the alert refresh has not caught up with. It leaves
-// last_computed_at alone: finalizing a window, and firing its exhaustion alert, is alert evaluation's job.
-func refreshSubscriptionEntitlementGrantUsage(ctx context.Context, params ServiceParams, sub *subscription.Subscription, periodStart, periodEnd, at time.Time) error {
-	if params.EntitlementGrantRepo == nil || sub == nil {
-		return nil
-	}
-	filter := types.NewNoLimitEntitlementGrantFilter().
-		WithCustomerIDs(sub.CustomerID).
-		WithSubscriptionIDs(sub.ID).
-		WithScopeEntityType(types.EntitlementGrantScopeSubscription).
-		WithCycleOverlap(periodStart, periodEnd)
-	grants, err := params.EntitlementGrantRepo.List(ctx, filter)
-	if err != nil {
-		return err
-	}
-	for _, g := range grants {
-		if !at.After(g.ValidFrom) {
-			continue
-		}
-		// Stored usage already reaches as far as this refresh would measure: a finalized window, or a
-		// historical recalculation older than the last evaluation.
-		if g.LastComputedAt != nil && !g.LastComputedAt.Before(types.EarliestOf(at, g.ValidTo)) {
-			continue
-		}
-		usage, _, err := NewMeterUsageService(params).GetSubscriptionWindowSpend(ctx, sub, g.ValidFrom, types.EarliestOf(at, g.ValidTo))
-		if err != nil {
-			return err
-		}
-		refreshed := entitlementgrant.NewEntitlementGrantBuilder(grantUsageSnapshot(g, decimal.Max(usage, decimal.Zero), at)).
-			WithLastComputedAt(g.LastComputedAt).
-			Build()
-		if err := params.EntitlementGrantRepo.UpdateSnapshot(ctx, refreshed); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // subscriptionEntitlementGrantConfigFilter matches the published subscription entitlement grants on subIDs, or on every
 // subscription when none are given.
 func subscriptionEntitlementGrantConfigFilter(subIDs ...string) *types.EntitlementFilter {

@@ -2960,17 +2960,6 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 			Mark(ierr.ErrValidation)
 	}
 
-	// Denomination freshness at the money moment: materialize any pending entitlement
-	// grant overage (debounce gap) before charges are calculated. Idempotent;
-	// never blocks invoicing — worst case billing folds the last materialized
-	// values. Dep guard keeps partially-wired test services on the old path.
-	if s.EntitlementGrantRepo != nil && s.CustomerRepo != nil && s.SubRepo != nil && s.MeterUsageRepo != nil {
-		if err := NewAlertService(s.ServiceParams).RefreshEntitlementGrantsForCustomer(ctx, subscription.CustomerID); err != nil {
-			s.Logger.Error(ctx, "entitlement grant refresh before invoicing failed; using last materialized overage",
-				"subscription_id", subscription.ID, "error", err)
-		}
-	}
-
 	// Draft-first: create zero-dollar draft (idempotent; returns existing if same period)
 	// Use ToDraftRequest to build from pre-fetched subscription, avoiding redundant DB fetch
 	draftReq := req.ToDraftRequest(
