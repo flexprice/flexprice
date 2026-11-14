@@ -2,11 +2,13 @@ package activities
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/heartbeat"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -89,6 +91,8 @@ func (a *PlanActivities) SyncPlanPricesV2(ctx context.Context, input SyncPlanPri
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
+
+	defer heartbeat.Start(ctx, 10*time.Second)()
 
 	result, err := a.planService.SyncPlanPricesV2(ctx, input.PlanID)
 	if err != nil {

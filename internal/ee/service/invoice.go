@@ -1947,6 +1947,19 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	}
 	recordInvoiceTransition(ctx, inv)
 
+	// Gateway links are expired only once the void is committed.
+	closeLinksCtx := types.WithoutDBTransaction(ctx)
+	closeLinks := func() {
+		if err := NewPaymentService(s.ServiceParams).(*paymentService).voidOpenPaymentLinks(closeLinksCtx, inv.ID); err != nil {
+			s.Logger.Error(closeLinksCtx, "failed to close payment links on void",
+				"error", err,
+				"invoice_id", inv.ID)
+		}
+	}
+	if !types.RegisterPostCommit(ctx, closeLinks) {
+		closeLinks()
+	}
+
 	// A voided invoice will never be paid, so a purchased-credit transaction still
 	// waiting on it must not stay pending: it blocks the wallet's auto-topup guard
 	// indefinitely and is unrecoverable without a manual DB edit.

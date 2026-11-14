@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	dlqengine "github.com/flexprice/flexprice/internal/kafka/dlq"
+	"github.com/flexprice/flexprice/internal/temporal/activities/heartbeat"
 	models "github.com/flexprice/flexprice/internal/temporal/models/dlq"
 	"go.temporal.io/sdk/activity"
 )
@@ -31,23 +32,7 @@ func (a *ReplayDLQActivities) ReplayDLQ(ctx context.Context, input models.Replay
 		return nil, err
 	}
 
-	// Heartbeat so a dead worker is detected within HeartbeatTimeout instead of StartToCloseTimeout.
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-done:
-				return
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				activity.RecordHeartbeat(ctx)
-			}
-		}
-	}()
+	defer heartbeat.Start(ctx, 10*time.Second)()
 
 	summary, err := a.dlqReplayService.ReplayDLQ(ctx, dlqengine.Options{
 		SourceTopic:    input.SourceTopic,

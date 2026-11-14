@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -42,6 +43,10 @@ type fakeClient struct {
 
 	ingested  [][]usageEvent // one entry per IngestBulk call
 	ingestErr error
+
+	usdRates     map[string]decimal.Decimal
+	usdRatesErr  error
+	usdRateCalls int
 
 	// freeFirstPeriod makes a checkout complete with nothing to collect; the subscription turns active.
 	freeFirstPeriod bool
@@ -198,6 +203,14 @@ func (f *fakeClient) IngestBulk(_ context.Context, events []usageEvent) error {
 	return nil
 }
 
+func (f *fakeClient) USDRates(context.Context) (map[string]decimal.Decimal, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.usdRateCalls++
+	return f.usdRates, f.usdRatesErr
+}
+
 // recordingClient records the context provisioning ran with, signals each call, and can panic.
 type recordingClient struct {
 	*fakeClient
@@ -264,10 +277,10 @@ func newTestService(client billingClient) (*selfBillingService, *testDeps) {
 		SelfBillingPostgresRepo:   d.usage,
 
 		Config: &config.Configuration{Billing: config.BillingConfig{
-			Enabled:      true,
-			Region:       "us",
-			APIHost:      "https://cloud.test/v1",
-			APIKey:       "sk",
+			Enabled:       true,
+			Region:        "us",
+			APIHost:       "https://cloud.test/v1",
+			APIKey:        "sk",
 			DefaultPlanID: "plan_1",
 			PlanIDs:       []string{"plan_1", "plan_2"},
 			DashboardURL:  "https://us.app.test",

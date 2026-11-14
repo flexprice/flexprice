@@ -31,15 +31,14 @@ func NewInMemoryEventPublisher(eventStore *InMemoryEventStore) publisher.EventPu
 		eventStore: eventStore,
 	}
 
-	// Start consumer goroutine
-	go pub.startConsumer()
+	// Subscribe before starting the goroutine so no event published right after construction is dropped.
+	go pub.startConsumer(pub.Subscribe())
 
 	return pub
 }
 
 // startConsumer simulates a Kafka consumer that processes events and stores them
-func (p *InMemoryPublisherService) startConsumer() {
-	ch := p.Subscribe()
+func (p *InMemoryPublisherService) startConsumer(ch chan *message.Message) {
 	for msg := range ch {
 		var event events.Event
 		if err := json.Unmarshal(msg.Payload, &event); err != nil {

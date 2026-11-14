@@ -5728,9 +5728,14 @@ func (s *subscriptionService) buildAddonProrationEntries(
 
 	entries := make([]LineItemProrationEntry, 0, len(lineItems))
 	for _, lineItem := range lineItems {
-		priceResp, err := priceSvc.GetPrice(ctx, lineItem.PriceID)
-		if err != nil {
-			return nil, err
+		// A previewed override price is unsaved, so it is only on the line item.
+		linePrice := lineItem.Price
+		if linePrice == nil || linePrice.ID != lineItem.PriceID {
+			priceResp, err := priceSvc.GetPrice(ctx, lineItem.PriceID)
+			if err != nil {
+				return nil, err
+			}
+			linePrice = priceResp.Price
 		}
 
 		entry := LineItemProrationEntry{
@@ -5738,9 +5743,9 @@ func (s *subscriptionService) buildAddonProrationEntries(
 			Action:   action,
 		}
 		if action == types.ProrationActionAddItem {
-			entry.NewPrice, entry.NewQuantity = priceResp.Price, lineItem.Quantity
+			entry.NewPrice, entry.NewQuantity = linePrice, lineItem.Quantity
 		} else {
-			entry.CurrentPrice, entry.CurrentQuantity = priceResp.Price, lineItem.Quantity
+			entry.CurrentPrice, entry.CurrentQuantity = linePrice, lineItem.Quantity
 		}
 		entries = append(entries, entry)
 	}

@@ -32,13 +32,13 @@ func productionEnvs(t *testing.T, d *testDeps, tenantID string) int {
 
 func TestStartCheckout(t *testing.T) {
 	tests := []struct {
-		name          string
-		remoteStatus  types.SubscriptionStatus // "" = no subscription yet
-		free          bool                     // $0 first period: the trial ends without a session
-		wantStatus    types.CheckoutStatus
-		wantURL       string
-		wantTenant    types.TenantInternalStatus
-		wantOpened    []string
+		name         string
+		remoteStatus types.SubscriptionStatus // "" = no subscription yet
+		free         bool                     // $0 first period: the trial ends without a session
+		wantStatus   types.CheckoutStatus
+		wantURL      string
+		wantTenant   types.TenantInternalStatus
+		wantOpened   []string
 	}{
 		{
 			name:         "trialing_buys_the_default_plan",

@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -13,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
 	razorpay "github.com/razorpay/razorpay-go"
+	rzperrors "github.com/razorpay/razorpay-go/errors"
 	"github.com/samber/lo"
 )
 
@@ -53,6 +55,10 @@ type RazorpayClient interface {
 	// "created" | "partially_paid" | "paid" | "expired" | "cancelled", and its
 	// "payments" array carries the underlying pay_xxx attempts once any exist.
 	FetchPaymentLink(ctx context.Context, paymentLinkID string) (map[string]interface{}, error)
+	// CancelPaymentLink cancels a payment link (POST /v1/payment_links/{id}/cancel).
+	CancelPaymentLink(ctx context.Context, paymentLinkID string) (map[string]interface{}, error)
+	// CancelInvoice cancels an issued invoice (POST /v1/invoices/{id}/cancel).
+	CancelInvoice(ctx context.Context, invoiceID string) (map[string]interface{}, error)
 }
 
 // Client handles Razorpay API client setup and configuration
@@ -314,6 +320,18 @@ func (c *Client) CreatePaymentLink(ctx context.Context, paymentLinkData map[stri
 	// lets make a struct from here
 	if err != nil {
 		c.logger.Error(ctx, "failed to create payment link in Razorpay", "error", err)
+
+		var rejected *rzperrors.BadRequestError
+		// Proxy 5xx pages and other non-JSON bodies arrive as BadRequestError with no message.
+		if errors.As(err, &rejected) && rejected.Message != "" {
+			return nil, ierr.NewErrorf("razorpay rejected the payment link: %s", rejected.Message).
+				WithHintf("Razorpay rejected the payment link: %s", rejected.Message).
+				WithReportableDetails(map[string]interface{}{
+					"error": rejected.Message,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
 		return nil, ierr.NewError("failed to create payment link in Razorpay").
 			WithHint("Unable to create payment link in Razorpay").
 			WithReportableDetails(map[string]interface{}{
@@ -686,6 +704,50 @@ func (c *Client) FetchPaymentLink(ctx context.Context, paymentLinkID string) (ma
 			WithReportableDetails(map[string]interface{}{
 				"payment_link_id": paymentLinkID,
 				"error":           err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	return result, nil
+}
+
+// CancelPaymentLink cancels a payment link. SDK: PaymentLink.Cancel.
+func (c *Client) CancelPaymentLink(ctx context.Context, paymentLinkID string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.PaymentLink.Cancel(paymentLinkID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to cancel Razorpay payment link", "error", err, "payment_link_id", paymentLinkID)
+		return nil, ierr.NewError("failed to cancel Razorpay payment link").
+			WithHint("Unable to cancel the payment link in Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"payment_link_id": paymentLinkID,
+				"error":           err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	return result, nil
+}
+
+// CancelInvoice cancels an issued invoice. SDK: Invoice.Cancel.
+func (c *Client) CancelInvoice(ctx context.Context, invoiceID string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Invoice.Cancel(invoiceID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to cancel Razorpay invoice", "error", err, "invoice_id", invoiceID)
+		return nil, ierr.NewError("failed to cancel Razorpay invoice").
+			WithHint("Unable to cancel the invoice in Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": invoiceID,
+				"error":      err.Error(),
 			}).
 			Mark(ierr.ErrInternal)
 	}
