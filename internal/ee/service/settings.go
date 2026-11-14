@@ -482,6 +482,9 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	case types.SettingKeyRevenueRecognitionConfig:
 		return updateSettingByKey[types.RevenueRecognitionConfig](s, ctx, key, req)
 	case types.SettingKeyEmailNotificationConfig:
+		if err := s.requireReplyToForEmails(ctx, req); err != nil {
+			return nil, err
+		}
 		return updateSettingByKey[types.EmailNotificationConfig](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
@@ -621,6 +624,27 @@ func (s *settingsService) updateBillingEntityGuardedSetting(ctx context.Context,
 		return err
 	})
 	return resp, err
+}
+
+// requireReplyToForEmails refuses to turn on emails while the tenant has no email customers can reply to.
+func (s *settingsService) requireReplyToForEmails(ctx context.Context, req *dto.UpdateSettingRequest) error {
+	cfg, err := utils.ToStruct[types.EmailNotificationConfig](req.Value)
+	if err != nil {
+		return err
+	}
+	if !cfg.Enabled {
+		return nil
+	}
+	t, err := s.TenantRepo.GetByID(ctx, types.GetTenantID(ctx))
+	if err != nil {
+		return err
+	}
+	if t.BillingDetails.ReplyToEmail() == "" {
+		return ierr.NewError("tenant has no reply-to email").
+			WithHint("Add a billing or help email in your business settings before turning on emails").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // guardBillingEntitySetting rejects a prefix change or an external tax engine once billing entities are on.

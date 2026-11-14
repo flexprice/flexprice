@@ -988,7 +988,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		},
 		SettingKeyEmailNotificationConfig: {
 			Key:          SettingKeyEmailNotificationConfig,
-			DefaultValue: map[string]interface{}{"attach_invoice_pdf": true},
+			DefaultValue: map[string]interface{}{"enabled": false, "attach_invoice_pdf": true},
 			Description:  "How Flexprice emails customers in this environment",
 		},
 	}, nil
@@ -1344,6 +1344,8 @@ func (c BillingEntityConfig) Validate() error {
 
 // EmailNotificationConfig is how Flexprice emails customers in an environment.
 type EmailNotificationConfig struct {
+	// Enabled lets this environment email customers; every send needs it.
+	Enabled bool `json:"enabled"`
 	// AttachInvoicePDF attaches the invoice PDF to invoice emails.
 	AttachInvoicePDF bool `json:"attach_invoice_pdf"`
 }
