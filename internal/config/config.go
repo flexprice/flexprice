@@ -79,6 +79,7 @@ type Configuration struct {
 	OnboardingEvents       OnboardingEventsConfig       `mapstructure:"onboarding_events" validate:"omitempty"`
 	WebhookRetryJob        WebhookRetryJobConfig        `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                 GeminiConfig                 `mapstructure:"gemini" validate:"omitempty"`
+	OpenRouter             OpenRouterConfig             `mapstructure:"openrouter" validate:"omitempty"`
 	Whop                   WhopConfig                   `mapstructure:"whop" validate:"omitempty"`
 	Onboarding             OnboardingConfig             `mapstructure:"onboarding" validate:"omitempty"`
 	ChatSupport            ChatSupportConfig            `mapstructure:"chat_support" validate:"omitempty"`
@@ -131,6 +132,15 @@ type WhopConfig struct {
 type GeminiConfig struct {
 	APIKey string `mapstructure:"api_key" validate:"omitempty"`
 	Model  string `mapstructure:"model" validate:"omitempty"`
+}
+
+type OpenRouterConfig struct {
+	APIKey         string `mapstructure:"api_key" validate:"omitempty"`
+	BaseURL        string `mapstructure:"base_url" validate:"omitempty"`
+	Model          string `mapstructure:"model" validate:"omitempty"`
+	PDFEngine      string `mapstructure:"pdf_engine" validate:"omitempty"`
+	TimeoutSeconds int    `mapstructure:"timeout_seconds" validate:"omitempty"`
+	ZDR            bool   `mapstructure:"zdr"`
 }
 
 type CacheConfig struct {
