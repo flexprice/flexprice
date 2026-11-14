@@ -4156,18 +4156,9 @@ func (s *VoidPaymentLinksSuite) TestVoid_VoidsPendingStripeLinkAndExpiresIt() {
 	s.Equal([]string{"cs_1"}, s.provider.expired)
 }
 
-func (s *VoidPaymentLinksSuite) TestVoid_VoidsInitiatedLink() {
-	s.seedInvoice()
-	s.seedPayment("pay_1", types.PaymentStatusInitiated, types.PaymentMethodTypePaymentLink, "cs_1")
-
-	s.void(dto.InvoiceVoidRequest{})
-
-	s.Equal(types.PaymentStatusVoided, s.payment("pay_1").PaymentStatus)
-}
-
 func (s *VoidPaymentLinksSuite) TestVoid_LinkNeverCreatedSkipsGateway() {
 	s.seedInvoice()
-	s.seedPayment("pay_1", types.PaymentStatusInitiated, types.PaymentMethodTypePaymentLink, "")
+	s.seedPayment("pay_1", types.PaymentStatusPending, types.PaymentMethodTypePaymentLink, "")
 
 	s.void(dto.InvoiceVoidRequest{})
 

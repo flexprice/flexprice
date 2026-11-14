@@ -1345,18 +1345,14 @@ func errInvoiceVoided(invoiceID string) error {
 // A link that was paid or could not be closed keeps its payment for the gateway webhook; links owned by
 // a checkout session are left to that session.
 func (s *paymentService) voidOpenPaymentLinks(ctx context.Context, invoiceID string) error {
-	var open []*payment.Payment
-	for _, status := range []types.PaymentStatus{types.PaymentStatusInitiated, types.PaymentStatusPending} {
-		filter := types.NewNoLimitPaymentFilter()
-		filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
-		filter.DestinationID = lo.ToPtr(invoiceID)
-		filter.PaymentMethodType = lo.ToPtr(string(types.PaymentMethodTypePaymentLink))
-		filter.PaymentStatus = lo.ToPtr(string(status))
-		payments, err := s.PaymentRepo.List(ctx, filter)
-		if err != nil {
-			return err
-		}
-		open = append(open, payments...)
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentMethodType = lo.ToPtr(string(types.PaymentMethodTypePaymentLink))
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusPending))
+	open, err := s.PaymentRepo.List(ctx, filter)
+	if err != nil {
+		return err
 	}
 
 	checkoutSvc := NewCheckoutSessionService(s.ServiceParams)

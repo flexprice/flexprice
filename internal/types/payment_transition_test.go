@@ -36,9 +36,9 @@ func TestPaymentStatusValidateTransitionTo(t *testing.T) {
 		{"succeeded to partially refunded", PaymentStatusSucceeded, PaymentStatusPartiallyRefunded, false},
 		{"succeeded to voided", PaymentStatusSucceeded, PaymentStatusVoided, false},
 
-		// Unpaid payments can be voided; a charge in flight or failed cannot.
-		{"initiated to voided", PaymentStatusInitiated, PaymentStatusVoided, false},
+		// A pending payment can be voided; one not started, in flight or failed cannot.
 		{"pending to voided", PaymentStatusPending, PaymentStatusVoided, false},
+		{"initiated cannot be voided", PaymentStatusInitiated, PaymentStatusVoided, true},
 		{"processing cannot be voided", PaymentStatusProcessing, PaymentStatusVoided, true},
 		{"failed cannot be voided", PaymentStatusFailed, PaymentStatusVoided, true},
 		{"partially refunded to refunded", PaymentStatusPartiallyRefunded, PaymentStatusRefunded, false},
