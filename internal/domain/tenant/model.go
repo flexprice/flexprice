@@ -17,11 +17,11 @@ type TenantBillingDetails struct {
 }
 
 // ReplyToEmail is where customer replies go: the help email, else the billing email.
-func (d TenantBillingDetails) ReplyToEmail() string {
-	if d.HelpEmail != "" {
-		return d.HelpEmail
+func (t TenantBillingDetails) ReplyToEmail() string {
+	if t.HelpEmail != "" {
+		return t.HelpEmail
 	}
-	return d.Email
+	return t.Email
 }
 
 // TenantAddress represents a physical address in the tenant billing details
