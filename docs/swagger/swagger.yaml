@@ -21344,14 +21344,14 @@ paths:
       summary: Get Customer Wallets
       tags:
       - Wallets
-  /email-messages/search:
+  /emails/search:
     post:
       consumes:
       - application/json
       description: Use when reviewing emails sent to customers, for example every
         bounced email this month or every email to one customer. Filter by delivery
         status, trigger, customer, document and date. Newest first; paginated.
-      operationId: queryEmailMessage
+      operationId: queryEmail
       parameters:
       - description: Filter
         in: body

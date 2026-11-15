@@ -6312,14 +6312,14 @@
         ]
       }
     },
-    "/email-messages/search": {
+    "/emails/search": {
       "post": {
         "tags": [
           "Invoices"
         ],
         "summary": "Search emails",
         "description": "Use when reviewing emails sent to customers, for example every bounced email this month or every email to one customer. Filter by delivery status, trigger, customer, document and date. Newest first; paginated.",
-        "operationId": "queryEmailMessage",
+        "operationId": "queryEmail",
         "requestBody": {
           "description": "Filter",
           "content": {
