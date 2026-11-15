@@ -1181,6 +1181,32 @@ func (s *EntitlementGrantSuite) TestFeatureEntitlementGrantBilling_RemeasuresFin
 	s.True(decimal.NewFromInt(150).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
 }
 
+// A repeat compute at the same as-of still picks up events that landed after the first one finalized the window.
+func (s *EntitlementGrantSuite) TestFeatureEntitlementGrantBilling_RepeatComputeAtSameAsOfPicksUpLateEvents() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	start := sub.CurrentPeriodStart
+	s.seedMeterUsage(cust.ExternalID, m.ID, start.Add(time.Hour), 120)
+	s.Require().NoError(NewAlertService(s.buildServiceParams()).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, start.Add(time.Hour+time.Minute)))
+	g := s.listSubscriptionGrants(sub)[0]
+	end := start.Add(2 * time.Hour)
+	s.Require().NoError(s.GetStores().EntitlementGrantRepo.CloseWindow(ctx, g.ID, end))
+	asOf := end.Add(time.Hour)
+	billing := s.subGrantBilling()
+
+	s.Require().NoError(billing.refreshEntitlementGrantsForInvoice(ctx, sub, start, sub.CurrentPeriodEnd, asOf))
+	first, err := s.GetStores().EntitlementGrantRepo.Get(ctx, g.ID)
+	s.Require().NoError(err)
+	s.Require().True(first.LastComputedAt.Equal(asOf), "precondition: the first compute finalized the window at the as-of")
+
+	s.seedMeterUsage(cust.ExternalID, m.ID, end.Add(-time.Minute), 30) // late: lands between the two computes
+	s.Require().NoError(billing.refreshEntitlementGrantsForInvoice(ctx, sub, start, sub.CurrentPeriodEnd, asOf))
+
+	stored, err := s.GetStores().EntitlementGrantRepo.Get(ctx, g.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(150).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
+}
+
 // A plan change bills a partial period inside the current cycle; the window it opens spans the real
 // cycle with one quota, not a sliver that ends at the change.
 func (s *EntitlementGrantSuite) TestFeatureEntitlementGrantBilling_PartialPeriodOpensRealWindow() {

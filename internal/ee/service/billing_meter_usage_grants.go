@@ -43,10 +43,10 @@ func (s *billingService) refreshEntitlementGrantsForInvoice(ctx context.Context,
 		return err
 	}
 	// Collected before evaluation, which finalizes the windows it measures. A historical as-of that
-	// predates the last measurement keeps the stored usage.
+	// predates the last measurement keeps the stored usage; a repeat at the same as-of re-measures.
 	finalized := lo.Filter(grants, func(g *entitlementgrant.EntitlementGrant, _ int) bool {
 		return g.LastComputedAt != nil && !g.LastComputedAt.Before(g.ValidTo) &&
-			!g.ValidTo.After(asOf) && g.LastComputedAt.Before(asOf)
+			!g.ValidTo.After(asOf) && !g.LastComputedAt.After(asOf)
 	})
 
 	// After rollover the invoice is for an earlier cycle; window opening reads the cycle from the current period.
