@@ -20,6 +20,10 @@ type CustomerFilter struct {
 	ExternalID  string             `json:"external_id,omitempty" form:"external_id" validate:"omitempty"`
 	Email       string             `json:"email,omitempty" form:"email" validate:"omitempty,email"`
 
+	// search_query matches customers whose name or external_id contains the
+	// text (case-insensitive), or whose id equals it. ANDed with the other filters.
+	SearchQuery string `json:"search_query,omitempty" form:"search_query" validate:"omitempty"`
+
 	// billing_entity_id filters by the customer's billing entity
 	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
 }
@@ -56,6 +60,12 @@ func (f CustomerFilter) Validate() error {
 		if err := f.MetadataFilter.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if len(strings.TrimSpace(f.SearchQuery)) > 255 {
+		return ierr.NewError("search_query is too long").
+			WithHint("Search with at most 255 characters").
+			Mark(ierr.ErrValidation)
 	}
 
 	if f.Email != "" && !IsValidEmail(f.Email) {
