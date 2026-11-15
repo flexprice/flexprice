@@ -119,10 +119,8 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 
 		// A row without a rate still goes out with amount 0 and no usd_* fields, so Flexprice Cloud keeps its invoice amounts.
 		if usdRate, ok := usdRates[strings.ToLower(inv.Currency)]; ok {
-			usdAmount := inv.Total
-			if !types.IsMatchingCurrency(inv.Currency, usdCurrency) {
-				usdAmount = types.RoundToCurrencyPrecision(inv.Total.Mul(usdRate), usdCurrency)
-			}
+			// Not rounded: the meter sums sub-cent hourly values exactly and the Flexprice Cloud invoice rounds once.
+			usdAmount := inv.Total.Mul(usdRate)
 			properties["amount"] = usdAmount.String()
 			properties["usd_amount"] = usdAmount.String()
 			properties["usd_rate"] = usdRate.String()
