@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"context"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
@@ -354,8 +356,18 @@ func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 	return entRepo.NewScheduledTaskRepository(p.EntClient, p.Logger)
 }
 
-func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
-	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
+func NewMeterUsageRepository(p RepositoryParams, cfg *config.Configuration) events.MeterUsageRepository {
+	var opts []clickhouseRepo.MeterUsageRepositoryOption
+	if cfg != nil && cfg.MeterUsage.Rollup.Enabled {
+		table := cfg.MeterUsage.Rollup.Table
+		if clickhouseRepo.IsValidRollupTable(table) {
+			opts = append(opts, clickhouseRepo.WithRollupTable(table))
+			p.Logger.Info(context.Background(), "meter_usage rollup reads enabled", "table", table)
+		} else {
+			p.Logger.Error(context.Background(), "meter_usage rollup table invalid, rollup disabled", "table", table)
+		}
+	}
+	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger, opts...)
 }
 
 func NewActivityRepository(p RepositoryParams) domainActivity.Repository {

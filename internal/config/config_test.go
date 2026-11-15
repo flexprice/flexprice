@@ -282,3 +282,21 @@ func TestDeduplicationTTLFromYAMLAndEnv(t *testing.T) {
 	assert.Equal(t, 15*time.Minute, cfg.BulkMeterUsageTracking.DeduplicationTTL())
 	assert.Equal(t, 2*time.Hour, cfg.MeterUsageTracking.DeduplicationTTL())
 }
+
+func TestMeterUsageRollupFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.False(t, cfg.MeterUsage.Rollup.Enabled)
+	assert.Equal(t, "meter_usage_hourly", cfg.MeterUsage.Rollup.Table)
+
+	t.Setenv("FLEXPRICE_METER_USAGE_ROLLUP_ENABLED", "true")
+	t.Setenv("FLEXPRICE_METER_USAGE_ROLLUP_TABLE", "meter_usage_rollup_lt")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.True(t, cfg.MeterUsage.Rollup.Enabled)
+	assert.Equal(t, "meter_usage_rollup_lt", cfg.MeterUsage.Rollup.Table)
+}

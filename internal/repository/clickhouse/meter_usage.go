@@ -22,17 +22,22 @@ import (
 // MeterUsageQueryBuilder (SQL construction), keeping this file focused on
 // I/O: batch inserts, query execution, and row scanning.
 type MeterUsageRepository struct {
-	store  *clickhouse.ClickHouseStore
-	logger *logger.Logger
-	qb     *MeterUsageQueryBuilder
+	store       *clickhouse.ClickHouseStore
+	logger      *logger.Logger
+	qb          *MeterUsageQueryBuilder
+	rollupTable string
 }
 
-func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger) events.MeterUsageRepository {
-	return &MeterUsageRepository{
+func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger, opts ...MeterUsageRepositoryOption) events.MeterUsageRepository {
+	r := &MeterUsageRepository{
 		store:  store,
 		logger: logger,
 		qb:     NewMeterUsageQueryBuilder(),
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // insertTimeout caps each batch insert; without it the driver uses the caller's much longer deadline.
@@ -159,6 +164,16 @@ func (r *MeterUsageRepository) GetUsage(ctx context.Context, params *events.Mete
 	})
 	defer FinishSpan(span)
 
+	if query, args, ok := buildRollupScalarQuery(params, r.rollupTable); ok {
+		result, err := r.executeScalarQuery(ctx, query, args, params)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, err
+		}
+		SetSpanSuccess(span)
+		return result, nil
+	}
+
 	aggregator := GetMeterUsageAggregator(params.AggregationType)
 	query := aggregator.GetQuery(ctx, params, r.qb)
 	_, args := r.qb.BuildWhereClause(params)
@@ -232,6 +247,16 @@ func (r *MeterUsageRepository) GetUsageMultiMeter(ctx context.Context, params *e
 		"window_size":      params.WindowSize,
 	})
 	defer FinishSpan(span)
+
+	if query, args, ok := buildRollupMultiMeterQuery(params, r.rollupTable); ok {
+		results, err := r.executeMultiMeterScalarQuery(ctx, query, args, params)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, err
+		}
+		SetSpanSuccess(span)
+		return results, nil
+	}
 
 	aggregator := GetMeterUsageAggregator(params.AggregationType)
 	// Extract aggregation expressions from the aggregator type
@@ -674,6 +699,9 @@ func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *
 		ORDER BY meter_id
 		%s
 	`, finalClause, where, settings)
+	if q, a, ok := buildRollupDistinctMetersQuery(params, r.rollupTable); ok {
+		query, args = q, a
+	}
 
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {
