@@ -3808,8 +3808,8 @@ type invoicePDFSource struct {
 // pdfSource resolves the invoice's PDF in order: its own link, its billing provider's, then
 // Flexprice's stored copy, rendered and uploaded only when missing or forced.
 func (s *invoiceService) pdfSource(ctx context.Context, inv *invoice.Invoice, forceGenerate bool) (*invoicePDFSource, error) {
-	if inv.InvoicePDFURL != nil {
-		return &invoicePDFSource{url: lo.FromPtr(inv.InvoicePDFURL)}, nil
+	if url := lo.FromPtr(inv.InvoicePDFURL); url != "" {
+		return &invoicePDFSource{url: url}, nil
 	}
 
 	if url, err := s.billingProviderPDFURL(ctx, inv.ID); err == nil && url != "" {

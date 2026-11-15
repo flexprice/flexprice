@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -43,8 +45,8 @@ func (h *EmailNotificationHandler) SendInvoiceEmail(c *gin.Context) {
 	}
 
 	var req dto.SendInvoiceEmailRequest
-	if c.Request.ContentLength > 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
 			c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
 			return
 		}

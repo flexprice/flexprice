@@ -126,6 +126,14 @@ func emailLogFilterFn(ctx context.Context, e *emaillog.EmailLog, filter interfac
 	if f.EntityType != "" && e.EntityType != f.EntityType {
 		return false
 	}
+	if f.TimeRangeFilter != nil {
+		if f.TimeRangeFilter.StartTime != nil && e.CreatedAt.Before(*f.TimeRangeFilter.StartTime) {
+			return false
+		}
+		if f.TimeRangeFilter.EndTime != nil && e.CreatedAt.After(*f.TimeRangeFilter.EndTime) {
+			return false
+		}
+	}
 	return len(f.EntityIDs) == 0 || lo.Contains(f.EntityIDs, e.EntityID)
 }
 
