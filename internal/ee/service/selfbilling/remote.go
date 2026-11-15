@@ -100,9 +100,6 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) (bool, erro
 	if err != nil || sub != nil {
 		return false, err
 	}
-	if err := c.refuseOpenPurchase(ctx, extID); err != nil {
-		return false, err
-	}
 
 	req := sdktypes.CreateSubscriptionRequest{
 		ExternalCustomerID: lo.ToPtr(extID),
@@ -120,12 +117,6 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) (bool, erro
 // StartPlanCheckout creates a subscription on in.planID behind a checkout: Cloud keeps it draft until paid and archives it
 // if the checkout fails. It has no trial, and a $0 first period activates at once with no session.
 func (c *remoteClient) StartPlanCheckout(ctx context.Context, in checkoutInput) (*remoteCheckout, error) {
-	// A $0 plan activates before Cloud creates a checkout session, so the session idempotency key never sees it.
-	// A draft is an unpaid purchase; creating another would leave both live once the first is paid.
-	if err := c.refuseOpenPurchase(ctx, in.extID); err != nil {
-		return nil, err
-	}
-
 	req := sdktypes.CreateSubscriptionRequest{
 		ExternalCustomerID: lo.ToPtr(in.extID),
 		PlanID:             in.planID,
@@ -137,8 +128,8 @@ func (c *remoteClient) StartPlanCheckout(ctx context.Context, in checkoutInput) 
 			SuccessURL:      lo.ToPtr(in.successURL),
 			FailureURL:      lo.ToPtr(in.failureURL),
 			Metadata:        map[string]string{metaExternalID: in.extID},
-			// One open purchase per current subscription, so two checkouts can never both be paid.
-			IdempotencyKey: lo.ToPtr("plan_checkout:" + in.subscriptionID),
+			// Same subscription and plan replay one checkout. A different plan is a new purchase.
+			IdempotencyKey: lo.ToPtr("plan_checkout:" + in.subscriptionID + ":" + in.planID),
 		},
 	}
 
@@ -160,27 +151,6 @@ func (c *remoteClient) StartPlanCheckout(ctx context.Context, in checkoutInput) 
 		}, nil
 	}
 	return toRemoteCheckout(resp.SubscriptionResponse.CheckoutSession), nil
-}
-
-// refuseOpenPurchase rejects a new subscription while an unpaid purchase is still a draft.
-func (c *remoteClient) refuseOpenPurchase(ctx context.Context, extID string) error {
-	resp, err := c.sdk.Subscriptions.QuerySubscription(ctx, sdktypes.SubscriptionFilter{
-		ExternalCustomerID: lo.ToPtr(extID),
-		SubscriptionStatus: []sdktypes.SubscriptionStatus{sdktypes.SubscriptionStatusDraft},
-		Limit:              lo.ToPtr(int64(1)),
-	})
-	if isNotFound(err) {
-		return nil
-	}
-	if err != nil {
-		return cloudErr(err)
-	}
-	if resp.ListSubscriptionsResponse != nil && len(resp.ListSubscriptionsResponse.Items) > 0 {
-		return ierr.NewError("a self-billing purchase is already open").
-			WithHint("A checkout is already open; finish it, or wait for it to expire, before starting another").
-			Mark(ierr.ErrAlreadyExists)
-	}
-	return nil
 }
 
 // EndTrials cancels the customer's trials on self-serve plans, without an invoice, once a paid subscription replaced them.

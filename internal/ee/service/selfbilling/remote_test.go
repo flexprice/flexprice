@@ -1021,20 +1021,9 @@ func TestStartPlanCheckout(t *testing.T) {
 	assert.EqualValues(t, 0, body["trial_period_days"])
 	assert.Nil(t, body["payment_behavior"])
 	checkout := body["checkout"].(map[string]any)
-	assert.Equal(t, "plan_checkout:sub_trial", checkout["idempotency_key"])
+	assert.Equal(t, "plan_checkout:sub_trial:plan_2", checkout["idempotency_key"])
 	assert.Equal(t, "https://app.test/ok", checkout["success_url"])
 	assert.Empty(t, f.subCancels, "the trial stays until the purchase is paid")
-}
-
-func TestStartPlanCheckout_DraftPurchaseBlocksAnother(t *testing.T) {
-	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
-	f.subs["in:t1"] = []map[string]any{{"id": "s_draft", "plan_id": "plan_2", "subscription_status": "draft"}}
-	c := newTestRemoteClient(t, f)
-
-	_, err := c.StartPlanCheckout(context.Background(), checkoutInput{extID: "in:t1", subscriptionID: "sub_trial", planID: "plan_free"})
-	require.Error(t, err)
-	assert.True(t, ierr.IsAlreadyExists(err), "got %v", err)
-	assert.Empty(t, f.subscriptions)
 }
 
 func TestStartPlanCheckout_OpenCheckoutConflicts(t *testing.T) {
