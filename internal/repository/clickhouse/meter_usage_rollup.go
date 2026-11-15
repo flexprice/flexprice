@@ -84,7 +84,7 @@ type tierSplit struct {
 	hours    []events.TimeRange
 }
 
-// splitDays reports whether a full day exists.
+// splitDays finds full UTC days.
 func splitDays(plan rollupPlan) (tierSplit, bool) {
 	var s tierSplit
 	if !plan.bucketStart.IsZero() {
