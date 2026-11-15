@@ -17,18 +17,19 @@ How Product fits with billing, entitlements and revenue recognition: what was **
 | Feature                 | What a customer may access or use. Entitlements reference it. Points to one meter.                                                                                                                                           |
 | Meter                   | Measures usage events. Prices and features reference it.                                                                                                                                                                     |
 | Price                   | How a charge is calculated, one per rate. Carries a Product, which line items inherit with no override.                                                                                                                      |
-| Plan                    | A reusable package of prices and entitlements.                                                                                                                                                                               |
-| Subscription            | One customer's arrangement. It owns the customer-specific objects below.                                                                                                                                                     |
+| Plan, Add-on            | A reusable package of prices and entitlements. A plan is the base package; add-ons extend it. Either can span several Products through its prices.                                                                          |
+| Subscription            | One customer's arrangement, with a start and end date. Standalone, or linked to a contract. It owns the customer-specific objects below.                                                                                    |
 | Line item               | A price applied to one subscription, with customer-specific quantity, dates and overrides. Its recognition pattern is resolved once, when it is created.                                                                     |
 | Recognition pattern     | How a line's revenue is earned: straight line, point in time or as consumed. As consumed covers usage billed as it is used and a prepaid amount earned as its grant is drawn.                                               |
 | Commitment              | An agreed purchase of usage over a term: a prepaid bank, a reservation or a postpaid minimum. Has one Product of its own; its scope can span prices of several Products. Covers usage charges only.                          |
-| Billing Term (BT)       | A known amount and how it is collected, e.g. 30% upfront and 70% quarterly. Owned by a Commitment or a Subscription, and carries a Product: the commitment's, or one set on the subscription BT. Several BTs can collect one amount. |
+| Billing Term (BT)       | A known amount and how it is collected, e.g. 30% upfront and 70% quarterly. Owned by a Commitment, whose Product its lines carry. Several BTs can collect one amount. Fixed fees use fixed Prices, not BTs.                  |
 | Entitlement             | What a customer may access or consume, for a Feature. Scoped to a plan, add-on, subscription or commitment.                                                                                                                  |
 | Entitlement grant       | An allowance with a quantity or value, eligibility and validity. One that does not reset and was paid for is earned as it is drawn.                                                                                          |
 | Credit Grant            | Issues credits, paid or free, once or on a schedule, with expiry.                                                                                                                                                            |
 | Wallet                  | Holds credits and applies them to invoices as settlement. Buying credits is a prepayment, not a promise. Coverage under an agreed scope is an entitlement grant, not a wallet.                                               |
-| Contract                | A customer's agreement for one term. Holds one or more of the customer's subscriptions, with their commitments and BTs. A renewal starts a new contract.                                                                     |
-| POB                     | A promise to the customer. One per contract, Product and recognition pattern. Fulfilling it earns the consideration allocated to it.                                                                                         |
+| Contract                | A customer's agreement for one term, with a start and end date. Records the Plans, Add-ons, Products, Charges and overrides sold; links one or more subscriptions that bill and provision them; owns the POBs. A renewal starts a new contract. |
+| POB                     | A promise to the customer under a contract. One per contract, Product and recognition pattern. Stores allocated, billed, earned and recognised amounts separately. Standalone subscriptions have no POBs.                  |
+| Allocation              | How a contract's fixed consideration is spread across its POBs: relative SSP, or an approved manual split. Allocations sum to the pool.                                                                                     |
 | Invoice, Credit Note    | Billing, and adjustments to billing.                                                                                                                                                                                         |
 | Payment, Refund         | Settlement, and its reversal.                                                                                                                                                                                                |
 | Journal entry and lines | Immutable financial effects. A line may carry attribution such as POB and Product.                                                                                                                                           |
@@ -210,9 +211,7 @@ erDiagram
 erDiagram
   CONTRACT ||--o{ CONTRACT_ASSOCIATION : "contract_id"
   SUBSCRIPTION ||--o{ CONTRACT_ASSOCIATION : "entity_id"
-  COMMITMENT |o--o{ BILLING_TERM : "owner_id"
-  SUBSCRIPTION |o--o{ BILLING_TERM : "owner_id"
-  PRODUCT ||--o{ BILLING_TERM : "product_id"
+  COMMITMENT ||--o{ BILLING_TERM : "owner_id"
   BILLING_TERM ||--|{ BILLING_INSTALMENT : "billing_term_id"
   CONTRACT ||--o{ POB : "contract_id"
   PRODUCT ||--o{ POB : "product_id"
@@ -221,6 +220,13 @@ erDiagram
   COMMITMENT |o--o{ INVOICE_LINE : "commitment_id"
   POB |o--o{ JOURNAL_LINE : "pob_id"
 
+  CONTRACT {
+    string id PK
+    time start_date
+    time end_date
+    decimal commercial_value "new"
+    decimal allocation_pool "new; fixed consideration"
+  }
   CONTRACT_ASSOCIATION {
     string contract_id FK
     string entity_type "subscription"
@@ -228,9 +234,8 @@ erDiagram
   }
   BILLING_TERM {
     string id PK
-    string owner_type "commitment or subscription (new)"
+    string owner_type "commitment"
     string owner_id FK
-    string product_id FK "new; the commitment's, or set on a subscription BT"
   }
   BILLING_INSTALMENT {
     string id PK
@@ -242,6 +247,7 @@ erDiagram
     string contract_id FK
     string product_id FK "new"
     string recognition_method "unique with contract and product among open POBs"
+    decimal allocated_amount "new; fixed consideration; billed, earned and recognised derive from JEs"
   }
   INVOICE_LINE {
     string id PK
@@ -257,12 +263,71 @@ erDiagram
   }
 ```
 
-- Product is set on Price, Commitment and a subscription BT. Line items inherit it from the price, a commitment's BT from the commitment, and invoice and journal lines snapshot it.
+- Product is set on Price and Commitment. Line items inherit it from the price, BT lines from the commitment, and invoice and journal lines snapshot it. Every Price in a contract has a Product; a customer override keeps the original Price's Product.
 - A line item's recognition pattern is resolved once, when it is created: usage is as consumed, one-time is point in time, other fixed prices are straight line, and a fixed price that funds a grant which does not reset is as consumed.
 - A POB is one per contract, Product and recognition pattern. An invoice line finds its POB through its line item, its BT instalment or its commitment, so there is no POB association.
-- A contract holds the customer's subscriptions; commitments come with their subscription. A renewal starts a new contract.
-- A BT has one owner, a commitment or a subscription, and carries a Product. Its instalment lines join the POB of that Product: as consumed for a commitment's BT, straight line over the instalment's service period for a subscription BT.
-- A commitment covers usage charges and provides its entitlement and grant.
+- A contract links the customer's subscriptions; their line items and commitments are the record of what was sold, and the contract holds only its header and POB allocations. A linked subscription has an end date, and billing resolves to the contract through the subscription for the service period. A renewal starts a new contract.
+- BTs are owned by commitments only. Ordinary fixed fees are fixed Prices whose term value comes from the actual billing schedule.
+- A commitment covers usage charges and provides its entitlement and grant. Its grant can be drawn by eligible prices of several Products; each drawdown records the consuming price and Product, and the funding commitment.
+
+## Standalone and contract-based recognition
+
+A subscription is either standalone or linked to a contract. Both post JEs; only contracts have POBs.
+
+| | Standalone subscription | Contract-based subscription |
+| --- | --- | --- |
+| Source of revenue | Finalised invoice lines only: net amount, service period and the line's recognition pattern | POBs: allocated amount, earned by schedule or fulfillment |
+| Before invoicing | Nothing accrues | Earned revenue accrues as unbilled |
+| Recurring fixed charge | Ratable over the line's service period | Straight line POB |
+| One-time charge | Point in time, at finalisation | Point in time POB |
+| Usage and overage | At finalisation, for the billed period | As consumed POB, as used |
+| Commitment BT instalment | Ratable over the instalment's service period, following the invoice | As consumed POB, by grant drawdown |
+| Minimum true-up | At finalisation of the true-up line | When the window closes, from its allocation |
+| Arrears billing | Elapsed periods are recognised in full at finalisation (catch-up) | Already earned; the invoice only offsets unbilled |
+| Credit note | Reduces deferred first, then recognised | Reduces the POB's billed; the allocation is unchanged |
+
+The examples below show contract-based recognition. Under a standalone subscription, each one follows the left column: Example 1 recognises 3,000 on Apr 1 when the arrears invoice finalises, and the bank in Examples 2, 3 and 5 earns ratably over each instalment's service period instead of by drawdown.
+
+**Future extension:** recognise standalone prepaid commitment revenue from actual drawdowns, independently of invoicing.
+
+## Allocation
+
+A contract tracks two totals: **commercial value**, what the customer agreed to pay, and the **allocation pool**, the fixed consideration spread across POBs. They match today; future pass-through charges may make them differ.
+
+- In v1 the pool is allocated by relative SSP, or by an approved manual split. Allocations sum to the pool.
+- A POB can be allocated 0 and still track fulfillment. A $0 sale price can still receive an SSP allocation: two distinct promises with equal SSPs billed $10 and $0 are allocated $5 and $5, and each earns its $5 by its own pattern.
+- A variable-only POB can start with no fixed allocation and earn later. A POB can hold both: bank drawdowns release up to the bank's allocation, and overage adds revenue above it.
+- A single price never bundles several Products. Billing credits each line's own POB, allocation sets what each POB earns, and each POB's billed and earned net into its own deferred or unbilled. The contract reports their net. See Example 10.
+
+## Journal entries and amendments
+
+- Billing events (invoice finalisation, void, credit note, payment, refund) each post their own JE. Recognition and offset JEs post asynchronously at accounting period close.
+- JE lines carry Product, and POB for contract revenue, so one invoice can fund several Products or POBs.
+- Posted JEs are immutable. Corrections are reversals or adjustment entries. A retried workflow posts each event once.
+- An amendment is effective-dated and preserves posted history. It can modify or add a subscription, add a POB for a new promise, or change the remaining allocation or schedule of an existing POB. A billing-only change affects only the invoice schedule.
+
+## Rollout by section
+
+### 1. Products
+
+Products ship in the catalog for every tenant. A Product holds template prices, and plan, add-on and subscription prices name the Product they belong to.
+
+| Action | Result |
+| --- | --- |
+| Create a Product | `lookup_key` is generated from the name when left empty |
+| Create a price on the Product | A template price: `entity_type=PRODUCT`, `entity_id` and `product_id` = the Product. It has no scope and is never billed directly. |
+| Add a Product to a plan, add-on, or a contract's subscription | Each selected template becomes a price of that entity, linked to the Product by `product_id`. The copy keeps no link to its template and does not follow its edits. The same Product can be added again to bring in more templates. |
+| Create a price in a plan or add-on | `product_id` is optional |
+| Set the Product on an existing plan or add-on price | Allowed once, while `product_id` is empty. It never changes after that. |
+| Delete a Product | Also deletes its template prices that no subscription uses. Blocked while any plan, add-on or subscription price names it. |
+
+**Schema**
+
+| Change | Where |
+| --- | --- |
+| `PRICE_ENTITY_TYPE_PRODUCT = "PRODUCT"` | `internal/types/price.go`. `entity_type` is already varchar(20), so the enum needs no migration |
+
+The service enforces `product_id = entity_id` for template prices, and lists and pickers of plan or add-on prices exclude them. Price stays optional on `product_id` until it joins a contract (Contracts section). The ERP item and per-Product account overrides ship with ERP posting (revenue recognition phase 2 ERD), not with this release.
 
 ## Framework
 
@@ -279,15 +344,15 @@ Each example answers these, in order:
 | #   | Example                                                                                 | What it tests                                                                                                  |
 | --- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | 1   | Recurring platform subscription                                                         | The baseline: Product inherited from Price, time-based earning                                                 |
-| 2   | Platform access plus a purchased usage bank (60k + 60k, four 30k invoices)              | Two Products, BTs per component, why instalments don't refill the bank                                         |
+| 2   | Platform access plus a purchased usage bank (60k + 60k, four 30k invoices)              | Two Products, a fixed Price and a commitment BT, why instalments don't refill the bank                         |
 | 3   | Same 12k purchase, different collection (30% upfront + 70% monthly, vs all at year-end) | Earning is independent of collection                                                                           |
-| 4   | Metered usage with a postpaid minimum                                                   | Meter, Price, Commitment, usage above the minimum and true-up with no entitlement; how the shortfall is earned |
+| 4   | Metered usage with a postpaid minimum                                                   | A minimum is variable consideration; usage and true-up earn as billed in v1                                    |
 | 5   | Purchased allowance (100 units for 80)                                                  | Operational value ≠ allocated value; breakage on the POB                                                       |
 | 6   | Wallet credits (100 credits for 80)                                                     | Consumption vs settlement vs expiry; credits are payment, not a POB                                            |
 | 7   | Free credits (50 promotional credits)                                                   | No revenue and no liability; the whole settlement is a discount                                                |
 | 8   | Allowance inside paid access (100 runs a day)                                           | An allowance earns by time with access, not by drawdown                                                        |
-| 9   | One bank covering several Products                                                      | One commitment and POB for a bank several Products draw from; revenue by drawing Product                       |
-| 10  | One agreement collected by a contract-level BT (100k, four 25k instalments)             | A BT owned by the contract; billing split across POBs by allocation                                            |
+| 9   | Prepaid usage across several Products                                                   | A commitment per Product; no shared bank                                                                       |
+| 10  | Negotiated prices reallocated by SSP (72k + 48k billed, 60k + 60k allocated)            | SSP changes earning, not billing; POB positions net at the contract                                            |
 
 
 ### Example 1 — Recurring platform subscription
@@ -345,7 +410,7 @@ Journal lines: prod_platform, from the POB
 
 ### Example 2 — Platform access plus a purchased usage bank
 
-**In short:** Contract = Subscription + BT A (on the subscription, `prod_platform`) + Commitment (`prod_agent_usage`) + BT B (on the commitment) + usage line item (`prod_agent_usage`) + grant (from the commitment) + 2 POBs (`prod_platform`, straight line; `prod_agent_usage`, as consumed)
+**In short:** Contract = Subscription + platform line item (`prod_platform`) + Commitment (`prod_agent_usage`) + BT (on the commitment) + usage line item (`prod_agent_usage`) + grant (from the commitment) + 2 POBs (`prod_platform`, straight line; `prod_agent_usage`, as consumed)
 
 **1. Agreement**
 
@@ -355,7 +420,7 @@ Globex buys a one-year deal starting Jan 1:
 - Agent usage bank: 60,000, all available from Jan 1. Usage beyond the bank is billed at the overage rate. Unused rights lapse at Dec 31 with no refund and no rollover.
 - Collection: four quarterly invoices of 30,000, in arrears.
 
-Each component is allocated its own 60,000.
+Relative SSP allocates 60,000 to each component.
 
 **2. Entities**
 
@@ -363,9 +428,9 @@ Each component is allocated its own 60,000.
 | Entity            | Instance                                                    | Responsibility                                                        |
 | ----------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
 | Product           | `prod_platform`, `prod_agent_usage`                         | Name the two things sold                                              |
-| Billing Term A    | 4 × 15,000 in arrears, on the subscription, `prod_platform` | Collects access. Carries its own Product.                             |
+| Price, line item  | Platform, 15,000 a quarter in arrears, `prod_platform`      | Bills access each quarter                                             |
 | Commitment        | 60,000 usage bank for the year, scoped to the usage price   | Holds the bank's value and Product                                    |
-| Billing Term B    | 4 × 15,000 in arrears, on the commitment                    | Collects the bank's value. Carries the commitment's Product.          |
+| Billing Term      | 4 × 15,000 in arrears, on the commitment                    | Collects the bank's value. Carries the commitment's Product.          |
 | Entitlement       | Access to the platform feature, from the plan               | Gates access. Not read by revenue.                                    |
 | Entitlement grant | 60,000 of agent usage, valid Jan 1 – Dec 31, from the commitment | Provides the bank; tracks its drawdown                           |
 | Price, line item  | Agent usage, per unit                                       | Values each unit drawn from the bank. Covered usage is 0 on invoices; overage is billed here. |
@@ -373,10 +438,10 @@ Each component is allocated its own 60,000.
 | Contract          | Globex contract                                             | Groups the POBs                                                       |
 | POB A             | `prod_platform`, straight line                              | Promise delivered over time                                           |
 | POB B             | `prod_agent_usage`, as consumed                             | Promise delivered as the grant is drawn down, and as overage is used  |
-| Invoice           | Quarterly invoice                                           | One per quarter: an instalment from each BT, plus any overage         |
+| Invoice           | Quarterly invoice                                           | One per quarter: the platform line, the BT instalment, and any overage |
 
 
-Platform access has no price or line item. BT A, owned by the subscription, collects it, and its instalment lines earn into POB A by time. The bank's BT is on the commitment.
+Access is an ordinary fixed Price, so it needs no BT. Only the bank, a commitment, has a BT.
 
 **3. Earning and financial changes**
 
@@ -388,7 +453,7 @@ Platform access has no price or line item. BT A, owned by the subscription, coll
 | ------------------ | -------------------------------------------------------------------------------------- | -------- | ------------- |
 | Jan month end      | Dr unbilled 7,000 / Cr revenue 5,000 (platform) + 2,000 (usage)                        | 7,000    | 0             |
 | Feb, Mar month end | 8,000 each (5,000 + 3,000)                                                             | 23,000   | 0             |
-| Apr 1, Q1 invoice  | Dr AR 30,000 / Cr deferred 15,000 (BT A, platform) + 15,000 (BT B, usage)              | 23,000   | 30,000        |
+| Apr 1, Q1 invoice  | Dr AR 30,000 / Cr deferred 15,000 (platform line) + 15,000 (BT instalment, usage)      | 23,000   | 30,000        |
 | Offset for Q1      | POB A 15,000. POB B: min(15,000 billed, 8,000 earned) = 8,000                          | 0        | 7,000 (usage) |
 
 
@@ -419,9 +484,9 @@ After the Q1 invoice:
 ```
 Contract
 └── Subscription
-    ├── BT A: 4 × 15,000 (prod_platform) ──▶ instalment lines ──▶ POB A (prod_platform, straight line)
+    ├── Platform line item (Price: prod_platform, 15,000 a quarter, straight line) ──▶ POB A (prod_platform, straight line)
     ├── Commitment: bank, 60,000 (prod_agent_usage)
-    │     ├── BT B: 4 × 15,000 (prod_agent_usage) ──▶ instalment lines ──▶ POB B
+    │     ├── BT: 4 × 15,000 (prod_agent_usage) ──▶ instalment lines ──▶ POB B
     │     ├── Entitlement (entity_type=COMMITMENT)
     │     │     └──entitlement_config_id──▶ Grant: 60,000, Jan 1 – Dec 31 ── drawdown ──▶ POB B
     │     └── scope ──▶ agent usage price
@@ -430,7 +495,7 @@ Contract
     └── Entitlement: access to the platform feature, from the plan ── no POB
 ```
 
-**Rule:** A known amount for access can be collected by a subscription BT with its own Product; its instalments earn by time. A prepaid usage bank is a Commitment with one Product, collected by its BT and provided by its grant. Its instalments, drawdown and overage all earn into the POB of that Product, as consumed. Rights follow the agreement; collection only changes billed.
+**Rule:** Access is a fixed Price; its lines earn by time. A prepaid usage bank is a Commitment with one Product, collected by its BT and provided by its grant. Its instalments, drawdown and overage all earn into the POB of that Product, as consumed. Rights follow the agreement; collection only changes billed.
 
 ### Example 3 — Same 12k purchase, different collection
 
@@ -477,7 +542,7 @@ The POB earns what's drawn from the grant: 400, 1,000 and 1,200. That's the same
 
 X never carries unbilled here, and Y never carries deferred. If usage ran ahead of X's billing, X would carry unbilled too. The Dec 31 row assumes the bank is fully used, or that the remainder is breakage on lapse (Example 2).
 
-**Annual access, delivered evenly.** Under both options, a 12,000 access charge collected by a subscription BT earns 1,000 a month. By Mar 31, X shows 2,700 deferred and Y shows 3,000 unbilled.
+**Annual access, delivered evenly.** A 12,000 access Price earns 1,000 a month however it is billed. Billed annually upfront, it shows 9,000 deferred at Mar 31; billed annually in arrears, 3,000 unbilled. A fixed Price follows its own cadence, so collecting access as 30% upfront and 70% monthly needs custom billing schedules (future extension).
 
 **4. Relationships**
 
@@ -498,7 +563,7 @@ Only the BT differs between X and Y.
 
 ### Example 4 — Metered usage with a postpaid minimum
 
-**In short:** Contract = Subscription + usage line item (`prod_api_calls`) + minimum Commitment (`prod_api_calls`, scoped to the usage price) + 1 POB (`prod_api_calls`, as consumed)
+**In short:** Contract = Subscription + usage line item (`prod_api_calls`) + minimum Commitment (`prod_api_calls`, scoped to the usage price) + 1 POB (`prod_api_calls`, as consumed, allocated 0)
 
 **1. Agreement**
 
@@ -509,39 +574,38 @@ Q1 usage: Jan 800, Feb 900, Mar 700. The total is 2,400, so the shortfall is 600
 **2. Entities**
 
 
-| Entity       | Instance                                                | Responsibility                                                      |
-| ------------ | ------------------------------------------------------- | ------------------------------------------------------------------- |
-| Product      | `prod_api_calls`                                        | Names what is sold                                                  |
-| Meter        | API calls                                               | Counts usage events                                                 |
-| Price        | 0.01 per call, monthly in arrears                       | Values usage                                                        |
-| Subscription | The customer's subscription                             | Holds the line item and the commitment                              |
-| Line item    | API calls line                                          | Bills usage each month                                              |
-| Commitment   | 3,000 minimum per quarter, scoped to the API calls price | Holds the minimum and Product; sets the true-up                    |
-| Contract     | The customer's contract                                 | Groups the POB                                                      |
-| POB          | `prod_api_calls`, as consumed                           | Earns usage as it happens, and any shortfall when the window closes |
-| Invoice      | Monthly; the quarter's last one adds a true-up line     | Bills usage and the shortfall                                       |
+| Entity       | Instance                                                 | Responsibility                                       |
+| ------------ | -------------------------------------------------------- | ---------------------------------------------------- |
+| Product      | `prod_api_calls`                                         | Names what is sold                                   |
+| Meter        | API calls                                                | Counts usage events                                  |
+| Price        | 0.01 per call, monthly in arrears                        | Values usage                                         |
+| Subscription | The customer's subscription                              | Holds the line item and the commitment               |
+| Line item    | API calls line                                           | Bills usage each month                               |
+| Commitment   | 3,000 minimum per quarter, scoped to the API calls price | Holds the minimum and Product; sets the true-up      |
+| Contract     | The customer's contract                                  | Owns the POB                                         |
+| POB          | `prod_api_calls`, as consumed, allocated 0               | Earns usage and the true-up; both are variable       |
+| Invoice      | Monthly; the quarter's last one adds a true-up line      | Bills usage and the shortfall                        |
 
 
-Not needed: an entitlement or grant (nothing gates or draws down), a BT (the minimum is a floor, not a schedule), a POB of the commitment's own, or a wallet.
+Not needed: an entitlement or grant, a BT (the minimum is a floor, not a schedule), a POB of the commitment's own, or a wallet.
 
-The true-up line reaches its POB through its commitment: it carries the commitment's Product, which here is the usage Product, so it joins the usage POB. A commitment given a Product of its own would put its true-ups in a separate POB.
+The minimum is variable consideration: nothing about it is in the allocation pool, so the POB's allocation is 0. The true-up line carries the commitment's Product, which here is the usage Product, so it joins the usage POB.
 
 **3. Earning and financial changes**
 
-Usage earns as it happens. The shortfall earns on Mar 31, when the window closes and the minimum is due. It comes from the window's allocation, not from the true-up invoice. If the true-up were invoiced later, Q1 revenue would still be 3,000.
+In v1, usage and true-ups earn as billed: each finalised invoice line earns ratably over its service period. Billed equals earned, so the POB carries no unbilled or deferred. A month's revenue lands in that month as long as its invoice finalises before the month closes; otherwise it lands in the first open period.
 
 
-| Event                     | Entry (`prod_api_calls`)                                               | Unbilled | Deferred |
-| ------------------------- | ---------------------------------------------------------------------- | -------- | -------- |
-| Jan 31, usage             | Dr unbilled 800 / Cr revenue 800                                       | 800      | 0        |
-| Feb 1, invoice and offset | Dr AR 800 / Cr deferred 800; offset 800                                | 0        | 0        |
-| Feb 28 and Mar 1          | Same, for 900                                                          | 0        | 0        |
-| Mar 31, usage             | Dr unbilled 700 / Cr revenue 700                                       | 700      | 0        |
-| Mar 31, window closes     | Shortfall: Dr unbilled 600 / Cr revenue 600                            | 1,300    | 0        |
-| Apr 1, invoice and offset | Dr AR 1,300 (usage 700, true-up 600) / Cr deferred 1,300; offset 1,300 | 0        | 0        |
+| Event                         | Entry (`prod_api_calls`)                                      | Revenue lands in |
+| ----------------------------- | ------------------------------------------------------------- | ---------------- |
+| Feb 1, January usage invoiced | Dr AR 800 / Cr deferred 800; Dr deferred 800 / Cr revenue 800 | January          |
+| Mar 1, February usage         | Same, for 900                                                 | February         |
+| Apr 1, March usage + true-up  | Dr AR 1,300 / Cr deferred 1,300; Dr deferred / Cr revenue: 700 usage (March) + 600 true-up (ratably over Jan–Mar: 200 a month) | March, with January and February's 200 each in the first open period if they have closed |
 
 
 Q1 revenue is 3,000. Had usage been 3,500, there would be no true-up, and 3,500 would be earned as usage.
+
+**Later, as consumed:** usage earns as it happens, from metering, before it is invoiced, and the true-up earns when the window closes on Mar 31.
 
 **4. Relationships**
 
@@ -550,14 +614,14 @@ Contract
 └── Subscription
     ├── Commitment: 3,000 minimum a quarter (prod_api_calls)
     │     ├── scope ──▶ API calls price
-    │     └── true-up invoice line: prod_api_calls ──commitment_id──▶ POB (prod_api_calls, as consumed)
-    └── API calls line item (Price: prod_api_calls, Meter: API calls, as consumed) ──▶ same POB
+    │     └── true-up invoice line: prod_api_calls ──commitment_id──▶ POB (prod_api_calls, as consumed, allocated 0)
+    └── API calls line item (Price: prod_api_calls, Meter: API calls) ──▶ same POB
           └── usage invoice lines: prod_api_calls
 
 No BT, no entitlement.
 ```
 
-**Rule:** A minimum is a floor on what the usage pays, not a separate promise. Its true-up joins the POB of the commitment's Product and earns when the window closes, from the window's allocation. The true-up invoice only bills it.
+**Rule:** A minimum is a floor on what the usage pays, not a separate promise, and it is variable consideration outside the allocation. Its true-up joins the POB of the commitment's Product. In v1 both usage and true-up earn as billed, over their invoice lines' service periods.
 
 ### Example 5 — Purchased allowance
 
@@ -784,145 +848,132 @@ The overage price and the agent runs feature share the agent runs meter.
 
 **Rule:** An allowance that resets and doesn't carry over is part of the access promise. It earns by time with access, not by drawdown. Only usage beyond it earns as it is used.
 
-### Example 9 — One bank covering several Products
+### Example 9 — Prepaid usage across several Products
 
-**In short:** Contract = Subscription + Commitment (`prod_ai_bank`) + BT (on the commitment) + 3 usage lines (voice, text, model) + grant + 1 bank POB (`prod_ai_bank`, as consumed) + a usage POB per drawing Product, for overage
+**In short:** Contract = Subscription + 3 Commitments (`prod_voice`, `prod_text`, `prod_model`), each with a BT + 3 usage lines + 3 POBs (one per Product)
 
 **1. Agreement**
 
-A customer buys a 30,000 AI usage bank for the year, invoiced upfront on Jan 1. Voice, text and model usage can all draw from it, each at its own price. Usage beyond the bank is billed at those prices. Unused rights lapse at Dec 31.
-
-January usage: voice 1,200, text 500, model 300.
+A customer buys 30,000 of AI usage for the year, invoiced upfront on Jan 1: 15,000 of voice, 9,000 of text and 6,000 of model usage. Each part covers only its own usage, at that usage's price. Usage beyond a part is billed at its price as overage. Unused rights lapse at Dec 31.
 
 **2. Entities**
 
 
-| Entity             | Instance                                                             | Responsibility                                               |
-| ------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Product            | `prod_voice`, `prod_text`, `prod_model`                              | Name the three kinds of usage                                |
-| Product            | `prod_ai_bank`                                                       | Names the bank itself, which is what was sold                |
-| Commitment         | 30,000 bank for the year, scoped to the three usage prices           | Holds the value and `prod_ai_bank`                           |
-| Billing Term       | 30,000 upfront on Jan 1                                              | Collects the value; carries `prod_ai_bank`                   |
-| Entitlement, grant | One grant of 30,000, Jan 1 – Dec 31; eligible: voice, text and model | Provides the bank; tracks drawdown and which Product drew it |
-| Prices, line items | Voice, text and model usage lines                                    | Value each unit drawn, and bill overage                      |
-| Contract, POBs     | Bank POB: `prod_ai_bank`, as consumed. Usage POBs: `prod_voice`, `prod_text`, `prod_model`, as consumed | The bank POB earns as the grant is drawn; a usage POB earns its Product's overage |
-| Invoice            | The BT invoice, then overage invoices                                | Bills the BT row and any overage                             |
+| Entity             | Instance                                                              | Responsibility                                 |
+| ------------------ | --------------------------------------------------------------------- | ---------------------------------------------- |
+| Product            | `prod_voice`, `prod_text`, `prod_model`                               | Name the three kinds of usage                  |
+| Commitments        | 15,000 voice, 9,000 text, 6,000 model; each scoped to its own price   | Hold each part's value and Product             |
+| Billing Terms      | One per commitment, upfront on Jan 1                                  | Collect each value; one invoice, three lines   |
+| Prices, line items | Voice, text and model usage lines                                     | Value units drawn, and bill overage            |
+| Contract           | Pool 30,000                                                           | Owns the POBs and the allocation               |
+| POBs               | One per Product, allocated 15,000, 9,000 and 6,000                    | Earn each commitment's allocation              |
 
 
-Not needed: splitting the bank across the drawing Products. The usage mix isn't known upfront, so there is no fixed amount to give each; the bank keeps one POB under its own Product.
+Not needed: a shared bank. A commitment belongs to one Product and covers only its prices, so one pool spent across several Products is either split into a commitment per Product, as here, or sold as one Product (say `prod_ai_usage`) whose prices are voice, text and model.
 
 **3. Earning and financial changes**
 
-The bank POB earns what's drawn, valued at each line's price: 2,000 in January. Its deferred and unbilled lines carry `prod_ai_bank`. Its revenue lines carry the Product that drew it, taken from the grant's drawdown records.
+In v1 each prepaid commitment earns its allocation straight line over its term: voice 1,250, text 750 and model 500 a month. Overage earns as billed, on the same Product's POB, above its allocation.
 
 
-| Event               | Entry                                                                                                                       | Unbilled | Deferred |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------- | -------- |
-| Jan 1, BT invoice   | Dr AR 30,000 / Cr deferred 30,000 (`prod_ai_bank`)                                                                          | 0        | 30,000   |
-| Jan 31, 2,000 drawn | Dr unbilled 2,000 (`prod_ai_bank`) / Cr revenue 1,200 (`prod_voice`) + 500 (`prod_text`) + 300 (`prod_model`); offset 2,000 | 0        | 28,000   |
+| Event              | Entry                                                                                                | Deferred |
+| ------------------ | ---------------------------------------------------------------------------------------------------- | -------- |
+| Jan 1, BT invoice  | Dr AR 30,000 / Cr deferred 15,000 (`prod_voice`) + 9,000 (`prod_text`) + 6,000 (`prod_model`)         | 30,000   |
+| Each month end     | Dr deferred 2,500 / Cr revenue 1,250 (`prod_voice`) + 750 (`prod_text`) + 500 (`prod_model`)          | −2,500   |
+| Dec 1, voice overage of 400 invoiced | Dr AR 400 / Cr deferred 400; Dr deferred 400 / Cr revenue 400 (`prod_voice`)       | —        |
 
 
-**Overage.** Say the bank runs out in November, and 400 of voice usage comes after it. That 400 is invoiced on Dec 1 on the voice line, so it earns on the (`prod_voice`, as consumed) POB, not the bank's. Its unbilled, deferred and revenue lines all carry `prod_voice` and net within that POB.
+With SSPs given, the 30,000 pool can be reallocated across the three POBs; the BT invoice still bills 15,000, 9,000 and 6,000.
+
+**Later, as consumed:** each POB earns its commitment's drawdown, and the unused remainder is breakage at Dec 31.
 
 **4. Relationships**
 
 ```
-Contract
+Contract (pool 30,000)
 └── Subscription
-    ├── Commitment: bank, 30,000 (prod_ai_bank)
-    │     ├── BT: 30,000 upfront (prod_ai_bank) ──▶ instalment line ──▶ POB (prod_ai_bank, as consumed)
-    │     ├── Entitlement ──▶ Grant: 30,000; scoped to voice, text and model ── drawdown ──▶ same POB
-    │     └── scope ──▶ voice, text and model prices
-    ├── Voice line item (Price: prod_voice, as consumed)  ──▶ POB (prod_voice, as consumed)  ┐
-    ├── Text line item  (Price: prod_text, as consumed)   ──▶ POB (prod_text, as consumed)   ├── overage only
-    └── Model line item (Price: prod_model, as consumed)  ──▶ POB (prod_model, as consumed)  ┘
-
-Bank POB revenue lines: the drawing line's Product.
-Bank POB deferred, unbilled and breakage lines: prod_ai_bank.
-A commitment scoped to one Product's prices carries that Product; scoped to several, its own.
+    ├── Commitment: voice 15,000 (prod_voice) ── BT: upfront ──▶ POB (prod_voice), straight line
+    │     └── scope ──▶ voice price
+    ├── Commitment: text 9,000 (prod_text)    ── BT: upfront ──▶ POB (prod_text), straight line
+    │     └── scope ──▶ text price
+    ├── Commitment: model 6,000 (prod_model)  ── BT: upfront ──▶ POB (prod_model), straight line
+    │     └── scope ──▶ model price
+    ├── Voice line item (Price: prod_voice) ──▶ POB (prod_voice), overage as billed
+    ├── Text line item  (Price: prod_text)  ──▶ POB (prod_text), overage as billed
+    └── Model line item (Price: prod_model) ──▶ POB (prod_model), overage as billed
 ```
 
-**Rule:** A bank shared by several Products is one commitment and one POB under the bank's own Product. Its deferred, unbilled and breakage lines carry the bank's Product; its revenue lines carry the Product that drew it. Overage after the bank runs out earns on the drawing Product's own usage POB.
+**Rule:** A commitment has one Product and covers only that Product's prices. Usage prepaid across several Products is a commitment per Product, or one Product that groups the usage prices. Each commitment earns into its Product's POB; overage adds to that POB above its allocation.
 
-### Example 10 — One agreement collected by a contract-level BT
+### Example 10 — Negotiated prices reallocated by SSP
 
-**In short:** Contract = Subscription + Commitment A (`prod_platform`) + Commitment B (`prod_agent_usage`) + 1 BT (owned by the contract) + usage line item + grant (from B) + 2 POBs (one per commitment)
+**In short:** Contract = Subscription + platform line item (`prod_platform`) + Commitment (`prod_agent_usage`) with a BT + usage line item + 2 POBs, billed 72,000 / 48,000, allocated 60,000 / 60,000 by SSP
 
 **1. Agreement**
 
-A customer signs one 100,000 agreement for the year: platform access and an agent usage bank. It's collected as four quarterly instalments of 25,000, in arrears. The instalments are for the whole agreement, not for either part.
-
-The standalone selling prices allocate 48,000 to access and 52,000 to the bank. Q1 usage: Jan 4,000, Feb 5,000, Mar 6,000.
+A customer signs a 120,000 agreement for the year: platform access at 18,000 a quarter and a 48,000 agent usage bank collected as 12,000 a quarter, both in arrears. The negotiated prices favour the bank, but the two have equal standalone selling prices, so each is allocated 60,000.
 
 **2. Entities**
 
 
-| Entity             | Instance                                                            | Responsibility                                         |
-| ------------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
-| Product            | `prod_platform`, `prod_agent_usage`                                 | Name the two things sold                               |
-| Commitment A       | Platform access for the year, no usage scope; allocated 48,000      | Holds access's value and Product                       |
-| Commitment B       | Usage bank for the year, scoped to the usage line; allocated 52,000 | Holds the bank's value and Product; provides the grant |
-| Billing Term       | 4 × 25,000 in arrears, owned by the contract                        | Collects the agreement. Has no Product of its own.     |
-| Entitlement, grant | Access to `prod_platform`; a 52,000 grant of agent usage            | Gate access; provide the bank                          |
-| Price, line item   | Agent usage, per unit                                               | Values units drawn, and overage                        |
-| Subscription       | The customer's subscription                                         | Holds the usage line and the commitments               |
-| Contract           | The customer's contract                                             | Owns the BT; groups the POBs                           |
-| POB A, POB B       | Access, from Commitment A; the bank, from Commitment B              | Earn by time; earn by drawdown                         |
-| Invoice            | Quarterly                                                           | One line per instalment                                |
+| Entity           | Instance                                                         | Responsibility                                     |
+| ---------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+| Product          | `prod_platform`, `prod_agent_usage`                              | Name the two things sold                           |
+| Price, line item | Platform, 18,000 a quarter in arrears (`prod_platform`)          | Bills access                                       |
+| Commitment       | 48,000 usage bank for the year (`prod_agent_usage`)              | Holds the bank's value and Product                 |
+| Billing Term     | 4 × 12,000 in arrears, on the commitment                         | Collects the bank                                  |
+| Price, line item | Agent usage, per unit (`prod_agent_usage`)                       | Values units drawn, and bills overage              |
+| Contract         | Pool 120,000; SSPs equal                                         | Owns the POBs and the allocation                   |
+| POB A, POB B     | `prod_platform` and `prod_agent_usage`, straight line, 60,000 each | Earn their allocation                            |
 
 
-Not needed: BTs on the commitments.
+Not needed: a bundled price. Each charge is a Price or commitment with one Product; only the allocation moves revenue between them.
 
 **3. Earning and financial changes**
 
-POB A earns 4,000 a month by time. POB B earns usage as it's drawn. Each 25,000 instalment is split between the POBs by allocation, 48% and 52%: 12,000 to access and 13,000 to the bank.
+Without SSPs each POB would be allocated what it bills: 72,000 and 48,000. With equal SSPs the 120,000 pool is reallocated to 60,000 each, so each POB earns 5,000 a month. Billing still credits each line's own POB; the monthly offset nets each POB's billed against its earned.
 
 
-| Event                | Entry                                                                                                    | Unbilled      | Deferred |
-| -------------------- | -------------------------------------------------------------------------------------------------------- | ------------- | -------- |
-| Jan–Mar month ends   | Dr unbilled / Cr revenue: 4,000 a month (`prod_platform`); 4,000, 5,000 and 6,000 (`prod_agent_usage`)   | 27,000        | 0        |
-| Apr 1, Q1 instalment | Dr AR 25,000 / Cr deferred 12,000 (`prod_platform`) + 13,000 (`prod_agent_usage`), from one invoice line | 27,000        | 25,000   |
-| Offset for Q1        | POB A 12,000. POB B: min(13,000 billed, 15,000 earned) = 13,000                                          | 2,000 (usage) | 0        |
+| Event                | Entry                                                                         | POB A (`prod_platform`) | POB B (`prod_agent_usage`) |
+| -------------------- | ----------------------------------------------------------------------------- | ----------------------- | -------------------------- |
+| Jan–Mar month ends   | Dr unbilled / Cr revenue 5,000 a month on each POB                            | unbilled 15,000         | unbilled 15,000            |
+| Apr 1, Q1 invoice    | Dr AR 30,000 / Cr deferred 18,000 (POB A) + 12,000 (POB B)                     | deferred 18,000         | deferred 12,000            |
+| Offset for Q1        | Each POB nets billed against earned                                           | deferred 3,000          | unbilled 3,000             |
 
 
-After Q1, revenue is 27,000, and POB B carries 2,000 unbilled because its usage ran ahead of its share of billing.
+After Q1, revenue is 30,000, the same as billed. POB A is 3,000 ahead in billing and POB B 3,000 behind; they net to 0 at the contract level, which is where the contract asset or liability is reported.
 
-**Agreed:** one invoice line per instalment. The BT has no Product; the line's Product is split by allocation across the commitments' Products.
+The same mechanism covers a 10 / 0 sale of two promises with equal SSPs: each POB is allocated 5 and earns it by its own method, and the 0-billed POB carries unbilled until the contract ends.
 
 **4. Relationships**
 
 ```
-Contract
-├── BT: 4 × 25,000, no Product ──bills by allocation──▶ POB A 48% + POB B 52%
+Contract (pool 120,000; SSP: POB A 60,000, POB B 60,000)
 └── Subscription
-    ├── Commitment A: access, 48,000 (prod_platform) ──source──▶ POB A, by time
-    │     └── Entitlement: access (prod_platform) ── no POB
-    ├── Commitment B: bank, 52,000 (prod_agent_usage) ──source──▶ POB B, by drawdown
-    │     ├── Entitlement ──▶ Grant: 52,000
+    ├── Platform line item (Price: prod_platform, 18,000 a quarter) ──▶ POB A (prod_platform), straight line
+    ├── Commitment: bank 48,000 (prod_agent_usage)
+    │     ├── BT: 4 × 12,000 ──▶ POB B (prod_agent_usage), straight line
     │     └── scope ──▶ usage line item
-    └── Usage line item (Price: prod_agent_usage) ── no POB of its own
-
-Instalment invoice line: 12,000 prod_platform + 13,000 prod_agent_usage.
-Commitment A could also be held by the contract directly, outside the subscription.
+    ├── Usage line item (Price: prod_agent_usage) ──▶ POB B, overage as billed
+    └── Entitlement: access to the platform feature, from the plan ── no POB
 ```
 
-**Rule:** A contract's BT collects for the whole agreement. Its billing is split across the contract's POBs by allocation, so each POB's billed and earned still net out under its commitment's Product.
+**Rule:** Every charge has one Product, and billing credits that Product's POB. SSPs change only what each POB earns. Each POB's billed and earned net into its own deferred or unbilled, and the contract reports their net.
 
 ## Relationship summary
 
 ### Where a known amount lives
 
 
-| Offering                                   | Known amount                                  | BT owner                           | POB tracks                                                          |
-| ------------------------------------------ | --------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
-| Prepaid access (e.g. 60k for a year)       | Commitment `value`, no usage scope            | Commitment or Contract             | The commitment, by time                                             |
-| Usage bank or other prepaid coverage       | Commitment `value`                            | Commitment or Contract             | The commitment and its grant's drawdown                             |
-| Recurring fixed charge on a plan price     | The line item's price × quantity, each period | None; the price's cadence collects | The line item                                                       |
-| Postpaid usage, with or without a minimum  | None upfront                                  | None; billed per period            | The commitment if one scopes the line item; otherwise the line item |
-| One agreement covering several commitments | Each commitment's `value`                     | Contract                           | Each commitment's POB, billed by allocation                         |
+| Offering                                  | Known amount                                  | Collected by                         | POB tracks                                                          |
+| ----------------------------------------- | --------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------- |
+| Access, recurring or prepaid              | The line item's price × quantity, each period | The fixed Price's cadence            | The line item, by time                                              |
+| Usage bank or other prepaid coverage      | Commitment `value`                            | The commitment's BT                  | The commitment and its grant's drawdown                             |
+| Postpaid usage, with or without a minimum | None upfront                                  | Billed per period                    | The commitment if one scopes the line item; otherwise the line item |
+| Negotiated prices across several Products | Each Price or commitment, as billed           | Its own cadence or BT                | Each Product's POB; SSP reallocation changes only earning           |
 
 
-The middle layer is the Commitment for known prepaid amounts and the line item for amounts priced each period. A BT's rows state their own amounts, so a BT needs no Price. A Price is needed only to value units, such as usage and overage.
+The middle layer is the line item for fixed and usage charges and the Commitment for prepaid usage. A BT's rows state their own amounts, so a BT needs no Price. Negotiated instalments for a fixed charge or a whole contract wait for custom billing schedules (future extension).
 
 ### Entitlements
 
@@ -935,6 +986,10 @@ The middle layer is the Commitment for known prepaid amounts and the line item f
 | Postpaid usage            | None, unless there is an access limit | Subscription                     | No. Meter usage on the line item is the measure. |
 | Free or purchased credits | None; credit grant and wallet         | Customer wallet                  | No. Credits are a payment method.                |
 
+
+## Open questions
+
+- **Price without a Product.** What a price with no Product posts to outside a contract: likely the global account defaults.
 
 ## References
 
