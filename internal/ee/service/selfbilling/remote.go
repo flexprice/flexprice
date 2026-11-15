@@ -101,8 +101,13 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) (bool, erro
 		return false, err
 	}
 
-	req := newSubscriptionRequest(extID, c.defaultPlanID)
-	req.PaymentBehavior = lo.ToPtr(trialPaymentBehavior)
+	req := sdktypes.CreateSubscriptionRequest{
+		ExternalCustomerID: lo.ToPtr(extID),
+		PlanID:             c.defaultPlanID,
+		Currency:           trialCurrency,
+		BillingPeriod:      trialBillingPeriod,
+		PaymentBehavior:    lo.ToPtr(trialPaymentBehavior),
+	}
 	if _, err := c.sdk.Subscriptions.CreateSubscription(ctx, req); err != nil {
 		return false, cloudErr(err)
 	}
@@ -112,15 +117,20 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) (bool, erro
 // StartPlanCheckout creates a subscription on in.planID behind a checkout: Cloud keeps it draft until paid and archives it
 // if the checkout fails. It has no trial, and a $0 first period activates at once with no session.
 func (c *remoteClient) StartPlanCheckout(ctx context.Context, in checkoutInput) (*remoteCheckout, error) {
-	req := newSubscriptionRequest(in.extID, in.planID)
-	req.TrialPeriodDays = lo.ToPtr(int64(0))
-	req.Checkout = &sdktypes.CheckoutParams{
-		PaymentProvider: c.provider,
-		SuccessURL:      lo.ToPtr(in.successURL),
-		FailureURL:      lo.ToPtr(in.failureURL),
-		Metadata:        map[string]string{metaExternalID: in.extID},
-		// One open purchase per current subscription, so two checkouts can never both be paid.
-		IdempotencyKey: lo.ToPtr("plan_checkout:" + in.subscriptionID),
+	req := sdktypes.CreateSubscriptionRequest{
+		ExternalCustomerID: lo.ToPtr(in.extID),
+		PlanID:             in.planID,
+		Currency:           trialCurrency,
+		BillingPeriod:      trialBillingPeriod,
+		TrialPeriodDays:    lo.ToPtr(int64(0)),
+		Checkout: &sdktypes.CheckoutParams{
+			PaymentProvider: c.provider,
+			SuccessURL:      lo.ToPtr(in.successURL),
+			FailureURL:      lo.ToPtr(in.failureURL),
+			Metadata:        map[string]string{metaExternalID: in.extID},
+			// One open purchase per current subscription, so two checkouts can never both be paid.
+			IdempotencyKey: lo.ToPtr("plan_checkout:" + in.subscriptionID),
+		},
 	}
 
 	resp, err := c.sdk.Subscriptions.CreateSubscription(ctx, req)
@@ -198,17 +208,6 @@ func (c *remoteClient) EndTrials(ctx context.Context, extID string) error {
 		}
 	}
 	return nil
-}
-
-// newSubscriptionRequest holds what every self-serve subscription shares. Only the trial is allow_incomplete: a checkout
-// subscription is send_invoice, which Cloud does not allow with it.
-func newSubscriptionRequest(extID, planID string) sdktypes.CreateSubscriptionRequest {
-	return sdktypes.CreateSubscriptionRequest{
-		ExternalCustomerID: lo.ToPtr(extID),
-		PlanID:             planID,
-		Currency:           trialCurrency,
-		BillingPeriod:      trialBillingPeriod,
-	}
 }
 
 func (c *remoteClient) LatestSubscription(ctx context.Context, extID string) (*remoteSubscription, error) {
