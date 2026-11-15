@@ -49,10 +49,22 @@ const groupKeySeparator = "\x00"
 // propertyKeysSampleRows is the number of latest rows sampled per meter for property keys.
 const propertyKeysSampleRows = 10000
 
+// defaultInsertChunk is the rows per insert statement.
+const defaultInsertChunk = 100
+
+// maxInsertChunk caps rows per insert statement.
+const maxInsertChunk = 10000
+
 // BulkInsertMeterUsage inserts meter usage records in batches of 100
 func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records []*events.MeterUsage) error {
+	return r.BulkInsertMeterUsageChunked(ctx, records, defaultInsertChunk)
+}
+
+// BulkInsertMeterUsageChunked inserts with chunkSize rows per statement.
+func (r *MeterUsageRepository) BulkInsertMeterUsageChunked(ctx context.Context, records []*events.MeterUsage, chunkSize int) error {
 	span := StartRepositorySpan(ctx, "meter_usage", "bulk_insert", map[string]interface{}{
 		"record_count": len(records),
+		"chunk_size":   chunkSize,
 	})
 	defer FinishSpan(span)
 
@@ -61,7 +73,10 @@ func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records
 		return nil
 	}
 
-	batches := lo.Chunk(records, 100)
+	if chunkSize <= 0 {
+		chunkSize = defaultInsertChunk
+	}
+	batches := lo.Chunk(records, min(chunkSize, maxInsertChunk))
 
 	for _, batch := range batches {
 		batchCtx, cancel := context.WithTimeout(ctx, insertTimeout)

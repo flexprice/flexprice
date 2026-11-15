@@ -33,6 +33,32 @@ type Lock interface {
 	Release(ctx context.Context) error
 }
 
+// BatchLocker acquires many locks per round trip.
+type BatchLocker interface {
+	// AcquireLocks aligns with keys; nil entries failed.
+	AcquireLocks(ctx context.Context, keys []string, ttl time.Duration) ([]Lock, error)
+}
+
+// AcquireLocks batches when locker supports it.
+func AcquireLocks(ctx context.Context, locker Locker, keys []string, ttl time.Duration) ([]Lock, error) {
+	if bl, ok := locker.(BatchLocker); ok {
+		return bl.AcquireLocks(ctx, keys, ttl)
+	}
+	locks := make([]Lock, len(keys))
+	var firstErr error
+	for i, key := range keys {
+		lock, err := locker.AcquireLock(ctx, key, ttl)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		locks[i] = lock
+	}
+	return locks, firstErr
+}
+
 // It returns a nil Lock when locker is nil, and a Lock reporting AcquiredSuccessfully() ==
 // false when every attempt was exhausted; a non-nil error means the locker itself failed.
 // Callers decide whether to skip the work or proceed unserialized.
@@ -127,6 +153,37 @@ func (l *redisLocker) AcquireLock(ctx context.Context, key string, ttl time.Dura
 		token:   token,
 		success: ok,
 	}, nil
+}
+
+// batchLockChunk bounds one pipeline.
+const batchLockChunk = 1000
+
+// AcquireLocks pipelines SET NX per key.
+func (l *redisLocker) AcquireLocks(ctx context.Context, keys []string, ttl time.Duration) ([]Lock, error) {
+	locks := make([]Lock, len(keys))
+	var firstErr error
+	for start := 0; start < len(keys); start += batchLockChunk {
+		end := min(start+batchLockChunk, len(keys))
+		pipe := l.client.Pipeline()
+		cmds := make([]*redis.BoolCmd, 0, end-start)
+		tokens := make([]string, 0, end-start)
+		for _, key := range keys[start:end] {
+			token := uuid.NewString()
+			tokens = append(tokens, token)
+			cmds = append(cmds, pipe.SetNX(ctx, key, token, ttl))
+		}
+		if _, err := pipe.Exec(ctx); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		for i, cmd := range cmds {
+			ok, err := cmd.Result()
+			if err != nil {
+				continue
+			}
+			locks[start+i] = &redisLock{client: l.client, key: keys[start+i], token: tokens[i], success: ok}
+		}
+	}
+	return locks, firstErr
 }
 
 func (l *redisLock) AcquiredSuccessfully() bool {
