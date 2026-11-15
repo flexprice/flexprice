@@ -4,7 +4,6 @@ import (
 	"errors"
 	"testing"
 
-	cerrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
@@ -27,7 +26,7 @@ func TestTakeTurns(t *testing.T) {
 }
 
 func TestClassifyDelivery(t *testing.T) {
-	pdfUnavailable := cerrors.Mark(ierr.NewError("pdf").Mark(ierr.ErrServiceUnavailable), errAttachmentUnavailable)
+	pdfUnavailable := ierr.WithError(errAttachmentUnavailable).Mark(ierr.ErrServiceUnavailable)
 
 	for name, tc := range map[string]struct {
 		err  error

@@ -2,9 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
-	cerrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -25,7 +25,7 @@ const (
 )
 
 // errAttachmentUnavailable marks an email whose attachment could not be produced this run.
-var errAttachmentUnavailable = cerrors.New("email attachment unavailable")
+var errAttachmentUnavailable = errors.New("email attachment unavailable")
 
 // EmailDispatchResult counts what one dispatch run did with the emails it took.
 type EmailDispatchResult struct {
@@ -157,7 +157,7 @@ func classifyDelivery(err error) deliveryOutcome {
 		return deliverySent
 	case ierr.IsValidation(err):
 		return deliveryFailed
-	case cerrors.Is(err, errAttachmentUnavailable):
+	case errors.Is(err, errAttachmentUnavailable):
 		return deliveryDeferred
 	case ierr.IsTooManyRequests(err):
 		return deliveryRateLimited

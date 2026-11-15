@@ -6,7 +6,7 @@ import (
 	"net/mail"
 	"strings"
 
-	cerrors "github.com/cockroachdb/errors"
+	"github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
@@ -282,7 +282,7 @@ func (s *emailNotificationService) failIfPermanent(ctx context.Context, e *email
 	if !ierr.IsValidation(err) && !ierr.IsInvalidOperation(err) && !ierr.IsNotFound(err) {
 		return err
 	}
-	reason := cerrors.FlattenHints(err)
+	reason := errors.FlattenHints(err)
 	if reason == "" {
 		reason = "The email could not be delivered"
 	}
