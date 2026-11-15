@@ -30,8 +30,6 @@ import (
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
-const eventDeduplicationLockTTL = 24 * time.Hour
-
 // MeterUsageTrackingService handles meter-level usage tracking.
 // Unlike FeatureUsageTrackingService, this skips subscription/feature/price resolution.
 // It matches events to meters, extracts quantity, and writes to the meter_usage table.
@@ -260,7 +258,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 	}
 
 	// Per-event Redis dedup mirrors the single-event path: acquire an event-ID
-	// keyed lock (TTL = 24h) before doing any work for that event, skip events
+	// keyed lock (TTL = redis_deduplication_ttl) before doing any work for that event, skip events
 	// whose lock is already held, and release every lock we acquired if the
 	// batch fails downstream so redelivery isn't dedup-skipped until TTL.
 	// Gated by BulkMeterUsageTracking.RedisDeduplicationEnabled so the bulk
@@ -307,7 +305,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 
 		if dedupEnabled && evt.ID != "" && !evt.ForceReprocess {
 			cacheKey := cache.GenerateKey(ctx, cache.PrefixEvent, evt.ID)
-			lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
+			lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, s.Config.BulkMeterUsageTracking.DeduplicationTTL())
 			if lockErr != nil {
 				// Fail open: log and continue processing the event so a Redis
 				// blip can't silently drop billing rows.
@@ -467,7 +465,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		s.ServiceParams.Locker != nil {
 		eventId := event.ID
 		cacheKey := cache.GenerateKey(ctx, cache.PrefixEvent, eventId)
-		lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
+		lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, s.Config.MeterUsageTracking.DeduplicationTTL())
 		if lockErr != nil {
 			s.Logger.Error(ctx, "failed to acquire lock on meter usage tracking event", "error", lockErr, "event_id", eventId)
 		} else {

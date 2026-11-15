@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"math"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -13,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/logger"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -551,4 +555,107 @@ func (s *MeterUsageTrackingSuite) TestEffectiveUsageAlertTiming() {
 			s.Equal(tt.wantStale, stale)
 		})
 	}
+}
+
+type recordingLock struct {
+	acquired bool
+	locker   *recordingLocker
+}
+
+func (l *recordingLock) AcquiredSuccessfully() bool { return l.acquired }
+func (l *recordingLock) Release(_ context.Context) error {
+	l.locker.mu.Lock()
+	defer l.locker.mu.Unlock()
+	l.locker.releases++
+	return nil
+}
+
+type recordingLocker struct {
+	mu       sync.Mutex
+	acquire  bool
+	ttls     []time.Duration
+	releases int
+}
+
+func (r *recordingLocker) AcquireLock(_ context.Context, _ string, ttl time.Duration) (cache.Lock, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ttls = append(r.ttls, ttl)
+	return &recordingLock{acquired: r.acquire, locker: r}, nil
+}
+
+func TestDedupLockTTL(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+
+	tests := []struct {
+		name string
+		ttl  time.Duration
+		want time.Duration
+	}{
+		{"default when unset", 0, 24 * time.Hour},
+		{"override", 20 * time.Minute, 20 * time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			locker := &recordingLocker{}
+			svc := &meterUsageTrackingService{ServiceParams: ServiceParams{
+				Logger: logger.NewNoopLogger(),
+				Locker: locker,
+				Config: &config.Configuration{
+					MeterUsageTracking: config.MeterUsageTrackingConfig{
+						RedisDeduplicationEnabled: true,
+						RedisDeduplicationTTL:     tt.ttl,
+					},
+					BulkMeterUsageTracking: config.BulkMeterUsageTrackingConfig{
+						RedisDeduplicationEnabled: true,
+						RedisDeduplicationTTL:     tt.ttl,
+					},
+				},
+			}}
+
+			require.NoError(t, svc.processEvent(ctx, &events.Event{ID: "evt_single", EventName: "api_call"}))
+
+			payload, err := json.Marshal(events.EventBatch{
+				TenantID:      types.DefaultTenantID,
+				EnvironmentID: "env_test",
+				Events:        []*events.Event{{ID: "evt_bulk", EventName: "api_call"}},
+			})
+			require.NoError(t, err)
+			require.NoError(t, svc.processBulkMessage(ctx, message.NewMessage("msg_1", payload)))
+
+			assert.Equal(t, []time.Duration{tt.want, tt.want}, locker.ttls)
+		})
+	}
+}
+
+type stubTemporalService struct {
+	temporalservice.TemporalService
+}
+
+func (s *MeterUsageTrackingSuite) TestScheduleUsageAlert_TenantFlagsOffKeepsThrottleLock() {
+	orig := usageAlertTemporalService
+	usageAlertTemporalService = func() temporalservice.TemporalService { return stubTemporalService{} }
+	defer func() { usageAlertTemporalService = orig }()
+
+	s.WithEnvironment("env_usage_alert")
+	ctx := s.GetContext()
+	locker := &recordingLocker{acquire: true}
+	const delay = 5*time.Minute + 30*time.Second
+	svc := &meterUsageTrackingService{ServiceParams: ServiceParams{
+		Logger:       logger.NewNoopLogger(),
+		SettingsRepo: s.GetStores().SettingsRepo,
+		Locker:       locker,
+		Config: &config.Configuration{UsageAlerts: config.UsageAlertsConfig{
+			WalletAlertsEnabled:      true,
+			SpendAlertsEnabled:       true,
+			EntitlementAlertsEnabled: true,
+			ScheduleDelay:            delay,
+			StaleAfter:               time.Hour,
+		}},
+	}}
+
+	svc.scheduleUsageAlertWorkflow(ctx, &customer.Customer{ID: "cust_1"})
+
+	s.Equal([]time.Duration{delay}, locker.ttls)
+	s.Equal(0, locker.releases, "throttle lock must not be released")
 }
