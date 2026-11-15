@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	// maxEmailAttachmentBytes is Resend's cap on one email, attachments included.
-	maxEmailAttachmentBytes = 40 << 20
+	// maxEmailAttachmentBytes keeps the Base64-encoded PDF under Resend's 40 MB email limit.
+	maxEmailAttachmentBytes = 25 << 20
 	// maxInvoiceEmailLines keeps long invoices short; the hosted invoice has every line.
 	maxInvoiceEmailLines = 10
 )
@@ -100,7 +100,7 @@ func attachInvoicePDF(ctx context.Context, invoiceSvc *invoiceService, inv *invo
 		return err
 	}
 	switch {
-	case inv.InvoicePDFURL != nil:
+	case lo.FromPtr(inv.InvoicePDFURL) != "":
 		view.PDFURL = src.url
 		composed.metadata[emailMetaPDF] = emailPDFInvoiceLink
 		return nil
@@ -298,7 +298,7 @@ func chargeDetail(li *dto.InvoiceLineItemResponse, money func(decimal.Decimal) s
 	if lo.FromPtr(li.PriceType) == string(types.PRICE_TYPE_USAGE) || li.Quantity.IsZero() {
 		return groupDigits(li.Quantity.String()) + " used"
 	}
-	unit := money(li.Amount.Div(li.Quantity).Round(2))
+	unit := money(li.Amount.Div(li.Quantity))
 	if li.Quantity.Equal(decimal.NewFromInt(1)) {
 		return unit + " each"
 	}

@@ -1,9 +1,11 @@
 package resend
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"sort"
 	"time"
@@ -15,7 +17,11 @@ import (
 	svix "github.com/svix/svix-webhooks/go"
 )
 
-const sendTimeout = 30 * time.Second
+const (
+	sendTimeout = 30 * time.Second
+	// errConcurrentIdempotentRequests is Resend's 409 for a key whose first request has not finished.
+	errConcurrentIdempotentRequests = "concurrent_idempotent_requests"
+)
 
 // Config holds what the Resend backend needs; an empty WebhookSecret rejects every delivery event.
 type Config struct {
@@ -76,16 +82,22 @@ func (b *backend) Send(ctx context.Context, msg emailtypes.OutboundEmail) (email
 		req.Attachments = append(req.Attachments, &resend.Attachment{Filename: a.Filename, Content: a.Content})
 	}
 
-	status := new(int)
-	ctx = context.WithValue(ctx, statusKey{}, status)
+	reply := new(sendResponse)
+	ctx = context.WithValue(ctx, statusKey{}, reply)
 
 	sent, err := b.client.Emails.SendWithOptions(ctx, req, &resend.SendEmailOptions{IdempotencyKey: msg.IdempotencyKey})
 	if err != nil {
-		// 409: Resend already took a send with this idempotency key, so the email went out.
-		if *status == http.StatusConflict {
+		if reply.status == http.StatusConflict {
+			// An earlier send with this key is still running and may yet fail, so retry later.
+			if reply.errorName == errConcurrentIdempotentRequests {
+				return emailtypes.SendResult{}, ierr.WithError(err).
+					WithHint("Resend is still processing an earlier send of this email").
+					Mark(ierr.ErrServiceUnavailable)
+			}
+			// Any other 409: Resend already took a send with this key, so the email went out.
 			return emailtypes.SendResult{}, nil
 		}
-		return emailtypes.SendResult{}, classifySendError(err, *status)
+		return emailtypes.SendResult{}, classifySendError(err, reply.status)
 	}
 	return emailtypes.SendResult{ProviderMessageID: sent.Id}, nil
 }
@@ -196,8 +208,14 @@ func (t *tagSet) UnmarshalJSON(b []byte) error {
 
 type statusKey struct{}
 
+// sendResponse is what statusTransport records about Resend's reply; errorName is set only on a 409.
+type sendResponse struct {
+	status    int
+	errorName string
+}
+
 // statusTransport records the response status in the request context, since resend-go
-// reports 4xx and 5xx failures as the same untyped error.
+// reports 4xx and 5xx failures as the same untyped error and drops the error name.
 type statusTransport struct {
 	base http.RoundTripper
 }
@@ -205,9 +223,27 @@ type statusTransport struct {
 func (t statusTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.base.RoundTrip(req)
 	if resp != nil {
-		if status, ok := req.Context().Value(statusKey{}).(*int); ok {
-			*status = resp.StatusCode
+		if r, ok := req.Context().Value(statusKey{}).(*sendResponse); ok {
+			r.status = resp.StatusCode
+			if resp.StatusCode == http.StatusConflict {
+				r.errorName = readErrorName(resp)
+			}
 		}
 	}
 	return resp, err
+}
+
+// readErrorName returns the error name from Resend's JSON body and leaves the body readable for resend-go.
+func readErrorName(resp *http.Response) string {
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	if err != nil {
+		return ""
+	}
+	var e struct {
+		Name string `json:"name"`
+	}
+	_ = json.Unmarshal(body, &e)
+	return e.Name
 }
