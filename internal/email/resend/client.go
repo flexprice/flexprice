@@ -81,6 +81,10 @@ func (b *backend) Send(ctx context.Context, msg emailtypes.OutboundEmail) (email
 
 	sent, err := b.client.Emails.SendWithOptions(ctx, req, &resend.SendEmailOptions{IdempotencyKey: msg.IdempotencyKey})
 	if err != nil {
+		// 409: Resend already took a send with this idempotency key, so the email went out.
+		if *status == http.StatusConflict {
+			return emailtypes.SendResult{}, nil
+		}
 		return emailtypes.SendResult{}, classifySendError(err, *status)
 	}
 	return emailtypes.SendResult{ProviderMessageID: sent.Id}, nil

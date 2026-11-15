@@ -27,18 +27,18 @@ func TestTakeTurns(t *testing.T) {
 }
 
 func TestClassifyDelivery(t *testing.T) {
-	pdfNotReady := cerrors.Mark(ierr.NewError("pdf").Mark(ierr.ErrServiceUnavailable), errAttachmentNotReady)
+	pdfUnavailable := cerrors.Mark(ierr.NewError("pdf").Mark(ierr.ErrServiceUnavailable), errAttachmentUnavailable)
 
 	for name, tc := range map[string]struct {
 		err  error
 		want deliveryOutcome
 	}{
-		"sent":               {nil, deliverySent},
-		"rejected":           {ierr.NewError("bad address").Mark(ierr.ErrValidation), deliveryFailed},
-		"attachment pending": {pdfNotReady, deliveryDeferred},
-		"rate limited":       {ierr.NewError("429").Mark(ierr.ErrTooManyRequests), deliveryRateLimited},
-		"provider down":      {ierr.NewError("503").Mark(ierr.ErrServiceUnavailable), deliveryProviderDown},
-		"other":              {errors.New("db timeout"), deliveryDeferred},
+		"sent":                   {nil, deliverySent},
+		"rejected":               {ierr.NewError("bad address").Mark(ierr.ErrValidation), deliveryFailed},
+		"attachment unavailable": {pdfUnavailable, deliveryDeferred},
+		"rate limited":           {ierr.NewError("429").Mark(ierr.ErrTooManyRequests), deliveryRateLimited},
+		"provider down":          {ierr.NewError("503").Mark(ierr.ErrServiceUnavailable), deliveryProviderDown},
+		"other":                  {errors.New("db timeout"), deliveryDeferred},
 	} {
 		t.Run(name, func(t *testing.T) {
 			assert.Equal(t, tc.want, classifyDelivery(tc.err))

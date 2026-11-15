@@ -152,6 +152,23 @@ func TestSend_ReturnsProviderID(t *testing.T) {
 	assert.Equal(t, "re_123", res.ProviderMessageID)
 }
 
+func TestSend_DuplicateKeyCountsAsSent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"name":"invalid_idempotent_request"}`))
+	}))
+	defer srv.Close()
+
+	p, err := New(Config{APIKey: "re_test"})
+	require.NoError(t, err)
+	p.(*backend).client.BaseURL = mustParse(t, srv.URL+"/")
+
+	res, err := p.Send(context.Background(), emailtypes.OutboundEmail{IdempotencyKey: "email_1", From: "a@x.io", To: []string{"b@x.io"}, Subject: "s", HTML: "h"})
+	require.NoError(t, err)
+	assert.Empty(t, res.ProviderMessageID)
+}
+
 func mustParse(t *testing.T, raw string) *url.URL {
 	u, err := url.Parse(raw)
 	require.NoError(t, err)
