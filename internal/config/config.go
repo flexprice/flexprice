@@ -1124,7 +1124,7 @@ type BulkMeterUsageTrackingConfig struct {
 	PostInsertSideEffectsEnabled bool          `mapstructure:"post_insert_side_effects_enabled" default:"true"`
 }
 
-// DefaultRedisDeduplicationTTL is the event dedup lock TTL fallback.
+// DefaultRedisDeduplicationTTL is the fallback TTL.
 const DefaultRedisDeduplicationTTL = 24 * time.Hour
 
 func dedupTTLOrDefault(ttl time.Duration) time.Duration {
@@ -1134,12 +1134,12 @@ func dedupTTLOrDefault(ttl time.Duration) time.Duration {
 	return ttl
 }
 
-// DeduplicationTTL returns the single-event dedup lock TTL.
+// DeduplicationTTL returns single-event dedup TTL.
 func (c MeterUsageTrackingConfig) DeduplicationTTL() time.Duration {
 	return dedupTTLOrDefault(c.RedisDeduplicationTTL)
 }
 
-// DeduplicationTTL returns the bulk dedup lock TTL.
+// DeduplicationTTL returns bulk dedup TTL.
 func (c BulkMeterUsageTrackingConfig) DeduplicationTTL() time.Duration {
 	return dedupTTLOrDefault(c.RedisDeduplicationTTL)
 }
