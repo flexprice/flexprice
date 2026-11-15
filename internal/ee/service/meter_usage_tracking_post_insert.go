@@ -92,6 +92,9 @@ func (s *meterUsageTrackingService) runBulkMeterUsagePostInsertSideEffects(ctx c
 	}
 }
 
+// Overridable in tests.
+var usageAlertTemporalService = temporalservice.GetGlobalTemporalService
+
 // scheduleUsageAlertWorkflow starts a debounced per-customer workflow. WorkflowID
 // is stable per (tenant, env, customer); WorkflowExecutionAlreadyStarted is the
 // dedup safety net on the Temporal side.
@@ -109,7 +112,7 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		return
 	}
 
-	temporalSvc := temporalservice.GetGlobalTemporalService()
+	temporalSvc := usageAlertTemporalService()
 	if temporalSvc == nil {
 		s.Logger.Debug(ctx, "temporal service not available, skipping usage alert workflow",
 			"customer_id", cust.ID,
@@ -136,12 +139,8 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 	// Per-tenant gate: settings can turn any alert type off independently of the deployment-level config.
 	walletEnabled, spendEnabled, entitlementEnabled := s.effectiveUsageAlertFlags(ctx)
 	if !walletEnabled && !spendEnabled && !entitlementEnabled {
-		if throttleLock != nil {
-			if releaseErr := throttleLock.Release(ctx); releaseErr != nil {
-				s.Logger.Error(ctx, "failed to release usage alert schedule lock", "error", releaseErr, "customer_id", cust.ID)
-			}
-		}
-		s.Logger.Debug(ctx, "usage alerts disabled for tenant, skipping workflow", "customer_id", cust.ID)
+		// Keep throttle lock; expires after delay.
+		s.Logger.Info(ctx, "usage alerts disabled by tenant settings, skipping", "customer_id", cust.ID)
 		return
 	}
 
