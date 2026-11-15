@@ -7270,7 +7270,9 @@ func (s *subscriptionService) aggregateSubscriptionEntitlements(ctx context.Cont
 		}
 	}
 
-	if req != nil && req.RefreshGrants && s.Config.EntitlementGrants.RefreshOnRead {
+	// Window opening ignores status, so only live subscriptions are refreshed, as in the alert workflow.
+	isLive := sub.SubscriptionStatus == types.SubscriptionStatusActive || sub.SubscriptionStatus == types.SubscriptionStatusTrialing
+	if req != nil && req.RefreshGrants && s.Config.EntitlementGrants.RefreshOnRead && isLive {
 		cust, err := s.CustomerRepo.Get(ctx, sub.CustomerID)
 		if err == nil {
 			err = NewAlertService(s.ServiceParams).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, clock.Now())
