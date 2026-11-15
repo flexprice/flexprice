@@ -176,3 +176,33 @@ func TestExpirePaymentLink_UnknownHandleNotImplemented(t *testing.T) {
 		assert.True(t, ierr.IsNotImplemented(err), handle)
 	}
 }
+
+type fakePaymentClient struct {
+	RazorpayClient
+	resp map[string]interface{}
+}
+
+func (c *fakePaymentClient) FetchPayment(_ context.Context, _ string) (map[string]interface{}, error) {
+	return c.resp, nil
+}
+
+func TestGetPaymentStatus(t *testing.T) {
+	tests := []struct {
+		name      string
+		resp      map[string]interface{}
+		wantError string
+	}{
+		{name: "failed payment carries the gateway error", resp: map[string]interface{}{"status": "failed", "error_description": "predebit notification was not approved"}, wantError: "predebit notification was not approved"},
+		{name: "captured payment has no error", resp: map[string]interface{}{"status": "captured", "error_description": nil}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewPaymentService(&fakePaymentClient{resp: tt.resp}, nil, nil, nil, logger.NewNoopLogger())
+			status, gatewayError, err := svc.GetPaymentStatus(context.Background(), "pay_x")
+			require.NoError(t, err)
+			assert.Equal(t, tt.resp["status"], status)
+			assert.Equal(t, tt.wantError, gatewayError)
+		})
+	}
+}

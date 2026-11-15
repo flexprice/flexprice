@@ -67,7 +67,7 @@ func (a *CheckoutAdapter) FetchPaymentState(
 	}
 
 	if paymentID := req.GatewayPaymentID; paymentID != "" {
-		rawStatus, err := a.Svc.GetPaymentStatus(ctx, paymentID)
+		rawStatus, _, err := a.Svc.GetPaymentStatus(ctx, paymentID)
 		if err != nil {
 			return nil, err
 		}

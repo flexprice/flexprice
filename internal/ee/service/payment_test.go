@@ -340,7 +340,7 @@ func (s *PaymentServiceSuite) TestGatewayPaymentStatus_ReconcilesCheckoutAndStan
 				}
 				s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, p))
 				svc := s.service.(*paymentService)
-				result, err := svc.applyGatewayPaymentStatus(ctx, p, types.PaymentStatusSucceeded, "pay_captured")
+				result, err := svc.applyGatewayPaymentStatus(ctx, p, types.PaymentStatusSucceeded, "pay_captured", "")
 				s.Require().NoError(err)
 				s.Equal(types.PaymentStatusSucceeded, result.PaymentStatus)
 				s.Equal("pay_captured", lo.FromPtr(result.GatewayPaymentID))
@@ -356,6 +356,72 @@ func (s *PaymentServiceSuite) TestGatewayPaymentStatus_ReconcilesCheckoutAndStan
 				s.True(after.AmountRemaining.IsZero())
 			})
 		}
+	}
+}
+
+func (s *PaymentServiceSuite) TestInvoicePaymentFailurePublishesInvoicePaymentFailedOnce() {
+	autoCharge := types.Metadata{types.MetadataKeyPaymentTrigger: types.PaymentTriggerInvoiceAutoCharge}
+	tests := []struct {
+		name            string
+		metadata        types.Metadata
+		destinationType types.PaymentDestinationType
+		wantEvents      int
+	}{
+		{name: "auto-charge payment", metadata: autoCharge, destinationType: types.PaymentDestinationTypeInvoice, wantEvents: 1},
+		{name: "other invoice payment", destinationType: types.PaymentDestinationTypeInvoice, wantEvents: 1},
+		{name: "customer payment", destinationType: types.PaymentDestinationTypeCustomer, wantEvents: 0},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+			p := &payment.Payment{
+				ID:                "pay_failed_" + lo.SnakeCase(tt.name),
+				DestinationType:   tt.destinationType,
+				DestinationID:     lo.Ternary(tt.destinationType == types.PaymentDestinationTypeInvoice, s.testData.invoice.ID, s.testData.customer.ID),
+				PaymentMethodType: types.PaymentMethodTypeCard,
+				PaymentStatus:     types.PaymentStatusProcessing,
+				PaymentGateway:    lo.ToPtr(string(types.PaymentGatewayTypeRazorpay)),
+				GatewayPaymentID:  lo.ToPtr("pay_rzp_declined"),
+				Amount:            decimal.NewFromFloat(100),
+				Currency:          "inr",
+				Metadata:          tt.metadata,
+				BaseModel:         types.GetDefaultBaseModel(ctx),
+			}
+			s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, p))
+
+			// Gateway sync marks it FAILED first, then the payment.failed webhook and a redelivery update it again.
+			svc := s.service.(*paymentService)
+			_, err := svc.applyGatewayPaymentStatus(ctx, p, types.PaymentStatusFailed, "", "predebit notification was not approved")
+			s.Require().NoError(err)
+			for range 2 {
+				_, err = svc.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{
+					PaymentStatus: lo.ToPtr(string(types.PaymentStatusFailed)),
+					ErrorMessage:  lo.ToPtr("predebit notification was not approved"),
+				})
+				s.Require().NoError(err)
+			}
+
+			events := lo.Filter(s.GetPublishedWebhooks(), func(e *types.WebhookEvent, _ int) bool {
+				return e.EventName == types.WebhookEventInvoicePaymentFailed
+			})
+			s.Require().Len(events, tt.wantEvents)
+			if tt.wantEvents == 0 {
+				return
+			}
+			var internal webhookDto.InternalInvoicePaymentFailedEvent
+			s.Require().NoError(json.Unmarshal(events[0].Payload, &internal))
+			s.Equal(webhookDto.InternalInvoicePaymentFailedEvent{
+				InvoiceID:           s.testData.invoice.ID,
+				TenantID:            types.GetTenantID(ctx),
+				Provider:            types.SecretProviderRazorpay,
+				Reason:              types.InvoicePaymentFailureReasonDeclined,
+				PaymentID:           p.ID,
+				Error:               "predebit notification was not approved",
+				IsAutoChargeAttempt: tt.metadata != nil,
+			}, internal)
+		})
 	}
 }
 
@@ -843,6 +909,43 @@ func (s *PaymentServiceSuite) TestProcessPaymentCountsOutcome() {
 	s.NoError(err)
 	s.Equal(types.PaymentStatusSucceeded, processed.PaymentStatus)
 	s.Equal(before+1, r.Sum("payment.transitions", match))
+}
+
+func (s *PaymentServiceSuite) TestProcessPaymentFailurePublishesInvoicePaymentFailed() {
+	p := s.newMetricsPayment("pay_processor_failed", string(types.PaymentGatewayTypeStripe), types.PaymentMethodTypeUPI, types.PaymentStatusPending)
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+
+	processor := NewPaymentProcessorService(ServiceParams{
+		Logger:           s.GetLogger(),
+		Config:           s.GetConfig(),
+		DB:               s.GetDB(),
+		PaymentRepo:      s.GetStores().PaymentRepo,
+		InvoiceRepo:      s.GetStores().InvoiceRepo,
+		CustomerRepo:     s.GetStores().CustomerRepo,
+		TenantRepo:       s.GetStores().TenantRepo,
+		EnvironmentRepo:  s.GetStores().EnvironmentRepo,
+		SettingsRepo:     s.GetStores().SettingsRepo,
+		EventPublisher:   s.GetPublisher(),
+		WebhookPublisher: s.GetWebhookPublisher(),
+		Locker:           s.GetLocker(),
+	})
+	processed, _ := processor.ProcessPayment(s.GetContext(), p.ID)
+	s.Require().Equal(types.PaymentStatusFailed, processed.PaymentStatus)
+
+	events := lo.Filter(s.GetPublishedWebhooks(), func(e *types.WebhookEvent, _ int) bool {
+		return e.EventName == types.WebhookEventInvoicePaymentFailed
+	})
+	s.Require().Len(events, 1)
+	var internal webhookDto.InternalInvoicePaymentFailedEvent
+	s.Require().NoError(json.Unmarshal(events[0].Payload, &internal))
+	s.Equal(webhookDto.InternalInvoicePaymentFailedEvent{
+		InvoiceID: s.testData.invoice.ID,
+		TenantID:  types.GetTenantID(s.GetContext()),
+		Provider:  types.SecretProviderStripe,
+		Reason:    types.InvoicePaymentFailureReasonProviderError,
+		PaymentID: p.ID,
+		Error:     lo.FromPtr(processed.ErrorMessage),
+	}, internal)
 }
 
 // Creation counts as the first transition; checkout payments carry the checkout marker.
