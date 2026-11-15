@@ -27,11 +27,13 @@ const (
 	alertTenantSuspended alertEvent = "tenant_suspended"
 )
 
-// alert is the JSON body posted to the Zapier catch hook.
+// alert is the JSON body posted to the Zapier catch hook. Email identifies a new tenant, which keeps
+// the default name until onboarding renames it.
 type alert struct {
 	Event      alertEvent                 `json:"event"`
 	TenantID   string                     `json:"tenant_id"`
 	TenantName string                     `json:"tenant_name"`
+	Email      string                     `json:"email"`
 	Region     string                     `json:"region"`
 	FromStatus types.TenantInternalStatus `json:"from_status,omitempty"`
 	ToStatus   types.TenantInternalStatus `json:"to_status,omitempty"`

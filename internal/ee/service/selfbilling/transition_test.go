@@ -203,6 +203,7 @@ func TestUpdateTenantStatus_Alerts(t *testing.T) {
 			seedTenant(t, d, "t1", tt.from)
 			tn, err := d.tenants.GetByID(context.Background(), "t1")
 			require.NoError(t, err)
+			tn.BillingDetails.Email = "a@acme.io"
 
 			status, err := s.updateTenantStatus(tenantCtx("t1"), tn, tt.sub)
 			require.NoError(t, err)
@@ -218,6 +219,7 @@ func TestUpdateTenantStatus_Alerts(t *testing.T) {
 				Event:      tt.wantEvent,
 				TenantID:   "t1",
 				TenantName: "t1",
+				Email:      "a@acme.io",
 				Region:     "us",
 				FromStatus: tt.from,
 				ToStatus:   tt.wantTo,
