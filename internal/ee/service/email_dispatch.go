@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -34,16 +35,17 @@ type EmailDispatchResult struct {
 	Deferred int
 }
 
-type deliveryOutcome int
+// deliveryOutcome is also the outcome label on the email.deliveries metric.
+type deliveryOutcome string
 
 const (
-	deliverySent deliveryOutcome = iota
-	deliveryFailed
-	deliverySkipped
-	deliveryDeferred
+	deliverySent     deliveryOutcome = "sent"
+	deliveryFailed   deliveryOutcome = "failed"
+	deliverySkipped  deliveryOutcome = "skipped"
+	deliveryDeferred deliveryOutcome = "deferred"
 	// deliveryProviderDown counts toward ending the run; deliveryRateLimited ends it at once.
-	deliveryProviderDown
-	deliveryRateLimited
+	deliveryProviderDown deliveryOutcome = "provider_down"
+	deliveryRateLimited  deliveryOutcome = "rate_limited"
 )
 
 // DispatchEmails sends queued emails from every environment, taking one email from each environment in
@@ -71,7 +73,10 @@ func (s *emailNotificationService) DispatchEmails(ctx context.Context) (*EmailDi
 
 	providerFailures := 0
 	for _, e := range takeTurns(queues, emailDispatchBatchSize) {
-		switch s.dispatchOne(envContext(ctx, e.TenantID, e.EnvironmentID), e) {
+		envCtx := envContext(ctx, e.TenantID, e.EnvironmentID)
+		outcome := s.dispatchOne(envCtx, e)
+		metrics.RecordCounter(envCtx, metrics.EmailDeliveries, 1, metrics.L(metrics.KeyOutcome, string(outcome)))
+		switch outcome {
 		case deliverySent:
 			res.Sent++
 			providerFailures = 0
