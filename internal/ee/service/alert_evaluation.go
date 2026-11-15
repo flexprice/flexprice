@@ -72,6 +72,7 @@ func (s *alertService) evaluateSpendAlertsForSubscriptions(ctx context.Context, 
 	billingSvc := NewBillingService(s.ServiceParams)
 	alertLogsSvc := NewAlertLogsService(s.ServiceParams)
 	now := clock.Now()
+	usageSource := s.spendAlertUsageSource()
 
 	for _, cfg := range subCfgs {
 		sub, ok := subsByID[cfg.EntityID]
@@ -86,7 +87,7 @@ func (s *alertService) evaluateSpendAlertsForSubscriptions(ctx context.Context, 
 			SubscriptionID: sub.ID,
 			StartTime:      sub.CurrentPeriodStart,
 			EndTime:        now,
-			Source:         string(types.UsageSourceInvoiceCreation),
+			Source:         string(usageSource),
 		})
 		if err != nil {
 			s.Logger.Error(ctx, "spend alerts: failed to get meter usage", "error", err, "subscription_id", sub.ID)
@@ -94,7 +95,7 @@ func (s *alertService) evaluateSpendAlertsForSubscriptions(ctx context.Context, 
 		}
 
 		_, totalUsageCost, err := billingSvc.CalculateMeterUsageCharges(
-			ctx, sub, usage, sub.CurrentPeriodStart, now, types.UsageSourceInvoiceCreation,
+			ctx, sub, usage, sub.CurrentPeriodStart, now, usageSource,
 			nil,
 		)
 		if err != nil {
@@ -105,6 +106,14 @@ func (s *alertService) evaluateSpendAlertsForSubscriptions(ctx context.Context, 
 		s.logSubscriptionSpendAlert(ctx, alertLogsSvc, cust.ID, sub, cfg, totalUsageCost, now)
 	}
 	return nil
+}
+
+// spendAlertUsageSource picks FINAL or non-FINAL reads.
+func (s *alertService) spendAlertUsageSource() types.UsageSource {
+	if s.Config != nil && s.Config.UsageAlerts.SkipFinal {
+		return types.UsageSourcePreview
+	}
+	return types.UsageSourceInvoiceCreation
 }
 
 func (s *alertService) logSubscriptionSpendAlert(

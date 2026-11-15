@@ -1024,6 +1024,8 @@ type MeterUsageTrackingConfig struct {
 // MeterUsageConfig tunes meter_usage reads.
 type MeterUsageConfig struct {
 	Rollup MeterUsageRollupConfig `mapstructure:"rollup"`
+	// Skips the distinct-meter pre-query on scalar reads.
+	SkipDistinctMeterPrefilter bool `mapstructure:"skip_distinct_meter_prefilter" default:"false"`
 }
 
 // MeterUsageRollupConfig serves scalar reads from an hourly rollup.
@@ -1051,6 +1053,8 @@ type UsageAlertsConfig struct {
 	WalletAlertsEnabled      bool          `mapstructure:"wallet_alerts_enabled" default:"true"`
 	SpendAlertsEnabled       bool          `mapstructure:"spend_alerts_enabled" default:"true"`
 	EntitlementAlertsEnabled bool          `mapstructure:"entitlement_alerts_enabled" default:"true"`
+	// Spend alerts read usage without FINAL.
+	SkipFinal bool `mapstructure:"skip_final" default:"false"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that

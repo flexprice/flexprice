@@ -602,24 +602,32 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 		}
 	}
 
+	isAnalyticsQuery := req.WindowSize != "" || len(req.PropertyFilters) > 0 || len(req.Sources) > 0 || len(req.GroupBy) > 0
+
 	// 7. Distinct meter optimization — skip meters with zero usage.
 	// No FINAL: duplicate rows share their meter_id, so deduping can't change the set.
-	distinctMeterIDs, err := s.repo.GetDistinctMeterIDs(ctx, &events.MeterUsageQueryParams{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerIDs: externalCustomerIDs,
-		StartTime:           usageStartTime,
-		EndTime:             usageEndTime,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get distinct meter_ids from meter_usage: %w", err)
+	var activeMeterIDs map[string]bool
+	if s.skipDistinctMeterPrefilter(isAnalyticsQuery, lineItems, result) {
+		activeMeterIDs = make(map[string]bool, len(lineItems))
+		for _, item := range lineItems {
+			activeMeterIDs[item.MeterID] = true
+		}
+	} else {
+		distinctMeterIDs, err := s.repo.GetDistinctMeterIDs(ctx, &events.MeterUsageQueryParams{
+			TenantID:            types.GetTenantID(ctx),
+			EnvironmentID:       types.GetEnvironmentID(ctx),
+			ExternalCustomerIDs: externalCustomerIDs,
+			StartTime:           usageStartTime,
+			EndTime:             usageEndTime,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get distinct meter_ids from meter_usage: %w", err)
+		}
+		activeMeterIDs = make(map[string]bool, len(distinctMeterIDs))
+		for _, id := range distinctMeterIDs {
+			activeMeterIDs[id] = true
+		}
 	}
-	activeMeterIDs := make(map[string]bool, len(distinctMeterIDs))
-	for _, id := range distinctMeterIDs {
-		activeMeterIDs[id] = true
-	}
-
-	isAnalyticsQuery := req.WindowSize != "" || len(req.PropertyFilters) > 0 || len(req.Sources) > 0 || len(req.GroupBy) > 0
 
 	// 8. Include running SUM meters even when the requested window has no events.
 	meterToLineItems := make(map[string][]*subscription.SubscriptionLineItem)
@@ -946,6 +954,23 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 	}
 
 	return result, nil
+}
+
+// skipDistinctMeterPrefilter is true for scalar, non-bucketed reads when configured.
+func (s *meterUsageService) skipDistinctMeterPrefilter(isAnalyticsQuery bool, lineItems []*subscription.SubscriptionLineItem, usage *SubscriptionMeterUsage) bool {
+	if isAnalyticsQuery || s.Config == nil || !s.Config.MeterUsage.SkipDistinctMeterPrefilter {
+		return false
+	}
+	for _, item := range lineItems {
+		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
+			continue
+		}
+		m, p := usage.MeterMap[item.MeterID], usage.PriceMap[item.PriceID]
+		if price.IsBucketedMax(p, m) || price.IsBucketedSum(p, m) {
+			return false
+		}
+	}
+	return true
 }
 
 // queryAndAppendAnalyticsEntries runs one GetDetailedAnalytics call for the
