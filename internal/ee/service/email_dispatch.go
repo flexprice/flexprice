@@ -7,10 +7,8 @@ import (
 	cerrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
-	"github.com/flexprice/flexprice/internal/email"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"golang.org/x/time/rate"
 )
 
 const (
@@ -18,8 +16,8 @@ const (
 	emailAttachmentWait = 10 * time.Minute
 	// emailSendDeadline is how long a queued email may wait for the provider before it is marked failed.
 	emailSendDeadline = 24 * time.Hour
-	// emailDispatchWindow bounds one dispatch run's sends: send_rate_per_second × this window.
-	emailDispatchWindow = 50 * time.Second
+	// emailDispatchBatchSize is how many queued emails one dispatch run takes.
+	emailDispatchBatchSize = 400
 	// emailProviderFailureLimit is how many provider outage errors in a row end a dispatch run; high
 	// enough that a few emails failing on their own cannot hold up the rest of the queue.
 	emailProviderFailureLimit = 20
@@ -49,15 +47,13 @@ const (
 )
 
 // DispatchEmails sends queued emails from every environment, taking one email from each environment in
-// turn, at most email.send_rate_per_second. An email that cannot be sent now stays queued for the next run.
+// turn. An email that cannot be sent now stays queued for the next run.
 func (s *emailNotificationService) DispatchEmails(ctx context.Context) (*EmailDispatchResult, error) {
 	res := &EmailDispatchResult{}
 	if !s.Config.Email.IsProviderConfigured() {
 		return res, nil
 	}
 
-	sendRate := s.Config.Email.SendRatePerSecond
-	budget := sendRate * int(emailDispatchWindow/time.Second)
 	ctx = types.WithForceWriter(ctx)
 
 	envs, err := s.EmailLogRepo.ListEnvironmentsWithQueuedEmails(ctx)
@@ -66,19 +62,16 @@ func (s *emailNotificationService) DispatchEmails(ctx context.Context) (*EmailDi
 	}
 	queues := make([][]*emaillog.EmailLog, 0, len(envs))
 	for _, env := range envs {
-		queued, err := s.EmailLogRepo.ListQueued(envContext(ctx, env.TenantID, env.EnvironmentID), budget)
+		queued, err := s.EmailLogRepo.ListQueued(envContext(ctx, env.TenantID, env.EnvironmentID), emailDispatchBatchSize)
 		if err != nil {
 			return nil, err
 		}
 		queues = append(queues, queued)
 	}
 
-	paced := &emailNotificationService{ServiceParams: s.ServiceParams}
-	paced.EmailProvider = pacedProvider{Provider: s.EmailProvider, limiter: rate.NewLimiter(rate.Limit(sendRate), 1)}
-
 	providerFailures := 0
-	for _, e := range takeTurns(queues, budget) {
-		switch paced.dispatchOne(envContext(ctx, e.TenantID, e.EnvironmentID), e) {
+	for _, e := range takeTurns(queues, emailDispatchBatchSize) {
+		switch s.dispatchOne(envContext(ctx, e.TenantID, e.EnvironmentID), e) {
 		case deliverySent:
 			res.Sent++
 			providerFailures = 0
@@ -190,17 +183,4 @@ func takeTurns(queues [][]*emaillog.EmailLog, limit int) []*emaillog.EmailLog {
 
 func envContext(ctx context.Context, tenantID, environmentID string) context.Context {
 	return types.SetEnvironmentID(types.SetTenantID(ctx, tenantID), environmentID)
-}
-
-// pacedProvider holds every send to the limiter's rate.
-type pacedProvider struct {
-	email.Provider
-	limiter *rate.Limiter
-}
-
-func (p pacedProvider) Send(ctx context.Context, msg email.OutboundEmail) (email.SendResult, error) {
-	if err := p.limiter.Wait(ctx); err != nil {
-		return email.SendResult{}, ierr.WithError(err).WithHint("Email dispatch stopped before sending").Mark(ierr.ErrServiceUnavailable)
-	}
-	return p.Provider.Send(ctx, msg)
 }
