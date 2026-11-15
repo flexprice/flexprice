@@ -12,6 +12,7 @@ import (
 	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -24,6 +25,62 @@ type adjustMeterUsageGrantsResult struct {
 	Measure      types.EntitlementGrantMeasure
 	Overage      decimal.Decimal
 	PerECOverage map[string]decimal.Decimal
+}
+
+// refreshEntitlementGrantsForInvoice brings the invoice period's grant usage up to asOf before billing
+// reads it. Windows an alert run already finalized are re-measured too: events that land after
+// finalization (consumer lag, DLQ replays) would otherwise never reach the grant's overage.
+func (s *billingService) refreshEntitlementGrantsForInvoice(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, asOf time.Time) error {
+	cust, err := s.CustomerRepo.Get(ctx, sub.CustomerID)
+	if err != nil {
+		return err
+	}
+	grants, err := s.EntitlementGrantRepo.List(ctx, types.NewNoLimitEntitlementGrantFilter().
+		WithCustomerIDs(sub.CustomerID).
+		WithSubscriptionIDs(sub.ID).
+		WithCycleOverlap(periodStart, periodEnd))
+	if err != nil {
+		return err
+	}
+	// Collected before evaluation, which finalizes the windows it measures. A historical as-of that
+	// predates the last measurement keeps the stored usage.
+	finalized := lo.Filter(grants, func(g *entitlementgrant.EntitlementGrant, _ int) bool {
+		return g.LastComputedAt != nil && !g.LastComputedAt.Before(g.ValidTo) &&
+			!g.ValidTo.After(asOf) && g.LastComputedAt.Before(asOf)
+	})
+
+	// After rollover the invoice is for an earlier cycle; window opening reads the cycle from the current period.
+	evalSub := sub
+	if !periodEnd.After(sub.CurrentPeriodStart) {
+		pastCycle := *sub
+		pastCycle.CurrentPeriodStart, pastCycle.CurrentPeriodEnd = periodStart, periodEnd
+		evalSub = &pastCycle
+	}
+	if err := NewAlertService(s.ServiceParams).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{evalSub}, asOf); err != nil {
+		return err
+	}
+	if len(finalized) == 0 {
+		return nil
+	}
+
+	grantSvc := &entitlementGrantService{ServiceParams: s.ServiceParams}
+	meta, err := grantSvc.buildGrantEvalMeta(ctx, []*subscription.Subscription{sub}, nil, finalized, NewSubscriptionService(s.ServiceParams))
+	if err != nil {
+		return err
+	}
+	for _, g := range finalized {
+		usage, err := grantSvc.MeasureEntitlementGrantUsage(ctx, meta, sub, g, asOf)
+		if ierr.IsNotFound(err) {
+			continue // feature or meter gone; the evaluator skips these too
+		}
+		if err != nil {
+			return err
+		}
+		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, grantUsageSnapshot(g, usage, asOf)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // loadEntitlementGrantsByMeterID returns grants overlapping the billing cycle

@@ -266,10 +266,10 @@ func (s *alertService) EvaluateAndAlertEntitlementGrants(ctx context.Context, cu
 			continue
 		}
 
+		// An alert failure must not block billing; the next evaluation retries the transition.
 		if err := s.transitionEntitlementGrantAlert(ctx, alertLogsSvc, cust, g, usage, at); err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: alert transition failed",
 				"grant_id", g.ID, "error", err)
-			errs = append(errs, err)
 		}
 
 		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, grantUsageSnapshot(g, usage, at)); err != nil {
