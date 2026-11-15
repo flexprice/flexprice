@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS flexprice.meter_usage_hourly
     event_count           UInt64                   NOT NULL
 )
 ENGINE = SummingMergeTree((qty_sum, event_count))
-PARTITION BY toYYYYMMDD(bucket)
-ORDER BY (tenant_id, environment_id, external_customer_id, meter_id, bucket)
-SETTINGS index_granularity = 1024;
+PARTITION BY toYYYYMM(bucket)
+ORDER BY (tenant_id, environment_id, external_customer_id, bucket, meter_id)
+SETTINGS index_granularity = 256;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS flexprice.meter_usage_hourly_mv
 TO flexprice.meter_usage_hourly
