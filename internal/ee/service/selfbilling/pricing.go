@@ -76,19 +76,37 @@ func (c *remoteClient) offeredPlan(ctx context.Context) (*dto.SelfBillingPlanRes
 	return c.offeredPlanByID(ctx, c.defaultPlanID)
 }
 
-// offeredPlans is every plan a tenant may buy at checkout. The default plan is first; known is an offer already loaded.
-func (c *remoteClient) offeredPlans(ctx context.Context, known *dto.SelfBillingPlanResponse) ([]*dto.SelfBillingPlanResponse, error) {
-	out := make([]*dto.SelfBillingPlanResponse, 0, len(c.planIDs))
-	for _, id := range c.offeredPlanIDs() {
-		if known != nil && known.ID == id {
-			out = append(out, known)
-			continue
+// offeredPlans loads every plan a tenant may buy in one search. The default plan is first.
+func (c *remoteClient) offeredPlans(ctx context.Context) ([]*dto.SelfBillingPlanResponse, error) {
+	ids := c.offeredPlanIDs()
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	resp, err := c.sdk.Plans.QueryPlan(ctx, sdktypes.PlanFilter{
+		PlanIds: ids,
+		Expand:  lo.ToPtr(string(types.ExpandPrices)),
+		Limit:   lo.ToPtr(int64(len(ids))),
+	})
+	if err != nil {
+		return nil, cloudErr(err)
+	}
+	if resp.ListPlansResponse == nil {
+		return nil, unreadablePricing()
+	}
+
+	byID := lo.KeyBy(resp.ListPlansResponse.Items, func(plan sdktypes.PlanResponse) string { return lo.FromPtr(plan.ID) })
+	out := make([]*dto.SelfBillingPlanResponse, 0, len(ids))
+	for _, id := range ids {
+		plan, ok := byID[id]
+		if !ok {
+			return nil, unreadablePricing()
 		}
-		plan, err := c.offeredPlanByID(ctx, id)
+		offer, err := c.planOffer(ctx, &plan)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, plan)
+		out = append(out, offer)
 	}
 	return out, nil
 }
@@ -104,6 +122,11 @@ func (c *remoteClient) offeredPlanByID(ctx context.Context, planID string) (*dto
 		return nil, unreadablePricing()
 	}
 
+	return c.planOffer(ctx, plan)
+}
+
+func (c *remoteClient) planOffer(ctx context.Context, plan *sdktypes.PlanResponse) (*dto.SelfBillingPlanResponse, error) {
+	var err error
 	out := newSummaryPlan(plan)
 	now := clock.Now()
 	meters := make(map[string]*sdktypes.MeterResponse)

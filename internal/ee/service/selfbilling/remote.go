@@ -366,12 +366,7 @@ func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummar
 	noLiveSubscription := sub == nil || sub.status == types.SubscriptionStatusCancelled
 	selfServeTrial := sub != nil && sub.status == types.SubscriptionStatusTrialing && lo.Contains(c.planIDs, sub.planID)
 	if noLiveSubscription || selfServeTrial {
-		// With no live subscription the plan shown is already the default's offer.
-		var known *dto.SelfBillingPlanResponse
-		if noLiveSubscription {
-			known = plan
-		}
-		out.plans, err = c.offeredPlans(ctx, known)
+		out.plans, err = c.offeredPlans(ctx)
 		if err != nil {
 			return nil, err
 		}

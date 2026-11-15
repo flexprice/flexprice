@@ -39,6 +39,7 @@ const (
 	pathCheckoutSessions     = "/checkout/sessions/" // as GetCheckoutSession builds it
 	pathEventsBulk           = "/events/bulk"        // as IngestEventsBulk builds it
 	pathFXRateQuery          = "/forex/query"        // as QueryFXRates builds it
+	pathPlanSearch           = "/plans/search"       // as QueryPlan builds it
 )
 
 // notFoundBody is the JSON error envelope the Flexprice API returns for a 404.
@@ -162,6 +163,22 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 				limit = min(int(l), limit)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"items": matching[:limit]})
+
+		case r.Method == http.MethodPost && r.URL.Path == pathPlanSearch:
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("invalid plan search body: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			var items []map[string]any
+			for _, id := range body["plan_ids"].([]any) {
+				plan, ok := f.plans[id.(string)]
+				if ok {
+					items = append(items, plan)
+				}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
 
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/plans/"):
 			plan, ok := f.plans[strings.TrimPrefix(r.URL.Path, "/plans/")]
