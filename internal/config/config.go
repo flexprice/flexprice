@@ -1138,6 +1138,10 @@ type BulkMeterUsageTrackingConfig struct {
 	RedisDeduplicationEnabled    bool          `mapstructure:"redis_deduplication_enabled" default:"true"`
 	RedisDeduplicationTTL        time.Duration `mapstructure:"redis_deduplication_ttl" default:"24h"`
 	PostInsertSideEffectsEnabled bool          `mapstructure:"post_insert_side_effects_enabled" default:"true"`
+	// One Redis round trip per batch.
+	BatchDedupLocks bool `mapstructure:"batch_dedup_locks" default:"false"`
+	// Rows per meter_usage insert statement.
+	InsertChunkSize int `mapstructure:"insert_chunk_size" default:"100"`
 }
 
 // DefaultRedisDeduplicationTTL is the fallback TTL.
