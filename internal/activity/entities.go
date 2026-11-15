@@ -5,6 +5,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -95,6 +96,12 @@ func Registrations() *Registry {
 			EntityType: types.SystemEntityTypeBillingInstalment, EntName: "BillingInstalment",
 			Snapshot: snapshotOf(billingterm.InstalmentFromEnt),
 			Label:    []string{"invoice_label"},
+		},
+		Registration{
+			EntityType: types.SystemEntityTypeEmailLog, EntName: "EmailLog",
+			Snapshot: snapshotOf(emaillog.FromEnt),
+			Label:    []string{"subject"},
+			Actions:  []Action{EmailLogFailed, EmailLogBounced, EmailLogSuppressed, EmailLogComplained, EmailLogDelivered, EmailLogSent, EmailLogSkipped},
 		},
 	)
 	if err != nil {

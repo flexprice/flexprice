@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/errors"
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
@@ -282,7 +283,7 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 	if out.skipReason != "" {
 		e.DeliveryStatus = types.EmailDeliveryStatusSkipped
 		e.StatusReason = lo.ToPtr(out.skipReason)
-		if err := s.EmailLogRepo.Create(ctx, e); err != nil {
+		if err := s.EmailLogRepo.Create(activity.WithAction(ctx, e.ID, activity.EmailLogSkipped), e); err != nil {
 			return nil, err
 		}
 		s.Logger.Info(ctx, "email skipped", "email_log_id", e.ID, "entity_id", e.EntityID, "reason", out.skipReason)
@@ -468,8 +469,33 @@ func (s *emailNotificationService) transition(ctx context.Context, id string, ch
 		if next == nil {
 			return nil
 		}
+		if action, ok := deliveryAction(next.DeliveryStatus); ok && next.DeliveryStatus != cur.DeliveryStatus {
+			txCtx = activity.WithAction(txCtx, cur.ID, action)
+		}
 		return s.EmailLogRepo.Update(txCtx, next)
 	})
+}
+
+// deliveryAction names the activity-log entry for an email reaching a delivery status.
+func deliveryAction(status types.EmailDeliveryStatus) (activity.Action, bool) {
+	switch status {
+	case types.EmailDeliveryStatusSent:
+		return activity.EmailLogSent, true
+	case types.EmailDeliveryStatusDelivered:
+		return activity.EmailLogDelivered, true
+	case types.EmailDeliveryStatusBounced:
+		return activity.EmailLogBounced, true
+	case types.EmailDeliveryStatusComplained:
+		return activity.EmailLogComplained, true
+	case types.EmailDeliveryStatusFailed:
+		return activity.EmailLogFailed, true
+	case types.EmailDeliveryStatusSuppressed:
+		return activity.EmailLogSuppressed, true
+	case types.EmailDeliveryStatusSkipped:
+		return activity.EmailLogSkipped, true
+	default:
+		return "", false
+	}
 }
 
 // compose renders an email log with its email type's composer.

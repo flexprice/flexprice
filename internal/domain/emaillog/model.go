@@ -17,8 +17,8 @@ type EmailLog struct {
 	CustomerID        string                    `json:"customer_id"`
 	TemplateKey       types.EmailTemplateKey    `json:"template_key"`
 	Trigger           types.EmailTrigger        `json:"trigger"`
-	FromAddress       string                    `json:"from_address"`
-	ReplyTo           string                    `json:"reply_to"`
+	FromAddress       string                    `json:"from_address" activity:"drop"`
+	ReplyTo           string                    `json:"reply_to" activity:"drop"`
 	ToAddresses       []string                  `json:"to_addresses" activity:"drop"`
 	CCAddresses       []string                  `json:"cc_addresses" activity:"drop"`
 	Subject           string                    `json:"subject"`

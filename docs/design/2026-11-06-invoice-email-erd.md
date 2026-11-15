@@ -57,6 +57,7 @@ flowchart TD
 
 - Auto-send writes a `skipped` row instead of sending when the customer has no email or the invoice total is 0. Manual send still works for zero-amount invoices.
 - Every region's webhook receives every event (one account); each region drops events whose `tags.region` is not its own.
+- `email_log` changes reach the activity log through the existing Ent hook.
 
 ## Data model
 
@@ -131,6 +132,8 @@ Handler rules:
 - Forward only: `queued < sent < delivery_delayed < delivered < complained`; `bounced`, `failed`, `suppressed` are final. Replays change nothing, so no dedupe column.
 - Never log webhook bodies (customer emails; staging sees prod events).
 - No event 72 h after `sent`: UI shows "No delivery confirmation". No polling.
+
+**Activity log:** register `email_log` in `internal/activity/entities.go`; each status update sets `activity.WithAction`. Actions: `created`, `skipped`, `sent`, `delivered`, `bounced`, `complained`, `failed`, `suppressed` (not `delivery_delayed`). `skipped` rows carry `status_reason`; with auto-send off nothing is written. The actor on `created` is `created_by`; status updates from webhooks and the dispatcher use `system`. `customer_id` links every entry to the customer's timeline. The snapshot drops `from_address`, `reply_to`, `to_addresses`, `cc_addresses`, `status_reason` and `metadata` (`activity:"drop"`), as it does for customer contact data.
 
 ## APIs and UI
 
@@ -210,7 +213,7 @@ type Provider interface {
 |---|---|---|
 | Unit, fake `Provider` | Nothing | Setting validation, From/Reply-To, skip rules, status rank |
 | Webhook handler | Signed fixtures in `testdata/` | Signature, region drop, forward-only, unknown id |
-| Docker, `provider: local` | Nothing | Finalize / Send → dispatcher → `email_log` |
+| Docker, `provider: local` | Nothing | Finalize / Send → dispatcher → `email_log` → activity log |
 | Real Resend | API key + tunnel | Real send, PDF, delivery events via `delivered@`, `bounced@`, `complained@`, `suppressed@resend.dev` |
 
 Real-Resend runs send only to the `@resend.dev` test addresses, never from the root `flexprice.io`, and the temporary tunnel webhook is deleted afterwards.

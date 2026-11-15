@@ -27,6 +27,7 @@ const (
 
 	SystemEntityTypeBillingTerm       SystemEntityType = "billing_term"
 	SystemEntityTypeBillingInstalment SystemEntityType = "billing_instalment"
+	SystemEntityTypeEmailLog          SystemEntityType = "email_log"
 )
 
 type EntityCreationStatus string
