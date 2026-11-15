@@ -23,8 +23,8 @@ const (
 	emailProviderFailureLimit = 20
 )
 
-// errAttachmentNotReady marks an email whose attachment is still being produced.
-var errAttachmentNotReady = cerrors.New("email attachment not ready")
+// errAttachmentUnavailable marks an email whose attachment could not be produced this run.
+var errAttachmentUnavailable = cerrors.New("email attachment unavailable")
 
 // EmailDispatchResult counts what one dispatch run did with the emails it took.
 type EmailDispatchResult struct {
@@ -124,7 +124,7 @@ func (s *emailNotificationService) dispatchOne(ctx context.Context, e *emaillog.
 
 	err = s.DeliverEmail(ctx, e.ID, age >= emailAttachmentWait)
 	outcome := classifyDelivery(err)
-	if outcome == deliveryDeferred && !cerrors.Is(err, errAttachmentNotReady) {
+	if outcome == deliveryDeferred {
 		s.Logger.Error(ctx, "email delivery deferred", "error", err, "email_log_id", e.ID)
 	}
 	return outcome
@@ -152,7 +152,7 @@ func classifyDelivery(err error) deliveryOutcome {
 		return deliverySent
 	case ierr.IsValidation(err):
 		return deliveryFailed
-	case cerrors.Is(err, errAttachmentNotReady):
+	case cerrors.Is(err, errAttachmentUnavailable):
 		return deliveryDeferred
 	case ierr.IsTooManyRequests(err):
 		return deliveryRateLimited

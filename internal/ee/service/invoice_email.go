@@ -77,7 +77,7 @@ func (s *emailNotificationService) composeInvoiceEmail(ctx context.Context, e *e
 	default:
 		if err := attachInvoicePDF(ctx, invoiceSvc.(*invoiceService), &inv.Invoice, &view, composed); err != nil {
 			if !allowMissingAttachments {
-				return nil, cerrors.Mark(ierr.WithError(err).WithHint("The invoice PDF is not ready yet").Mark(ierr.ErrServiceUnavailable), errAttachmentNotReady)
+				return nil, cerrors.Mark(ierr.WithError(err).WithHint("The invoice PDF could not be produced").Mark(ierr.ErrServiceUnavailable), errAttachmentUnavailable)
 			}
 			s.Logger.Info(ctx, "sending invoice email without its pdf", "email_log_id", e.ID, "invoice_id", inv.ID, "reason", err.Error())
 			composed.metadata[emailMetaPDF] = emailPDFUnavailable

@@ -235,9 +235,11 @@ func (s *emailNotificationService) DeliverEmail(ctx context.Context, emailLogID 
 	}
 
 	b := emaillog.NewEmailLogBuilder(e).
-		WithProviderMessageID(res.ProviderMessageID).
 		WithDeliveryStatus(types.EmailDeliveryStatusSent).
 		WithSentAt(clock.Now())
+	if res.ProviderMessageID != "" {
+		b = b.WithProviderMessageID(res.ProviderMessageID)
+	}
 	for k, v := range composed.metadata {
 		b = b.WithMetadata(k, v)
 	}
