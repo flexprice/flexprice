@@ -24,12 +24,12 @@ func WithRollupTable(table string) MeterUsageRepositoryOption {
 
 var validRollupTable = regexp.MustCompile(`^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)?$`)
 
-// IsValidRollupTable reports whether table is a safe identifier.
+// IsValidRollupTable checks the table identifier.
 func IsValidRollupTable(table string) bool {
 	return validRollupTable.MatchString(table)
 }
 
-// rollupPlan splits [start, end) into rollup hours and raw edges.
+// rollupPlan holds rollup hours and edges.
 type rollupPlan struct {
 	bucketStart time.Time
 	bucketEnd   time.Time
@@ -48,7 +48,7 @@ func floorHour(t time.Time) time.Time {
 	return t.UTC().Truncate(time.Hour)
 }
 
-// planRollup returns false when the rollup cannot serve params.
+// planRollup reports whether rollup applies.
 func planRollup(params *events.MeterUsageQueryParams) (rollupPlan, bool) {
 	if params == nil || params.UseFinal || params.WindowSize != "" ||
 		len(params.GroupBy) > 0 || len(params.PropertyFilters) > 0 ||
@@ -80,7 +80,7 @@ func planRollup(params *events.MeterUsageQueryParams) (rollupPlan, bool) {
 	return plan, true
 }
 
-// rollupValueExprs returns rollup and raw value expressions.
+// rollupValueExprs returns rollup and raw expressions.
 func rollupValueExprs(agg types.AggregationType) (rollupExpr, rawExpr string, ok bool) {
 	switch agg {
 	case types.AggregationSum, types.AggregationSumWithMultiplier, types.AggregationWeightedSum:
@@ -92,7 +92,7 @@ func rollupValueExprs(agg types.AggregationType) (rollupExpr, rawExpr string, ok
 	}
 }
 
-// rollupScope builds tenant, customer and meter filters.
+// rollupScope builds tenant/customer/meter filters.
 func rollupScope(params *events.MeterUsageQueryParams) ([]string, []interface{}) {
 	conds := []string{"tenant_id = ?", "environment_id = ?"}
 	args := []interface{}{params.TenantID, params.EnvironmentID}
@@ -123,7 +123,7 @@ func placeholders(n int) string {
 	return strings.TrimSuffix(strings.Repeat("?, ", n), ", ")
 }
 
-// rollupBranches builds the rollup and raw-edge SELECTs.
+// rollupBranches builds rollup and edge SELECTs.
 func rollupBranches(params *events.MeterUsageQueryParams, plan rollupPlan, table, selectCols, rawCols, groupBy string) ([]string, []interface{}) {
 	scope, scopeArgs := rollupScope(params)
 
@@ -155,7 +155,7 @@ func rollupBranches(params *events.MeterUsageQueryParams, plan rollupPlan, table
 	return branches, args
 }
 
-// buildRollupScalarQuery returns (value, event_count) for one meter.
+// buildRollupScalarQuery handles one meter.
 func buildRollupScalarQuery(params *events.MeterUsageQueryParams, table string) (string, []interface{}, bool) {
 	if table == "" {
 		return "", nil, false
@@ -206,7 +206,7 @@ func buildRollupMultiMeterQuery(params *events.MeterUsageQueryParams, table stri
 	return query, args, true
 }
 
-// buildRollupDistinctMetersQuery lists meters with usage in range.
+// buildRollupDistinctMetersQuery lists meters with usage.
 func buildRollupDistinctMetersQuery(params *events.MeterUsageQueryParams, table string) (string, []interface{}, bool) {
 	if table == "" || params.AggregationType == types.AggregationCountUnique {
 		return "", nil, false

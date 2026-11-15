@@ -956,7 +956,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 	return result, nil
 }
 
-// skipDistinctMeterPrefilter is true for scalar, non-bucketed reads when configured.
+// skipDistinctMeterPrefilter gates the distinct-meter pre-query.
 func (s *meterUsageService) skipDistinctMeterPrefilter(isAnalyticsQuery bool, lineItems []*subscription.SubscriptionLineItem, usage *SubscriptionMeterUsage) bool {
 	if isAnalyticsQuery || s.Config == nil || !s.Config.MeterUsage.SkipDistinctMeterPrefilter {
 		return false

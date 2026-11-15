@@ -33,9 +33,9 @@ type Lock interface {
 	Release(ctx context.Context) error
 }
 
-// BatchLocker acquires many locks per round trip.
+// BatchLocker acquires locks in bulk.
 type BatchLocker interface {
-	// AcquireLocks aligns with keys; nil entries failed.
+	// Result aligns with keys; nil failed.
 	AcquireLocks(ctx context.Context, keys []string, ttl time.Duration) ([]Lock, error)
 }
 
