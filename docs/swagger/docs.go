@@ -28664,6 +28664,10 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "plan_id": {
+                    "description": "PlanID is the offered plan to buy; empty means the default plan, or a negotiated trial's own plan.",
+                    "type": "string"
+                },
                 "tax_id": {
                     "type": "string"
                 }
@@ -28769,8 +28773,12 @@ const docTemplate = `{
                         "$ref": "#/definitions/SelfBillingInvoice"
                     }
                 },
-                "plan": {
-                    "$ref": "#/definitions/SelfBillingPlanResponse"
+                "plans": {
+                    "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live. The first plan is the default.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SelfBillingPlanResponse"
+                    }
                 },
                 "status": {
                     "$ref": "#/definitions/types.TenantInternalStatus"

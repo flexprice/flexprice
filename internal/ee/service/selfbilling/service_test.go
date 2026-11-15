@@ -36,9 +36,8 @@ type fakeClient struct {
 	trialsStarted int
 	err           error
 
-	trialCheckouts   int
-	trialCheckoutErr error
-	portalExtIDs     []string
+	opened       []string // one per checkout: the plan a plan checkout buys, or "trial_end"
+	portalExtIDs []string
 
 	billingUpdates map[string]billingDetails // extID -> last details passed to UpdateBillingDetails
 
@@ -49,11 +48,13 @@ type fakeClient struct {
 	usdRatesErr  error
 	usdRateCalls int
 
-	// freeFirstPeriod makes StartTrialEndCheckout end the trial with nothing to collect; the subscription turns active.
+	// freeFirstPeriod makes a checkout complete with nothing to collect; the subscription turns active.
 	freeFirstPeriod bool
 
-	// staleAfterTrialEnd leaves the subscription unchanged after a free trial end, as a lagging read would.
+	// staleAfterTrialEnd leaves the subscription unchanged after a free checkout, as a lagging read would.
 	staleAfterTrialEnd bool
+
+	trialsEnded []string // extIDs passed to EndTrials
 }
 
 func newFakeClient() *fakeClient {
@@ -93,7 +94,7 @@ func (f *fakeClient) StartTrial(_ context.Context, extID string) (bool, error) {
 		return false, f.err
 	}
 	f.trialsStarted++
-	f.subs[extID] = &remoteSubscription{id: "sub_" + extID, status: types.SubscriptionStatusTrialing}
+	f.subs[extID] = &remoteSubscription{id: "sub_" + extID, planID: "plan_1", status: types.SubscriptionStatusTrialing}
 	return f.err == nil, f.err
 }
 
@@ -113,14 +114,27 @@ func (f *fakeClient) UpdateBillingDetails(_ context.Context, extID string, detai
 }
 
 func (f *fakeClient) StartTrialEndCheckout(_ context.Context, in checkoutInput) (*remoteCheckout, error) {
+	return f.open(in, "trial_end")
+}
+
+func (f *fakeClient) StartPlanCheckout(_ context.Context, in checkoutInput) (*remoteCheckout, error) {
+	return f.open(in, in.planID)
+}
+
+func (f *fakeClient) EndTrials(_ context.Context, extID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	f.trialCheckouts++
-	if f.trialCheckoutErr != nil {
-		return nil, f.trialCheckoutErr
-	}
+	f.trialsEnded = append(f.trialsEnded, extID)
+	return f.err
+}
 
+// open records a checkout of kind and returns its session, keyed by the subscription and kind.
+func (f *fakeClient) open(in checkoutInput, kind string) (*remoteCheckout, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.opened = append(f.opened, kind)
 	if f.freeFirstPeriod {
 		if sub, ok := f.subs[in.extID]; ok && !f.staleAfterTrialEnd {
 			sub.status = types.SubscriptionStatusActive
@@ -129,7 +143,7 @@ func (f *fakeClient) StartTrialEndCheckout(_ context.Context, in checkoutInput) 
 	}
 
 	co := &remoteCheckout{
-		id:     "cs_" + in.subscriptionID,
+		id:     "cs_" + in.subscriptionID + "_" + kind,
 		status: types.CheckoutStatusPending,
 		url:    "https://checkout.test/" + in.subscriptionID,
 		extID:  in.extID,
@@ -263,12 +277,13 @@ func newTestService(client billingClient) (*selfBillingService, *testDeps) {
 		SelfBillingPostgresRepo:   d.usage,
 
 		Config: &config.Configuration{Billing: config.BillingConfig{
-			Enabled:      true,
-			Region:       "us",
-			APIHost:      "https://cloud.test/v1",
-			APIKey:       "sk",
-			PlanID:       "plan_1",
-			DashboardURL: "https://us.app.test",
+			Enabled:       true,
+			Region:        "us",
+			APIHost:       "https://cloud.test/v1",
+			APIKey:        "sk",
+			DefaultPlanID: "plan_1",
+			PlanIDs:       []string{"plan_1", "plan_2"},
+			DashboardURL:  "https://us.app.test",
 		}},
 	}
 

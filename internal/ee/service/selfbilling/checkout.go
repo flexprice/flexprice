@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 const (
@@ -14,7 +15,8 @@ const (
 	checkoutFailurePath = "/billing/checkout/failure"
 )
 
-// StartCheckout only checks out a trialing subscription; an active one activates and an incomplete one pays in the portal.
+// StartCheckout buys a plan with one checkout that creates its subscription, during the trial and after it ends. A
+// negotiated (enterprise) trial pays its own plan at trial end; an active one activates; an incomplete one pays in the portal.
 func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string, req dto.SelfBillingCheckoutRequest) (_ *dto.SelfBillingCheckoutResponse, err error) {
 	defer func() { s.logRemoteFailure(ctx, "start_checkout", tenantID, err) }()
 
@@ -24,6 +26,14 @@ func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string,
 
 	if err := req.Validate(); err != nil {
 		return nil, err
+	}
+	planIDs := s.Config.Billing.PlanIDs
+	planID := lo.CoalesceOrEmpty(req.PlanID, s.Config.Billing.DefaultPlanID)
+	if !lo.Contains(planIDs, planID) {
+		return nil, ierr.NewError("plan is not offered for self-serve checkout").
+			WithHint("Choose one of the plans offered on the upgrade page").
+			WithReportableDetails(map[string]any{"plan_id": planID}).
+			Mark(ierr.ErrValidation)
 	}
 
 	t, err := s.TenantRepo.GetByID(ctx, tenantID)
@@ -63,8 +73,25 @@ func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string,
 			Mark(ierr.ErrNotFound)
 	}
 
+	in := checkoutInput{
+		extID:          extID,
+		subscriptionID: sub.id,
+		planID:         planID,
+		successURL:     s.Config.Billing.DashboardURL + checkoutSuccessPath,
+		failureURL:     s.Config.Billing.DashboardURL + checkoutFailurePath,
+	}
+
+	// A paid or unpaid subscription is not changed here: the plans are offered only while one can be bought.
+	if (sub.status == types.SubscriptionStatusActive || sub.status == types.SubscriptionStatusIncomplete) &&
+		req.PlanID != "" && req.PlanID != sub.planID {
+		return nil, ierr.NewErrorf("flexprice cloud subscription %s is %s; its plan cannot change at checkout", sub.id, sub.status).
+			WithHint("Your plan cannot be changed here; contact support").
+			WithReportableDetails(map[string]any{"subscription_id": sub.id, "status": sub.status, "plan_id": req.PlanID}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	var co *remoteCheckout
 	switch sub.status {
-	case types.SubscriptionStatusTrialing:
 	case types.SubscriptionStatusActive:
 		status, err := s.updateTenantStatus(ctx, t, sub)
 		if err != nil {
@@ -75,6 +102,7 @@ func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string,
 			Terminal: true,
 			Tenant:   status,
 		}, nil
+
 	case types.SubscriptionStatusIncomplete:
 		// The trial ended unpaid, so its invoice is paid from the customer portal.
 		p, err := s.client.PortalSession(ctx, extID)
@@ -86,6 +114,24 @@ func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string,
 			Status: types.CheckoutStatusPending,
 			Tenant: t.InternalStatus,
 		}, nil
+
+	case types.SubscriptionStatusTrialing:
+		if lo.Contains(planIDs, sub.planID) {
+			co, err = s.client.StartPlanCheckout(ctx, in)
+			break
+		}
+		// A negotiated trial keeps its plan, so it cannot buy another here.
+		if req.PlanID != "" && req.PlanID != sub.planID {
+			return nil, ierr.NewErrorf("flexprice cloud subscription %s is on a negotiated plan", sub.id).
+				WithHint("Your plan cannot be changed here; contact support").
+				WithReportableDetails(map[string]any{"subscription_id": sub.id, "plan_id": req.PlanID}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+		co, err = s.client.StartTrialEndCheckout(ctx, in)
+
+	case types.SubscriptionStatusCancelled:
+		co, err = s.client.StartPlanCheckout(ctx, in)
+
 	default:
 		return nil, ierr.NewErrorf("flexprice cloud subscription %s is %s", sub.id, sub.status).
 			WithHint("Your billing subscription cannot be paid for here; contact support").
@@ -95,13 +141,6 @@ func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string,
 			}).
 			Mark(ierr.ErrInvalidOperation)
 	}
-
-	co, err := s.client.StartTrialEndCheckout(ctx, checkoutInput{
-		extID:          extID,
-		subscriptionID: sub.id,
-		successURL:     s.Config.Billing.DashboardURL + checkoutSuccessPath,
-		failureURL:     s.Config.Billing.DashboardURL + checkoutFailurePath,
-	})
 	if err != nil {
 		return nil, err
 	}
