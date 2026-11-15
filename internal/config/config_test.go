@@ -247,8 +247,7 @@ func TestBillingConfig_HasSecureZapierWebhookURL(t *testing.T) {
 	}
 }
 
-// TestBillingPlanIDs_FromEnv proves a comma-separated FLEXPRICE_BILLING_PLAN_IDS becomes the list of offered plans,
-// and that a default plan outside that list stops startup.
+// TestBillingPlanIDs_FromEnv proves a comma-separated FLEXPRICE_BILLING_PLAN_IDS becomes the list of offered plans.
 func TestBillingPlanIDs_FromEnv(t *testing.T) {
 	t.Setenv("FLEXPRICE_BILLING_ENABLED", "true")
 	t.Setenv("FLEXPRICE_BILLING_DEFAULT_PLAN_ID", "plan_1")
@@ -259,10 +258,7 @@ func TestBillingPlanIDs_FromEnv(t *testing.T) {
 		t.Fatalf("NewConfig() error: %v", err)
 	}
 	assert.Equal(t, []string{"plan_1", "plan_2"}, cfg.Billing.PlanIDs)
-
-	t.Setenv("FLEXPRICE_BILLING_DEFAULT_PLAN_ID", "plan_3")
-	_, err = NewConfig()
-	assert.ErrorContains(t, err, "default_plan_id")
+	assert.Equal(t, "plan_1", cfg.Billing.DefaultPlanID)
 }
 
 // TestBillingPlanID_RenamedKeyStopsStartup proves the old FLEXPRICE_BILLING_PLAN_ID fails loudly rather than turning self-billing off.

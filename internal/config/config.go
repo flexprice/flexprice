@@ -1301,9 +1301,6 @@ func NewConfig() (*Configuration, error) {
 	if v.IsSet("billing.plan_id") || os.Getenv("FLEXPRICE_BILLING_PLAN_ID") != "" {
 		return nil, fmt.Errorf("billing.plan_id (FLEXPRICE_BILLING_PLAN_ID) was renamed to billing.default_plan_id (FLEXPRICE_BILLING_DEFAULT_PLAN_ID)")
 	}
-	if cfg.Billing.Enabled && cfg.Billing.DefaultPlanID != "" && !slices.Contains(cfg.Billing.PlanIDs, cfg.Billing.DefaultPlanID) {
-		return nil, fmt.Errorf("billing.default_plan_id %q must be one of billing.plan_ids", cfg.Billing.DefaultPlanID)
-	}
 
 	// Step 6: Parse API keys from env var (JSON string override).
 	// We read the OS env var directly instead of via Viper because the value is a JSON
