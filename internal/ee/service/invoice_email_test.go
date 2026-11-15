@@ -44,8 +44,8 @@ func TestInvoiceChargeGroups(t *testing.T) {
 	assert.Equal(t, 4, count, "zero-amount lines are left out")
 	assert.Equal(t, 0, more)
 	require.Len(t, groups, 3)
-	assert.Equal(t, render.ChargeGroup{Name: "Growth", Total: "$2,250.00", Lines: []render.ChargeLine{
-		{Name: "Platform fee", Detail: "$500.00 each", Amount: "$450.00"},
+	assert.Equal(t, render.ChargeGroup{Name: "Growth", Total: "$2,300.00", Lines: []render.ChargeLine{
+		{Name: "Platform fee", Detail: "$500.00 each", Amount: "$500.00"},
 		{Name: "API calls", Detail: "1,800 used", Amount: "$1,800.00"},
 	}}, groups[0])
 	assert.Equal(t, "Support", groups[1].Name, "an add-on is its own group")

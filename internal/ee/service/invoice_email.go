@@ -249,8 +249,9 @@ func invoiceEmailState(inv *dto.InvoiceResponse, now time.Time) render.InvoiceSt
 	return render.InvoiceStateDue
 }
 
-// invoiceChargeGroups groups charged lines by plan or add-on in first-seen order (the portal's
-// toGroups), keeping the first maxInvoiceEmailLines lines; group totals count every line.
+// invoiceChargeGroups groups charged lines by plan or add-on in first-seen order (as the portal's
+// toGroups), keeping the first maxInvoiceEmailLines lines; group totals count every line. Amounts are
+// gross: discounts and credits are summary rows, so groups add up to the subtotal.
 func invoiceChargeGroups(items []*dto.InvoiceLineItemResponse, money func(decimal.Decimal) string) ([]render.ChargeGroup, int, int) {
 	type group struct {
 		name  string
@@ -273,16 +274,14 @@ func invoiceChargeGroups(items []*dto.InvoiceLineItemResponse, money func(decima
 				groupName = name
 			}
 		}
-		net := li.Amount.Sub(li.LineItemDiscount).Sub(li.InvoiceLevelDiscount).Sub(li.PrepaidCreditsApplied)
-
 		g, ok := lo.Find(groups, func(g *group) bool { return g.name == groupName })
 		if !ok {
 			g = &group{name: groupName}
 			groups = append(groups, g)
 		}
-		g.total = g.total.Add(net)
+		g.total = g.total.Add(li.Amount)
 		if shown < maxInvoiceEmailLines {
-			g.lines = append(g.lines, render.ChargeLine{Name: name, Detail: chargeDetail(li, money), Amount: money(net)})
+			g.lines = append(g.lines, render.ChargeLine{Name: name, Detail: chargeDetail(li, money), Amount: money(li.Amount)})
 			shown++
 		}
 	}
