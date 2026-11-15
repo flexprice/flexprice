@@ -257,12 +257,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
-	// Per-event Redis dedup mirrors the single-event path: acquire an event-ID
-	// keyed lock (TTL = redis_deduplication_ttl) before doing any work for that event, skip events
-	// whose lock is already held, and release every lock we acquired if the
-	// batch fails downstream so redelivery isn't dedup-skipped until TTL.
-	// Gated by BulkMeterUsageTracking.RedisDeduplicationEnabled so the bulk
-	// consumer can toggle dedup independently of the single-event stream.
+	// Per-event dedup locks; released on failure.
 	dedupEnabled := s.Config.BulkMeterUsageTracking.RedisDeduplicationEnabled && s.ServiceParams.Locker != nil
 	var dedupLocks []cache.Lock
 	defer func() {
