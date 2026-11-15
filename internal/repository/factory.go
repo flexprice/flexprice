@@ -363,6 +363,13 @@ func NewMeterUsageRepository(p RepositoryParams, cfg *config.Configuration) even
 		if clickhouseRepo.IsValidRollupTable(table) {
 			opts = append(opts, clickhouseRepo.WithRollupTable(table))
 			p.Logger.Info(context.Background(), "meter_usage rollup reads enabled", "table", table)
+			daily := cfg.MeterUsage.Rollup.DailyTable
+			if daily != "" && clickhouseRepo.IsValidRollupTable(daily) {
+				opts = append(opts, clickhouseRepo.WithDailyRollupTable(daily))
+				p.Logger.Info(context.Background(), "meter_usage daily rollup reads enabled", "table", daily)
+			} else if daily != "" {
+				p.Logger.Error(context.Background(), "meter_usage daily rollup table invalid, daily tier disabled", "table", daily)
+			}
 		} else {
 			p.Logger.Error(context.Background(), "meter_usage rollup table invalid, rollup disabled", "table", table)
 		}

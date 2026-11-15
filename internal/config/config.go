@@ -1032,6 +1032,8 @@ type MeterUsageConfig struct {
 type MeterUsageRollupConfig struct {
 	Enabled bool   `mapstructure:"enabled" default:"false"`
 	Table   string `mapstructure:"table" default:"meter_usage_hourly"`
+	// Empty disables the daily tier.
+	DailyTable string `mapstructure:"daily_table" default:""`
 }
 
 // UsageAlertsConfig controls the usage-driven alert pipeline end to end:

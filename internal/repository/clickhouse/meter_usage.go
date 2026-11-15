@@ -22,10 +22,10 @@ import (
 // MeterUsageQueryBuilder (SQL construction), keeping this file focused on
 // I/O: batch inserts, query execution, and row scanning.
 type MeterUsageRepository struct {
-	store       *clickhouse.ClickHouseStore
-	logger      *logger.Logger
-	qb          *MeterUsageQueryBuilder
-	rollupTable string
+	store  *clickhouse.ClickHouseStore
+	logger *logger.Logger
+	qb     *MeterUsageQueryBuilder
+	rollup rollupTables
 }
 
 func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger, opts ...MeterUsageRepositoryOption) events.MeterUsageRepository {
@@ -179,7 +179,7 @@ func (r *MeterUsageRepository) GetUsage(ctx context.Context, params *events.Mete
 	})
 	defer FinishSpan(span)
 
-	if query, args, ok := buildRollupScalarQuery(params, r.rollupTable); ok {
+	if query, args, ok := buildTieredScalarQuery(params, r.rollup); ok {
 		result, err := r.executeScalarQuery(ctx, query, args, params)
 		if err != nil {
 			SetSpanError(span, err)
@@ -263,7 +263,7 @@ func (r *MeterUsageRepository) GetUsageMultiMeter(ctx context.Context, params *e
 	})
 	defer FinishSpan(span)
 
-	if query, args, ok := buildRollupMultiMeterQuery(params, r.rollupTable); ok {
+	if query, args, ok := buildTieredMultiMeterQuery(params, r.rollup); ok {
 		results, err := r.executeMultiMeterScalarQuery(ctx, query, args, params)
 		if err != nil {
 			SetSpanError(span, err)
@@ -714,7 +714,7 @@ func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *
 		ORDER BY meter_id
 		%s
 	`, finalClause, where, settings)
-	if q, a, ok := buildRollupDistinctMetersQuery(params, r.rollupTable); ok {
+	if q, a, ok := buildTieredDistinctMetersQuery(params, r.rollup); ok {
 		query, args = q, a
 	}
 

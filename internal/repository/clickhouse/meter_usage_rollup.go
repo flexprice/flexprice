@@ -17,9 +17,24 @@ type MeterUsageRepositoryOption func(*MeterUsageRepository)
 func WithRollupTable(table string) MeterUsageRepositoryOption {
 	return func(r *MeterUsageRepository) {
 		if validRollupTable.MatchString(table) {
-			r.rollupTable = table
+			r.rollup.hourly = table
 		}
 	}
+}
+
+// WithDailyRollupTable enables the daily tier.
+func WithDailyRollupTable(table string) MeterUsageRepositoryOption {
+	return func(r *MeterUsageRepository) {
+		if validRollupTable.MatchString(table) {
+			r.rollup.daily = table
+		}
+	}
+}
+
+// rollupTables names the rollup tiers.
+type rollupTables struct {
+	hourly string
+	daily  string
 }
 
 var validRollupTable = regexp.MustCompile(`^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)?$`)
@@ -46,6 +61,48 @@ func ceilHour(t time.Time) time.Time {
 
 func floorHour(t time.Time) time.Time {
 	return t.UTC().Truncate(time.Hour)
+}
+
+const oneDay = 24 * time.Hour
+
+func ceilDay(t time.Time) time.Time {
+	d := t.UTC().Truncate(oneDay)
+	if d.Before(t.UTC()) {
+		return d.Add(oneDay)
+	}
+	return d
+}
+
+func floorDay(t time.Time) time.Time {
+	return t.UTC().Truncate(oneDay)
+}
+
+// tierSplit divides rollup hours into tiers.
+type tierSplit struct {
+	dayStart time.Time
+	dayEnd   time.Time
+	hours    []events.TimeRange
+}
+
+// splitDays reports whether a full day exists.
+func splitDays(plan rollupPlan) (tierSplit, bool) {
+	var s tierSplit
+	if !plan.bucketStart.IsZero() {
+		s.dayStart = ceilDay(plan.bucketStart)
+	}
+	if !plan.bucketEnd.IsZero() {
+		s.dayEnd = floorDay(plan.bucketEnd)
+	}
+	if !plan.bucketStart.IsZero() && !plan.bucketEnd.IsZero() && !s.dayStart.Before(s.dayEnd) {
+		return tierSplit{}, false
+	}
+	if plan.bucketStart.Before(s.dayStart) {
+		s.hours = append(s.hours, events.TimeRange{Start: plan.bucketStart, End: s.dayStart})
+	}
+	if !plan.bucketEnd.IsZero() && s.dayEnd.Before(plan.bucketEnd) {
+		s.hours = append(s.hours, events.TimeRange{Start: s.dayEnd, End: plan.bucketEnd})
+	}
+	return s, true
 }
 
 // planRollup reports whether rollup applies.
@@ -124,22 +181,16 @@ func placeholders(n int) string {
 }
 
 // rollupBranches builds rollup and edge SELECTs.
-func rollupBranches(params *events.MeterUsageQueryParams, plan rollupPlan, table, selectCols, rawCols, groupBy string) ([]string, []interface{}) {
+func rollupBranches(params *events.MeterUsageQueryParams, plan rollupPlan, tables rollupTables, selectCols, rawCols, groupBy string) ([]string, []interface{}) {
 	scope, scopeArgs := rollupScope(params)
 
-	bucketConds := append([]string{}, scope...)
-	bucketArgs := append([]interface{}{}, scopeArgs...)
-	if !plan.bucketStart.IsZero() {
-		bucketConds = append(bucketConds, "bucket >= ?")
-		bucketArgs = append(bucketArgs, plan.bucketStart)
+	var branches []string
+	var args []interface{}
+	if split, ok := splitDays(plan); tables.daily != "" && ok {
+		branches, args = tieredBranches(scope, scopeArgs, split, tables, selectCols, groupBy)
+	} else {
+		branches, args = hourlyBranch(scope, scopeArgs, plan, tables.hourly, selectCols, groupBy)
 	}
-	if !plan.bucketEnd.IsZero() {
-		bucketConds = append(bucketConds, "bucket < ?")
-		bucketArgs = append(bucketArgs, plan.bucketEnd)
-	}
-
-	branches := []string{fmt.Sprintf("SELECT %s FROM %s WHERE %s%s", selectCols, table, strings.Join(bucketConds, " AND "), groupBy)}
-	args := bucketArgs
 
 	if len(plan.edges) > 0 {
 		edgeConds := append([]string{}, scope...)
@@ -155,9 +206,55 @@ func rollupBranches(params *events.MeterUsageQueryParams, plan rollupPlan, table
 	return branches, args
 }
 
+func hourlyBranch(scope []string, scopeArgs []interface{}, plan rollupPlan, table, selectCols, groupBy string) ([]string, []interface{}) {
+	bucketConds := append([]string{}, scope...)
+	bucketArgs := append([]interface{}{}, scopeArgs...)
+	if !plan.bucketStart.IsZero() {
+		bucketConds = append(bucketConds, "bucket >= ?")
+		bucketArgs = append(bucketArgs, plan.bucketStart)
+	}
+	if !plan.bucketEnd.IsZero() {
+		bucketConds = append(bucketConds, "bucket < ?")
+		bucketArgs = append(bucketArgs, plan.bucketEnd)
+	}
+
+	return []string{fmt.Sprintf("SELECT %s FROM %s WHERE %s%s", selectCols, table, strings.Join(bucketConds, " AND "), groupBy)}, bucketArgs
+}
+
+func tieredBranches(scope []string, scopeArgs []interface{}, split tierSplit, tables rollupTables, selectCols, groupBy string) ([]string, []interface{}) {
+	dayConds := append([]string{}, scope...)
+	args := append([]interface{}{}, scopeArgs...)
+	if !split.dayStart.IsZero() {
+		dayConds = append(dayConds, "bucket >= ?")
+		args = append(args, split.dayStart)
+	}
+	if !split.dayEnd.IsZero() {
+		dayConds = append(dayConds, "bucket < ?")
+		args = append(args, split.dayEnd)
+	}
+	branches := []string{fmt.Sprintf("SELECT %s FROM %s WHERE %s%s", selectCols, tables.daily, strings.Join(dayConds, " AND "), groupBy)}
+
+	if len(split.hours) > 0 {
+		hourConds := append([]string{}, scope...)
+		args = append(args, scopeArgs...)
+		ranges := make([]string, 0, len(split.hours))
+		for _, h := range split.hours {
+			ranges = append(ranges, "(bucket >= ? AND bucket < ?)")
+			args = append(args, h.Start, h.End)
+		}
+		hourConds = append(hourConds, "("+strings.Join(ranges, " OR ")+")")
+		branches = append(branches, fmt.Sprintf("SELECT %s FROM %s WHERE %s%s", selectCols, tables.hourly, strings.Join(hourConds, " AND "), groupBy))
+	}
+	return branches, args
+}
+
 // buildRollupScalarQuery handles one meter.
 func buildRollupScalarQuery(params *events.MeterUsageQueryParams, table string) (string, []interface{}, bool) {
-	if table == "" {
+	return buildTieredScalarQuery(params, rollupTables{hourly: table})
+}
+
+func buildTieredScalarQuery(params *events.MeterUsageQueryParams, tables rollupTables) (string, []interface{}, bool) {
+	if tables.hourly == "" {
 		return "", nil, false
 	}
 	rollupExpr, rawExpr, ok := rollupValueExprs(params.AggregationType)
@@ -168,7 +265,7 @@ func buildRollupScalarQuery(params *events.MeterUsageQueryParams, table string) 
 	if !ok {
 		return "", nil, false
 	}
-	branches, args := rollupBranches(params, plan, table,
+	branches, args := rollupBranches(params, plan, tables,
 		rollupExpr+" AS v, toUInt64(sum(event_count)) AS n",
 		rawExpr+" AS v, toUInt64(COUNT(DISTINCT id)) AS n",
 		"")
@@ -182,7 +279,11 @@ func buildRollupScalarQuery(params *events.MeterUsageQueryParams, table string) 
 
 // buildRollupMultiMeterQuery returns (meter_id, value, event_count) rows.
 func buildRollupMultiMeterQuery(params *events.MeterUsageQueryParams, table string) (string, []interface{}, bool) {
-	if table == "" || len(params.MeterIDs) == 0 {
+	return buildTieredMultiMeterQuery(params, rollupTables{hourly: table})
+}
+
+func buildTieredMultiMeterQuery(params *events.MeterUsageQueryParams, tables rollupTables) (string, []interface{}, bool) {
+	if tables.hourly == "" || len(params.MeterIDs) == 0 {
 		return "", nil, false
 	}
 	rollupExpr, rawExpr, ok := rollupValueExprs(params.AggregationType)
@@ -193,7 +294,7 @@ func buildRollupMultiMeterQuery(params *events.MeterUsageQueryParams, table stri
 	if !ok {
 		return "", nil, false
 	}
-	branches, args := rollupBranches(params, plan, table,
+	branches, args := rollupBranches(params, plan, tables,
 		"meter_id, "+rollupExpr+" AS v, toUInt64(sum(event_count)) AS n",
 		"meter_id, "+rawExpr+" AS v, toUInt64(COUNT(DISTINCT id)) AS n",
 		" GROUP BY meter_id")
@@ -208,14 +309,18 @@ func buildRollupMultiMeterQuery(params *events.MeterUsageQueryParams, table stri
 
 // buildRollupDistinctMetersQuery lists meters with usage.
 func buildRollupDistinctMetersQuery(params *events.MeterUsageQueryParams, table string) (string, []interface{}, bool) {
-	if table == "" || params.AggregationType == types.AggregationCountUnique {
+	return buildTieredDistinctMetersQuery(params, rollupTables{hourly: table})
+}
+
+func buildTieredDistinctMetersQuery(params *events.MeterUsageQueryParams, tables rollupTables) (string, []interface{}, bool) {
+	if tables.hourly == "" || params.AggregationType == types.AggregationCountUnique {
 		return "", nil, false
 	}
 	plan, ok := planRollup(params)
 	if !ok {
 		return "", nil, false
 	}
-	branches, args := rollupBranches(params, plan, table, "DISTINCT meter_id", "DISTINCT meter_id", "")
+	branches, args := rollupBranches(params, plan, tables, "DISTINCT meter_id", "DISTINCT meter_id", "")
 	query := fmt.Sprintf(`
 		SELECT DISTINCT meter_id
 		FROM (%s)
