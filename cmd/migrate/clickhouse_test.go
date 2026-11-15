@@ -93,6 +93,11 @@ func TestSplitSQL_MigrationFiles(t *testing.T) {
 	if len(files) == 0 {
 		t.Fatal("no clickhouse migration files found")
 	}
+	optional, err := filepath.Glob("../../migrations/clickhouse/rollup/*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files = append(files, optional...)
 
 	for _, f := range files {
 		t.Run(filepath.Base(f), func(t *testing.T) {
