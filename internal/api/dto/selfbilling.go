@@ -65,6 +65,7 @@ type SelfBillingSummaryResponse struct {
 	Invoices           []SelfBillingInvoice          `json:"invoices"`
 	Usage              *CustomerUsageSummaryResponse `json:"usage,omitempty"`
 	// Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.
+	// The first plan is the default.
 	Plans []*SelfBillingPlanResponse `json:"plans,omitempty"`
 }
 

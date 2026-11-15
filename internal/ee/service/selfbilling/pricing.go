@@ -57,15 +57,29 @@ func (c *remoteClient) summaryPlan(ctx context.Context, extID string) (*remoteSu
 		WithHint("The subscription changed; reload the billing summary").Mark(ierr.ErrInvalidOperation)
 }
 
+// offeredPlanIDs lists the default plan first, then the other offered plans in configured order.
+func (c *remoteClient) offeredPlanIDs() []string {
+	ids := make([]string, 0, len(c.planIDs))
+	if lo.Contains(c.planIDs, c.defaultPlanID) {
+		ids = append(ids, c.defaultPlanID)
+	}
+	for _, id := range c.planIDs {
+		if id != c.defaultPlanID {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // offeredPlan is the default plan's offer: what a tenant with no live subscription is shown.
 func (c *remoteClient) offeredPlan(ctx context.Context) (*dto.SelfBillingPlanResponse, error) {
 	return c.offeredPlanByID(ctx, c.defaultPlanID)
 }
 
-// offeredPlans is every plan a tenant may buy at checkout, in configured order; known is an offer already loaded.
+// offeredPlans is every plan a tenant may buy at checkout. The default plan is first; known is an offer already loaded.
 func (c *remoteClient) offeredPlans(ctx context.Context, known *dto.SelfBillingPlanResponse) ([]*dto.SelfBillingPlanResponse, error) {
 	out := make([]*dto.SelfBillingPlanResponse, 0, len(c.planIDs))
-	for _, id := range c.planIDs {
+	for _, id := range c.offeredPlanIDs() {
 		if known != nil && known.ID == id {
 			out = append(out, known)
 			continue

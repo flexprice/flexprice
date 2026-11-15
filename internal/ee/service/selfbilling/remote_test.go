@@ -1065,8 +1065,8 @@ func TestRemoteClient_SummaryOffersPlansWhileOneCanBeBought(t *testing.T) {
 		planID    string
 		wantPlans []string
 	}{
-		{"trialing_sees_every_offered_plan", "trialing", "plan_1", []string{"plan_2", "plan_1"}},
-		{"ended_trial_sees_every_offered_plan", "cancelled", "plan_1", []string{"plan_2", "plan_1"}},
+		{"trialing_sees_every_offered_plan", "trialing", "plan_1", []string{"plan_1", "plan_2"}},
+		{"ended_trial_sees_every_offered_plan", "cancelled", "plan_1", []string{"plan_1", "plan_2"}},
 		{"active_sees_none", "active", "plan_1", nil},
 		{"enterprise_trial_sees_none", "trialing", "plan_enterprise", nil},
 	}

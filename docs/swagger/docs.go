@@ -28774,7 +28774,7 @@ const docTemplate = `{
                     }
                 },
                 "plans": {
-                    "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.",
+                    "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live. The first plan is the default.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/SelfBillingPlanResponse"
