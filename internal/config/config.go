@@ -1297,12 +1297,6 @@ func NewConfig() (*Configuration, error) {
 		return nil, fmt.Errorf("unable to decode into config struct, %v", err)
 	}
 
-	// billing.plan_id was renamed. An empty leftover is ignored: Viper treats billing.plan_id: "" as set,
-	// and that must not block startup. A real value would otherwise turn self-billing off silently.
-	if strings.TrimSpace(v.GetString("billing.plan_id")) != "" || strings.TrimSpace(os.Getenv("FLEXPRICE_BILLING_PLAN_ID")) != "" {
-		return nil, fmt.Errorf("billing.plan_id (FLEXPRICE_BILLING_PLAN_ID) was renamed to billing.default_plan_id (FLEXPRICE_BILLING_DEFAULT_PLAN_ID)")
-	}
-
 	// Step 6: Parse API keys from env var (JSON string override).
 	// We read the OS env var directly instead of via Viper because the value is a JSON
 	// string — Viper/mapstructure would try to decode it as a map and panic during

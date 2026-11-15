@@ -260,20 +260,3 @@ func TestBillingPlanIDs_FromEnv(t *testing.T) {
 	assert.Equal(t, []string{"plan_1", "plan_2"}, cfg.Billing.PlanIDs)
 	assert.Equal(t, "plan_1", cfg.Billing.DefaultPlanID)
 }
-
-// TestBillingPlanID_RenamedKeyStopsStartup proves the old FLEXPRICE_BILLING_PLAN_ID fails loudly rather than turning self-billing off.
-func TestBillingPlanID_RenamedKeyStopsStartup(t *testing.T) {
-	t.Setenv("FLEXPRICE_BILLING_PLAN_ID", "plan_1")
-
-	_, err := NewConfig()
-	assert.ErrorContains(t, err, "renamed to billing.default_plan_id")
-}
-
-func TestBillingPlanID_EmptyLegacyValueDoesNotStopStartup(t *testing.T) {
-	t.Setenv("FLEXPRICE_BILLING_PLAN_ID", "   ")
-
-	_, err := NewConfig()
-	if err != nil {
-		assert.NotContains(t, err.Error(), "renamed to billing.default_plan_id")
-	}
-}
