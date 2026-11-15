@@ -338,7 +338,8 @@ func main() {
 			provideBillingEntityScope,
 			service.NewHostedInvoiceTokenService,
 			service.NewHostedInvoiceService,
-			fx.Annotate(service.NewEmailNotificationService, fx.As(fx.Self()), fx.As(new(interfaces.InvoiceEmailSender))),
+			service.NewEmailNotificationService,
+			provideInvoiceEmailSender,
 			service.NewCouponService,
 			service.NewCommitmentService,
 			service.NewCouponAssociationService,
@@ -936,5 +937,9 @@ func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.Rev
 }
 
 func provideBillingEntityScope(s service.BillingEntityService) interfaces.BillingEntityScope {
+	return s
+}
+
+func provideInvoiceEmailSender(s service.EmailNotificationService) interfaces.InvoiceEmailSender {
 	return s
 }
