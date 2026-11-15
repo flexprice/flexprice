@@ -89,7 +89,8 @@ func TestServiceParamsProviders(t *testing.T) {
 			Region:       "us",
 			APIHost:      "https://billing.example.com/v1",
 			APIKey:       "sk_test",
-			PlanID:       "plan_free",
+			DefaultPlanID: "plan_free",
+			PlanIDs:       []string{"plan_free"},
 			DashboardURL: "https://app.example.com",
 		}},
 	}
