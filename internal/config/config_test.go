@@ -268,3 +268,12 @@ func TestBillingPlanID_RenamedKeyStopsStartup(t *testing.T) {
 	_, err := NewConfig()
 	assert.ErrorContains(t, err, "renamed to billing.default_plan_id")
 }
+
+func TestBillingPlanID_EmptyLegacyValueDoesNotStopStartup(t *testing.T) {
+	t.Setenv("FLEXPRICE_BILLING_PLAN_ID", "   ")
+
+	_, err := NewConfig()
+	if err != nil {
+		assert.NotContains(t, err.Error(), "renamed to billing.default_plan_id")
+	}
+}
