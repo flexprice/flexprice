@@ -44,14 +44,14 @@ func (s *stubSelfBilling) Summary(_ context.Context, tenantID string) (*dto.Self
 	s.gotTenant = tenantID
 	return &dto.SelfBillingSummaryResponse{
 		Status: types.TenantInternalStatusActive,
-		Plan: &dto.SelfBillingPlanResponse{
+		Plans: []*dto.SelfBillingPlanResponse{{
 			ID:   "plan_1",
 			Name: "Self Serve",
 			Charges: []*dto.SelfBillingChargeResponse{{
 				PriceID: "price_override",
 				Amount:  decimal.RequireFromString("79.123456789"),
 			}},
-		},
+		}},
 	}, nil
 }
 
@@ -101,10 +101,10 @@ func TestSelfBillingHandler_UsesContextTenant(t *testing.T) {
 			if tt.name == "summary_ignores_query_tenant" || tt.name == "tenant_billing_ignores_query_tenant" {
 				var summary dto.SelfBillingSummaryResponse
 				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &summary))
-				require.NotNil(t, summary.Plan)
-				assert.Equal(t, "plan_1", summary.Plan.ID)
-				require.Len(t, summary.Plan.Charges, 1)
-				assert.Equal(t, "79.123456789", summary.Plan.Charges[0].Amount.String())
+				require.Len(t, summary.Plans, 1)
+				assert.Equal(t, "plan_1", summary.Plans[0].ID)
+				require.Len(t, summary.Plans[0].Charges, 1)
+				assert.Equal(t, "79.123456789", summary.Plans[0].Charges[0].Amount.String())
 				assert.Contains(t, w.Body.String(), `"amount":"79.123456789"`)
 			}
 		})

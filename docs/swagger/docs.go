@@ -28773,9 +28773,6 @@ const docTemplate = `{
                         "$ref": "#/definitions/SelfBillingInvoice"
                     }
                 },
-                "plan": {
-                    "$ref": "#/definitions/SelfBillingPlanResponse"
-                },
                 "plans": {
                     "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.",
                     "type": "array",

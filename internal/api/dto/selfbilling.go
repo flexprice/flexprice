@@ -64,7 +64,6 @@ type SelfBillingSummaryResponse struct {
 	TrialEndsAt        *time.Time                    `json:"trial_ends_at,omitempty"`
 	Invoices           []SelfBillingInvoice          `json:"invoices"`
 	Usage              *CustomerUsageSummaryResponse `json:"usage,omitempty"`
-	Plan               *SelfBillingPlanResponse      `json:"plan"`
 	// Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.
 	Plans []*SelfBillingPlanResponse `json:"plans,omitempty"`
 }
