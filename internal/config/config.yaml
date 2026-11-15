@@ -556,6 +556,7 @@ meter_usage:
   rollup:
     enabled: false
     table: "meter_usage_hourly"
+  skip_distinct_meter_prefilter: false
 
 meter_usage_tracking_lazy:
   enabled: true
@@ -573,6 +574,7 @@ usage_alerts:
   wallet_alerts_enabled: true
   spend_alerts_enabled: true
   entitlement_alerts_enabled: true
+  skip_final: false # spend alerts read usage without FINAL
 
 wallet_balance_alert:
   enabled: true

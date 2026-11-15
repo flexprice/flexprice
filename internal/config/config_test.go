@@ -300,3 +300,21 @@ func TestMeterUsageRollupFromYAMLAndEnv(t *testing.T) {
 	assert.True(t, cfg.MeterUsage.Rollup.Enabled)
 	assert.Equal(t, "meter_usage_rollup_lt", cfg.MeterUsage.Rollup.Table)
 }
+
+func TestAlertReadFlagsFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.False(t, cfg.UsageAlerts.SkipFinal)
+	assert.False(t, cfg.MeterUsage.SkipDistinctMeterPrefilter)
+
+	t.Setenv("FLEXPRICE_USAGE_ALERTS_SKIP_FINAL", "true")
+	t.Setenv("FLEXPRICE_METER_USAGE_SKIP_DISTINCT_METER_PREFILTER", "true")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.True(t, cfg.UsageAlerts.SkipFinal)
+	assert.True(t, cfg.MeterUsage.SkipDistinctMeterPrefilter)
+}
