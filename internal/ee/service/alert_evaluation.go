@@ -249,10 +249,6 @@ func (s *alertService) EvaluateAndAlertEntitlementGrants(ctx context.Context, cu
 				"grant_id", g.ID, "valid_from", g.ValidFrom)
 			continue
 		}
-		// Already measured as far as this pass would: a historical recalculation must not move usage back.
-		if g.LastComputedAt != nil && !g.LastComputedAt.Before(types.EarliestOf(at, g.ValidTo)) {
-			continue
-		}
 
 		usage, err := grantSvc.MeasureEntitlementGrantUsage(ctx, meta, sub, g, at)
 		if ierr.IsNotFound(err) {
