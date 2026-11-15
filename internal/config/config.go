@@ -1024,11 +1024,11 @@ type MeterUsageTrackingConfig struct {
 // MeterUsageConfig tunes meter_usage reads.
 type MeterUsageConfig struct {
 	Rollup MeterUsageRollupConfig `mapstructure:"rollup"`
-	// Skips the distinct-meter pre-query on scalar reads.
+	// Skips distinct-meter pre-query.
 	SkipDistinctMeterPrefilter bool `mapstructure:"skip_distinct_meter_prefilter" default:"false"`
 }
 
-// MeterUsageRollupConfig serves scalar reads from an hourly rollup.
+// MeterUsageRollupConfig enables hourly rollup reads.
 type MeterUsageRollupConfig struct {
 	Enabled bool   `mapstructure:"enabled" default:"false"`
 	Table   string `mapstructure:"table" default:"meter_usage_hourly"`
@@ -1053,7 +1053,7 @@ type UsageAlertsConfig struct {
 	WalletAlertsEnabled      bool          `mapstructure:"wallet_alerts_enabled" default:"true"`
 	SpendAlertsEnabled       bool          `mapstructure:"spend_alerts_enabled" default:"true"`
 	EntitlementAlertsEnabled bool          `mapstructure:"entitlement_alerts_enabled" default:"true"`
-	// Spend alerts read usage without FINAL.
+	// Spend alerts skip FINAL.
 	SkipFinal bool `mapstructure:"skip_final" default:"false"`
 }
 
@@ -1138,7 +1138,7 @@ type BulkMeterUsageTrackingConfig struct {
 	RedisDeduplicationEnabled    bool          `mapstructure:"redis_deduplication_enabled" default:"true"`
 	RedisDeduplicationTTL        time.Duration `mapstructure:"redis_deduplication_ttl" default:"24h"`
 	PostInsertSideEffectsEnabled bool          `mapstructure:"post_insert_side_effects_enabled" default:"true"`
-	// One Redis round trip per batch.
+	// One Redis round trip.
 	BatchDedupLocks bool `mapstructure:"batch_dedup_locks" default:"false"`
 	// Rows per meter_usage insert statement.
 	InsertChunkSize int `mapstructure:"insert_chunk_size" default:"100"`

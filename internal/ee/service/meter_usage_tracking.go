@@ -234,7 +234,7 @@ func stampIngestedAt(records []*events.MeterUsage) {
 // processBulkMessage unmarshals a RawEventBatch, matches every event to its
 // meters, and issues a single BulkInsertMeterUsage. Malformed rows inside the
 // batch are skipped so healthy siblings still land in ClickHouse.
-// acquireBulkDedupLocks takes a batch's dedup locks in one round trip.
+// acquireBulkDedupLocks locks a batch at once.
 func (s *meterUsageTrackingService) acquireBulkDedupLocks(
 	ctx context.Context,
 	batch []*events.Event,
@@ -276,7 +276,7 @@ func (s *meterUsageTrackingService) acquireBulkDedupLocks(
 	return skip, held, nil
 }
 
-// insertBulkRecords honours the bulk insert chunk size.
+// insertBulkRecords applies the chunk size.
 func (s *meterUsageTrackingService) insertBulkRecords(ctx context.Context, records []*events.MeterUsage) error {
 	chunk := s.Config.BulkMeterUsageTracking.InsertChunkSize
 	if inserter, ok := s.meterUsageRepo.(events.ChunkedMeterUsageInserter); ok && chunk > 0 {
@@ -331,7 +331,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		}
 		evt.EventName = strings.TrimSpace(evt.EventName)
 
-		// Held events must take no lock.
+		// Held events take no lock.
 		if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(ctx, evt.ExternalCustomerID, evt.Timestamp) {
 			s.Logger.Error(ctx, "holding bulk meter usage batch: a deletion is in progress for this customer and period",
 				"error", types.ErrEventDeletionInProgress,
