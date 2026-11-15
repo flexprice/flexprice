@@ -56,15 +56,13 @@ func (s *emailNotificationService) DispatchEmails(ctx context.Context) (*EmailDi
 		return res, nil
 	}
 
-	ctx = types.WithForceWriter(ctx)
-
 	envs, err := s.EmailLogRepo.ListEnvironmentsWithQueuedEmails(ctx)
 	if err != nil {
 		return nil, err
 	}
 	queues := make([][]*emaillog.EmailLog, 0, len(envs))
 	for _, env := range envs {
-		queued, err := s.EmailLogRepo.ListQueued(envContext(ctx, env.TenantID, env.EnvironmentID), emailDispatchBatchSize)
+		queued, err := s.EmailLogRepo.ListQueued(types.WithForceWriter(envContext(ctx, env.TenantID, env.EnvironmentID)), emailDispatchBatchSize)
 		if err != nil {
 			return nil, err
 		}
@@ -137,7 +135,7 @@ func (s *emailNotificationService) dispatchOne(ctx context.Context, e *emaillog.
 
 // skipQueued records that a queued email will not be sent.
 func (s *emailNotificationService) skipQueued(ctx context.Context, emailLogID string, reason string) error {
-	e, err := s.EmailLogRepo.Get(ctx, emailLogID)
+	e, err := s.EmailLogRepo.Get(types.WithForceWriter(ctx), emailLogID)
 	if err != nil {
 		return err
 	}

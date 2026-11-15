@@ -34,7 +34,7 @@ type EmailNotificationService interface {
 	// MarkEmailFailed records that delivery gave up on a queued email.
 	MarkEmailFailed(ctx context.Context, emailLogID string, reason string) error
 
-	// DispatchEmails sends queued emails from every environment at the deployment's send rate.
+	// DispatchEmails sends queued emails from every environment, one at a time.
 	DispatchEmails(ctx context.Context) (*EmailDispatchResult, error)
 }
 
@@ -199,7 +199,7 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 }
 
 func (s *emailNotificationService) DeliverEmail(ctx context.Context, emailLogID string, allowMissingAttachments bool) error {
-	e, err := s.EmailLogRepo.Get(ctx, emailLogID)
+	e, err := s.EmailLogRepo.Get(types.WithForceWriter(ctx), emailLogID)
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func (s *emailNotificationService) DeliverEmail(ctx context.Context, emailLogID 
 }
 
 func (s *emailNotificationService) MarkEmailFailed(ctx context.Context, emailLogID string, reason string) error {
-	e, err := s.EmailLogRepo.Get(ctx, emailLogID)
+	e, err := s.EmailLogRepo.Get(types.WithForceWriter(ctx), emailLogID)
 	if err != nil {
 		return err
 	}
