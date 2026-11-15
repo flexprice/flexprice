@@ -5164,7 +5164,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/email-messages/search": {
+        "/emails/search": {
             "post": {
                 "security": [
                     {
@@ -5182,7 +5182,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Search emails",
-                "operationId": "queryEmailMessage",
+                "operationId": "queryEmail",
                 "parameters": [
                     {
                         "description": "Filter",

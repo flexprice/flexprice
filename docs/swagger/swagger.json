@@ -5160,7 +5160,7 @@
                 }
             }
         },
-        "/email-messages/search": {
+        "/emails/search": {
             "post": {
                 "security": [
                     {
@@ -5178,7 +5178,7 @@
                     "Invoices"
                 ],
                 "summary": "Search emails",
-                "operationId": "queryEmailMessage",
+                "operationId": "queryEmail",
                 "parameters": [
                     {
                         "description": "Filter",

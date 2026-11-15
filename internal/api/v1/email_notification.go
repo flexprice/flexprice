@@ -88,9 +88,9 @@ func (h *EmailNotificationHandler) ListInvoiceEmails(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// QueryEmailMessages godoc
+// QueryEmails godoc
 // @Summary Search emails
-// @ID queryEmailMessage
+// @ID queryEmail
 // @Description Use when reviewing emails sent to customers, for example every bounced email this month or every email to one customer. Filter by delivery status, trigger, customer, document and date. Newest first; paginated.
 // @Tags Invoices
 // @x-scope "read"
@@ -101,8 +101,8 @@ func (h *EmailNotificationHandler) ListInvoiceEmails(c *gin.Context) {
 // @Success 200 {object} dto.ListEmailLogsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /email-messages/search [post]
-func (h *EmailNotificationHandler) QueryEmailMessages(c *gin.Context) {
+// @Router /emails/search [post]
+func (h *EmailNotificationHandler) QueryEmails(c *gin.Context) {
 	var filter types.EmailLogFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).WithHint("Invalid filter parameters").Mark(ierr.ErrValidation))
