@@ -25,14 +25,19 @@ type MeterUsageRepository struct {
 	store  *clickhouse.ClickHouseStore
 	logger *logger.Logger
 	qb     *MeterUsageQueryBuilder
+	rollup rollupTables
 }
 
-func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger) events.MeterUsageRepository {
-	return &MeterUsageRepository{
+func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger, opts ...MeterUsageRepositoryOption) events.MeterUsageRepository {
+	r := &MeterUsageRepository{
 		store:  store,
 		logger: logger,
 		qb:     NewMeterUsageQueryBuilder(),
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // insertTimeout caps each batch insert; without it the driver uses the caller's much longer deadline.
@@ -44,10 +49,22 @@ const groupKeySeparator = "\x00"
 // propertyKeysSampleRows is the number of latest rows sampled per meter for property keys.
 const propertyKeysSampleRows = 10000
 
-// BulkInsertMeterUsage inserts meter usage records in batches of 100
+// defaultInsertChunk is rows per insert.
+const defaultInsertChunk = 100
+
+// maxInsertChunk caps rows per insert statement.
+const maxInsertChunk = 10000
+
+// BulkInsertMeterUsage inserts in 100-row batches.
 func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records []*events.MeterUsage) error {
+	return r.BulkInsertMeterUsageChunked(ctx, records, defaultInsertChunk)
+}
+
+// BulkInsertMeterUsageChunked inserts chunkSize-row statements.
+func (r *MeterUsageRepository) BulkInsertMeterUsageChunked(ctx context.Context, records []*events.MeterUsage, chunkSize int) error {
 	span := StartRepositorySpan(ctx, "meter_usage", "bulk_insert", map[string]interface{}{
 		"record_count": len(records),
+		"chunk_size":   chunkSize,
 	})
 	defer FinishSpan(span)
 
@@ -56,7 +73,10 @@ func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records
 		return nil
 	}
 
-	batches := lo.Chunk(records, 100)
+	if chunkSize <= 0 {
+		chunkSize = defaultInsertChunk
+	}
+	batches := lo.Chunk(records, min(chunkSize, maxInsertChunk))
 
 	for _, batch := range batches {
 		batchCtx, cancel := context.WithTimeout(ctx, insertTimeout)
@@ -159,6 +179,16 @@ func (r *MeterUsageRepository) GetUsage(ctx context.Context, params *events.Mete
 	})
 	defer FinishSpan(span)
 
+	if query, args, ok := buildTieredScalarQuery(params, r.rollup); ok {
+		result, err := r.executeScalarQuery(ctx, query, args, params)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, err
+		}
+		SetSpanSuccess(span)
+		return result, nil
+	}
+
 	aggregator := GetMeterUsageAggregator(params.AggregationType)
 	query := aggregator.GetQuery(ctx, params, r.qb)
 	_, args := r.qb.BuildWhereClause(params)
@@ -232,6 +262,16 @@ func (r *MeterUsageRepository) GetUsageMultiMeter(ctx context.Context, params *e
 		"window_size":      params.WindowSize,
 	})
 	defer FinishSpan(span)
+
+	if query, args, ok := buildTieredMultiMeterQuery(params, r.rollup); ok {
+		results, err := r.executeMultiMeterScalarQuery(ctx, query, args, params)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, err
+		}
+		SetSpanSuccess(span)
+		return results, nil
+	}
 
 	aggregator := GetMeterUsageAggregator(params.AggregationType)
 	// Extract aggregation expressions from the aggregator type
@@ -674,6 +714,9 @@ func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *
 		ORDER BY meter_id
 		%s
 	`, finalClause, where, settings)
+	if q, a, ok := buildTieredDistinctMetersQuery(params, r.rollup); ok {
+		query, args = q, a
+	}
 
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {

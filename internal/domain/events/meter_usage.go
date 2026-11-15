@@ -221,6 +221,11 @@ type PropertyLookupParams struct {
 }
 
 // MeterUsageRepository defines read/write operations on the meter_usage ClickHouse table
+// ChunkedMeterUsageInserter sets rows per insert statement.
+type ChunkedMeterUsageInserter interface {
+	BulkInsertMeterUsageChunked(ctx context.Context, records []*MeterUsage, chunkSize int) error
+}
+
 type MeterUsageRepository interface {
 	// BulkInsertMeterUsage inserts multiple meter usage records in batches
 	BulkInsertMeterUsage(ctx context.Context, records []*MeterUsage) error

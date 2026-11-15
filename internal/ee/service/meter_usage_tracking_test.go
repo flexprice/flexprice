@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"math"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -13,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/logger"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -551,4 +555,226 @@ func (s *MeterUsageTrackingSuite) TestEffectiveUsageAlertTiming() {
 			s.Equal(tt.wantStale, stale)
 		})
 	}
+}
+
+type recordingLock struct {
+	acquired bool
+	locker   *recordingLocker
+}
+
+func (l *recordingLock) AcquiredSuccessfully() bool { return l.acquired }
+func (l *recordingLock) Release(_ context.Context) error {
+	l.locker.mu.Lock()
+	defer l.locker.mu.Unlock()
+	l.locker.releases++
+	return nil
+}
+
+type recordingLocker struct {
+	mu       sync.Mutex
+	acquire  bool
+	ttls     []time.Duration
+	releases int
+}
+
+func (r *recordingLocker) AcquireLock(_ context.Context, _ string, ttl time.Duration) (cache.Lock, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ttls = append(r.ttls, ttl)
+	return &recordingLock{acquired: r.acquire, locker: r}, nil
+}
+
+func TestDedupLockTTL(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+
+	tests := []struct {
+		name string
+		ttl  time.Duration
+		want time.Duration
+	}{
+		{"default when unset", 0, 24 * time.Hour},
+		{"override", 20 * time.Minute, 20 * time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			locker := &recordingLocker{}
+			svc := &meterUsageTrackingService{ServiceParams: ServiceParams{
+				Logger: logger.NewNoopLogger(),
+				Locker: locker,
+				Config: &config.Configuration{
+					MeterUsageTracking: config.MeterUsageTrackingConfig{
+						RedisDeduplicationEnabled: true,
+						RedisDeduplicationTTL:     tt.ttl,
+					},
+					BulkMeterUsageTracking: config.BulkMeterUsageTrackingConfig{
+						RedisDeduplicationEnabled: true,
+						RedisDeduplicationTTL:     tt.ttl,
+					},
+				},
+			}}
+
+			require.NoError(t, svc.processEvent(ctx, &events.Event{ID: "evt_single", EventName: "api_call"}))
+
+			payload, err := json.Marshal(events.EventBatch{
+				TenantID:      types.DefaultTenantID,
+				EnvironmentID: "env_test",
+				Events:        []*events.Event{{ID: "evt_bulk", EventName: "api_call"}},
+			})
+			require.NoError(t, err)
+			require.NoError(t, svc.processBulkMessage(ctx, message.NewMessage("msg_1", payload)))
+
+			assert.Equal(t, []time.Duration{tt.want, tt.want}, locker.ttls)
+		})
+	}
+}
+
+type stubTemporalService struct {
+	temporalservice.TemporalService
+}
+
+func (s *MeterUsageTrackingSuite) TestScheduleUsageAlert_TenantFlagsOffKeepsThrottleLock() {
+	orig := usageAlertTemporalService
+	usageAlertTemporalService = func() temporalservice.TemporalService { return stubTemporalService{} }
+	defer func() { usageAlertTemporalService = orig }()
+
+	s.WithEnvironment("env_usage_alert")
+	ctx := s.GetContext()
+	locker := &recordingLocker{acquire: true}
+	const delay = 5*time.Minute + 30*time.Second
+	svc := &meterUsageTrackingService{ServiceParams: ServiceParams{
+		Logger:       logger.NewNoopLogger(),
+		SettingsRepo: s.GetStores().SettingsRepo,
+		Locker:       locker,
+		Config: &config.Configuration{UsageAlerts: config.UsageAlertsConfig{
+			WalletAlertsEnabled:      true,
+			SpendAlertsEnabled:       true,
+			EntitlementAlertsEnabled: true,
+			ScheduleDelay:            delay,
+			StaleAfter:               time.Hour,
+		}},
+	}}
+
+	svc.scheduleUsageAlertWorkflow(ctx, &customer.Customer{ID: "cust_1"})
+
+	s.Equal([]time.Duration{delay}, locker.ttls)
+	s.Equal(0, locker.releases, "throttle lock must not be released")
+}
+
+type batchRecordingLocker struct {
+	recordingLocker
+	held       map[string]bool
+	batchCalls int
+	batchKeys  []string
+}
+
+func (b *batchRecordingLocker) AcquireLocks(_ context.Context, keys []string, _ time.Duration) ([]cache.Lock, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.batchCalls++
+	b.batchKeys = append(b.batchKeys, keys...)
+	locks := make([]cache.Lock, len(keys))
+	for i, k := range keys {
+		ok := !b.held[k]
+		b.held[k] = true
+		locks[i] = &recordingLock{acquired: ok, locker: &b.recordingLocker}
+	}
+	return locks, nil
+}
+
+type chunkRecordingStore struct {
+	*testutil.InMemoryMeterUsageStore
+	chunks []int
+	fail   bool
+}
+
+func (c *chunkRecordingStore) BulkInsertMeterUsageChunked(ctx context.Context, records []*events.MeterUsage, chunk int) error {
+	c.chunks = append(c.chunks, chunk)
+	if c.fail {
+		return assert.AnError
+	}
+	return c.InMemoryMeterUsageStore.BulkInsertMeterUsage(ctx, records)
+}
+
+func newBulkBatchingService(t *testing.T, locker cache.Locker, store events.MeterUsageRepository, batch bool, chunk int) *meterUsageTrackingService {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	meters := testutil.NewInMemoryMeterStore()
+	require.NoError(t, meters.CreateMeter(ctx, &meter.Meter{
+		ID:          "meter_api",
+		EventName:   "api_call",
+		Aggregation: meter.Aggregation{Type: types.AggregationCount},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}))
+	return &meterUsageTrackingService{
+		ServiceParams: ServiceParams{
+			Logger:    logger.NewNoopLogger(),
+			Locker:    locker,
+			MeterRepo: meters,
+			Config: &config.Configuration{BulkMeterUsageTracking: config.BulkMeterUsageTrackingConfig{
+				RedisDeduplicationEnabled: true,
+				BatchDedupLocks:           batch,
+				InsertChunkSize:           chunk,
+			}},
+		},
+		meterUsageRepo: store,
+	}
+}
+
+func bulkMessage(t *testing.T, ids ...string) *message.Message {
+	evts := make([]*events.Event, 0, len(ids))
+	for _, id := range ids {
+		evts = append(evts, &events.Event{ID: id, EventName: "api_call", ExternalCustomerID: "c1", Timestamp: time.Now().UTC()})
+	}
+	payload, err := json.Marshal(events.EventBatch{TenantID: types.DefaultTenantID, EnvironmentID: "env_test", Events: evts})
+	require.NoError(t, err)
+	return message.NewMessage("msg_batch", payload)
+}
+
+func TestProcessBulkMessage_BatchDedupLocks(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	locker := &batchRecordingLocker{held: map[string]bool{}}
+	store := &chunkRecordingStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()}
+	svc := newBulkBatchingService(t, locker, store, true, 5000)
+
+	require.NoError(t, svc.processBulkMessage(ctx, bulkMessage(t, "e1", "e2", "e1", "e3")))
+
+	assert.Equal(t, 1, locker.batchCalls, "one round trip per batch")
+	assert.Empty(t, locker.ttls, "no per-event AcquireLock")
+	assert.Len(t, locker.batchKeys, 4)
+	assert.Equal(t, []int{5000}, store.chunks)
+	got, err := store.GetUsage(ctx, &events.MeterUsageQueryParams{
+		TenantID: types.DefaultTenantID, EnvironmentID: "env_test", MeterID: "meter_api", AggregationType: types.AggregationCount,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(3), got.EventCount, "in-batch duplicate skipped")
+
+	require.NoError(t, svc.processBulkMessage(ctx, bulkMessage(t, "e1", "e4")))
+	got, err = store.GetUsage(ctx, &events.MeterUsageQueryParams{
+		TenantID: types.DefaultTenantID, EnvironmentID: "env_test", MeterID: "meter_api", AggregationType: types.AggregationCount,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(4), got.EventCount, "redelivered event skipped")
+	assert.Equal(t, 0, locker.releases)
+}
+
+func TestProcessBulkMessage_BatchDedupLocksReleasedOnInsertFailure(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	locker := &batchRecordingLocker{held: map[string]bool{}}
+	store := &chunkRecordingStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore(), fail: true}
+	svc := newBulkBatchingService(t, locker, store, true, 500)
+
+	require.Error(t, svc.processBulkMessage(ctx, bulkMessage(t, "e1", "e2", "e1")))
+	assert.Equal(t, 2, locker.releases, "acquired locks released, skipped duplicate not")
+}
+
+func TestProcessBulkMessage_DefaultPathUnchanged(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	locker := &batchRecordingLocker{held: map[string]bool{}}
+	locker.acquire = true
+	store := &chunkRecordingStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()}
+	svc := newBulkBatchingService(t, locker, store, false, 100)
+
+	require.NoError(t, svc.processBulkMessage(ctx, bulkMessage(t, "e1", "e2")))
+	assert.Equal(t, 0, locker.batchCalls)
+	assert.Len(t, locker.ttls, 2)
+	assert.Equal(t, []int{100}, store.chunks)
 }

@@ -246,3 +246,108 @@ func TestBillingConfig_HasSecureZapierWebhookURL(t *testing.T) {
 		})
 	}
 }
+
+func TestDeduplicationTTL(t *testing.T) {
+	tests := []struct {
+		name string
+		ttl  time.Duration
+		want time.Duration
+	}{
+		{"unset falls back", 0, 24 * time.Hour},
+		{"negative falls back", -time.Minute, 24 * time.Hour},
+		{"override honored", 30 * time.Minute, 30 * time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, MeterUsageTrackingConfig{RedisDeduplicationTTL: tt.ttl}.DeduplicationTTL())
+			assert.Equal(t, tt.want, BulkMeterUsageTrackingConfig{RedisDeduplicationTTL: tt.ttl}.DeduplicationTTL())
+		})
+	}
+}
+
+func TestDeduplicationTTLFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.Equal(t, 24*time.Hour, cfg.MeterUsageTracking.DeduplicationTTL())
+	assert.Equal(t, 24*time.Hour, cfg.BulkMeterUsageTracking.DeduplicationTTL())
+
+	t.Setenv("FLEXPRICE_BULK_METER_USAGE_TRACKING_REDIS_DEDUPLICATION_TTL", "15m")
+	t.Setenv("FLEXPRICE_METER_USAGE_TRACKING_REDIS_DEDUPLICATION_TTL", "2h")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.Equal(t, 15*time.Minute, cfg.BulkMeterUsageTracking.DeduplicationTTL())
+	assert.Equal(t, 2*time.Hour, cfg.MeterUsageTracking.DeduplicationTTL())
+}
+
+func TestMeterUsageRollupFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.False(t, cfg.MeterUsage.Rollup.Enabled)
+	assert.Equal(t, "meter_usage_hourly", cfg.MeterUsage.Rollup.Table)
+
+	t.Setenv("FLEXPRICE_METER_USAGE_ROLLUP_ENABLED", "true")
+	t.Setenv("FLEXPRICE_METER_USAGE_ROLLUP_TABLE", "meter_usage_rollup_lt")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.True(t, cfg.MeterUsage.Rollup.Enabled)
+	assert.Equal(t, "meter_usage_rollup_lt", cfg.MeterUsage.Rollup.Table)
+}
+
+func TestMeterUsageRollupDailyTableFromEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.Equal(t, "", cfg.MeterUsage.Rollup.DailyTable)
+
+	t.Setenv("FLEXPRICE_METER_USAGE_ROLLUP_DAILY_TABLE", "flexprice.meter_usage_daily")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.Equal(t, "flexprice.meter_usage_daily", cfg.MeterUsage.Rollup.DailyTable)
+}
+
+func TestAlertReadFlagsFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.False(t, cfg.UsageAlerts.SkipFinal)
+	assert.False(t, cfg.MeterUsage.SkipDistinctMeterPrefilter)
+
+	t.Setenv("FLEXPRICE_USAGE_ALERTS_SKIP_FINAL", "true")
+	t.Setenv("FLEXPRICE_METER_USAGE_SKIP_DISTINCT_METER_PREFILTER", "true")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.True(t, cfg.UsageAlerts.SkipFinal)
+	assert.True(t, cfg.MeterUsage.SkipDistinctMeterPrefilter)
+}
+
+func TestBulkBatchingFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.False(t, cfg.BulkMeterUsageTracking.BatchDedupLocks)
+	assert.Equal(t, 100, cfg.BulkMeterUsageTracking.InsertChunkSize)
+
+	t.Setenv("FLEXPRICE_BULK_METER_USAGE_TRACKING_BATCH_DEDUP_LOCKS", "true")
+	t.Setenv("FLEXPRICE_BULK_METER_USAGE_TRACKING_INSERT_CHUNK_SIZE", "5000")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.True(t, cfg.BulkMeterUsageTracking.BatchDedupLocks)
+	assert.Equal(t, 5000, cfg.BulkMeterUsageTracking.InsertChunkSize)
+}

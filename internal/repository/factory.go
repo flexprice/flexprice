@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"context"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
@@ -355,8 +357,25 @@ func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 	return entRepo.NewScheduledTaskRepository(p.EntClient, p.Logger)
 }
 
-func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
-	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
+func NewMeterUsageRepository(p RepositoryParams, cfg *config.Configuration) events.MeterUsageRepository {
+	var opts []clickhouseRepo.MeterUsageRepositoryOption
+	if cfg != nil && cfg.MeterUsage.Rollup.Enabled {
+		table := cfg.MeterUsage.Rollup.Table
+		if clickhouseRepo.IsValidRollupTable(table) {
+			opts = append(opts, clickhouseRepo.WithRollupTable(table))
+			p.Logger.Info(context.Background(), "meter_usage rollup reads enabled", "table", table)
+			daily := cfg.MeterUsage.Rollup.DailyTable
+			if daily != "" && clickhouseRepo.IsValidRollupTable(daily) {
+				opts = append(opts, clickhouseRepo.WithDailyRollupTable(daily))
+				p.Logger.Info(context.Background(), "meter_usage daily rollup reads enabled", "table", daily)
+			} else if daily != "" {
+				p.Logger.Error(context.Background(), "meter_usage daily rollup table invalid, daily tier disabled", "table", daily)
+			}
+		} else {
+			p.Logger.Error(context.Background(), "meter_usage rollup table invalid, rollup disabled", "table", table)
+		}
+	}
+	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger, opts...)
 }
 
 // NewUsageAnalyticsRepository returns the ClickHouse repository that prices meter_usage events for usage analytics.
