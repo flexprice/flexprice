@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -115,9 +114,11 @@ func (s *usageAnalyticsService) GetBreakdown(ctx context.Context, req *dto.Usage
 		}
 	}
 
-	if err := unsupportedMetersErr(in.excluded); err != nil {
-		return nil, err
-	}
+	// A meter excluded in any billing period is left out everywhere, so its usage is never half counted.
+	in.windows = lo.Filter(in.windows, func(w usageanalytics.LineWindow, _ int) bool {
+		_, excluded := in.excluded[w.MeterID]
+		return !excluded
+	})
 
 	currency, err := singleCurrency(in.windows)
 	if err != nil {
@@ -149,6 +150,9 @@ func (s *usageAnalyticsService) GetBreakdown(ctx context.Context, req *dto.Usage
 	}
 	resp.UnappliedCouponIDs = lo.Keys(in.unappliedCoupons)
 	sort.Strings(resp.UnappliedCouponIDs)
+	if len(in.excluded) > 0 {
+		resp.OmittedMeters = in.excluded
+	}
 	return resp, nil
 }
 
@@ -350,7 +354,8 @@ func (s *usageAnalyticsService) addBilledLines(
 	}
 
 	// Only UsageCharges are read: fixed charges here skip invoice prep's cadence and one-time rules.
-	result, err := billing.calculateMeterUsageCharges(ctx, cs.owner, items, seg.PeriodStart, seg.PeriodEnd, true, nil, items)
+	// Billing decides each line's window and exclusion, not its quantity, so its usage skips FINAL.
+	result, err := billing.calculateMeterUsageCharges(ctx, types.UsageSourceAnalytics, cs.owner, items, seg.PeriodStart, seg.PeriodEnd, true, nil, items)
 	if err != nil {
 		return err
 	}
@@ -470,22 +475,6 @@ func flatExclusion(owner *subscription.Subscription, li *subscription.Subscripti
 		return excludedEntitlement
 	}
 	return ""
-}
-
-// unsupportedMetersErr rejects the request when a requested meter has a line usage analytics cannot
-// price yet, naming each meter and why, so no total silently leaves usage out.
-func unsupportedMetersErr(excluded map[string]string) error {
-	if len(excluded) == 0 {
-		return nil
-	}
-	meterIDs := lo.Keys(excluded)
-	sort.Strings(meterIDs)
-	named := lo.Map(meterIDs, func(id string, _ int) string { return id + " (" + excluded[id] + ")" })
-	msg := fmt.Sprintf("usage analytics does not support meters %s yet; pass meter_ids or feature_ids to leave them out", strings.Join(named, ", "))
-	return ierr.NewError(msg).
-		WithHint(msg).
-		WithReportableDetails(map[string]any{"unsupported_meters": excluded}).
-		Mark(ierr.ErrValidation)
 }
 
 // loadMeters fills the meters and their features for line items not seen yet.
