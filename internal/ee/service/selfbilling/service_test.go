@@ -406,6 +406,7 @@ func TestProvision(t *testing.T) {
 			assert.Equal(t, alertTrialStarted, got[0].Event)
 			assert.Equal(t, tt.tenantID, got[0].TenantID)
 			assert.Equal(t, "Acme", got[0].TenantName)
+			assert.Equal(t, "a@acme.io", got[0].Email)
 			assert.Equal(t, "us", got[0].Region)
 			assert.Empty(t, got[0].FromStatus)
 			assert.False(t, got[0].OccurredAt.IsZero())

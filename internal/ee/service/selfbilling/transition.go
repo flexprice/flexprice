@@ -76,6 +76,7 @@ func (s *selfBillingService) updateTenantStatus(ctx context.Context, t *tenant.T
 			Event:      event,
 			TenantID:   t.ID,
 			TenantName: t.Name,
+			Email:      t.BillingDetails.Email,
 			FromStatus: t.InternalStatus,
 			ToStatus:   next,
 			Reason:     reason,
