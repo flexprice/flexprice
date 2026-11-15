@@ -7,7 +7,7 @@ import (
 	htmltemplate "html/template"
 	"strings"
 	// text/template renders only the plain-text part; the HTML part uses html/template.
-	texttemplate "text/template" // nosemgrep: go.lang.security.audit.xss.import-text-template
+	texttemplate "text/template" // nosemgrep: go.lang.security.audit.xss.import-text-template.import-text-template
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
