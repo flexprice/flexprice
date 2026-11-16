@@ -98,6 +98,9 @@ func (s *meterUsageTrackingService) firstAlertsOffLog(ctx context.Context) bool 
 	return !seen
 }
 
+// Throttle TTL when delay is non-positive.
+const defaultUsageAlertThrottleTTL = time.Minute
+
 // Overridable in tests.
 var usageAlertTemporalService = temporalservice.GetGlobalTemporalService
 
@@ -128,10 +131,15 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 
 	delay, staleAfter := s.effectiveUsageAlertTiming(ctx)
 
+	throttleTTL := delay
+	if throttleTTL <= 0 {
+		throttleTTL = defaultUsageAlertThrottleTTL
+	}
+
 	var throttleLock cache.Lock
 	if s.Locker != nil {
 		throttleKey := cache.GenerateKey(ctx, cache.PrefixUsageAlertSchedule, cust.ID)
-		lock, err := s.Locker.AcquireLock(ctx, throttleKey, delay)
+		lock, err := s.Locker.AcquireLock(ctx, throttleKey, throttleTTL)
 		if err != nil {
 			// Fail open: a duplicate StartWorkflow is absorbed by AlreadyStarted.
 			s.Logger.Error(ctx, "failed to acquire usage alert schedule lock, scheduling anyway", "error", err, "customer_id", cust.ID)
@@ -145,7 +153,7 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 	// Per-tenant gate: settings can turn any alert type off independently of the deployment-level config.
 	walletEnabled, spendEnabled, entitlementEnabled := s.effectiveUsageAlertFlags(ctx)
 	if !walletEnabled && !spendEnabled && !entitlementEnabled {
-		// Keep throttle lock; expires after delay.
+		// Keep throttle lock; expires via TTL.
 		if s.firstAlertsOffLog(ctx) {
 			s.Logger.Debug(ctx, "usage alerts disabled by tenant settings, skipping", "tenant_id", types.GetTenantID(ctx), "environment_id", types.GetEnvironmentID(ctx))
 		}

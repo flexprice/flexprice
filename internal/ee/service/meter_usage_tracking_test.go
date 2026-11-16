@@ -596,6 +596,7 @@ func TestDedupLockTTL(t *testing.T) {
 		want time.Duration
 	}{
 		{"default when unset", 0, 24 * time.Hour},
+		{"default when negative", -time.Minute, eventDeduplicationLockTTL},
 		{"override", 20 * time.Minute, 20 * time.Minute},
 	}
 	for _, tt := range tests {
@@ -633,6 +634,31 @@ func TestDedupLockTTL(t *testing.T) {
 
 type stubTemporalService struct {
 	temporalservice.TemporalService
+}
+
+func (s *MeterUsageTrackingSuite) TestScheduleUsageAlert_NonPositiveDelayThrottleTTL() {
+	orig := usageAlertTemporalService
+	usageAlertTemporalService = func() temporalservice.TemporalService { return stubTemporalService{} }
+	defer func() { usageAlertTemporalService = orig }()
+
+	s.WithEnvironment("env_usage_alert_ttl")
+	ctx := s.GetContext()
+	for name, delay := range map[string]time.Duration{"zero": 0, "negative": -time.Second} {
+		s.Run(name, func() {
+			locker := &recordingLocker{acquire: true}
+			svc := &meterUsageTrackingService{ServiceParams: ServiceParams{
+				Logger:       logger.NewNoopLogger(),
+				SettingsRepo: s.GetStores().SettingsRepo,
+				Locker:       locker,
+				Config: &config.Configuration{UsageAlerts: config.UsageAlertsConfig{
+					WalletAlertsEnabled: true,
+					ScheduleDelay:       delay,
+				}},
+			}}
+			svc.scheduleUsageAlertWorkflow(ctx, &customer.Customer{ID: "cust_ttl"})
+			s.Equal([]time.Duration{defaultUsageAlertThrottleTTL}, locker.ttls)
+		})
+	}
 }
 
 func (s *MeterUsageTrackingSuite) TestScheduleUsageAlert_TenantFlagsOffKeepsThrottleLock() {
