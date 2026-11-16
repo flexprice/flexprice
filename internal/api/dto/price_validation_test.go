@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -222,7 +223,7 @@ func TestCreatePriceRequest_ToPrice_DefaultStartDate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := validFlatFeeRequest()
 			tt.mutate(&req)
-			before := time.Now().UTC()
+			before := clock.Now()
 
 			p, err := req.ToPrice(context.Background())
 			require.NoError(t, err)
