@@ -61,6 +61,7 @@ type Configuration struct {
 	MeterUsageTrackingLazy MeterUsageTrackingLazyConfig `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
 	BulkEventConsumption   BulkEventConsumptionConfig   `mapstructure:"bulk_event_consumption" validate:"required"`
 	BulkMeterUsageTracking BulkMeterUsageTrackingConfig `mapstructure:"bulk_meter_usage_tracking" validate:"required"`
+	MeterUsage             MeterUsageConfig             `mapstructure:"meter_usage" validate:"omitempty"`
 	UsageAlerts            UsageAlertsConfig            `mapstructure:"usage_alerts" validate:"omitempty"`
 	EnvAccess              EnvAccessConfig              `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	Email                  EmailConfig                  `mapstructure:"email" validate:"required"`
@@ -1018,6 +1019,12 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
 	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+}
+
+// MeterUsageConfig tunes meter_usage reads.
+type MeterUsageConfig struct {
+	// Skips distinct-meter pre-query.
+	SkipDistinctMeterPrefilter bool `mapstructure:"skip_distinct_meter_prefilter" default:"false"`
 }
 
 // UsageAlertsConfig controls the usage-driven alert pipeline end to end:

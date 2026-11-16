@@ -300,3 +300,18 @@ func TestBulkBatchingFromYAMLAndEnv(t *testing.T) {
 	assert.True(t, cfg.BulkMeterUsageTracking.BatchDedupLocks)
 	assert.Equal(t, 5000, cfg.BulkMeterUsageTracking.InsertChunkSize)
 }
+
+func TestSkipDistinctMeterPrefilterFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.False(t, cfg.MeterUsage.SkipDistinctMeterPrefilter)
+
+	t.Setenv("FLEXPRICE_METER_USAGE_SKIP_DISTINCT_METER_PREFILTER", "true")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.True(t, cfg.MeterUsage.SkipDistinctMeterPrefilter)
+}
