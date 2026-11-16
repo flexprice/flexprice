@@ -24,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -129,6 +130,7 @@ type ServiceParams struct {
 	TaxRateRepo                  taxrate.Repository
 	FXRateRepo                   fxrate.Repository
 	HostedInvoiceTokenRepo       hostedinvoicetoken.Repository
+	EmailLogRepo                 emaillog.Repository
 	TaxAssociationRepo           taxassociation.Repository
 	TaxAppliedRepo               taxapplied.Repository
 	CouponRepo                   coupon.Repository
@@ -250,6 +252,7 @@ func NewServiceParams(
 	taxRateRepo taxrate.Repository,
 	fxRateRepo fxrate.Repository,
 	hostedInvoiceTokenRepo hostedinvoicetoken.Repository,
+	emailLogRepo emaillog.Repository,
 	couponRepo coupon.Repository,
 	couponAssociationRepo coupon_association.Repository,
 	couponApplicationRepo coupon_application.Repository,
@@ -340,6 +343,7 @@ func NewServiceParams(
 		TaxRateRepo:                  taxRateRepo,
 		FXRateRepo:                   fxRateRepo,
 		HostedInvoiceTokenRepo:       hostedInvoiceTokenRepo,
+		EmailLogRepo:                 emailLogRepo,
 		TaxAssociationRepo:           taxConfigRepo,
 		TaxAppliedRepo:               taxAppliedRepo,
 		EventPublisher:               eventPublisher,
