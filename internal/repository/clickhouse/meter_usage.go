@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clickhouse"
@@ -25,14 +26,21 @@ type MeterUsageRepository struct {
 	store  *clickhouse.ClickHouseStore
 	logger *logger.Logger
 	qb     *MeterUsageQueryBuilder
+	rollup rollupTables
+
+	rollupWarned sync.Map
 }
 
-func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger) events.MeterUsageRepository {
-	return &MeterUsageRepository{
+func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger, opts ...MeterUsageRepositoryOption) events.MeterUsageRepository {
+	r := &MeterUsageRepository{
 		store:  store,
 		logger: logger,
 		qb:     NewMeterUsageQueryBuilder(),
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // insertTimeout caps each batch insert; without it the driver uses the caller's much longer deadline.
@@ -179,6 +187,18 @@ func (r *MeterUsageRepository) GetUsage(ctx context.Context, params *events.Mete
 	})
 	defer FinishSpan(span)
 
+	if query, args, ok := buildTieredScalarQuery(params, r.rollup); ok {
+		result, err := r.executeScalarQuery(ctx, query, args, params)
+		if err == nil {
+			SetSpanSuccess(span)
+			return result, nil
+		}
+		if !r.rollupFallback(ctx, err) {
+			SetSpanError(span, err)
+			return nil, err
+		}
+	}
+
 	aggregator := GetMeterUsageAggregator(params.AggregationType)
 	query := aggregator.GetQuery(ctx, params, r.qb)
 	_, args := r.qb.BuildWhereClause(params)
@@ -252,6 +272,18 @@ func (r *MeterUsageRepository) GetUsageMultiMeter(ctx context.Context, params *e
 		"window_size":      params.WindowSize,
 	})
 	defer FinishSpan(span)
+
+	if query, args, ok := buildTieredMultiMeterQuery(params, r.rollup); ok {
+		results, err := r.executeMultiMeterScalarQuery(ctx, query, args, params)
+		if err == nil {
+			SetSpanSuccess(span)
+			return results, nil
+		}
+		if !r.rollupFallback(ctx, err) {
+			SetSpanError(span, err)
+			return nil, err
+		}
+	}
 
 	aggregator := GetMeterUsageAggregator(params.AggregationType)
 	// Extract aggregation expressions from the aggregator type
@@ -684,6 +716,18 @@ func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *
 	})
 	defer FinishSpan(span)
 
+	if q, a, ok := buildTieredDistinctMetersQuery(params, r.rollup); ok {
+		ids, err := r.queryDistinctMeterIDs(ctx, q, a)
+		if err == nil {
+			SetSpanSuccess(span)
+			return ids, nil
+		}
+		if !r.rollupFallback(ctx, err) {
+			SetSpanError(span, err)
+			return nil, err
+		}
+	}
+
 	where, args := r.qb.BuildWhereClause(params)
 	finalClause, settings := r.qb.BuildFinalClause(params.UseFinal)
 
@@ -695,9 +739,18 @@ func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *
 		%s
 	`, finalClause, where, settings)
 
-	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	meterIDs, err := r.queryDistinctMeterIDs(ctx, query, args)
 	if err != nil {
 		SetSpanError(span, err)
+		return nil, err
+	}
+	SetSpanSuccess(span)
+	return meterIDs, nil
+}
+
+func (r *MeterUsageRepository) queryDistinctMeterIDs(ctx context.Context, query string, args []interface{}) ([]string, error) {
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to query distinct meter_ids from meter_usage").
 			Mark(ierr.ErrDatabase)
@@ -708,15 +761,12 @@ func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *
 	for rows.Next() {
 		var meterID string
 		if err := rows.Scan(&meterID); err != nil {
-			SetSpanError(span, err)
 			return nil, ierr.WithError(err).
 				WithHint("Failed to scan distinct meter_id").
 				Mark(ierr.ErrDatabase)
 		}
 		meterIDs = append(meterIDs, meterID)
 	}
-
-	SetSpanSuccess(span)
 	return meterIDs, nil
 }
 

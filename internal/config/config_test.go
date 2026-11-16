@@ -330,3 +330,36 @@ func TestUsageAlertsSkipFinalFromYAMLAndEnv(t *testing.T) {
 	}
 	assert.True(t, cfg.UsageAlerts.SkipFinal)
 }
+
+func TestMeterUsageRollupFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.False(t, cfg.MeterUsage.Rollup.Enabled)
+	assert.Equal(t, "meter_usage_hourly", cfg.MeterUsage.Rollup.Table)
+
+	t.Setenv("FLEXPRICE_METER_USAGE_ROLLUP_ENABLED", "true")
+	t.Setenv("FLEXPRICE_METER_USAGE_ROLLUP_TABLE", "meter_usage_rollup_lt")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.True(t, cfg.MeterUsage.Rollup.Enabled)
+	assert.Equal(t, "meter_usage_rollup_lt", cfg.MeterUsage.Rollup.Table)
+}
+
+func TestMeterUsageRollupDailyTableFromEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.Equal(t, "", cfg.MeterUsage.Rollup.DailyTable)
+
+	t.Setenv("FLEXPRICE_METER_USAGE_ROLLUP_DAILY_TABLE", "flexprice.meter_usage_daily")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.Equal(t, "flexprice.meter_usage_daily", cfg.MeterUsage.Rollup.DailyTable)
+}

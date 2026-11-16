@@ -1024,7 +1024,16 @@ type MeterUsageTrackingConfig struct {
 // MeterUsageConfig tunes meter_usage reads.
 type MeterUsageConfig struct {
 	// Skips distinct-meter pre-query.
-	SkipDistinctMeterPrefilter bool `mapstructure:"skip_distinct_meter_prefilter" default:"false"`
+	SkipDistinctMeterPrefilter bool                   `mapstructure:"skip_distinct_meter_prefilter" default:"false"`
+	Rollup                     MeterUsageRollupConfig `mapstructure:"rollup"`
+}
+
+// MeterUsageRollupConfig enables rollup reads.
+type MeterUsageRollupConfig struct {
+	Enabled bool   `mapstructure:"enabled" default:"false"`
+	Table   string `mapstructure:"table" default:"meter_usage_hourly"`
+	// Empty disables the daily tier.
+	DailyTable string `mapstructure:"daily_table" default:""`
 }
 
 // UsageAlertsConfig controls the usage-driven alert pipeline end to end:

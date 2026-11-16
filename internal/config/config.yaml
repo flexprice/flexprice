@@ -554,6 +554,10 @@ meter_usage_tracking:
 
 meter_usage:
   skip_distinct_meter_prefilter: false
+  rollup:
+    enabled: false
+    table: "meter_usage_hourly"
+    daily_table: ""
 
 meter_usage_tracking_lazy:
   enabled: true

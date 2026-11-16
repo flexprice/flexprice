@@ -28,6 +28,11 @@ func NewClickHouseStore(config *config.Configuration, tracingService *tracing.Se
 	}, nil
 }
 
+// NewClickHouseStoreFromConn wraps an existing connection.
+func NewClickHouseStoreFromConn(conn driver.Conn) *ClickHouseStore {
+	return &ClickHouseStore{conn: conn}
+}
+
 // GetConn returns the ClickHouse driver connection.
 //
 // When otel.traces.storage_spans_enabled is true (env:
