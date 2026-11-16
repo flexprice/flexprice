@@ -185,6 +185,22 @@ func TestRunViewForExport_RowCap(t *testing.T) {
 	assert.True(t, ierr.IsValidation(err))
 }
 
+func TestRunViewForExport_QueryLevelCap(t *testing.T) {
+	overflow := ierr.NewError("result exceeds 500 rows").Mark(ierr.ErrValidation)
+	repo := &testutil.InMemoryReportsRepo{On: true, Err: overflow}
+	svc, _ := exportSvc(repo)
+	ctx := userCtx("env_1")
+	v := &analytics.View{Name: "b", Definition: billingView(types.ShapeBreakdown, "customer_id")}
+	require.NoError(t, svc.CreateView(ctx, v))
+
+	res, _, err := svc.RunViewForExport(ctx, v.ID, "2026-11-09..2026-11-10")
+	require.Error(t, err)
+	assert.True(t, ierr.IsValidation(err))
+	assert.Nil(t, res)
+	require.NotNil(t, repo.Last)
+	assert.Less(t, repo.MaxRows(), maxExportRows)
+}
+
 func TestValidateViewSource_WindowCap(t *testing.T) {
 	svc, _ := exportSvc(&testutil.InMemoryReportsRepo{On: true})
 	ctx := userCtx("env_1")
