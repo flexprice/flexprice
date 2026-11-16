@@ -16853,7 +16853,6 @@ definitions:
     - commitment
     - billing_term
     - billing_instalment
-    - email_log
     type: string
     x-enum-varnames:
     - SystemEntityTypeFeature
@@ -16873,7 +16872,6 @@ definitions:
     - SystemEntityTypeCommitment
     - SystemEntityTypeBillingTerm
     - SystemEntityTypeBillingInstalment
-    - SystemEntityTypeEmailLog
   types.TenantInternalStatus:
     enum:
     - trialing

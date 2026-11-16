@@ -43026,8 +43026,7 @@
           "event",
           "commitment",
           "billing_term",
-          "billing_instalment",
-          "email_log"
+          "billing_instalment"
         ],
         "x-enum-varnames": [
           "SystemEntityTypeFeature",
@@ -43046,8 +43045,7 @@
           "SystemEntityTypeEvent",
           "SystemEntityTypeCommitment",
           "SystemEntityTypeBillingTerm",
-          "SystemEntityTypeBillingInstalment",
-          "SystemEntityTypeEmailLog"
+          "SystemEntityTypeBillingInstalment"
         ],
         "x-speakeasy-name-override": "SystemEntityType"
       },

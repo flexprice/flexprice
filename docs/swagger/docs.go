@@ -40554,8 +40554,7 @@ const docTemplate = `{
                 "event",
                 "commitment",
                 "billing_term",
-                "billing_instalment",
-                "email_log"
+                "billing_instalment"
             ],
             "x-enum-varnames": [
                 "SystemEntityTypeFeature",
@@ -40574,8 +40573,7 @@ const docTemplate = `{
                 "SystemEntityTypeEvent",
                 "SystemEntityTypeCommitment",
                 "SystemEntityTypeBillingTerm",
-                "SystemEntityTypeBillingInstalment",
-                "SystemEntityTypeEmailLog"
+                "SystemEntityTypeBillingInstalment"
             ]
         },
         "types.TenantInternalStatus": {
