@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"sync"
 	"testing"
@@ -659,6 +660,37 @@ func (s *MeterUsageTrackingSuite) TestScheduleUsageAlert_NonPositiveDelayThrottl
 			s.Equal([]time.Duration{defaultUsageAlertThrottleTTL}, locker.ttls)
 		})
 	}
+}
+
+type failingSettingsRepo struct {
+	settings.Repository
+}
+
+func (failingSettingsRepo) GetByKey(context.Context, types.SettingKey) (*settings.Setting, error) {
+	return nil, errors.New("settings unavailable")
+}
+
+func (s *MeterUsageTrackingSuite) TestScheduleUsageAlert_SettingsReadErrorReleasesThrottleLock() {
+	orig := usageAlertTemporalService
+	usageAlertTemporalService = func() temporalservice.TemporalService { return stubTemporalService{} }
+	defer func() { usageAlertTemporalService = orig }()
+
+	s.WithEnvironment("env_usage_alert_err")
+	ctx := s.GetContext()
+	locker := &recordingLocker{acquire: true}
+	svc := &meterUsageTrackingService{ServiceParams: ServiceParams{
+		Logger:       logger.NewNoopLogger(),
+		SettingsRepo: failingSettingsRepo{},
+		Locker:       locker,
+		Config: &config.Configuration{UsageAlerts: config.UsageAlertsConfig{
+			WalletAlertsEnabled: true,
+			ScheduleDelay:       time.Minute,
+		}},
+	}}
+
+	svc.scheduleUsageAlertWorkflow(ctx, &customer.Customer{ID: "cust_err"})
+
+	s.Equal(1, locker.releases, "read error must release throttle lock")
 }
 
 func (s *MeterUsageTrackingSuite) TestScheduleUsageAlert_TenantFlagsOffKeepsThrottleLock() {
