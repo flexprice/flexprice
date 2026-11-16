@@ -135,17 +135,15 @@ func (s *emailNotificationService) dispatchOne(ctx context.Context, e *emaillog.
 
 // skipQueued records that a queued email will not be sent.
 func (s *emailNotificationService) skipQueued(ctx context.Context, emailLogID string, reason string) error {
-	e, err := s.EmailLogRepo.Get(types.WithForceWriter(ctx), emailLogID)
-	if err != nil {
-		return err
-	}
-	if e.DeliveryStatus != types.EmailDeliveryStatusQueued {
-		return nil
-	}
-	return s.EmailLogRepo.Update(ctx, emaillog.NewEmailLogBuilder(e).
-		WithDeliveryStatus(types.EmailDeliveryStatusSkipped).
-		WithStatusReason(reason).
-		Build())
+	return s.transition(ctx, emailLogID, func(cur *emaillog.EmailLog) *emaillog.EmailLog {
+		if !cur.DeliveryStatus.CanMoveTo(types.EmailDeliveryStatusSkipped) {
+			return nil
+		}
+		return emaillog.NewEmailLogBuilder(cur).
+			WithDeliveryStatus(types.EmailDeliveryStatusSkipped).
+			WithStatusReason(reason).
+			Build()
+	})
 }
 
 // classifyDelivery maps DeliverEmail's result to what the dispatch run does next.

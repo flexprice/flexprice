@@ -62,6 +62,10 @@ func (s *InMemoryEmailLogStore) GetByIdempotencyKey(ctx context.Context, key str
 	return e, nil
 }
 
+func (s *InMemoryEmailLogStore) GetForUpdate(ctx context.Context, id string) (*emaillog.EmailLog, error) {
+	return s.InMemoryStore.Get(ctx, id)
+}
+
 func (s *InMemoryEmailLogStore) Update(ctx context.Context, e *emaillog.EmailLog) error {
 	return s.InMemoryStore.Update(ctx, e.ID, e)
 }

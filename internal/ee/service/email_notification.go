@@ -239,16 +239,24 @@ func (s *emailNotificationService) DeliverEmail(ctx context.Context, emailLogID 
 		return s.failIfPermanent(ctx, e, err)
 	}
 
-	b := emaillog.NewEmailLogBuilder(e).
-		WithDeliveryStatus(types.EmailDeliveryStatusSent).
-		WithSentAt(clock.Now())
-	if res.ProviderMessageID != "" {
-		b = b.WithProviderMessageID(res.ProviderMessageID)
-	}
-	for k, v := range composed.metadata {
-		b = b.WithMetadata(k, v)
-	}
-	if err := s.EmailLogRepo.Update(ctx, b.Build()); err != nil {
+	sentAt := clock.Now()
+	err = s.transition(ctx, e.ID, func(cur *emaillog.EmailLog) *emaillog.EmailLog {
+		b := emaillog.NewEmailLogBuilder(cur)
+		if cur.ProviderMessageID == nil && res.ProviderMessageID != "" {
+			b = b.WithProviderMessageID(res.ProviderMessageID)
+		}
+		if cur.SentAt == nil {
+			b = b.WithSentAt(sentAt)
+		}
+		if cur.DeliveryStatus.CanMoveTo(types.EmailDeliveryStatusSent) {
+			b = b.WithDeliveryStatus(types.EmailDeliveryStatusSent)
+		}
+		for k, v := range composed.metadata {
+			b = b.WithMetadata(k, v)
+		}
+		return b.Build()
+	})
+	if err != nil {
 		return err
 	}
 
@@ -257,17 +265,31 @@ func (s *emailNotificationService) DeliverEmail(ctx context.Context, emailLogID 
 }
 
 func (s *emailNotificationService) MarkEmailFailed(ctx context.Context, emailLogID string, reason string) error {
-	e, err := s.EmailLogRepo.Get(types.WithForceWriter(ctx), emailLogID)
-	if err != nil {
-		return err
-	}
-	if e.DeliveryStatus != types.EmailDeliveryStatusQueued {
-		return nil
-	}
-	return s.EmailLogRepo.Update(ctx, emaillog.NewEmailLogBuilder(e).
-		WithDeliveryStatus(types.EmailDeliveryStatusFailed).
-		WithStatusReason(reason).
-		Build())
+	return s.transition(ctx, emailLogID, func(cur *emaillog.EmailLog) *emaillog.EmailLog {
+		if cur.DeliveryStatus != types.EmailDeliveryStatusQueued {
+			return nil
+		}
+		return emaillog.NewEmailLogBuilder(cur).
+			WithDeliveryStatus(types.EmailDeliveryStatusFailed).
+			WithStatusReason(reason).
+			Build()
+	})
+}
+
+// transition changes an email log under a row lock, so the email dispatcher and delivery events
+// cannot overwrite each other. change returns nil to leave the email as it is.
+func (s *emailNotificationService) transition(ctx context.Context, id string, change func(*emaillog.EmailLog) *emaillog.EmailLog) error {
+	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		cur, err := s.EmailLogRepo.GetForUpdate(txCtx, id)
+		if err != nil {
+			return err
+		}
+		next := change(cur)
+		if next == nil {
+			return nil
+		}
+		return s.EmailLogRepo.Update(txCtx, next)
+	})
 }
 
 // compose renders an email log with its email type's composer.
