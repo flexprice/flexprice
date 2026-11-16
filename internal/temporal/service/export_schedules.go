@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -22,6 +23,7 @@ const (
 	reconcilePageLimit = 500
 	reconcileAttempts  = 3
 	reconcileBackoff   = 5 * time.Second
+	reconcileMarkerTTL = 24 * time.Hour
 )
 
 type scheduleHandleGetter interface {
@@ -29,16 +31,40 @@ type scheduleHandleGetter interface {
 }
 
 // ReconcileExportScheduleTimeouts raises older export schedules to the current workflow timeout.
-// Failures are logged and never returned.
+// With a locker, one pod runs it per timeout value per day. Failures are logged and never returned.
 func ReconcileExportScheduleTimeouts(
 	ctx context.Context,
 	tc scheduleHandleGetter,
+	locker cache.Locker,
 	tenants tenant.Repository,
 	envs environment.Repository,
 	scheduledTasks scheduledtask.Repository,
 	log *logger.Logger,
 ) {
-	reconcileExportScheduleTimeouts(ctx, tc, tenants, envs, scheduledTasks, log, reconcileEnvLimit, reconcilePageLimit, reconcileBackoff)
+	var marker cache.Lock
+	if locker != nil {
+		lock, err := locker.AcquireLock(ctx, reconcileMarkerKey(), reconcileMarkerTTL)
+		switch {
+		case err != nil:
+			log.Error(ctx, "export schedule reconcile marker unavailable; running anyway", "error", err)
+		case !lock.AcquiredSuccessfully():
+			log.Info(ctx, "export schedule reconcile skipped; another pod ran it")
+			return
+		default:
+			marker = lock
+		}
+	}
+	ok := reconcileExportScheduleTimeouts(ctx, tc, tenants, envs, scheduledTasks, log, reconcileEnvLimit, reconcilePageLimit, reconcileBackoff)
+	if !ok && marker != nil {
+		if err := marker.Release(ctx); err != nil {
+			log.Error(ctx, "export schedule reconcile marker release failed", "error", err)
+		}
+	}
+}
+
+// Held while running and after success.
+func reconcileMarkerKey() string {
+	return fmt.Sprintf("export_schedule_reconcile:%s", types.ExportWorkflowTimeout)
 }
 
 func reconcileExportScheduleTimeouts(
@@ -50,22 +76,23 @@ func reconcileExportScheduleTimeouts(
 	log *logger.Logger,
 	envPageSize, taskPageSize int,
 	backoff time.Duration,
-) {
+) bool {
 	for attempt := 1; attempt <= reconcileAttempts; attempt++ {
 		err := reconcilePass(ctx, tc, tenants, envs, scheduledTasks, log, envPageSize, taskPageSize)
 		if err == nil {
-			return
+			return true
 		}
 		log.Error(ctx, "export schedule reconcile pass failed", "error", err, "attempt", attempt)
 		if attempt == reconcileAttempts {
-			return
+			return false
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case <-time.After(backoff << (attempt - 1)):
 		}
 	}
+	return false
 }
 
 // reconcilePass returns an error when any listing failed so the caller can retry.

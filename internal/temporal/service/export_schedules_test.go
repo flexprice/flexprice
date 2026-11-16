@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -121,7 +122,7 @@ func TestReconcileExportScheduleTimeouts(t *testing.T) {
 	}
 
 	run := func() {
-		ReconcileExportScheduleTimeouts(context.Background(), handles, fakeTenants{}, fakeEnvs{}, fakeScheduledTasks{rows: rows}, logger.NewNoopLogger())
+		ReconcileExportScheduleTimeouts(context.Background(), handles, nil, fakeTenants{}, fakeEnvs{}, fakeScheduledTasks{rows: rows}, logger.NewNoopLogger())
 	}
 	run()
 
@@ -231,4 +232,51 @@ func TestReconcileExportScheduleTimeouts_RetriesEarlyFailure(t *testing.T) {
 			require.Equal(t, tt.wantFixed, h.updates == 1)
 		})
 	}
+}
+
+type fakeLocker struct{ held map[string]bool }
+
+type fakeLock struct {
+	l   *fakeLocker
+	key string
+	ok  bool
+}
+
+func (f *fakeLocker) AcquireLock(_ context.Context, key string, _ time.Duration) (cache.Lock, error) {
+	if f.held[key] {
+		return &fakeLock{l: f, key: key}, nil
+	}
+	f.held[key] = true
+	return &fakeLock{l: f, key: key, ok: true}, nil
+}
+
+func (l *fakeLock) AcquiredSuccessfully() bool { return l.ok }
+
+func (l *fakeLock) Release(context.Context) error {
+	delete(l.l.held, l.key)
+	return nil
+}
+
+func TestReconcileExportScheduleTimeouts_RunsOncePerMarker(t *testing.T) {
+	locker := &fakeLocker{held: map[string]bool{}}
+	rows := []*scheduledtask.ScheduledTask{{ID: "a", TemporalScheduleID: "s", Interval: types.ScheduledTaskIntervalDaily}}
+	calls := 0
+	tenants := flakyTenants{calls: &calls}
+	run := func(ctx context.Context, tenants tenant.Repository) {
+		h := &fakeHandle{schedule: scheduleWithTimeout(60 * time.Minute)}
+		ReconcileExportScheduleTimeouts(ctx, fakeHandles{"s": h}, locker, tenants, fakeEnvs{}, fakeScheduledTasks{rows: rows}, logger.NewNoopLogger())
+	}
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	run(cancelled, flakyTenants{failures: 5, calls: &calls})
+	require.Equal(t, 1, calls)
+	require.Empty(t, locker.held, "failed run releases the marker")
+
+	run(context.Background(), tenants)
+	require.Equal(t, 2, calls)
+	require.True(t, locker.held[reconcileMarkerKey()])
+
+	run(context.Background(), tenants)
+	require.Equal(t, 2, calls, "second pod skips")
 }

@@ -788,7 +788,7 @@ func startTemporalWorker(
 			go func() {
 				bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 				defer cancel()
-				temporalservice.ReconcileExportScheduleTimeouts(bgCtx, temporalClient, params.TenantRepo, params.EnvironmentRepo, params.ScheduledTaskRepo, log)
+				temporalservice.ReconcileExportScheduleTimeouts(bgCtx, temporalClient, params.Locker, params.TenantRepo, params.EnvironmentRepo, params.ScheduledTaskRepo, log)
 			}()
 
 			// Register workflows and activities first (this creates the workers)
