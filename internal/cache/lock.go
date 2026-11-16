@@ -35,7 +35,7 @@ type Lock interface {
 
 // BatchLocker acquires locks in bulk.
 type BatchLocker interface {
-	// Result aligns with keys; nil failed.
+	// Result aligns with keys.
 	AcquireLocks(ctx context.Context, keys []string, ttl time.Duration) ([]Lock, error)
 }
 
@@ -174,6 +174,7 @@ func (l *redisLocker) AcquireLock(ctx context.Context, key string, ttl time.Dura
 const batchLockChunk = 1000
 
 // AcquireLocks pipelines the acquire script per key.
+// Unread replies count as held, so Release cleans up.
 func (l *redisLocker) AcquireLocks(ctx context.Context, keys []string, ttl time.Duration) ([]Lock, error) {
 	locks := make([]Lock, len(keys))
 	var firstErr error
@@ -194,7 +195,7 @@ func (l *redisLocker) AcquireLocks(ctx context.Context, keys []string, ttl time.
 		for i, cmd := range cmds {
 			ok, err := cmd.Bool()
 			if err != nil {
-				continue
+				ok = true
 			}
 			locks[start+i] = &redisLock{client: l.client, key: keys[start+i], token: tokens[i], success: ok}
 		}

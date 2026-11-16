@@ -1,12 +1,16 @@
 package cache
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
@@ -86,7 +90,7 @@ func TestRedisLockerAcquireLocks(t *testing.T) {
 		{"all free", []string{"a", "b"}, nil, nil, []bool{true, true}, []bool{false, false}, false, 1},
 		{"one held", []string{"a", "b", "c"}, []string{"b"}, nil, []bool{true, false, true}, []bool{false, false, false}, false, 1},
 		{"in-batch duplicate", []string{"a", "a"}, nil, nil, []bool{true, false}, []bool{false, false}, false, 1},
-		{"per-key error", []string{"a", "b"}, nil, []string{"a"}, []bool{false, true}, []bool{true, false}, true, 1},
+		{"per-key error", []string{"a", "b"}, nil, []string{"a"}, []bool{true, true}, []bool{false, false}, true, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -199,4 +203,176 @@ func TestRedisLockerAcquireLockTokenMatch(t *testing.T) {
 	v, err := replayed.Int64()
 	require.NoError(t, err)
 	require.Equal(t, int64(1), v)
+}
+
+func newMiniredisLocker(t *testing.T) (*redisLocker, *miniredis.Miniredis) {
+	t.Helper()
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	return &redisLocker{client: client}, mr
+}
+
+func TestAcquireScriptRetryIdempotent(t *testing.T) {
+	locker, mr := newMiniredisLocker(t)
+	ctx := context.Background()
+	run := func(token string) bool {
+		ok, err := acquireScript.Run(ctx, locker.client, []string{"k"}, token, 60000).Bool()
+		require.NoError(t, err)
+		return ok
+	}
+
+	require.True(t, run("tok-a"))
+	require.True(t, run("tok-a"), "retry with same token")
+	require.False(t, run("tok-b"), "different token")
+	got, err := mr.Get("k")
+	require.NoError(t, err)
+	require.Equal(t, "tok-a", got)
+	require.Positive(t, mr.TTL("k"))
+}
+
+// replayHook re-sends each pipeline after it applied.
+type replayHook struct{ sends int }
+
+func (h *replayHook) DialHook(next redis.DialHook) redis.DialHook          { return next }
+func (h *replayHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook { return next }
+func (h *replayHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		if cmds[0].Name() != "eval" {
+			return next(ctx, cmds)
+		}
+		h.sends++
+		if err := next(ctx, cmds); err != nil {
+			return err
+		}
+		return next(ctx, cmds)
+	}
+}
+
+func TestAcquireLocksTransportRetryRealScript(t *testing.T) {
+	locker, mr := newMiniredisLocker(t)
+	hook := &replayHook{}
+	locker.client.AddHook(hook)
+
+	locks, err := locker.AcquireLocks(context.Background(), []string{"a", "b", "a"}, time.Minute)
+	require.NoError(t, err)
+	require.Equal(t, 1, hook.sends)
+	require.Len(t, locks, 3)
+	require.True(t, locks[0].AcquiredSuccessfully())
+	require.True(t, locks[1].AcquiredSuccessfully())
+	require.False(t, locks[2].AcquiredSuccessfully(), "duplicate key, other token")
+
+	require.NoError(t, locks[0].Release(context.Background()))
+	require.False(t, mr.Exists("a"))
+	require.True(t, mr.Exists("b"))
+}
+
+// failReadHook fails the pipeline after Redis applied it.
+type failReadHook struct{ replayHook }
+
+func (h *failReadHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		if err := next(ctx, cmds); err != nil {
+			return err
+		}
+		err := errors.New("reply lost")
+		for _, c := range cmds {
+			c.SetErr(err)
+		}
+		return err
+	}
+}
+
+func TestAcquireLocksKeepsTokensOnReplyReadFailure(t *testing.T) {
+	locker, mr := newMiniredisLocker(t)
+	locker.client.AddHook(&failReadHook{})
+
+	locks, err := locker.AcquireLocks(context.Background(), []string{"a", "b"}, time.Minute)
+	require.Error(t, err)
+	require.Len(t, locks, 2)
+	require.True(t, mr.Exists("a"))
+	require.True(t, mr.Exists("b"))
+	for i, l := range locks {
+		require.NotNil(t, l, "key %d", i)
+		require.NoError(t, l.Release(context.Background()))
+	}
+	require.False(t, mr.Exists("a"))
+	require.False(t, mr.Exists("b"))
+
+	mr.Set("c", "other-owner")
+	locks, err = locker.AcquireLocks(context.Background(), []string{"c"}, time.Minute)
+	require.Error(t, err)
+	require.NoError(t, locks[0].Release(context.Background()))
+	require.True(t, mr.Exists("c"), "foreign lock untouched")
+}
+
+// dropReplyProxy applies the first EVAL upstream, then drops the connection.
+func dropReplyProxy(t *testing.T, upstream string) (addr string, drops *atomic.Int32) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ln.Close() })
+	drops = &atomic.Int32{}
+	go func() {
+		for {
+			client, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			up, err := net.Dial("tcp", upstream)
+			if err != nil {
+				_ = client.Close()
+				continue
+			}
+			var muted atomic.Bool
+			go func() {
+				buf := make([]byte, 4096)
+				for {
+					n, err := up.Read(buf)
+					if err != nil {
+						return
+					}
+					if !muted.Load() {
+						_, _ = client.Write(buf[:n])
+					}
+				}
+			}()
+			go func() {
+				defer client.Close()
+				defer up.Close()
+				buf := make([]byte, 65536)
+				for {
+					n, err := client.Read(buf)
+					if err != nil {
+						return
+					}
+					_, _ = up.Write(buf[:n])
+					if bytes.Contains(bytes.ToUpper(buf[:n]), []byte("EVAL")) && drops.CompareAndSwap(0, 1) {
+						muted.Store(true)
+						time.Sleep(100 * time.Millisecond)
+						return
+					}
+				}
+			}()
+		}
+	}()
+	return ln.Addr().String(), drops
+}
+
+func TestAcquireLocksLostReplyRealRetry(t *testing.T) {
+	mr := miniredis.RunT(t)
+	addr, drops := dropReplyProxy(t, mr.Addr())
+	client := redis.NewClient(&redis.Options{Addr: addr, MaxRetries: 3, MinRetryBackoff: time.Millisecond, MaxRetryBackoff: 5 * time.Millisecond})
+	t.Cleanup(func() { _ = client.Close() })
+	locker := &redisLocker{client: client}
+
+	locks, err := locker.AcquireLocks(context.Background(), []string{"a", "b"}, time.Minute)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, drops.Load(), "reply was dropped once")
+	for i, l := range locks {
+		require.NotNil(t, l, "key %d", i)
+		require.True(t, l.AcquiredSuccessfully(), "key %d", i)
+	}
+	require.True(t, mr.Exists("a"))
+	require.True(t, mr.Exists("b"))
 }
