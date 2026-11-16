@@ -1006,12 +1006,13 @@ type EventProcessingReplayConfig struct {
 
 // MeterUsageTrackingConfig configures the meter_usage pipeline consumer
 type MeterUsageTrackingConfig struct {
-	Enabled                   bool   `mapstructure:"enabled" default:"true"`
-	Topic                     string `mapstructure:"topic" default:"events"`
-	RateLimit                 int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup             string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
-	TopicDLQ                  string `mapstructure:"topic_dlq" default:""`
-	RedisDeduplicationEnabled bool   `mapstructure:"redis_deduplication_enabled" default:"false"`
+	Enabled                   bool          `mapstructure:"enabled" default:"true"`
+	Topic                     string        `mapstructure:"topic" default:"events"`
+	RateLimit                 int64         `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup             string        `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
+	TopicDLQ                  string        `mapstructure:"topic_dlq" default:""`
+	RedisDeduplicationEnabled bool          `mapstructure:"redis_deduplication_enabled" default:"false"`
+	RedisDeduplicationTTL     time.Duration `mapstructure:"redis_deduplication_ttl" default:"24h"`
 
 	// event.rejected webhook (fired when an event produces no meter usage); opt-in.
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
@@ -1113,13 +1114,34 @@ type BulkEventConsumptionConfig struct {
 // quantity/hash for every event, and bulk-inserts into meter_usage. Distinct
 // consumer group from BulkEventConsumption so the two run in parallel.
 type BulkMeterUsageTrackingConfig struct {
-	Enabled                      bool   `mapstructure:"enabled" default:"true"`
-	Topic                        string `mapstructure:"topic" default:"raw_events"`
-	RateLimit                    int64  `mapstructure:"rate_limit" default:"10"`
-	ConsumerGroup                string `mapstructure:"consumer_group" default:"v1_bulk_meter_usage_tracking"`
-	TopicDLQ                     string `mapstructure:"topic_dlq" default:""`
-	RedisDeduplicationEnabled    bool   `mapstructure:"redis_deduplication_enabled" default:"true"`
-	PostInsertSideEffectsEnabled bool   `mapstructure:"post_insert_side_effects_enabled" default:"true"`
+	Enabled                      bool          `mapstructure:"enabled" default:"true"`
+	Topic                        string        `mapstructure:"topic" default:"raw_events"`
+	RateLimit                    int64         `mapstructure:"rate_limit" default:"10"`
+	ConsumerGroup                string        `mapstructure:"consumer_group" default:"v1_bulk_meter_usage_tracking"`
+	TopicDLQ                     string        `mapstructure:"topic_dlq" default:""`
+	RedisDeduplicationEnabled    bool          `mapstructure:"redis_deduplication_enabled" default:"true"`
+	RedisDeduplicationTTL        time.Duration `mapstructure:"redis_deduplication_ttl" default:"24h"`
+	PostInsertSideEffectsEnabled bool          `mapstructure:"post_insert_side_effects_enabled" default:"true"`
+}
+
+// DefaultRedisDeduplicationTTL is the fallback TTL.
+const DefaultRedisDeduplicationTTL = 24 * time.Hour
+
+func dedupTTLOrDefault(ttl time.Duration) time.Duration {
+	if ttl <= 0 {
+		return DefaultRedisDeduplicationTTL
+	}
+	return ttl
+}
+
+// DeduplicationTTL returns single-event dedup TTL.
+func (c MeterUsageTrackingConfig) DeduplicationTTL() time.Duration {
+	return dedupTTLOrDefault(c.RedisDeduplicationTTL)
+}
+
+// DeduplicationTTL returns bulk dedup TTL.
+func (c BulkMeterUsageTrackingConfig) DeduplicationTTL() time.Duration {
+	return dedupTTLOrDefault(c.RedisDeduplicationTTL)
 }
 
 type OnboardingEventsConfig struct {

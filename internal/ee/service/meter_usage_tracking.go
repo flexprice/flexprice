@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- dedup salt, not security-sensitive
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -29,8 +30,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
-
-const eventDeduplicationLockTTL = 24 * time.Hour
 
 // MeterUsageTrackingService handles meter-level usage tracking.
 // Unlike FeatureUsageTrackingService, this skips subscription/feature/price resolution.
@@ -61,6 +60,7 @@ type meterUsageTrackingService struct {
 	expressionEvaluator expression.Evaluator
 	analyticsPublisher  analytics.MeterUsageSinkPublisher
 	deletionWindow      EventDeletionWindowService
+	alertsOffLogged     sync.Map
 }
 
 // NewMeterUsageTrackingService creates a new meter usage tracking service
@@ -307,10 +307,9 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 
 		if dedupEnabled && evt.ID != "" && !evt.ForceReprocess {
 			cacheKey := cache.GenerateKey(ctx, cache.PrefixEvent, evt.ID)
-			lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
+			lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, s.Config.BulkMeterUsageTracking.DeduplicationTTL())
 			if lockErr != nil {
-				// Fail open: log and continue processing the event so a Redis
-				// blip can't silently drop billing rows.
+				// Fail open on Redis errors.
 				s.Logger.Error(ctx, "failed to acquire lock on bulk meter usage tracking event", "error", lockErr, "event_id", evt.ID)
 			} else if !lock.AcquiredSuccessfully() {
 				s.Logger.Info(ctx, "event already processed, skipping in bulk batch", "event_id", evt.ID)
@@ -467,7 +466,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		s.ServiceParams.Locker != nil {
 		eventId := event.ID
 		cacheKey := cache.GenerateKey(ctx, cache.PrefixEvent, eventId)
-		lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
+		lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, s.Config.MeterUsageTracking.DeduplicationTTL())
 		if lockErr != nil {
 			s.Logger.Error(ctx, "failed to acquire lock on meter usage tracking event", "error", lockErr, "event_id", eventId)
 		} else {
