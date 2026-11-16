@@ -3919,13 +3919,32 @@ func (s *walletService) balanceAlertValue(ctx context.Context, w *wallet.Wallet,
 	return creditBalance.Div(base).Mul(decimal.NewFromInt(100)), true, nil
 }
 
+// alertsOnLowBalance reports whether the thresholds watch for the balance
+// falling: every configured threshold uses the "below" condition. With "above"
+// thresholds an alarm means the balance is high, which a low-balance reading
+// must not report as running out.
+func alertsOnLowBalance(settings *types.AlertSettings) bool {
+	set := 0
+	for _, t := range []*types.AlertThreshold{settings.Critical, settings.Warning, settings.Info} {
+		if t == nil {
+			continue
+		}
+		if t.Condition != types.AlertConditionBelow {
+			return false
+		}
+		set++
+	}
+	return set > 0
+}
+
 // BalanceAlertStatus is where a wallet's balance stands against its alert
 // thresholds right now: ok, info, warning or in_alarm. It resolves the
 // thresholds and compares the balance exactly as the balance alert pipeline
 // does (the wallet's own settings, else the tenant's
 // wallet_balance_alert_config, and only while the tenant has wallet alerts on),
 // so it agrees with the alert logs and webhooks without waiting for them.
-// nil when alerts are off or there is nothing to evaluate.
+// nil when alerts are off, there is nothing to evaluate, or the thresholds
+// watch for a rising balance ("above") rather than a falling one.
 func (s *walletService) BalanceAlertStatus(ctx context.Context, w *wallet.Wallet, creditBalance, balance decimal.Decimal) (*types.AlertState, error) {
 	settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
 	tenantConfig, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
@@ -3939,8 +3958,7 @@ func (s *walletService) BalanceAlertStatus(ctx context.Context, w *wallet.Wallet
 	if err != nil {
 		return nil, err
 	}
-	if !alertSettings.IsAlertEnabled() ||
-		(alertSettings.Critical == nil && alertSettings.Warning == nil && alertSettings.Info == nil) {
+	if !alertSettings.IsAlertEnabled() || !alertsOnLowBalance(alertSettings) {
 		return nil, nil
 	}
 	value, ok, err := s.balanceAlertValue(ctx, w, alertSettings, creditBalance, balance)

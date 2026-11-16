@@ -4713,3 +4713,16 @@ func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_AbsoluteUsesCurren
 	s.Require().NotNil(got)
 	s.Equal(types.AlertStateWarning, *got)
 }
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_AboveThresholds_Nil() {
+	s.setTenantWalletAlertConfig(types.AlertSettings{
+		AlertEnabled: lo.ToPtr(true),
+		Critical:     &types.AlertThreshold{Threshold: decimal.NewFromInt(1000), Condition: types.AlertConditionAbove},
+	})
+	// A high balance trips an "above" alarm; it is not a low balance to warn about.
+	w := s.makeWallet("wallet_status_above", decimal.NewFromInt(5000), nil, nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(5000), decimal.NewFromInt(5000))
+	s.NoError(err)
+	s.Nil(got)
+}
