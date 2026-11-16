@@ -80,7 +80,7 @@ func (s *stubAnalyticsService) QueryView(_ context.Context, _ string, _ map[stri
 	return s.result, s.err
 }
 
-func (s *stubAnalyticsService) ValidateReportSource(_ context.Context, _ string, _ *types.ReportParams) error {
+func (s *stubAnalyticsService) ValidateReportSource(_ context.Context, _ string, _ *types.ReportParams, _ int) error {
 	return s.err
 }
 

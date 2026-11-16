@@ -26,7 +26,7 @@ type AnalyticsService interface {
 	GetView(ctx context.Context, id string) (*analytics.View, error)
 	UpdateView(ctx context.Context, v *analytics.View) error
 	DeleteView(ctx context.Context, id string) error
-	ValidateReportSource(ctx context.Context, key string, params *types.ReportParams) error
+	ValidateReportSource(ctx context.Context, key string, params *types.ReportParams, windowDays int) error
 	ValidateViewSource(ctx context.Context, viewID string, windowDays int) error
 	RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error)
 	RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error)
@@ -611,12 +611,15 @@ func reportRequestFromParams(params *types.ReportParams, rng string) *dto.Report
 	return req
 }
 
-func (s *analyticsService) ValidateReportSource(_ context.Context, key string, params *types.ReportParams) error {
+// ValidateReportSource checks params and the longest run window.
+func (s *analyticsService) ValidateReportSource(_ context.Context, key string, params *types.ReportParams, windowDays int) error {
 	if err := s.requireReports(); err != nil {
 		return err
 	}
-	_, err := reportRequestFromParams(params, "last_30_days").ValidateForReport(key, s.ReportsRepo.MaxRows())
-	return err
+	if _, err := reportRequestFromParams(params, "").ValidateForReport(key, s.ReportsRepo.MaxRows()); err != nil {
+		return err
+	}
+	return checkReportRange(key, windowDays)
 }
 
 func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string, windowDays int) error {

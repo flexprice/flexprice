@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/rbac"
+	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
 )
@@ -37,11 +38,13 @@ type sourceValidatorFake struct {
 	reportKey, viewID  string
 	calls              int
 	viewDays           int
+	reportDays         int
 }
 
-func (f *sourceValidatorFake) ValidateReportSource(_ context.Context, key string, _ *types.ReportParams) error {
+func (f *sourceValidatorFake) ValidateReportSource(_ context.Context, key string, _ *types.ReportParams, days int) error {
 	f.calls++
 	f.reportKey = key
+	f.reportDays = days
 	return f.reportErr
 }
 
@@ -374,7 +377,7 @@ func TestCreateReportExport_RangeCap(t *testing.T) {
 			repo, tc := &exportRepoFake{}, &exportTemporalFake{}
 			s := newExportService(repo, tc)
 			s.rbac = testRBAC(t)
-			s.analytics = &sourceValidatorFake{}
+			s.analytics, _ = exportSvc(&testutil.InMemoryReportsRepo{On: true})
 			req := reportCreateReq()
 			req.Interval = tt.interval
 			req.SourceConfig.ReportKey = tt.key

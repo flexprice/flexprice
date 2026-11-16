@@ -23,17 +23,41 @@ func TestValidateReportSource(t *testing.T) {
 	ok := &types.ReportParams{Shape: "scalar"}
 
 	svc, _ := exportSvc(&testutil.InMemoryReportsRepo{On: true})
-	assert.NoError(t, svc.ValidateReportSource(billingCtx(), "invoice_total", ok))
+	assert.NoError(t, svc.ValidateReportSource(billingCtx(), "invoice_total", ok, 31))
 
-	err := svc.ValidateReportSource(billingCtx(), "nope", ok)
+	err := svc.ValidateReportSource(billingCtx(), "nope", ok, 1)
 	assert.True(t, ierr.IsNotFound(err))
 
-	err = svc.ValidateReportSource(billingCtx(), "invoice_total", &types.ReportParams{Shape: "histogram"})
+	err = svc.ValidateReportSource(billingCtx(), "invoice_total", &types.ReportParams{Shape: "histogram"}, 1)
 	assert.True(t, ierr.IsValidation(err))
 
 	off, _ := exportSvc(&testutil.InMemoryReportsRepo{On: false})
-	err = off.ValidateReportSource(billingCtx(), "invoice_total", ok)
+	err = off.ValidateReportSource(billingCtx(), "invoice_total", ok, 1)
 	assert.True(t, ierr.IsPermissionDenied(err))
+}
+
+func TestValidateReportSource_IntervalWindow(t *testing.T) {
+	svc, _ := exportSvc(&testutil.InMemoryReportsRepo{On: true})
+	params := &types.ReportParams{Shape: "timeseries"}
+	tests := []struct {
+		interval types.ScheduledTaskInterval
+		wantErr  bool
+	}{
+		{types.ScheduledTaskIntervalDaily, false},
+		{types.ScheduledTaskIntervalWeekly, false},
+		{types.ScheduledTaskIntervalMonthly, true},
+		{types.ScheduledTaskIntervalManual, false},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.interval), func(t *testing.T) {
+			err := svc.ValidateReportSource(billingCtx(), "events_volume", params, intervalWindowDays(tt.interval))
+			if tt.wantErr {
+				assert.True(t, ierr.IsValidation(err), "got %v", err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
 }
 
 func TestValidateViewSource(t *testing.T) {

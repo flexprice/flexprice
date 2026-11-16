@@ -90,13 +90,10 @@ func (s *scheduledTaskService) validateSource(ctx context.Context, req dto.Creat
 	if req.EntityType == types.ScheduledTaskEntityTypeAnalyticsView {
 		return s.analytics.ValidateViewSource(ctx, req.SourceConfig.ViewID, intervalWindowDays(req.Interval))
 	}
-	if err := s.analytics.ValidateReportSource(ctx, req.SourceConfig.ReportKey, req.SourceConfig.ReportParams); err != nil {
+	if err := s.analytics.ValidateReportSource(ctx, req.SourceConfig.ReportKey, req.SourceConfig.ReportParams, intervalWindowDays(req.Interval)); err != nil {
 		return err
 	}
-	if err := checkReportGrain(req.SourceConfig.ReportKey, req.SourceConfig.ReportParams, req.Interval); err != nil {
-		return err
-	}
-	return checkReportRange(req.SourceConfig.ReportKey, intervalWindowDays(req.Interval))
+	return checkReportGrain(req.SourceConfig.ReportKey, req.SourceConfig.ReportParams, req.Interval)
 }
 
 // Partial buckets would repeat across runs.
