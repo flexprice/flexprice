@@ -397,12 +397,43 @@ func TestList_OriginFilters(t *testing.T) {
 	require.Equal(t, types.ExportOriginCustomersPage, repo.listed.ExcludeOrigin)
 }
 
-func TestCreate_CustomersHourlyRejected(t *testing.T) {
-	s := customerExportService(&originRepoFake{}, &customerCountFake{})
-	req := customersReq()
-	req.Interval = types.ScheduledTaskIntervalHourly
-	_, err := s.CreateScheduledTask(exportCtx(), req)
-	require.True(t, ierr.IsValidation(err), "got %v", err)
+func TestCreate_CustomersIntervalAllowlist(t *testing.T) {
+	for _, interval := range []types.ScheduledTaskInterval{
+		types.ScheduledTaskIntervalHourly,
+		types.ScheduledTaskIntervalEvery15Minutes,
+		types.ScheduledTaskIntervalEvery30Minutes,
+	} {
+		t.Run("deny "+string(interval), func(t *testing.T) {
+			repo := &originRepoFake{}
+			s := customerExportService(repo, &customerCountFake{})
+			req := customersReq()
+			req.Interval = interval
+			req.ConnectionID = "conn_1"
+			req.JobConfig = &types.S3JobConfig{Bucket: "b", Region: "us-east-1"}
+			_, err := s.CreateScheduledTask(exportCtx(), req)
+			require.True(t, ierr.IsValidation(err), "got %v", err)
+			require.Contains(t, errText(err), "Customer list exports run daily, weekly, monthly or manually.")
+			require.Nil(t, repo.created)
+		})
+	}
+	for _, interval := range []types.ScheduledTaskInterval{
+		types.ScheduledTaskIntervalDaily,
+		types.ScheduledTaskIntervalWeekly,
+		types.ScheduledTaskIntervalMonthly,
+	} {
+		t.Run("allow "+string(interval), func(t *testing.T) {
+			req := customersReq()
+			req.Interval = interval
+			req.Schedule = &types.ExportSchedule{Timezone: "UTC", DayOfWeek: lo.ToPtr(1), DayOfMonth: lo.ToPtr(1)}
+			if interval != types.ScheduledTaskIntervalWeekly {
+				req.Schedule.DayOfWeek = nil
+			}
+			if interval != types.ScheduledTaskIntervalMonthly {
+				req.Schedule.DayOfMonth = nil
+			}
+			require.NoError(t, req.Validate())
+		})
+	}
 }
 
 func TestCreate_BadRunWindowRejectedBeforeCreate(t *testing.T) {

@@ -130,10 +130,15 @@ func (r *CreateScheduledTaskRequest) validateOriginAndRun() error {
 	if err := r.Origin.Validate(); err != nil {
 		return err
 	}
-	if r.EntityType == types.ScheduledTaskEntityTypeCustomers && r.Interval == types.ScheduledTaskIntervalHourly {
-		return ierr.NewError("customers exports can't run hourly").
-			WithHint("Customer list exports can't run hourly.").
-			Mark(ierr.ErrValidation)
+	if r.EntityType == types.ScheduledTaskEntityTypeCustomers {
+		switch r.Interval {
+		case types.ScheduledTaskIntervalManual, types.ScheduledTaskIntervalDaily,
+			types.ScheduledTaskIntervalWeekly, types.ScheduledTaskIntervalMonthly:
+		default:
+			return ierr.NewErrorf("customers exports can't run %s", r.Interval).
+				WithHint("Customer list exports run daily, weekly, monthly or manually.").
+				Mark(ierr.ErrValidation)
+		}
 	}
 	if cf := r.SourceConfig.GetCustomerFilter(); cf != nil {
 		if r.Origin != types.ExportOriginCustomersPage {
