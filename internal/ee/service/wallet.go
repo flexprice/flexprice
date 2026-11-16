@@ -3900,11 +3900,8 @@ func (s *walletService) processFeatureWalletBalanceAlert(ctx context.Context, w 
 	return nil
 }
 
-// balanceAlertValue is the figure a wallet's balance alert compares with its
-// thresholds: the currency balance for absolute thresholds (they are
-// denominated in the wallet's currency), or the credit balance as a percentage
-// of the period's credits for percentage ones. ok is false when a percentage
-// has no credits to divide by, so there is nothing to evaluate.
+// balanceAlertValue is the currency balance, or credits as a percent of the period's credits.
+// ok is false when a percentage has no credits to divide by.
 func (s *walletService) balanceAlertValue(ctx context.Context, w *wallet.Wallet, alertSettings *types.AlertSettings, creditBalance, balance decimal.Decimal) (decimal.Decimal, bool, error) {
 	if alertSettings.AlertThresholdType != types.AlertThresholdTypePercentage {
 		return balance, true, nil
@@ -3919,10 +3916,7 @@ func (s *walletService) balanceAlertValue(ctx context.Context, w *wallet.Wallet,
 	return creditBalance.Div(base).Mul(decimal.NewFromInt(100)), true, nil
 }
 
-// alertsOnLowBalance reports whether the thresholds watch for the balance
-// falling: every configured threshold uses the "below" condition. With "above"
-// thresholds an alarm means the balance is high, which a low-balance reading
-// must not report as running out.
+// alertsOnLowBalance reports that every set threshold uses the below condition.
 func alertsOnLowBalance(settings *types.AlertSettings) bool {
 	set := 0
 	for _, t := range []*types.AlertThreshold{settings.Critical, settings.Warning, settings.Info} {
@@ -3937,14 +3931,6 @@ func alertsOnLowBalance(settings *types.AlertSettings) bool {
 	return set > 0
 }
 
-// BalanceAlertStatus is where a wallet's balance stands against its alert
-// thresholds right now: ok, info, warning or in_alarm. It resolves the
-// thresholds and compares the balance exactly as the balance alert pipeline
-// does (the wallet's own settings, else the tenant's
-// wallet_balance_alert_config, and only while the tenant has wallet alerts on),
-// so it agrees with the alert logs and webhooks without waiting for them.
-// nil when alerts are off, there is nothing to evaluate, or the thresholds
-// watch for a rising balance ("above") rather than a falling one.
 func (s *walletService) BalanceAlertStatus(ctx context.Context, w *wallet.Wallet, creditBalance, balance decimal.Decimal) (*types.AlertState, error) {
 	settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
 	tenantConfig, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)

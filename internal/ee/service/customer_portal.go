@@ -311,11 +311,7 @@ func (s *customerPortalService) GetWallets(ctx context.Context) ([]*dto.WalletBa
 		return nil, err
 	}
 
-	// Each wallet carries where its balance stands against the alert thresholds,
-	// for the portal's low-balance banner: judged on the balance the portal
-	// shows, so the banner and the figure beside it never disagree. A wallet
-	// whose status cannot be worked out is listed without one rather than
-	// failing the whole list. The tenant config is read once for the list.
+	// Status uses the balance the portal shows. A wallet that cannot be evaluated is listed without one.
 	settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
 	tenantConfig, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
 	if err != nil {
