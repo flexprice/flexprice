@@ -295,9 +295,7 @@ func (r *customerRepository) ListRefsByFilter(ctx context.Context, filter *types
 			refs = append(refs, domainCustomer.Ref{ID: row.ID, ExternalID: row.ExternalID})
 		}
 		if max > 0 && len(refs) > max {
-			return nil, ierr.NewErrorf("Filter matches more than %d customers; narrow it", max).
-				WithHintf("Filter matches more than %d customers; narrow it", max).
-				Mark(ierr.ErrValidation)
+			return nil, types.FilteredCustomersCapError(max)
 		}
 		if len(rows) < limit {
 			break

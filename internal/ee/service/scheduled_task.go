@@ -175,7 +175,8 @@ func (s *scheduledTaskService) validateCustomerFilter(ctx context.Context, req d
 	if s.customerRepo == nil {
 		return ierr.NewError("customer repository not configured").Mark(ierr.ErrInternal)
 	}
-	if _, err := s.customerRepo.Count(ctx, cf); err != nil {
+	count, err := s.customerRepo.Count(ctx, cf)
+	if err != nil {
 		if ierr.IsValidation(err) {
 			hint := "The customer filter is invalid"
 			if hints := cockroachErrors.GetAllHints(err); len(hints) > 0 {
@@ -186,6 +187,9 @@ func (s *scheduledTaskService) validateCustomerFilter(ctx context.Context, req d
 				Mark(ierr.ErrValidation)
 		}
 		return err
+	}
+	if max := req.EntityType.MaxFilteredCustomers(); max > 0 && count > max {
+		return types.FilteredCustomersCapError(max)
 	}
 	return nil
 }

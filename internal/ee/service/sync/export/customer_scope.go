@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	maxScopedCustomers       = 10000
-	maxScopedReportCustomers = 1000
+	maxScopedCustomers       = types.MaxExportFilteredCustomers
+	maxScopedReportCustomers = types.MaxReportFilteredCustomers
 )
 
 // customerScope restricts exports to filtered customers.

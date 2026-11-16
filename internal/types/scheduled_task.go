@@ -220,6 +220,29 @@ func (e ScheduledTaskEntityType) AllowsCustomerFilter() bool {
 	return false
 }
 
+const (
+	MaxExportFilteredCustomers = 10000
+	MaxReportFilteredCustomers = 1000
+)
+
+// Zero means uncapped.
+func (e ScheduledTaskEntityType) MaxFilteredCustomers() int {
+	switch e {
+	case ScheduledTaskEntityTypeCustomers:
+		return 0
+	case ScheduledTaskEntityTypeReport:
+		return MaxReportFilteredCustomers
+	}
+	return MaxExportFilteredCustomers
+}
+
+// FilteredCustomersCapError is the over-cap validation error.
+func FilteredCustomersCapError(max int) error {
+	return ierr.NewErrorf("Filter matches more than %d customers; narrow it", max).
+		WithHintf("Filter matches more than %d customers; narrow it", max).
+		Mark(ierr.ErrValidation)
+}
+
 // ExportOrigin is where an export was created.
 type ExportOrigin string
 

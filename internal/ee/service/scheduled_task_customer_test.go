@@ -46,13 +46,62 @@ func (r *originRepoFake) List(_ context.Context, f *scheduledtask.ListFilters) (
 
 type customerCountFake struct {
 	customer.Repository
-	err error
-	got *types.CustomerFilter
+	err   error
+	got   *types.CustomerFilter
+	count int
 }
 
 func (c *customerCountFake) Count(_ context.Context, f *types.CustomerFilter) (int, error) {
 	c.got = f
-	return 0, c.err
+	return c.count, c.err
+}
+
+func TestCreate_CustomerFilterCountCap(t *testing.T) {
+	invoice := func() dto.CreateScheduledTaskRequest {
+		return dto.CreateScheduledTaskRequest{
+			EntityType: types.ScheduledTaskEntityTypeInvoice, Interval: types.ScheduledTaskIntervalManual, Enabled: true,
+			Origin:       types.ExportOriginCustomersPage,
+			SourceConfig: &types.ExportSourceConfig{CustomerFilter: &types.CustomerFilter{}},
+		}
+	}
+	report := func() dto.CreateScheduledTaskRequest {
+		return dto.CreateScheduledTaskRequest{
+			EntityType: types.ScheduledTaskEntityTypeReport, Interval: types.ScheduledTaskIntervalManual, Enabled: true,
+			Origin: types.ExportOriginCustomersPage,
+			SourceConfig: &types.ExportSourceConfig{
+				ReportKey: "invoice_total", ReportParams: &types.ReportParams{Shape: "breakdown"},
+				CustomerFilter: &types.CustomerFilter{},
+			},
+		}
+	}
+	tests := []struct {
+		name  string
+		req   dto.CreateScheduledTaskRequest
+		count int
+		hint  string
+	}{
+		{"invoice at cap", invoice(), 10000, ""},
+		{"invoice over cap", invoice(), 10001, "Filter matches more than 10000 customers; narrow it"},
+		{"report at cap", report(), 1000, ""},
+		{"report over cap", report(), 1001, "Filter matches more than 1000 customers; narrow it"},
+		{"customers uncapped", customersReq(), 50000, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &originRepoFake{}
+			s := customerExportService(repo, &customerCountFake{count: tt.count})
+			s.rbac = testRBAC(t)
+			s.analytics = &sourceValidatorFake{}
+			_, err := s.CreateScheduledTask(withRoles(exportCtx(), roleWithAnalytics), tt.req)
+			if tt.hint == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.True(t, ierr.IsValidation(err), "got %v", err)
+			require.Contains(t, errText(err), tt.hint)
+			require.Nil(t, repo.created)
+		})
+	}
 }
 
 func customerExportService(repo *originRepoFake, cust *customerCountFake) *scheduledTaskService {
