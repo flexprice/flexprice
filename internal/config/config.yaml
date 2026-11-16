@@ -551,6 +551,12 @@ meter_usage_tracking:
   rejected_event_webhook_enabled: false
   rejected_event_webhook_window: "10m"
 
+meter_usage:
+  rollup:
+    enabled: false
+    table: "meter_usage_hourly"
+    daily_table: ""
+
 meter_usage_tracking_lazy:
   enabled: true
   topic: "events_lazy"

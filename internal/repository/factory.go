@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"context"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
@@ -355,8 +357,36 @@ func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 	return entRepo.NewScheduledTaskRepository(p.EntClient, p.Logger)
 }
 
-func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
-	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
+func NewMeterUsageRepository(p RepositoryParams, cfg *config.Configuration) events.MeterUsageRepository {
+	var opts []clickhouseRepo.MeterUsageRepositoryOption
+	if cfg != nil && cfg.MeterUsage.Rollup.Enabled {
+		opts = initMeterUsageRollupOptions(context.Background(), cfg.MeterUsage.Rollup, clickhouseRepo.NewTableExistsFunc(p.ClickHouseDB), p.Logger)
+	}
+	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger, opts...)
+}
+
+func initMeterUsageRollupOptions(ctx context.Context, rc config.MeterUsageRollupConfig, exists clickhouseRepo.TableExistsFunc, log *logger.Logger) []clickhouseRepo.MeterUsageRepositoryOption {
+	if !clickhouseRepo.IsValidRollupTable(rc.Table) {
+		log.Warn(ctx, "meter_usage rollup table invalid, rollup disabled", "table", rc.Table)
+		return nil
+	}
+	daily := rc.DailyTable
+	if daily != "" && !clickhouseRepo.IsValidRollupTable(daily) {
+		log.Warn(ctx, "meter_usage daily rollup table invalid, daily tier disabled", "table", daily)
+		daily = ""
+	}
+
+	hourly, daily := clickhouseRepo.InitRollupTables(ctx, exists, rc.Table, daily, log)
+	var opts []clickhouseRepo.MeterUsageRepositoryOption
+	if hourly != "" {
+		opts = append(opts, clickhouseRepo.WithRollupTable(hourly))
+		log.Info(ctx, "meter_usage rollup reads enabled", "table", hourly)
+	}
+	if daily != "" {
+		opts = append(opts, clickhouseRepo.WithDailyRollupTable(daily))
+		log.Info(ctx, "meter_usage daily rollup reads enabled", "table", daily)
+	}
+	return opts
 }
 
 // NewUsageAnalyticsRepository returns the ClickHouse repository that prices meter_usage events for usage analytics.
