@@ -153,3 +153,34 @@ func TestExportObjectKeyCustomerFilter(t *testing.T) {
 	assert.NotEqual(t, acme, exportObjectKey(request("globex"), exporter))
 	assert.Equal(t, exportObjectKey(request("acme", "globex"), exporter), exportObjectKey(request("globex", "acme"), exporter))
 }
+
+func TestExportObjectKeySavedCustomerFilter(t *testing.T) {
+	exporter := &WalletLedgerExporter{}
+	request := func(cf *types.CustomerFilter) *dto.ExportRequest {
+		r := &dto.ExportRequest{
+			StartTime: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+			EndTime:   time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC),
+			JobConfig: &types.S3JobConfig{},
+		}
+		if cf != nil {
+			r.SourceConfig = &types.ExportSourceConfig{CustomerFilter: cf}
+		}
+		return r
+	}
+
+	full := exportObjectKey(request(nil), exporter)
+	assert.Equal(t, "wallet_ledger/wallet_ledger-261001000000-261002000000.csv", full)
+	assert.Equal(t, full, exportObjectKey(&dto.ExportRequest{
+		StartTime: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC),
+		JobConfig: &types.S3JobConfig{}, SourceConfig: &types.ExportSourceConfig{},
+	}, exporter))
+
+	acme := exportObjectKey(request(&types.CustomerFilter{Email: "a@acme.co"}), exporter)
+	globex := exportObjectKey(request(&types.CustomerFilter{Email: "a@globex.co"}), exporter)
+	all := exportObjectKey(request(&types.CustomerFilter{}), exporter)
+	assert.NotEqual(t, full, all)
+	assert.NotEqual(t, acme, globex)
+	assert.NotEqual(t, acme, all)
+	assert.Equal(t, acme, exportObjectKey(request(&types.CustomerFilter{Email: "a@acme.co"}), exporter))
+}

@@ -308,7 +308,7 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// exportObjectKey builds <key_prefix>/<entity>/<entity>-<start>-<end>[-customers-<digest>].csv[.gz].
+// exportObjectKey builds <key_prefix>/<entity>/<entity>-<start>-<end>[-customers-<digest>][-filter-<digest>].csv[.gz].
 // A customer-filtered run gets its own key so it never replaces the full export of the same window.
 func exportObjectKey(request *dto.ExportRequest, exporter Exporter) string {
 	startTimeStr := request.StartTime.Format("060102150405")
@@ -317,6 +317,9 @@ func exportObjectKey(request *dto.ExportRequest, exporter Exporter) string {
 	filename := fmt.Sprintf("%s-%s-%s", filenamePrefix, startTimeStr, endTimeStr)
 	if len(request.CustomerExternalIDs) > 0 {
 		filename += "-customers-" + customerFilterDigest(request.CustomerExternalIDs)
+	}
+	if cf := request.SourceConfig.GetCustomerFilter(); cf != nil {
+		filename += "-filter-" + jsonDigest(cf)
 	}
 	if request.ManagedCopy {
 		if suffix := runKeySuffix(request.TaskID); suffix != "" {
@@ -530,7 +533,12 @@ func customerFilterDigest(customerExternalIDs []string) string {
 	ids := lo.Uniq(customerExternalIDs)
 	sort.Strings(ids)
 	// JSON, not a joined string: an ID may contain the separator.
-	encoded, _ := json.Marshal(ids)
+	return jsonDigest(ids)
+}
+
+// Struct JSON is canonical: fixed field order.
+func jsonDigest(v any) string {
+	encoded, _ := json.Marshal(v)
 	sum := sha256.Sum256(encoded)
 	return hex.EncodeToString(sum[:6])
 }
