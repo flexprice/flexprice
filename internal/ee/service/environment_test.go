@@ -253,32 +253,35 @@ func (s *EnvironmentServiceSuite) TestProcessBrandingImage() {
 		b, err := processBrandingImage(data, types.BrandingAssetLogo)
 		s.Require().NoError(err)
 		s.Equal(a.Hash(), b.Hash())
-		s.Equal("tenant_1/env_1/"+a.Hash()+".png", publicAssetKey("tenant_1", "env_1", a))
+		key := publicAssetKey("tenant_1", a)
+		s.Equal("tenant_1/"+a.Hash()+".png", key)
+		s.Equal("production/tenant_1/assets/"+a.Hash()+".png", publicAssetObjectKey("production", key))
+		s.Equal("tenant_1/assets/"+a.Hash()+".png", publicAssetObjectKey("", key))
 	})
 }
 
 func (s *EnvironmentServiceSuite) TestParsePublicAssetPath() {
 	hash := strings.Repeat("ab", 32)
 	tests := []struct {
-		name, tenant, env, file string
-		ok                      bool
+		name, tenant, file string
+		ok                 bool
 	}{
-		{name: "prefixed ids", tenant: "tenant_01M77", env: "env_01M77", file: hash + ".png", ok: true},
-		{name: "jpg", tenant: "tenant_1", env: "env_1", file: hash + ".jpg", ok: true},
-		{name: "self-hosted default tenant", tenant: "00000000-0000-0000-0000-000000000000", env: "00000000-0000-0000-0000-000000000000", file: hash + ".png", ok: true},
-		{name: "path traversal", tenant: "..", env: "env_1", file: hash + ".png"},
-		{name: "short hash", tenant: "tenant_1", env: "env_1", file: hash[:63] + ".png"},
-		{name: "uppercase hash", tenant: "tenant_1", env: "env_1", file: strings.ToUpper(hash) + ".png"},
-		{name: "gif extension", tenant: "tenant_1", env: "env_1", file: hash + ".gif"},
-		{name: "id over 50 chars", tenant: strings.Repeat("t", 51), env: "env_1", file: hash + ".png"},
-		{name: "empty env", tenant: "tenant_1", env: "", file: hash + ".png"},
+		{name: "prefixed id", tenant: "tenant_01M77", file: hash + ".png", ok: true},
+		{name: "jpg", tenant: "tenant_1", file: hash + ".jpg", ok: true},
+		{name: "self-hosted default tenant", tenant: "00000000-0000-0000-0000-000000000000", file: hash + ".png", ok: true},
+		{name: "path traversal", tenant: "..", file: hash + ".png"},
+		{name: "short hash", tenant: "tenant_1", file: hash[:63] + ".png"},
+		{name: "uppercase hash", tenant: "tenant_1", file: strings.ToUpper(hash) + ".png"},
+		{name: "gif extension", tenant: "tenant_1", file: hash + ".gif"},
+		{name: "id over 50 chars", tenant: strings.Repeat("t", 51), file: hash + ".png"},
+		{name: "empty tenant", tenant: "", file: hash + ".png"},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			key, ext, gotHash, ok := parsePublicAssetPath(tt.tenant, tt.env, tt.file)
+			key, ext, gotHash, ok := parsePublicAssetPath(tt.tenant, tt.file)
 			s.Equal(tt.ok, ok)
 			if tt.ok {
-				s.Equal(tt.tenant+"/"+tt.env+"/"+tt.file, key)
+				s.Equal(tt.tenant+"/"+tt.file, key)
 				s.Equal(tt.file[65:], ext)
 				s.Equal(hash, gotHash)
 			}

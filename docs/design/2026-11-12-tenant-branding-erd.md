@@ -223,7 +223,7 @@ Highlighted pieces are new or extended; the dashed line is future reuse.
 **Main flow (UC1 then UC3–UC5)**
 1. An admin uploads a logo or icon from the console or the API.
 2. The API checks the request size, the file type from its content, and the image dimensions, then re-encodes the image.
-3. The re-encoded image is stored under its tenant and environment, named by its content hash; the environment's settings or the billing entity record that key. Nothing already stored is removed.
+3. The re-encoded image is stored under its tenant, named by its content hash; the environment's settings or the billing entity record that key. Nothing already stored is removed.
 4. A customer opens the hosted invoice page or the portal, which calls its existing API.
 5. That API works out the issuer (FR-10) and runs the branding lookup (FR-11), which returns the issuer's name and logo and icon URLs built on the deployment's public API address.
 6. The page draws the header and sets the tab icon; the browser loads the images from the public image endpoint, which reads them from storage and returns them with long-lived cache headers.
@@ -271,9 +271,9 @@ No row, or a field left out, means not uploaded. The generic settings API refuse
 
 `branding_config` is accepted only on billing entities: customer and subscription create and update requests that carry it in their `settings` are rejected with a validation error. The entity's `settings` are not returned on the billing entity response and are written only by the branding upload and remove endpoints.
 
-- **Image key:** `<tenant id>/<environment id>/<sha256 of the stored bytes, hex>.<png|jpg>`, for both environment and billing entity assets. The extension sets the served `Content-Type`. Scoping by tenant and environment keeps each owner's images apart, so a later clean-up of a tenant or an environment touches no one else. The stored image can be larger than the upload after re-encoding; the 512 KB limit applies to the upload.
-- **Storage object:** the key under an `assets/` prefix in the invoice bucket, through a new public asset storage purpose (section 7).
-- **Public asset layer:** storing, serving and reading images by key is a generic layer (`PublicAssetService`) that any flow can use for images it serves publicly; each flow keeps its own upload rules (here: logo and icon dimensions and the 512 KB limit) and records the keys it uses. The key carries no flow name, so identical bytes in one environment are one object; objects are never deleted. Private files must not use this layer.
+- **Image key:** `<tenant id>/<sha256 of the stored bytes, hex>.<png|jpg>`, for both environment and billing entity assets. The extension sets the served `Content-Type`. Scoping by tenant keeps each tenant's images apart, so a later clean-up of a tenant touches no one else. Each environment's setting and each billing entity record their own key, so environments still have their own logo and icon; identical bytes in two environments are one object. The stored image can be larger than the upload after re-encoding; the 512 KB limit applies to the upload.
+- **Storage object:** `<key prefix>/<tenant id>/assets/<file>` in the invoice bucket, through a new public asset storage purpose (section 7), so a tenant's images sit under the same tenant folder as its invoice PDFs.
+- **Public asset layer:** storing, serving and reading images by key is a generic layer (`PublicAssetService`) that any flow can use for images it serves publicly; each flow keeps its own upload rules (here: logo and icon dimensions and the 512 KB limit) and records the keys it uses. The key carries no flow name, so identical bytes in one tenant are one object; objects are never deleted. Private files must not use this layer.
 - **Migration:** an optional JSON field on the billing entity ent schema, and its nullable `settings` column added in one versioned SQL migration; no backfill. Null is "no override", which is a real state, not a default. The environment setting needs no migration.
 - **Writes:** the environment's setting is changed in a transaction that takes a lock on the environment's `branding_config`, reads the stored value bypassing the settings cache, sets one field and saves, so uploading the logo and the icon at the same time keeps both. A billing entity's key is written the same way: a transaction that takes a lock on the entity's settings, reads the entity, sets one field of `branding_config` and writes only the `settings` column, so it never overwrites the other key or the entity's other fields.
 - **Reads:** the branding lookup and environment responses read `branding_config` from the database, not the per-pod settings cache, so an upload shows on every pod at once.
@@ -308,17 +308,17 @@ No row, or a field left out, means not uploaded. The generic settings API refuse
 
 ```json
 {
-  "logo_url": "https://us.api.flexprice.io/v1/assets/tenant_01…/env_01…/9f2c…e1.png",
-  "icon_url": "https://us.api.flexprice.io/v1/assets/tenant_01…/env_01…/41ab…7d.png"
+  "logo_url": "https://us.api.flexprice.io/v1/assets/tenant_01…/9f2c…e1.png",
+  "icon_url": "https://us.api.flexprice.io/v1/assets/tenant_01…/41ab…7d.png"
 }
 ```
 
 **Serve an image**
-- `GET /v1/assets/{tenant_id}/{environment_id}/{file}`, the public asset endpoint, in the existing unauthenticated `/v1` route group, outside the hosted invoice token group (section 6). The global CORS and security headers it inherits do not block cross-origin `<img>` loads.
+- `GET /v1/assets/{tenant_id}/{file}`, the public asset endpoint, in the existing unauthenticated `/v1` route group, outside the hosted invoice token group (section 6). The global CORS and security headers it inherits do not block cross-origin `<img>` loads.
 - `200`: image bytes, `Content-Type` from the key's extension, `Cache-Control: public, max-age=31536000, immutable`, `ETag` set to the quoted hash (NFR-4, NFR-8).
 - `304`: `If-None-Match` matches.
-- `404`: the path does not match `<tenant id>/<environment id>/<64 hex>.<png|jpg>`, or storage reports no such object (download extended to say so, section 7). The format check runs before storage (NFR-7).
-- `500`: any other storage failure, sent without the caching headers. Each id segment is 1–50 letters, digits, `_` or `-`: ids are usually prefixed ULIDs (`tenant_…`, `env_…`), but the self-hosted default tenant is a bare all-zero UUID, so a strict prefix check would break it.
+- `404`: the path does not match `<tenant id>/<64 hex>.<png|jpg>`, or storage reports no such object (download extended to say so, section 7). The format check runs before storage (NFR-7).
+- `500`: any other storage failure, sent without the caching headers. The tenant id is 1–50 letters, digits, `_` or `-`: ids are usually prefixed ULIDs (`tenant_…`), but the self-hosted default tenant is a bare all-zero UUID, so a strict prefix check would break it.
 
 **Issuer branding on customer-facing responses**
 - The hosted invoice response's `tenant` block gains `logo_url` and `icon_url` for the invoice's issuer (FR-17). Its `name` stays the frozen issuer name.
@@ -327,7 +327,7 @@ No row, or a field left out, means not uploaded. The generic settings API refuse
 ```json
 {
   "name": "Acme India",
-  "logo_url": "https://us.api.flexprice.io/v1/assets/tenant_01…/env_01…/9f2c…e1.png"
+  "logo_url": "https://us.api.flexprice.io/v1/assets/tenant_01…/9f2c…e1.png"
 }
 ```
 
@@ -402,7 +402,7 @@ Alt text on every logo and icon is the issuer's name (NFR-12). Only the billing 
 | Upload safety | Body cap while reading, type from content, size, dimensions and pixel cap from the header before decoding, then a full re-encode; only PNG and JPEG are ever stored. | NFR-1, NFR-2, NFR-3 |
 | Serving safety | Exact `Content-Type` from the stored extension plus `nosniff`; the path is validated before storage is touched. | NFR-4, NFR-7 |
 | Access control | Upload and remove reuse environment and billing entity write permission; lookups are scoped to the caller's tenant and environment. | NFR-5, NFR-6 |
-| Privacy | Logos are public by nature. Metadata such as EXIF location is stripped on upload. Public URLs contain the tenant and environment IDs, which are not credentials. | NFR-1 |
+| Privacy | Logos are public by nature. Metadata such as EXIF location is stripped on upload. Public URLs contain the tenant ID, which is not a credential. | NFR-1 |
 | Observability | Rejected uploads return a message naming the rule and are not logged as errors. Storage failures on upload, on the image endpoint and during PDF rendering are logged with the tenant, environment and entity IDs. | NFR-10 |
 | Failure: storage off or unreachable | Upload returns 500 with a branding-specific message and keeps the current key. The image endpoint returns 500 without caching headers, so nothing bad is cached; the hosted page and portal treat the failed image as not uploaded and show the no-asset layout, with the Flexprice favicon in the tab. PDF rendering falls back to the no-asset header. | NFR-10, NFR-12 |
 | Failure: public address not configured | URL fields are omitted, and every surface shows its no-asset fallback. | — |
@@ -421,7 +421,7 @@ Alt text on every logo and icon is the issuer's name (NFR-12). Only the billing 
 |---|---|---|
 | Requests for random well-formed image paths each cost one storage read, and no rate limiting exists. | Low / Medium | Path check before storage; a storage "not found" is cheap. Add per-IP limits or a CDN if abuse appears. |
 | The invoice bucket's lifecycle rules, if any, could expire the branding prefix and break links. | Low / High | Infra checks lifecycle rules on the invoice bucket in every region before release. |
-| Public image URLs reveal tenant and environment IDs to anyone who sees a page or, later, an email. | Medium / Low | The IDs grant nothing without an API key or session token; URLs carry no other data. |
+| Public image URLs reveal the tenant ID to anyone who sees a page or, later, an email. | Medium / Low | The ID grants nothing without an API key or session token; URLs carry no other data. |
 | A rebranded billing entity shows its new logo next to its old frozen name on earlier finalized invoices. | Medium / Low | Accepted: the logo is read live by decision. |
 | A PDF rendered during a storage read failure is stored without branding and stays that way. | Low / Medium | The failure is logged; a forced regeneration restores the branding. |
 | A phone-photo JPEG with an orientation tag shows rotated once metadata is stripped. | Low / Low | Logos are rarely photos; the console preview shows the stored result so the tenant can re-upload. |

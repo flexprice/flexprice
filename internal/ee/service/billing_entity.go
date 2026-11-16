@@ -499,7 +499,7 @@ func (s *billingEntityService) UploadBrandingAsset(ctx context.Context, id strin
 	if err != nil {
 		return nil, err
 	}
-	key, err := NewPublicAssetService(s.ServiceParams).StoreImage(ctx, existing.EnvironmentID, img)
+	key, err := NewPublicAssetService(s.ServiceParams).StoreImage(ctx, img)
 	if err != nil {
 		return nil, err
 	}

@@ -20,10 +20,10 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// PublicAssetService stores images under a tenant and environment by content hash and serves them publicly.
+// PublicAssetService stores images under a tenant by content hash and serves them publicly.
 type PublicAssetService interface {
-	// StoreImage stores a processed image under the tenant in ctx and the given environment and returns its asset key.
-	StoreImage(ctx context.Context, environmentID string, img *processedImage) (string, error)
+	// StoreImage stores a processed image under the tenant in ctx and returns its asset key.
+	StoreImage(ctx context.Context, img *processedImage) (string, error)
 	// Get returns a stored asset for the public endpoint; a malformed path is not found without a storage call.
 	Get(ctx context.Context, req dto.PublicAssetRequest) (*dto.PublicAsset, error)
 	// Read downloads a stored asset by its key.
@@ -38,7 +38,7 @@ func NewPublicAssetService(params ServiceParams) PublicAssetService {
 	return &publicAssetService{ServiceParams: params}
 }
 
-func (s *publicAssetService) StoreImage(ctx context.Context, environmentID string, img *processedImage) (string, error) {
+func (s *publicAssetService) StoreImage(ctx context.Context, img *processedImage) (string, error) {
 	store, err := s.StorageResolver.ForPlatform(ctx, storage.PurposePublicAsset)
 	if err != nil {
 		return "", err
@@ -48,11 +48,11 @@ func (s *publicAssetService) StoreImage(ctx context.Context, environmentID strin
 		return "", err
 	}
 
-	key := publicAssetKey(types.GetTenantID(ctx), environmentID, img)
+	key := publicAssetKey(types.GetTenantID(ctx), img)
 	objectKey := publicAssetObjectKey(bc.KeyPrefix, key)
 	exists, err := store.Exists(ctx, objectKey)
 	if err != nil {
-		s.Logger.Error(ctx, "public asset existence check failed", "error", err, "environment_id", environmentID, "key", key)
+		s.Logger.Error(ctx, "public asset existence check failed", "error", err, "key", key)
 		return "", err
 	}
 	if exists {
@@ -64,14 +64,14 @@ func (s *publicAssetService) StoreImage(ctx context.Context, environmentID strin
 		format = storage.UploadFormatJPEG
 	}
 	if _, err := store.Upload(ctx, &storage.UploadRequest{Key: objectKey, Data: img.Data(), Format: format}); err != nil {
-		s.Logger.Error(ctx, "public asset upload failed", "error", err, "environment_id", environmentID, "key", key)
+		s.Logger.Error(ctx, "public asset upload failed", "error", err, "key", key)
 		return "", err
 	}
 	return key, nil
 }
 
 func (s *publicAssetService) Get(ctx context.Context, req dto.PublicAssetRequest) (*dto.PublicAsset, error) {
-	key, ext, hash, ok := parsePublicAssetPath(req.TenantID, req.EnvironmentID, req.File)
+	key, ext, hash, ok := parsePublicAssetPath(req.TenantID, req.File)
 	if !ok {
 		return nil, ierr.NewError("asset not found").WithHint("Asset not found").Mark(ierr.ErrNotFound)
 	}
@@ -89,7 +89,7 @@ func (s *publicAssetService) Get(ctx context.Context, req dto.PublicAssetRequest
 	asset.Data, err = s.Read(ctx, key)
 	if err != nil {
 		if !ierr.IsNotFound(err) {
-			s.Logger.Error(ctx, "public asset read failed", "error", err, "tenant_id", req.TenantID, "environment_id", req.EnvironmentID, "key", key)
+			s.Logger.Error(ctx, "public asset read failed", "error", err, "tenant_id", req.TenantID, "key", key)
 		}
 		return nil, err
 	}
@@ -108,10 +108,11 @@ func (s *publicAssetService) Read(ctx context.Context, key string) ([]byte, erro
 	return store.Download(ctx, publicAssetObjectKey(bc.KeyPrefix, key))
 }
 
-// publicAssetObjectKey is the storage object for an asset key: <prefix>/assets/<key>.
+// publicAssetObjectKey is the storage object for an asset key <tenant>/<file>: <prefix>/<tenant>/assets/<file>.
 func publicAssetObjectKey(prefix, key string) string {
-	ext := path.Ext(key)
-	return storage.ObjectKey(prefix, "assets", strings.TrimSuffix(key, ext), strings.TrimPrefix(ext, "."), false)
+	tenantDir, file := path.Split(key)
+	ext := path.Ext(file)
+	return storage.ObjectKey(prefix, path.Join(tenantDir, "assets"), strings.TrimSuffix(file, ext), strings.TrimPrefix(ext, "."), false)
 }
 
 // publicAssetURL is the public URL of an asset key, or "" when unset or no public origin is configured.
@@ -206,19 +207,19 @@ func processImage(data []byte, maxBytes int, checkDimensions func(width, height 
 	return &processedImage{data: out.Bytes(), ext: ext, hash: hex.EncodeToString(sum[:])}, nil
 }
 
-// publicAssetKey is the asset key: <tenant>/<environment>/<sha256>.<ext>.
-func publicAssetKey(tenantID, environmentID string, img *processedImage) string {
-	return fmt.Sprintf("%s/%s/%s.%s", tenantID, environmentID, img.Hash(), img.Ext())
+// publicAssetKey is the asset key: <tenant>/<sha256>.<ext>.
+func publicAssetKey(tenantID string, img *processedImage) string {
+	return fmt.Sprintf("%s/%s.%s", tenantID, img.Hash(), img.Ext())
 }
 
 // parsePublicAssetPath validates public asset path segments and returns the asset key.
-func parsePublicAssetPath(tenantID, environmentID, file string) (key, ext, hash string, ok bool) {
-	if !assetIDPattern.MatchString(tenantID) || !assetIDPattern.MatchString(environmentID) {
+func parsePublicAssetPath(tenantID, file string) (key, ext, hash string, ok bool) {
+	if !assetIDPattern.MatchString(tenantID) {
 		return "", "", "", false
 	}
 	m := assetFilePattern.FindStringSubmatch(file)
 	if m == nil {
 		return "", "", "", false
 	}
-	return fmt.Sprintf("%s/%s/%s", tenantID, environmentID, file), m[2], m[1], true
+	return tenantID + "/" + file, m[2], m[1], true
 }

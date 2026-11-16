@@ -180,7 +180,7 @@ func NewRouter(
 		v1Public.POST("/auth/password", handlers.Auth.SetPassword)
 
 		// Public assets (logos, icons) load on customer-facing pages and emails without a session.
-		v1Public.GET("/assets/:tenant_id/:environment_id/:file", handlers.PublicAsset.Get)
+		v1Public.GET("/assets/:tenant_id/:file", handlers.PublicAsset.Get)
 
 		// SAML single sign-on. Public because these run before a session exists:
 		// the login redirect starts the flow, and the ACS callback is posted by

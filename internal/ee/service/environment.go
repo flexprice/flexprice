@@ -258,7 +258,7 @@ func (s *environmentService) UploadBrandingAsset(ctx context.Context, id string,
 	if err != nil {
 		return nil, err
 	}
-	key, err := NewPublicAssetService(s.ServiceParams).StoreImage(ctx, env.ID, img)
+	key, err := NewPublicAssetService(s.ServiceParams).StoreImage(ctx, img)
 	if err != nil {
 		return nil, err
 	}

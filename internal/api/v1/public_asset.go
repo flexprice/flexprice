@@ -24,10 +24,9 @@ func NewPublicAssetHandler(service service.PublicAssetService, log *logger.Logge
 // Get serves a public asset with immutable caching.
 func (h *PublicAssetHandler) Get(c *gin.Context) {
 	asset, err := h.service.Get(c.Request.Context(), dto.PublicAssetRequest{
-		TenantID:      c.Param("tenant_id"),
-		EnvironmentID: c.Param("environment_id"),
-		File:          c.Param("file"),
-		IfNoneMatch:   c.GetHeader("If-None-Match"),
+		TenantID:    c.Param("tenant_id"),
+		File:        c.Param("file"),
+		IfNoneMatch: c.GetHeader("If-None-Match"),
 	})
 	if err != nil {
 		c.Error(err)
