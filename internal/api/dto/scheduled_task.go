@@ -128,7 +128,7 @@ type UpdateScheduledTaskRequest struct {
 	Enabled  *bool                 `json:"enabled,omitempty"`
 	Name     *string               `json:"name,omitempty"`
 	Schedule *types.ExportSchedule `json:"schedule,omitempty"`
-	// Absent keeps; empty clears.
+	// Absent keeps; empty clears; daily/weekly/monthly/manual only.
 	EmailConfig *types.ExportEmailConfig `json:"email_config,omitempty"`
 }
 
