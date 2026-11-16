@@ -1241,6 +1241,7 @@ var (
 		{Name: "status_reason", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "sent_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "delivered_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "idempotency_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(128)"}},
 		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// EmailLogsTable holds the schema information for the "email_logs" table.
@@ -1279,6 +1280,14 @@ var (
 				Name:    "emaillog_tenant_id_environment_id_delivery_status_created_at",
 				Unique:  false,
 				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[20], EmailLogsColumns[3]},
+			},
+			{
+				Name:    "idx_email_log_idempotency_key",
+				Unique:  true,
+				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[24]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "idempotency_key IS NOT NULL",
+				},
 			},
 			{
 				Name:    "idx_email_log_queued",

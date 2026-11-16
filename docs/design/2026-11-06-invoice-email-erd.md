@@ -77,6 +77,7 @@ New table `email_log` (`BaseMixin` + `EnvironmentMixin`):
 | `delivery_status` | varchar(30) | See Delivery tracking |
 | `status_reason` | text, null | Provider detail |
 | `sent_at`, `delivered_at` | timestamptz, null | |
+| `idempotency_key` | varchar(128), null | Manual send only, from the request |
 | `metadata` | jsonb | Message-ID, PDF notes |
 
 `delivery_status` is separate from `BaseMixin.status`, which stays `published` / `archived`. `created_by` / `created_at` record who requested the send and when, from the request context: the user who clicked Send, or for auto sends the actor that finalized the invoice.
@@ -85,6 +86,7 @@ Indexes:
 - Unique `(provider, provider_message_id)` where not null: one email per provider message.
 - `(tenant_id, environment_id, entity_type, entity_id, created_at DESC)`: invoice Emails panel.
 - Partial unique `(tenant_id, environment_id, entity_id, template_key)` where `trigger = 'auto'`: one auto email per invoice.
+- Partial unique `(tenant_id, environment_id, idempotency_key)` where not null: one email per idempotency key.
 - `(tenant_id, environment_id, delivery_status, created_at)`: search.
 
 Setting `email_notification_config` (existing `settings` table; no row = off):
@@ -139,12 +141,14 @@ Handler rules:
 | Endpoint | Purpose | Permission |
 |---|---|---|
 | `GET/PUT /settings/email_notification_config` | Read / change auto-send | Existing settings rules |
-| `POST /invoices/{id}/email` | Manual send; optional `to`, `cc` | `invoice:write` |
+| `POST /invoices/{id}/email` | Manual send; optional `to`, `cc`, `idempotency_key` | `invoice:write` |
 | `GET /invoices/{id}/emails` | Emails for an invoice | `invoice:read` |
 | `POST /emails/search` | Filter by status, trigger, date, customer | `invoice:read` |
 | `POST /v1/webhooks/email/{provider}` | Delivery events, Svix-signed | Public |
 
 Manual send refuses: non-finalized invoices, no recipient, no tenant Reply-To, more than 50 To addresses.
+
+A repeated `idempotency_key` returns the email first sent with it and queues nothing; a key already used for another invoice is refused. Without a key, every call queues a new email.
 
 UI: Settings → Email (toggle, entity picker, From/Reply-To preview); invoice **Send email** dialog and **Emails** panel. The existing Trigger communication action stays.
 

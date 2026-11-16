@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/lib/pq"
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/emaillog"
@@ -55,6 +56,7 @@ func (r *emailLogRepository) Create(ctx context.Context, e *domainEmailLog.Email
 		SetNillableStatusReason(e.StatusReason).
 		SetNillableSentAt(e.SentAt).
 		SetNillableDeliveredAt(e.DeliveredAt).
+		SetNillableIdempotencyKey(e.IdempotencyKey).
 		SetMetadata(e.Metadata).
 		SetStatus(string(e.Status)).
 		SetTenantID(e.TenantID).
@@ -67,11 +69,19 @@ func (r *emailLogRepository) Create(ctx context.Context, e *domainEmailLog.Email
 	if err != nil {
 		SetSpanError(span, err)
 		var pqErr *pq.Error
-		if ent.IsConstraintError(err) && errors.As(err, &pqErr) && pqErr.Constraint == schema.Idx_email_log_auto_once {
-			return ierr.WithError(err).
-				WithHint("An automatic email was already sent for this document").
-				WithReportableDetails(map[string]any{"entity_id": e.EntityID, "template_key": e.TemplateKey}).
-				Mark(ierr.ErrAlreadyExists)
+		if ent.IsConstraintError(err) && errors.As(err, &pqErr) {
+			switch pqErr.Constraint {
+			case schema.Idx_email_log_auto_once:
+				return ierr.WithError(err).
+					WithHint("An automatic email was already sent for this document").
+					WithReportableDetails(map[string]any{"entity_id": e.EntityID, "template_key": e.TemplateKey}).
+					Mark(ierr.ErrAlreadyExists)
+			case schema.Idx_email_log_idempotency_key:
+				return ierr.WithError(err).
+					WithHint("An email with this idempotency key already exists").
+					WithReportableDetails(map[string]any{"idempotency_key": lo.FromPtr(e.IdempotencyKey)}).
+					Mark(ierr.ErrAlreadyExists)
+			}
 		}
 		r.log.Error(ctx, "error creating email log", "error", err, "email_log_id", e.ID, "entity_id", e.EntityID)
 		return ierr.WithError(err).
@@ -96,6 +106,25 @@ func (r *emailLogRepository) Get(ctx context.Context, id string) (*domainEmailLo
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, r.notFoundOrDatabase(err, "Email log was not found", map[string]any{"email_log_id": id})
+	}
+	SetSpanSuccess(span)
+	return domainEmailLog.FromEnt(row), nil
+}
+
+func (r *emailLogRepository) GetByIdempotencyKey(ctx context.Context, key string) (*domainEmailLog.EmailLog, error) {
+	span := StartRepositorySpan(ctx, "email_log", "get_by_idempotency_key", map[string]interface{}{"idempotency_key": key})
+	defer FinishSpan(span)
+
+	row, err := r.client.Reader(ctx).EmailLog.Query().
+		Where(
+			emaillog.IdempotencyKey(key),
+			emaillog.TenantID(types.GetTenantID(ctx)),
+			emaillog.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Only(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, r.notFoundOrDatabase(err, "Email log was not found", map[string]any{"idempotency_key": key})
 	}
 	SetSpanSuccess(span)
 	return domainEmailLog.FromEnt(row), nil

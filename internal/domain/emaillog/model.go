@@ -28,6 +28,7 @@ type EmailLog struct {
 	StatusReason      *string                   `json:"status_reason,omitempty"`
 	SentAt            *time.Time                `json:"sent_at,omitempty"`
 	DeliveredAt       *time.Time                `json:"delivered_at,omitempty"`
+	IdempotencyKey    *string                   `json:"idempotency_key,omitempty"`
 	Metadata          types.Metadata            `json:"metadata,omitempty"`
 	types.BaseModel
 }
@@ -56,6 +57,7 @@ func FromEnt(e *ent.EmailLog) *EmailLog {
 		StatusReason:      e.StatusReason,
 		SentAt:            e.SentAt,
 		DeliveredAt:       e.DeliveredAt,
+		IdempotencyKey:    e.IdempotencyKey,
 		Metadata:          e.Metadata,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,

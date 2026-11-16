@@ -60,6 +60,8 @@ const (
 	FieldSentAt = "sent_at"
 	// FieldDeliveredAt holds the string denoting the delivered_at field in the database.
 	FieldDeliveredAt = "delivered_at"
+	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
+	FieldIdempotencyKey = "idempotency_key"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// Table holds the table name of the emaillog in the database.
@@ -92,6 +94,7 @@ var Columns = []string{
 	FieldStatusReason,
 	FieldSentAt,
 	FieldDeliveredAt,
+	FieldIdempotencyKey,
 	FieldMetadata,
 }
 
@@ -253,6 +256,11 @@ func BySentAt(opts ...sql.OrderTermOption) OrderOption {
 // ByDeliveredAt orders the results by the delivered_at field.
 func ByDeliveredAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeliveredAt, opts...).ToFunc()
+}
+
+// ByIdempotencyKey orders the results by the idempotency_key field.
+func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIdempotencyKey, opts...).ToFunc()
 }
 
 // ByMetadata orders the results by the metadata field.

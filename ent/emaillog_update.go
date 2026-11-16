@@ -286,6 +286,9 @@ func (_u *EmailLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.DeliveredAtCleared() {
 		_spec.ClearField(emaillog.FieldDeliveredAt, field.TypeTime)
 	}
+	if _u.mutation.IdempotencyKeyCleared() {
+		_spec.ClearField(emaillog.FieldIdempotencyKey, field.TypeString)
+	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(emaillog.FieldMetadata, field.TypeOther, value)
 	}
@@ -598,6 +601,9 @@ func (_u *EmailLogUpdateOne) sqlSave(ctx context.Context) (_node *EmailLog, err 
 	}
 	if _u.mutation.DeliveredAtCleared() {
 		_spec.ClearField(emaillog.FieldDeliveredAt, field.TypeTime)
+	}
+	if _u.mutation.IdempotencyKeyCleared() {
+		_spec.ClearField(emaillog.FieldIdempotencyKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(emaillog.FieldMetadata, field.TypeOther, value)

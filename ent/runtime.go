@@ -1308,7 +1308,7 @@ func init() {
 	// emaillog.DeliveryStatusValidator is a validator for the "delivery_status" field. It is called by the builders before save.
 	emaillog.DeliveryStatusValidator = emaillogDescDeliveryStatus.Validators[0].(func(string) error)
 	// emaillogDescMetadata is the schema descriptor for metadata field.
-	emaillogDescMetadata := emaillogFields[17].Descriptor()
+	emaillogDescMetadata := emaillogFields[18].Descriptor()
 	// emaillog.DefaultMetadata holds the default value on creation for the metadata field.
 	emaillog.DefaultMetadata = emaillogDescMetadata.Default.(types.Metadata)
 	entitlementMixin := schema.Entitlement{}.Mixin()

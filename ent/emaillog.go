@@ -65,6 +65,8 @@ type EmailLog struct {
 	SentAt *time.Time `json:"sent_at,omitempty"`
 	// DeliveredAt holds the value of the "delivered_at" field.
 	DeliveredAt *time.Time `json:"delivered_at,omitempty"`
+	// IdempotencyKey holds the value of the "idempotency_key" field.
+	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata     types.Metadata `json:"metadata,omitempty"`
 	selectValues sql.SelectValues
@@ -77,7 +79,7 @@ func (*EmailLog) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case emaillog.FieldToAddresses, emaillog.FieldCcAddresses:
 			values[i] = new([]byte)
-		case emaillog.FieldID, emaillog.FieldTenantID, emaillog.FieldStatus, emaillog.FieldCreatedBy, emaillog.FieldUpdatedBy, emaillog.FieldEnvironmentID, emaillog.FieldEntityType, emaillog.FieldEntityID, emaillog.FieldCustomerID, emaillog.FieldTemplateKey, emaillog.FieldTrigger, emaillog.FieldFromAddress, emaillog.FieldReplyTo, emaillog.FieldSubject, emaillog.FieldProvider, emaillog.FieldProviderMessageID, emaillog.FieldDeliveryStatus, emaillog.FieldStatusReason:
+		case emaillog.FieldID, emaillog.FieldTenantID, emaillog.FieldStatus, emaillog.FieldCreatedBy, emaillog.FieldUpdatedBy, emaillog.FieldEnvironmentID, emaillog.FieldEntityType, emaillog.FieldEntityID, emaillog.FieldCustomerID, emaillog.FieldTemplateKey, emaillog.FieldTrigger, emaillog.FieldFromAddress, emaillog.FieldReplyTo, emaillog.FieldSubject, emaillog.FieldProvider, emaillog.FieldProviderMessageID, emaillog.FieldDeliveryStatus, emaillog.FieldStatusReason, emaillog.FieldIdempotencyKey:
 			values[i] = new(sql.NullString)
 		case emaillog.FieldCreatedAt, emaillog.FieldUpdatedAt, emaillog.FieldSentAt, emaillog.FieldDeliveredAt:
 			values[i] = new(sql.NullTime)
@@ -250,6 +252,13 @@ func (_m *EmailLog) assignValues(columns []string, values []any) error {
 				_m.DeliveredAt = new(time.Time)
 				*_m.DeliveredAt = value.Time
 			}
+		case emaillog.FieldIdempotencyKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
+			} else if value.Valid {
+				_m.IdempotencyKey = new(string)
+				*_m.IdempotencyKey = value.String
+			}
 		case emaillog.FieldMetadata:
 			if value, ok := values[i].(*types.Metadata); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
@@ -367,6 +376,11 @@ func (_m *EmailLog) String() string {
 	if v := _m.DeliveredAt; v != nil {
 		builder.WriteString("delivered_at=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.IdempotencyKey; v != nil {
+		builder.WriteString("idempotency_key=")
+		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")

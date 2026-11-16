@@ -13,6 +13,10 @@ import (
 // when a second automatic email is inserted for the same entity and template.
 const Idx_email_log_auto_once = "idx_email_log_auto_once"
 
+// Idx_email_log_idempotency_key is exported so the repository can match pq.Error.Constraint
+// when a manual send repeats an idempotency key.
+const Idx_email_log_idempotency_key = "idx_email_log_idempotency_key"
+
 // EmailLog holds the schema definition for one email sent to a customer.
 type EmailLog struct {
 	ent.Schema
@@ -115,6 +119,12 @@ func (EmailLog) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
+		field.String("idempotency_key").
+			SchemaType(varchar("128")).
+			Optional().
+			Nillable().
+			Immutable(),
+
 		field.Other("metadata", types.Metadata{}).
 			SchemaType(map[string]string{"postgres": "jsonb"}).
 			Optional().
@@ -124,7 +134,7 @@ func (EmailLog) Fields() []ent.Field {
 
 func (EmailLog) Indexes() []ent.Index {
 	return []ent.Index{
-		// Delivery webhooks look emails up by the provider's id.
+		// One email per provider message.
 		index.Fields("provider", "provider_message_id").
 			Unique().
 			Annotations(entsql.IndexWhere("provider_message_id IS NOT NULL")),
@@ -137,6 +147,11 @@ func (EmailLog) Indexes() []ent.Index {
 			StorageKey(Idx_email_log_auto_once).
 			Annotations(entsql.IndexWhere("\"trigger\" = 'auto'")),
 		index.Fields("tenant_id", "environment_id", "delivery_status", "created_at"),
+		// A repeated manual send with the same key returns the first email.
+		index.Fields("tenant_id", "environment_id", "idempotency_key").
+			Unique().
+			StorageKey(Idx_email_log_idempotency_key).
+			Annotations(entsql.IndexWhere("idempotency_key IS NOT NULL")),
 		// The email dispatcher finds environments with queued emails without scanning every email sent.
 		index.Fields("tenant_id", "environment_id", "created_at").
 			StorageKey("idx_email_log_queued").

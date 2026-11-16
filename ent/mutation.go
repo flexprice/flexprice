@@ -34995,6 +34995,7 @@ type EmailLogMutation struct {
 	status_reason       *string
 	sent_at             *time.Time
 	delivered_at        *time.Time
+	idempotency_key     *string
 	metadata            *types.Metadata
 	clearedFields       map[string]struct{}
 	done                bool
@@ -36069,6 +36070,55 @@ func (m *EmailLogMutation) ResetDeliveredAt() {
 	delete(m.clearedFields, emaillog.FieldDeliveredAt)
 }
 
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (m *EmailLogMutation) SetIdempotencyKey(s string) {
+	m.idempotency_key = &s
+}
+
+// IdempotencyKey returns the value of the "idempotency_key" field in the mutation.
+func (m *EmailLogMutation) IdempotencyKey() (r string, exists bool) {
+	v := m.idempotency_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdempotencyKey returns the old "idempotency_key" field's value of the EmailLog entity.
+// If the EmailLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmailLogMutation) OldIdempotencyKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdempotencyKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdempotencyKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdempotencyKey: %w", err)
+	}
+	return oldValue.IdempotencyKey, nil
+}
+
+// ClearIdempotencyKey clears the value of the "idempotency_key" field.
+func (m *EmailLogMutation) ClearIdempotencyKey() {
+	m.idempotency_key = nil
+	m.clearedFields[emaillog.FieldIdempotencyKey] = struct{}{}
+}
+
+// IdempotencyKeyCleared returns if the "idempotency_key" field was cleared in this mutation.
+func (m *EmailLogMutation) IdempotencyKeyCleared() bool {
+	_, ok := m.clearedFields[emaillog.FieldIdempotencyKey]
+	return ok
+}
+
+// ResetIdempotencyKey resets all changes to the "idempotency_key" field.
+func (m *EmailLogMutation) ResetIdempotencyKey() {
+	m.idempotency_key = nil
+	delete(m.clearedFields, emaillog.FieldIdempotencyKey)
+}
+
 // SetMetadata sets the "metadata" field.
 func (m *EmailLogMutation) SetMetadata(t types.Metadata) {
 	m.metadata = &t
@@ -36152,7 +36202,7 @@ func (m *EmailLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EmailLogMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 25)
 	if m.tenant_id != nil {
 		fields = append(fields, emaillog.FieldTenantID)
 	}
@@ -36222,6 +36272,9 @@ func (m *EmailLogMutation) Fields() []string {
 	if m.delivered_at != nil {
 		fields = append(fields, emaillog.FieldDeliveredAt)
 	}
+	if m.idempotency_key != nil {
+		fields = append(fields, emaillog.FieldIdempotencyKey)
+	}
 	if m.metadata != nil {
 		fields = append(fields, emaillog.FieldMetadata)
 	}
@@ -36279,6 +36332,8 @@ func (m *EmailLogMutation) Field(name string) (ent.Value, bool) {
 		return m.SentAt()
 	case emaillog.FieldDeliveredAt:
 		return m.DeliveredAt()
+	case emaillog.FieldIdempotencyKey:
+		return m.IdempotencyKey()
 	case emaillog.FieldMetadata:
 		return m.Metadata()
 	}
@@ -36336,6 +36391,8 @@ func (m *EmailLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldSentAt(ctx)
 	case emaillog.FieldDeliveredAt:
 		return m.OldDeliveredAt(ctx)
+	case emaillog.FieldIdempotencyKey:
+		return m.OldIdempotencyKey(ctx)
 	case emaillog.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -36508,6 +36565,13 @@ func (m *EmailLogMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDeliveredAt(v)
 		return nil
+	case emaillog.FieldIdempotencyKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdempotencyKey(v)
+		return nil
 	case emaillog.FieldMetadata:
 		v, ok := value.(types.Metadata)
 		if !ok {
@@ -36569,6 +36633,9 @@ func (m *EmailLogMutation) ClearedFields() []string {
 	if m.FieldCleared(emaillog.FieldDeliveredAt) {
 		fields = append(fields, emaillog.FieldDeliveredAt)
 	}
+	if m.FieldCleared(emaillog.FieldIdempotencyKey) {
+		fields = append(fields, emaillog.FieldIdempotencyKey)
+	}
 	if m.FieldCleared(emaillog.FieldMetadata) {
 		fields = append(fields, emaillog.FieldMetadata)
 	}
@@ -36609,6 +36676,9 @@ func (m *EmailLogMutation) ClearField(name string) error {
 		return nil
 	case emaillog.FieldDeliveredAt:
 		m.ClearDeliveredAt()
+		return nil
+	case emaillog.FieldIdempotencyKey:
+		m.ClearIdempotencyKey()
 		return nil
 	case emaillog.FieldMetadata:
 		m.ClearMetadata()
@@ -36689,6 +36759,9 @@ func (m *EmailLogMutation) ResetField(name string) error {
 		return nil
 	case emaillog.FieldDeliveredAt:
 		m.ResetDeliveredAt()
+		return nil
+	case emaillog.FieldIdempotencyKey:
+		m.ResetIdempotencyKey()
 		return nil
 	case emaillog.FieldMetadata:
 		m.ResetMetadata()

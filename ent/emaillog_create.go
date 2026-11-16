@@ -239,6 +239,20 @@ func (_c *EmailLogCreate) SetNillableDeliveredAt(v *time.Time) *EmailLogCreate {
 	return _c
 }
 
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (_c *EmailLogCreate) SetIdempotencyKey(v string) *EmailLogCreate {
+	_c.mutation.SetIdempotencyKey(v)
+	return _c
+}
+
+// SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
+func (_c *EmailLogCreate) SetNillableIdempotencyKey(v *string) *EmailLogCreate {
+	if v != nil {
+		_c.SetIdempotencyKey(*v)
+	}
+	return _c
+}
+
 // SetMetadata sets the "metadata" field.
 func (_c *EmailLogCreate) SetMetadata(v types.Metadata) *EmailLogCreate {
 	_c.mutation.SetMetadata(v)
@@ -535,6 +549,10 @@ func (_c *EmailLogCreate) createSpec() (*EmailLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DeliveredAt(); ok {
 		_spec.SetField(emaillog.FieldDeliveredAt, field.TypeTime, value)
 		_node.DeliveredAt = &value
+	}
+	if value, ok := _c.mutation.IdempotencyKey(); ok {
+		_spec.SetField(emaillog.FieldIdempotencyKey, field.TypeString, value)
+		_node.IdempotencyKey = &value
 	}
 	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(emaillog.FieldMetadata, field.TypeOther, value)
