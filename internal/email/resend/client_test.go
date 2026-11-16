@@ -152,6 +152,33 @@ func TestSend_ReturnsProviderID(t *testing.T) {
 	assert.Equal(t, "re_123", res.ProviderMessageID)
 }
 
+func TestSend_DuplicateKey(t *testing.T) {
+	send := func(t *testing.T, name string) (emailtypes.SendResult, error) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(`{"name":"` + name + `","message":"idempotency conflict"}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		p, err := New(Config{APIKey: "re_test"})
+		require.NoError(t, err)
+		p.(*backend).client.BaseURL = mustParse(t, srv.URL+"/")
+		return p.Send(context.Background(), emailtypes.OutboundEmail{IdempotencyKey: "email_1", From: "a@x.io", To: []string{"b@x.io"}, Subject: "s", HTML: "h"})
+	}
+
+	t.Run("already sent counts as sent", func(t *testing.T) {
+		res, err := send(t, "invalid_idempotent_request")
+		require.NoError(t, err)
+		assert.Empty(t, res.ProviderMessageID)
+	})
+	t.Run("earlier send still running is retried", func(t *testing.T) {
+		_, err := send(t, "concurrent_idempotent_requests")
+		require.Error(t, err)
+		assert.True(t, ierr.IsServiceUnavailable(err))
+	})
+}
+
 func mustParse(t *testing.T, raw string) *url.URL {
 	u, err := url.Parse(raw)
 	require.NoError(t, err)

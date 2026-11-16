@@ -1,0 +1,26 @@
+{{define "body"}}Invoice {{.Number}} · {{.Badge}}
+{{.AmountLabel}}: {{.Amount}}
+{{if .When}}{{.When}}
+{{end}}{{if .ViewURL}}
+View invoice: {{.ViewURL}}
+{{else if .PDFAttached}}
+The invoice PDF is attached.
+{{else if .PDFURL}}
+Invoice PDF: {{.PDFURL}}
+{{end}}{{if .BilledTo}}
+Billed to: {{.BilledTo}}{{end}}{{if .InvoiceDate}}
+Invoice date: {{.InvoiceDate}}{{end}}
+
+What you're paying for ({{.ChargeCount}} {{if eq .ChargeCount 1}}charge{{else}}charges{{end}})
+{{range .Groups}}
+{{.Name}}: {{.Total}}
+{{range .Lines}}  {{.Name}}{{if .Detail}} ({{.Detail}}){{end}}: {{.Amount}}
+{{end}}{{end}}{{if .MoreCharges}}
++ {{.MoreCharges}} more on the invoice
+{{end}}
+Subtotal: {{.Subtotal}}
+{{range .Adjustments}}{{.Label}}: {{.Amount}}
+{{end}}Total: {{.Total}}
+{{if .AmountPaid}}Paid: -{{.AmountPaid}}
+{{end}}{{if .AmountDue}}Amount due: {{.AmountDue}}
+{{end}}{{end}}
