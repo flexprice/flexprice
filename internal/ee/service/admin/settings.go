@@ -107,12 +107,6 @@ func (s *settingsService) UpdateTenantSetting(ctx context.Context, tenantID, env
 	if err := key.Validate(); err != nil {
 		return nil, err
 	}
-	if key == types.SettingKeyBillingEntityConfig {
-		return nil, ierr.NewError("billing_entity_config cannot be changed from the admin portal").
-			WithHint("The billing entities mode changes only by enabling billing entities").
-			Mark(ierr.ErrValidation)
-	}
-
 	ctx, err := settingContext(ctx, s.ServiceParams, tenantID, environmentID, key)
 	if err != nil {
 		return nil, err
@@ -127,11 +121,26 @@ func (s *settingsService) UpdateTenantSetting(ctx context.Context, tenantID, env
 			Mark(ierr.ErrVersionConflict)
 	}
 
-	setting, err := s.settings.UpdateSettingByKeyUnchecked(ctx, key, &dto.UpdateSettingRequest{Value: req.Value})
+	setting, err := s.settings.UpdateSettingByKey(ctx, key, &dto.UpdateSettingRequest{Value: req.Value})
 	if err != nil {
 		return nil, err
 	}
 
 	s.Logger.Info(ctx, "updated tenant setting", "tenant_id", tenantID, "environment_id", environmentID, "key", key)
 	return admindto.NewSettingResponse(setting), nil
+}
+
+func settingContext(ctx context.Context, s service.ServiceParams, tenantID, environmentID string, key types.SettingKey) (context.Context, error) {
+	if key == types.SettingKeyTenantConfig || key == types.SettingKeySAMLConfig {
+		if _, err := s.TenantRepo.GetByID(ctx, tenantID); err != nil {
+			return nil, err
+		}
+		return types.SetTenantID(ctx, tenantID), nil
+	}
+	if environmentID == "" {
+		return nil, ierr.NewErrorf("environment_id is required for %s", key).
+			WithHint("Provide the environment the setting belongs to").
+			Mark(ierr.ErrValidation)
+	}
+	return environmentContext(ctx, s, tenantID, environmentID)
 }

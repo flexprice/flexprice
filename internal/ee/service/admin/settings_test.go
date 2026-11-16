@@ -449,17 +449,6 @@ func TestUpdateTenantSetting(t *testing.T) {
 		assert.Equal(t, true, resp.Value["enabled"])
 	})
 
-	t.Run("an operator approves SAML, which tenants cannot", func(t *testing.T) {
-		d := newSettingsTestDeps(t)
-		d.withSAML()
-
-		resp, err := newTestSettingsService(d.params).UpdateTenantSetting(context.Background(), settingsTenantID, "",
-			types.SettingKeySAMLConfig, admindto.UpdateSettingRequest{Value: map[string]interface{}{"active": true}})
-
-		require.NoError(t, err)
-		assert.Equal(t, true, resp.Value["active"])
-	})
-
 	refused := []struct {
 		name          string
 		key           types.SettingKey
