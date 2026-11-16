@@ -36,7 +36,7 @@ var _ = []any{
 // WebhookEventInvoiceCreateDrafted godoc
 // @Summary invoice.create.drafted
 // @Description Fired when a new invoice is created in draft state. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Invoice
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
@@ -46,7 +46,7 @@ func WebhookEventInvoiceCreateDrafted() {}
 // WebhookEventInvoiceUpdateFinalized godoc
 // @Summary invoice.update.finalized
 // @Description Fired when an invoice is finalized and locked for payment. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Invoice
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
@@ -56,7 +56,7 @@ func WebhookEventInvoiceUpdateFinalized() {}
 // WebhookEventInvoiceUpdateVoided godoc
 // @Summary invoice.update.voided
 // @Description Fired when an invoice is voided (e.g. order cancelled or duplicate). `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Invoice
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
@@ -66,7 +66,7 @@ func WebhookEventInvoiceUpdateVoided() {}
 // WebhookEventInvoiceUpdatePayment godoc
 // @Summary invoice.update.payment
 // @Description Fired when an invoice payment status changes. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Invoice
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
@@ -76,7 +76,7 @@ func WebhookEventInvoiceUpdatePayment() {}
 // WebhookEventInvoiceUpdate godoc
 // @Summary invoice.update
 // @Description Fired when an invoice is updated. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Invoice
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
@@ -86,7 +86,7 @@ func WebhookEventInvoiceUpdate() {}
 // WebhookEventInvoicePaymentOverdue godoc
 // @Summary invoice.payment.overdue
 // @Description Fired when an invoice payment is overdue past the due date. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Invoice
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
@@ -96,7 +96,7 @@ func WebhookEventInvoicePaymentOverdue() {}
 // WebhookEventInvoicePaymentFailed godoc
 // @Summary invoice.payment.failed
 // @Description Fired when a payment of an invoice does not succeed. `reason` is `payment_method_unavailable`, `provider_error` or `declined`; `is_auto_charge_attempt` is true when Flexprice charged the saved payment method. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Invoice
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.InvoicePaymentFailedWebhookPayload "Webhook payload"
@@ -106,7 +106,7 @@ func WebhookEventInvoicePaymentFailed() {}
 // WebhookEventInvoiceSyncSuccess godoc
 // @Summary invoice.sync.success
 // @Description Fired once per provider when an invoice is synced to that provider.
-// @Tags Webhook Events
+// @Tags Invoice
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.InvoiceSyncWebhookPayload "Webhook payload"
@@ -116,7 +116,7 @@ func WebhookEventInvoiceSyncSuccess() {}
 // WebhookEventInvoiceSyncFailed godoc
 // @Summary invoice.sync.failed
 // @Description Fired once per provider when an invoice sync fails after its last retry.
-// @Tags Webhook Events
+// @Tags Invoice
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.InvoiceSyncWebhookPayload "Webhook payload"
@@ -126,7 +126,7 @@ func WebhookEventInvoiceSyncFailed() {}
 // WebhookEventInvoiceCommunicationTriggered godoc
 // @Summary invoice.communication.triggered
 // @Description Fired when an invoice communication (e.g. email notification) is triggered. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Invoice
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CommunicationWebhookPayload "Webhook payload"
@@ -136,7 +136,7 @@ func WebhookEventInvoiceCommunicationTriggered() {}
 // WebhookEventSubscriptionCreated godoc
 // @Summary subscription.created
 // @Description Fired when a new subscription is created. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
@@ -146,7 +146,7 @@ func WebhookEventSubscriptionCreated() {}
 // WebhookEventSubscriptionDraftCreated godoc
 // @Summary subscription.draft.created
 // @Description Fired when a new draft subscription is created (not yet activated). Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
@@ -156,7 +156,7 @@ func WebhookEventSubscriptionDraftCreated() {}
 // WebhookEventSubscriptionActivated godoc
 // @Summary subscription.activated
 // @Description Fired when a draft subscription is activated. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
@@ -166,7 +166,7 @@ func WebhookEventSubscriptionActivated() {}
 // WebhookEventSubscriptionUpdated godoc
 // @Summary subscription.updated
 // @Description Fired when a subscription is updated (e.g. quantity, billing anchor, or metadata changes). Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
@@ -176,7 +176,7 @@ func WebhookEventSubscriptionUpdated() {}
 // WebhookEventSubscriptionPaused godoc
 // @Summary subscription.paused
 // @Description Fired when a subscription is paused. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
@@ -186,7 +186,7 @@ func WebhookEventSubscriptionPaused() {}
 // WebhookEventSubscriptionCancelled godoc
 // @Summary subscription.cancelled
 // @Description Fired when a subscription is cancelled (immediately or end-of-period). Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
@@ -196,7 +196,7 @@ func WebhookEventSubscriptionCancelled() {}
 // WebhookEventSubscriptionPlanChanged godoc
 // @Summary subscription.plan_changed
 // @Description Fired when a subscription plan changes in place (id/anchor preserved; not cancelled+created). Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
@@ -206,7 +206,7 @@ func WebhookEventSubscriptionPlanChanged() {}
 // WebhookEventSubscriptionResumed godoc
 // @Summary subscription.resumed
 // @Description Fired when a paused subscription is resumed. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
@@ -216,7 +216,7 @@ func WebhookEventSubscriptionResumed() {}
 // WebhookEventSubscriptionRenewalDue godoc
 // @Summary subscription.renewal.due
 // @Description Fired when a subscription renewal is upcoming (cron-driven). Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
@@ -226,7 +226,7 @@ func WebhookEventSubscriptionRenewalDue() {}
 // WebhookEventSubscriptionSpendThresholdReached godoc
 // @Summary subscription.spend.threshold_reached
 // @Description Fired when a subscription's total metered spend crosses an alert threshold (critical, warning, or info) for the current billing period. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
@@ -236,7 +236,7 @@ func WebhookEventSubscriptionSpendThresholdReached() {}
 // WebhookEventSubscriptionSpendThresholdRecovered godoc
 // @Summary subscription.spend.threshold_recovered
 // @Description Fired when a subscription's total metered spend falls back below all configured alert thresholds for the current billing period. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
@@ -246,7 +246,7 @@ func WebhookEventSubscriptionSpendThresholdRecovered() {}
 // WebhookEventSubscriptionLineItemSpendThresholdReached godoc
 // @Summary subscription.line_item_spend.threshold_reached
 // @Description Fired when a subscription line item's metered spend crosses an alert threshold (critical, warning, or info) for the current billing period. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
@@ -256,7 +256,7 @@ func WebhookEventSubscriptionLineItemSpendThresholdReached() {}
 // WebhookEventSubscriptionLineItemSpendThresholdRecovered godoc
 // @Summary subscription.line_item_spend.threshold_recovered
 // @Description Fired when a subscription line item's metered spend falls back below all configured alert thresholds for the current billing period. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
@@ -266,7 +266,7 @@ func WebhookEventSubscriptionLineItemSpendThresholdRecovered() {}
 // WebhookEventSubscriptionGroupSpendThresholdReached godoc
 // @Summary subscription.group_spend.threshold_reached
 // @Description Fired when a feature group's total metered spend on a subscription crosses an alert threshold (critical, warning, or info) for the current billing period. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
@@ -276,7 +276,7 @@ func WebhookEventSubscriptionGroupSpendThresholdReached() {}
 // WebhookEventSubscriptionGroupSpendThresholdRecovered godoc
 // @Summary subscription.group_spend.threshold_recovered
 // @Description Fired when a feature group's total metered spend on a subscription falls back below all configured alert thresholds for the current billing period. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
@@ -286,7 +286,7 @@ func WebhookEventSubscriptionGroupSpendThresholdRecovered() {}
 // WebhookEventSubscriptionPhaseCreated godoc
 // @Summary subscription.phase.created
 // @Description Fired when a new subscription phase is created. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionPhaseWebhookPayload "Webhook payload"
@@ -296,7 +296,7 @@ func WebhookEventSubscriptionPhaseCreated() {}
 // WebhookEventSubscriptionPhaseUpdated godoc
 // @Summary subscription.phase.updated
 // @Description Fired when a subscription phase is updated. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionPhaseWebhookPayload "Webhook payload"
@@ -306,7 +306,7 @@ func WebhookEventSubscriptionPhaseUpdated() {}
 // WebhookEventSubscriptionPhaseDeleted godoc
 // @Summary subscription.phase.deleted
 // @Description Fired when a subscription phase is deleted. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Subscription
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.SubscriptionPhaseWebhookPayload "Webhook payload"
@@ -316,7 +316,7 @@ func WebhookEventSubscriptionPhaseDeleted() {}
 // WebhookEventCustomerCreated godoc
 // @Summary customer.created
 // @Description Fired when a new customer is created. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Customer
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CustomerWebhookPayload "Webhook payload"
@@ -326,7 +326,7 @@ func WebhookEventCustomerCreated() {}
 // WebhookEventCustomerUpdated godoc
 // @Summary customer.updated
 // @Description Fired when a customer is updated. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Customer
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CustomerWebhookPayload "Webhook payload"
@@ -336,7 +336,7 @@ func WebhookEventCustomerUpdated() {}
 // WebhookEventCustomerDeleted godoc
 // @Summary customer.deleted
 // @Description Fired when a customer is deleted. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Customer
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CustomerWebhookPayload "Webhook payload"
@@ -346,7 +346,7 @@ func WebhookEventCustomerDeleted() {}
 // WebhookEventPaymentCreated godoc
 // @Summary payment.created
 // @Description Fired when a new payment is created. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Payment and refund
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.PaymentWebhookPayload "Webhook payload"
@@ -356,7 +356,7 @@ func WebhookEventPaymentCreated() {}
 // WebhookEventPaymentUpdated godoc
 // @Summary payment.updated
 // @Description Fired when a payment is updated. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Payment and refund
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.PaymentWebhookPayload "Webhook payload"
@@ -366,7 +366,7 @@ func WebhookEventPaymentUpdated() {}
 // WebhookEventPaymentSuccess godoc
 // @Summary payment.success
 // @Description Fired when a payment succeeds. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Payment and refund
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.PaymentWebhookPayload "Webhook payload"
@@ -376,7 +376,7 @@ func WebhookEventPaymentSuccess() {}
 // WebhookEventPaymentFailed godoc
 // @Summary payment.failed
 // @Description Fired when a payment fails. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Payment and refund
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.PaymentWebhookPayload "Webhook payload"
@@ -386,7 +386,7 @@ func WebhookEventPaymentFailed() {}
 // WebhookEventPaymentAttemptFailed godoc
 // @Summary payment.attempt.failed
 // @Description Fired when one charge attempt is declined and the payment stays open for retry. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Payment and refund
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.PaymentAttemptWebhookPayload "Webhook payload"
@@ -396,7 +396,7 @@ func WebhookEventPaymentAttemptFailed() {}
 // WebhookEventPaymentPending godoc
 // @Summary payment.pending
 // @Description Fired when a payment is pending processing. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Payment and refund
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.PaymentWebhookPayload "Webhook payload"
@@ -406,7 +406,7 @@ func WebhookEventPaymentPending() {}
 // WebhookEventFeatureCreated godoc
 // @Summary feature.created
 // @Description Fired when a new feature is created. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Feature and entitlement
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.FeatureWebhookPayload "Webhook payload"
@@ -416,7 +416,7 @@ func WebhookEventFeatureCreated() {}
 // WebhookEventFeatureUpdated godoc
 // @Summary feature.updated
 // @Description Fired when a feature is updated. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Feature and entitlement
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.FeatureWebhookPayload "Webhook payload"
@@ -426,7 +426,7 @@ func WebhookEventFeatureUpdated() {}
 // WebhookEventFeatureDeleted godoc
 // @Summary feature.deleted
 // @Description Fired when a feature is deleted. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Feature and entitlement
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.FeatureWebhookPayload "Webhook payload"
@@ -436,7 +436,7 @@ func WebhookEventFeatureDeleted() {}
 // WebhookEventFeatureWalletBalanceAlert godoc
 // @Summary feature.wallet_balance.alert
 // @Description Fired when a feature's associated wallet balance crosses an alert threshold. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Feature and entitlement
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.AlertWebhookPayload "Webhook payload"
@@ -446,7 +446,7 @@ func WebhookEventFeatureWalletBalanceAlert() {}
 // WebhookEventEntitlementCreated godoc
 // @Summary entitlement.created
 // @Description Fired when a new entitlement is created. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Feature and entitlement
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.EntitlementWebhookPayload "Webhook payload"
@@ -456,7 +456,7 @@ func WebhookEventEntitlementCreated() {}
 // WebhookEventEntitlementUpdated godoc
 // @Summary entitlement.updated
 // @Description Fired when an entitlement is updated. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Feature and entitlement
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.EntitlementWebhookPayload "Webhook payload"
@@ -466,7 +466,7 @@ func WebhookEventEntitlementUpdated() {}
 // WebhookEventEntitlementDeleted godoc
 // @Summary entitlement.deleted
 // @Description Fired when an entitlement is deleted. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Feature and entitlement
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.EntitlementWebhookPayload "Webhook payload"
@@ -476,7 +476,7 @@ func WebhookEventEntitlementDeleted() {}
 // WebhookEventCommitmentCreated godoc
 // @Summary commitment.created
 // @Description Fired when a commitment is created on a subscription. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Commitment and billing terms
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CommitmentWebhookPayload "Webhook payload"
@@ -486,7 +486,7 @@ func WebhookEventCommitmentCreated() {}
 // WebhookEventCommitmentUpdated godoc
 // @Summary commitment.updated
 // @Description Fired when a commitment's descriptive fields are updated. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Commitment and billing terms
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CommitmentWebhookPayload "Webhook payload"
@@ -496,7 +496,7 @@ func WebhookEventCommitmentUpdated() {}
 // WebhookEventCommitmentTerminated godoc
 // @Summary commitment.terminated
 // @Description Fired when a commitment is terminated. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Commitment and billing terms
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CommitmentWebhookPayload "Webhook payload"
@@ -506,7 +506,7 @@ func WebhookEventCommitmentTerminated() {}
 // WebhookEventBillingTermsCreated godoc
 // @Summary billing_terms.created
 // @Description Fired when billing terms are saved against an entity (like a commitment). Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Commitment and billing terms
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.BillingTermsWebhookPayload "Webhook payload"
@@ -516,7 +516,7 @@ func WebhookEventBillingTermsCreated() {}
 // WebhookEventBillingTermsUpdated godoc
 // @Summary billing_terms.updated
 // @Description Fired when an entity's (like a commitment's) billing terms are replaced. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Commitment and billing terms
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.BillingTermsWebhookPayload "Webhook payload"
@@ -526,7 +526,7 @@ func WebhookEventBillingTermsUpdated() {}
 // WebhookEventBillingInstalmentCreated godoc
 // @Summary billing_instalment.created
 // @Description Fired when a billing instalment is scheduled for an entity (like a commitment). Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Commitment and billing terms
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.BillingInstalmentWebhookPayload "Webhook payload"
@@ -536,7 +536,7 @@ func WebhookEventBillingInstalmentCreated() {}
 // WebhookEventBillingInstalmentUpdated godoc
 // @Summary billing_instalment.updated
 // @Description Fired when a trigger moves a billing instalment's bill date, or a voided invoice puts it back on schedule. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Commitment and billing terms
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.BillingInstalmentWebhookPayload "Webhook payload"
@@ -546,7 +546,7 @@ func WebhookEventBillingInstalmentUpdated() {}
 // WebhookEventBillingInstalmentCancelled godoc
 // @Summary billing_instalment.cancelled
 // @Description Fired when a billing instalment is cancelled. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Commitment and billing terms
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.BillingInstalmentWebhookPayload "Webhook payload"
@@ -556,7 +556,7 @@ func WebhookEventBillingInstalmentCancelled() {}
 // WebhookEventBillingInstalmentInvoiced godoc
 // @Summary billing_instalment.invoiced
 // @Description Fired when the invoice carrying a billing instalment is finalized. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Commitment and billing terms
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.BillingInstalmentWebhookPayload "Webhook payload"
@@ -566,7 +566,7 @@ func WebhookEventBillingInstalmentInvoiced() {}
 // WebhookEventWalletCreated godoc
 // @Summary wallet.created
 // @Description Fired when a new wallet is created. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Wallet
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
@@ -576,7 +576,7 @@ func WebhookEventWalletCreated() {}
 // WebhookEventWalletUpdated godoc
 // @Summary wallet.updated
 // @Description Fired when a wallet is updated. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Wallet
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
@@ -586,7 +586,7 @@ func WebhookEventWalletUpdated() {}
 // WebhookEventWalletTerminated godoc
 // @Summary wallet.terminated
 // @Description Fired when a wallet is terminated. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Wallet
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
@@ -596,7 +596,7 @@ func WebhookEventWalletTerminated() {}
 // WebhookEventWalletTransactionCreated godoc
 // @Summary wallet.transaction.created
 // @Description Fired when a new wallet transaction is created (top-up, deduction, etc.). Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Wallet
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.TransactionWebhookPayload "Webhook payload"
@@ -606,7 +606,7 @@ func WebhookEventWalletTransactionCreated() {}
 // WebhookEventWalletTransactionUpdated godoc
 // @Summary wallet.transaction.updated
 // @Description Fired when an existing wallet transaction is updated (e.g. pending to completed). Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Wallet
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.TransactionUpdatedWebhookPayload "Webhook payload"
@@ -616,7 +616,7 @@ func WebhookEventWalletTransactionUpdated() {}
 // WebhookEventWalletCreditBalanceDropped godoc
 // @Summary wallet.credit_balance.dropped
 // @Description Fired when a wallet's credit balance drops below an alert threshold. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Wallet
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
@@ -626,7 +626,7 @@ func WebhookEventWalletCreditBalanceDropped() {}
 // WebhookEventWalletCreditBalanceRecovered godoc
 // @Summary wallet.credit_balance.recovered
 // @Description Fired when a wallet's credit balance recovers above an alert threshold. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Wallet
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
@@ -636,7 +636,7 @@ func WebhookEventWalletCreditBalanceRecovered() {}
 // WebhookEventWalletOngoingBalanceDropped godoc
 // @Summary wallet.ongoing_balance.dropped
 // @Description Fired when a wallet's ongoing balance drops below an alert threshold. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Wallet
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
@@ -646,7 +646,7 @@ func WebhookEventWalletOngoingBalanceDropped() {}
 // WebhookEventWalletOngoingBalanceRecovered godoc
 // @Summary wallet.ongoing_balance.recovered
 // @Description Fired when a wallet's ongoing balance recovers above an alert threshold. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Wallet
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
@@ -656,7 +656,7 @@ func WebhookEventWalletOngoingBalanceRecovered() {}
 // WebhookEventWalletOngoingBalanceUpdated godoc
 // @Summary wallet.ongoing_balance.updated
 // @Description Fired when a wallet's ongoing (real-time) balance changes. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Wallet
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
@@ -666,7 +666,7 @@ func WebhookEventWalletOngoingBalanceUpdated() {}
 // WebhookEventCreditNoteCreated godoc
 // @Summary credit_note.created
 // @Description Fired when a new credit note is created. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Credit note
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CreditNoteWebhookPayload "Webhook payload"
@@ -676,7 +676,7 @@ func WebhookEventCreditNoteCreated() {}
 // WebhookEventCreditNoteUpdated godoc
 // @Summary credit_note.updated
 // @Description Fired when a credit note is updated. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Credit note
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CreditNoteWebhookPayload "Webhook payload"
@@ -686,7 +686,7 @@ func WebhookEventCreditNoteUpdated() {}
 // WebhookEventRefundCreated godoc
 // @Summary refund.created
 // @Description Fired when a refund is planned against an invoice, before the money moves. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Payment and refund
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.RefundWebhookPayload "Webhook payload"
@@ -696,7 +696,7 @@ func WebhookEventRefundCreated() {}
 // WebhookEventRefundSucceeded godoc
 // @Summary refund.succeeded
 // @Description Fired when a refund settles, to the original payment gateway or to a wallet. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Payment and refund
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.RefundWebhookPayload "Webhook payload"
@@ -706,7 +706,7 @@ func WebhookEventRefundSucceeded() {}
 // WebhookEventRefundFailed godoc
 // @Summary refund.failed
 // @Description Fired when a refund fails. A gateway refund that fails is retried into the customer's wallet. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Payment and refund
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.RefundWebhookPayload "Webhook payload"
@@ -716,7 +716,7 @@ func WebhookEventRefundFailed() {}
 // WebhookEventCheckoutSessionInitiated godoc
 // @Summary checkout.session.initiated
 // @Description Fired when a Checkout Session is created and a payment URL is returned to the customer. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Checkout
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
@@ -726,7 +726,7 @@ func WebhookEventCheckoutSessionInitiated() {}
 // WebhookEventCheckoutSessionCompleted godoc
 // @Summary checkout.session.completed
 // @Description Fired when payment is confirmed; the subscription is now active and the invoice is finalized. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Checkout
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
@@ -736,7 +736,7 @@ func WebhookEventCheckoutSessionCompleted() {}
 // WebhookEventCheckoutSessionFailed godoc
 // @Summary checkout.session.failed
 // @Description Fired when payment fails or the provider cancels the payment link. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Checkout
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
@@ -746,7 +746,7 @@ func WebhookEventCheckoutSessionFailed() {}
 // WebhookEventCheckoutSessionExpired godoc
 // @Summary checkout.session.expired
 // @Description Fired when a Checkout Session times out without payment; draft records are cleaned up. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Checkout
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
@@ -756,7 +756,7 @@ func WebhookEventCheckoutSessionExpired() {}
 // WebhookEventEventRejected godoc
 // @Summary event.rejected
 // @Description Fired when an ingested usage event produces no meter usage — either no meter is registered for its event name, or meters exist for the name but the event matched none of their filters. Throttled to at most once per configured window per event name. Doc-only for parsing.
-// @Tags Webhook Events
+// @Tags Usage ingestion
 // @Accept json
 // @Produce json
 // @Success 200 {object} webhookDto.RejectedEventWebhookPayload "Webhook payload"

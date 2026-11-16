@@ -15485,7 +15485,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.cancelled",
                 "responses": {
@@ -15508,7 +15508,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.created",
                 "responses": {
@@ -15531,7 +15531,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.invoiced",
                 "responses": {
@@ -15554,7 +15554,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.updated",
                 "responses": {
@@ -15577,7 +15577,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_terms.created",
                 "responses": {
@@ -15600,7 +15600,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_terms.updated",
                 "responses": {
@@ -15623,7 +15623,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.completed",
                 "responses": {
@@ -15646,7 +15646,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.expired",
                 "responses": {
@@ -15669,7 +15669,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.failed",
                 "responses": {
@@ -15692,7 +15692,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.initiated",
                 "responses": {
@@ -15715,7 +15715,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.created",
                 "responses": {
@@ -15738,7 +15738,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.terminated",
                 "responses": {
@@ -15761,7 +15761,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.updated",
                 "responses": {
@@ -15784,7 +15784,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Credit note"
                 ],
                 "summary": "credit_note.created",
                 "responses": {
@@ -15807,7 +15807,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Credit note"
                 ],
                 "summary": "credit_note.updated",
                 "responses": {
@@ -15830,7 +15830,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.created",
                 "responses": {
@@ -15853,7 +15853,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.deleted",
                 "responses": {
@@ -15876,7 +15876,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.updated",
                 "responses": {
@@ -15899,7 +15899,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.created",
                 "responses": {
@@ -15922,7 +15922,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.deleted",
                 "responses": {
@@ -15945,7 +15945,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.updated",
                 "responses": {
@@ -15968,7 +15968,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Usage ingestion"
                 ],
                 "summary": "event.rejected",
                 "responses": {
@@ -15991,7 +15991,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.created",
                 "responses": {
@@ -16014,7 +16014,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.deleted",
                 "responses": {
@@ -16037,7 +16037,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.updated",
                 "responses": {
@@ -16060,7 +16060,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.wallet_balance.alert",
                 "responses": {
@@ -16083,7 +16083,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.communication.triggered",
                 "responses": {
@@ -16106,7 +16106,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.create.drafted",
                 "responses": {
@@ -16129,7 +16129,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.payment.failed",
                 "responses": {
@@ -16152,7 +16152,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.payment.overdue",
                 "responses": {
@@ -16175,7 +16175,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.sync.failed",
                 "responses": {
@@ -16198,7 +16198,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.sync.success",
                 "responses": {
@@ -16221,7 +16221,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update",
                 "responses": {
@@ -16244,7 +16244,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.finalized",
                 "responses": {
@@ -16267,7 +16267,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.payment",
                 "responses": {
@@ -16290,7 +16290,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.voided",
                 "responses": {
@@ -16313,7 +16313,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.attempt.failed",
                 "responses": {
@@ -16336,7 +16336,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.created",
                 "responses": {
@@ -16359,7 +16359,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.failed",
                 "responses": {
@@ -16382,7 +16382,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.pending",
                 "responses": {
@@ -16405,7 +16405,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.success",
                 "responses": {
@@ -16428,7 +16428,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.updated",
                 "responses": {
@@ -16451,7 +16451,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.created",
                 "responses": {
@@ -16474,7 +16474,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.failed",
                 "responses": {
@@ -16497,7 +16497,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.succeeded",
                 "responses": {
@@ -16520,7 +16520,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.activated",
                 "responses": {
@@ -16543,7 +16543,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.cancelled",
                 "responses": {
@@ -16566,7 +16566,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.created",
                 "responses": {
@@ -16589,7 +16589,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.draft.created",
                 "responses": {
@@ -16612,7 +16612,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.group_spend.threshold_reached",
                 "responses": {
@@ -16635,7 +16635,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.group_spend.threshold_recovered",
                 "responses": {
@@ -16658,7 +16658,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.line_item_spend.threshold_reached",
                 "responses": {
@@ -16681,7 +16681,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.line_item_spend.threshold_recovered",
                 "responses": {
@@ -16704,7 +16704,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.paused",
                 "responses": {
@@ -16727,7 +16727,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.created",
                 "responses": {
@@ -16750,7 +16750,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.deleted",
                 "responses": {
@@ -16773,7 +16773,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.updated",
                 "responses": {
@@ -16796,7 +16796,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.plan_changed",
                 "responses": {
@@ -16819,7 +16819,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.renewal.due",
                 "responses": {
@@ -16842,7 +16842,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.resumed",
                 "responses": {
@@ -16865,7 +16865,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.spend.threshold_reached",
                 "responses": {
@@ -16888,7 +16888,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.spend.threshold_recovered",
                 "responses": {
@@ -16911,7 +16911,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.updated",
                 "responses": {
@@ -16934,7 +16934,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.created",
                 "responses": {
@@ -16957,7 +16957,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.credit_balance.dropped",
                 "responses": {
@@ -16980,7 +16980,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.credit_balance.recovered",
                 "responses": {
@@ -17003,7 +17003,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.dropped",
                 "responses": {
@@ -17026,7 +17026,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.recovered",
                 "responses": {
@@ -17049,7 +17049,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.updated",
                 "responses": {
@@ -17072,7 +17072,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.terminated",
                 "responses": {
@@ -17095,7 +17095,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.transaction.created",
                 "responses": {
@@ -17118,7 +17118,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.transaction.updated",
                 "responses": {
@@ -17141,7 +17141,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.updated",
                 "responses": {
@@ -28774,7 +28774,7 @@ const docTemplate = `{
                     }
                 },
                 "plans": {
-                    "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live. The first plan is the default.",
+                    "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.\nThe first plan is the default.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/SelfBillingPlanResponse"

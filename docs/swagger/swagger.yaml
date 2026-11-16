@@ -8264,11 +8264,10 @@ definitions:
         items:
           $ref: '#/definitions/SelfBillingInvoice'
         type: array
-      plan:
-        $ref: '#/definitions/SelfBillingPlanResponse'
       plans:
-        description: 'Plans are the plans a tenant can buy at checkout: during a self-serve
-          trial and once no subscription is live.'
+        description: |-
+          Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.
+          The first plan is the default.
         items:
           $ref: '#/definitions/SelfBillingPlanResponse'
         type: array
@@ -28057,7 +28056,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.cancelled
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_instalment.created:
     post:
       consumes:
@@ -28073,7 +28072,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.created
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_instalment.invoiced:
     post:
       consumes:
@@ -28089,7 +28088,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.invoiced
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_instalment.updated:
     post:
       consumes:
@@ -28105,7 +28104,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.updated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_terms.created:
     post:
       consumes:
@@ -28121,7 +28120,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingTermsWebhookPayload'
       summary: billing_terms.created
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_terms.updated:
     post:
       consumes:
@@ -28137,7 +28136,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingTermsWebhookPayload'
       summary: billing_terms.updated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/checkout.session.completed:
     post:
       consumes:
@@ -28153,7 +28152,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.completed
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/checkout.session.expired:
     post:
       consumes:
@@ -28169,7 +28168,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.expired
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/checkout.session.failed:
     post:
       consumes:
@@ -28185,7 +28184,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.failed
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/checkout.session.initiated:
     post:
       consumes:
@@ -28201,7 +28200,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.initiated
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/commitment.created:
     post:
       consumes:
@@ -28217,7 +28216,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommitmentWebhookPayload'
       summary: commitment.created
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/commitment.terminated:
     post:
       consumes:
@@ -28232,7 +28231,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommitmentWebhookPayload'
       summary: commitment.terminated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/commitment.updated:
     post:
       consumes:
@@ -28248,7 +28247,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommitmentWebhookPayload'
       summary: commitment.updated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/credit_note.created:
     post:
       consumes:
@@ -28263,7 +28262,7 @@ paths:
             $ref: '#/definitions/webhookDto.CreditNoteWebhookPayload'
       summary: credit_note.created
       tags:
-      - Webhook Events
+      - Credit note
   /webhook-events/credit_note.updated:
     post:
       consumes:
@@ -28278,7 +28277,7 @@ paths:
             $ref: '#/definitions/webhookDto.CreditNoteWebhookPayload'
       summary: credit_note.updated
       tags:
-      - Webhook Events
+      - Credit note
   /webhook-events/customer.created:
     post:
       consumes:
@@ -28293,7 +28292,7 @@ paths:
             $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
       summary: customer.created
       tags:
-      - Webhook Events
+      - Customer
   /webhook-events/customer.deleted:
     post:
       consumes:
@@ -28308,7 +28307,7 @@ paths:
             $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
       summary: customer.deleted
       tags:
-      - Webhook Events
+      - Customer
   /webhook-events/customer.updated:
     post:
       consumes:
@@ -28323,7 +28322,7 @@ paths:
             $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
       summary: customer.updated
       tags:
-      - Webhook Events
+      - Customer
   /webhook-events/entitlement.created:
     post:
       consumes:
@@ -28338,7 +28337,7 @@ paths:
             $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
       summary: entitlement.created
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/entitlement.deleted:
     post:
       consumes:
@@ -28353,7 +28352,7 @@ paths:
             $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
       summary: entitlement.deleted
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/entitlement.updated:
     post:
       consumes:
@@ -28368,7 +28367,7 @@ paths:
             $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
       summary: entitlement.updated
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/event.rejected:
     post:
       consumes:
@@ -28386,7 +28385,7 @@ paths:
             $ref: '#/definitions/webhookDto.RejectedEventWebhookPayload'
       summary: event.rejected
       tags:
-      - Webhook Events
+      - Usage ingestion
   /webhook-events/feature.created:
     post:
       consumes:
@@ -28401,7 +28400,7 @@ paths:
             $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
       summary: feature.created
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/feature.deleted:
     post:
       consumes:
@@ -28416,7 +28415,7 @@ paths:
             $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
       summary: feature.deleted
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/feature.updated:
     post:
       consumes:
@@ -28431,7 +28430,7 @@ paths:
             $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
       summary: feature.updated
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/feature.wallet_balance.alert:
     post:
       consumes:
@@ -28447,7 +28446,7 @@ paths:
             $ref: '#/definitions/webhookDto.AlertWebhookPayload'
       summary: feature.wallet_balance.alert
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/invoice.communication.triggered:
     post:
       consumes:
@@ -28466,7 +28465,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommunicationWebhookPayload'
       summary: invoice.communication.triggered
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.create.drafted:
     post:
       consumes:
@@ -28485,7 +28484,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.create.drafted
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.payment.failed:
     post:
       consumes:
@@ -28502,7 +28501,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoicePaymentFailedWebhookPayload'
       summary: invoice.payment.failed
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.payment.overdue:
     post:
       consumes:
@@ -28521,7 +28520,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.payment.overdue
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.sync.failed:
     post:
       consumes:
@@ -28537,7 +28536,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceSyncWebhookPayload'
       summary: invoice.sync.failed
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.sync.success:
     post:
       consumes:
@@ -28552,7 +28551,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceSyncWebhookPayload'
       summary: invoice.sync.success
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update:
     post:
       consumes:
@@ -28571,7 +28570,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update.finalized:
     post:
       consumes:
@@ -28590,7 +28589,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.finalized
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update.payment:
     post:
       consumes:
@@ -28609,7 +28608,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.payment
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update.voided:
     post:
       consumes:
@@ -28628,7 +28627,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.voided
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/payment.attempt.failed:
     post:
       consumes:
@@ -28644,7 +28643,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentAttemptWebhookPayload'
       summary: payment.attempt.failed
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.created:
     post:
       consumes:
@@ -28659,7 +28658,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.created
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.failed:
     post:
       consumes:
@@ -28674,7 +28673,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.failed
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.pending:
     post:
       consumes:
@@ -28689,7 +28688,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.pending
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.success:
     post:
       consumes:
@@ -28704,7 +28703,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.success
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.updated:
     post:
       consumes:
@@ -28719,7 +28718,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.updated
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/refund.created:
     post:
       consumes:
@@ -28735,7 +28734,7 @@ paths:
             $ref: '#/definitions/webhookDto.RefundWebhookPayload'
       summary: refund.created
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/refund.failed:
     post:
       consumes:
@@ -28751,7 +28750,7 @@ paths:
             $ref: '#/definitions/webhookDto.RefundWebhookPayload'
       summary: refund.failed
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/refund.succeeded:
     post:
       consumes:
@@ -28767,7 +28766,7 @@ paths:
             $ref: '#/definitions/webhookDto.RefundWebhookPayload'
       summary: refund.succeeded
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/subscription.activated:
     post:
       consumes:
@@ -28782,7 +28781,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.activated
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.cancelled:
     post:
       consumes:
@@ -28798,7 +28797,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.cancelled
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.created:
     post:
       consumes:
@@ -28813,7 +28812,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.created
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.draft.created:
     post:
       consumes:
@@ -28829,7 +28828,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.draft.created
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.group_spend.threshold_reached:
     post:
       consumes:
@@ -28846,7 +28845,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.group_spend.threshold_reached
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.group_spend.threshold_recovered:
     post:
       consumes:
@@ -28863,7 +28862,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.group_spend.threshold_recovered
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.line_item_spend.threshold_reached:
     post:
       consumes:
@@ -28880,7 +28879,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.line_item_spend.threshold_reached
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.line_item_spend.threshold_recovered:
     post:
       consumes:
@@ -28897,7 +28896,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.line_item_spend.threshold_recovered
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.paused:
     post:
       consumes:
@@ -28912,7 +28911,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.paused
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.phase.created:
     post:
       consumes:
@@ -28927,7 +28926,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
       summary: subscription.phase.created
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.phase.deleted:
     post:
       consumes:
@@ -28942,7 +28941,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
       summary: subscription.phase.deleted
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.phase.updated:
     post:
       consumes:
@@ -28957,7 +28956,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
       summary: subscription.phase.updated
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.plan_changed:
     post:
       consumes:
@@ -28973,7 +28972,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.plan_changed
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.renewal.due:
     post:
       consumes:
@@ -28989,7 +28988,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.renewal.due
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.resumed:
     post:
       consumes:
@@ -29004,7 +29003,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.resumed
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.spend.threshold_reached:
     post:
       consumes:
@@ -29021,7 +29020,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.spend.threshold_reached
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.spend.threshold_recovered:
     post:
       consumes:
@@ -29038,7 +29037,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.spend.threshold_recovered
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.updated:
     post:
       consumes:
@@ -29054,7 +29053,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.updated
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/wallet.created:
     post:
       consumes:
@@ -29069,7 +29068,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.created
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.credit_balance.dropped:
     post:
       consumes:
@@ -29085,7 +29084,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.credit_balance.dropped
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.credit_balance.recovered:
     post:
       consumes:
@@ -29101,7 +29100,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.credit_balance.recovered
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.ongoing_balance.dropped:
     post:
       consumes:
@@ -29117,7 +29116,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.ongoing_balance.dropped
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.ongoing_balance.recovered:
     post:
       consumes:
@@ -29133,7 +29132,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.ongoing_balance.recovered
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.ongoing_balance.updated:
     post:
       consumes:
@@ -29149,7 +29148,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.ongoing_balance.updated
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.terminated:
     post:
       consumes:
@@ -29164,7 +29163,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.terminated
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.transaction.created:
     post:
       consumes:
@@ -29180,7 +29179,7 @@ paths:
             $ref: '#/definitions/webhookDto.TransactionWebhookPayload'
       summary: wallet.transaction.created
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.transaction.updated:
     post:
       consumes:
@@ -29196,7 +29195,7 @@ paths:
             $ref: '#/definitions/webhookDto.TransactionUpdatedWebhookPayload'
       summary: wallet.transaction.updated
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.updated:
     post:
       consumes:
@@ -29211,7 +29210,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.updated
       tags:
-      - Webhook Events
+      - Wallet
   /workflows/search:
     post:
       consumes:

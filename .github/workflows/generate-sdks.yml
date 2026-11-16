@@ -13,7 +13,7 @@
 # (default flexprice/flexprice-docs) and DOCS_BRANCH (default main). refresh-docs fails when the token is unset.
 # Spec copy: variable OPENAPI_SPEC_S3, JSON {"role", "region", "bucket", "distribution", "url"}; skipped while unset.
 # When set, secret AWS_ACCOUNT_ID is required to construct the role ARN. The role needs
-# s3:PutObject on <bucket>/openapi.json, and cloudfront:CreateInvalidation and cloudfront:GetInvalidation on the distribution.
+# s3:PutObject on <bucket>/openapi.json and <bucket>/webhooks.json, and cloudfront:CreateInvalidation and cloudfront:GetInvalidation on the distribution.
 # url is where the distribution is served, e.g. https://swagger.flexprice.io.
 # Published packages: pip install flexprice | npm i @flexprice/sdk | npm i @flexprice/mcp-server
 # Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk, flexprice/javascript-sdk, flexprice/python-sdk, flexprice/mcp-server.
@@ -231,7 +231,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: openapi-spec
-          path: docs/swagger/swagger-3-0.json
+          path: |
+            docs/swagger/swagger-3-0.json
+            docs/swagger/webhooks.json
 
   # ---------------------------------------------------------------------------
   # Docs: Mintlify re-reads the hosted spec only on deploy, so wait for Speakeasy to
@@ -305,8 +307,10 @@ jobs:
           DISTRIBUTION=$(jq -er .distribution <<<"$OPENAPI_SPEC_S3")
           aws s3 cp "$RUNNER_TEMP/openapi.json" "s3://$BUCKET/openapi.json" --only-show-errors \
             --content-type application/json --cache-control "public, max-age=300"
+          aws s3 cp release-spec/webhooks.json "s3://$BUCKET/webhooks.json" --only-show-errors \
+            --content-type application/json --cache-control "public, max-age=300"
           INVALIDATION=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" \
-            --paths /openapi.json --query Invalidation.Id --output text)
+            --paths /openapi.json /webhooks.json --query Invalidation.Id --output text)
           aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION" --id "$INVALIDATION"
 
       # Two assertions: the CDN serves the bytes just uploaded (no truncation, no stale
