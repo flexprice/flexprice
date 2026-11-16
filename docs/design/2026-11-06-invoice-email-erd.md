@@ -36,13 +36,13 @@ The send path must stay generic: custom domains (Phase 2), receipts, payment fai
 | What | Where | Use |
 |---|---|---|
 | `invoice.update.finalized` event | `internal/types/webhook.go`, `internal/ee/service/revenue_hooks.go` | Auto trigger |
-| Integration-events dispatch for finalized invoices | `internal/integration/events/dispatch.go` | Auto trigger joins its list |
+| `webhook.topic` consumers (webhooks, integration events) | `internal/webhook/`, `internal/integration/events/` | Auto trigger adds a third consumer group |
 | `GetInvoicePDFUrl` | `internal/ee/service/invoice.go` | PDF source order |
 | Resend client, `renderTemplate()`, `EmailConfig` (unused today) | `internal/email/`, `internal/config/` | Reused for the adapter and config |
 
 ## Architecture
 
-Auto and manual sends share one service, one dispatcher and one adapter. No new runtime component: API, consumer and Temporal worker only.
+Auto and manual sends share one service, one dispatcher and one adapter. No new runtime component: API, consumer and Temporal worker only. The auto trigger is its own consumer group (`email_events.consumer_group`) on `webhook.topic`, so email retries and integration-sync retries never re-run each other.
 
 ```mermaid
 flowchart TD
@@ -201,7 +201,7 @@ type Provider interface {
 - Service `internal/ee/service/email_notification.go`: `SendInvoiceEmail` loads invoice, customer, tenant and setting and inserts `queued`; nothing else happens in the request.
 - `EmailDispatchWorkflow` (Temporal schedule, every minute, one run at a time) lists environments with queued emails, takes one email from each in turn (manual sends first, then oldest) and sends up to 400 emails per run, one at a time. A composer per `template_key` builds each email's content.
 - An email that cannot be sent now stays `queued` and nothing is written: a 429 ends the run, 20 provider errors in a row end it, a PDF that cannot be produced is retried. A 409 for a send Resend is still processing stays `queued`; any other 409 (Resend already has the idempotency key) counts as sent; any other 4xx marks `failed`, and so does an email still queued after 24 hours. An email queued before the environment turned emails off is marked `skipped`.
-- Auto trigger in the integration-events dispatch list; the one-auto-email index stops redelivery from double-sending.
+- Auto trigger is the `email-events-consumer` group on `webhook.topic`, handling `invoice.update.finalized` only; the one-auto-email index stops redelivery from double-sending.
 - Everything ships behind `email.enabled` plus a set `email.provider`; with no provider, customer emails stay off.
 
 ## Testing
