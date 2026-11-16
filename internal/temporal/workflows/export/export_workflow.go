@@ -1,7 +1,10 @@
 package export
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/email"
@@ -210,7 +213,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 			EnvID:    taskDetails.EnvID,
 			UserID:   input.UserID,
 			Status:   types.TaskStatusFailed,
-			Error:    err.Error(),
+			Error:    runFailureMessage(err),
 		}
 		_ = workflow.ExecuteActivity(ctx, taskActivity.UpdateTaskStatus, failInput).Get(ctx, nil)
 
@@ -267,8 +270,6 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		Success:     true,
 	}, nil
 }
-
-const maxDeliveryDetailLen = 200
 
 // Never fails the run.
 func deliverRun(ctx workflow.Context, details *export.ScheduledTaskDetails, taskID string, status types.TaskStatus, recordCount int, runErr error) {
@@ -354,10 +355,26 @@ func fileDelivery(ctx workflow.Context, details *export.ScheduledTaskDetails, ru
 	}
 	if runErr != nil {
 		d.Status = types.ExportDeliveryStatusFailed
-		d.Detail = runErr.Error()
-		if r := []rune(d.Detail); len(r) > maxDeliveryDetailLen {
-			d.Detail = string(r[:maxDeliveryDetailLen])
-		}
+		d.Detail = runFailureMessage(runErr)
 	}
 	return d
+}
+
+const (
+	runTimedOutMessage = "The export took too long and was stopped"
+	runFailedMessage   = "The export failed"
+)
+
+// User-facing; full error stays in logs.
+func runFailureMessage(err error) string {
+	if temporal.IsTimeoutError(err) || errors.Is(err, context.DeadlineExceeded) {
+		return runTimedOutMessage
+	}
+	msg := strings.ToLower(err.Error())
+	for _, s := range []string{"deadline exceeded", "timeout", "timed out"} {
+		if strings.Contains(msg, s) {
+			return runTimedOutMessage
+		}
+	}
+	return runFailedMessage
 }

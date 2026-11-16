@@ -3,6 +3,7 @@ package export
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -10,7 +11,9 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/workflow"
 )
@@ -81,6 +84,7 @@ type deliveryRun struct {
 	env      *testsuite.TestWorkflowEnvironment
 	emailIn  []export.SendExportEmailsInput
 	recorded []export.RecordDeliveriesInput
+	statusIn []export.UpdateTaskStatusInput
 }
 
 func newDeliveryRun(details export.ScheduledTaskDetails, exportErr error, emailErr error) *deliveryRun {
@@ -101,7 +105,11 @@ func newDeliveryRun(details export.ScheduledTaskDetails, exportErr error, emailE
 	details.EntityType = types.ScheduledTaskEntityTypeEvents
 	r.env.OnActivity("GetScheduledTaskDetails", mock.Anything, mock.Anything).Return(&details, nil)
 	r.env.OnActivity("CreateTask", mock.Anything, mock.Anything).Return(&export.CreateTaskOutput{TaskID: "task_1"}, nil)
-	r.env.OnActivity("UpdateTaskStatus", mock.Anything, mock.Anything).Return(nil)
+	r.env.OnActivity("UpdateTaskStatus", mock.Anything, mock.Anything).Return(
+		func(_ context.Context, in export.UpdateTaskStatusInput) error {
+			r.statusIn = append(r.statusIn, in)
+			return nil
+		})
 	r.env.OnActivity("CompleteTask", mock.Anything, mock.Anything).Return(nil)
 	r.env.OnActivity("ExportData", mock.Anything, mock.Anything).Return(&export.ExportDataOutput{FileURL: "f", RecordCount: 3}, exportErr)
 	r.env.OnActivity("SendExportEmails", mock.Anything, mock.Anything).Return(
@@ -172,6 +180,37 @@ func TestExecuteExportWorkflow_FailedRunEmailsFailure(t *testing.T) {
 	require.Len(t, r.recorded, 1)
 	require.Equal(t, types.ExportDeliveryTypeFlexprice, r.recorded[0].Deliveries[0].Type)
 	require.Equal(t, types.ExportDeliveryStatusFailed, r.recorded[0].Deliveries[0].Status)
+}
+
+func TestExecuteExportWorkflow_FailureMessageHidesError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"generic", errors.New("dial tcp 10.0.0.1:9000: secret host"), "The export failed"},
+		{"deadline", errors.New("query: context deadline exceeded"), "The export took too long and was stopped"},
+		{"clickhouse timeout", errors.New("code: 159, Timeout exceeded: elapsed 600s"), "The export took too long and was stopped"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := newDeliveryRun(export.ScheduledTaskDetails{Interval: types.ScheduledTaskIntervalDaily}, tt.err, nil)
+			r.run()
+
+			require.Error(t, r.env.GetWorkflowError())
+			last := r.statusIn[len(r.statusIn)-1]
+			require.Equal(t, types.TaskStatusFailed, last.Status)
+			require.Equal(t, tt.want, last.Error)
+			require.Len(t, r.recorded, 1)
+			require.Equal(t, tt.want, r.recorded[0].Deliveries[0].Detail)
+		})
+	}
+}
+
+func TestRunFailureMessage(t *testing.T) {
+	require.Equal(t, runTimedOutMessage, runFailureMessage(temporal.NewTimeoutError(enumspb.TIMEOUT_TYPE_START_TO_CLOSE, nil)))
+	require.Equal(t, runTimedOutMessage, runFailureMessage(fmt.Errorf("wrap: %w", context.DeadlineExceeded)))
+	require.Equal(t, runFailedMessage, runFailureMessage(errors.New("bucket access denied")))
 }
 
 func TestExecuteExportWorkflow_SubDailySendsNoEmail(t *testing.T) {
