@@ -3951,12 +3951,17 @@ func (s *walletService) BalanceAlertStatus(ctx context.Context, w *wallet.Wallet
 	if err != nil {
 		return nil, err
 	}
-	if !tenantConfig.IsAlertEnabled() {
+	return s.balanceAlertStatus(ctx, w, &tenantConfig, creditBalance, balance)
+}
+
+// balanceAlertStatus compares one wallet using a tenant config already loaded for the list.
+func (s *walletService) balanceAlertStatus(ctx context.Context, w *wallet.Wallet, tenantConfig *types.AlertSettings, creditBalance, balance decimal.Decimal) (*types.AlertState, error) {
+	if tenantConfig == nil || !tenantConfig.IsAlertEnabled() {
 		return nil, nil
 	}
-	alertSettings, err := s.resolveWalletAlertSettings(ctx, w, settingsSvc)
-	if err != nil {
-		return nil, err
+	alertSettings := w.AlertSettings
+	if alertSettings == nil {
+		alertSettings = tenantConfig
 	}
 	if !alertSettings.IsAlertEnabled() || !alertsOnLowBalance(alertSettings) {
 		return nil, nil

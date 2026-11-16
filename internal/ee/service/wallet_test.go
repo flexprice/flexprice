@@ -4714,6 +4714,20 @@ func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_AbsoluteUsesCurren
 	s.Equal(types.AlertStateWarning, *got)
 }
 
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_PercentageOfPeriodCredits() {
+	cfg := *s.percentageAlertSettings()
+	s.setTenantWalletAlertConfig(cfg)
+	w := s.makeWallet("wallet_status_pct", decimal.NewFromInt(25), nil, nil)
+	s.makeCreditTransaction("wtxn_status_pct", w.ID, decimal.NewFromInt(100),
+		types.TransactionStatusCompleted, types.StatusPublished, time.Now().UTC().Add(-time.Hour))
+
+	// 25 credits against a 100 credit base is 25%, the warning threshold.
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(25), decimal.NewFromInt(25))
+	s.NoError(err)
+	s.Require().NotNil(got)
+	s.Equal(types.AlertStateWarning, *got)
+}
+
 func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_AboveThresholds_Nil() {
 	s.setTenantWalletAlertConfig(types.AlertSettings{
 		AlertEnabled: lo.ToPtr(true),
