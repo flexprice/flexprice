@@ -548,11 +548,12 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 		query = query.Where(customer.ExternalIDIn(f.ExternalIDs...))
 	}
 
-	// One search box over name, external id and id: an OR group, ANDed with the rest,
+	// One search box over name, email, external id and id: an OR group, ANDed with the rest,
 	// so pagination and the total count only matching customers.
 	if term := strings.TrimSpace(f.SearchQuery); term != "" {
 		query = query.Where(customer.Or(
 			customer.NameContainsFold(term),
+			customer.EmailContainsFold(term),
 			customer.ExternalIDContainsFold(term),
 			customer.ID(term),
 		))

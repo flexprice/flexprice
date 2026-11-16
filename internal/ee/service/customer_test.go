@@ -297,6 +297,9 @@ func (s *CustomerServiceSuite) TestGetCustomersSearchQuery() {
 	s.Run("name_contains_case_insensitive", func() {
 		s.ElementsMatch([]string{"cust_search_acme"}, search("acme rob"))
 	})
+	s.Run("email_contains_case_insensitive", func() {
+		s.ElementsMatch([]string{"cust_search_acme"}, search("ACME@example"))
+	})
 	s.Run("external_id_contains", func() {
 		s.ElementsMatch([]string{"cust_search_acme"}, search("tenant_abc"))
 	})

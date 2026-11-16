@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// search_query is an OR of name/external_id ILIKE and id equality, ANDed with the
+// search_query is an OR of name/email/external_id ILIKE and id equality, ANDed with the
 // rest of the filter. Only Postgres runs the real predicate. Run with:
 //
 //	go test -tags pgintegration ./internal/repository/ent -run TestCustomerSearchQuery
@@ -36,18 +36,19 @@ func TestCustomerSearchQuery(t *testing.T) {
 
 	runID := types.GenerateUUIDWithPrefix("search")
 	base := types.GetDefaultBaseModel(ctx)
-	mk := func(id, name, externalID string) *domainCustomer.Customer {
+	mk := func(id, name, externalID, email string) *domainCustomer.Customer {
 		return &domainCustomer.Customer{
 			ID:            id,
 			Name:          name,
 			ExternalID:    externalID,
+			Email:         email,
 			TaxTreatment:  types.TaxTreatmentTaxable,
 			EnvironmentID: types.GetEnvironmentID(ctx),
 			BaseModel:     base,
 		}
 	}
-	acme := mk("cust_acme_"+runID, "Acme Robotics "+runID, "usw1:tenant_"+runID)
-	globex := mk("cust_globex_"+runID, "Globex "+runID, "globex-"+runID)
+	acme := mk("cust_acme_"+runID, "Acme Robotics "+runID, "usw1:tenant_"+runID, "billing-"+runID+"@corp.test")
+	globex := mk("cust_globex_"+runID, "Globex "+runID, "globex-"+runID, "globex@example.com")
 	for _, c := range []*domainCustomer.Customer{acme, globex} {
 		require.NoError(t, repo.Create(ctx, c))
 	}
@@ -68,6 +69,7 @@ func TestCustomerSearchQuery(t *testing.T) {
 
 	require.ElementsMatch(t, []string{acme.ID}, search("ACME ROBOTICS "+runID))
 	require.ElementsMatch(t, []string{acme.ID}, search("tenant_"+runID))
+	require.ElementsMatch(t, []string{acme.ID}, search("BILLING-"+runID))
 	require.ElementsMatch(t, []string{globex.ID}, search(globex.ID))
 	// An id is matched exactly, not as a substring.
 	require.Empty(t, search("globex_"+runID[:4]+"_no_such"))
