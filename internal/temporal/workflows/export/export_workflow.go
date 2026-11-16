@@ -284,7 +284,11 @@ func deliverRun(ctx workflow.Context, details *export.ScheduledTaskDetails, task
 
 	deliveries := []types.ExportDelivery{fileDelivery(ctx, details, runErr)}
 
-	if len(details.EmailRecipients) > 0 && details.Interval != types.ScheduledTaskIntervalHourly {
+	emailAllowed := details.Interval != types.ScheduledTaskIntervalHourly
+	if workflow.GetVersion(ctx, "export-email-intervals", workflow.DefaultVersion, 1) == 1 {
+		emailAllowed = details.Interval.SupportsEmail()
+	}
+	if len(details.EmailRecipients) > 0 && emailAllowed {
 		var out export.SendExportEmailsOutput
 		emailCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 			StartToCloseTimeout: 5 * time.Minute,

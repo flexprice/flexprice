@@ -23,7 +23,7 @@ type CreateScheduledTaskRequest struct {
 	Schedule  *types.ExportSchedule       `json:"schedule,omitempty"`
 	// Required for report and analytics_view exports.
 	SourceConfig *types.ExportSourceConfig `json:"source_config,omitempty"`
-	// Run recipients; not allowed for hourly.
+	// Run recipients; daily, weekly, monthly, manual only.
 	EmailConfig *types.ExportEmailConfig `json:"email_config,omitempty"`
 }
 
@@ -128,7 +128,7 @@ type UpdateScheduledTaskRequest struct {
 	Enabled  *bool                 `json:"enabled,omitempty"`
 	Name     *string               `json:"name,omitempty"`
 	Schedule *types.ExportSchedule `json:"schedule,omitempty"`
-	// Absent keeps; empty clears. Hourly rejects recipients.
+	// Absent keeps; empty clears.
 	EmailConfig *types.ExportEmailConfig `json:"email_config,omitempty"`
 }
 

@@ -85,7 +85,7 @@ type SendExportEmailsOutput struct {
 // SendExportEmails reports per-recipient failures as results.
 func (a *DeliveryActivity) SendExportEmails(ctx context.Context, in SendExportEmailsInput) (*SendExportEmailsOutput, error) {
 	out := &SendExportEmailsOutput{}
-	if in.Interval == types.ScheduledTaskIntervalHourly {
+	if !in.Interval.SupportsEmail() {
 		return out, nil
 	}
 	record := func(addr, status, detail string) {

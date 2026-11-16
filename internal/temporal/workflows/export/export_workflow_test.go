@@ -174,16 +174,35 @@ func TestExecuteExportWorkflow_FailedRunEmailsFailure(t *testing.T) {
 	require.Equal(t, types.ExportDeliveryStatusFailed, r.recorded[0].Deliveries[0].Status)
 }
 
-func TestExecuteExportWorkflow_HourlySendsNoEmail(t *testing.T) {
+func TestExecuteExportWorkflow_SubDailySendsNoEmail(t *testing.T) {
+	for _, interval := range []types.ScheduledTaskInterval{
+		types.ScheduledTaskIntervalHourly,
+		types.ScheduledTaskIntervalEvery15Minutes,
+		types.ScheduledTaskIntervalEvery30Minutes,
+	} {
+		t.Run(string(interval), func(t *testing.T) {
+			r := newDeliveryRun(export.ScheduledTaskDetails{
+				Interval: interval, EmailRecipients: []string{"a@x.com"},
+			}, nil, nil)
+			r.run()
+
+			require.NoError(t, r.env.GetWorkflowError())
+			require.Empty(t, r.emailIn)
+			require.Len(t, r.recorded, 1)
+			require.Len(t, r.recorded[0].Deliveries, 1)
+		})
+	}
+}
+
+func TestExecuteExportWorkflow_OldVersionEmailsSubHourly(t *testing.T) {
 	r := newDeliveryRun(export.ScheduledTaskDetails{
-		Interval: types.ScheduledTaskIntervalHourly, EmailRecipients: []string{"a@x.com"},
+		Interval: types.ScheduledTaskIntervalEvery15Minutes, EmailRecipients: []string{"a@x.com"},
 	}, nil, nil)
+	r.env.OnGetVersion("export-email-intervals", workflow.DefaultVersion, 1).Return(workflow.DefaultVersion)
 	r.run()
 
 	require.NoError(t, r.env.GetWorkflowError())
-	require.Empty(t, r.emailIn)
-	require.Len(t, r.recorded, 1)
-	require.Len(t, r.recorded[0].Deliveries, 1)
+	require.Len(t, r.emailIn, 1)
 }
 
 func TestExecuteExportWorkflow_EmailActivityErrorKeepsRunSuccess(t *testing.T) {

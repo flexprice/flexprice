@@ -210,17 +210,24 @@ func TestSendExportEmails_MixedRecipients(t *testing.T) {
 	require.Len(t, sender.sent, 2)
 }
 
-func TestSendExportEmails_HourlySendsNothing(t *testing.T) {
-	sender := &fakeSender{}
-	users := &fakeUsers{known: map[string]bool{"a@x.com": true}}
-	a := newDeliveryActivity(sender, users, &fakeCounter{n: map[string]int64{}}, true, 5)
-	in := baseInput("a@x.com")
-	in.Interval = types.ScheduledTaskIntervalHourly
+func TestSendExportEmails_SubDailySendsNothing(t *testing.T) {
+	for _, interval := range []types.ScheduledTaskInterval{
+		types.ScheduledTaskIntervalHourly,
+		types.ScheduledTaskIntervalEvery15Minutes,
+		types.ScheduledTaskIntervalEvery30Minutes,
+		types.ScheduledTaskIntervalCustom,
+	} {
+		sender := &fakeSender{}
+		users := &fakeUsers{known: map[string]bool{"a@x.com": true}}
+		a := newDeliveryActivity(sender, users, &fakeCounter{n: map[string]int64{}}, true, 5)
+		in := baseInput("a@x.com")
+		in.Interval = interval
 
-	out, err := a.SendExportEmails(context.Background(), in)
-	require.NoError(t, err)
-	require.Empty(t, out.Deliveries)
-	require.Empty(t, sender.sent)
+		out, err := a.SendExportEmails(context.Background(), in)
+		require.NoError(t, err)
+		require.Empty(t, out.Deliveries, interval)
+		require.Empty(t, sender.sent, interval)
+	}
 }
 
 func TestSendExportEmails_EmptyNameUsesEntityType(t *testing.T) {

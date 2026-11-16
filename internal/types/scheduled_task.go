@@ -49,6 +49,15 @@ func (s ScheduledTaskInterval) Validate() error {
 		Mark(ierr.ErrValidation)
 }
 
+// SupportsEmail reports whether runs may email recipients.
+func (s ScheduledTaskInterval) SupportsEmail() bool {
+	switch s {
+	case ScheduledTaskIntervalDaily, ScheduledTaskIntervalWeekly, ScheduledTaskIntervalMonthly, ScheduledTaskIntervalManual:
+		return true
+	}
+	return false
+}
+
 // ExportSchedule is an export's run time.
 type ExportSchedule struct {
 	Hour   int `json:"hour" minimum:"0" maximum:"23"`

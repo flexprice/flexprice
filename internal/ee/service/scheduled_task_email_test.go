@@ -65,7 +65,8 @@ func TestCreate_EmailRecipientValidation(t *testing.T) {
 		wantErr   string
 	}{
 		{"unavailable rejects", false, types.ScheduledTaskIntervalDaily, []string{"a@x.com"}, "Email is not configured"},
-		{"hourly rejects", true, types.ScheduledTaskIntervalHourly, []string{"a@x.com"}, "hourly"},
+		{"hourly rejects", true, types.ScheduledTaskIntervalHourly, []string{"a@x.com"}, "daily, weekly, monthly and manual"},
+		{"manual ok", true, types.ScheduledTaskIntervalManual, []string{"a@x.com"}, ""},
 		{"bad syntax rejects", true, types.ScheduledTaskIntervalDaily, []string{"not-an-email"}, "invalid"},
 		{"non-user rejects", true, types.ScheduledTaskIntervalDaily, []string{"z@x.com"}, "z***@x.com is not a user in this account"},
 		{"empty ok even if unavailable", false, types.ScheduledTaskIntervalDaily, nil, ""},
@@ -85,6 +86,16 @@ func TestCreate_EmailRecipientValidation(t *testing.T) {
 			require.Nil(t, repo.created)
 		})
 	}
+
+	t.Run("sub-hourly rejects", func(t *testing.T) {
+		s, _ := emailService(&exportRepoFake{}, true)
+		for _, interval := range []types.ScheduledTaskInterval{types.ScheduledTaskIntervalEvery15Minutes, types.ScheduledTaskIntervalEvery30Minutes} {
+			err := s.validateRecipients(exportCtx(), interval, &types.ExportEmailConfig{Recipients: []string{"a@x.com"}})
+			require.Error(t, err)
+			require.True(t, ierr.IsValidation(err))
+			require.Contains(t, errText(err), "daily, weekly, monthly and manual")
+		}
+	})
 
 	t.Run("11 rejects", func(t *testing.T) {
 		s, _ := emailService(&exportRepoFake{}, true)

@@ -106,9 +106,9 @@ func (s *scheduledTaskService) validateRecipients(ctx context.Context, interval 
 			WithHint("Email is not configured").
 			Mark(ierr.ErrValidation)
 	}
-	if interval == types.ScheduledTaskIntervalHourly {
-		return ierr.NewError("email not supported for hourly exports").
-			WithHint("Email delivery is not available for hourly exports").
+	if !interval.SupportsEmail() {
+		return ierr.NewError("email not supported for this interval").
+			WithHint("Email delivery is available only for daily, weekly, monthly and manual exports").
 			Mark(ierr.ErrValidation)
 	}
 	if len(normalized.Recipients) > types.MaxExportEmailRecipients {
