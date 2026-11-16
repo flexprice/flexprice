@@ -655,6 +655,8 @@ bulk_meter_usage_tracking:
   topic_dlq: "staging_meter_usage_tracking_bulk_dlq"
   redis_deduplication_enabled: true
   post_insert_side_effects_enabled: true
+  batch_dedup_locks: false
+  insert_chunk_size: 100
 
 integration_events:
   enabled: true

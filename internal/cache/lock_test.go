@@ -114,3 +114,18 @@ func TestAcquireLockWithRetryStopsOnCancelledContext(t *testing.T) {
 	require.False(t, lock.AcquiredSuccessfully())
 	require.Equal(t, 1, locker.calls)
 }
+
+func TestAcquireLocks_FallsBackPerKey(t *testing.T) {
+	locker := &fakeLocker{acquiredOnCall: 2}
+	locks, err := AcquireLocks(context.Background(), locker, []string{"a", "b", "c"}, time.Minute)
+	require.NoError(t, err)
+	require.Len(t, locks, 3)
+	require.False(t, locks[0].AcquiredSuccessfully())
+	require.True(t, locks[1].AcquiredSuccessfully())
+	require.Equal(t, 3, locker.calls)
+
+	failing := &fakeLocker{err: errors.New("redis down")}
+	locks, err = AcquireLocks(context.Background(), failing, []string{"a", "b"}, time.Minute)
+	require.Error(t, err)
+	require.Equal(t, []Lock{nil, nil}, locks)
+}
