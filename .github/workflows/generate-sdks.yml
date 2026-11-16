@@ -313,8 +313,8 @@ jobs:
             --paths /openapi.json /webhooks.json --query Invalidation.Id --output text)
           aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION" --id "$INVALIDATION"
 
-      # Two assertions: the CDN serves the bytes just uploaded (no truncation, no stale
-      # cache), and those bytes still carry this release's base spec.
+      # Three assertions: the CDN serves the bytes just uploaded (no truncation, no stale
+      # cache), those bytes still carry this release's base spec, and webhooks.json is served as uploaded.
       - name: Check the hosted spec serves this release
         if: vars.OPENAPI_SPEC_S3 != ''
         env:
@@ -323,6 +323,8 @@ jobs:
           set -euo pipefail
           python3 scripts/wait-for-docs-spec.py "$RUNNER_TEMP/openapi.json" --url "$SPEC_URL" --exact
           python3 scripts/wait-for-docs-spec.py release-spec/swagger-3-0.json --url "$SPEC_URL" --timeout 0
+          curl -fsS --retry 3 -o "$RUNNER_TEMP/webhooks-served.json" "${SPEC_URL%/}/webhooks.json"
+          cmp "$RUNNER_TEMP/webhooks-served.json" release-spec/webhooks.json
 
       # The release is recorded as a new row in the docs repo's version.mdx.
       - name: Redeploy docs

@@ -2685,7 +2685,41 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/webhookDto.SpendAlertEvent"
+                "type": "object",
+                "properties": {
+                  "alert_status": {
+                    "$ref": "#/components/schemas/types.AlertState"
+                  },
+                  "alert_type": {
+                    "$ref": "#/components/schemas/types.AlertType"
+                  },
+                  "current_spend": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "string"
+                  },
+                  "subscription": {
+                    "$ref": "#/components/schemas/webhookDto.Subscription"
+                  },
+                  "subscription_line_item_id": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": "string"
+                  },
+                  "triggered_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "subscription.group_spend.threshold_reached"
+                    ],
+                    "description": "Sent by Flexprice Cloud only."
+                  }
+                }
               }
             }
           }
@@ -2727,7 +2761,41 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/webhookDto.SpendAlertEvent"
+                "type": "object",
+                "properties": {
+                  "alert_status": {
+                    "$ref": "#/components/schemas/types.AlertState"
+                  },
+                  "alert_type": {
+                    "$ref": "#/components/schemas/types.AlertType"
+                  },
+                  "current_spend": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "string"
+                  },
+                  "subscription": {
+                    "$ref": "#/components/schemas/webhookDto.Subscription"
+                  },
+                  "subscription_line_item_id": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": "string"
+                  },
+                  "triggered_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "subscription.group_spend.threshold_recovered"
+                    ],
+                    "description": "Sent by Flexprice Cloud only."
+                  }
+                }
               }
             }
           }
@@ -2769,7 +2837,41 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/webhookDto.SpendAlertEvent"
+                "type": "object",
+                "properties": {
+                  "alert_status": {
+                    "$ref": "#/components/schemas/types.AlertState"
+                  },
+                  "alert_type": {
+                    "$ref": "#/components/schemas/types.AlertType"
+                  },
+                  "current_spend": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "string"
+                  },
+                  "subscription": {
+                    "$ref": "#/components/schemas/webhookDto.Subscription"
+                  },
+                  "subscription_line_item_id": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": "string"
+                  },
+                  "triggered_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "subscription.line_item_spend.threshold_reached"
+                    ],
+                    "description": "Sent by Flexprice Cloud only."
+                  }
+                }
               }
             }
           }
@@ -2811,7 +2913,41 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/webhookDto.SpendAlertEvent"
+                "type": "object",
+                "properties": {
+                  "alert_status": {
+                    "$ref": "#/components/schemas/types.AlertState"
+                  },
+                  "alert_type": {
+                    "$ref": "#/components/schemas/types.AlertType"
+                  },
+                  "current_spend": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "string"
+                  },
+                  "subscription": {
+                    "$ref": "#/components/schemas/webhookDto.Subscription"
+                  },
+                  "subscription_line_item_id": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": "string"
+                  },
+                  "triggered_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "subscription.line_item_spend.threshold_recovered"
+                    ],
+                    "description": "Sent by Flexprice Cloud only."
+                  }
+                }
               }
             }
           }
@@ -3236,7 +3372,41 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/webhookDto.SpendAlertEvent"
+                "type": "object",
+                "properties": {
+                  "alert_status": {
+                    "$ref": "#/components/schemas/types.AlertState"
+                  },
+                  "alert_type": {
+                    "$ref": "#/components/schemas/types.AlertType"
+                  },
+                  "current_spend": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "string"
+                  },
+                  "subscription": {
+                    "$ref": "#/components/schemas/webhookDto.Subscription"
+                  },
+                  "subscription_line_item_id": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": "string"
+                  },
+                  "triggered_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "subscription.spend.threshold_reached"
+                    ],
+                    "description": "Sent by Flexprice Cloud only."
+                  }
+                }
               }
             }
           }
@@ -3278,7 +3448,41 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/webhookDto.SpendAlertEvent"
+                "type": "object",
+                "properties": {
+                  "alert_status": {
+                    "$ref": "#/components/schemas/types.AlertState"
+                  },
+                  "alert_type": {
+                    "$ref": "#/components/schemas/types.AlertType"
+                  },
+                  "current_spend": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "string"
+                  },
+                  "subscription": {
+                    "$ref": "#/components/schemas/webhookDto.Subscription"
+                  },
+                  "subscription_line_item_id": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": "string"
+                  },
+                  "triggered_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "subscription.spend.threshold_recovered"
+                    ],
+                    "description": "Sent by Flexprice Cloud only."
+                  }
+                }
               }
             }
           }
@@ -6599,36 +6803,6 @@
           },
           "timestamp": {
             "type": "string"
-          }
-        }
-      },
-      "webhookDto.SpendAlertEvent": {
-        "type": "object",
-        "properties": {
-          "alert_status": {
-            "$ref": "#/components/schemas/types.AlertState"
-          },
-          "alert_type": {
-            "$ref": "#/components/schemas/types.AlertType"
-          },
-          "current_spend": {
-            "type": "string"
-          },
-          "group_id": {
-            "type": "string"
-          },
-          "subscription": {
-            "$ref": "#/components/schemas/webhookDto.Subscription"
-          },
-          "subscription_line_item_id": {
-            "type": "string"
-          },
-          "threshold": {
-            "type": "string"
-          },
-          "triggered_at": {
-            "type": "string",
-            "format": "date-time"
           }
         }
       },

@@ -52,14 +52,12 @@ function payloadName(event, stub) {
   return ref.slice(SCHEMA_PREFIX.length);
 }
 
-// Pins event_type to this event; the shared enum would show the first event name on every page.
+// Pins event_type to this event on every page; Svix adds the field to Cloud deliveries even when the payload type lacks it.
 function bodySchema(event, name, schemas) {
   const payload = schemas[name];
-  if (!payload.properties?.event_type) return { $ref: SCHEMA_PREFIX + name };
-  return {
-    ...payload,
-    properties: { ...payload.properties, event_type: { type: 'string', enum: [event] } },
-  };
+  const eventType = { type: 'string', enum: [event] };
+  if (!payload.properties?.event_type) eventType.description = 'Sent by Flexprice Cloud only.';
+  return { ...payload, properties: { ...payload.properties, event_type: eventType } };
 }
 
 function webhook(event, stub, schemas) {
