@@ -3567,7 +3567,7 @@ func (s *meterUsageService) periodCommitments(
 	}
 
 	// A shared true-up is split across the commitment's whole scope by utilized value.
-	trueUpShares := map[string]map[string]decimal.Decimal{}
+	trueUpShares := map[string]map[string]types.CommitmentInfo{}
 	for _, line := range trueUps {
 		commitmentID := lo.FromPtr(line.CommitmentID)
 		scope := loader.scopeByCommitment[commitmentID].lineItems
@@ -3586,10 +3586,15 @@ func (s *meterUsageService) periodCommitments(
 
 		amounts := roundShares(allocateCostByWeight(line.Amount, utilized), usage.Subscription.Currency)
 		quantities := allocateCostByWeight(unused, utilized)
-		shares := allocateCostByWeight(decimal.NewFromInt(1), utilized)
-		trueUpShares[commitmentID] = map[string]decimal.Decimal{}
+		if trueUpShares[commitmentID] == nil {
+			trueUpShares[commitmentID] = map[string]types.CommitmentInfo{}
+		}
+
 		for i, item := range scope {
-			trueUpShares[commitmentID][item.ID] = shares[i]
+			share := trueUpShares[commitmentID][item.ID]
+			share.ComputedTrueUpAmount = share.ComputedTrueUpAmount.Add(amounts[i])
+			share.ComputedTrueUpQuantity = share.ComputedTrueUpQuantity.Add(quantities[i])
+			trueUpShares[commitmentID][item.ID] = share
 			lineBreakdown := breakdownByLine[item.ID]
 			lineBreakdown.ComputedTrueUpAmount = lineBreakdown.ComputedTrueUpAmount.Add(amounts[i])
 			lineBreakdown.ComputedTrueUpQuantity = lineBreakdown.ComputedTrueUpQuantity.Add(quantities[i])
@@ -3602,11 +3607,21 @@ func (s *meterUsageService) periodCommitments(
 		}
 	}
 
+	// A line two window stacks price has no single set of windows, so it keeps sharing its charges by usage.
+	stacksOf := map[string]int{}
+	for _, stack := range stacks {
+		for _, line := range stack.Lines {
+			if line.PerWindow {
+				stacksOf[line.Item.ID]++
+			}
+		}
+	}
+
 	windowsByLine := map[string][]billedWindow{}
 	for si, stack := range stacks {
 		for li, line := range stack.Lines {
 			lineBreakdown := breakdownByLine[line.Item.ID]
-			if lineBreakdown == nil || !line.PerWindow {
+			if lineBreakdown == nil || !line.PerWindow || stacksOf[line.Item.ID] != 1 {
 				continue
 			}
 
@@ -3619,46 +3634,69 @@ func (s *meterUsageService) periodCommitments(
 	return breakdownByLine, windowsByLine, nil
 }
 
-// lineWindows cuts what a period bills a line priced per window by commitment window. Each window prices on its own,
-// so its utilized and overage are exact; a window commitment's true-up is the capacity each window left unused, and a
-// billing-period one's, which no window owns, follows usage.
+// lineWindows cuts what a period bills a line priced per window by commitment window. A window commitment's true-up
+// goes to the windows by the capacity each left unused; one no window owns follows usage.
 func lineWindows(
 	stack *commitmentStack,
 	alloc *allocation,
 	li int,
-	trueUpShares map[string]map[string]decimal.Decimal,
+	trueUpShares map[string]map[string]types.CommitmentInfo,
 	billed *types.CommitmentInfo,
 	aggregation types.AggregationType,
 	currency string,
 ) []billedWindow {
 	line := stack.Lines[li]
 	n := len(stack.Windows)
-	utilized, overage, unused := make([]decimal.Decimal, n), make([]decimal.Decimal, n), make([]decimal.Decimal, n)
+	utilized, overage := make([]decimal.Decimal, n), make([]decimal.Decimal, n)
 	for w := range stack.Windows {
 		overage[w] = alloc.Overage[li][w]
 		utilized[w] = line.Usage[w].Sub(overage[w])
-		if stack.Measurement != types.CommitmentMeasurementWindow {
+	}
+
+	// Each commitment's true-up is cut on its own: commitments bill their unused units at different prices.
+	trueUpAmounts, trueUpQuantities := make([]decimal.Decimal, n), make([]decimal.Decimal, n)
+	rest := types.CommitmentInfo{
+		ComputedTrueUpAmount:   billed.ComputedTrueUpAmount,
+		ComputedTrueUpQuantity: billed.ComputedTrueUpQuantity,
+	}
+	addTrueUp := func(share types.CommitmentInfo, weights []decimal.Decimal) {
+		amounts := roundShares(allocateCostByWeight(share.ComputedTrueUpAmount, weights), currency)
+		quantities := allocateCostByWeight(share.ComputedTrueUpQuantity, weights)
+		for w := range n {
+			trueUpAmounts[w] = trueUpAmounts[w].Add(amounts[w])
+			trueUpQuantities[w] = trueUpQuantities[w].Add(quantities[w])
+		}
+	}
+	for ci, sc := range stack.Commitments {
+		share, ok := trueUpShares[sc.ID][line.Item.ID]
+		if !ok || stack.Measurement != types.CommitmentMeasurementWindow {
 			continue
 		}
 
-		for ci, sc := range stack.Commitments {
-			share := trueUpShares[sc.ID][line.Item.ID]
-			if share.IsPositive() && sc.PoolOf[w] != noPool {
-				unused[w] = unused[w].Add(share.Mul(alloc.Commitments[ci].UnusedByPool[sc.PoolOf[w]]))
+		unused := make([]decimal.Decimal, n)
+		for w := range n {
+			if sc.PoolOf[w] != noPool {
+				unused[w] = alloc.Commitments[ci].UnusedByPool[sc.PoolOf[w]]
 			}
 		}
+
+		if !lo.SomeBy(unused, decimal.Decimal.IsPositive) {
+			continue
+		}
+
+		addTrueUp(share, unused)
+		rest.ComputedTrueUpAmount = rest.ComputedTrueUpAmount.Sub(share.ComputedTrueUpAmount)
+		rest.ComputedTrueUpQuantity = rest.ComputedTrueUpQuantity.Sub(share.ComputedTrueUpQuantity)
 	}
 
-	if !lo.SomeBy(unused, decimal.Decimal.IsPositive) {
-		unused = line.Usage
+	if !rest.ComputedTrueUpAmount.IsZero() || !rest.ComputedTrueUpQuantity.IsZero() {
+		addTrueUp(rest, line.Usage)
 	}
 
 	utilizedAmounts := roundShares(allocateUsageCost(billed.ComputedCommitmentUtilizedAmount, utilized, aggregation), currency)
 	overageAmounts := roundShares(allocateUsageCost(billed.ComputedOverageAmount, overage, aggregation), currency)
-	trueUpAmounts := roundShares(allocateCostByWeight(billed.ComputedTrueUpAmount, unused), currency)
 	utilizedQuantities := allocateUsageCost(billed.ComputedCommitmentUtilizedQuantity, utilized, aggregation)
 	overageQuantities := allocateUsageCost(billed.ComputedOverageQuantity, overage, aggregation)
-	trueUpQuantities := allocateCostByWeight(billed.ComputedTrueUpQuantity, unused)
 	windows := make([]billedWindow, n)
 	for w, start := range stack.Windows {
 		windows[w] = billedWindow{start: start, billed: types.CommitmentInfo{
@@ -3741,9 +3779,8 @@ func addToGroup(group *events.DetailedUsageAnalytic, share *types.CommitmentInfo
 	group.TotalCost = group.TotalCost.Add(billedCost(share))
 }
 
-// allocateBilledWindows gives each analytics window what the commitment windows inside it billed. Groups keep their
-// shares of the period's charges, so each takes that part of every window. A window that bills without usage, as a
-// binding window commitment's empty bucket does, gets a zero-usage point.
+// allocateBilledWindows gives each group its share of what the commitment windows inside every analytics window
+// billed. A window that bills without usage, as a binding window commitment's empty bucket does, gets a zero-usage point.
 func allocateBilledWindows(
 	groups []*events.DetailedUsageAnalytic,
 	shares []types.CommitmentInfo,
@@ -3779,6 +3816,10 @@ func allocateBilledWindows(
 	utilized := weightsOf(func(c *types.CommitmentInfo) decimal.Decimal { return c.ComputedCommitmentUtilizedAmount })
 	overage := weightsOf(func(c *types.CommitmentInfo) decimal.Decimal { return c.ComputedOverageAmount })
 	trueUp := weightsOf(func(c *types.CommitmentInfo) decimal.Decimal { return c.ComputedTrueUpAmount })
+	// Quantities follow the windows' quantities: usage a billing-terms commitment covers is utilized at $0.
+	utilizedUnits := weightsOf(func(c *types.CommitmentInfo) decimal.Decimal { return c.ComputedCommitmentUtilizedQuantity })
+	overageUnits := weightsOf(func(c *types.CommitmentInfo) decimal.Decimal { return c.ComputedOverageQuantity })
+	trueUpUnits := weightsOf(func(c *types.CommitmentInfo) decimal.Decimal { return c.ComputedTrueUpQuantity })
 
 	for gi, group := range groups {
 		share := &shares[gi]
@@ -3792,9 +3833,9 @@ func allocateBilledWindows(
 		utilizedAmounts := roundShares(allocateUsageCost(share.ComputedCommitmentUtilizedAmount, utilized, aggregation), currency)
 		overageAmounts := roundShares(allocateUsageCost(share.ComputedOverageAmount, overage, aggregation), currency)
 		trueUpAmounts := roundShares(allocateCostByWeight(share.ComputedTrueUpAmount, trueUp), currency)
-		utilizedQuantities := allocateUsageCost(share.ComputedCommitmentUtilizedQuantity, utilized, aggregation)
-		overageQuantities := allocateUsageCost(share.ComputedOverageQuantity, overage, aggregation)
-		trueUpQuantities := allocateCostByWeight(share.ComputedTrueUpQuantity, trueUp)
+		utilizedQuantities := allocateUsageCost(share.ComputedCommitmentUtilizedQuantity, utilizedUnits, aggregation)
+		overageQuantities := allocateUsageCost(share.ComputedOverageQuantity, overageUnits, aggregation)
+		trueUpQuantities := allocateCostByWeight(share.ComputedTrueUpQuantity, trueUpUnits)
 		for k, start := range starts {
 			part := types.CommitmentInfo{
 				ComputedCommitmentUtilizedAmount:   utilizedAmounts[k],

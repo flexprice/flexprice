@@ -8058,7 +8058,7 @@ func TestLineWindowsBillEachWindowItsOwnCharges(t *testing.T) {
 		ComputedOverageAmount:            dec("5"),
 		ComputedTrueUpAmount:             dec("26"),
 	}
-	shares := map[string]map[string]decimal.Decimal{"cmt": {"line": dec("1")}}
+	shares := map[string]map[string]types.CommitmentInfo{"cmt": {"line": {ComputedTrueUpAmount: dec("26")}}}
 	got := lineWindows(stack, alloc, 0, shares, billed, types.AggregationSum, "usd")
 	require.Len(t, got, 4)
 	for w, want := range [][3]string{{"4", "0", "6"}, {"10", "5", "0"}, {"0", "0", "10"}, {"0", "0", "10"}} {
@@ -8071,4 +8071,76 @@ func TestLineWindowsBillEachWindowItsOwnCharges(t *testing.T) {
 	require.Len(t, kept, 3)
 	require.True(t, billed.ComputedTrueUpAmount.Equal(dec("16")), "true-up %s", billed.ComputedTrueUpAmount)
 	require.True(t, billed.ComputedCommitmentUtilizedAmount.Equal(dec("14")), "utilized %s", billed.ComputedCommitmentUtilizedAmount)
+}
+
+// Commitments bill their unused units at their own prices, so each one's true-up is cut by its own windows: the
+// first leaves 10 units in the second window at $1, the second 10 in the first at $5.
+func TestLineWindowsCutEachCommitmentsTrueUpOnItsOwn(t *testing.T) {
+	start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	line := &usageLine{
+		Item:      &subscription.SubscriptionLineItem{ID: "line"},
+		Usage:     []decimal.Decimal{dec("10"), dec("10")},
+		PerWindow: true,
+	}
+	stack := &commitmentStack{
+		Type:        types.COMMITMENT_TYPE_QUANTITY,
+		Measurement: types.CommitmentMeasurementWindow,
+		Windows:     []time.Time{start, start.Add(time.Minute)},
+		Commitments: []*stackedCommitment{
+			{Commitment: &commitment.Commitment{ID: "cheap"}, PoolOf: []int{0, 1}},
+			{Commitment: &commitment.Commitment{ID: "dear"}, PoolOf: []int{0, 1}},
+		},
+		Lines: []*usageLine{line},
+	}
+	alloc := &allocation{
+		Commitments: []commitmentAllocation{
+			{UnusedByPool: []decimal.Decimal{dec("0"), dec("10")}},
+			{UnusedByPool: []decimal.Decimal{dec("10"), dec("0")}},
+		},
+		Overage: [][]decimal.Decimal{{dec("0"), dec("0")}},
+	}
+	billed := &types.CommitmentInfo{ComputedTrueUpAmount: dec("60"), ComputedTrueUpQuantity: dec("20")}
+	shares := map[string]map[string]types.CommitmentInfo{
+		"cheap": {"line": {ComputedTrueUpAmount: dec("10"), ComputedTrueUpQuantity: dec("10")}},
+		"dear":  {"line": {ComputedTrueUpAmount: dec("50"), ComputedTrueUpQuantity: dec("10")}},
+	}
+
+	got := lineWindows(stack, alloc, 0, shares, billed, types.AggregationSum, "usd")
+	require.Len(t, got, 2)
+	require.True(t, got[0].billed.ComputedTrueUpAmount.Equal(dec("50")), "first window true-up %s", got[0].billed.ComputedTrueUpAmount)
+	require.True(t, got[1].billed.ComputedTrueUpAmount.Equal(dec("10")), "second window true-up %s", got[1].billed.ComputedTrueUpAmount)
+	require.True(t, got[0].billed.ComputedTrueUpQuantity.Equal(dec("10")), "first window unused %s", got[0].billed.ComputedTrueUpQuantity)
+}
+
+// Usage a billing-terms commitment covers is utilized at $0, so its quantity stays on the window that used it
+// instead of following the windows' cost.
+func (s *MeterUsageServiceSuite) TestAnalytics_BilledWindowsKeepQuantitiesBilledAtNoCharge() {
+	start := s.periodStart
+	data := &AnalyticsData{
+		Analytics: []*events.DetailedUsageAnalytic{{
+			SubLineItemID:   "line",
+			AggregationType: types.AggregationSum,
+			TotalUsage:      dec("10"),
+			Points: []events.UsageAnalyticPoint{
+				{Timestamp: start, Usage: dec("8")},
+				{Timestamp: start.Add(time.Minute), Usage: dec("2")},
+			},
+		}},
+		LineTotals: map[string]decimal.Decimal{"line": dec("0")},
+		LineBilledPeriods: map[string][]billedPeriod{"line": {{
+			period: types.Period{Start: start, End: start.Add(2 * time.Minute)},
+			billed: &types.CommitmentInfo{ComputedCommitmentUtilizedQuantity: dec("10")},
+			windows: []billedWindow{
+				{start: start, billed: types.CommitmentInfo{ComputedCommitmentUtilizedQuantity: dec("8")}},
+				{start: start.Add(time.Minute), billed: types.CommitmentInfo{ComputedCommitmentUtilizedQuantity: dec("2")}},
+			},
+		}}},
+		Params: &events.UsageAnalyticsParams{WindowSize: types.WindowSizeMinute},
+	}
+
+	points := allocateLineItemCosts(data)[0].Points
+	s.Require().Len(points, 2)
+	s.True(points[0].ComputedCommitmentUtilizedQuantity.Equal(dec("8")), "utilized %s", points[0].ComputedCommitmentUtilizedQuantity)
+	s.True(points[1].ComputedCommitmentUtilizedQuantity.Equal(dec("2")), "utilized %s", points[1].ComputedCommitmentUtilizedQuantity)
+	s.True(points[0].Cost.IsZero(), "cost %s", points[0].Cost)
 }
