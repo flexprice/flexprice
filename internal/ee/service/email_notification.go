@@ -57,8 +57,9 @@ type outgoingEmail struct {
 	to          []string
 	cc          []string
 	// senderName and replyTo fall back to the tenant's name and reply-to email when empty.
-	senderName string
-	replyTo    string
+	senderName     string
+	replyTo        string
+	idempotencyKey *string
 }
 
 // composedEmail is an email type's rendered content for one email log.
@@ -71,6 +72,13 @@ type composedEmail struct {
 func (s *emailNotificationService) SendInvoiceEmail(ctx context.Context, invoiceID string, req *dto.SendInvoiceEmailRequest) (*dto.EmailLogResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
+	}
+	replayed, err := s.findInvoiceEmailReplay(ctx, invoiceID, req.IdempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	if replayed != nil {
+		return dto.NewEmailLogResponse(replayed), nil
 	}
 
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
@@ -101,21 +109,54 @@ func (s *emailNotificationService) SendInvoiceEmail(ctx context.Context, invoice
 	}
 
 	e, err := s.queue(ctx, outgoingEmail{
-		entityType:  types.SystemEntityTypeInvoice,
-		entityID:    inv.ID,
-		customerID:  inv.CustomerID,
-		templateKey: types.EmailTemplateInvoiceFinalized,
-		trigger:     types.EmailTriggerManual,
-		subject:     invoiceEmailSubject(inv, merchant.Name),
-		to:          to,
-		cc:          req.CC,
-		senderName:  merchant.Name,
-		replyTo:     merchant.BillingDetails.ReplyToEmail(),
+		entityType:     types.SystemEntityTypeInvoice,
+		entityID:       inv.ID,
+		customerID:     inv.CustomerID,
+		templateKey:    types.EmailTemplateInvoiceFinalized,
+		trigger:        types.EmailTriggerManual,
+		subject:        invoiceEmailSubject(inv, merchant.Name),
+		to:             to,
+		cc:             req.CC,
+		senderName:     merchant.Name,
+		replyTo:        merchant.BillingDetails.ReplyToEmail(),
+		idempotencyKey: req.IdempotencyKey,
 	})
+	if err != nil && req.IdempotencyKey != nil && ierr.IsAlreadyExists(err) {
+		// Lost a race with a concurrent retry on the same key.
+		replayed, replayErr := s.findInvoiceEmailReplay(types.WithForceWriter(ctx), invoiceID, req.IdempotencyKey)
+		if replayErr != nil {
+			return nil, replayErr
+		}
+		if replayed != nil {
+			return dto.NewEmailLogResponse(replayed), nil
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
 	return dto.NewEmailLogResponse(e), nil
+}
+
+// findInvoiceEmailReplay returns the email already sent with key, or nil when the key is unused.
+// A key used for another invoice is refused.
+func (s *emailNotificationService) findInvoiceEmailReplay(ctx context.Context, invoiceID string, key *string) (*emaillog.EmailLog, error) {
+	if key == nil {
+		return nil, nil
+	}
+	existing, err := s.EmailLogRepo.GetByIdempotencyKey(ctx, *key)
+	if ierr.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if existing.EntityID != invoiceID {
+		return nil, ierr.NewError("idempotency key used for another invoice").
+			WithHint("This idempotency key was already used to email another invoice").
+			WithReportableDetails(map[string]any{"idempotency_key": *key, "invoice_id": invoiceID}).
+			Mark(ierr.ErrValidation)
+	}
+	return existing, nil
 }
 
 func (s *emailNotificationService) ListInvoiceEmails(ctx context.Context, invoiceID string) (*dto.ListEmailLogsResponse, error) {
@@ -192,6 +233,7 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 		Subject:        out.subject,
 		Provider:       s.EmailProvider.Name(),
 		DeliveryStatus: types.EmailDeliveryStatusQueued,
+		IdempotencyKey: out.idempotencyKey,
 		Metadata:       types.Metadata{},
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}

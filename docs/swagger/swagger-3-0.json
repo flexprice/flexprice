@@ -26800,6 +26800,9 @@
           "id": {
             "type": "string"
           },
+          "idempotency_key": {
+            "type": "string"
+          },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
           },
@@ -31638,6 +31641,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "idempotency_key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
           },
           "to": {
             "maxItems": 50,

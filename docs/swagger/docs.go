@@ -24037,6 +24037,9 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "idempotency_key": {
+                    "type": "string"
+                },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
                 },
@@ -29014,6 +29017,11 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "idempotency_key": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "minLength": 1
                 },
                 "to": {
                     "type": "array",

@@ -7,9 +7,11 @@ import (
 )
 
 // SendInvoiceEmailRequest overrides who receives an invoice email; empty To sends to the customer's email.
+// A repeated IdempotencyKey returns the email first sent with it.
 type SendInvoiceEmailRequest struct {
-	To []string `json:"to,omitempty" validate:"omitempty,max=50,dive,email"`
-	CC []string `json:"cc,omitempty" validate:"omitempty,max=50,dive,email"`
+	To             []string `json:"to,omitempty" validate:"omitempty,max=50,dive,email"`
+	CC             []string `json:"cc,omitempty" validate:"omitempty,max=50,dive,email"`
+	IdempotencyKey *string  `json:"idempotency_key,omitempty" validate:"omitempty,min=1,max=128"`
 }
 
 func (r *SendInvoiceEmailRequest) Validate() error {

@@ -4778,6 +4778,8 @@ definitions:
         type: string
       id:
         type: string
+      idempotency_key:
+        type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
       provider:
@@ -8354,6 +8356,10 @@ definitions:
           type: string
         maxItems: 50
         type: array
+      idempotency_key:
+        maxLength: 128
+        minLength: 1
+        type: string
       to:
         items:
           type: string
