@@ -39,14 +39,21 @@ func (s *InMemoryEmailLogStore) Create(ctx context.Context, e *emaillog.EmailLog
 }
 
 func (s *InMemoryEmailLogStore) Get(ctx context.Context, id string) (*emaillog.EmailLog, error) {
-	return s.InMemoryStore.Get(ctx, id)
+	e, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !CheckTenantFilter(ctx, e.TenantID) || !CheckEnvironmentFilter(ctx, e.EnvironmentID) {
+		return nil, ierr.NewError("email log not found").Mark(ierr.ErrNotFound)
+	}
+	return e, nil
 }
 
 func (s *InMemoryEmailLogStore) GetByIdempotencyKey(ctx context.Context, key string) (*emaillog.EmailLog, error) {
 	all, _ := s.InMemoryStore.List(ctx, nil, nil, nil)
 	e, ok := lo.Find(all, func(x *emaillog.EmailLog) bool {
 		return x.IdempotencyKey != nil && *x.IdempotencyKey == key &&
-			x.TenantID == types.GetTenantID(ctx) && x.EnvironmentID == types.GetEnvironmentID(ctx)
+			CheckTenantFilter(ctx, x.TenantID) && CheckEnvironmentFilter(ctx, x.EnvironmentID)
 	})
 	if !ok {
 		return nil, ierr.NewError("email log not found").Mark(ierr.ErrNotFound)

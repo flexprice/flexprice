@@ -271,7 +271,7 @@ data:
       reply_to: {{ .Values.app.email.replyTo | quote }}
       calendar_url: {{ .Values.app.email.calendarUrl | quote }}
       # Plain config value (user-signup automation), not a secret → rendered here. The secret
-      # (resend_api_key) is NOT rendered — it's bound from FLEXPRICE_EMAIL_RESEND_API_KEY via BindEnv.
+      # (resend.api_key) is NOT rendered — it's bound from FLEXPRICE_EMAIL_RESEND_API_KEY via BindEnv.
       zapier_webhook_url: {{ .Values.app.email.zapierWebhookUrl | quote }}
     
     feature_flag:

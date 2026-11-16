@@ -1176,7 +1176,6 @@ type Email struct {
 
 type EmailConfig struct {
 	Enabled          bool   `mapstructure:"enabled" validate:"required"`
-	ResendAPIKey     string `mapstructure:"resend_api_key" validate:"omitempty"`
 	FromAddress      string `mapstructure:"from_address" validate:"omitempty"`
 	ReplyTo          string `mapstructure:"reply_to" validate:"omitempty"`
 	CalendarURL      string `mapstructure:"calendar_url" validate:"omitempty"`
