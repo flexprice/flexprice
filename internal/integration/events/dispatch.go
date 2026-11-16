@@ -270,7 +270,17 @@ func DispatchInvoiceAutoEmail(
 		)
 		return nil
 	}
-	return sender.SendAutoInvoiceEmail(ctx, payload.InvoiceID)
+	// Missing data means nothing to email; a NotFound here would make the handler ack a joined vendor-sync failure.
+	err := sender.SendAutoInvoiceEmail(ctx, payload.InvoiceID)
+	if ierr.IsNotFound(err) {
+		log.Info(ctx, "integration_events: auto email not sent, referenced data not found",
+			"invoice_id", payload.InvoiceID,
+			"message_uuid", msgUUID,
+			"error", err,
+		)
+		return nil
+	}
+	return err
 }
 
 // DispatchCustomerVendorSync starts Temporal customer-sync workflows for each enabled provider.
