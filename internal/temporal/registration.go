@@ -368,7 +368,7 @@ func RegisterWorkflowsAndActivities(
 		selfBillingHourly:            cronActivities.NewSelfBillingHourlyActivities(selfbilling.New(params), params.Logger),
 		commitment:                   cronActivities.NewCommitmentCronActivities(service.NewCommitmentService(params), params.Logger),
 		emailDispatch:                cronActivities.NewEmailDispatchActivities(service.NewEmailNotificationService(params), params.Logger),
-		staleExportSweep:             cronActivities.NewStaleExportSweepActivities(params.TaskRepo, params.Logger),
+		staleExportSweep:             cronActivities.NewStaleExportSweepActivities(params.TaskRepo, params.ScheduledTaskRepo, params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each

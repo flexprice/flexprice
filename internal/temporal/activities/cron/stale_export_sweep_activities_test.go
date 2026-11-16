@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -37,11 +38,18 @@ func TestSweepStaleExportRuns(t *testing.T) {
 	other.CreatedAt = clock.Now().Add(-3 * time.Hour)
 	require.NoError(t, store.Create(context.Background(), other))
 
-	a := NewStaleExportSweepActivities(store, logger.NewNoopLogger())
+	s3 := &task.Task{ID: "old_s3", TaskType: types.TaskTypeExport, TaskStatus: types.TaskStatusProcessing, EnvironmentID: "e1", ScheduledTaskID: "st_s3"}
+	s3.TenantID = "t1"
+	s3.Status = types.StatusPublished
+	s3.CreatedAt = clock.Now().Add(-3 * time.Hour)
+	require.NoError(t, store.Create(context.Background(), s3))
+
+	exports := fakeScheduledTasks{rows: map[string]*scheduledtask.ScheduledTask{"st_s3": {ID: "st_s3", ConnectionID: "conn_1", JobConfig: &types.S3JobConfig{Bucket: "b", KeyPrefix: "p/"}}}}
+	a := NewStaleExportSweepActivities(store, exports, logger.NewNoopLogger())
 	a.batchSize = 1
 	n, err := a.SweepStaleExportRunsActivity(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, 3, n)
+	require.Equal(t, 4, n)
 
 	want := map[string]types.TaskStatus{
 		"other_tenant":      types.TaskStatusFailed,
@@ -58,9 +66,25 @@ func TestSweepStaleExportRuns(t *testing.T) {
 	}
 	failed, err := store.Get(context.Background(), "old_pending")
 	require.NoError(t, err)
-	require.Equal(t, "Run did not finish.", *failed.ErrorSummary)
+	require.Equal(t, "The run stopped before finishing. Run it again.", *failed.ErrorSummary)
 	require.NotNil(t, failed.FailedAt)
 	require.Equal(t, types.DefaultUserID, failed.UpdatedBy)
+	ds := failed.Metadata["deliveries"].([]types.ExportDelivery)
+	require.Len(t, ds, 1)
+	require.Equal(t, types.ExportDeliveryTypeFlexprice, ds[0].Type)
+	require.Equal(t, types.ExportDeliveryStatusFailed, ds[0].Status)
+	require.Equal(t, "The run stopped before finishing. Run it again.", ds[0].Detail)
+
+	viaS3, err := store.Get(context.Background(), "old_s3")
+	require.NoError(t, err)
+	ds = viaS3.Metadata["deliveries"].([]types.ExportDelivery)
+	require.Equal(t, types.ExportDeliveryTypeS3, ds[0].Type)
+	require.Equal(t, "b/p/", ds[0].Target)
+	require.Equal(t, types.ExportDeliveryStatusFailed, ds[0].Status)
+
+	done, err := store.Get(context.Background(), "old_completed")
+	require.NoError(t, err)
+	require.NotContains(t, done.Metadata, "deliveries")
 }
 
 type flakyFailStore struct {
@@ -80,7 +104,7 @@ func TestSweepStaleExportRuns_ReturnsErrorAfterAttemptingAllRows(t *testing.T) {
 	seedTask(t, store, "a_bad", types.TaskTypeExport, types.TaskStatusProcessing, 4*time.Hour)
 	seedTask(t, store, "b_ok", types.TaskTypeExport, types.TaskStatusProcessing, 3*time.Hour)
 
-	a := NewStaleExportSweepActivities(flakyFailStore{store, "a_bad"}, logger.NewNoopLogger())
+	a := NewStaleExportSweepActivities(flakyFailStore{store, "a_bad"}, fakeScheduledTasks{}, logger.NewNoopLogger())
 	n, err := a.SweepStaleExportRunsActivity(context.Background())
 	require.Error(t, err)
 	require.Equal(t, 1, n)
@@ -88,4 +112,16 @@ func TestSweepStaleExportRuns_ReturnsErrorAfterAttemptingAllRows(t *testing.T) {
 	good, err := store.Get(context.Background(), "b_ok")
 	require.NoError(t, err)
 	require.Equal(t, types.TaskStatusFailed, good.TaskStatus)
+}
+
+type fakeScheduledTasks struct {
+	scheduledtask.Repository
+	rows map[string]*scheduledtask.ScheduledTask
+}
+
+func (f fakeScheduledTasks) Get(_ context.Context, id string) (*scheduledtask.ScheduledTask, error) {
+	if st, ok := f.rows[id]; ok {
+		return st, nil
+	}
+	return nil, errors.New("not found")
 }

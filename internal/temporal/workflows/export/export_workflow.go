@@ -370,22 +370,7 @@ func deliverRun(ctx workflow.Context, details *export.ScheduledTaskDetails, task
 }
 
 func fileDelivery(ctx workflow.Context, details *export.ScheduledTaskDetails, runErr error) types.ExportDelivery {
-	d := types.ExportDelivery{
-		Type:   types.ExportDeliveryTypeFlexprice,
-		Target: "Flexprice",
-		Status: types.ExportDeliveryStatusDelivered,
-		At:     workflow.Now(ctx),
-	}
-	if details.ConnectionID != "" {
-		d.Type = types.ExportDeliveryTypeS3
-		d.Target = "s3"
-		if cfg := details.JobConfig; cfg != nil {
-			d.Target = cfg.Bucket + "/" + cfg.KeyPrefix
-			if cfg.Provider == types.SecretProviderGCS {
-				d.Type = types.ExportDeliveryTypeGCS
-			}
-		}
-	}
+	d := types.NewFileDelivery(details.ConnectionID, details.JobConfig, workflow.Now(ctx))
 	if runErr != nil {
 		d.Status = types.ExportDeliveryStatusFailed
 		d.Detail = runFailureMessage(runErr)

@@ -841,3 +841,25 @@ type ExportDelivery struct {
 	Detail string    `json:"detail,omitempty"`
 	At     time.Time `json:"at"`
 }
+
+// NewFileDelivery returns a delivered entry for the run's file destination.
+func NewFileDelivery(connectionID string, cfg *S3JobConfig, at time.Time) ExportDelivery {
+	d := ExportDelivery{
+		Type:   ExportDeliveryTypeFlexprice,
+		Target: "Flexprice",
+		Status: ExportDeliveryStatusDelivered,
+		At:     at,
+	}
+	if connectionID == "" {
+		return d
+	}
+	d.Type = ExportDeliveryTypeS3
+	d.Target = "s3"
+	if cfg != nil {
+		d.Target = cfg.Bucket + "/" + cfg.KeyPrefix
+		if cfg.Provider == SecretProviderGCS {
+			d.Type = ExportDeliveryTypeGCS
+		}
+	}
+	return d
+}

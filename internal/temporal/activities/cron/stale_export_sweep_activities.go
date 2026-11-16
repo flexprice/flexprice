@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -13,20 +14,21 @@ import (
 
 const (
 	staleExportAge       = types.ExportWorkflowTimeout + 30*time.Minute
-	staleExportReason    = "Run did not finish."
+	staleExportReason    = "The run stopped before finishing. Run it again."
 	staleExportBatchSize = 500
 	staleExportMaxPasses = 20
 )
 
 // StaleExportSweepActivities fails export runs that never reached a final status.
 type StaleExportSweepActivities struct {
-	taskRepo  task.Repository
-	logger    *logger.Logger
-	batchSize int
+	taskRepo          task.Repository
+	scheduledTaskRepo scheduledtask.Repository
+	logger            *logger.Logger
+	batchSize         int
 }
 
-func NewStaleExportSweepActivities(taskRepo task.Repository, log *logger.Logger) *StaleExportSweepActivities {
-	return &StaleExportSweepActivities{taskRepo: taskRepo, logger: log, batchSize: staleExportBatchSize}
+func NewStaleExportSweepActivities(taskRepo task.Repository, scheduledTaskRepo scheduledtask.Repository, log *logger.Logger) *StaleExportSweepActivities {
+	return &StaleExportSweepActivities{taskRepo: taskRepo, scheduledTaskRepo: scheduledTaskRepo, logger: log, batchSize: staleExportBatchSize}
 }
 
 // SweepStaleExportRunsActivity returns how many runs it failed.
@@ -52,6 +54,7 @@ func (a *StaleExportSweepActivities) SweepStaleExportRunsActivity(ctx context.Co
 			}
 			if changed {
 				passFailed++
+				a.recordFailedDelivery(rowCtx, ref.ID)
 			}
 		}
 		total += passFailed
@@ -74,4 +77,30 @@ func (a *StaleExportSweepActivities) SweepStaleExportRunsActivity(ctx context.Co
 		return total, fmt.Errorf("failed to fail %d stale export runs", rowErrors)
 	}
 	return total, nil
+}
+
+// recordFailedDelivery logs and drops its own errors.
+func (a *StaleExportSweepActivities) recordFailedDelivery(ctx context.Context, taskID string) {
+	run, err := a.taskRepo.Get(ctx, taskID)
+	if err != nil {
+		a.logger.Error(ctx, "stale export sweep: get run failed", "error", err, "task_id", taskID)
+		return
+	}
+	var connectionID string
+	var cfg *types.S3JobConfig
+	if run.ScheduledTaskID != "" {
+		st, err := a.scheduledTaskRepo.Get(ctx, run.ScheduledTaskID)
+		if err != nil {
+			a.logger.Error(ctx, "stale export sweep: get export failed", "error", err, "task_id", taskID)
+			return
+		}
+		connectionID = st.ConnectionID
+		cfg, _ = st.GetS3JobConfig()
+	}
+	d := types.NewFileDelivery(connectionID, cfg, clock.Now())
+	d.Status = types.ExportDeliveryStatusFailed
+	d.Detail = staleExportReason
+	if err := a.taskRepo.SetTaskMetadataKey(ctx, taskID, "deliveries", []types.ExportDelivery{d}); err != nil {
+		a.logger.Error(ctx, "stale export sweep: record delivery failed", "error", err, "task_id", taskID)
+	}
 }
