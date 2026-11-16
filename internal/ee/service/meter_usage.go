@@ -2857,27 +2857,19 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 			weights = rangeUsage
 		}
 
-		for gi, share := range splitBilled(bp.billed, weights, groups[0].AggregationType, groups[0].Currency) {
-			group := groups[gi]
-			info := group.CommitmentInfo
-			info.ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount.Add(share.ComputedCommitmentUtilizedAmount)
-			info.ComputedOverageAmount = info.ComputedOverageAmount.Add(share.ComputedOverageAmount)
-			info.ComputedTrueUpAmount = info.ComputedTrueUpAmount.Add(share.ComputedTrueUpAmount)
-			info.ComputedCommitmentUtilizedQuantity = info.ComputedCommitmentUtilizedQuantity.Add(share.ComputedCommitmentUtilizedQuantity)
-			info.ComputedOverageQuantity = info.ComputedOverageQuantity.Add(share.ComputedOverageQuantity)
-			info.ComputedTrueUpQuantity = info.ComputedTrueUpQuantity.Add(share.ComputedTrueUpQuantity)
-			// Utilized plus true-up: what the commitment itself bills; overage is billed outside it.
-			info.Amount = info.ComputedCommitmentUtilizedAmount.Add(info.ComputedTrueUpAmount)
-			total := share.ComputedCommitmentUtilizedAmount.Add(share.ComputedOverageAmount).Add(share.ComputedTrueUpAmount)
-			group.TotalCost = group.TotalCost.Add(total)
+		shares := splitBilled(bp.billed, weights, groups[0].AggregationType, groups[0].Currency)
+		// A line priced per window places each window's charges on the point of that window, not by usage.
+		if grain != "" && len(bp.windows) > 0 {
+			allocateBilledWindows(groups, shares, bp.windows, windows)
+			continue
+		}
 
-			// A billing-terms commitment covers usage at $0, so a share can carry quantities without an amount.
-			carries := !total.IsZero() ||
-				!share.ComputedCommitmentUtilizedQuantity.IsZero() ||
-				!share.ComputedOverageQuantity.IsZero() ||
-				!share.ComputedTrueUpQuantity.IsZero()
+		for gi, share := range shares {
+			group := groups[gi]
+			addToGroup(group, &share)
+
 			at := pointsIn[gi]
-			if len(at) == 0 && !fill.IsZero() && carries {
+			if len(at) == 0 && !fill.IsZero() && carriesCharge(&share) {
 				group.Points = append(group.Points, events.UsageAnalyticPoint{Timestamp: fill, WindowStart: fill})
 				at = []int{len(group.Points) - 1}
 			}
@@ -2888,16 +2880,7 @@ func allocateBilledPeriods(data *AnalyticsData, groups []*events.DetailedUsageAn
 			}
 
 			for k, part := range splitBilled(&share, usage, group.AggregationType, group.Currency) {
-				point := &group.Points[at[k]]
-				point.ComputedCommitmentUtilizedAmount = point.ComputedCommitmentUtilizedAmount.Add(part.ComputedCommitmentUtilizedAmount)
-				point.ComputedOverageAmount = point.ComputedOverageAmount.Add(part.ComputedOverageAmount)
-				point.ComputedTrueUpAmount = point.ComputedTrueUpAmount.Add(part.ComputedTrueUpAmount)
-				point.ComputedCommitmentUtilizedQuantity = point.ComputedCommitmentUtilizedQuantity.Add(part.ComputedCommitmentUtilizedQuantity)
-				point.ComputedOverageQuantity = point.ComputedOverageQuantity.Add(part.ComputedOverageQuantity)
-				point.ComputedTrueUpQuantity = point.ComputedTrueUpQuantity.Add(part.ComputedTrueUpQuantity)
-				point.Cost = point.Cost.Add(part.ComputedCommitmentUtilizedAmount).
-					Add(part.ComputedOverageAmount).
-					Add(part.ComputedTrueUpAmount)
+				addToPoint(&group.Points[at[k]], &part)
 			}
 		}
 	}
@@ -3293,6 +3276,14 @@ const maxCommitmentPeriods = 366
 type billedPeriod struct {
 	period types.Period
 	billed *types.CommitmentInfo
+	// windows is billed cut by the commitment windows that billed it, for a line priced window by window; nil otherwise.
+	windows []billedWindow
+}
+
+// billedWindow is what the commitment window starting at start bills a line.
+type billedWindow struct {
+	start  time.Time
+	billed types.CommitmentInfo
 }
 
 // calculateLineItemCommitments returns what each billing period of [params.StartTime, end) bills, as of now, the queried
@@ -3322,14 +3313,15 @@ func (s *meterUsageService) calculateLineItemCommitments(
 	}
 
 	breakdownsByPeriod := make([]map[string]*types.CommitmentInfo, len(periods))
+	windowsByPeriod := make([]map[string][]billedWindow, len(periods))
 	covered := map[string]bool{}
 	for i, period := range periods {
-		breakdowns, err := s.periodCommitments(ctx, usage, selectedCharges, params, billingAnchor, period, end, now)
+		breakdowns, windows, err := s.periodCommitments(ctx, usage, selectedCharges, params, billingAnchor, period, end, now)
 		if err != nil {
 			return nil, err
 		}
 
-		breakdownsByPeriod[i] = breakdowns
+		breakdownsByPeriod[i], windowsByPeriod[i] = breakdowns, windows
 		for lineID := range breakdowns {
 			covered[lineID] = true
 		}
@@ -3375,7 +3367,11 @@ func (s *meterUsageService) calculateLineItemCommitments(
 	byLine := map[string][]billedPeriod{}
 	for i, period := range periods {
 		for lineID, breakdown := range breakdownsByPeriod[i] {
-			byLine[lineID] = append(byLine[lineID], billedPeriod{period: period, billed: breakdown})
+			byLine[lineID] = append(byLine[lineID], billedPeriod{
+				period:  period,
+				billed:  breakdown,
+				windows: windowsByPeriod[i][lineID],
+			})
 		}
 	}
 
@@ -3451,7 +3447,7 @@ func billingPeriodsIn(sub *subscription.Subscription, span types.Period, now tim
 }
 
 // periodCommitments prices one billing period's part of the range through the billing commitment loader: what its
-// commitments bill each queried line they cover.
+// commitments bill each queried line they cover, and that cut by commitment window for the lines priced per window.
 func (s *meterUsageService) periodCommitments(
 	ctx context.Context,
 	usage *SubscriptionMeterUsage,
@@ -3460,7 +3456,7 @@ func (s *meterUsageService) periodCommitments(
 	billingAnchor *time.Time,
 	period types.Period,
 	end, now time.Time,
-) (map[string]*types.CommitmentInfo, error) {
+) (map[string]*types.CommitmentInfo, map[string][]billedWindow, error) {
 	// The loader finds the commitments from the subscription's lines, so their usage is added once it knows which.
 	commitmentCharges := map[string][]*dto.SubscriptionUsageByMetersResponse{}
 
@@ -3469,7 +3465,7 @@ func (s *meterUsageService) periodCommitments(
 		ctx, usage.Subscription, period.Start, period.End, now, commitmentCharges, usage.MeterMap, types.UsageSourceAnalytics,
 	)
 	if err != nil || len(loader.commitments) == 0 {
-		return nil, err
+		return nil, nil, err
 	}
 
 	queried := make(map[string]bool, len(selectedCharges))
@@ -3478,7 +3474,7 @@ func (s *meterUsageService) periodCommitments(
 	}
 
 	if len(loader.CommitmentsCovering(queried)) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// The lines read include those a meter filter left out. A period holding the whole range reuses the queried usage,
@@ -3502,20 +3498,22 @@ func (s *meterUsageService) periodCommitments(
 	periodParams.StartTime = period.Start
 	readCharges, err := s.fetchLineItemCharges(ctx, usage, linesToRead, &periodParams, billingAnchor, period.End)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := s.applyRunningTotals(ctx, usage, readCharges, period.End); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for lineID, charge := range readCharges {
 		commitmentCharges[lineID] = []*dto.SubscriptionUsageByMetersResponse{charge}
 	}
 
-	lines, _, err := loader.BillingLines(ctx)
+	stacks, allocs, err := loader.Stacks(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
+	lines := coverWithBillingTerms(loader.usageLinesOf(ctx, stacks, allocs), loader.commitments)
 
 	breakdownByLine := map[string]*types.CommitmentInfo{}
 	for _, sc := range loader.commitments {
@@ -3569,6 +3567,7 @@ func (s *meterUsageService) periodCommitments(
 	}
 
 	// A shared true-up is split across the commitment's whole scope by utilized value.
+	trueUpShares := map[string]map[string]decimal.Decimal{}
 	for _, line := range trueUps {
 		commitmentID := lo.FromPtr(line.CommitmentID)
 		scope := loader.scopeByCommitment[commitmentID].lineItems
@@ -3587,7 +3586,10 @@ func (s *meterUsageService) periodCommitments(
 
 		amounts := roundShares(allocateCostByWeight(line.Amount, utilized), usage.Subscription.Currency)
 		quantities := allocateCostByWeight(unused, utilized)
+		shares := allocateCostByWeight(decimal.NewFromInt(1), utilized)
+		trueUpShares[commitmentID] = map[string]decimal.Decimal{}
 		for i, item := range scope {
+			trueUpShares[commitmentID][item.ID] = shares[i]
 			lineBreakdown := breakdownByLine[item.ID]
 			lineBreakdown.ComputedTrueUpAmount = lineBreakdown.ComputedTrueUpAmount.Add(amounts[i])
 			lineBreakdown.ComputedTrueUpQuantity = lineBreakdown.ComputedTrueUpQuantity.Add(quantities[i])
@@ -3600,7 +3602,221 @@ func (s *meterUsageService) periodCommitments(
 		}
 	}
 
-	return breakdownByLine, nil
+	windowsByLine := map[string][]billedWindow{}
+	for si, stack := range stacks {
+		for li, line := range stack.Lines {
+			lineBreakdown := breakdownByLine[line.Item.ID]
+			if lineBreakdown == nil || !line.PerWindow {
+				continue
+			}
+
+			aggregation := usage.MeterMap[line.Item.MeterID].Aggregation.Type
+			windows := lineWindows(stack, allocs[si], li, trueUpShares, lineBreakdown, aggregation, usage.Subscription.Currency)
+			windowsByLine[line.Item.ID] = keepWindowsBefore(windows, period.End, lineBreakdown)
+		}
+	}
+
+	return breakdownByLine, windowsByLine, nil
+}
+
+// lineWindows cuts what a period bills a line priced per window by commitment window. Each window prices on its own,
+// so its utilized and overage are exact; a window commitment's true-up is the capacity each window left unused, and a
+// billing-period one's, which no window owns, follows usage.
+func lineWindows(
+	stack *commitmentStack,
+	alloc *allocation,
+	li int,
+	trueUpShares map[string]map[string]decimal.Decimal,
+	billed *types.CommitmentInfo,
+	aggregation types.AggregationType,
+	currency string,
+) []billedWindow {
+	line := stack.Lines[li]
+	n := len(stack.Windows)
+	utilized, overage, unused := make([]decimal.Decimal, n), make([]decimal.Decimal, n), make([]decimal.Decimal, n)
+	for w := range stack.Windows {
+		overage[w] = alloc.Overage[li][w]
+		utilized[w] = line.Usage[w].Sub(overage[w])
+		if stack.Measurement != types.CommitmentMeasurementWindow {
+			continue
+		}
+
+		for ci, sc := range stack.Commitments {
+			share := trueUpShares[sc.ID][line.Item.ID]
+			if share.IsPositive() && sc.PoolOf[w] != noPool {
+				unused[w] = unused[w].Add(share.Mul(alloc.Commitments[ci].UnusedByPool[sc.PoolOf[w]]))
+			}
+		}
+	}
+
+	if !lo.SomeBy(unused, decimal.Decimal.IsPositive) {
+		unused = line.Usage
+	}
+
+	utilizedAmounts := roundShares(allocateUsageCost(billed.ComputedCommitmentUtilizedAmount, utilized, aggregation), currency)
+	overageAmounts := roundShares(allocateUsageCost(billed.ComputedOverageAmount, overage, aggregation), currency)
+	trueUpAmounts := roundShares(allocateCostByWeight(billed.ComputedTrueUpAmount, unused), currency)
+	utilizedQuantities := allocateUsageCost(billed.ComputedCommitmentUtilizedQuantity, utilized, aggregation)
+	overageQuantities := allocateUsageCost(billed.ComputedOverageQuantity, overage, aggregation)
+	trueUpQuantities := allocateCostByWeight(billed.ComputedTrueUpQuantity, unused)
+	windows := make([]billedWindow, n)
+	for w, start := range stack.Windows {
+		windows[w] = billedWindow{start: start, billed: types.CommitmentInfo{
+			ComputedCommitmentUtilizedAmount:   utilizedAmounts[w],
+			ComputedOverageAmount:              overageAmounts[w],
+			ComputedTrueUpAmount:               trueUpAmounts[w],
+			ComputedCommitmentUtilizedQuantity: utilizedQuantities[w],
+			ComputedOverageQuantity:            overageQuantities[w],
+			ComputedTrueUpQuantity:             trueUpQuantities[w],
+		}}
+	}
+
+	return windows
+}
+
+// keepWindowsBefore drops the windows starting at or after end and the ones billing nothing, and sets total to what
+// the kept ones bill. A projected open period holds windows past the range, whose floors the range does not owe yet.
+func keepWindowsBefore(windows []billedWindow, end time.Time, total *types.CommitmentInfo) []billedWindow {
+	kept := make([]billedWindow, 0, len(windows))
+	sum := types.CommitmentInfo{}
+	for _, window := range windows {
+		if !window.start.Before(end) || !carriesCharge(&window.billed) {
+			continue
+		}
+
+		addBilled(&sum, &window.billed)
+		kept = append(kept, window)
+	}
+
+	total.ComputedCommitmentUtilizedAmount = sum.ComputedCommitmentUtilizedAmount
+	total.ComputedOverageAmount = sum.ComputedOverageAmount
+	total.ComputedTrueUpAmount = sum.ComputedTrueUpAmount
+	total.ComputedCommitmentUtilizedQuantity = sum.ComputedCommitmentUtilizedQuantity
+	total.ComputedOverageQuantity = sum.ComputedOverageQuantity
+	total.ComputedTrueUpQuantity = sum.ComputedTrueUpQuantity
+	return kept
+}
+
+// addBilled adds what part bills to into.
+func addBilled(into, part *types.CommitmentInfo) {
+	into.ComputedCommitmentUtilizedAmount = into.ComputedCommitmentUtilizedAmount.Add(part.ComputedCommitmentUtilizedAmount)
+	into.ComputedOverageAmount = into.ComputedOverageAmount.Add(part.ComputedOverageAmount)
+	into.ComputedTrueUpAmount = into.ComputedTrueUpAmount.Add(part.ComputedTrueUpAmount)
+	into.ComputedCommitmentUtilizedQuantity = into.ComputedCommitmentUtilizedQuantity.Add(part.ComputedCommitmentUtilizedQuantity)
+	into.ComputedOverageQuantity = into.ComputedOverageQuantity.Add(part.ComputedOverageQuantity)
+	into.ComputedTrueUpQuantity = into.ComputedTrueUpQuantity.Add(part.ComputedTrueUpQuantity)
+}
+
+// billedCost is the money a share bills: utilized, overage and true-up.
+func billedCost(share *types.CommitmentInfo) decimal.Decimal {
+	return share.ComputedCommitmentUtilizedAmount.Add(share.ComputedOverageAmount).Add(share.ComputedTrueUpAmount)
+}
+
+// carriesCharge reports whether a share bills money or usage. A billing-terms commitment covers usage at $0, so a
+// share can carry quantities without an amount.
+func carriesCharge(share *types.CommitmentInfo) bool {
+	return !billedCost(share).IsZero() ||
+		!share.ComputedCommitmentUtilizedQuantity.IsZero() ||
+		!share.ComputedOverageQuantity.IsZero() ||
+		!share.ComputedTrueUpQuantity.IsZero()
+}
+
+// addToPoint adds what part bills to the point's cost and commitment breakdown.
+func addToPoint(point *events.UsageAnalyticPoint, part *types.CommitmentInfo) {
+	point.ComputedCommitmentUtilizedAmount = point.ComputedCommitmentUtilizedAmount.Add(part.ComputedCommitmentUtilizedAmount)
+	point.ComputedOverageAmount = point.ComputedOverageAmount.Add(part.ComputedOverageAmount)
+	point.ComputedTrueUpAmount = point.ComputedTrueUpAmount.Add(part.ComputedTrueUpAmount)
+	point.ComputedCommitmentUtilizedQuantity = point.ComputedCommitmentUtilizedQuantity.Add(part.ComputedCommitmentUtilizedQuantity)
+	point.ComputedOverageQuantity = point.ComputedOverageQuantity.Add(part.ComputedOverageQuantity)
+	point.ComputedTrueUpQuantity = point.ComputedTrueUpQuantity.Add(part.ComputedTrueUpQuantity)
+	point.Cost = point.Cost.Add(billedCost(part))
+}
+
+// addToGroup adds what share bills to the group's total and commitment breakdown.
+func addToGroup(group *events.DetailedUsageAnalytic, share *types.CommitmentInfo) {
+	info := group.CommitmentInfo
+	addBilled(info, share)
+	// Utilized plus true-up: what the commitment itself bills; overage is billed outside it.
+	info.Amount = info.ComputedCommitmentUtilizedAmount.Add(info.ComputedTrueUpAmount)
+	group.TotalCost = group.TotalCost.Add(billedCost(share))
+}
+
+// allocateBilledWindows gives each analytics window what the commitment windows inside it billed. Groups keep their
+// shares of the period's charges, so each takes that part of every window. A window that bills without usage, as a
+// binding window commitment's empty bucket does, gets a zero-usage point.
+func allocateBilledWindows(
+	groups []*events.DetailedUsageAnalytic,
+	shares []types.CommitmentInfo,
+	billed []billedWindow,
+	windows pointWindows,
+) {
+	var starts []time.Time
+	var totals []types.CommitmentInfo
+	for i := range billed {
+		start := windows.startOf(billed[i].start)
+		if len(starts) == 0 || !starts[len(starts)-1].Equal(start) {
+			starts, totals = append(starts, start), append(totals, types.CommitmentInfo{})
+		}
+
+		addBilled(&totals[len(totals)-1], &billed[i].billed)
+	}
+
+	// A kind no window billed, left with a rounding remainder, follows the windows' cost.
+	weightsOf := func(pick func(*types.CommitmentInfo) decimal.Decimal) []decimal.Decimal {
+		weights := make([]decimal.Decimal, len(totals))
+		for k := range totals {
+			weights[k] = pick(&totals[k])
+		}
+
+		if lo.EveryBy(weights, decimal.Decimal.IsZero) {
+			for k := range totals {
+				weights[k] = billedCost(&totals[k])
+			}
+		}
+
+		return weights
+	}
+	utilized := weightsOf(func(c *types.CommitmentInfo) decimal.Decimal { return c.ComputedCommitmentUtilizedAmount })
+	overage := weightsOf(func(c *types.CommitmentInfo) decimal.Decimal { return c.ComputedOverageAmount })
+	trueUp := weightsOf(func(c *types.CommitmentInfo) decimal.Decimal { return c.ComputedTrueUpAmount })
+
+	for gi, group := range groups {
+		share := &shares[gi]
+		addToGroup(group, share)
+		pointAt := make(map[int64]int, len(group.Points))
+		for j, point := range group.Points {
+			pointAt[point.Timestamp.Unix()] = j
+		}
+
+		aggregation, currency := group.AggregationType, group.Currency
+		utilizedAmounts := roundShares(allocateUsageCost(share.ComputedCommitmentUtilizedAmount, utilized, aggregation), currency)
+		overageAmounts := roundShares(allocateUsageCost(share.ComputedOverageAmount, overage, aggregation), currency)
+		trueUpAmounts := roundShares(allocateCostByWeight(share.ComputedTrueUpAmount, trueUp), currency)
+		utilizedQuantities := allocateUsageCost(share.ComputedCommitmentUtilizedQuantity, utilized, aggregation)
+		overageQuantities := allocateUsageCost(share.ComputedOverageQuantity, overage, aggregation)
+		trueUpQuantities := allocateCostByWeight(share.ComputedTrueUpQuantity, trueUp)
+		for k, start := range starts {
+			part := types.CommitmentInfo{
+				ComputedCommitmentUtilizedAmount:   utilizedAmounts[k],
+				ComputedOverageAmount:              overageAmounts[k],
+				ComputedTrueUpAmount:               trueUpAmounts[k],
+				ComputedCommitmentUtilizedQuantity: utilizedQuantities[k],
+				ComputedOverageQuantity:            overageQuantities[k],
+				ComputedTrueUpQuantity:             trueUpQuantities[k],
+			}
+			if !carriesCharge(&part) {
+				continue
+			}
+
+			j, ok := pointAt[start.Unix()]
+			if !ok {
+				group.Points = append(group.Points, events.UsageAnalyticPoint{Timestamp: start, WindowStart: start})
+				j = len(group.Points) - 1
+			}
+
+			addToPoint(&group.Points[j], &part)
+		}
+	}
 }
 
 // chargeCost prices a line's usage the way billing prices it: bucketed usage bucket by bucket, otherwise in one go.

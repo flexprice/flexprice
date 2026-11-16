@@ -60,6 +60,8 @@ type commitmentAllocation struct {
 	UsedByLine []decimal.Decimal // aligned with the commitment's Lines
 	Capacity   decimal.Decimal
 	Unused     decimal.Decimal
+	// UnusedByPool is what each pool has left, aligned with the commitment's Pools.
+	UnusedByPool []decimal.Decimal
 }
 
 // sortCommitmentStack orders commitments by priority, then earlier start, then lower id.
@@ -204,6 +206,7 @@ func allocate(stack *commitmentStack) (*allocation, error) {
 		got := &out.Commitments[ci]
 		got.Used = decimal.Sum(decimal.Zero, got.UsedByLine...)
 		got.Unused = got.Capacity.Sub(got.Used)
+		got.UnusedByPool = capacityLeft[ci]
 	}
 
 	return out, nil

@@ -123,6 +123,13 @@ lines' quantities go to `computed_*_quantity` the same way: usage a billing-term
 $0, and only a quantity commitment's true-up counts its unused units. A running SUM meter is read at its total at the
 period's end, as invoices bill it. A covered line's periods without a commitment bill at its own price.
 
+Within a period, a line priced window by window (a bucketed price, with or without a window commitment) puts each
+window's own utilized, overage and true-up on the point holding that window (`lineWindows`, `allocateBilledWindows`),
+so a window over its commitment shows no true-up. A window that bills without usage, which only a binding window
+commitment's unused capacity does, gets a zero-usage point; windows past the queried range are left out, so a range
+reaching into the open period is not charged the rest of the period's floor. Other lines keep usage-backed points only
+and share the period's charges by usage.
+
 Each period's charges stay on that period's groups and points, shared by the usage billing priced: a bucketed price's
 summed buckets, not a window's peak. Amounts are rounded to the currency on their running total (`roundShares`), so
 shares sum to what was billed; quantities share by the same weights unrounded. A point belongs to the period holding

@@ -22,6 +22,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -7146,12 +7147,22 @@ func (s *MeterUsageServiceSuite) TestCommitments_WindowCommitmentBillsWhatTheInv
 	}
 	s.True(pointsCost.Equal(invoiced), "points add up to %s", pointsCost)
 
-	// Within the period the charges follow usage: 5 Jan used 14 of the 18 units, 6 Jan the other 4.
-	s.Require().Len(item.Points, 2)
+	// Each day carries its own window: 5 Jan fills its $10 and runs $8 over, 6 Jan uses $4 and leaves $6, and every
+	// other day bills its unused $10 on a zero-usage point.
+	s.Require().Len(item.Points, 31)
 	for _, p := range item.Points {
-		wantOverage := byKind[types.CommitmentLineOverage].Mul(p.Usage).Div(dec("18"))
-		s.True(p.ComputedOverageAmount.Sub(wantOverage).Abs().LessThan(dec("0.01")),
-			"overage on %s is %s, want %s", p.Timestamp, p.ComputedOverageAmount, wantOverage)
+		utilized, overage, trueUp := "0", "0", "10"
+		switch p.Timestamp.Day() {
+		case 5:
+			utilized, overage, trueUp = "10", "8", "0"
+		case 6:
+			utilized, trueUp = "4", "6"
+		default:
+			s.True(p.Usage.IsZero(), "usage on %s is %s", p.Timestamp, p.Usage)
+		}
+		s.True(p.ComputedCommitmentUtilizedAmount.Equal(dec(utilized)), "utilized on %s is %s", p.Timestamp, p.ComputedCommitmentUtilizedAmount)
+		s.True(p.ComputedOverageAmount.Equal(dec(overage)), "overage on %s is %s", p.Timestamp, p.ComputedOverageAmount)
+		s.True(p.ComputedTrueUpAmount.Equal(dec(trueUp)), "true-up on %s is %s", p.Timestamp, p.ComputedTrueUpAmount)
 		s.True(p.Cost.Equal(p.ComputedCommitmentUtilizedAmount.Add(p.ComputedOverageAmount).Add(p.ComputedTrueUpAmount)),
 			"point on %s costs %s", p.Timestamp, p.Cost)
 	}
@@ -7918,4 +7929,146 @@ func (s *MeterUsageServiceSuite) TestCommitments_ExpandedRequestsCarryTheTotalWi
 	s.Require().NoError(err)
 	s.Require().NotNil(resp.TotalCostWithInstalments)
 	s.True(resp.TotalCostWithInstalments.Equal(resp.TotalCost), "with instalments %s, cost %s", resp.TotalCostWithInstalments, resp.TotalCost)
+}
+
+// A line priced per window gets each window's own charges: an empty window a binding window commitment still bills
+// gets a zero-usage point, and a window over its commitment takes no true-up.
+func (s *MeterUsageServiceSuite) TestAnalytics_BilledWindowsLandOnTheirOwnPoints() {
+	start := s.periodStart
+	minute := func(n int) time.Time { return start.Add(time.Duration(n) * time.Minute) }
+	window := func(n int, utilized, overage, trueUp string) billedWindow {
+		return billedWindow{start: minute(n), billed: types.CommitmentInfo{
+			ComputedCommitmentUtilizedAmount: dec(utilized),
+			ComputedOverageAmount:            dec(overage),
+			ComputedTrueUpAmount:             dec(trueUp),
+		}}
+	}
+	data := &AnalyticsData{
+		Analytics: []*events.DetailedUsageAnalytic{{
+			SubLineItemID:   "line",
+			AggregationType: types.AggregationSum,
+			TotalUsage:      dec("19"),
+			Points: []events.UsageAnalyticPoint{
+				{Timestamp: minute(0), Usage: dec("4")},
+				{Timestamp: minute(1), Usage: dec("15")},
+			},
+		}},
+		LineTotals: map[string]decimal.Decimal{"line": dec("35")},
+		LineBilledPeriods: map[string][]billedPeriod{"line": {{
+			period: types.Period{Start: start, End: minute(4)},
+			billed: &types.CommitmentInfo{
+				IsWindowed:                       true,
+				TrueUpEnabled:                    true,
+				ComputedCommitmentUtilizedAmount: dec("14"),
+				ComputedOverageAmount:            dec("5"),
+				ComputedTrueUpAmount:             dec("26"),
+			},
+			windows: []billedWindow{
+				window(0, "4", "0", "6"),
+				window(1, "10", "5", "0"),
+				window(2, "0", "0", "10"),
+				window(3, "0", "0", "10"),
+			},
+		}}},
+		Params: &events.UsageAnalyticsParams{WindowSize: types.WindowSizeMinute},
+	}
+
+	group := allocateLineItemCosts(data)[0]
+	s.Require().Len(group.Points, 4)
+	want := []struct{ usage, utilized, overage, trueUp, cost string }{
+		{"4", "4", "0", "6", "10"},
+		{"15", "10", "5", "0", "15"},
+		{"0", "0", "0", "10", "10"},
+		{"0", "0", "0", "10", "10"},
+	}
+	for i, w := range want {
+		point := group.Points[i]
+		s.True(point.Timestamp.Equal(minute(i)), "point %d at %s", i, point.Timestamp)
+		s.True(point.Usage.Equal(dec(w.usage)), "point %d usage %s", i, point.Usage)
+		s.True(point.ComputedCommitmentUtilizedAmount.Equal(dec(w.utilized)), "point %d utilized %s", i, point.ComputedCommitmentUtilizedAmount)
+		s.True(point.ComputedOverageAmount.Equal(dec(w.overage)), "point %d overage %s", i, point.ComputedOverageAmount)
+		s.True(point.ComputedTrueUpAmount.Equal(dec(w.trueUp)), "point %d true-up %s", i, point.ComputedTrueUpAmount)
+		s.True(point.Cost.Equal(dec(w.cost)), "point %d cost %s", i, point.Cost)
+	}
+	s.True(group.TotalCost.Equal(dec("45")), "total %s", group.TotalCost)
+	s.True(group.CommitmentInfo.ComputedTrueUpAmount.Equal(dec("26")), "true-up %s", group.CommitmentInfo.ComputedTrueUpAmount)
+}
+
+// Windows finer than the requested grain add up on the point of the window holding them.
+func (s *MeterUsageServiceSuite) TestAnalytics_BilledWindowsRollUpToTheRequestedGrain() {
+	start := s.periodStart
+	data := &AnalyticsData{
+		Analytics: []*events.DetailedUsageAnalytic{{
+			SubLineItemID:   "line",
+			AggregationType: types.AggregationSum,
+			TotalUsage:      dec("4"),
+			Points:          []events.UsageAnalyticPoint{{Timestamp: start, Usage: dec("4")}},
+		}},
+		LineTotals: map[string]decimal.Decimal{"line": dec("30")},
+		LineBilledPeriods: map[string][]billedPeriod{"line": {{
+			period: types.Period{Start: start, End: start.Add(2 * time.Hour)},
+			billed: &types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("4"), ComputedTrueUpAmount: dec("26")},
+			windows: []billedWindow{
+				{start: start, billed: types.CommitmentInfo{ComputedCommitmentUtilizedAmount: dec("4"), ComputedTrueUpAmount: dec("6")}},
+				{start: start.Add(time.Minute), billed: types.CommitmentInfo{ComputedTrueUpAmount: dec("10")}},
+				{start: start.Add(time.Hour), billed: types.CommitmentInfo{ComputedTrueUpAmount: dec("10")}},
+			},
+		}}},
+		Params: &events.UsageAnalyticsParams{WindowSize: types.WindowSizeHour},
+	}
+
+	points := allocateLineItemCosts(data)[0].Points
+	s.Require().Len(points, 2)
+	s.True(points[0].Cost.Equal(dec("20")), "cost %s", points[0].Cost)
+	s.True(points[0].ComputedTrueUpAmount.Equal(dec("16")), "true-up %s", points[0].ComputedTrueUpAmount)
+	s.True(points[1].Timestamp.Equal(start.Add(time.Hour)), "point at %s", points[1].Timestamp)
+	s.True(points[1].Usage.IsZero(), "usage %s", points[1].Usage)
+	s.True(points[1].Cost.Equal(dec("10")), "cost %s", points[1].Cost)
+}
+
+// A window commitment's true-up is the capacity each window left unused, and the windows past the range, which a
+// projected open period holds, are not billed to it.
+func TestLineWindowsBillEachWindowItsOwnCharges(t *testing.T) {
+	start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	windows := []time.Time{start, start.Add(time.Minute), start.Add(2 * time.Minute), start.Add(3 * time.Minute)}
+	line := &usageLine{
+		Item:      &subscription.SubscriptionLineItem{ID: "line"},
+		Cost:      dec("19"),
+		Usage:     []decimal.Decimal{dec("4"), dec("15"), dec("0"), dec("0")},
+		PerWindow: true,
+	}
+	sc := &stackedCommitment{
+		Commitment: &commitment.Commitment{ID: "cmt", Value: dec("10"), Binding: true},
+		Lines:      []*usageLine{line},
+		Pools:      []decimal.Decimal{dec("10"), dec("10"), dec("10"), dec("10")},
+		PoolOf:     []int{0, 1, 2, 3},
+	}
+	stack := &commitmentStack{
+		Type:        types.COMMITMENT_TYPE_AMOUNT,
+		Measurement: types.CommitmentMeasurementWindow,
+		Windows:     windows,
+		Commitments: []*stackedCommitment{sc},
+		Lines:       []*usageLine{line},
+	}
+	alloc, err := allocate(stack)
+	require.NoError(t, err)
+
+	billed := &types.CommitmentInfo{
+		ComputedCommitmentUtilizedAmount: dec("14"),
+		ComputedOverageAmount:            dec("5"),
+		ComputedTrueUpAmount:             dec("26"),
+	}
+	shares := map[string]map[string]decimal.Decimal{"cmt": {"line": dec("1")}}
+	got := lineWindows(stack, alloc, 0, shares, billed, types.AggregationSum, "usd")
+	require.Len(t, got, 4)
+	for w, want := range [][3]string{{"4", "0", "6"}, {"10", "5", "0"}, {"0", "0", "10"}, {"0", "0", "10"}} {
+		require.True(t, got[w].billed.ComputedCommitmentUtilizedAmount.Equal(dec(want[0])), "window %d utilized %s", w, got[w].billed.ComputedCommitmentUtilizedAmount)
+		require.True(t, got[w].billed.ComputedOverageAmount.Equal(dec(want[1])), "window %d overage %s", w, got[w].billed.ComputedOverageAmount)
+		require.True(t, got[w].billed.ComputedTrueUpAmount.Equal(dec(want[2])), "window %d true-up %s", w, got[w].billed.ComputedTrueUpAmount)
+	}
+
+	kept := keepWindowsBefore(got, start.Add(3*time.Minute), billed)
+	require.Len(t, kept, 3)
+	require.True(t, billed.ComputedTrueUpAmount.Equal(dec("16")), "true-up %s", billed.ComputedTrueUpAmount)
+	require.True(t, billed.ComputedCommitmentUtilizedAmount.Equal(dec("14")), "utilized %s", billed.ComputedCommitmentUtilizedAmount)
 }

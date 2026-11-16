@@ -390,10 +390,19 @@ func (l *commitmentLoader) usageLines(ctx context.Context) ([]dto.CreateInvoiceL
 		return nil, err
 	}
 
+	return l.usageLinesOf(ctx, stacks, allocs), nil
+}
+
+// usageLinesOf renders the usage lines of stacks already allocated.
+func (l *commitmentLoader) usageLinesOf(
+	ctx context.Context,
+	stacks []*commitmentStack,
+	allocs []*allocation,
+) []dto.CreateInvoiceLineItemRequest {
 	cost := func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
 		return l.priceSvc.CalculateCost(ctx, p, qty)
 	}
-	return commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost), nil
+	return commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost)
 }
 
 // BillingLines returns the commitment lines an invoice bills and their total: the usage lines, with those of
