@@ -625,6 +625,7 @@ func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo pay
 	filter := types.NewNoLimitPaymentFilter()
 	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
 	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentStatuses = []types.PaymentStatus{types.PaymentStatusPending, types.PaymentStatusProcessing}
 	existing, err := paymentRepo.List(ctx, filter)
 	if err == nil && lo.ContainsBy(existing, func(p *payment.Payment) bool { return p.ID != paymentID && p.IsChargeInFlight() }) {
 		err = errChargeInFlight(invoiceID)

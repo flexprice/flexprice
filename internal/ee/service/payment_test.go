@@ -872,6 +872,38 @@ func (s *PaymentServiceSuite) TestProcessPayment_RejectsSubmittedWebhookCharge()
 	}
 }
 
+// A Razorpay charge awaiting its webhook cannot be voided; a pending payment link still can.
+func (s *PaymentServiceSuite) TestUpdatePayment_VoidRejectedWhileChargeInFlight() {
+	razorpay := string(types.PaymentGatewayTypeRazorpay)
+	tests := []struct {
+		name    string
+		method  types.PaymentMethodType
+		status  types.PaymentStatus
+		allowed bool
+	}{
+		{name: "pending upi charge", method: types.PaymentMethodTypeUPI, status: types.PaymentStatusPending},
+		{name: "pending card charge", method: types.PaymentMethodTypeCard, status: types.PaymentStatusPending},
+		{name: "pending payment link", method: types.PaymentMethodTypePaymentLink, status: types.PaymentStatusPending, allowed: true},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			p := s.newMetricsPayment("pay_void_"+string(tt.method), razorpay, tt.method, tt.status)
+
+			_, err := s.service.UpdatePayment(s.GetContext(), p.ID, dto.UpdatePaymentRequest{PaymentStatus: lo.ToPtr(string(types.PaymentStatusVoided))})
+
+			got, getErr := s.GetStores().PaymentRepo.Get(s.GetContext(), p.ID)
+			s.Require().NoError(getErr)
+			if tt.allowed {
+				s.NoError(err)
+				s.Equal(types.PaymentStatusVoided, got.PaymentStatus)
+				return
+			}
+			s.True(ierr.IsInvalidOperation(err))
+			s.Equal(tt.status, got.PaymentStatus)
+		})
+	}
+}
+
 // Creation counts as the first transition; checkout payments carry the checkout marker.
 func (s *PaymentServiceSuite) TestPaymentCreationCountedWithCheckoutLabel() {
 	r := metricstest.Install(s.T())

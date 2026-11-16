@@ -241,6 +241,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			}
 			return paymentObj, err
 		}
+		p.recordPaymentTransition(ctx, paymentObj, statusBeforeOutcome)
 		return paymentObj, nil
 	}
 	if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
