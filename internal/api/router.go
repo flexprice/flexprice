@@ -231,6 +231,7 @@ func NewRouter(
 			environment.GET("/:id", read(types.EntityEnvironment, types.ActionRead), handlers.Environment.GetEnvironment)
 			environment.PUT("/:id", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.UpdateEnvironment)
 			environment.POST("/:id/clone", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.CloneEnvironment)
+			environment.GET("/:id/branding", read(types.EntityEnvironment, types.ActionRead), handlers.Environment.GetBranding)
 			environment.PUT("/:id/branding/:asset", brandingBodyLimit, write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.UploadBrandingAsset)
 			environment.DELETE("/:id/branding/:asset", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.RemoveBrandingAsset)
 		}
@@ -654,6 +655,7 @@ func NewRouter(
 			billingEntities.POST("", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.CreateBillingEntity)
 			billingEntities.GET("/:id", observe(types.EntityBillingEntity), handlers.BillingEntity.GetBillingEntity)
 			billingEntities.PUT("/:id", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.UpdateBillingEntity)
+			billingEntities.GET("/:id/branding", observe(types.EntityBillingEntity), handlers.BillingEntity.GetBranding)
 			billingEntities.PUT("/:id/branding/:asset", brandingBodyLimit, write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.UploadBrandingAsset)
 			billingEntities.DELETE("/:id/branding/:asset", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.RemoveBrandingAsset)
 		}

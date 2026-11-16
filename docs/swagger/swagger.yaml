@@ -1467,16 +1467,12 @@ definitions:
         type: string
       environment_id:
         type: string
-      icon_url:
-        type: string
       id:
         type: string
       invoice_number_prefix:
         type: string
       is_default:
         type: boolean
-      logo_url:
-        type: string
       metadata:
         additionalProperties:
           type: string
@@ -1571,6 +1567,13 @@ definitions:
         items:
           $ref: '#/definitions/billingterm.Instalment'
         type: array
+    type: object
+  BrandingResponse:
+    properties:
+      icon_url:
+        type: string
+      logo_url:
+        type: string
     type: object
   BucketSummary:
     properties:
@@ -4935,23 +4938,6 @@ definitions:
       updated_at:
         type: string
       updated_by:
-        type: string
-    type: object
-  EnvironmentResponse:
-    properties:
-      created_at:
-        type: string
-      icon_url:
-        type: string
-      id:
-        type: string
-      logo_url:
-        type: string
-      name:
-        type: string
-      type:
-        type: string
-      updated_at:
         type: string
     type: object
   Event:
@@ -18925,6 +18911,43 @@ paths:
       summary: Update a billing entity
       tags:
       - Billing Entities
+  /billing-entities/{id}/branding:
+    get:
+      description: Get the billing entity's own logo and icon URLs; a URL is omitted
+        when that asset is not uploaded. An entity with either asset uses only its
+        own; one with none uses its environment's.
+      operationId: getBillingEntityBranding
+      parameters:
+      - description: Billing entity ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/BrandingResponse'
+        "400":
+          description: Billing entities not enabled
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a billing entity's logo and icon
+      tags:
+      - Billing Entities
+      x-scope: read
   /billing-entities/{id}/branding/{asset}:
     delete:
       description: Remove the billing entity's logo or icon. Image URLs handed out
@@ -18950,7 +18973,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/BillingEntityResponse'
+            $ref: '#/definitions/BrandingResponse'
         "400":
           description: Invalid asset or billing entities not enabled
           schema:
@@ -19002,7 +19025,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/BillingEntityResponse'
+            $ref: '#/definitions/BrandingResponse'
         "400":
           description: Invalid image or billing entities not enabled
           schema:
@@ -21452,6 +21475,42 @@ paths:
       summary: Query entitlements
       tags:
       - Entitlements
+  /environments/{id}/branding:
+    get:
+      description: Get the environment's logo and icon URLs; a URL is omitted when
+        that asset is not uploaded.
+      operationId: getEnvironmentBranding
+      parameters:
+      - description: Environment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/BrandingResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get an environment's logo and icon
+      tags:
+      - Environments
+      x-scope: read
   /environments/{id}/branding/{asset}:
     delete:
       description: Remove the environment's logo or icon. Image URLs handed out earlier
@@ -21477,7 +21536,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/EnvironmentResponse'
+            $ref: '#/definitions/BrandingResponse'
         "400":
           description: Bad Request
           schema:
@@ -21532,7 +21591,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/EnvironmentResponse'
+            $ref: '#/definitions/BrandingResponse'
         "400":
           description: Bad Request
           schema:

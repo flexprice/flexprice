@@ -91,7 +91,7 @@ Variation: the invoice's PDF comes from a connected billing provider or an exter
 | FR-4 | An icon must be square and at least 128 × 128 px. A logo must be at least 128 px on each side. | UC1, UC2 | A 200 × 100 icon, a 100 × 100 icon and a 600 × 100 logo are each rejected with a message naming the rule broken; a 600 × 128 logo is accepted. |
 | FR-5 | A rejected upload leaves the current asset unchanged. | UC1, UC2 | After a rejected upload, reading the environment returns the same URL as before. |
 | FR-6 | A tenant admin or API client can remove the logo or the icon. | UC1 | After removal, reading the environment returns no URL for that asset and surfaces show its fallback (FR-12–FR-16). |
-| FR-7 | Reading an environment returns absolute logo and icon URLs, or none for an asset not uploaded. | UC1 | Read after upload and after removal returns the expected URLs. |
+| FR-7 | Reading an environment's branding returns absolute logo and icon URLs, or none for an asset not uploaded. | UC1 | Read after upload and after removal returns the expected URLs. |
 | FR-8 | FR-1–FR-7 also apply to a billing entity's logo and icon. Entity uploads and removals are rejected unless billing entities are enabled for the environment, as other billing entity reads and writes are. | UC2 | With billing entities enabled, an entity upload succeeds and reads back; in an environment where they are not enabled, it is rejected with the existing "not enabled" message. |
 | FR-9 | The console's environment settings and billing entity page let an admin upload, replace and remove each asset and show the current one. | UC1, UC2 | In the console, uploading, replacing and removing each asset is reflected after reload. |
 
@@ -159,7 +159,7 @@ Variation: the invoice's PDF comes from a connected billing provider or an exter
 | Platform storage | Upload, download and existence checks on Flexprice-owned buckets, chosen per deployment; callers pick a bucket by purpose (invoice, export, import). Existence checks report not-found the same way on S3 and GCS; download reports every failure, not-found included, as a server error. No delete operation exists | Extend: a public asset purpose that resolves to the invoice bucket under its own key prefix, so no new bucket or infra; image content types added to uploads; download reports not-found distinctly; the storage-off check extended to it |
 | Security headers | `nosniff` on every API response | Reuse as-is |
 | Request body limit | Cuts a request body off while it is read | Reuse as-is, set to 1 MiB on the upload routes |
-| Environment API and its write permission | Environment read, update and clone; writes guarded by environment write permission; responses have their own shape, separate from the stored record | Extend: logo and icon URLs on read; upload and remove endpoints under the same permission |
+| Environment API and its write permission | Environment read, update and clone; writes guarded by environment write permission; responses have their own shape, separate from the stored record | Extend: branding read, upload and remove endpoints under the same permissions; the environment response itself is unchanged |
 | Environment settings | One stored value per environment and key, e.g. `invoice_config` (whose invoice number prefix a billing entity overrides with its own column) and `customer_portal_config` (portal theme colours). A key with its own flow (`billing_entity_config`) is refused by the generic settings API and written under a lock after an uncached read | Extend: a `branding_config` key for the environment's logo and icon, handled like `billing_entity_config` |
 | Billing entity API and its gating | Entity read and update, rejected while billing entities are off | Extend: same as the environment |
 | Invoice issuer resolution | The billing entity that issued an invoice (frozen on finalized invoices, stored on drafts), else the tenant | Reuse as-is for FR-10 |
@@ -286,7 +286,7 @@ No row, or a field left out, means not uploaded. The generic settings API refuse
 - `PUT /v1/environments/{id}/branding/{asset}` and `PUT /v1/billing-entities/{id}/branding/{asset}`, where `{asset}` is `logo` or `icon`.
 - Auth: API key or session with environment write (environment route) or billing entity write (entity route) permission.
 - Request: `multipart/form-data` with one part `file`.
-- Response `200`: the updated environment or billing entity, as its existing update endpoint returns it, including the new URL fields.
+- Response `200`: the branding object below with the new URLs.
 - Any error leaves the current key unchanged (FR-5). Errors:
 
 | Status | When |
@@ -300,15 +300,14 @@ No row, or a field left out, means not uploaded. The generic settings API refuse
 **Remove an asset**
 - `DELETE /v1/environments/{id}/branding/{asset}` and `DELETE /v1/billing-entities/{id}/branding/{asset}`.
 - Clears the key only; the stored image stays (NFR-9). Removing an asset that is not set succeeds.
-- Response `200`: the updated environment or billing entity. Errors as for upload, minus the file errors.
+- Response `200`: the branding object below. Errors as for upload, minus the file errors.
 
 **Read**
-- Every environment and billing entity response gains two fields, omitted when not set. The stored keys themselves are not returned.
+- `GET /v1/environments/{id}/branding` (environment read permission) and `GET /v1/billing-entities/{id}/branding` (billing entity read permission; rejected while billing entities are off, as other entity reads are). The environment and billing entity responses themselves are unchanged, as environment settings such as the invoice number prefix are not part of the environment response either.
+- The branding object, shared by read, upload and remove; a URL is omitted when that asset is not set, and the stored keys are not returned. An entity's object shows only its own assets, not the environment's it falls back to.
 
 ```json
 {
-  "id": "be_01…",
-  "name": "Acme India",
   "logo_url": "https://us.api.flexprice.io/v1/assets/tenant_01…/env_01…/9f2c…e1.png",
   "icon_url": "https://us.api.flexprice.io/v1/assets/tenant_01…/env_01…/41ab…7d.png"
 }

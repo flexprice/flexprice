@@ -26,8 +26,6 @@ type EnvironmentResponse struct {
 	Type      string `json:"type"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
-	LogoURL   string `json:"logo_url,omitempty"`
-	IconURL   string `json:"icon_url,omitempty"`
 }
 
 type ListEnvironmentsResponse struct {

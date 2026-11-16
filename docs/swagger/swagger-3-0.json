@@ -2288,6 +2288,75 @@
         "x-codegen-request-body-name": "billing_entity"
       }
     },
+    "/billing-entities/{id}/branding": {
+      "get": {
+        "tags": [
+          "Billing Entities"
+        ],
+        "summary": "Get a billing entity's logo and icon",
+        "description": "Get the billing entity's own logo and icon URLs; a URL is omitted when that asset is not uploaded. An entity with either asset uses only its own; one with none uses its environment's.",
+        "operationId": "getBillingEntityBranding",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Billing entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Billing entities not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/billing-entities/{id}/branding/{asset}": {
       "put": {
         "tags": [
@@ -2346,7 +2415,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BillingEntityResponse"
+                  "$ref": "#/components/schemas/BrandingResponse"
                 }
               }
             }
@@ -2426,7 +2495,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BillingEntityResponse"
+                  "$ref": "#/components/schemas/BrandingResponse"
                 }
               }
             }
@@ -6853,6 +6922,75 @@
         ]
       }
     },
+    "/environments/{id}/branding": {
+      "get": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "Get an environment's logo and icon",
+        "description": "Get the environment's logo and icon URLs; a URL is omitted when that asset is not uploaded.",
+        "operationId": "getEnvironmentBranding",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandingResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/environments/{id}/branding/{asset}": {
       "put": {
         "tags": [
@@ -6911,7 +7049,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EnvironmentResponse"
+                  "$ref": "#/components/schemas/BrandingResponse"
                 }
               }
             }
@@ -7001,7 +7139,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EnvironmentResponse"
+                  "$ref": "#/components/schemas/BrandingResponse"
                 }
               }
             }
@@ -22848,9 +22986,6 @@
           "environment_id": {
             "type": "string"
           },
-          "icon_url": {
-            "type": "string"
-          },
           "id": {
             "type": "string"
           },
@@ -22859,9 +22994,6 @@
           },
           "is_default": {
             "type": "boolean"
-          },
-          "logo_url": {
-            "type": "string"
           },
           "metadata": {
             "type": "object",
@@ -22990,6 +23122,17 @@
             "items": {
               "$ref": "#/components/schemas/billingterm.Instalment"
             }
+          }
+        }
+      },
+      "BrandingResponse": {
+        "type": "object",
+        "properties": {
+          "icon_url": {
+            "type": "string"
+          },
+          "logo_url": {
+            "type": "string"
           }
         }
       },
@@ -27276,34 +27419,6 @@
           },
           "updated_by": {
             "type": "string"
-          }
-        }
-      },
-      "EnvironmentResponse": {
-        "type": "object",
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "icon_url": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "logo_url": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
           }
         }
       },

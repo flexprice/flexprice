@@ -36,10 +36,12 @@ type BillingEntityService interface {
 	Get(ctx context.Context, id string) (*dto.BillingEntityResponse, error)
 	List(ctx context.Context, filter *types.BillingEntityFilter) (*dto.ListBillingEntitiesResponse, error)
 	Update(ctx context.Context, id string, req dto.UpdateBillingEntityRequest) (*dto.BillingEntityResponse, error)
+	// GetBranding returns the entity's own logo and icon URLs.
+	GetBranding(ctx context.Context, id string) (*dto.BrandingResponse, error)
 	// UploadBrandingAsset stores the entity's logo or icon.
-	UploadBrandingAsset(ctx context.Context, id string, req dto.UploadBrandingAssetRequest) (*dto.BillingEntityResponse, error)
+	UploadBrandingAsset(ctx context.Context, id string, req dto.UploadBrandingAssetRequest) (*dto.BrandingResponse, error)
 	// RemoveBrandingAsset clears the entity's logo or icon; the stored image stays.
-	RemoveBrandingAsset(ctx context.Context, id string, asset types.BrandingAsset) (*dto.BillingEntityResponse, error)
+	RemoveBrandingAsset(ctx context.Context, id string, asset types.BrandingAsset) (*dto.BrandingResponse, error)
 }
 
 type billingEntityService struct {
@@ -395,7 +397,7 @@ func (s *billingEntityService) Create(ctx context.Context, req dto.CreateBilling
 	if err := s.BillingEntityRepo.Create(ctx, entity); err != nil {
 		return nil, err
 	}
-	return s.entityResponse(entity), nil
+	return &dto.BillingEntityResponse{BillingEntity: entity}, nil
 }
 
 func (s *billingEntityService) Get(ctx context.Context, id string) (*dto.BillingEntityResponse, error) {
@@ -406,7 +408,7 @@ func (s *billingEntityService) Get(ctx context.Context, id string) (*dto.Billing
 	if err != nil {
 		return nil, err
 	}
-	return s.entityResponse(entity), nil
+	return &dto.BillingEntityResponse{BillingEntity: entity}, nil
 }
 
 func (s *billingEntityService) List(ctx context.Context, filter *types.BillingEntityFilter) (*dto.ListBillingEntitiesResponse, error) {
@@ -430,7 +432,7 @@ func (s *billingEntityService) List(ctx context.Context, filter *types.BillingEn
 	}
 
 	items := lo.Map(entities, func(e *billingentity.BillingEntity, _ int) *dto.BillingEntityResponse {
-		return s.entityResponse(e)
+		return &dto.BillingEntityResponse{BillingEntity: e}
 	})
 	resp := types.NewListResponse(items, total, filter.GetLimit(), filter.GetOffset())
 	return &resp, nil
@@ -467,10 +469,21 @@ func (s *billingEntityService) Update(ctx context.Context, id string, req dto.Up
 	if err := s.BillingEntityRepo.Update(ctx, updated); err != nil {
 		return nil, err
 	}
-	return s.entityResponse(updated), nil
+	return &dto.BillingEntityResponse{BillingEntity: updated}, nil
 }
 
-func (s *billingEntityService) UploadBrandingAsset(ctx context.Context, id string, req dto.UploadBrandingAssetRequest) (*dto.BillingEntityResponse, error) {
+func (s *billingEntityService) GetBranding(ctx context.Context, id string) (*dto.BrandingResponse, error) {
+	if err := s.requireEnabled(ctx); err != nil {
+		return nil, err
+	}
+	entity, err := s.BillingEntityRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.brandingResponse(entity), nil
+}
+
+func (s *billingEntityService) UploadBrandingAsset(ctx context.Context, id string, req dto.UploadBrandingAssetRequest) (*dto.BrandingResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -493,7 +506,7 @@ func (s *billingEntityService) UploadBrandingAsset(ctx context.Context, id strin
 	return s.saveBrandingKey(ctx, existing, req.Asset, &key)
 }
 
-func (s *billingEntityService) RemoveBrandingAsset(ctx context.Context, id string, asset types.BrandingAsset) (*dto.BillingEntityResponse, error) {
+func (s *billingEntityService) RemoveBrandingAsset(ctx context.Context, id string, asset types.BrandingAsset) (*dto.BrandingResponse, error) {
 	if err := asset.Validate(); err != nil {
 		return nil, err
 	}
@@ -507,7 +520,7 @@ func (s *billingEntityService) RemoveBrandingAsset(ctx context.Context, id strin
 	return s.saveBrandingKey(ctx, existing, asset, nil)
 }
 
-func (s *billingEntityService) saveBrandingKey(ctx context.Context, existing *billingentity.BillingEntity, asset types.BrandingAsset, key *string) (*dto.BillingEntityResponse, error) {
+func (s *billingEntityService) saveBrandingKey(ctx context.Context, existing *billingentity.BillingEntity, asset types.BrandingAsset, key *string) (*dto.BrandingResponse, error) {
 	if err := s.BillingEntityRepo.UpdateBrandingKey(ctx, existing.ID, asset, key); err != nil {
 		return nil, err
 	}
@@ -515,14 +528,13 @@ func (s *billingEntityService) saveBrandingKey(ctx context.Context, existing *bi
 	if err != nil {
 		return nil, err
 	}
-	return s.entityResponse(updated), nil
+	return s.brandingResponse(updated), nil
 }
 
-func (s *billingEntityService) entityResponse(e *billingentity.BillingEntity) *dto.BillingEntityResponse {
-	return &dto.BillingEntityResponse{
-		BillingEntity: e,
-		LogoURL:       publicAssetURL(s.Config, e.LogoKey),
-		IconURL:       publicAssetURL(s.Config, e.IconKey),
+func (s *billingEntityService) brandingResponse(e *billingentity.BillingEntity) *dto.BrandingResponse {
+	return &dto.BrandingResponse{
+		LogoURL: publicAssetURL(s.Config, e.LogoKey),
+		IconURL: publicAssetURL(s.Config, e.IconKey),
 	}
 }
 

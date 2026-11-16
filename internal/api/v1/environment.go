@@ -90,6 +90,29 @@ func (h *EnvironmentHandler) UpdateEnvironment(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Get an environment's logo and icon
+// @ID getEnvironmentBranding
+// @Description Get the environment's logo and icon URLs; a URL is omitted when that asset is not uploaded.
+// @Tags Environments
+// @x-scope "read"
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Environment ID"
+// @Success 200 {object} dto.BrandingResponse
+// @Failure 403 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /environments/{id}/branding [get]
+func (h *EnvironmentHandler) GetBranding(c *gin.Context) {
+	resp, err := h.service.GetBranding(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Upload an environment logo or icon
 // @ID uploadEnvironmentBrandingAsset
 // @Description Upload the environment's logo or icon as a PNG or JPEG of at most 512 KB. An icon must be square and at least 128 x 128 px; a logo at least 128 px on each side. Replaces the current asset.
@@ -101,7 +124,7 @@ func (h *EnvironmentHandler) UpdateEnvironment(c *gin.Context) {
 // @Param id path string true "Environment ID"
 // @Param asset path string true "Asset" Enums(logo, icon)
 // @Param file formData file true "PNG or JPEG image"
-// @Success 200 {object} dto.EnvironmentResponse
+// @Success 200 {object} dto.BrandingResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 403 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse
@@ -132,7 +155,7 @@ func (h *EnvironmentHandler) UploadBrandingAsset(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Environment ID"
 // @Param asset path string true "Asset" Enums(logo, icon)
-// @Success 200 {object} dto.EnvironmentResponse
+// @Success 200 {object} dto.BrandingResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 403 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse

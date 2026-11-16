@@ -1899,6 +1899,60 @@ const docTemplate = `{
                 }
             }
         },
+        "/billing-entities/{id}/branding": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get the billing entity's own logo and icon URLs; a URL is omitted when that asset is not uploaded. An entity with either asset uses only its own; one with none uses its environment's.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "Get a billing entity's logo and icon",
+                "operationId": "getBillingEntityBranding",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Billing entity ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BrandingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Billing entities not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/billing-entities/{id}/branding/{asset}": {
             "put": {
                 "security": [
@@ -1949,7 +2003,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/BillingEntityResponse"
+                            "$ref": "#/definitions/BrandingResponse"
                         }
                     },
                     "400": {
@@ -2012,7 +2066,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/BillingEntityResponse"
+                            "$ref": "#/definitions/BrandingResponse"
                         }
                     },
                     "400": {
@@ -5610,6 +5664,60 @@ const docTemplate = `{
                 }
             }
         },
+        "/environments/{id}/branding": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get the environment's logo and icon URLs; a URL is omitted when that asset is not uploaded.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Environments"
+                ],
+                "summary": "Get an environment's logo and icon",
+                "operationId": "getEnvironmentBranding",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BrandingResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/environments/{id}/branding/{asset}": {
             "put": {
                 "security": [
@@ -5660,7 +5768,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/EnvironmentResponse"
+                            "$ref": "#/definitions/BrandingResponse"
                         }
                     },
                     "400": {
@@ -5729,7 +5837,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/EnvironmentResponse"
+                            "$ref": "#/definitions/BrandingResponse"
                         }
                     },
                     "400": {
@@ -19682,9 +19790,6 @@ const docTemplate = `{
                 "environment_id": {
                     "type": "string"
                 },
-                "icon_url": {
-                    "type": "string"
-                },
                 "id": {
                     "type": "string"
                 },
@@ -19693,9 +19798,6 @@ const docTemplate = `{
                 },
                 "is_default": {
                     "type": "boolean"
-                },
-                "logo_url": {
-                    "type": "string"
                 },
                 "metadata": {
                     "type": "object",
@@ -19828,6 +19930,17 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/billingterm.Instalment"
                     }
+                }
+            }
+        },
+        "BrandingResponse": {
+            "type": "object",
+            "properties": {
+                "icon_url": {
+                    "type": "string"
+                },
+                "logo_url": {
+                    "type": "string"
                 }
             }
         },
@@ -24444,32 +24557,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_by": {
-                    "type": "string"
-                }
-            }
-        },
-        "EnvironmentResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "icon_url": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "logo_url": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "updated_at": {
                     "type": "string"
                 }
             }

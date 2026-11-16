@@ -23,6 +23,12 @@ func (r *UploadBrandingAssetRequest) Validate() error {
 	return nil
 }
 
+// BrandingResponse is an environment's or billing entity's logo and icon URLs, omitted when not uploaded.
+type BrandingResponse struct {
+	LogoURL string `json:"logo_url,omitempty"`
+	IconURL string `json:"icon_url,omitempty"`
+}
+
 // PortalBrandingResponse is the issuer shown in the customer portal.
 type PortalBrandingResponse struct {
 	Name    string `json:"name"`
