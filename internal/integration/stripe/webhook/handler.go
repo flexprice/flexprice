@@ -207,7 +207,7 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 			return err
 		}
 
-		payment, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
+		payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 		if err != nil {
 			h.logger.Error(ctx, "failed to get FlexPrice payment, skipping event",
 				"error", err,
@@ -282,7 +282,7 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 		"flexprice_payment_id", flexpricePaymentID)
 
 	// Get payment record by flexprice_payment_id
-	payment, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
+	payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		h.logger.Error(ctx, "failed to get payment record, skipping event",
 			"error", err,
@@ -967,7 +967,7 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	}
 
 	// get payment from database
-	payment, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
+	payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		h.logger.Error(ctx, "failed to get payment from database, skipping event", "error", err, "event_id", event.ID)
 		return nil

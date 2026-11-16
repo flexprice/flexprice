@@ -93,7 +93,7 @@ type webhookTestPaymentService struct {
 	attempts    []dto.RecordAttemptRequest
 }
 
-func (s *webhookTestPaymentService) GetPayment(_ context.Context, _ string) (*dto.PaymentResponse, error) {
+func (s *webhookTestPaymentService) GetPayment(_ context.Context, _ dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
 	s.getCalls++
 	return s.payment, nil
 }

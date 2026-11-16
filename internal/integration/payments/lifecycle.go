@@ -10,6 +10,7 @@ import (
 
 	"github.com/samber/lo"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -116,7 +117,7 @@ func (l *PaymentLifecycle) ConfirmGatewayPayment(ctx context.Context, flexpriceP
 		return ierr.NewError("gateway_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	existing, err := l.paymentService.GetPayment(ctx, flexpricePaymentID)
+	existing, err := l.paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Payment not found").
@@ -176,7 +177,7 @@ func (l *PaymentLifecycle) RecordPaymentSuccess(ctx context.Context, params Reco
 		return ierr.NewError("flexprice_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	existing, err := l.paymentService.GetPayment(ctx, params.FlexpricePaymentID)
+	existing, err := l.paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: params.FlexpricePaymentID})
 	if err != nil {
 		l.logger.Error(ctx, "failed to get payment for success recording",
 			"flexprice_payment_id", params.FlexpricePaymentID,
@@ -348,7 +349,7 @@ func (l *PaymentLifecycle) RecordPaymentFailure(ctx context.Context, params Reco
 		return ierr.NewError("flexprice_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	existing, err := l.paymentService.GetPayment(ctx, params.FlexpricePaymentID)
+	existing, err := l.paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: params.FlexpricePaymentID})
 	if err != nil {
 		l.logger.Error(ctx, "failed to get payment for failure recording",
 			"flexprice_payment_id", params.FlexpricePaymentID,
@@ -437,7 +438,7 @@ func (l *PaymentLifecycle) RecordPaymentVoided(ctx context.Context, params Recor
 		return ierr.NewError("flexprice_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	existing, err := l.paymentService.GetPayment(ctx, params.FlexpricePaymentID)
+	existing, err := l.paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: params.FlexpricePaymentID})
 	if err != nil {
 		l.logger.Error(ctx, "failed to get payment for void recording",
 			"flexprice_payment_id", params.FlexpricePaymentID,
@@ -518,7 +519,7 @@ func (l *PaymentLifecycle) RecordPaymentRefunded(ctx context.Context, params Rec
 		return ierr.NewError("flexprice_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	existing, err := l.paymentService.GetPayment(ctx, params.FlexpricePaymentID)
+	existing, err := l.paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: params.FlexpricePaymentID})
 	if err != nil {
 		l.logger.Error(ctx, "failed to get payment for refund recording",
 			"flexprice_payment_id", params.FlexpricePaymentID,
