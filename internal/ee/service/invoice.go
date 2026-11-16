@@ -86,6 +86,8 @@ type InvoiceService interface {
 	// GetInvoiceBillingEntity is the billing entity frozen at finalization, else the customer's entity now; nil means the tenant bills.
 	// An issued invoice without a frozen billing entity predates billing entities, so the tenant stays its biller.
 	GetInvoiceBillingEntity(ctx context.Context, inv *invoice.Invoice) (*types.InvoiceBillingEntity, error)
+	// GetInvoiceIssuerBranding is the invoice issuer's name and branding image keys, read live.
+	GetInvoiceIssuerBranding(ctx context.Context, inv *invoice.Invoice) (*IssuerBranding, error)
 	RecalculateInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
@@ -3939,8 +3941,7 @@ func (s *invoiceService) GetInvoicePDF(ctx context.Context, req dto.InvoicePDFRe
 // brandingImagesForPDF returns the issuer's logo, else its icon. A failure is logged and the
 // PDF renders without branding, since a stored PDF must not depend on an image read.
 func (s *invoiceService) brandingImagesForPDF(ctx context.Context, inv *invoice.Invoice) (logo, icon *pdf.Image) {
-	branding := NewBrandingService(s.ServiceParams)
-	brand, err := branding.ForInvoice(ctx, inv)
+	brand, err := s.GetInvoiceIssuerBranding(ctx, inv)
 	if err != nil {
 		s.Logger.Error(ctx, "branding lookup failed, rendering invoice without it", "error", err, "invoice_id", inv.ID)
 		return nil, nil
@@ -3954,7 +3955,7 @@ func (s *invoiceService) brandingImagesForPDF(ctx context.Context, inv *invoice.
 		return nil, nil
 	}
 
-	data, err := branding.ReadImage(ctx, *key)
+	data, err := NewBrandingService(s.ServiceParams).ReadImage(ctx, *key)
 	if err != nil {
 		s.Logger.Error(ctx, "branding image read failed, rendering invoice without it", "error", err, "invoice_id", inv.ID, "key", *key)
 		return nil, nil

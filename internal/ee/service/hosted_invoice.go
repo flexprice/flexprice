@@ -103,7 +103,7 @@ func (s *hostedInvoiceService) GetInvoice(ctx context.Context) (*dto.HostedInvoi
 	if billingEntity != nil {
 		t = billingEntityAsTenant(t, billingEntity)
 	}
-	brand, err := NewBrandingService(s.ServiceParams).ForInvoice(ctx, &inv.Invoice)
+	brand, err := NewInvoiceService(s.ServiceParams).GetInvoiceIssuerBranding(ctx, &inv.Invoice)
 	if err != nil {
 		return nil, err
 	}
