@@ -38,6 +38,10 @@ func (s *InMemoryEmailLogStore) Get(ctx context.Context, id string) (*emaillog.E
 	return s.InMemoryStore.Get(ctx, id)
 }
 
+func (s *InMemoryEmailLogStore) GetForUpdate(ctx context.Context, id string) (*emaillog.EmailLog, error) {
+	return s.InMemoryStore.Get(ctx, id)
+}
+
 func (s *InMemoryEmailLogStore) Update(ctx context.Context, e *emaillog.EmailLog) error {
 	return s.InMemoryStore.Update(ctx, e.ID, e)
 }
