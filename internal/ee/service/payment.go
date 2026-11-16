@@ -566,6 +566,12 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		if err := p.PaymentStatus.ValidateTransitionTo(target); err != nil {
 			return nil, err
 		}
+		// Voiding here does not cancel the gateway charge, and its capture could no longer settle the payment.
+		if target == types.PaymentStatusVoided && p.IsChargeInFlight() {
+			return nil, ierr.NewError("payment charge is in progress at the gateway").
+				WithHint("This payment cannot be voided until the gateway reports its outcome").
+				Mark(ierr.ErrInvalidOperation)
+		}
 		p.PaymentStatus = target
 	}
 	if req.PaymentGateway != nil {

@@ -240,6 +240,9 @@ type PaymentFilter struct {
 
 	// UpdatedAtGTE bounds updated_at, which every lifecycle change bumps.
 	UpdatedAtGTE *time.Time `form:"updated_at_gte"`
+
+	// PaymentStatuses matches any of these statuses; internal only.
+	PaymentStatuses []PaymentStatus `form:"-" json:"-"`
 }
 
 // NewNoLimitPaymentFilter creates a new payment filter with no limit
