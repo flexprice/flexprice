@@ -214,21 +214,22 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 	}
 
 	data := map[string]interface{}{
-		"customer":     customerInfo,
-		"type":         "link",
-		"amount":       toPaise(req.Amount),
-		"currency":     strings.ToUpper(req.Currency),
-		"description":  "Subscription authorization",
-		"receipt":      req.InvoiceID,
-		"email_notify": true,
-		"sms_notify":   true,
+		"customer": customerInfo,
+		"type":     "link",
+		"amount":   toPaise(req.Amount),
+		"currency": strings.ToUpper(req.Currency),
+		"description": linkDescription(c.Name, lo.Map(req.LineItems, func(li interfaces.CheckoutLineItem, _ int) string {
+			return li.Description
+		})),
+		"email_notify": req.NotifyCustomer,
+		"sms_notify":   req.NotifyCustomer,
 		"notes": map[string]interface{}{
 			"flexprice_customer_id": req.CustomerID,
 			"flexprice_payment_id":  req.PaymentID,
 		},
 	}
 	if req.ExpiresAt != nil {
-		data["expire_by"] = req.ExpiresAt.Unix()
+		data["expire_by"] = clampExpireBy(*req.ExpiresAt).Unix()
 	}
 
 	// as_presented allows another debit in the same period, still capped by max_amount.

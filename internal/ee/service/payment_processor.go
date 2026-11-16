@@ -509,43 +509,16 @@ func (p *paymentProcessor) handleRazorpayTokenCharge(ctx context.Context, paymen
 }
 
 func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
-	// Extract success URL and cancel URL from metadata
-	successURL := ""
-	cancelURL := ""
-
-	if paymentObj.Metadata != nil {
-		if url, exists := paymentObj.Metadata["success_url"]; exists {
-			successURL = url
-		}
-		if url, exists := paymentObj.Metadata["cancel_url"]; exists {
-			cancelURL = url
-		}
-	}
-
-	// Prepare metadata for payment link request
-	linkMetadata := make(map[string]string)
-	if paymentObj.Metadata != nil {
-		// Copy metadata but exclude connection-related fields (internal use only)
-		for k, v := range paymentObj.Metadata {
-			if k != "connection_id" && k != "connection_name" {
-				linkMetadata[k] = v
-			}
-		}
-	}
-
-	// Add FlexPrice payment ID to metadata
-	linkMetadata["flexprice_payment_id"] = paymentObj.ID
-
 	// Convert to Razorpay payment link request
 	paymentLinkReq := &razorpay.CreatePaymentLinkRequest{
-		InvoiceID:  paymentObj.DestinationID,
-		CustomerID: invoice.CustomerID,
-		Amount:     paymentObj.Amount,
-		Currency:   paymentObj.Currency,
-		SuccessURL: successURL,
-		CancelURL:  cancelURL,
-		Metadata:   linkMetadata,
-		PaymentID:  paymentObj.ID,
+		InvoiceID:      paymentObj.DestinationID,
+		CustomerID:     invoice.CustomerID,
+		Amount:         paymentObj.Amount,
+		Currency:       paymentObj.Currency,
+		SuccessURL:     gatewayURL(paymentObj, "success_url"),
+		CancelURL:      gatewayURL(paymentObj, "cancel_url"),
+		PaymentID:      paymentObj.ID,
+		NotifyCustomer: paymentObj.GatewayMetadata["notify_customer"] == "true",
 	}
 
 	// Get Razorpay integration for creating payment link
