@@ -2,8 +2,10 @@ package types
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,4 +68,29 @@ func TestCustomerFilter_UnmarshalFrontendSearchJSON(t *testing.T) {
 		assert.True(t, HasFieldFilter(f.Filters, "status"))
 		assert.Equal(t, "", f.GetStatus())
 	})
+}
+
+// search_query is limited to 255 characters, not bytes, after trimming.
+func TestCustomerFilter_ValidateSearchQueryLength(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		wantErr bool
+	}{
+		{"ascii_at_limit", strings.Repeat("a", 255), false},
+		{"ascii_over_limit", strings.Repeat("a", 256), true},
+		{"multibyte_at_limit", strings.Repeat("é", 255), false},
+		{"multibyte_over_limit", strings.Repeat("客", 256), true},
+		{"surrounding_spaces_not_counted", "  " + strings.Repeat("a", 255) + "  ", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := CustomerFilter{SearchQuery: tt.query}.Validate()
+			if tt.wantErr {
+				assert.True(t, ierr.IsValidation(err), "got %v", err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
 }

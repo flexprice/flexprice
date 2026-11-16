@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
@@ -62,7 +63,7 @@ func (f CustomerFilter) Validate() error {
 		}
 	}
 
-	if len(strings.TrimSpace(f.SearchQuery)) > 255 {
+	if utf8.RuneCountInString(strings.TrimSpace(f.SearchQuery)) > 255 {
 		return ierr.NewError("search_query is too long").
 			WithHint("Search with at most 255 characters").
 			Mark(ierr.ErrValidation)

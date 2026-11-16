@@ -29,7 +29,8 @@ func TestCustomerSearchQuery(t *testing.T) {
 	require.NoError(t, err)
 	client := postgres.NewClient(clients, log, nil)
 
-	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_customer_search_test")
+	// Reads go to the writer, so a configured reader's replication lag cannot hide the fixtures.
+	ctx := types.WithForceWriter(types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_customer_search_test"))
 	// List and Create do not touch the cache.
 	repo := NewCustomerRepository(client, log, nil)
 
@@ -40,6 +41,7 @@ func TestCustomerSearchQuery(t *testing.T) {
 			ID:            id,
 			Name:          name,
 			ExternalID:    externalID,
+			TaxTreatment:  types.TaxTreatmentTaxable,
 			EnvironmentID: types.GetEnvironmentID(ctx),
 			BaseModel:     base,
 		}
