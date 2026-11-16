@@ -5,10 +5,11 @@ package webhook
 
 import (
 	"context"
-	"github.com/flexprice/flexprice/internal/metrics/metricstest"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
+	"github.com/stretchr/testify/require"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
@@ -152,7 +153,9 @@ type webhookTestCheckoutSessionService struct {
 	interfaces.CheckoutSessionService
 	session       *dto.CheckoutSessionResponse // returned by List, matched by session.ID (see note on suite below)
 	listErr       error
+	completeErr   error // returned by CompleteCheckoutSession; on ErrAlreadyExists the session is expired first
 	completeCalls []string
+	cleanupCalls  []string
 }
 
 func (s *webhookTestCheckoutSessionService) List(_ context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error) {
@@ -167,6 +170,18 @@ func (s *webhookTestCheckoutSessionService) List(_ context.Context, filter *type
 
 func (s *webhookTestCheckoutSessionService) CompleteCheckoutSession(_ context.Context, sessionID string, _ *types.CheckoutProviderResult) error {
 	s.completeCalls = append(s.completeCalls, sessionID)
+	if ierr.IsAlreadyExists(s.completeErr) {
+		s.session.CheckoutStatus = types.CheckoutStatusExpired
+	}
+	return s.completeErr
+}
+
+func (s *webhookTestCheckoutSessionService) Get(_ context.Context, _ string) (*dto.CheckoutSessionResponse, error) {
+	return s.session, nil
+}
+
+func (s *webhookTestCheckoutSessionService) CleanupCheckoutSession(_ context.Context, sessionID string, _ error) error {
+	s.cleanupCalls = append(s.cleanupCalls, sessionID)
 	return nil
 }
 
@@ -263,6 +278,31 @@ func (s *WebhookCheckoutBranchingSuite) TestPendingSession_Completes() {
 	s.Empty(s.client.refundCalls, "pending session must not trigger a refund")
 }
 
+func (s *WebhookCheckoutBranchingSuite) TestPendingSession_PastExpiry_Refunds() {
+	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending,
+	}
+	s.checkoutSvc.completeErr = ierr.NewError("checkout session expired").Mark(ierr.ErrAlreadyExists)
+
+	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_test001", "pay_rzp_001"), s.services)
+
+	s.NoError(err)
+	s.Require().Len(s.checkoutSvc.completeCalls, 1)
+	s.Equal([]string{"pay_rzp_001"}, s.client.refundCalls, "a capture the expired session would not take is refunded")
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPendingSession_CompleteError_Retries() {
+	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending,
+	}
+	s.checkoutSvc.completeErr = ierr.NewError("db down").Mark(ierr.ErrDatabase)
+
+	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_test001", "pay_rzp_001"), s.services)
+
+	s.Error(err, "the error reaches the webhook so Razorpay redelivers")
+	s.Empty(s.client.refundCalls)
+}
+
 func (s *WebhookCheckoutBranchingSuite) TestExpiredSession_Refunds() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
 		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired,
@@ -356,6 +396,7 @@ func (s *WebhookCheckoutBranchingSuite) makeFailedEvent() *RazorpayWebhookEvent 
 func (s *WebhookCheckoutBranchingSuite) pendingSession() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
 		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending,
+		PaymentAction: &types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: "https://rzp.io/x"},
 	}
 }
 
@@ -378,6 +419,19 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_PendingSession_Records
 	}, s.paymentSvc.failedAttempts()[0].Metadata)
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
 		"a decline on an open checkout session must not seal the payment")
+	s.Empty(s.checkoutSvc.cleanupCalls, "a link session stays open for the customer to retry")
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_AutoChargeSession_FailsSession() {
+	s.pendingSession()
+	s.checkoutSvc.session.PaymentAction = nil
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+
+	s.NoError(err)
+	s.Len(s.paymentSvc.failedAttempts(), 1)
+	s.Equal([]string{"pay_flex_001"}, s.checkoutSvc.cleanupCalls, "an off-session decline ends the session")
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RepeatedDeclines_RecordEachAttempt() {

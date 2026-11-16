@@ -496,8 +496,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 }
 
 func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
-	// Always return 200 OK to Razorpay to prevent retries
-	// We log errors internally but don't expose them to Razorpay
+	// 200 unless event processing fails; a retry cannot fix a bad URL, signature or payload.
 	defer func() {
 		if c.IsAborted() {
 			return
@@ -593,6 +592,8 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	err = razorpayIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, environmentID, serviceDeps)
 	if err != nil {
 		h.logger.Error(context.Background(), "failed to handle Razorpay webhook event", "error", err)
+		// Razorpay redelivers only on non-2xx.
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 

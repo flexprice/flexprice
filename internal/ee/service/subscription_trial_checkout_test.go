@@ -363,7 +363,7 @@ func (s *SubscriptionServiceSuite) TestTrialEndCheckout_UnpaidCleanupLeavesTrial
 			session, err := s.GetStores().CheckoutSessionRepo.Get(ctx, sessionID)
 			s.Require().NoError(err)
 
-			s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, tt.reason))
+			s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, tt.reason, false))
 
 			got, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
 			s.Require().NoError(err)

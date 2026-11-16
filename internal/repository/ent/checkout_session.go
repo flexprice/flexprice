@@ -380,7 +380,7 @@ func (r *checkoutSessionRepository) MarkCompleted(ctx context.Context, sessionID
 	return len(rows) > 0, nil
 }
 
-func (r *checkoutSessionRepository) MarkTerminal(ctx context.Context, sessionID string, status types.CheckoutStatus, failureReason *string) (bool, error) {
+func (r *checkoutSessionRepository) MarkTerminal(ctx context.Context, sessionID string, status types.CheckoutStatus, failureReason *string, cancelled bool) (bool, error) {
 	if status != types.CheckoutStatusExpired && status != types.CheckoutStatusFailed {
 		return false, ierr.NewError("invalid terminal checkout status").
 			WithHint("MarkTerminal accepts expired or failed").
@@ -407,6 +407,9 @@ func (r *checkoutSessionRepository) MarkTerminal(ctx context.Context, sessionID 
 		SetUpdatedBy(types.GetUserID(ctx))
 	if failureReason != nil {
 		q = q.SetFailureReason(*failureReason)
+	}
+	if cancelled {
+		q = q.SetCancelledAt(clock.Now())
 	}
 
 	rows, err := q.SaveReturning(ctx)

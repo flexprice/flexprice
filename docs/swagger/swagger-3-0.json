@@ -18992,6 +18992,27 @@
         }
       }
     },
+    "/webhook-events/checkout.session.cancelled": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "checkout.session.cancelled",
+        "description": "Fired when a Checkout Session is cancelled through the API, alongside checkout.session.expired. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.CheckoutSessionWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook-events/checkout.session.completed": {
       "post": {
         "tags": [
@@ -41091,6 +41112,7 @@
           "checkout.session.completed",
           "checkout.session.failed",
           "checkout.session.expired",
+          "checkout.session.cancelled",
           "event.rejected"
         ],
         "x-enum-varnames": [
@@ -41166,6 +41188,7 @@
           "WebhookEventCheckoutSessionCompleted",
           "WebhookEventCheckoutSessionFailed",
           "WebhookEventCheckoutSessionExpired",
+          "WebhookEventCheckoutSessionCancelled",
           "WebhookEventEventRejected"
         ],
         "x-speakeasy-name-override": "WebhookEventName"
