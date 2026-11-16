@@ -25,6 +25,8 @@ const (
 	maxExportNameLen        = 120
 	emailCounterTTL         = 2 * time.Hour
 	emailSentTTL            = 25 * time.Hour
+	emailDecisionLimited    = "rate_limited"
+	emailDecisionAdmitted   = "admitted"
 )
 
 type emailSender interface {
@@ -37,6 +39,7 @@ type userLookup interface {
 
 type emailCounter interface {
 	IsEnabled() bool
+	Get(ctx context.Context, key string) (interface{}, bool)
 	Incr(ctx context.Context, key string, ttl time.Duration) (int64, error)
 	TrySetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error)
 }
@@ -128,24 +131,15 @@ func (a *DeliveryActivity) SendExportEmails(ctx context.Context, in SendExportEm
 			continue
 		}
 		if a.counter != nil && a.counter.IsEnabled() {
-			firstAttempt, err := a.counter.TrySetNX(ctx, sentMarkerKey(in.TaskID, addr), 1, emailSentTTL)
+			decision, err := a.admit(ctx, in, addr, limit)
 			if err != nil {
 				a.logger.Error(ctx, "export email rate limit check failed", "error", err, "task_id", in.TaskID)
 				record(addr, types.ExportDeliveryStatusFailed, "rate limit check failed")
 				continue
 			}
-			if firstAttempt {
-				key := fmt.Sprintf("exports:email:%s:%s", in.TenantID, clock.Now().UTC().Format("2006010215"))
-				n, err := a.counter.Incr(ctx, key, emailCounterTTL)
-				if err != nil {
-					a.logger.Error(ctx, "export email rate limit check failed", "error", err, "task_id", in.TaskID)
-					record(addr, types.ExportDeliveryStatusFailed, "rate limit check failed")
-					continue
-				}
-				if n > limit {
-					record(addr, types.ExportDeliveryStatusRateLimited, "")
-					continue
-				}
+			if decision == emailDecisionLimited {
+				record(addr, types.ExportDeliveryStatusRateLimited, "")
+				continue
 			}
 		}
 
@@ -165,6 +159,30 @@ func (a *DeliveryActivity) SendExportEmails(ctx context.Context, in SendExportEm
 		record(addr, types.ExportDeliveryStatusDelivered, "")
 	}
 	return out, nil
+}
+
+// Retries reuse the stored cap decision.
+func (a *DeliveryActivity) admit(ctx context.Context, in SendExportEmailsInput, addr string, limit int64) (string, error) {
+	marker := sentMarkerKey(in.TaskID, addr)
+	if stored, ok := a.counter.Get(ctx, marker); ok {
+		if s, _ := stored.(string); s == emailDecisionLimited {
+			return emailDecisionLimited, nil
+		}
+		return emailDecisionAdmitted, nil
+	}
+	key := fmt.Sprintf("exports:email:%s:%s", in.TenantID, clock.Now().UTC().Format("2006010215"))
+	n, err := a.counter.Incr(ctx, key, emailCounterTTL)
+	if err != nil {
+		return "", err
+	}
+	decision := emailDecisionAdmitted
+	if n > limit {
+		decision = emailDecisionLimited
+	}
+	if _, err := a.counter.TrySetNX(ctx, marker, decision, emailSentTTL); err != nil {
+		return "", err
+	}
+	return decision, nil
 }
 
 func (a *DeliveryActivity) compose(in SendExportEmailsInput) (subject, body string) {

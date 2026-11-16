@@ -50,22 +50,26 @@ type fakeCounter struct {
 	err     error
 	keys    []string
 
-	marked   map[string]bool
+	marked   map[string]interface{}
 	setNXErr error
 }
 
 func (f *fakeCounter) IsEnabled() bool { return f.enabled }
-func (f *fakeCounter) TrySetNX(_ context.Context, key string, _ interface{}, _ time.Duration) (bool, error) {
+func (f *fakeCounter) Get(_ context.Context, key string) (interface{}, bool) {
+	v, ok := f.marked[key]
+	return v, ok
+}
+func (f *fakeCounter) TrySetNX(_ context.Context, key string, value interface{}, _ time.Duration) (bool, error) {
 	if f.setNXErr != nil {
 		return false, f.setNXErr
 	}
 	if f.marked == nil {
-		f.marked = map[string]bool{}
+		f.marked = map[string]interface{}{}
 	}
-	if f.marked[key] {
+	if _, ok := f.marked[key]; ok {
 		return false, nil
 	}
-	f.marked[key] = true
+	f.marked[key] = value
 	return true, nil
 }
 func (f *fakeCounter) Incr(_ context.Context, key string, _ time.Duration) (int64, error) {
@@ -192,6 +196,54 @@ func TestSendExportEmails_RetryDoesNotRecountCap(t *testing.T) {
 	require.Len(t, c.keys, 2)
 	require.Len(t, sender.sent, 6)
 	require.Equal(t, sender.sent[0].IdempotencyKey, sender.sent[2].IdempotencyKey)
+}
+
+func TestSendExportEmails_RetryKeepsRateLimit(t *testing.T) {
+	sender := &fakeSender{}
+	users := &fakeUsers{known: map[string]bool{"a@x.com": true, "b@x.com": true}}
+	c := &fakeCounter{enabled: true, n: map[string]int64{}}
+	a := newDeliveryActivity(sender, users, c, true, 1)
+
+	in := baseInput("a@x.com", "b@x.com")
+	for i := 0; i < 3; i++ {
+		out, err := a.SendExportEmails(context.Background(), in)
+		require.NoError(t, err)
+		require.Equal(t, "delivered", out.Deliveries[0].Status)
+		require.Equal(t, "rate_limited", out.Deliveries[1].Status)
+	}
+
+	require.Len(t, c.keys, 2)
+	require.Len(t, sender.sent, 3)
+	for _, s := range sender.sent {
+		require.Equal(t, "a@x.com", s.ToAddress)
+	}
+}
+
+func TestSendExportEmails_LegacyMarkerAdmits(t *testing.T) {
+	sender := &fakeSender{}
+	users := &fakeUsers{known: map[string]bool{"a@x.com": true}}
+	c := &fakeCounter{enabled: true, n: map[string]int64{}, marked: map[string]interface{}{
+		sentMarkerKey("task 1", "a@x.com"): "1",
+	}}
+	a := newDeliveryActivity(sender, users, c, true, 1)
+
+	out, err := a.SendExportEmails(context.Background(), baseInput("a@x.com"))
+	require.NoError(t, err)
+	require.Equal(t, "delivered", out.Deliveries[0].Status)
+	require.Empty(t, c.keys)
+}
+
+func TestSendExportEmails_MarkerWriteErrorFails(t *testing.T) {
+	sender := &fakeSender{}
+	users := &fakeUsers{known: map[string]bool{"a@x.com": true}}
+	c := &fakeCounter{enabled: true, n: map[string]int64{}, setNXErr: errors.New("down")}
+	a := newDeliveryActivity(sender, users, c, true, 5)
+
+	out, err := a.SendExportEmails(context.Background(), baseInput("a@x.com"))
+	require.NoError(t, err)
+	require.Equal(t, "failed", out.Deliveries[0].Status)
+	require.Equal(t, "rate limit check failed", out.Deliveries[0].Detail)
+	require.Empty(t, sender.sent)
 }
 
 func TestSendExportEmails_MixedRecipients(t *testing.T) {
