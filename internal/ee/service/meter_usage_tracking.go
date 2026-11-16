@@ -31,6 +31,9 @@ import (
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
+// Default dedup lock TTL.
+const eventDeduplicationLockTTL = config.DefaultRedisDeduplicationTTL
+
 // MeterUsageTrackingService handles meter-level usage tracking.
 // Unlike FeatureUsageTrackingService, this skips subscription/feature/price resolution.
 // It matches events to meters, extracts quantity, and writes to the meter_usage table.
