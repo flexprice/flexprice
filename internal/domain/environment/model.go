@@ -9,9 +9,6 @@ type Environment struct {
 	ID   string                `db:"id" json:"id"`
 	Name string                `db:"name" json:"name"`
 	Type types.EnvironmentType `db:"type" json:"type"`
-	// LogoKey and IconKey are branding image keys; nil means not uploaded.
-	LogoKey *string `db:"logo_key" json:"-"`
-	IconKey *string `db:"icon_key" json:"-"`
 
 	types.BaseModel
 }
@@ -23,11 +20,9 @@ func FromEnt(e *ent.Environment) *Environment {
 	}
 
 	return &Environment{
-		ID:      e.ID,
-		Name:    e.Name,
-		Type:    types.EnvironmentType(e.Type),
-		LogoKey: e.LogoKey,
-		IconKey: e.IconKey,
+		ID:   e.ID,
+		Name: e.Name,
+		Type: types.EnvironmentType(e.Type),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

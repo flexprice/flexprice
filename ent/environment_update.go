@@ -96,46 +96,6 @@ func (_u *EnvironmentUpdate) SetNillableType(v *string) *EnvironmentUpdate {
 	return _u
 }
 
-// SetLogoKey sets the "logo_key" field.
-func (_u *EnvironmentUpdate) SetLogoKey(v string) *EnvironmentUpdate {
-	_u.mutation.SetLogoKey(v)
-	return _u
-}
-
-// SetNillableLogoKey sets the "logo_key" field if the given value is not nil.
-func (_u *EnvironmentUpdate) SetNillableLogoKey(v *string) *EnvironmentUpdate {
-	if v != nil {
-		_u.SetLogoKey(*v)
-	}
-	return _u
-}
-
-// ClearLogoKey clears the value of the "logo_key" field.
-func (_u *EnvironmentUpdate) ClearLogoKey() *EnvironmentUpdate {
-	_u.mutation.ClearLogoKey()
-	return _u
-}
-
-// SetIconKey sets the "icon_key" field.
-func (_u *EnvironmentUpdate) SetIconKey(v string) *EnvironmentUpdate {
-	_u.mutation.SetIconKey(v)
-	return _u
-}
-
-// SetNillableIconKey sets the "icon_key" field if the given value is not nil.
-func (_u *EnvironmentUpdate) SetNillableIconKey(v *string) *EnvironmentUpdate {
-	if v != nil {
-		_u.SetIconKey(*v)
-	}
-	return _u
-}
-
-// ClearIconKey clears the value of the "icon_key" field.
-func (_u *EnvironmentUpdate) ClearIconKey() *EnvironmentUpdate {
-	_u.mutation.ClearIconKey()
-	return _u
-}
-
 // Mutation returns the EnvironmentMutation object of the builder.
 func (_u *EnvironmentUpdate) Mutation() *EnvironmentMutation {
 	return _u.mutation
@@ -225,18 +185,6 @@ func (_u *EnvironmentUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(environment.FieldType, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.LogoKey(); ok {
-		_spec.SetField(environment.FieldLogoKey, field.TypeString, value)
-	}
-	if _u.mutation.LogoKeyCleared() {
-		_spec.ClearField(environment.FieldLogoKey, field.TypeString)
-	}
-	if value, ok := _u.mutation.IconKey(); ok {
-		_spec.SetField(environment.FieldIconKey, field.TypeString, value)
-	}
-	if _u.mutation.IconKeyCleared() {
-		_spec.ClearField(environment.FieldIconKey, field.TypeString)
-	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{environment.Label}
@@ -322,46 +270,6 @@ func (_u *EnvironmentUpdateOne) SetNillableType(v *string) *EnvironmentUpdateOne
 	if v != nil {
 		_u.SetType(*v)
 	}
-	return _u
-}
-
-// SetLogoKey sets the "logo_key" field.
-func (_u *EnvironmentUpdateOne) SetLogoKey(v string) *EnvironmentUpdateOne {
-	_u.mutation.SetLogoKey(v)
-	return _u
-}
-
-// SetNillableLogoKey sets the "logo_key" field if the given value is not nil.
-func (_u *EnvironmentUpdateOne) SetNillableLogoKey(v *string) *EnvironmentUpdateOne {
-	if v != nil {
-		_u.SetLogoKey(*v)
-	}
-	return _u
-}
-
-// ClearLogoKey clears the value of the "logo_key" field.
-func (_u *EnvironmentUpdateOne) ClearLogoKey() *EnvironmentUpdateOne {
-	_u.mutation.ClearLogoKey()
-	return _u
-}
-
-// SetIconKey sets the "icon_key" field.
-func (_u *EnvironmentUpdateOne) SetIconKey(v string) *EnvironmentUpdateOne {
-	_u.mutation.SetIconKey(v)
-	return _u
-}
-
-// SetNillableIconKey sets the "icon_key" field if the given value is not nil.
-func (_u *EnvironmentUpdateOne) SetNillableIconKey(v *string) *EnvironmentUpdateOne {
-	if v != nil {
-		_u.SetIconKey(*v)
-	}
-	return _u
-}
-
-// ClearIconKey clears the value of the "icon_key" field.
-func (_u *EnvironmentUpdateOne) ClearIconKey() *EnvironmentUpdateOne {
-	_u.mutation.ClearIconKey()
 	return _u
 }
 
@@ -483,18 +391,6 @@ func (_u *EnvironmentUpdateOne) sqlSave(ctx context.Context) (_node *Environment
 	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(environment.FieldType, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.LogoKey(); ok {
-		_spec.SetField(environment.FieldLogoKey, field.TypeString, value)
-	}
-	if _u.mutation.LogoKeyCleared() {
-		_spec.ClearField(environment.FieldLogoKey, field.TypeString)
-	}
-	if value, ok := _u.mutation.IconKey(); ok {
-		_spec.SetField(environment.FieldIconKey, field.TypeString, value)
-	}
-	if _u.mutation.IconKeyCleared() {
-		_spec.ClearField(environment.FieldIconKey, field.TypeString)
 	}
 	_node = &Environment{config: _u.config}
 	_spec.Assign = _node.assignValues

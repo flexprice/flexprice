@@ -180,7 +180,7 @@ func (r *environmentRepository) Update(ctx context.Context, env *domainEnvironme
 	client := r.client.Writer(ctx)
 	// Scoped by tenant so a row belonging to another tenant is not matched and
 	// the write affects nothing rather than succeeding on a foreign record.
-	update := client.Environment.
+	count, err := client.Environment.
 		Update().
 		Where(
 			entEnvironment.ID(env.ID),
@@ -188,18 +188,8 @@ func (r *environmentRepository) Update(ctx context.Context, env *domainEnvironme
 		).
 		SetName(env.Name).
 		SetType(string(env.Type)).
-		SetUpdatedBy(env.UpdatedBy)
-	if env.LogoKey != nil {
-		update.SetLogoKey(*env.LogoKey)
-	} else {
-		update.ClearLogoKey()
-	}
-	if env.IconKey != nil {
-		update.SetIconKey(*env.IconKey)
-	} else {
-		update.ClearIconKey()
-	}
-	count, err := update.Save(ctx)
+		SetUpdatedBy(env.UpdatedBy).
+		Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)

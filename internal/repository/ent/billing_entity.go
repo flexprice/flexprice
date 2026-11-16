@@ -214,16 +214,6 @@ func (r *billingEntityRepository) Update(ctx context.Context, e *domain.BillingE
 		SetMetadata(e.Metadata).
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
-	if e.LogoKey != nil {
-		update.SetLogoKey(*e.LogoKey)
-	} else {
-		update.ClearLogoKey()
-	}
-	if e.IconKey != nil {
-		update.SetIconKey(*e.IconKey)
-	} else {
-		update.ClearIconKey()
-	}
 	updated, err := update.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -268,6 +258,49 @@ func applyBillingEntityFilter(query *ent.BillingEntityQuery, f *types.BillingEnt
 		query = query.Where(entbillingentity.IsDefault(*f.IsDefault))
 	}
 	return query
+}
+
+// UpdateBrandingKey writes only the asset's key column, so a concurrent write of the other asset or of the entity's other fields is kept.
+func (r *billingEntityRepository) UpdateBrandingKey(ctx context.Context, id string, asset types.BrandingAsset, key *string) error {
+	span := StartRepositorySpan(ctx, "billing_entity", "update_branding_key", map[string]interface{}{
+		"billing_entity_id": id,
+	})
+	defer FinishSpan(span)
+
+	update := r.client.Writer(ctx).BillingEntity.Update().
+		Where(
+			entbillingentity.ID(id),
+			entbillingentity.TenantID(types.GetTenantID(ctx)),
+			entbillingentity.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entbillingentity.Status(string(types.StatusPublished)),
+		).
+		SetUpdatedAt(clock.Now()).
+		SetUpdatedBy(types.GetUserID(ctx))
+	switch {
+	case asset == types.BrandingAssetLogo && key != nil:
+		update.SetLogoKey(*key)
+	case asset == types.BrandingAssetLogo:
+		update.ClearLogoKey()
+	case key != nil:
+		update.SetIconKey(*key)
+	default:
+		update.ClearIconKey()
+	}
+	count, err := update.Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to update billing entity branding").
+			Mark(ierr.ErrDatabase)
+	}
+	if count == 0 {
+		return ierr.NewErrorf("billing entity %s not found", id).
+			WithHintf("Billing entity %s was not found", id).
+			Mark(ierr.ErrNotFound)
+	}
+
+	SetSpanSuccess(span)
+	return nil
 }
 
 func billingEntityFromEnt(e *ent.BillingEntity) *domain.BillingEntity {

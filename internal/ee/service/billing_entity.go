@@ -504,15 +504,11 @@ func (s *billingEntityService) RemoveBrandingAsset(ctx context.Context, id strin
 }
 
 func (s *billingEntityService) saveBrandingKey(ctx context.Context, existing *billingentity.BillingEntity, asset types.BrandingAsset, key *string) (*dto.BillingEntityResponse, error) {
-	builder := billingentity.NewBillingEntityBuilder(existing)
-	if asset == types.BrandingAssetLogo {
-		builder.WithLogoKey(key)
-	} else {
-		builder.WithIconKey(key)
+	if err := s.BillingEntityRepo.UpdateBrandingKey(ctx, existing.ID, asset, key); err != nil {
+		return nil, err
 	}
-
-	updated := builder.Build()
-	if err := s.BillingEntityRepo.Update(ctx, updated); err != nil {
+	updated, err := s.BillingEntityRepo.Get(ctx, existing.ID)
+	if err != nil {
 		return nil, err
 	}
 	return s.entityResponse(updated), nil

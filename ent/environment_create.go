@@ -108,34 +108,6 @@ func (_c *EnvironmentCreate) SetType(v string) *EnvironmentCreate {
 	return _c
 }
 
-// SetLogoKey sets the "logo_key" field.
-func (_c *EnvironmentCreate) SetLogoKey(v string) *EnvironmentCreate {
-	_c.mutation.SetLogoKey(v)
-	return _c
-}
-
-// SetNillableLogoKey sets the "logo_key" field if the given value is not nil.
-func (_c *EnvironmentCreate) SetNillableLogoKey(v *string) *EnvironmentCreate {
-	if v != nil {
-		_c.SetLogoKey(*v)
-	}
-	return _c
-}
-
-// SetIconKey sets the "icon_key" field.
-func (_c *EnvironmentCreate) SetIconKey(v string) *EnvironmentCreate {
-	_c.mutation.SetIconKey(v)
-	return _c
-}
-
-// SetNillableIconKey sets the "icon_key" field if the given value is not nil.
-func (_c *EnvironmentCreate) SetNillableIconKey(v *string) *EnvironmentCreate {
-	if v != nil {
-		_c.SetIconKey(*v)
-	}
-	return _c
-}
-
 // SetID sets the "id" field.
 func (_c *EnvironmentCreate) SetID(v string) *EnvironmentCreate {
 	_c.mutation.SetID(v)
@@ -292,14 +264,6 @@ func (_c *EnvironmentCreate) createSpec() (*Environment, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.GetType(); ok {
 		_spec.SetField(environment.FieldType, field.TypeString, value)
 		_node.Type = value
-	}
-	if value, ok := _c.mutation.LogoKey(); ok {
-		_spec.SetField(environment.FieldLogoKey, field.TypeString, value)
-		_node.LogoKey = &value
-	}
-	if value, ok := _c.mutation.IconKey(); ok {
-		_spec.SetField(environment.FieldIconKey, field.TypeString, value)
-		_node.IconKey = &value
 	}
 	return _node, _spec
 }

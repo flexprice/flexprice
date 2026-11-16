@@ -17,11 +17,12 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/customer"
-	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 )
 
 // BrandingService stores branding images and resolves an issuer's logo and icon.
@@ -189,11 +190,11 @@ func (s *brandingService) tenantBranding(ctx context.Context, environmentID stri
 }
 
 func (s *brandingService) issuerBranding(ctx context.Context, name string, entity *billingentity.BillingEntity, environmentID string) (*IssuerBranding, error) {
-	env, err := s.EnvironmentRepo.Get(ctx, environmentID)
-	if err != nil && !ierr.IsNotFound(err) {
+	cfg, err := environmentBranding(ctx, s.SettingsRepo, environmentID)
+	if err != nil {
 		return nil, err
 	}
-	logoKey, iconKey := selectBrandingKeys(entity, env)
+	logoKey, iconKey := selectBrandingKeys(entity, cfg)
 	return &IssuerBranding{name: name, logoKey: logoKey, iconKey: iconKey}, nil
 }
 
@@ -340,7 +341,7 @@ func parseBrandingImageKey(tenantID, environmentID, file string) (key, ext, hash
 }
 
 // selectBrandingKeys uses the entity's own pair when it has any asset, else the environment's.
-func selectBrandingKeys(entity *billingentity.BillingEntity, env *environment.Environment) (logoKey, iconKey *string) {
+func selectBrandingKeys(entity *billingentity.BillingEntity, env *types.BrandingConfig) (logoKey, iconKey *string) {
 	if entity != nil && (entity.LogoKey != nil || entity.IconKey != nil) {
 		return entity.LogoKey, entity.IconKey
 	}
@@ -348,4 +349,20 @@ func selectBrandingKeys(entity *billingentity.BillingEntity, env *environment.En
 		return nil, nil
 	}
 	return env.LogoKey, env.IconKey
+}
+
+// environmentBranding reads the environment's branding_config from the database; none set means no assets.
+func environmentBranding(ctx context.Context, repo settings.Repository, environmentID string) (*types.BrandingConfig, error) {
+	stored, err := repo.GetByKeyUncached(ctx, environmentID, types.SettingKeyBrandingConfig)
+	if ierr.IsNotFound(err) {
+		return &types.BrandingConfig{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := utils.ToStruct[types.BrandingConfig](stored.Value)
+	if err != nil {
+		return nil, err
+	}
+	return &cfg, nil
 }

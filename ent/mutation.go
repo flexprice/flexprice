@@ -40041,8 +40041,6 @@ type EnvironmentMutation struct {
 	updated_by    *string
 	name          *string
 	_type         *string
-	logo_key      *string
-	icon_key      *string
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*Environment, error)
@@ -40467,104 +40465,6 @@ func (m *EnvironmentMutation) ResetType() {
 	m._type = nil
 }
 
-// SetLogoKey sets the "logo_key" field.
-func (m *EnvironmentMutation) SetLogoKey(s string) {
-	m.logo_key = &s
-}
-
-// LogoKey returns the value of the "logo_key" field in the mutation.
-func (m *EnvironmentMutation) LogoKey() (r string, exists bool) {
-	v := m.logo_key
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldLogoKey returns the old "logo_key" field's value of the Environment entity.
-// If the Environment object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EnvironmentMutation) OldLogoKey(ctx context.Context) (v *string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldLogoKey is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldLogoKey requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldLogoKey: %w", err)
-	}
-	return oldValue.LogoKey, nil
-}
-
-// ClearLogoKey clears the value of the "logo_key" field.
-func (m *EnvironmentMutation) ClearLogoKey() {
-	m.logo_key = nil
-	m.clearedFields[environment.FieldLogoKey] = struct{}{}
-}
-
-// LogoKeyCleared returns if the "logo_key" field was cleared in this mutation.
-func (m *EnvironmentMutation) LogoKeyCleared() bool {
-	_, ok := m.clearedFields[environment.FieldLogoKey]
-	return ok
-}
-
-// ResetLogoKey resets all changes to the "logo_key" field.
-func (m *EnvironmentMutation) ResetLogoKey() {
-	m.logo_key = nil
-	delete(m.clearedFields, environment.FieldLogoKey)
-}
-
-// SetIconKey sets the "icon_key" field.
-func (m *EnvironmentMutation) SetIconKey(s string) {
-	m.icon_key = &s
-}
-
-// IconKey returns the value of the "icon_key" field in the mutation.
-func (m *EnvironmentMutation) IconKey() (r string, exists bool) {
-	v := m.icon_key
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldIconKey returns the old "icon_key" field's value of the Environment entity.
-// If the Environment object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EnvironmentMutation) OldIconKey(ctx context.Context) (v *string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldIconKey is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldIconKey requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldIconKey: %w", err)
-	}
-	return oldValue.IconKey, nil
-}
-
-// ClearIconKey clears the value of the "icon_key" field.
-func (m *EnvironmentMutation) ClearIconKey() {
-	m.icon_key = nil
-	m.clearedFields[environment.FieldIconKey] = struct{}{}
-}
-
-// IconKeyCleared returns if the "icon_key" field was cleared in this mutation.
-func (m *EnvironmentMutation) IconKeyCleared() bool {
-	_, ok := m.clearedFields[environment.FieldIconKey]
-	return ok
-}
-
-// ResetIconKey resets all changes to the "icon_key" field.
-func (m *EnvironmentMutation) ResetIconKey() {
-	m.icon_key = nil
-	delete(m.clearedFields, environment.FieldIconKey)
-}
-
 // Where appends a list predicates to the EnvironmentMutation builder.
 func (m *EnvironmentMutation) Where(ps ...predicate.Environment) {
 	m.predicates = append(m.predicates, ps...)
@@ -40599,7 +40499,7 @@ func (m *EnvironmentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EnvironmentMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 8)
 	if m.tenant_id != nil {
 		fields = append(fields, environment.FieldTenantID)
 	}
@@ -40623,12 +40523,6 @@ func (m *EnvironmentMutation) Fields() []string {
 	}
 	if m._type != nil {
 		fields = append(fields, environment.FieldType)
-	}
-	if m.logo_key != nil {
-		fields = append(fields, environment.FieldLogoKey)
-	}
-	if m.icon_key != nil {
-		fields = append(fields, environment.FieldIconKey)
 	}
 	return fields
 }
@@ -40654,10 +40548,6 @@ func (m *EnvironmentMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case environment.FieldType:
 		return m.GetType()
-	case environment.FieldLogoKey:
-		return m.LogoKey()
-	case environment.FieldIconKey:
-		return m.IconKey()
 	}
 	return nil, false
 }
@@ -40683,10 +40573,6 @@ func (m *EnvironmentMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldName(ctx)
 	case environment.FieldType:
 		return m.OldType(ctx)
-	case environment.FieldLogoKey:
-		return m.OldLogoKey(ctx)
-	case environment.FieldIconKey:
-		return m.OldIconKey(ctx)
 	}
 	return nil, fmt.Errorf("unknown Environment field %s", name)
 }
@@ -40752,20 +40638,6 @@ func (m *EnvironmentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetType(v)
 		return nil
-	case environment.FieldLogoKey:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetLogoKey(v)
-		return nil
-	case environment.FieldIconKey:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetIconKey(v)
-		return nil
 	}
 	return fmt.Errorf("unknown Environment field %s", name)
 }
@@ -40802,12 +40674,6 @@ func (m *EnvironmentMutation) ClearedFields() []string {
 	if m.FieldCleared(environment.FieldUpdatedBy) {
 		fields = append(fields, environment.FieldUpdatedBy)
 	}
-	if m.FieldCleared(environment.FieldLogoKey) {
-		fields = append(fields, environment.FieldLogoKey)
-	}
-	if m.FieldCleared(environment.FieldIconKey) {
-		fields = append(fields, environment.FieldIconKey)
-	}
 	return fields
 }
 
@@ -40827,12 +40693,6 @@ func (m *EnvironmentMutation) ClearField(name string) error {
 		return nil
 	case environment.FieldUpdatedBy:
 		m.ClearUpdatedBy()
-		return nil
-	case environment.FieldLogoKey:
-		m.ClearLogoKey()
-		return nil
-	case environment.FieldIconKey:
-		m.ClearIconKey()
 		return nil
 	}
 	return fmt.Errorf("unknown Environment nullable field %s", name)
@@ -40865,12 +40725,6 @@ func (m *EnvironmentMutation) ResetField(name string) error {
 		return nil
 	case environment.FieldType:
 		m.ResetType()
-		return nil
-	case environment.FieldLogoKey:
-		m.ResetLogoKey()
-		return nil
-	case environment.FieldIconKey:
-		m.ResetIconKey()
 		return nil
 	}
 	return fmt.Errorf("unknown Environment field %s", name)

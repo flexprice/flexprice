@@ -8,8 +8,11 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/environment"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 )
 
 type EnvironmentService interface {
@@ -88,7 +91,7 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, req dto.Crea
 		return nil, err
 	}
 
-	return s.environmentResponse(env), nil
+	return s.environmentResponse(ctx, env)
 }
 
 func (s *environmentService) CheckCloneAllowed(ctx context.Context, environmentIDs ...string) error {
@@ -125,7 +128,7 @@ func (s *environmentService) GetEnvironment(ctx context.Context, id string) (*dt
 		}
 	}
 
-	return s.environmentResponse(env), nil
+	return s.environmentResponse(ctx, env)
 }
 
 func (s *environmentService) GetEnvironments(ctx context.Context, filter types.Filter) (*dto.ListEnvironmentsResponse, error) {
@@ -177,7 +180,11 @@ func (s *environmentService) GetEnvironments(ctx context.Context, filter types.F
 	}
 
 	for i, env := range allowedEnvironments {
-		response.Environments[i] = *s.environmentResponse(env)
+		resp, err := s.environmentResponse(ctx, env)
+		if err != nil {
+			return nil, err
+		}
+		response.Environments[i] = *resp
 	}
 
 	return response, nil
@@ -208,7 +215,7 @@ func (s *environmentService) UpdateEnvironment(ctx context.Context, id string, r
 		return nil, err
 	}
 
-	return s.environmentResponse(env), nil
+	return s.environmentResponse(ctx, env)
 }
 
 // writableEnvironment loads the environment named in the path and checks the caller may write it.
@@ -259,24 +266,57 @@ func (s *environmentService) RemoveBrandingAsset(ctx context.Context, id string,
 	return s.saveBrandingKey(ctx, env, asset, nil)
 }
 
+// saveBrandingKey sets one image key in the environment's branding_config. The lock and the uncached
+// read inside the transaction keep a concurrent write of the other asset from being lost.
 func (s *environmentService) saveBrandingKey(ctx context.Context, env *environment.Environment, asset types.BrandingAsset, key *string) (*dto.EnvironmentResponse, error) {
-	if asset == types.BrandingAssetLogo {
-		env.LogoKey = key
-	} else {
-		env.IconKey = key
-	}
-	env.UpdatedAt = clock.Now()
-	env.UpdatedBy = types.GetUserID(ctx)
-
-	if err := s.repo.Update(ctx, env); err != nil {
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: "branding_config:" + env.TenantID + ":" + env.ID}); err != nil {
+			return err
+		}
+		stored, err := s.SettingsRepo.GetByKeyUncached(txCtx, env.ID, types.SettingKeyBrandingConfig)
+		if err != nil && !ierr.IsNotFound(err) {
+			return err
+		}
+		cfg := types.BrandingConfig{}
+		if stored != nil {
+			if cfg, err = utils.ToStruct[types.BrandingConfig](stored.Value); err != nil {
+				return err
+			}
+		}
+		if asset == types.BrandingAssetLogo {
+			cfg.LogoKey = key
+		} else {
+			cfg.IconKey = key
+		}
+		value, err := utils.ToMap(cfg)
+		if err != nil {
+			return err
+		}
+		if stored == nil {
+			return s.SettingsRepo.Create(txCtx, &settings.Setting{
+				ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+				EnvironmentID: env.ID,
+				Key:           types.SettingKeyBrandingConfig,
+				Value:         value,
+				BaseModel:     types.GetDefaultBaseModel(txCtx),
+			})
+		}
+		stored.Value = value
+		return s.SettingsRepo.Update(txCtx, stored)
+	})
+	if err != nil {
 		return nil, err
 	}
-	return s.environmentResponse(env), nil
+	return s.environmentResponse(ctx, env)
 }
 
-func (s *environmentService) environmentResponse(env *environment.Environment) *dto.EnvironmentResponse {
+func (s *environmentService) environmentResponse(ctx context.Context, env *environment.Environment) (*dto.EnvironmentResponse, error) {
+	cfg, err := environmentBranding(ctx, s.SettingsRepo, env.ID)
+	if err != nil {
+		return nil, err
+	}
 	resp := dto.NewEnvironmentResponse(env)
-	resp.LogoURL = brandingImageURL(s.Config, env.LogoKey)
-	resp.IconURL = brandingImageURL(s.Config, env.IconKey)
-	return resp
+	resp.LogoURL = brandingImageURL(s.Config, cfg.LogoKey)
+	resp.IconURL = brandingImageURL(s.Config, cfg.IconKey)
+	return resp, nil
 }

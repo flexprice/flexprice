@@ -1,6 +1,6 @@
 # Tenant branding: logo and icon — Design ERD
 
-Status: In review · Owner: Paras Aghija · Last updated: 2026-11-12
+Status: In review · Owner: Paras Aghija · Last updated: 2026-11-16
 Links: FLE-2316 · Billing entities P1 ERD · Billing entities P2 ERD
 
 ## 1. Requirement
@@ -160,6 +160,7 @@ Variation: the invoice's PDF comes from a connected billing provider or an exter
 | Security headers | `nosniff` on every API response | Reuse as-is |
 | Request body limit | Cuts a request body off while it is read | Reuse as-is, set to 1 MiB on the upload routes |
 | Environment API and its write permission | Environment read, update and clone; writes guarded by environment write permission; responses have their own shape, separate from the stored record | Extend: logo and icon URLs on read; upload and remove endpoints under the same permission |
+| Environment settings | One stored value per environment and key, e.g. `invoice_config` (whose invoice number prefix a billing entity overrides with its own column) and `customer_portal_config` (portal theme colours). A key with its own flow (`billing_entity_config`) is refused by the generic settings API and written under a lock after an uncached read | Extend: a `branding_config` key for the environment's logo and icon, handled like `billing_entity_config` |
 | Billing entity API and its gating | Entity read and update, rejected while billing entities are off | Extend: same as the environment |
 | Invoice issuer resolution | The billing entity that issued an invoice (frozen on finalized invoices, stored on drafts), else the tenant | Reuse as-is for FR-10 |
 | Customer's billing entity | The entity that bills a customer, else the default entity, when billing entities are on | Reuse as-is for FR-10 |
@@ -193,7 +194,7 @@ flowchart LR
     cportal[Customer portal API]
     pdf[Invoice PDF pipeline]:::new
   end
-  db[(Postgres<br/>environments and billing entities)]
+  db[(Postgres<br/>environment settings and billing entities)]
   store[(Platform storage<br/>invoice bucket)]
   email[Invoice emails<br/>later]
 
@@ -222,7 +223,7 @@ Highlighted pieces are new or extended; the dashed line is future reuse.
 **Main flow (UC1 then UC3–UC5)**
 1. An admin uploads a logo or icon from the console or the API.
 2. The API checks the request size, the file type from its content, and the image dimensions, then re-encodes the image.
-3. The re-encoded image is stored under its tenant and environment, named by its content hash; the environment or billing entity records that key. Nothing already stored is removed.
+3. The re-encoded image is stored under its tenant and environment, named by its content hash; the environment's settings or the billing entity record that key. Nothing already stored is removed.
 4. A customer opens the hosted invoice page or the portal, which calls its existing API.
 5. That API works out the issuer (FR-10) and runs the branding lookup (FR-11), which returns the issuer's name and logo and icon URLs built on the deployment's public API address.
 6. The page draws the header and sets the tab icon; the browser loads the images from the public image endpoint, which reads them from storage and returns them with long-lived cache headers.
@@ -236,13 +237,12 @@ Highlighted pieces are new or extended; the dashed line is future reuse.
 ```mermaid
 erDiagram
   TENANT ||--o{ ENVIRONMENT : has
+  ENVIRONMENT ||--o{ SETTINGS : has
   ENVIRONMENT ||--o{ BILLING_ENTITY : has
-  ENVIRONMENT {
-    string id
-    string tenant_id
-    string name
-    string logo_key "new, nullable"
-    string icon_key "new, nullable"
+  SETTINGS {
+    string environment_id
+    string key "branding_config, new"
+    jsonb value "logo_key, icon_key"
   }
   BILLING_ENTITY {
     string id
@@ -253,16 +253,29 @@ erDiagram
   }
 ```
 
+The environment's pair follows where the environment's invoice number prefix lives (an environment setting), and the entity's pair follows where the entity's own prefix lives (a column on the entity).
+
+**Environment: setting `branding_config`** (no schema change)
+
+| Field | Type | Meaning |
+|---|---|---|
+| logo_key | string, omitted when unset | Image key of the environment's logo. |
+| icon_key | string, omitted when unset | Image key of the environment's icon. |
+
+No row, or a field left out, means not uploaded. The generic settings API refuses writes and deletes of this key, as it does for `billing_entity_config`; only the upload and remove endpoints change it.
+
+**Billing entity: new columns**
+
 | Table | Column | Type | Null | Default | Why |
 |---|---|---|---|---|---|
-| environments | logo_key | character varying | yes | null | Image key of the environment's logo; null means not uploaded. |
-| environments | icon_key | character varying | yes | null | Image key of the environment's icon; null means not uploaded. |
 | billing_entities | logo_key | character varying | yes | null | Image key of the entity's logo; null means the entity has none. |
 | billing_entities | icon_key | character varying | yes | null | Image key of the entity's icon; null means the entity has none. |
 
 - **Image key:** `<tenant id>/<environment id>/<sha256 of the stored bytes, hex>.<png|jpg>`, for both environment and billing entity assets. The extension sets the served `Content-Type`. Scoping by tenant and environment keeps each owner's images apart, so a later clean-up of a tenant or an environment touches no one else. The stored image can be larger than the upload after re-encoding; the 512 KB limit applies to the upload.
 - **Storage object:** the key under a `branding/` prefix in the invoice bucket, through a new branding storage purpose (section 7).
-- **Migration:** optional string fields on both ent schemas, and the four nullable columns added in one versioned SQL migration; no backfill. Null is "not uploaded", which is a real state, not a default.
+- **Migration:** optional string fields on the billing entity ent schema, and its two nullable columns added in one versioned SQL migration; no backfill. Null is "not uploaded", which is a real state, not a default. The setting needs no migration.
+- **Writes:** the environment's setting is changed in a transaction that takes a lock on the environment's `branding_config`, reads the stored value bypassing the settings cache, sets one field and saves, so uploading the logo and the icon at the same time keeps both. A billing entity's key is written by an update of that one column, so it never overwrites the other key or the entity's other fields.
+- **Reads:** the branding lookup and environment responses read `branding_config` from the database, not the per-pod settings cache, so an upload shows on every pod at once.
 - **Environment clone:** does not copy the logo or icon; a cloned environment starts with none, as clone today copies only features and plans.
 - **Config:** `branding.base_url`, the deployment's public API origin (scheme and host, for example `https://us.api.flexprice.io`), named like the existing `hosted_invoice.base_url`, `checkout.base_url` and `auth.saml.base_url`. Image URLs are `<base_url>/v1/branding/images/<image key>`. When it is empty, URL fields are omitted and surfaces show their fallbacks, as an empty `hosted_invoice.base_url` already yields no hosted links.
 
@@ -335,13 +348,13 @@ sequenceDiagram
   alt not stored yet
     API->>Store: store branding/<key>
   end
-  API->>DB: set logo_key = <key>
+  API->>DB: set logo key in branding_config (environment) or logo_key column (entity)
   API-->>Admin: 200 updated record with logo_url
 ```
 
 **Branding lookup** (one function used by the hosted invoice API, the portal API, the PDF pipeline and, later, emails)
 1. Find the issuer (FR-10). For an invoice, the billing entity ID from its frozen snapshot, or a draft's own entity; the name comes from the invoice as today. For the portal, the customer's billing entity, else the tenant.
-2. If the issuer is a billing entity with a logo or an icon, use the entity's two keys; otherwise use the two keys of the invoice's or customer's environment (FR-11).
+2. If the issuer is a billing entity with a logo or an icon, use the entity's two keys; otherwise use the two keys in the `branding_config` setting of the invoice's or customer's environment (FR-11).
 3. Return the name, and an absolute URL for each key that is set.
 
 **PDF render**
@@ -394,7 +407,7 @@ Alt text on every logo and icon is the issuer's name (NFR-12). Only the billing 
 | Failure: storage off or unreachable | Upload returns 500 with a branding-specific message and keeps the current key. The image endpoint returns 500 without caching headers, so nothing bad is cached; the hosted page and portal treat the failed image as not uploaded and show the no-asset layout, with the Flexprice favicon in the tab. PDF rendering falls back to the no-asset header. | NFR-10, NFR-12 |
 | Failure: public address not configured | URL fields are omitted, and every surface shows its no-asset fallback. | — |
 | Failure: portal branding call fails | The portal keeps today's header and wording. | — |
-| Idempotency and concurrency | The same image always produces the same key, so a repeated upload stores nothing new. Two concurrent uploads to one asset end with the last write's key; both images stay stored. | NFR-9 |
+| Idempotency and concurrency | The same image always produces the same key, so a repeated upload stores nothing new. Two concurrent uploads to one asset end with the last write's key; both images stay stored. Concurrent uploads of the logo and the icon both stick (section 9.1, Writes). | NFR-9 |
 | Performance and caching | Browsers may cache each image for a year, and a new upload gets a new URL, so nothing needs invalidating. No server cache in v1. A PDF render adds one storage read. | NFR-8 |
 | Backward compatibility | New columns are nullable with no backfill, and new response fields are omitted when unset, so existing clients see no change. Stored PDFs are untouched. | — |
 | Portability | Storage goes through the existing provider abstraction, unchanged on S3, GCS and S3-compatible storage. | NFR-11 |

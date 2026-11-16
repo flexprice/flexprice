@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -51,6 +52,7 @@ func (s *EnvironmentServiceSuite) SetupTest() {
 	settingsRepo := testutil.NewInMemorySettingsStore()
 	serviceParams := ServiceParams{
 		SettingsRepo: settingsRepo,
+		DB:           testutil.NewMockPostgresClient(logger.NewNoopLogger()),
 	}
 	realSettingsService := NewSettingsService(serviceParams)
 
@@ -287,20 +289,20 @@ func (s *EnvironmentServiceSuite) TestParseBrandingImageKey() {
 func (s *EnvironmentServiceSuite) TestSelectBrandingKeys() {
 	envLogo, envIcon := lo.ToPtr("t/e/envlogo.png"), lo.ToPtr("t/e/envicon.png")
 	entLogo, entIcon := lo.ToPtr("t/e/entlogo.png"), lo.ToPtr("t/e/enticon.png")
-	env := &environment.Environment{LogoKey: envLogo, IconKey: envIcon}
+	env := &types.BrandingConfig{LogoKey: envLogo, IconKey: envIcon}
 
 	tests := []struct {
 		name               string
 		entity             *billingentity.BillingEntity
-		env                *environment.Environment
+		env                *types.BrandingConfig
 		wantLogo, wantIcon *string
 	}{
 		{name: "entity icon only never mixes in env logo", entity: &billingentity.BillingEntity{IconKey: entIcon}, env: env, wantIcon: entIcon},
 		{name: "entity with both", entity: &billingentity.BillingEntity{LogoKey: entLogo, IconKey: entIcon}, env: env, wantLogo: entLogo, wantIcon: entIcon},
 		{name: "entity with none uses env", entity: &billingentity.BillingEntity{}, env: env, wantLogo: envLogo, wantIcon: envIcon},
 		{name: "no entity uses env", env: env, wantLogo: envLogo, wantIcon: envIcon},
-		{name: "nothing anywhere", env: &environment.Environment{}},
-		{name: "no env row", entity: &billingentity.BillingEntity{}},
+		{name: "nothing anywhere", env: &types.BrandingConfig{}},
+		{name: "no env config", entity: &billingentity.BillingEntity{}},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
@@ -309,4 +311,27 @@ func (s *EnvironmentServiceSuite) TestSelectBrandingKeys() {
 			s.Equal(tt.wantIcon, icon)
 		})
 	}
+}
+
+func (s *EnvironmentServiceSuite) TestSaveBrandingKeyKeepsTheOtherAsset() {
+	env := &environment.Environment{ID: "env_branding", Name: "Sandbox", Type: types.EnvironmentDevelopment}
+	env.TenantID = "test-tenant-id"
+	ctx := types.SetEnvironmentID(s.ctx, env.ID)
+	logo, icon := lo.ToPtr("t/e/logo.png"), lo.ToPtr("t/e/icon.png")
+
+	_, err := s.environmentService.saveBrandingKey(ctx, env, types.BrandingAssetLogo, logo)
+	s.Require().NoError(err)
+	_, err = s.environmentService.saveBrandingKey(ctx, env, types.BrandingAssetIcon, icon)
+	s.Require().NoError(err)
+	cfg, err := environmentBranding(ctx, s.environmentService.SettingsRepo, env.ID)
+	s.Require().NoError(err)
+	s.Equal(logo, cfg.LogoKey)
+	s.Equal(icon, cfg.IconKey)
+
+	_, err = s.environmentService.saveBrandingKey(ctx, env, types.BrandingAssetLogo, nil)
+	s.Require().NoError(err)
+	cfg, err = environmentBranding(ctx, s.environmentService.SettingsRepo, env.ID)
+	s.Require().NoError(err)
+	s.Nil(cfg.LogoKey)
+	s.Equal(icon, cfg.IconKey)
 }

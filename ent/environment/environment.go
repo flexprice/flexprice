@@ -29,10 +29,6 @@ const (
 	FieldName = "name"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
-	// FieldLogoKey holds the string denoting the logo_key field in the database.
-	FieldLogoKey = "logo_key"
-	// FieldIconKey holds the string denoting the icon_key field in the database.
-	FieldIconKey = "icon_key"
 	// Table holds the table name of the environment in the database.
 	Table = "environments"
 )
@@ -48,8 +44,6 @@ var Columns = []string{
 	FieldUpdatedBy,
 	FieldName,
 	FieldType,
-	FieldLogoKey,
-	FieldIconKey,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -125,14 +119,4 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByType orders the results by the type field.
 func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
-}
-
-// ByLogoKey orders the results by the logo_key field.
-func ByLogoKey(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldLogoKey, opts...).ToFunc()
-}
-
-// ByIconKey orders the results by the icon_key field.
-func ByIconKey(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldIconKey, opts...).ToFunc()
 }
