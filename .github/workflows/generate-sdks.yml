@@ -323,8 +323,7 @@ jobs:
           set -euo pipefail
           python3 scripts/wait-for-docs-spec.py "$RUNNER_TEMP/openapi.json" --url "$SPEC_URL" --exact
           python3 scripts/wait-for-docs-spec.py release-spec/swagger-3-0.json --url "$SPEC_URL" --timeout 0
-          curl -fsS --retry 3 -o "$RUNNER_TEMP/webhooks-served.json" "${SPEC_URL%/}/webhooks.json"
-          cmp "$RUNNER_TEMP/webhooks-served.json" release-spec/webhooks.json
+          python3 scripts/wait-for-docs-spec.py release-spec/webhooks.json --url "${SPEC_URL%/}/webhooks.json" --exact
 
       # The release is recorded as a new row in the docs repo's version.mdx.
       - name: Redeploy docs
