@@ -275,3 +275,25 @@ func (s *EntitlementGrantSuite) TestSkipDistinctMeterPrefilter_SameUsage() {
 	s.Len(before, 6)
 	s.Equal(before, after)
 }
+
+func (s *EntitlementGrantSuite) setSkipFinal(on bool) {
+	cfg := s.GetConfig()
+	prev := cfg.UsageAlerts
+	cfg.UsageAlerts.SkipFinal = on
+	s.T().Cleanup(func() { cfg.UsageAlerts = prev })
+}
+
+func (s *EntitlementGrantSuite) TestAlertEvaluation_SkipFinalQueryCount() {
+	fx := s.newAlertQueryFixture(25, 25)
+
+	s.setSkipFinal(false)
+	s.runAlertEvaluation(fx)
+	s.Equal(6, fx.counter.total)
+	s.Equal(2, fx.counter.final)
+
+	fx.counter.reset()
+	s.setSkipFinal(true)
+	s.runAlertEvaluation(fx)
+	s.Equal(6, fx.counter.total)
+	s.Zero(fx.counter.final)
+}

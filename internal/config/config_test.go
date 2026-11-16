@@ -315,3 +315,18 @@ func TestSkipDistinctMeterPrefilterFromYAMLAndEnv(t *testing.T) {
 	}
 	assert.True(t, cfg.MeterUsage.SkipDistinctMeterPrefilter)
 }
+
+func TestUsageAlertsSkipFinalFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.False(t, cfg.UsageAlerts.SkipFinal)
+
+	t.Setenv("FLEXPRICE_USAGE_ALERTS_SKIP_FINAL", "true")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.True(t, cfg.UsageAlerts.SkipFinal)
+}
