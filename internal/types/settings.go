@@ -1182,11 +1182,8 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		return cfg.Validate()
 
 	case SettingKeyEmailNotificationConfig:
-		cfg, err := utils.ToStruct[EmailNotificationConfig](value)
-		if err != nil {
-			return err
-		}
-		return cfg.Validate()
+		// Lenient here: a partial update fragment may omit fields the merged result already has.
+		return nil
 
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
@@ -1367,7 +1364,7 @@ func (c EmailNotificationConfig) Validate() error {
 	}
 	if !c.Enabled {
 		return ierr.NewError("auto-send needs emails to be enabled").
-			WithHint("Enable emails for this environment, then turn on auto-send").
+			WithHint("Turn on emails before auto-send, and turn off auto-send before emails").
 			Mark(ierr.ErrValidation)
 	}
 	if len(c.AutoSend.Entities) == 0 {

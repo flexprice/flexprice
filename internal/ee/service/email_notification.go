@@ -191,8 +191,7 @@ func (s *emailNotificationService) SendAutoInvoiceEmail(ctx context.Context, inv
 	}
 
 	// The invoice was finalized moments ago; read it from the primary, not a lagging replica.
-	ctx = types.WithForceWriter(ctx)
-	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	inv, err := s.InvoiceRepo.Get(types.WithForceWriter(ctx), invoiceID)
 	if err != nil {
 		return err
 	}
@@ -267,7 +266,8 @@ func (s *emailNotificationService) ListEmails(ctx context.Context, filter *types
 }
 
 // queue checks the sender and recipients and records the email as queued for DispatchEmails.
-// An automatic email that cannot be sent is recorded as skipped, with the reason.
+// An automatic email that cannot be sent is recorded as skipped, with the reason; one with no
+// Reply-To is not recorded at all and returns a nil email.
 func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail) (*emaillog.EmailLog, error) {
 	if !s.Config.Email.IsProviderConfigured() {
 		return nil, ierr.NewError("customer emails are disabled").
@@ -293,6 +293,9 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 	auto := out.trigger == types.EmailTriggerAuto
 
 	switch {
+	case replyTo == "" && auto:
+		s.Logger.Info(ctx, "automatic email not sent: no reply-to email", "entity_id", out.entityID)
+		return nil, nil
 	case out.skipReason != "":
 	case len(to) == 0 && auto:
 		out.skipReason = "Customer has no email address"
@@ -300,8 +303,6 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 		return nil, ierr.NewError("no email recipient").
 			WithHint("Add an email address to the customer, or enter one to send to").
 			Mark(ierr.ErrValidation)
-	case replyTo == "" && auto:
-		out.skipReason = "No billing or help email for customers to reply to"
 	case replyTo == "":
 		return nil, ierr.NewError("tenant has no reply-to email").
 			WithHint("Add a billing or help email in your business settings so customers can reply").

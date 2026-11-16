@@ -174,6 +174,16 @@ func (s *AutoInvoiceEmailSuite) TestSkipsWhenAutoSendIsOff() {
 	s.Empty(s.emailsFor(inv.ID))
 }
 
+func (s *AutoInvoiceEmailSuite) TestNoReplyToRecordsNothing() {
+	s.enableAutoSend()
+	ctx := s.GetContext()
+	s.Require().NoError(s.GetStores().TenantRepo.Update(ctx, &tenant.Tenant{ID: types.GetTenantID(ctx), Name: "Acme"}))
+
+	inv := s.finalizedInvoice("", 0)
+	s.Require().NoError(s.svc.SendAutoInvoiceEmail(ctx, inv.ID))
+	s.Empty(s.emailsFor(inv.ID))
+}
+
 func (s *AutoInvoiceEmailSuite) TestRecordsSkipReasons() {
 	s.enableAutoSend()
 	tests := []struct {
