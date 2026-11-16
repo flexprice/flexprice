@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"math"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -13,12 +16,16 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/logger"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 type MeterUsageTrackingSuite struct {
@@ -552,3 +559,127 @@ func (s *MeterUsageTrackingSuite) TestEffectiveUsageAlertTiming() {
 		})
 	}
 }
+
+type recordingLock struct {
+	acquired bool
+	locker   *recordingLocker
+}
+
+func (l *recordingLock) AcquiredSuccessfully() bool { return l.acquired }
+func (l *recordingLock) Release(_ context.Context) error {
+	l.locker.mu.Lock()
+	defer l.locker.mu.Unlock()
+	l.locker.releases++
+	return nil
+}
+
+type recordingLocker struct {
+	mu       sync.Mutex
+	acquire  bool
+	ttls     []time.Duration
+	releases int
+}
+
+func (r *recordingLocker) AcquireLock(_ context.Context, _ string, ttl time.Duration) (cache.Lock, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ttls = append(r.ttls, ttl)
+	return &recordingLock{acquired: r.acquire, locker: r}, nil
+}
+
+func TestDedupLockTTL(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+
+	tests := []struct {
+		name string
+		ttl  time.Duration
+		want time.Duration
+	}{
+		{"default when unset", 0, 24 * time.Hour},
+		{"override", 20 * time.Minute, 20 * time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			locker := &recordingLocker{}
+			svc := &meterUsageTrackingService{ServiceParams: ServiceParams{
+				Logger: logger.NewNoopLogger(),
+				Locker: locker,
+				Config: &config.Configuration{
+					MeterUsageTracking: config.MeterUsageTrackingConfig{
+						RedisDeduplicationEnabled: true,
+						RedisDeduplicationTTL:     tt.ttl,
+					},
+					BulkMeterUsageTracking: config.BulkMeterUsageTrackingConfig{
+						RedisDeduplicationEnabled: true,
+						RedisDeduplicationTTL:     tt.ttl,
+					},
+				},
+			}}
+
+			require.NoError(t, svc.processEvent(ctx, &events.Event{ID: "evt_single", EventName: "api_call"}))
+
+			payload, err := json.Marshal(events.EventBatch{
+				TenantID:      types.DefaultTenantID,
+				EnvironmentID: "env_test",
+				Events:        []*events.Event{{ID: "evt_bulk", EventName: "api_call"}},
+			})
+			require.NoError(t, err)
+			require.NoError(t, svc.processBulkMessage(ctx, message.NewMessage("msg_1", payload)))
+
+			assert.Equal(t, []time.Duration{tt.want, tt.want}, locker.ttls)
+		})
+	}
+}
+
+type stubTemporalService struct {
+	temporalservice.TemporalService
+}
+
+func (s *MeterUsageTrackingSuite) TestScheduleUsageAlert_TenantFlagsOffKeepsThrottleLock() {
+	orig := usageAlertTemporalService
+	usageAlertTemporalService = func() temporalservice.TemporalService { return stubTemporalService{} }
+	defer func() { usageAlertTemporalService = orig }()
+
+	s.WithEnvironment("env_usage_alert")
+	ctx := s.GetContext()
+	locker := &recordingLocker{acquire: true}
+	core, logs := observer.New(zapcore.DebugLevel)
+	const delay = 5*time.Minute + 30*time.Second
+	svc := &meterUsageTrackingService{ServiceParams: ServiceParams{
+		Logger:       logger.NewFromSugared(zap.New(core).Sugar()),
+		SettingsRepo: s.GetStores().SettingsRepo,
+		Locker:       locker,
+		Config: &config.Configuration{UsageAlerts: config.UsageAlertsConfig{
+			WalletAlertsEnabled:      true,
+			SpendAlertsEnabled:       true,
+			EntitlementAlertsEnabled: true,
+			ScheduleDelay:            delay,
+			StaleAfter:               time.Hour,
+		}},
+	}}
+
+	svc.scheduleUsageAlertWorkflow(ctx, &customer.Customer{ID: "cust_1"})
+
+	s.Equal([]time.Duration{delay}, locker.ttls)
+	s.Equal(0, locker.releases, "throttle lock must not be released")
+
+	svc.scheduleUsageAlertWorkflow(ctx, &customer.Customer{ID: "cust_2"})
+	s.Equal([]time.Duration{delay, delay}, locker.ttls)
+	s.Equal(1, logs.FilterMessage(alertsOffMsg).Len(), "same tenant logs once")
+	s.Equal(zapcore.DebugLevel, logs.FilterMessage(alertsOffMsg).All()[0].Level)
+
+	otherCtx := types.SetTenantID(ctx, "tenant_other")
+	svc.scheduleUsageAlertWorkflow(otherCtx, &customer.Customer{ID: "cust_3"})
+	s.Equal(2, logs.FilterMessage(alertsOffMsg).Len(), "other tenant logs again")
+}
+
+func TestFirstAlertsOffLog(t *testing.T) {
+	svc := &meterUsageTrackingService{}
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "t1"), "e1")
+	assert.True(t, svc.firstAlertsOffLog(ctx))
+	assert.False(t, svc.firstAlertsOffLog(ctx))
+	assert.True(t, svc.firstAlertsOffLog(types.SetEnvironmentID(ctx, "e2")))
+	assert.True(t, svc.firstAlertsOffLog(types.SetTenantID(ctx, "t2")))
+}
+
+const alertsOffMsg = "usage alerts disabled by tenant settings, skipping"
