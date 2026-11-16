@@ -1122,6 +1122,8 @@ type BulkMeterUsageTrackingConfig struct {
 	RedisDeduplicationEnabled    bool          `mapstructure:"redis_deduplication_enabled" default:"true"`
 	RedisDeduplicationTTL        time.Duration `mapstructure:"redis_deduplication_ttl" default:"24h"`
 	PostInsertSideEffectsEnabled bool          `mapstructure:"post_insert_side_effects_enabled" default:"true"`
+	BatchDedupLocks              bool          `mapstructure:"batch_dedup_locks" default:"false"`
+	InsertChunkSize              int           `mapstructure:"insert_chunk_size" default:"100"`
 }
 
 // DefaultRedisDeduplicationTTL is the fallback TTL.
@@ -1425,7 +1427,7 @@ const (
 // A non-local deployment booting with any of these for an ENABLED feature is running on a
 // public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
 var placeholderSecrets = map[string]bool{
-	"": true, // unset
+	"":             true, // unset
 	"super_secret": true,
 	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
 	"<supabase service key>":                                   true,

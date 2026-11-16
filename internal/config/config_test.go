@@ -282,3 +282,21 @@ func TestDeduplicationTTLFromYAMLAndEnv(t *testing.T) {
 	assert.Equal(t, 15*time.Minute, cfg.BulkMeterUsageTracking.DeduplicationTTL())
 	assert.Equal(t, 2*time.Hour, cfg.MeterUsageTracking.DeduplicationTTL())
 }
+
+func TestBulkBatchingFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.False(t, cfg.BulkMeterUsageTracking.BatchDedupLocks)
+	assert.Equal(t, 100, cfg.BulkMeterUsageTracking.InsertChunkSize)
+
+	t.Setenv("FLEXPRICE_BULK_METER_USAGE_TRACKING_BATCH_DEDUP_LOCKS", "true")
+	t.Setenv("FLEXPRICE_BULK_METER_USAGE_TRACKING_INSERT_CHUNK_SIZE", "5000")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.True(t, cfg.BulkMeterUsageTracking.BatchDedupLocks)
+	assert.Equal(t, 5000, cfg.BulkMeterUsageTracking.InsertChunkSize)
+}

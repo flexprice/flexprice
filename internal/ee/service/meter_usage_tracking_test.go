@@ -683,3 +683,197 @@ func TestFirstAlertsOffLog(t *testing.T) {
 }
 
 const alertsOffMsg = "usage alerts disabled by tenant settings, skipping"
+
+type batchRecordingLocker struct {
+	recordingLocker
+	held       map[string]bool
+	batchCalls int
+	batchKeys  []string
+}
+
+func (b *batchRecordingLocker) AcquireLocks(_ context.Context, keys []string, _ time.Duration) ([]cache.Lock, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.batchCalls++
+	b.batchKeys = append(b.batchKeys, keys...)
+	locks := make([]cache.Lock, len(keys))
+	for i, k := range keys {
+		ok := !b.held[k]
+		b.held[k] = true
+		locks[i] = &recordingLock{acquired: ok, locker: &b.recordingLocker}
+	}
+	return locks, nil
+}
+
+type chunkRecordingStore struct {
+	*testutil.InMemoryMeterUsageStore
+	chunks []int
+	fail   bool
+}
+
+func (c *chunkRecordingStore) BulkInsertMeterUsageChunked(ctx context.Context, records []*events.MeterUsage, chunk int) error {
+	c.chunks = append(c.chunks, chunk)
+	if c.fail {
+		return assert.AnError
+	}
+	return c.InMemoryMeterUsageStore.BulkInsertMeterUsage(ctx, records)
+}
+
+func newBulkBatchingService(t *testing.T, locker cache.Locker, store events.MeterUsageRepository, batch bool, chunk int) *meterUsageTrackingService {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	meters := testutil.NewInMemoryMeterStore()
+	require.NoError(t, meters.CreateMeter(ctx, &meter.Meter{
+		ID:          "meter_api",
+		EventName:   "api_call",
+		Aggregation: meter.Aggregation{Type: types.AggregationCount},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}))
+	return &meterUsageTrackingService{
+		ServiceParams: ServiceParams{
+			Logger:    logger.NewNoopLogger(),
+			Locker:    locker,
+			MeterRepo: meters,
+			Config: &config.Configuration{BulkMeterUsageTracking: config.BulkMeterUsageTrackingConfig{
+				RedisDeduplicationEnabled: true,
+				BatchDedupLocks:           batch,
+				InsertChunkSize:           chunk,
+			}},
+		},
+		meterUsageRepo: store,
+	}
+}
+
+func bulkMessage(t *testing.T, ids ...string) *message.Message {
+	evts := make([]*events.Event, 0, len(ids))
+	for _, id := range ids {
+		evts = append(evts, &events.Event{ID: id, EventName: "api_call", ExternalCustomerID: "c1", Timestamp: time.Now().UTC()})
+	}
+	payload, err := json.Marshal(events.EventBatch{TenantID: types.DefaultTenantID, EnvironmentID: "env_test", Events: evts})
+	require.NoError(t, err)
+	return message.NewMessage("msg_batch", payload)
+}
+
+func TestProcessBulkMessage_BatchDedupLocks(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	locker := &batchRecordingLocker{held: map[string]bool{}}
+	store := &chunkRecordingStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()}
+	svc := newBulkBatchingService(t, locker, store, true, 5000)
+
+	require.NoError(t, svc.processBulkMessage(ctx, bulkMessage(t, "e1", "e2", "e1", "e3")))
+
+	assert.Equal(t, 1, locker.batchCalls, "one round trip per batch")
+	assert.Empty(t, locker.ttls, "no per-event AcquireLock")
+	assert.Len(t, locker.batchKeys, 4)
+	assert.Equal(t, []int{5000}, store.chunks)
+	got, err := store.GetUsage(ctx, &events.MeterUsageQueryParams{
+		TenantID: types.DefaultTenantID, EnvironmentID: "env_test", MeterID: "meter_api", AggregationType: types.AggregationCount,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(3), got.EventCount, "in-batch duplicate skipped")
+
+	require.NoError(t, svc.processBulkMessage(ctx, bulkMessage(t, "e1", "e4")))
+	got, err = store.GetUsage(ctx, &events.MeterUsageQueryParams{
+		TenantID: types.DefaultTenantID, EnvironmentID: "env_test", MeterID: "meter_api", AggregationType: types.AggregationCount,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(4), got.EventCount, "redelivered event skipped")
+	assert.Equal(t, 0, locker.releases)
+}
+
+func TestProcessBulkMessage_BatchDedupLocksReleasedOnInsertFailure(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	locker := &batchRecordingLocker{held: map[string]bool{}}
+	store := &chunkRecordingStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore(), fail: true}
+	svc := newBulkBatchingService(t, locker, store, true, 500)
+
+	require.Error(t, svc.processBulkMessage(ctx, bulkMessage(t, "e1", "e2", "e1")))
+	assert.Equal(t, 2, locker.releases, "acquired locks released, skipped duplicate not")
+}
+
+func TestProcessBulkMessage_DefaultPathUnchanged(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	locker := &batchRecordingLocker{held: map[string]bool{}}
+	locker.acquire = true
+	store := &chunkRecordingStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()}
+	svc := newBulkBatchingService(t, locker, store, false, 100)
+
+	require.NoError(t, svc.processBulkMessage(ctx, bulkMessage(t, "e1", "e2")))
+	assert.Equal(t, 0, locker.batchCalls)
+	assert.Len(t, locker.ttls, 2)
+	assert.Equal(t, []int{100}, store.chunks)
+}
+
+type suppressAllWindow struct{}
+
+func (suppressAllWindow) IsSuppressed(context.Context, string, time.Time) bool { return true }
+
+type failingBatchLocker struct {
+	recordingLocker
+}
+
+func (f *failingBatchLocker) AcquireLocks(_ context.Context, keys []string, _ time.Duration) ([]cache.Lock, error) {
+	locks := make([]cache.Lock, len(keys))
+	for i := 1; i < len(keys); i++ {
+		locks[i] = &recordingLock{acquired: true, locker: &f.recordingLocker}
+	}
+	return locks, assert.AnError
+}
+
+func TestProcessBulkMessage_BatchDedupLocksFailOpenPerKey(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	locker := &failingBatchLocker{}
+	store := &chunkRecordingStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()}
+	svc := newBulkBatchingService(t, locker, store, true, 100)
+
+	require.NoError(t, svc.processBulkMessage(ctx, bulkMessage(t, "e1", "e2")))
+	got, err := store.GetUsage(ctx, &events.MeterUsageQueryParams{
+		TenantID: types.DefaultTenantID, EnvironmentID: "env_test", MeterID: "meter_api", AggregationType: types.AggregationCount,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(2), got.EventCount, "failed key still processed")
+}
+
+func TestProcessBulkMessage_BatchDedupLocksSkipsUnkeyedEvents(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	locker := &batchRecordingLocker{held: map[string]bool{}}
+	store := &chunkRecordingStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()}
+	svc := newBulkBatchingService(t, locker, store, true, 100)
+
+	now := time.Now().UTC()
+	payload, err := json.Marshal(events.EventBatch{TenantID: types.DefaultTenantID, EnvironmentID: "env_test", Events: []*events.Event{
+		nil,
+		{ID: "", EventName: "api_call", ExternalCustomerID: "c1", Timestamp: now},
+		{ID: "e1", EventName: "api_call", ExternalCustomerID: "c1", Timestamp: now},
+	}})
+	require.NoError(t, err)
+
+	require.NoError(t, svc.processBulkMessage(ctx, message.NewMessage("m", payload)))
+	assert.Len(t, locker.batchKeys, 1, "only the keyed event is locked")
+}
+
+func TestProcessBulkMessage_DeletionHoldReleasesNothingAndFails(t *testing.T) {
+	for _, batch := range []bool{true, false} {
+		ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+		locker := &batchRecordingLocker{held: map[string]bool{}}
+		store := &chunkRecordingStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()}
+		svc := newBulkBatchingService(t, locker, store, batch, 100)
+		svc.deletionWindow = suppressAllWindow{}
+
+		err := svc.processBulkMessage(ctx, bulkMessage(t, "e1"))
+		require.ErrorIs(t, err, types.ErrEventDeletionInProgress)
+		assert.Empty(t, locker.ttls)
+		assert.Zero(t, locker.batchCalls)
+	}
+}
+
+func TestInsertBulkRecords_PlainRepoFallsBack(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	store := testutil.NewInMemoryMeterUsageStore()
+	svc := newBulkBatchingService(t, &batchRecordingLocker{held: map[string]bool{}}, store, false, 0)
+	require.NoError(t, svc.insertBulkRecords(ctx, []*events.MeterUsage{}))
+
+	chunked := &chunkRecordingStore{InMemoryMeterUsageStore: store}
+	svc = newBulkBatchingService(t, &batchRecordingLocker{held: map[string]bool{}}, chunked, false, 0)
+	require.NoError(t, svc.insertBulkRecords(ctx, []*events.MeterUsage{}))
+	assert.Empty(t, chunked.chunks, "non-positive chunk size uses default insert")
+}
