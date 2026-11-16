@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -51,7 +52,38 @@ func customerExportService(repo *originRepoFake, cust *customerCountFake) *sched
 	s := newExportService(&exportRepoFake{}, &exportTemporalFake{})
 	s.repo = repo
 	s.customerRepo = cust
+	s.config.Exports.CustomerFilterEnabled = true
 	return s
+}
+
+func TestCreate_CustomerFilterFlag(t *testing.T) {
+	invoiceWithFilter := dto.CreateScheduledTaskRequest{
+		EntityType: types.ScheduledTaskEntityTypeInvoice, Interval: types.ScheduledTaskIntervalManual, Enabled: true,
+		Origin:       types.ExportOriginCustomersPage,
+		SourceConfig: &types.ExportSourceConfig{CustomerFilter: &types.CustomerFilter{}},
+	}
+	plain := dto.CreateScheduledTaskRequest{
+		EntityType: types.ScheduledTaskEntityTypeInvoice, Interval: types.ScheduledTaskIntervalManual, Enabled: true,
+	}
+	for _, enabled := range []bool{false, true} {
+		for name, req := range map[string]dto.CreateScheduledTaskRequest{
+			"customers": customersReq(), "filtered invoice": invoiceWithFilter, "plain": plain,
+		} {
+			t.Run(fmt.Sprintf("%s enabled=%v", name, enabled), func(t *testing.T) {
+				repo := &originRepoFake{}
+				s := customerExportService(repo, &customerCountFake{})
+				s.config.Exports.CustomerFilterEnabled = enabled
+				_, err := s.CreateScheduledTask(exportCtx(), req)
+				if enabled || name == "plain" {
+					require.NoError(t, err)
+					return
+				}
+				require.True(t, ierr.IsValidation(err), "got %v", err)
+				require.Contains(t, errText(err), "Exports limited to customers are not available yet.")
+				require.Nil(t, repo.created)
+			})
+		}
+	}
 }
 
 func customersReq() dto.CreateScheduledTaskRequest {

@@ -455,6 +455,7 @@ gcs:
 exports:
   console_base_url: "" # Set via FLEXPRICE_EXPORTS_CONSOLE_BASE_URL
   max_emails_per_hour: 200
+  customer_filter_enabled: false # Set via FLEXPRICE_EXPORTS_CUSTOMER_FILTER_ENABLED
 
 flexprice_s3_exports:
   bucket: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_BUCKET env var

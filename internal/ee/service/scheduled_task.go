@@ -298,10 +298,25 @@ func (s *scheduledTaskService) checkRunWindow(ctx context.Context, entity types.
 	return nil
 }
 
+func (s *scheduledTaskService) requireCustomerFilterEnabled(req dto.CreateScheduledTaskRequest) error {
+	if req.SourceConfig.GetCustomerFilter() == nil && req.EntityType != types.ScheduledTaskEntityTypeCustomers {
+		return nil
+	}
+	if s.config != nil && s.config.Exports.CustomerFilterEnabled {
+		return nil
+	}
+	return ierr.NewError("customer filtered exports are not enabled").
+		WithHint("Exports limited to customers are not available yet.").
+		Mark(ierr.ErrValidation)
+}
+
 // CreateScheduledTask creates a new scheduled task
 func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.CreateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error) {
 	// Validate request
 	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.requireCustomerFilterEnabled(req); err != nil {
 		return nil, err
 	}
 	if err := requireAnalyticsRead(ctx, s.rbac, req.EntityType); err != nil {

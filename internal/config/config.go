@@ -166,6 +166,8 @@ type BucketConfig struct {
 type ExportsConfig struct {
 	ConsoleBaseURL   string `mapstructure:"console_base_url" validate:"omitempty"`
 	MaxEmailsPerHour int    `mapstructure:"max_emails_per_hour" validate:"omitempty"`
+	// Enable after workers understand customer filters.
+	CustomerFilterEnabled bool `mapstructure:"customer_filter_enabled"`
 }
 
 // ExportEmailAvailable reports email delivery readiness.
