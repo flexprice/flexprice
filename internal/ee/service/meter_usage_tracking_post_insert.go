@@ -92,7 +92,7 @@ func (s *meterUsageTrackingService) runBulkMeterUsagePostInsertSideEffects(ctx c
 	}
 }
 
-// firstAlertsOffLog is true once per tenant and environment.
+// firstAlertsOffLog is true once per tenant.
 func (s *meterUsageTrackingService) firstAlertsOffLog(ctx context.Context) bool {
 	_, seen := s.alertsOffLogged.LoadOrStore(types.GetTenantID(ctx)+"/"+types.GetEnvironmentID(ctx), struct{}{})
 	return !seen
