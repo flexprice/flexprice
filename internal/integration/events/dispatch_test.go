@@ -1,13 +1,9 @@
 package events
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 
-	"github.com/flexprice/flexprice/internal/config"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
 )
@@ -45,23 +41,4 @@ func TestRunTriggersOnlyProvider(t *testing.T) {
 		}, resolveDispatchOptions(nil))
 		require.Equal(t, []error{boom}, errs)
 	})
-}
-
-type invoiceEmailSenderFunc func(ctx context.Context, invoiceID string) error
-
-func (f invoiceEmailSenderFunc) SendAutoInvoiceEmail(ctx context.Context, invoiceID string) error {
-	return f(ctx, invoiceID)
-}
-
-func TestDispatchInvoiceAutoEmail_MissingDataIsNothingToSend(t *testing.T) {
-	cfg := &config.Configuration{Email: config.EmailConfig{Enabled: true, Provider: string(types.EmailProviderLocal)}}
-	event := &types.WebhookEvent{Payload: json.RawMessage(`{"invoice_id":"inv_1"}`)}
-	send := func(err error) error {
-		sender := invoiceEmailSenderFunc(func(context.Context, string) error { return err })
-		return DispatchInvoiceAutoEmail(context.Background(), cfg, sender, testLogger(), event, "msg-1")
-	}
-
-	require.NoError(t, send(ierr.NewError("invoice not found").Mark(ierr.ErrNotFound)))
-	boom := errors.New("boom")
-	require.ErrorIs(t, send(boom), boom)
 }

@@ -194,6 +194,7 @@ type ServiceParams struct {
 	// PubSubs
 	WalletBalanceAlertPubSub types.WalletBalanceAlertPubSub
 	WebhookPubSub            pubsub.PubSub
+	EmailEventsPubSub        types.EmailEventsPubSub
 
 	// RevenueFacts is the revenue_facts service the invoice hooks call after
 	// finalize/void. Implemented by internal/ee/service/revenue and injected
@@ -276,6 +277,7 @@ func NewServiceParams(
 	integrationFactory *integration.Factory,
 	walletBalanceAlertPubSub types.WalletBalanceAlertPubSub,
 	webhookPubSub pubsub.PubSub,
+	emailEventsPubSub types.EmailEventsPubSub,
 	planPriceSyncRepo planpricesync.Repository,
 	addonPriceSyncRepo addonpricesync.Repository,
 	workflowExecutionRepo workflowexecution.Repository,
@@ -372,6 +374,7 @@ func NewServiceParams(
 		EncryptionService:            encryptionService,
 		WalletBalanceAlertPubSub:     walletBalanceAlertPubSub,
 		WebhookPubSub:                webhookPubSub,
+		EmailEventsPubSub:            emailEventsPubSub,
 		PlanPriceSyncRepo:            planPriceSyncRepo,
 		AddonPriceSyncRepo:           addonPriceSyncRepo,
 		WorkflowExecutionRepo:        workflowExecutionRepo,

@@ -10,12 +10,13 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	"github.com/flexprice/flexprice/internal/email"
 	"github.com/flexprice/flexprice/internal/email/emailtypes"
 	"github.com/flexprice/flexprice/internal/email/render"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/interfaces"
+	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -25,7 +26,9 @@ type EmailNotificationService interface {
 	// SendInvoiceEmail queues the email for a finalized invoice; DispatchEmails sends it.
 	SendInvoiceEmail(ctx context.Context, invoiceID string, req *dto.SendInvoiceEmailRequest) (*dto.EmailLogResponse, error)
 
-	interfaces.InvoiceEmailSender
+	// SendAutoInvoiceEmail queues the email for a finalized invoice when the environment's auto-send
+	// setting covers invoices. A second call for the same invoice is a no-op.
+	SendAutoInvoiceEmail(ctx context.Context, invoiceID string) error
 
 	// ListInvoiceEmails returns the emails sent for an invoice, newest first.
 	ListInvoiceEmails(ctx context.Context, invoiceID string) (*dto.ListEmailLogsResponse, error)
@@ -47,6 +50,9 @@ type EmailNotificationService interface {
 	// HandleDeliveryWebhook verifies a provider's delivery webhook and records each event on its email.
 	// Events for another region, events without tenant tags and events for unknown emails are dropped.
 	HandleDeliveryWebhook(ctx context.Context, provider types.EmailProvider, body []byte, header http.Header) error
+
+	// RegisterHandler registers the email-events consumer that auto-sends emails for finalized invoices.
+	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
 }
 
 type emailNotificationService struct {
