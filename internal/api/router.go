@@ -925,7 +925,7 @@ func NewRouter(
 	v1Public.POST("/webhooks/email/:provider",
 		middleware.WebhookBodyLimitMiddleware(middleware.MaxWebhookBodyBytes),
 		middleware.WebhookActorMiddleware,
-		handlers.EmailNotification.HandleDeliveryWebhook)
+		handlers.Webhook.HandleEmailWebhook)
 
 	// Settings routes.
 	//
