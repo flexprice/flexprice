@@ -139,10 +139,25 @@ else
 end
 `)
 
+// acquireScript sets the key, or succeeds if it already holds our token.
+var acquireScript = redis.NewScript(`
+if redis.call("SET", KEYS[1], ARGV[1], "NX", "PX", ARGV[2]) then
+	return 1
+end
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+	return 1
+end
+return 0
+`)
+
+func ttlMillis(ttl time.Duration) int64 {
+	return max(ttl.Milliseconds(), 1)
+}
+
 func (l *redisLocker) AcquireLock(ctx context.Context, key string, ttl time.Duration) (Lock, error) {
 	token := uuid.NewString()
 
-	ok, err := l.client.SetNX(ctx, key, token, ttl).Result()
+	ok, err := acquireScript.Run(ctx, l.client, []string{key}, token, ttlMillis(ttl)).Bool()
 	if err != nil {
 		return nil, err
 	}
@@ -158,25 +173,26 @@ func (l *redisLocker) AcquireLock(ctx context.Context, key string, ttl time.Dura
 // batchLockChunk bounds one pipeline.
 const batchLockChunk = 1000
 
-// AcquireLocks pipelines SET NX per key.
+// AcquireLocks pipelines the acquire script per key.
 func (l *redisLocker) AcquireLocks(ctx context.Context, keys []string, ttl time.Duration) ([]Lock, error) {
 	locks := make([]Lock, len(keys))
 	var firstErr error
+	ms := ttlMillis(ttl)
 	for start := 0; start < len(keys); start += batchLockChunk {
 		end := min(start+batchLockChunk, len(keys))
 		pipe := l.client.Pipeline()
-		cmds := make([]*redis.BoolCmd, 0, end-start)
+		cmds := make([]*redis.Cmd, 0, end-start)
 		tokens := make([]string, 0, end-start)
 		for _, key := range keys[start:end] {
 			token := uuid.NewString()
 			tokens = append(tokens, token)
-			cmds = append(cmds, pipe.SetNX(ctx, key, token, ttl))
+			cmds = append(cmds, acquireScript.Eval(ctx, pipe, []string{key}, token, ms))
 		}
 		if _, err := pipe.Exec(ctx); err != nil && firstErr == nil {
 			firstErr = err
 		}
 		for i, cmd := range cmds {
-			ok, err := cmd.Result()
+			ok, err := cmd.Bool()
 			if err != nil {
 				continue
 			}
