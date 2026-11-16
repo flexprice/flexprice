@@ -567,6 +567,7 @@ usage_alerts:
   wallet_alerts_enabled: true
   spend_alerts_enabled: true
   entitlement_alerts_enabled: true
+  skip_final: false
 
 wallet_balance_alert:
   enabled: true

@@ -1038,6 +1038,8 @@ type UsageAlertsConfig struct {
 	WalletAlertsEnabled      bool          `mapstructure:"wallet_alerts_enabled" default:"true"`
 	SpendAlertsEnabled       bool          `mapstructure:"spend_alerts_enabled" default:"true"`
 	EntitlementAlertsEnabled bool          `mapstructure:"entitlement_alerts_enabled" default:"true"`
+	// Spend alerts skip FINAL.
+	SkipFinal bool `mapstructure:"skip_final" default:"false"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
