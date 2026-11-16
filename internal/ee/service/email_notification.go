@@ -190,7 +190,7 @@ func (s *emailNotificationService) SendAutoInvoiceEmail(ctx context.Context, inv
 		return nil
 	}
 
-	// The invoice was finalized moments ago; read it from the primary, not a lagging replica.
+	// The invoice, and on onboarding flows its customer, can be moments old; read both from the primary.
 	inv, err := s.InvoiceRepo.Get(types.WithForceWriter(ctx), invoiceID)
 	if err != nil {
 		return err
@@ -199,7 +199,7 @@ func (s *emailNotificationService) SendAutoInvoiceEmail(ctx context.Context, inv
 		s.Logger.Info(ctx, "automatic invoice email not sent: invoice is not finalized", "invoice_id", invoiceID, "invoice_status", inv.InvoiceStatus)
 		return nil
 	}
-	cust, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
+	cust, err := s.CustomerRepo.Get(types.WithForceWriter(ctx), inv.CustomerID)
 	if err != nil {
 		return err
 	}
