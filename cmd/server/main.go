@@ -219,6 +219,7 @@ func main() {
 			repository.NewSystemEventDomainRepository,
 			repository.NewGroupRepository,
 			repository.NewScheduledTaskRepository,
+			repository.NewCustomerDeletionRepository,
 			repository.NewPriceUnitRepository,
 			repository.NewWorkflowExecutionRepository,
 			repository.NewCheckoutSessionRepository,
