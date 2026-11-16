@@ -1260,3 +1260,67 @@ func (s *EntitlementGrantSuite) TestEvaluate_AlertFailureDoesNotBlock() {
 	stored := s.listSubscriptionGrants(sub)[0]
 	s.True(decimal.NewFromInt(120).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
 }
+
+func (s *EntitlementGrantSuite) withRefreshOnRead(enabled bool) {
+	cfg := s.GetConfig()
+	previous := cfg.EntitlementGrants.RefreshOnRead
+	cfg.EntitlementGrants.RefreshOnRead = enabled
+	s.T().Cleanup(func() { cfg.EntitlementGrants.RefreshOnRead = previous })
+}
+
+func grantUsageInResponse(features []*dto.AggregatedFeature, featureID string) *decimal.Decimal {
+	for _, f := range features {
+		if f.Feature != nil && f.Feature.ID == featureID && f.Entitlement != nil && f.Entitlement.GrantState != nil && len(f.Entitlement.GrantState.Allowances) > 0 {
+			return &f.Entitlement.GrantState.Allowances[0].Usage
+		}
+	}
+	return nil
+}
+
+// A customer read with refresh_grants returns freshly measured grant usage, only when the config allows it.
+func (s *EntitlementGrantSuite) TestCustomerEntitlementsRead_RefreshGrantsFollowsConfig() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	// The read evaluates at the real clock, and this fixture's period starts now.
+	s.seedMeterUsage(cust.ExternalID, m.ID, sub.CurrentPeriodStart, 60)
+	read := func() *dto.CustomerEntitlementsResponse {
+		resp, err := s.subGrantBilling().GetCustomerEntitlementsForSubscriptions(ctx, cust.ID, []*subscription.Subscription{sub},
+			&dto.GetCustomerEntitlementsRequest{RefreshGrants: true})
+		s.Require().NoError(err)
+		return resp
+	}
+
+	s.withRefreshOnRead(false)
+	read()
+	s.Empty(s.listSubscriptionGrants(sub), "disabled in config: the read changes nothing")
+
+	s.withRefreshOnRead(true)
+	usage := grantUsageInResponse(read().Features, "feature-recovery")
+	s.Require().NotNil(usage, "the response carries the grant state")
+	s.True(decimal.NewFromInt(60).Equal(*usage), "returned usage: got %s", usage)
+}
+
+// The subscription read refreshes only live subscriptions: window opening ignores status.
+func (s *EntitlementGrantSuite) TestSubscriptionEntitlementsRead_RefreshesOnlyLiveSubscriptions() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	s.seedMeterUsage(cust.ExternalID, m.ID, sub.CurrentPeriodStart, 60)
+	s.withRefreshOnRead(true)
+	subSvc := NewSubscriptionService(s.buildServiceParams())
+	read := func() *dto.SubscriptionEntitlementsResponse {
+		resp, err := subSvc.GetActiveAggregatedSubscriptionEntitlements(ctx, sub.ID, &dto.GetSubscriptionEntitlementsRequest{RefreshGrants: true})
+		s.Require().NoError(err)
+		return resp
+	}
+
+	sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+	read()
+	s.Empty(s.listSubscriptionGrants(sub), "a cancelled subscription is not refreshed")
+
+	sub.SubscriptionStatus = types.SubscriptionStatusActive
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+	usage := grantUsageInResponse(read().Features, "feature-recovery")
+	s.Require().NotNil(usage, "the response carries the grant state")
+	s.True(decimal.NewFromInt(60).Equal(*usage), "returned usage: got %s", usage)
+}

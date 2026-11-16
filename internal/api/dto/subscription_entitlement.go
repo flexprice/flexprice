@@ -13,6 +13,8 @@ import (
 // GetSubscriptionEntitlementsRequest represents the request for getting subscription entitlements
 type GetSubscriptionEntitlementsRequest struct {
 	FeatureIDs []string `json:"feature_ids,omitempty" form:"feature_ids"`
+	// RefreshGrants evaluates entitlement grants before returning their usage. Used by the UI.
+	RefreshGrants bool `json:"refresh_grants,omitempty" form:"refresh_grants"`
 }
 
 func (r *GetSubscriptionEntitlementsRequest) Validate() error {
