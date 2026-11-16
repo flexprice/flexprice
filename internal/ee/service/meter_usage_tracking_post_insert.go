@@ -151,9 +151,15 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 	}
 
 	// Per-tenant gate: settings can turn any alert type off independently of the deployment-level config.
-	walletEnabled, spendEnabled, entitlementEnabled := s.effectiveUsageAlertFlags(ctx)
+	walletEnabled, spendEnabled, entitlementEnabled, readFailed := s.effectiveUsageAlertFlags(ctx)
 	if !walletEnabled && !spendEnabled && !entitlementEnabled {
-		// Keep throttle lock; expires via TTL.
+		if readFailed && throttleLock != nil {
+			if releaseErr := throttleLock.Release(ctx); releaseErr != nil {
+				s.Logger.Error(ctx, "failed to release usage alert schedule lock", "error", releaseErr, "customer_id", cust.ID)
+			}
+			return
+		}
+		// Alerts off; lock expires via TTL.
 		if s.firstAlertsOffLog(ctx) {
 			s.Logger.Debug(ctx, "usage alerts disabled by tenant settings, skipping", "tenant_id", types.GetTenantID(ctx), "environment_id", types.GetEnvironmentID(ctx))
 		}
@@ -432,12 +438,13 @@ func (s *meterUsageTrackingService) effectiveUsageAlertTiming(ctx context.Contex
 
 // effectiveUsageAlertFlags AND-combines the deployment-level config flags with the per-tenant setting toggles.
 // Fail-closed: any settings-read error treats that setting as disabled (matches the wallet gate's behaviour and prevents a transient DB blip from mass-firing evaluations).
-func (s *meterUsageTrackingService) effectiveUsageAlertFlags(ctx context.Context) (wallet, spend, entitlement bool) {
+func (s *meterUsageTrackingService) effectiveUsageAlertFlags(ctx context.Context) (wallet, spend, entitlement, readFailed bool) {
 	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 
 	if s.Config.UsageAlerts.WalletAlertsEnabled {
 		walletCfg, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
 		if err != nil && !ierr.IsNotFound(err) {
+			readFailed = true
 			s.Logger.Error(ctx, "usage alerts: failed to read wallet alert setting, treating as disabled",
 				"error", err,
 				"setting_key", types.SettingKeyWalletBalanceAlertConfig,
@@ -448,6 +455,7 @@ func (s *meterUsageTrackingService) effectiveUsageAlertFlags(ctx context.Context
 	if s.Config.UsageAlerts.SpendAlertsEnabled {
 		spendCfg, err := GetSetting[types.AlertToggleConfig](settingsSvc, ctx, types.SettingKeySubscriptionAlertConfig)
 		if err != nil && !ierr.IsNotFound(err) {
+			readFailed = true
 			s.Logger.Error(ctx, "usage alerts: failed to read subscription alert setting, treating as disabled",
 				"error", err,
 				"setting_key", types.SettingKeySubscriptionAlertConfig,
@@ -458,6 +466,7 @@ func (s *meterUsageTrackingService) effectiveUsageAlertFlags(ctx context.Context
 	if s.Config.UsageAlerts.EntitlementAlertsEnabled {
 		entCfg, err := GetSetting[types.AlertToggleConfig](settingsSvc, ctx, types.SettingKeyEntitlementAlertConfig)
 		if err != nil && !ierr.IsNotFound(err) {
+			readFailed = true
 			s.Logger.Error(ctx, "usage alerts: failed to read entitlement alert setting, treating as disabled",
 				"error", err,
 				"setting_key", types.SettingKeyEntitlementAlertConfig,
