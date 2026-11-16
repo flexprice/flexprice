@@ -92,6 +92,12 @@ func TestApplyDeliveryEvent(t *testing.T) {
 		assert.Nil(t, applyDeliveryEvent(logWith(types.EmailDeliveryStatusDelivered, lo.ToPtr("msg_1")), event(types.EmailDeliveryStatusSent, "msg_1")))
 	})
 
+	t.Run("a bounce from before delivery changes nothing", func(t *testing.T) {
+		delivered := logWith(types.EmailDeliveryStatusDelivered, lo.ToPtr("msg_1"))
+		delivered.DeliveredAt = lo.ToPtr(at.Add(time.Minute))
+		assert.Nil(t, applyDeliveryEvent(delivered, event(types.EmailDeliveryStatusBounced, "msg_1")))
+	})
+
 	t.Run("an event for another message changes nothing", func(t *testing.T) {
 		assert.Nil(t, applyDeliveryEvent(logWith(types.EmailDeliveryStatusSent, lo.ToPtr("msg_1")), event(types.EmailDeliveryStatusDelivered, "msg_2")))
 	})

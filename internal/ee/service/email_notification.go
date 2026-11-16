@@ -426,9 +426,12 @@ func (s *emailNotificationService) recordDeliveryEvent(ctx context.Context, ev e
 }
 
 // applyDeliveryEvent is the email after a delivery event, or nil when the event changes nothing:
-// a stale or repeated status, or an event for a different provider message.
+// a stale or repeated status, an event from before delivery, or an event for a different provider message.
 func applyDeliveryEvent(cur *emaillog.EmailLog, ev email.DeliveryEvent) *emaillog.EmailLog {
 	if cur.ProviderMessageID != nil && *cur.ProviderMessageID != ev.ProviderMessageID {
+		return nil
+	}
+	if cur.DeliveredAt != nil && ev.OccurredAt.Before(*cur.DeliveredAt) {
 		return nil
 	}
 	if !cur.DeliveryStatus.CanMoveTo(ev.Status) {
