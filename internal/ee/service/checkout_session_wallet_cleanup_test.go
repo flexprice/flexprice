@@ -147,7 +147,7 @@ func (s *WalletServiceSuite) TestCleanupCheckoutSession_StalePendingCopyDoesNotC
 		ProviderPaymentIntentID: "pay_stale_cleanup_001",
 	}))
 
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, &stale, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, &stale, nil, false))
 
 	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
 	s.Require().NoError(err)
@@ -359,7 +359,7 @@ func (s *WalletServiceSuite) TestCheckoutSessionStatusCountedOnce() {
 	_, completed := s.seedPayFirstTopupSession("metrics-complete", decimal.NewFromInt(200), nil)
 	stale := *completed
 	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, completed.ID, &types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_metrics_001"}))
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, &stale, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, &stale, nil, false))
 
 	_, expired := s.seedPayFirstTopupSession("metrics-expire", decimal.NewFromInt(200), nil)
 	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, expired.ID, nil))

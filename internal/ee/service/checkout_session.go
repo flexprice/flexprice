@@ -296,7 +296,7 @@ func (s *checkoutSessionService) Delete(ctx context.Context, id string) error {
 	// Archiving alone leaves checkout_status pending, so the row keeps holding its
 	// idempotency key and keeps blocking the per-wallet pending guard while being
 	// invisible to every service query. Reach a terminal state first.
-	if err := s.cleanupCheckoutSession(ctx, session, nil); err != nil {
+	if err := s.cleanupCheckoutSession(ctx, session, nil, false); err != nil {
 		return err
 	}
 
@@ -338,7 +338,7 @@ func (s *checkoutSessionService) Cancel(ctx context.Context, id string) (*dto.Ch
 		}
 	}
 
-	if err := s.endCheckoutSession(ctx, session, nil, true); err != nil {
+	if err := s.cleanupCheckoutSession(ctx, session, nil, true); err != nil {
 		return nil, err
 	}
 
@@ -366,7 +366,7 @@ func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, ses
 		return err
 	}
 
-	return s.cleanupCheckoutSession(ctx, session, reason)
+	return s.cleanupCheckoutSession(ctx, session, reason, false)
 }
 
 func (s *checkoutSessionService) voidCheckoutInvoiceIfPartiallyPaid(ctx context.Context, session *domainCheckout.CheckoutSession, invoiceID string) error {
@@ -395,14 +395,9 @@ func (s *checkoutSessionService) voidCheckoutInvoiceIfPartiallyPaid(ctx context.
 }
 
 // cleanupCheckoutSession terminates the session and publishes checkout.session.failed
-// (reason set) or checkout.session.expired (no reason).
-func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error {
-	return s.endCheckoutSession(ctx, session, reason, false)
-}
-
-// endCheckoutSession is cleanupCheckoutSession that, after a cancel, also sets cancelled_at
+// (reason set) or checkout.session.expired (no reason). A cancel also sets cancelled_at
 // and publishes checkout.session.cancelled.
-func (s *checkoutSessionService) endCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error, cancelled bool) error {
+func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error, cancelled bool) error {
 	terminated, err := s.terminateCheckoutSession(ctx, session, reason, cancelled)
 	if err != nil || !terminated {
 		return err
@@ -609,7 +604,7 @@ func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, 
 			result.Total++
 			sessCtx := context.WithValue(ctx, types.CtxTenantID, sess.TenantID)
 			sessCtx = context.WithValue(sessCtx, types.CtxEnvironmentID, sess.EnvironmentID)
-			if err := s.cleanupCheckoutSession(sessCtx, sess, nil); err != nil {
+			if err := s.cleanupCheckoutSession(sessCtx, sess, nil, false); err != nil {
 				s.Logger.Error(ctx, "failed to cleanup expired checkout session",
 					"session_id", sess.ID, "error", err)
 				result.Failed++
@@ -641,7 +636,7 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 
 	// Past expiry the session is expired, never completed; a payment it took is a late capture.
 	if !session.CheckoutStatus.IsTerminal() && !session.ExpiresAt.IsZero() && clock.Now().After(session.ExpiresAt) {
-		if err := s.cleanupCheckoutSession(ctx, session, nil); err != nil {
+		if err := s.cleanupCheckoutSession(ctx, session, nil, false); err != nil {
 			return err
 		}
 		return ierr.NewError("checkout session expired").

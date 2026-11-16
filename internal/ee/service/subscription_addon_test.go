@@ -1019,7 +1019,7 @@ func (s *SubscriptionServiceSuite) TestAddAddonCheckout_CleanupArchivesPendingAs
 	lineItemsBefore := len(sub.LineItems)
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil, false))
 
 	archived, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, pending.ID)
 	s.Require().NoError(err)
@@ -1056,7 +1056,7 @@ func (s *SubscriptionServiceSuite) TestAddAddonCheckout_CleanupLeavesActivatedAs
 	s.Require().NoError(subService.applyAddAddonCheckoutParams(ctx, cfg.AddAddonParams))
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil, false))
 
 	stored, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, pending.ID)
 	s.Require().NoError(err)
