@@ -1193,6 +1193,15 @@ func (s *CommitmentServiceSuite) TestTerminate_BillingTerms_SettlementWithFee() 
 	s.Equal(lo.FromPtr(settlementLine.BillingInstalmentID), settlements[0].ID)
 	s.Equal(types.InstalmentStatusInvoiced, settlements[0].InstalmentStatus)
 	s.Equal(inv.ID, lo.FromPtr(settlements[0].InvoiceID))
+
+	// The fee is its own instalment on the same invoice, and no part of the settlement.
+	fees := s.feesOf(created.ID)
+	s.Require().Len(fees, 1)
+	s.Equal(lo.FromPtr(feeLine.BillingInstalmentID), fees[0].ID)
+	s.Equal(types.InstalmentStatusInvoiced, fees[0].InstalmentStatus)
+	s.Equal(inv.ID, lo.FromPtr(fees[0].InvoiceID))
+	s.True(fees[0].Amount.Equal(dec("250")), "fee %s", fees[0].Amount)
+	s.True(settlements[0].Amount.Equal(dec("400")), "settlement %s", settlements[0].Amount)
 }
 
 // The fee's bounds hold for the fee only: once the subscription has moved on to June, a fee for 1 May is rejected,

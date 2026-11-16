@@ -1,6 +1,7 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"maps"
@@ -1435,7 +1436,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	// Convert to response DTO
 	response := s.toUsageAnalyticsResponseDTO(ctx, data, data.Meters, params, lineItemCoupons, subscriptionCoupons)
 	if lo.Contains(params.Expand, string(types.ExpandInstalments)) {
-		instalments, err := s.invoicedInstalments(ctx, cust, subscriptions, params)
+		instalments, err := s.rangeInstalments(ctx, cust, subscriptions, params)
 		if err != nil {
 			return nil, err
 		}
@@ -1459,9 +1460,10 @@ func emptyAnalyticsResponse(params *events.MeterUsageDetailedAnalyticsParams) *d
 	return response
 }
 
-// invoicedInstalments returns the instalments invoiced in the request's range for the commitments on the customer's
-// subscriptions that cover a queried meter. Property and source filters apply no commitments, so they list none.
-func (s *meterUsageService) invoicedInstalments(
+// rangeInstalments returns the instalments of the commitments on the customer's subscriptions that cover a queried
+// meter: those invoiced in the request's range, and those still scheduled whose bill_on falls in it, in date order.
+// Property and source filters apply no commitments, so they list none.
+func (s *meterUsageService) rangeInstalments(
 	ctx context.Context,
 	cust *customer.Customer,
 	subscriptions []*subscription.Subscription,
@@ -1487,24 +1489,63 @@ func (s *meterUsageService) invoicedInstalments(
 		ownerIDs = append(ownerIDs, ids...)
 	}
 
-	invoiced := types.Period{Start: params.StartTime, End: params.EndTime}
-	return s.BillingInstalmentRepo.ListInvoiced(ctx, types.BillingTermOwnerCommitment, ownerIDs, invoiced)
+	if len(ownerIDs) == 0 {
+		return nil, nil
+	}
+
+	inRange := types.Period{Start: params.StartTime, End: params.EndTime}
+	invoiced, err := s.BillingInstalmentRepo.ListInvoiced(ctx, types.BillingTermOwnerCommitment, ownerIDs, inRange)
+	if err != nil {
+		return nil, err
+	}
+
+	scheduled, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
+		OwnerType: types.BillingTermOwnerCommitment,
+		OwnerIDs:  ownerIDs,
+		Statuses:  []types.InstalmentStatus{types.InstalmentStatusScheduled},
+		BillOnIn:  &inRange,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	instalments := append(invoiced, scheduled...)
+	slices.SortStableFunc(instalments, func(a, b *billingterm.Instalment) int {
+		return cmp.Or(instalmentDate(a).Compare(instalmentDate(b)), cmp.Compare(a.ID, b.ID))
+	})
+
+	return instalments, nil
 }
 
-// setInstalments lists the instalments on the response and sets its total with them.
+// instalmentDate is when the instalment was invoiced or, while it is scheduled, when it falls due.
+func instalmentDate(inst *billingterm.Instalment) time.Time {
+	if inst.InstalmentStatus == types.InstalmentStatusInvoiced && inst.InvoicedAt != nil {
+		return *inst.InvoicedAt
+	}
+
+	return inst.BillOn
+}
+
+// setInstalments lists the instalments on the response and sets its total with the invoiced ones.
 func setInstalments(response *dto.GetUsageAnalyticsResponse, instalments []*billingterm.Instalment) {
 	total := response.TotalCost
 	response.Instalments = make([]dto.UsageAnalyticInstalment, 0, len(instalments))
 	for _, inst := range instalments {
-		total = total.Add(inst.Amount)
+		if inst.InstalmentStatus == types.InstalmentStatusInvoiced {
+			total = total.Add(inst.Amount)
+		}
+
 		response.Instalments = append(response.Instalments, dto.UsageAnalyticInstalment{
 			ID:                 inst.ID,
 			CommitmentID:       inst.OwnerID,
 			SubscriptionID:     lo.FromPtr(inst.SubscriptionID),
 			InvoiceID:          lo.FromPtr(inst.InvoiceID),
+			Kind:               inst.Kind,
+			InstalmentStatus:   inst.InstalmentStatus,
 			InvoiceLabel:       inst.InvoiceLabel,
 			Amount:             inst.Amount,
 			Currency:           inst.Currency,
+			BillOn:             inst.BillOn,
 			InvoicedAt:         inst.InvoicedAt,
 			ServicePeriodStart: inst.ServicePeriodStart,
 			ServicePeriodEnd:   inst.ServicePeriodEnd,

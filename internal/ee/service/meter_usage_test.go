@@ -7461,6 +7461,81 @@ func (s *MeterUsageServiceSuite) billInstalment(invoicedAt time.Time) {
 	s.Require().NoError(err)
 }
 
+// scheduleInstalment stores a scheduled instalment of cmt_prepaid due at billOn.
+func (s *MeterUsageServiceSuite) scheduleInstalment(id string, kind types.InstalmentKind, amount string, billOn time.Time) {
+	ctx := s.GetContext()
+	_, err := s.GetStores().BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{{
+		ID:                 id,
+		OwnerType:          types.BillingTermOwnerCommitment,
+		OwnerID:            "cmt_prepaid",
+		CustomerID:         s.customer.ID,
+		SubscriptionID:     lo.ToPtr(s.sub.ID),
+		Currency:           "usd",
+		Kind:               kind,
+		Delivery:           types.InstalmentDeliverySubscriptionInvoice,
+		BillOn:             billOn,
+		Amount:             dec(amount),
+		InvoiceLabel:       id,
+		ServicePeriodStart: s.periodStart,
+		ServicePeriodEnd:   s.periodEnd,
+		InstalmentStatus:   types.InstalmentStatusScheduled,
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}})
+	s.Require().NoError(err)
+}
+
+// A scheduled instalment shows in the range holding its bill_on, told apart by status and kind, and stays out of the
+// total with instalments until an invoice bills it. Cancelled instalments and those due outside the range do not show.
+func (s *MeterUsageServiceSuite) TestCommitments_ListsScheduledInstalmentsOutsideTheTotal() {
+	ctx := s.GetContext()
+	s.prepayFloor()
+	s.billInstalment(januaryNoon(3))
+	s.scheduleInstalment("binst_dropped", types.InstalmentKindInstalment, "700", januaryNoon(21))
+	_, err := s.GetStores().BillingInstalmentRepo.Cancel(ctx, types.BillingTermOwnerCommitment, "cmt_prepaid",
+		[]types.InstalmentStatus{types.InstalmentStatusScheduled})
+	s.Require().NoError(err)
+	s.scheduleInstalment("binst_due", types.InstalmentKindInstalment, "700", januaryNoon(20))
+	s.scheduleInstalment("binst_fee", types.InstalmentKindCancellationFee, "90", januaryNoon(25))
+	s.scheduleInstalment("binst_later", types.InstalmentKindInstalment, "700", s.periodEnd)
+
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+		StartTime: s.periodStart,
+		EndTime:   s.periodEnd,
+		Expand:    []string{string(types.ExpandInstalments)},
+	})
+	s.Require().Len(resp.Instalments, 3)
+
+	invoiced, due, fee := resp.Instalments[0], resp.Instalments[1], resp.Instalments[2]
+	s.Equal("binst_prepaid", invoiced.ID)
+	s.Equal(types.InstalmentKindInstalment, invoiced.Kind)
+	s.Equal(types.InstalmentStatusInvoiced, invoiced.InstalmentStatus)
+
+	s.Equal("binst_due", due.ID)
+	s.Equal(types.InstalmentKindInstalment, due.Kind)
+	s.Equal(types.InstalmentStatusScheduled, due.InstalmentStatus)
+	s.True(due.BillOn.Equal(januaryNoon(20)), "bill on %s", due.BillOn)
+	s.Nil(due.InvoicedAt)
+	s.Empty(due.InvoiceID)
+
+	s.Equal("binst_fee", fee.ID)
+	s.Equal(types.InstalmentKindCancellationFee, fee.Kind)
+	s.Equal(types.InstalmentStatusScheduled, fee.InstalmentStatus)
+
+	s.Require().NotNil(resp.TotalCostWithInstalments)
+	s.True(resp.TotalCostWithInstalments.Equal(resp.TotalCost.Add(dec("1800"))), "with instalments %s, cost %s",
+		resp.TotalCostWithInstalments, resp.TotalCost)
+
+	// A range ending before the instalments fall due lists only what was invoiced in it.
+	early := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+		StartTime: s.periodStart,
+		EndTime:   januaryNoon(20),
+		Expand:    []string{string(types.ExpandInstalments)},
+	})
+	s.Require().Len(early.Instalments, 1)
+	s.Equal("binst_prepaid", early.Instalments[0].ID)
+}
+
 // The instalments of the commitments covering a queried meter show in the range they were invoiced in, and the total
 // with instalments adds them. A range or filter that leaves the commitment out lists none, and neither does a request
 // that does not expand instalments.
@@ -7503,6 +7578,8 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInsta
 	s.Equal("binst_prepaid", instalment.ID)
 	s.Equal("cmt_prepaid", instalment.CommitmentID)
 	s.Equal("inv_prepaid", instalment.InvoiceID)
+	s.Equal(types.InstalmentKindInstalment, instalment.Kind)
+	s.Equal(types.InstalmentStatusInvoiced, instalment.InstalmentStatus)
 	s.Require().NotNil(instalment.InvoicedAt)
 	s.True(instalment.InvoicedAt.Equal(januaryNoon(1)), "invoiced at %s", instalment.InvoicedAt)
 	// $50 over the prepaid floor, whose covered usage costs nothing, and $10 on the other meter.

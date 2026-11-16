@@ -27595,7 +27595,7 @@
           },
           "instalments": {
             "type": "array",
-            "description": "Instalments lists, with expand \"instalments\", the instalments invoiced in the range for the v2 commitments covering\na queried meter; it is empty with property or source filters, or when no usage line runs in the range.",
+            "description": "Instalments lists, with expand \"instalments\", the instalments of the v2 commitments covering a queried meter that\nwere invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source\nfilters, or when no usage line runs in the range.",
             "items": {
               "$ref": "#/components/schemas/UsageAnalyticInstalment"
             }
@@ -27615,7 +27615,7 @@
           },
           "total_cost_with_instalments": {
             "type": "string",
-            "description": "TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes \"instalments\"."
+            "description": "TotalCostWithInstalments is TotalCost plus the amounts of the invoiced Instalments, set when expand includes\n\"instalments\". Scheduled instalments are not billed yet, so they are left out."
           },
           "total_discount": {
             "type": "string"
@@ -31367,7 +31367,7 @@
           },
           "plans": {
             "type": "array",
-            "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live. The first plan is the default.",
+            "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.\nThe first plan is the default.",
             "items": {
               "$ref": "#/components/schemas/SelfBillingPlanResponse"
             }
@@ -34677,6 +34677,10 @@
           "amount": {
             "type": "string"
           },
+          "bill_on": {
+            "type": "string",
+            "description": "when it becomes billable"
+          },
           "commitment_id": {
             "type": "string"
           },
@@ -34685,6 +34689,9 @@
           },
           "id": {
             "type": "string"
+          },
+          "instalment_status": {
+            "$ref": "#/components/schemas/types.InstalmentStatus"
           },
           "invoice_id": {
             "type": "string"
@@ -34696,6 +34703,9 @@
             "type": "string",
             "description": "when the invoice billing it was finalized",
             "format": "date-time"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/types.InstalmentKind"
           },
           "service_period_end": {
             "type": "string",
@@ -42283,11 +42293,13 @@
         "type": "string",
         "enum": [
           "instalment",
-          "settlement"
+          "settlement",
+          "cancellation_fee"
         ],
         "x-enum-varnames": [
           "InstalmentKindInstalment",
-          "InstalmentKindSettlement"
+          "InstalmentKindSettlement",
+          "InstalmentKindCancellationFee"
         ],
         "x-speakeasy-name-override": "InstalmentKind"
       },

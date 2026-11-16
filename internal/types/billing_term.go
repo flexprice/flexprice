@@ -78,12 +78,15 @@ type InstalmentKind string
 const (
 	InstalmentKindInstalment InstalmentKind = "instalment"
 	InstalmentKindSettlement InstalmentKind = "settlement"
+	// InstalmentKindCancellationFee is the fee a commitment's termination bills; it is no part of the commitment's total.
+	InstalmentKindCancellationFee InstalmentKind = "cancellation_fee"
 )
 
 func (k InstalmentKind) Validate() error {
 	return validateEnum("instalment_kind", k, []InstalmentKind{
 		InstalmentKindInstalment,
 		InstalmentKindSettlement,
+		InstalmentKindCancellationFee,
 	})
 }
 
