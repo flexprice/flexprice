@@ -272,6 +272,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	f.builders[types.WebhookEventCheckoutSessionExpired] = func() PayloadBuilder {
 		return NewCheckoutSessionPayloadBuilder(f.services)
 	}
+	f.builders[types.WebhookEventCheckoutSessionCancelled] = func() PayloadBuilder {
+		return NewCheckoutSessionPayloadBuilder(f.services)
+	}
 
 	return f
 }

@@ -49,7 +49,8 @@ type Repository interface {
 	// MarkTerminal atomically transitions the session from pending/initiated to expired or failed.
 	// Returns (true, nil) if this call claimed the transition.
 	// Returns (false, nil) if the session was already in a terminal state — idempotent no-op.
-	MarkTerminal(ctx context.Context, sessionID string, status types.CheckoutStatus, failureReason *string) (bool, error)
+	// cancelled records that a cancel ended the session, setting cancelled_at.
+	MarkTerminal(ctx context.Context, sessionID string, status types.CheckoutStatus, failureReason *string, cancelled bool) (bool, error)
 
 	// ListExpiredCheckoutSessions returns active (initiated|pending) sessions whose ExpiresAt is before
 	// effectiveDate within the tenant+environment in ctx, ordered by expires_at asc.
