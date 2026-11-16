@@ -160,7 +160,7 @@ func TestPushUsage_USDConversion(t *testing.T) {
 		wantRate   string
 	}{
 		{"inr_converted", "inr", "100000", map[string]decimal.Decimal{"inr": decimal.RequireFromString("0.012")}, "1200", "0.012"},
-		{"rounded_to_cents", "inr", "1234.56", map[string]decimal.Decimal{"inr": decimal.RequireFromString("0.0119")}, "14.69", "0.0119"},
+		{"sub_cent_amount_not_rounded", "inr", "24", map[string]decimal.Decimal{"inr": decimal.RequireFromString("0.0001913876")}, "0.0045933024", "0.0001913876"},
 		{"currency_case_ignored", "EUR", "100", map[string]decimal.Decimal{"eur": decimal.RequireFromString("1.08")}, "108", "1.08"},
 		{"usd_total_kept_exact", "usd", "1.005", nil, "1.005", "1"},
 	}

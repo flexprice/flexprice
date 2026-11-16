@@ -1268,6 +1268,24 @@ func (s *PaymentService) GetInvoiceStatus(ctx context.Context, invoiceID string)
 	return out, nil
 }
 
+// CancelPaymentLink cancels a Razorpay payment link (plink_xxx).
+func (s *PaymentService) CancelPaymentLink(ctx context.Context, paymentLinkID string) error {
+	if paymentLinkID == "" {
+		return ierr.NewError("payment_link_id is required").Mark(ierr.ErrValidation)
+	}
+	_, err := s.client.CancelPaymentLink(ctx, paymentLinkID)
+	return err
+}
+
+// CancelInvoice cancels a Razorpay invoice (inv_xxx).
+func (s *PaymentService) CancelInvoice(ctx context.Context, invoiceID string) error {
+	if invoiceID == "" {
+		return ierr.NewError("razorpay invoice_id is required").Mark(ierr.ErrValidation)
+	}
+	_, err := s.client.CancelInvoice(ctx, invoiceID)
+	return err
+}
+
 // OrderStatus is the outcome of fetching a Razorpay order (order_xxx), used on the
 // saved-token charge path when a retry never saw the payment id.
 type OrderStatus struct {

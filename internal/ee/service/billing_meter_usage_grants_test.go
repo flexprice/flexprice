@@ -764,7 +764,7 @@ func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrantBilling_MonthlyG
 		s.Require().Len(grants, 1, "the threshold invoice must not open a second monthly window")
 		s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(ctx, s.customerOf(fx.sub), meta, grants, at))
 		// The threshold check's calculation, with the clock at `at` (the fixture subscription starts now).
-		result, err := s.subGrantBilling().calculateMeterUsageCharges(ctx, fx.sub, fx.sub.LineItems, from, at, true, &at, nil)
+		result, err := s.subGrantBilling().calculateMeterUsageCharges(ctx, types.UsageSourceInvoiceCreation, fx.sub, fx.sub.LineItems, from, at, true, &at, nil)
 		s.Require().NoError(err)
 		return result.TotalAmount
 	}

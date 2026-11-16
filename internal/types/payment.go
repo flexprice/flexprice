@@ -56,7 +56,8 @@ func (s PaymentStatus) IsDeletable() bool {
 // public update API. Self-transitions are allowed so that an update which
 // resends the current status is a no-op rather than an error. Terminal statuses
 // (see IsTerminal) have no outgoing transitions except SUCCEEDED, which is not
-// terminal because AUTH payments can still be voided or refunded.
+// terminal because AUTH payments can still be voided or refunded. A pending link
+// nobody paid is voided when its invoice is.
 var paymentStatusTransitions = map[PaymentStatus][]PaymentStatus{
 	// INITIATED reaches SUCCEEDED and OVERPAID directly because payments created
 	// with ProcessPayment=false (external gateways, backfills, checkout
@@ -76,6 +77,7 @@ var paymentStatusTransitions = map[PaymentStatus][]PaymentStatus{
 		PaymentStatusSucceeded,
 		PaymentStatusOverpaid,
 		PaymentStatusFailed,
+		PaymentStatusVoided,
 	},
 	PaymentStatusProcessing: {
 		PaymentStatusProcessing,

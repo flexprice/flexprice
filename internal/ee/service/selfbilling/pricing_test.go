@@ -133,7 +133,7 @@ func TestRemoteSummary_OfferedPlanFiltersPrices(t *testing.T) {
 func TestRemoteSummary_SubscriptionOverrides(t *testing.T) {
 	for _, status := range []types.SubscriptionStatus{
 		types.SubscriptionStatusTrialing, types.SubscriptionStatusActive,
-		types.SubscriptionStatusIncomplete, types.SubscriptionStatusPaused, types.SubscriptionStatusDraft,
+		types.SubscriptionStatusIncomplete, types.SubscriptionStatusPaused,
 	} {
 		t.Run(string(status), func(t *testing.T) {
 			f := newFakeCloud(map[string]string{
@@ -398,9 +398,7 @@ func TestSummary_RemotePricingAndStatusUseSameSubscription(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, types.TenantInternalStatusActive, got.Status)
 	assert.Equal(t, types.SubscriptionStatusActive, got.SubscriptionStatus)
-	require.NotNil(t, got.Plan)
-	require.Len(t, got.Plan.Charges, 1)
-	assert.Equal(t, "79.123456789", got.Plan.Charges[0].Amount.String())
+	assert.Nil(t, got.Plans)
 	assert.Equal(t, 1, productionEnvs(t, d, "t1"))
 }
 

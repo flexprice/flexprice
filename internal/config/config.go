@@ -909,8 +909,11 @@ type BillingConfig struct {
 	Region        string `mapstructure:"region"`
 	APIHost       string `mapstructure:"api_host"`
 	APIKey        string `mapstructure:"api_key"`
-	PlanID        string `mapstructure:"plan_id"`
-	DashboardURL  string `mapstructure:"dashboard_url"`
+	// DefaultPlanID is the plan every new tenant's trial starts on; it must be one of PlanIDs.
+	DefaultPlanID string `mapstructure:"default_plan_id"`
+	// PlanIDs are every plan a tenant may buy at checkout, the default included.
+	PlanIDs      []string `mapstructure:"plan_ids"`
+	DashboardURL string   `mapstructure:"dashboard_url"`
 
 	// PaymentProvider is the provider of Flexprice Cloud's trial-end checkout; empty means stripe.
 	PaymentProvider types.CheckoutPaymentProvider `mapstructure:"payment_provider"`
@@ -937,7 +940,7 @@ func (c BillingConfig) IsSelfBillingEnabled() bool {
 	return c.Enabled &&
 		c.Region != "" &&
 		c.APIKey != "" &&
-		c.PlanID != "" &&
+		c.DefaultPlanID != "" &&
 		c.DashboardURL != "" &&
 		c.CheckoutProvider().Validate() == nil &&
 		c.hasSecureAPIHost()
@@ -1403,7 +1406,7 @@ const (
 // A non-local deployment booting with any of these for an ENABLED feature is running on a
 // public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
 var placeholderSecrets = map[string]bool{
-	"": true, // unset
+	"":             true, // unset
 	"super_secret": true,
 	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
 	"<supabase service key>":                                   true,

@@ -720,6 +720,8 @@ func (s *InvoiceModificationServiceSuite) SetupTest() {
 		TaxAppliedRepo: s.GetStores().TaxAppliedRepo,
 		// Voiding reschedules the invoice's billing instalments.
 		BillingInstalmentRepo: s.GetStores().BillingInstalmentRepo,
+		// Voiding closes the invoice's open payment links.
+		PaymentRepo: s.GetStores().PaymentRepo,
 	})
 }
 

@@ -1635,6 +1635,20 @@ func (s *billingService) attachPricesToLineItems(ctx context.Context, lineItems 
 	return nil
 }
 
+// periodLineItems returns the line items billed in the period starting at periodStart, with prices attached.
+// Line items loaded via GetWithLineItems are filtered by sub.CurrentPeriodStart, so historical periods
+// (recalculation, past invoices) reload them by the invoice's period start.
+func (s *billingService) periodLineItems(ctx context.Context, subscriptionID string, periodStart time.Time) ([]*subscription.SubscriptionLineItem, error) {
+	lineItems, err := listActiveLineItems(ctx, s.SubscriptionLineItemRepo, subscriptionID, periodStart)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.attachPricesToLineItems(ctx, lineItems); err != nil {
+		return nil, err
+	}
+	return lineItems, nil
+}
+
 func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	ctx context.Context,
 	params *dto.PrepareSubscriptionInvoiceRequestParams,
@@ -1729,7 +1743,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	var calculationResult *dto.BillingCalculationResult
 	var metadata types.Metadata = make(types.Metadata)
-	var description string
 
 	switch referencePoint {
 	case types.ReferencePointPeriodStart:
@@ -1760,8 +1773,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		if err != nil {
 			return nil, err
 		}
-
-		description = fmt.Sprintf("Invoice for advance charges - subscription %s", sub.ID)
 
 	case types.ReferencePointPeriodEnd:
 		// Include both arrear charges for current period and advance charges for next period
@@ -1800,6 +1811,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// cumulative commitment support; falls back to raw-events CalculateCharges otherwise)
 		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			arrearLineItems,
 			periodStart,
@@ -1815,6 +1827,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For next period advance charges
 		advanceResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			advanceLineItems,
 			nextPeriodStart,
@@ -1835,8 +1848,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Invoice for subscription %s", sub.ID)
-
 	case types.ReferencePointPreview, types.ReferencePointRevenueFacts:
 		// Both include current-period arrear and next-period advance without
 		// filtering already-invoiced items; usage reads meter_usage (FINAL).
@@ -1846,6 +1857,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For current period arrear charges
 		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			classification.CurrentPeriodArrear,
 			periodStart,
@@ -1861,6 +1873,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For next period advance charges
 		advanceResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			classification.NextPeriodAdvance,
 			nextPeriodStart,
@@ -1881,7 +1894,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Preview invoice for subscription %s", sub.ID)
 		metadata[types.MetadataKeyIsPreview] = types.MetadataValueTrue
 
 	case types.ReferencePointInternalPreview:
@@ -1920,7 +1932,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Preview invoice for subscription %s", sub.ID)
 		metadata[types.MetadataKeyIsPreview] = types.MetadataValueTrue
 
 	case types.ReferencePointCancel:
@@ -1939,6 +1950,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For current period arrear charges
 		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			arrearLineItems,
 			periodStart,
@@ -1958,8 +1970,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Invoice for subscription %s", sub.ID)
-
 	default:
 		return nil, ierr.NewError("invalid reference point").
 			WithHint(fmt.Sprintf("Reference point '%s' is not supported", referencePoint)).
@@ -1975,7 +1985,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		Result:         calculationResult,
 		PeriodStart:    periodStart,
 		PeriodEnd:      periodEnd,
-		Description:    description,
 		Metadata:       metadata,
 		ReferencePoint: referencePoint,
 	})
@@ -2361,7 +2370,7 @@ func (s *billingService) SumUsageAmountForSubscription(
 	sub *subscription.Subscription,
 	periodStart, periodEnd time.Time,
 ) (decimal.Decimal, error) {
-	result, err := s.calculateMeterUsageCharges(ctx, sub, sub.LineItems, periodStart, periodEnd, true, nil, nil)
+	result, err := s.calculateMeterUsageCharges(ctx, types.UsageSourceInvoiceCreation, sub, sub.LineItems, periodStart, periodEnd, true, nil, nil)
 	if err != nil {
 		return decimal.Zero, err
 	}
@@ -2380,9 +2389,11 @@ func (s *billingService) SumUsageAmountForSubscription(
 // GetMeterUsageBySubscription call per sub-window and emit one line item per
 // sub-window. Same-cadence USAGE line items keep today's single-call behavior.
 //
-// periodLineItems, when set, are the active line items at periodStart.
+// periodLineItems, when set, are the active line items at periodStart. source sets how usage is read:
+// only invoice creation deduplicates with FINAL.
 func (s *billingService) calculateMeterUsageCharges(
 	ctx context.Context,
+	source types.UsageSource,
 	sub *subscription.Subscription,
 	lineItems []*subscription.SubscriptionLineItem,
 	periodStart,
@@ -2449,14 +2460,14 @@ func (s *billingService) calculateMeterUsageCharges(
 					SubscriptionID: sub.ID,
 					StartTime:      w.Start,
 					EndTime:        w.End,
-					Source:         string(types.UsageSourceInvoiceCreation),
+					Source:         string(source),
 					LineItems:      windowLineItems,
 				})
 				if err != nil {
 					return nil, err
 				}
 
-				lines, cost, err := s.CalculateMeterUsageCharges(ctx, &windowSub, usage, w.Start, w.End, types.UsageSourceInvoiceCreation, asOfOverride)
+				lines, cost, err := s.CalculateMeterUsageCharges(ctx, &windowSub, usage, w.Start, w.End, source, asOfOverride)
 				if err != nil {
 					return nil, err
 				}

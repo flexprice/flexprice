@@ -301,12 +301,7 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 	}
 
 	if invoice.InvoiceStatus == types.InvoiceStatusVoided {
-		return ierr.NewError("invoice is voided").
-			WithHint("Cannot create payment for a voided invoice").
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id": invoice.ID,
-			}).
-			Mark(ierr.ErrValidation)
+		return errInvoiceVoided(invoice.ID)
 	}
 
 	// A cross-currency draft is only payable after it converts at finalize.
@@ -1318,6 +1313,14 @@ func hasLiveMandate(m interfaces.ProviderPaymentMethod, gw types.PaymentGatewayT
 }
 
 func (s *paymentService) GetOrCreateInvoicePaymentLink(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error) {
+	inv, err := s.InvoiceRepo.Get(ctx, req.DestinationID)
+	if err != nil {
+		return nil, err
+	}
+	if inv.InvoiceStatus == types.InvoiceStatusVoided {
+		return nil, errInvoiceVoided(inv.ID)
+	}
+
 	// A live link for this invoice is reusable: without this a second tap creates a
 	// second full-amount link, and two links can both be paid.
 	if existing, err := s.livePaymentLink(ctx, req.DestinationID, lo.FromPtr(req.PaymentGateway)); err != nil {
@@ -1327,6 +1330,100 @@ func (s *paymentService) GetOrCreateInvoicePaymentLink(ctx context.Context, req 
 	}
 
 	return s.CreatePayment(ctx, req)
+}
+
+func errInvoiceVoided(invoiceID string) error {
+	return ierr.NewError("invoice is voided").
+		WithHint("Cannot create payment for a voided invoice").
+		WithReportableDetails(map[string]interface{}{
+			"invoice_id": invoiceID,
+		}).
+		Mark(ierr.ErrValidation)
+}
+
+// voidOpenPaymentLinks closes the unpaid payment links on a voided invoice and voids their payments.
+// A link that was paid or could not be closed keeps its payment for the gateway webhook; links owned by
+// a checkout session are left to that session.
+func (s *paymentService) voidOpenPaymentLinks(ctx context.Context, invoiceID string) error {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentMethodType = lo.ToPtr(string(types.PaymentMethodTypePaymentLink))
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusPending))
+	open, err := s.PaymentRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	checkoutSvc := NewCheckoutSessionService(s.ServiceParams)
+	for _, p := range open {
+		session, err := checkoutSvc.GetByPaymentID(ctx, p.ID)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to look up checkout session for payment link on void",
+				"error", err, "invoice_id", invoiceID, "payment_id", p.ID)
+			continue
+		}
+		if session != nil {
+			continue
+		}
+		if !s.closeProviderLink(ctx, invoiceID, p) {
+			continue
+		}
+		if _, err := s.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{
+			PaymentStatus: lo.ToPtr(string(types.PaymentStatusVoided)),
+			VoidedAt:      lo.ToPtr(clock.Now()),
+		}); err != nil {
+			s.Logger.Error(ctx, "failed to void payment link on invoice void",
+				"error", err, "invoice_id", invoiceID, "payment_id", p.ID)
+		}
+	}
+	return nil
+}
+
+// closeProviderLink closes the gateway-hosted link and reports whether it is closed and unpaid, so
+// its payment can be voided. A link never created at the gateway counts as closed. Failures are logged.
+func (s *paymentService) closeProviderLink(ctx context.Context, invoiceID string, p *payment.Payment) bool {
+	if lo.FromPtr(p.GatewayTrackingID) == "" {
+		return true
+	}
+	gateway := lo.FromPtr(p.PaymentGateway)
+	checkoutProvider, ok := types.CheckoutProviderFromGateway(types.PaymentGatewayType(gateway))
+	if !ok {
+		s.Logger.Info(ctx, "payment link cannot be expired on this gateway, leaving it open",
+			"invoice_id", invoiceID, "payment_id", p.ID, "gateway", gateway)
+		return false
+	}
+	resp, err := s.expireOnGateway(ctx, invoiceID, p, checkoutProvider)
+	switch {
+	case err == nil && resp != nil && resp.AlreadyPaid:
+		s.Logger.Info(ctx, "payment link was paid before the invoice was voided, leaving it to the gateway webhook",
+			"invoice_id", invoiceID, "payment_id", p.ID, "gateway", gateway)
+	case err == nil:
+		return true
+	case ierr.IsNotImplemented(err):
+		s.Logger.Info(ctx, "gateway cannot expire payment links",
+			"invoice_id", invoiceID, "payment_id", p.ID, "gateway", gateway)
+	default:
+		s.Logger.Error(ctx, "failed to expire payment link on gateway",
+			"error", err, "invoice_id", invoiceID, "payment_id", p.ID, "gateway", gateway)
+	}
+	return false
+}
+
+func (s *paymentService) expireOnGateway(ctx context.Context, invoiceID string, p *payment.Payment, checkoutProvider types.CheckoutPaymentProvider) (*interfaces.ExpirePaymentLinkResponse, error) {
+	gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	provider, err := s.IntegrationFactory.GetCheckoutProvider(
+		gatewayCtx, checkoutProvider, NewCustomerService(s.ServiceParams), NewInvoiceService(s.ServiceParams))
+	if err != nil {
+		return nil, err
+	}
+	return provider.ExpirePaymentLink(gatewayCtx, interfaces.ExpirePaymentLinkRequest{
+		GatewayTrackingID: lo.FromPtr(p.GatewayTrackingID),
+		InvoiceID:         invoiceID,
+	})
 }
 
 // livePaymentLink returns the payment for an unexpired link already issued for this

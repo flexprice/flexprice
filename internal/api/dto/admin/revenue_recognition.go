@@ -7,38 +7,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
-// UpdateRevenueRecognitionConfigRequest turns revenue recognition on or off for one environment; Backfill also starts
-// a backfill when enabling.
-type UpdateRevenueRecognitionConfigRequest struct {
-	TenantID      string `json:"tenant_id"`
-	EnvironmentID string `json:"environment_id"`
-	Enabled       bool   `json:"enabled"`
-	Backfill      bool   `json:"backfill"`
-}
-
-func (r *UpdateRevenueRecognitionConfigRequest) Validate() error {
-	if r == nil {
-		return ierr.NewError("request is required").Mark(ierr.ErrValidation)
-	}
-	if err := validateEnvironmentTarget(&r.TenantID, &r.EnvironmentID); err != nil {
-		return err
-	}
-	if r.Backfill && !r.Enabled {
-		return ierr.NewError("backfill requires enabled").
-			WithHint("A backfill only runs while revenue recognition is enabled").
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
-// RevenueRecognitionConfigResponse is the environment's setting and, when one was started, its backfill.
-type RevenueRecognitionConfigResponse struct {
-	TenantID      string                         `json:"tenant_id"`
-	EnvironmentID string                         `json:"environment_id"`
-	Enabled       bool                           `json:"enabled"`
-	Backfill      *RevenueRecognitionBackfillRun `json:"backfill,omitempty"`
-}
-
 // StartRevenueRecognitionBackfillRequest names the environment to rebuild from history.
 type StartRevenueRecognitionBackfillRequest struct {
 	TenantID      string `json:"tenant_id"`

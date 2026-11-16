@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
@@ -94,11 +95,42 @@ func (fakeWorkflowRun) GetRunID() string { return "run_1" }
 type fakeTemporalService struct {
 	temporalservice.TemporalService
 	inputs []interface{}
+	err    error
 }
 
 func (f *fakeTemporalService) ExecuteWorkflow(_ context.Context, _ types.TemporalWorkflowType, params interface{}) (temporalmodels.WorkflowRun, error) {
 	f.inputs = append(f.inputs, params)
+	if f.err != nil {
+		return nil, f.err
+	}
 	return fakeWorkflowRun{}, nil
+}
+
+func TestRunTriggers_WorkflowStartErrors(t *testing.T) {
+	alreadyRunning := ierr.NewError("already started").Mark(ierr.ErrAlreadyExists)
+	tests := []struct {
+		name     string
+		startErr error
+		opts     []DispatchOption
+		wantErrs int
+	}{
+		{name: "started"},
+		{name: "already running is skipped automatically", startErr: alreadyRunning},
+		{name: "already running is reported to a manual sync", startErr: alreadyRunning, opts: []DispatchOption{Manual()}, wantErrs: 1},
+		{name: "other failure is retried", startErr: ierr.NewError("temporal down").Mark(ierr.ErrInternal), wantErrs: 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			temporalSvc := &fakeTemporalService{err: tc.startErr}
+			trigger := providerTrigger{types.SecretProviderRazorpay, func() error {
+				return executeWorkflow(context.Background(), temporalSvc, testLogger(), types.TemporalRazorpayInvoiceSyncWorkflow, nil, types.SecretProviderRazorpay, "inv_1")
+			}}
+			if errs := runTriggers([]providerTrigger{trigger}, resolveDispatchOptions(tc.opts)); len(errs) != tc.wantErrs {
+				t.Fatalf("want %d errors, got %v", tc.wantErrs, errs)
+			}
+		})
+	}
 }
 
 func TestTriggerZohoBooksIfEnabled_MappedInvoice(t *testing.T) {

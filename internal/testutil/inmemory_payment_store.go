@@ -436,6 +436,10 @@ func paymentFilterFn(ctx context.Context, p *payment.Payment, filter interface{}
 		return false
 	}
 
+	if f.PaymentMethodType != nil && string(p.PaymentMethodType) != *f.PaymentMethodType {
+		return false
+	}
+
 	// Filter by time range
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil && p.CreatedAt.Before(*f.StartTime) {
