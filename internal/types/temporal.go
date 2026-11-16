@@ -117,6 +117,7 @@ const (
 	TemporalMarketplaceUsageSnapshotWorkflow               TemporalWorkflowType = "MarketplaceUsageSnapshotWorkflow"
 	TemporalMarketplaceUsageReportWorkflow                 TemporalWorkflowType = "MarketplaceUsageReportWorkflow"
 	TemporalRevenueRecognitionBackfillWorkflow             TemporalWorkflowType = "RevenueRecognitionBackfillWorkflow"
+	TemporalRevenueRecognitionWorkflow                     TemporalWorkflowType = "RevenueRecognitionWorkflow"
 )
 
 // temporalCronWorkflowTypes is the single list of schedule/worker cron workflows (keeps
@@ -136,6 +137,7 @@ var temporalCronWorkflowTypes = []TemporalWorkflowType{
 	TemporalMarketplaceUsageSnapshotWorkflow,
 	TemporalMarketplaceUsageReportWorkflow,
 	TemporalRevenueRecognitionBackfillWorkflow,
+	TemporalRevenueRecognitionWorkflow,
 }
 
 var workflowTypesExcludedFromTrackingCore = []TemporalWorkflowType{

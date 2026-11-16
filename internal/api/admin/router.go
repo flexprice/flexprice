@@ -89,7 +89,8 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 		revenueRecognition := group.Group("/revenue_recognition")
 		{
 			revenueRecognition.POST("/backfill", handlers.RevenueRecognition.StartBackfill)
-			revenueRecognition.GET("/backfill/runs/:workflow_id", handlers.RevenueRecognition.GetBackfill)
+			revenueRecognition.POST("/run", handlers.RevenueRecognition.StartRun)
+			revenueRecognition.GET("/runs/:workflow_id", handlers.RevenueRecognition.GetRun)
 		}
 	}
 
