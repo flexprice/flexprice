@@ -481,7 +481,7 @@ func (s *paymentService) paymentResponse(ctx context.Context, p *payment.Payment
 }
 
 // recordPaymentTransition runs after every saved payment create (from "") or status change:
-// it records the metric and publishes payment.created, payment.success or payment.failed.
+// it records the metric and publishes payment.created, payment.success or payment.failed (plus invoice.payment.failed).
 func (s *paymentService) recordPaymentTransition(ctx context.Context, p *payment.Payment, from types.PaymentStatus) {
 	if p.PaymentStatus == from {
 		return
@@ -499,6 +499,7 @@ func (s *paymentService) recordPaymentTransition(ctx context.Context, p *payment
 		s.publishSystemEvent(ctx, types.WebhookEventPaymentSuccess, p.ID)
 	case p.PaymentStatus == types.PaymentStatusFailed:
 		s.publishSystemEvent(ctx, types.WebhookEventPaymentFailed, p.ID)
+		s.publishInvoicePaymentFailed(ctx, p)
 	}
 }
 
@@ -656,6 +657,23 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	s.publishSystemEvent(ctx, types.WebhookEventPaymentUpdated, p.ID)
 
 	return dto.NewPaymentResponse(p), nil
+}
+
+// publishInvoicePaymentFailed sends invoice.payment.failed for a payment of an invoice that just failed.
+func (s *paymentService) publishInvoicePaymentFailed(ctx context.Context, p *payment.Payment) {
+	autoCharge := p.Metadata[types.MetadataKeyPaymentTrigger] == types.PaymentTriggerInvoiceAutoCharge
+	if p.DestinationType != types.PaymentDestinationTypeInvoice || p.PaymentGateway == nil || (lo.FromPtr(p.GatewayPaymentID) == "" && !autoCharge) {
+		return
+	}
+	// Without a gateway payment ID the gateway rejected the charge before creating it.
+	NewInvoiceService(s.ServiceParams).PublishInvoicePaymentFailed(ctx, webhookDto.InternalInvoicePaymentFailedEvent{
+		InvoiceID:           p.DestinationID,
+		Provider:            types.SecretProvider(lo.FromPtr(p.PaymentGateway)),
+		Reason:              lo.Ternary(lo.FromPtr(p.GatewayPaymentID) == "", types.InvoicePaymentFailureReasonProviderError, types.InvoicePaymentFailureReasonDeclined),
+		PaymentID:           p.ID,
+		Error:               lo.FromPtr(p.ErrorMessage),
+		IsAutoChargeAttempt: autoCharge,
+	})
 }
 
 // RecordAttempt appends a PaymentAttempt carrying the gateway's outcome for one charge
@@ -968,14 +986,14 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	}
 
 	var newStatus types.PaymentStatus
-	var backfillGatewayPaymentID string
+	var backfillGatewayPaymentID, gatewayError string
 
 	if gatewayPaymentID != "" {
 		switch gateway {
 		case types.PaymentGatewayTypeStripe:
 			newStatus, err = s.fetchStripePaymentStatus(gatewayCtx, gatewayPaymentID)
 		case types.PaymentGatewayTypeRazorpay:
-			newStatus, err = s.fetchRazorpayPaymentStatus(gatewayCtx, gatewayPaymentID)
+			newStatus, gatewayError, err = s.fetchRazorpayPaymentStatus(gatewayCtx, gatewayPaymentID)
 		case types.PaymentGatewayTypeMoyasar:
 			newStatus, err = s.fetchMoyasarPaymentStatus(gatewayCtx, gatewayPaymentID)
 		default:
@@ -1002,10 +1020,10 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		return p, err
 	}
 
-	return s.applyGatewayPaymentStatus(ctx, p, newStatus, backfillGatewayPaymentID)
+	return s.applyGatewayPaymentStatus(ctx, p, newStatus, backfillGatewayPaymentID, gatewayError)
 }
 
-func (s *paymentService) applyGatewayPaymentStatus(ctx context.Context, p *payment.Payment, newStatus types.PaymentStatus, backfillGatewayPaymentID string) (*payment.Payment, error) {
+func (s *paymentService) applyGatewayPaymentStatus(ctx context.Context, p *payment.Payment, newStatus types.PaymentStatus, backfillGatewayPaymentID, gatewayError string) (*payment.Payment, error) {
 	if newStatus == "" || newStatus == p.PaymentStatus {
 		return p, nil
 	}
@@ -1029,6 +1047,7 @@ func (s *paymentService) applyGatewayPaymentStatus(ctx context.Context, p *payme
 		updateReq.SucceededAt = lo.ToPtr(now)
 	case types.PaymentStatusFailed:
 		updateReq.FailedAt = lo.ToPtr(now)
+		updateReq.ErrorMessage = lo.EmptyableToPtr(gatewayError)
 	}
 
 	updatedPayment, err := s.UpdatePayment(ctx, p.ID, updateReq)
@@ -1061,16 +1080,17 @@ func (s *paymentService) fetchStripePaymentStatus(ctx context.Context, gatewayPa
 	return integrations.StripePaymentStatus(resp.Status).ToFlexpricePaymentStatus()
 }
 
-func (s *paymentService) fetchRazorpayPaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, error) {
+func (s *paymentService) fetchRazorpayPaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, string, error) {
 	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	rawStatus, err := razorpayIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
+	rawStatus, gatewayError, err := razorpayIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return integrations.RazorpayPaymentStatus(rawStatus).ToFlexpricePaymentStatus()
+	status, err := integrations.RazorpayPaymentStatus(rawStatus).ToFlexpricePaymentStatus()
+	return status, gatewayError, err
 }
 
 // fetchRazorpayPaymentLinkStatus reconciles a payment record against a Razorpay

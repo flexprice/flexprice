@@ -2381,11 +2381,6 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 				"invoice_id", inv.ID,
 				"payment_id", pymnt.ID)
 		}
-
-		failedEvent.Reason = types.InvoicePaymentFailureReasonProviderError
-		failedEvent.PaymentID = pymnt.ID
-		failedEvent.Error = errMsg
-		s.PublishInvoicePaymentFailed(ctx, failedEvent)
 		return false, nil
 	}
 
