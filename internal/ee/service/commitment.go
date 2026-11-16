@@ -831,9 +831,8 @@ func (s *commitmentService) billTermination(
 // cancellationFeeLabel is the invoice label of the instalment that bills a termination's cancellation fee.
 const cancellationFeeLabel = "Cancellation fee"
 
-// chargeCancellationFee creates the instalment that bills the fee from effectiveAt to the term end, or for an
-// open-ended commitment to the end of the billing period holding effectiveAt, cut at the subscription end. It returns
-// nil when the fee rounds to nothing, and must run inside the terminate transaction, under the commitment lock.
+// chargeCancellationFee creates the instalment billing the fee from effectiveAt to the term end, or to the end of the
+// billing period for an open-ended commitment; nil when the fee rounds to nothing. It runs in the terminate transaction.
 func (s *commitmentService) chargeCancellationFee(
 	ctx context.Context,
 	c *commitment.Commitment,

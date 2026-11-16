@@ -1460,9 +1460,8 @@ func emptyAnalyticsResponse(params *events.MeterUsageDetailedAnalyticsParams) *d
 	return response
 }
 
-// rangeInstalments returns the instalments of the commitments on the customer's subscriptions that cover a queried
-// meter: those invoiced in the request's range, and those still scheduled whose bill_on falls in it, in date order.
-// Property and source filters apply no commitments, so they list none.
+// rangeInstalments returns, in date order, the instalments of the commitments covering a queried meter that were
+// invoiced in the request's range or are still scheduled with a bill_on in it; none with property or source filters.
 func (s *meterUsageService) rangeInstalments(
 	ctx context.Context,
 	cust *customer.Customer,
