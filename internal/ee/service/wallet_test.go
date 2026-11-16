@@ -4611,3 +4611,105 @@ func (s *WalletServiceSuite) TestCreateWallet_CustomCurrencyEnforcement() {
 		})
 	}
 }
+
+// setTenantWalletAlertConfig stores the tenant's wallet_balance_alert_config.
+func (s *CheckWalletBalanceAlertSuite) setTenantWalletAlertConfig(cfg types.AlertSettings) {
+	value, err := utils.ToMap(cfg)
+	s.NoError(err)
+	s.NoError(s.GetStores().SettingsRepo.Create(s.GetContext(), &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeyWalletBalanceAlertConfig,
+		Value:         value,
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	}))
+}
+
+// tieredBelow is warning at 100 and critical at 0, both "below", switched on.
+func tieredBelow() types.AlertSettings {
+	return types.AlertSettings{
+		AlertEnabled: lo.ToPtr(true),
+		Warning:      &types.AlertThreshold{Threshold: decimal.NewFromInt(100), Condition: types.AlertConditionBelow},
+		Critical:     &types.AlertThreshold{Threshold: decimal.Zero, Condition: types.AlertConditionBelow},
+	}
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_TenantThresholds() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	w := s.makeWallet("wallet_status_tenant", decimal.NewFromInt(500), nil, nil)
+
+	tests := []struct {
+		name    string
+		balance decimal.Decimal
+		want    types.AlertState
+	}{
+		{name: "above the warning threshold is ok", balance: decimal.NewFromInt(101), want: types.AlertStateOk},
+		{name: "exactly the warning threshold is a warning", balance: decimal.NewFromInt(100), want: types.AlertStateWarning},
+		{name: "between the thresholds is a warning", balance: decimal.NewFromInt(40), want: types.AlertStateWarning},
+		{name: "zero is in alarm", balance: decimal.Zero, want: types.AlertStateInAlarm},
+		{name: "a negative balance is in alarm", balance: decimal.NewFromInt(-5), want: types.AlertStateInAlarm},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			got, err := s.service.BalanceAlertStatus(s.GetContext(), w, tt.balance, tt.balance)
+			s.NoError(err)
+			s.Require().NotNil(got)
+			s.Equal(tt.want, *got)
+		})
+	}
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_TenantAlertsOff_Nil() {
+	cfg := tieredBelow()
+	cfg.AlertEnabled = lo.ToPtr(false)
+	s.setTenantWalletAlertConfig(cfg)
+	// The wallet's own settings are on, but the tenant switch gates every wallet,
+	// as it does for the alert pipeline.
+	w := s.makeWallet("wallet_status_off", decimal.Zero, s.enabledAlertSettings(decimal.NewFromInt(10)), nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+	s.Nil(got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_NeverConfigured_Nil() {
+	// The default config is off, with a critical threshold of "below 0" sitting there.
+	w := s.makeWallet("wallet_status_default", decimal.Zero, nil, nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+	s.Nil(got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_WalletSettingsWin() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	// Critical at 50 on the wallet itself: 40 is in alarm here, a warning by the tenant's.
+	w := s.makeWallet("wallet_status_own", decimal.NewFromInt(40), s.enabledAlertSettings(decimal.NewFromInt(50)), nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(40), decimal.NewFromInt(40))
+	s.NoError(err)
+	s.Require().NotNil(got)
+	s.Equal(types.AlertStateInAlarm, *got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_WalletAlertsOff_Nil() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	own := s.enabledAlertSettings(decimal.NewFromInt(50))
+	own.AlertEnabled = lo.ToPtr(false)
+	w := s.makeWallet("wallet_status_own_off", decimal.Zero, own, nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+	s.Nil(got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_AbsoluteUsesCurrencyBalance() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	w := s.makeWallet("wallet_status_currency", decimal.NewFromInt(500), nil, nil)
+
+	// 1,000 credits worth 50 in currency: absolute thresholds are in currency.
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(1000), decimal.NewFromInt(50))
+	s.NoError(err)
+	s.Require().NotNil(got)
+	s.Equal(types.AlertStateWarning, *got)
+}

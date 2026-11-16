@@ -132,6 +132,10 @@ type WalletService interface {
 	// TODO: Cleanup this method, moved to `EvaluateAlertsForWallet`
 	CheckWalletBalanceAlert(ctx context.Context, req *wallet.WalletBalanceAlertEvent) error
 
+	// BalanceAlertStatus is where a wallet's balance stands against its alert
+	// thresholds now (ok, info, warning or in_alarm); nil when alerts are off.
+	BalanceAlertStatus(ctx context.Context, w *wallet.Wallet, creditBalance, balance decimal.Decimal) (*types.AlertState, error)
+
 	// PublishWalletBalanceAlertEvent publishes a wallet balance alert event
 	PublishWalletBalanceAlertEvent(ctx context.Context, customerID string, forceCalculateBalance bool, walletID string)
 
@@ -3896,29 +3900,74 @@ func (s *walletService) processFeatureWalletBalanceAlert(ctx context.Context, w 
 	return nil
 }
 
+// balanceAlertValue is the figure a wallet's balance alert compares with its
+// thresholds: the currency balance for absolute thresholds (they are
+// denominated in the wallet's currency), or the credit balance as a percentage
+// of the period's credits for percentage ones. ok is false when a percentage
+// has no credits to divide by, so there is nothing to evaluate.
+func (s *walletService) balanceAlertValue(ctx context.Context, w *wallet.Wallet, alertSettings *types.AlertSettings, creditBalance, balance decimal.Decimal) (decimal.Decimal, bool, error) {
+	if alertSettings.AlertThresholdType != types.AlertThresholdTypePercentage {
+		return balance, true, nil
+	}
+	base, err := s.resolvePercentageBase(ctx, w)
+	if err != nil {
+		return decimal.Zero, false, err
+	}
+	if base.IsZero() {
+		return decimal.Zero, false, nil
+	}
+	return creditBalance.Div(base).Mul(decimal.NewFromInt(100)), true, nil
+}
+
+// BalanceAlertStatus is where a wallet's balance stands against its alert
+// thresholds right now: ok, info, warning or in_alarm. It resolves the
+// thresholds and compares the balance exactly as the balance alert pipeline
+// does (the wallet's own settings, else the tenant's
+// wallet_balance_alert_config, and only while the tenant has wallet alerts on),
+// so it agrees with the alert logs and webhooks without waiting for them.
+// nil when alerts are off or there is nothing to evaluate.
+func (s *walletService) BalanceAlertStatus(ctx context.Context, w *wallet.Wallet, creditBalance, balance decimal.Decimal) (*types.AlertState, error) {
+	settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
+	tenantConfig, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
+	if err != nil {
+		return nil, err
+	}
+	if !tenantConfig.IsAlertEnabled() {
+		return nil, nil
+	}
+	alertSettings, err := s.resolveWalletAlertSettings(ctx, w, settingsSvc)
+	if err != nil {
+		return nil, err
+	}
+	if !alertSettings.IsAlertEnabled() ||
+		(alertSettings.Critical == nil && alertSettings.Warning == nil && alertSettings.Info == nil) {
+		return nil, nil
+	}
+	value, ok, err := s.balanceAlertValue(ctx, w, alertSettings, creditBalance, balance)
+	if err != nil || !ok {
+		return nil, err
+	}
+	status, err := alertSettings.AlertState(value)
+	if err != nil {
+		return nil, err
+	}
+	return &status, nil
+}
+
 // processWalletBalanceAlert checks and logs the ongoing balance alert for a wallet
 // and updates the wallet's alert state if it changed.
 func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet.Wallet, ongoingCreditBalance, ongoingBalance decimal.Decimal, alertSettings *types.AlertSettings, alertLogsService AlertLogsService, eventID string) error {
-	value := ongoingCreditBalance
-
-	if alertSettings.AlertThresholdType == types.AlertThresholdTypePercentage {
-		base, err := s.resolvePercentageBase(ctx, w)
-		if err != nil {
-			s.Logger.Error(ctx, "failed to resolve percentage base for wallet alert", "error", err, "wallet_id", w.ID)
-			return err
-		}
-		if base.IsZero() {
-			s.Logger.Info(ctx, "wallet percentage alert base is zero, skipping evaluation",
-				"wallet_id", w.ID,
-				"ongoing_credit_balance", ongoingCreditBalance,
-			)
-			return nil
-		}
-		value = ongoingCreditBalance.Div(base).Mul(decimal.NewFromInt(100))
-	} else {
-		// Absolute thresholds are denominated in wallet currency, so compare
-		// against the currency balance rather than the credit balance.
-		value = ongoingBalance
+	value, ok, err := s.balanceAlertValue(ctx, w, alertSettings, ongoingCreditBalance, ongoingBalance)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to resolve percentage base for wallet alert", "error", err, "wallet_id", w.ID)
+		return err
+	}
+	if !ok {
+		s.Logger.Info(ctx, "wallet percentage alert base is zero, skipping evaluation",
+			"wallet_id", w.ID,
+			"ongoing_credit_balance", ongoingCreditBalance,
+		)
+		return nil
 	}
 
 	alertStatus, err := alertSettings.AlertState(value)

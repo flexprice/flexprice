@@ -306,7 +306,39 @@ func (s *customerPortalService) GetWallets(ctx context.Context) ([]*dto.WalletBa
 	getWalletsReq := &dto.GetCustomerWalletsRequest{
 		ID: customerID,
 	}
-	return walletService.GetCustomerWallets(ctx, getWalletsReq)
+	wallets, err := walletService.GetCustomerWallets(ctx, getWalletsReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// Each wallet carries where its balance stands against the alert thresholds,
+	// for the portal's low-balance banner: judged on the balance the portal
+	// shows, so the banner and the figure beside it never disagree. A wallet
+	// whose status cannot be worked out is listed without one rather than
+	// failing the whole list.
+	for _, w := range wallets {
+		if w == nil || w.Wallet == nil {
+			continue
+		}
+		balance := w.Wallet.Balance
+		if w.RealTimeBalance != nil {
+			balance = *w.RealTimeBalance
+		}
+		creditBalance := w.Wallet.CreditBalance
+		if w.RealTimeCreditBalance != nil {
+			creditBalance = *w.RealTimeCreditBalance
+		}
+		status, err := walletService.BalanceAlertStatus(ctx, w.Wallet, creditBalance, balance)
+		if err != nil {
+			s.Logger.Warn(ctx, "failed to evaluate wallet balance alert status for portal",
+				"wallet_id", w.Wallet.ID,
+				"error", err,
+			)
+			continue
+		}
+		w.BalanceAlertStatus = status
+	}
+	return wallets, nil
 }
 
 // GetWallet returns a specific wallet

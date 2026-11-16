@@ -33096,6 +33096,14 @@ const docTemplate = `{
                 "balance": {
                     "type": "string"
                 },
+                "balance_alert_status": {
+                    "description": "BalanceAlertStatus is where the balance stands against the wallet's alert\nthresholds now (ok, info, warning or in_alarm), from the same settings\nthe balance alerts use. Set by the customer portal's wallet list; absent\nwhen wallet alerts are off.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.AlertState"
+                        }
+                    ]
+                },
                 "balance_updated_at": {
                     "type": "string"
                 },
