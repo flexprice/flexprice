@@ -170,7 +170,8 @@ type ExportsConfig struct {
 
 // ExportEmailAvailable reports email delivery readiness.
 func (c *Configuration) ExportEmailAvailable() bool {
-	return c.Email.Enabled && c.Email.Resend.APIKey != "" && c.Email.FromAddress != "" && c.Exports.ConsoleBaseURL != ""
+	return c.Email.Enabled && c.Email.Resend.APIKey != "" && c.Email.FromAddress != "" && c.Exports.ConsoleBaseURL != "" &&
+		c.Cache.Enabled && c.Cache.Redis.Enabled
 }
 
 // Credential sources for FlexpriceS3ExportsConfig. Exactly one is active per

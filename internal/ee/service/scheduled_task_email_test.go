@@ -41,6 +41,8 @@ func emailService(repo *exportRepoFake, available bool) (*scheduledTaskService, 
 	if available {
 		s.config.Email = config.EmailConfig{Enabled: true, ResendAPIKey: "k", FromAddress: "noreply@x.com"}
 		s.config.Exports.ConsoleBaseURL = "https://app"
+		s.config.Cache.Enabled = true
+		s.config.Cache.Redis.Enabled = true
 	}
 	users := &emailUserRepoFake{known: map[string]bool{"a@x.com": true, "b@x.com": true}}
 	s.userRepo = users
@@ -246,4 +248,15 @@ func TestValidateRecipients_RepoErrorHidesAddress(t *testing.T) {
 	require.NotContains(t, errText(err), "zed@")
 	require.NotContains(t, strings.Join(cerrors.GetAllDetails(err), " "), "zed@")
 	require.NotContains(t, fmt.Sprintf("%+v", err), "zed@")
+}
+
+func TestGetCapabilities_EmailNeedsRedisCache(t *testing.T) {
+	s, _ := emailService(&exportRepoFake{}, true)
+	require.True(t, s.GetCapabilities(exportCtx()).Email.Available)
+
+	s.config.Cache.Redis.Enabled = false
+	require.False(t, s.GetCapabilities(exportCtx()).Email.Available)
+	_, err := s.CreateScheduledTask(exportCtx(), emailCreateReq(types.ScheduledTaskIntervalDaily, "a@x.com"))
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err))
 }

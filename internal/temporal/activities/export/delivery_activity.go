@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -52,6 +53,7 @@ type DeliveryActivity struct {
 	taskRepo task.Repository
 	cfg      *config.Configuration
 	logger   *logger.Logger
+	uncapped sync.Once
 }
 
 func NewDeliveryActivity(
@@ -141,6 +143,10 @@ func (a *DeliveryActivity) SendExportEmails(ctx context.Context, in SendExportEm
 				record(addr, types.ExportDeliveryStatusRateLimited, "")
 				continue
 			}
+		} else {
+			a.uncapped.Do(func() {
+				a.logger.Error(ctx, "export email cap not enforced", "error", "redis cache unavailable")
+			})
 		}
 
 		sendCtx, cancel := context.WithTimeout(ctx, 15*time.Second)

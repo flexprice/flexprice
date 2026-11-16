@@ -87,6 +87,8 @@ func newDeliveryActivity(sender *fakeSender, users *fakeUsers, c *fakeCounter, a
 		cfg.Email.Enabled = true
 		cfg.Email.ResendAPIKey = "k"
 		cfg.Email.FromAddress = "noreply@x.com"
+		cfg.Cache.Enabled = true
+		cfg.Cache.Redis.Enabled = true
 	}
 	cfg.Exports.ConsoleBaseURL = "https://console.example.com/"
 	cfg.Exports.MaxEmailsPerHour = max

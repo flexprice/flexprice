@@ -309,19 +309,22 @@ func TestExportEmailAvailable(t *testing.T) {
 		key     string
 		from    string
 		baseURL string
+		redis   bool
 		want    bool
 	}{
-		{"all set", true, "k", "a@b.co", "https://app", true},
-		{"disabled", false, "k", "a@b.co", "https://app", false},
-		{"no key", true, "", "a@b.co", "https://app", false},
-		{"no from", true, "k", "", "https://app", false},
-		{"no base url", true, "k", "a@b.co", "", false},
+		{"all set", true, "k", "a@b.co", "https://app", true, true},
+		{"disabled", false, "k", "a@b.co", "https://app", true, false},
+		{"no key", true, "", "a@b.co", "https://app", true, false},
+		{"no from", true, "k", "", "https://app", true, false},
+		{"no base url", true, "k", "a@b.co", "", true, false},
+		{"no redis cache", true, "k", "a@b.co", "https://app", false, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &Configuration{
 				Email:   EmailConfig{Enabled: tt.enabled, Resend: ResendEmailConfig{APIKey: tt.key}, FromAddress: tt.from},
 				Exports: ExportsConfig{ConsoleBaseURL: tt.baseURL},
+				Cache:   CacheConfig{Enabled: tt.redis, Redis: RedisCacheConfig{Enabled: tt.redis}},
 			}
 			if got := c.ExportEmailAvailable(); got != tt.want {
 				t.Errorf("got %v want %v", got, tt.want)
