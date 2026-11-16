@@ -497,20 +497,6 @@ func (p *paymentProcessor) handleRazorpayTokenCharge(ctx context.Context, paymen
 }
 
 func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
-	// Prepare metadata for payment link request
-	linkMetadata := make(map[string]string)
-	if paymentObj.Metadata != nil {
-		// Copy metadata but exclude connection-related fields (internal use only)
-		for k, v := range paymentObj.Metadata {
-			if k != "connection_id" && k != "connection_name" {
-				linkMetadata[k] = v
-			}
-		}
-	}
-
-	// Add FlexPrice payment ID to metadata
-	linkMetadata["flexprice_payment_id"] = paymentObj.ID
-
 	// Convert to Razorpay payment link request
 	paymentLinkReq := &razorpay.CreatePaymentLinkRequest{
 		InvoiceID:      paymentObj.DestinationID,
@@ -519,7 +505,6 @@ func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context
 		Currency:       paymentObj.Currency,
 		SuccessURL:     gatewayURL(paymentObj, "success_url"),
 		CancelURL:      gatewayURL(paymentObj, "cancel_url"),
-		Metadata:       linkMetadata,
 		PaymentID:      paymentObj.ID,
 		NotifyCustomer: paymentObj.GatewayMetadata["notify_customer"] == "true",
 	}

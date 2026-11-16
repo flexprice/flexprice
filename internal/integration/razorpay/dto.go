@@ -79,7 +79,6 @@ type CreatePaymentLinkRequest struct {
 	Currency   string
 	SuccessURL string // Callback URL - customer redirected here after payment completion or cancellation
 	CancelURL  string // Not used by Razorpay (only SuccessURL is used as callback_url)
-	Metadata   map[string]string
 	PaymentID  string
 	// ExpiresAt, when set, is sent as expire_by so the link stops accepting new
 	// payments at a known time. Razorpay's minimum is 15 minutes from now.

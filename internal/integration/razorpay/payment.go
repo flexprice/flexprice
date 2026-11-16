@@ -20,9 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types/integrations"
 )
 
-// razorpayNoteMaxLen is the longest note value Razorpay accepts.
-const razorpayNoteMaxLen = 255
-
 // AutoChargeRequest is the input for PaymentService.AutoCharge.
 type AutoChargeRequest struct {
 	InvoiceID          string
@@ -219,16 +216,12 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	// Razorpay expects amounts in smallest currency unit
 	amountInSmallestUnit := req.Amount.Mul(decimal.NewFromInt(100)).IntPart()
 
-	// Metadata, then flexprice keys last so routing keys can't be overwritten.
-	notes := make(map[string]string)
-	for k, v := range req.Metadata {
-		notes[k] = lo.Substring(v, 0, razorpayNoteMaxLen)
+	notes := map[string]string{
+		"flexprice_invoice_id":  req.InvoiceID,
+		"flexprice_customer_id": req.CustomerID,
+		"flexprice_payment_id":  req.PaymentID,
+		"payment_source":        "flexprice",
 	}
-
-	notes["flexprice_invoice_id"] = req.InvoiceID
-	notes["flexprice_customer_id"] = req.CustomerID
-	notes["flexprice_payment_id"] = req.PaymentID
-	notes["payment_source"] = "flexprice"
 
 	invoiceNumber := DefaultInvoiceLabel
 	if invoiceResp.InvoiceNumber != nil && *invoiceResp.InvoiceNumber != "" {

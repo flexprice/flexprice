@@ -28,7 +28,6 @@ func (a *CheckoutAdapter) CreatePaymentLink(
 		Currency:       req.Currency,
 		SuccessURL:     req.SuccessURL,
 		CancelURL:      req.CancelURL,
-		Metadata:       req.Metadata,
 		PaymentID:      req.PaymentID,
 		ExpiresAt:      req.ExpiresAt,
 		NotifyCustomer: req.NotifyCustomer,
