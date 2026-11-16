@@ -176,7 +176,7 @@ func (s *emailNotificationService) SendAutoInvoiceEmail(ctx context.Context, inv
 	if !s.Config.Email.IsProviderConfigured() {
 		return nil
 	}
-	cfg, err := s.settings(ctx)
+	cfg, err := GetSetting[types.EmailNotificationConfig](NewSettingsService(s.ServiceParams).(*settingsService), ctx, types.SettingKeyEmailNotificationConfig)
 	if err != nil {
 		return err
 	}
@@ -509,10 +509,6 @@ func (s *emailNotificationService) transition(ctx context.Context, id string, ch
 		}
 		return s.EmailLogRepo.Update(txCtx, next)
 	})
-}
-
-func (s *emailNotificationService) settings(ctx context.Context) (types.EmailNotificationConfig, error) {
-	return GetSetting[types.EmailNotificationConfig](NewSettingsService(s.ServiceParams).(*settingsService), ctx, types.SettingKeyEmailNotificationConfig)
 }
 
 // compose renders an email log with its email type's composer.
