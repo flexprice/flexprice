@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strings"
 	"testing"
 	"time"
 
@@ -213,7 +211,7 @@ func (s *UsageAnalyticsSuite) usage(meterID, customerID string, ts time.Time, qt
 	}}))
 }
 
-// supportedMeters are the fixture's flat-priced meters; m_tiered makes an unfiltered request fail.
+// supportedMeters are the fixture's flat-priced meters; an unfiltered request omits m_tiered.
 var supportedMeters = []string{"m_tokens", "m_calls", "m_scaled"}
 
 func (s *UsageAnalyticsSuite) query(mutate func(r *dto.UsageAnalyticsRequest)) (*dto.UsageAnalyticsResponse, error) {
@@ -282,16 +280,6 @@ func (s *UsageAnalyticsSuite) TestFullPeriodLineTotalsEqualTheInvoice() {
 	s.Equal(4, s.assertLinesEqualInvoice(), "tok_old, tok_new, calls, scaled; tiered is excluded")
 }
 
-// assertUnsupported checks the request fails as bad input naming exactly these meters and reasons.
-func (s *UsageAnalyticsSuite) assertUnsupported(err error, want map[string]string) {
-	s.Require().Error(err)
-	s.True(ierr.IsValidation(err), "want validation error, got %v", err)
-	ids := lo.Keys(want)
-	sort.Strings(ids)
-	named := lo.Map(ids, func(id string, _ int) string { return id + " (" + want[id] + ")" })
-	s.Contains(err.Error(), "usage analytics does not support meters "+strings.Join(named, ", ")+" yet")
-}
-
 func (s *UsageAnalyticsSuite) TestGroupByDefaultsToMeter() {
 	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.GroupBy = nil })
 	s.NoError(err)
@@ -299,15 +287,19 @@ func (s *UsageAnalyticsSuite) TestGroupByDefaultsToMeter() {
 	s.Equal(map[string]string{"m_tokens": "13000.00", "m_calls": "0.04", "m_scaled": "20.00"}, amountByGroup(resp, "meter_id"))
 }
 
-func (s *UsageAnalyticsSuite) TestUnsupportedMeterRejectsTheRequest() {
-	_, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.MeterIDs = nil })
-	s.assertUnsupported(err, map[string]string{"m_tiered": excludedNotFlatPrice})
-
-	resp, err := s.query(nil)
+func (s *UsageAnalyticsSuite) TestUnsupportedMeterIsOmittedAndListed() {
+	all, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.MeterIDs = nil })
 	s.NoError(err)
+	s.Equal(map[string]string{"m_tiered": excludedNotFlatPrice}, all.OmittedMeters)
+
+	supported, err := s.query(nil)
+	s.NoError(err)
+	s.Nil(supported.OmittedMeters)
 	// 13,000 tokens + 4 calls × 0.01 + 40 scaled × 0.5; the tiered $ never appears.
-	s.Equal("13020.04", resp.Totals.Amount)
-	s.Equal(map[string]string{"alice": "7020.00", "bob": "6000.00", "123": "0.03", dto.UsageNoneValue: "0.01"}, amountByGroup(resp, "properties.user"))
+	for _, resp := range []*dto.UsageAnalyticsResponse{all, supported} {
+		s.Equal("13020.04", resp.Totals.Amount)
+		s.Equal(map[string]string{"alice": "7020.00", "bob": "6000.00", "123": "0.03", dto.UsageNoneValue: "0.01"}, amountByGroup(resp, "properties.user"))
+	}
 }
 
 func (s *UsageAnalyticsSuite) TestEntitlementsAndGrantsExcludeTheirMeters() {
@@ -326,8 +318,10 @@ func (s *UsageAnalyticsSuite) TestEntitlementsAndGrantsExcludeTheirMeters() {
 	})
 	s.NoError(err)
 
-	_, err = s.query(nil)
-	s.assertUnsupported(err, map[string]string{"m_calls": excludedEntitlement, "m_scaled": excludedEntitlement})
+	all, err := s.query(nil)
+	s.NoError(err)
+	s.Equal(map[string]string{"m_calls": excludedEntitlement, "m_scaled": excludedEntitlement}, all.OmittedMeters)
+	s.Equal("13000.00", all.Totals.Amount)
 
 	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.MeterIDs = []string{"m_tokens"} })
 	s.NoError(err)
@@ -357,13 +351,50 @@ func (s *UsageAnalyticsSuite) TestSubscriptionGrantExcludesTheLinesBillingLowere
 	s.NoError(err)
 
 	// Billing spreads the $10 over the tokens and scaled lines; calls stay at their flat price.
-	_, err = s.query(nil)
-	s.assertUnsupported(err, map[string]string{"m_scaled": excludedEntitlement, "m_tokens": excludedEntitlement})
+	all, err := s.query(nil)
+	s.NoError(err)
+	s.Equal(map[string]string{"m_scaled": excludedEntitlement, "m_tokens": excludedEntitlement}, all.OmittedMeters)
+	s.Equal("0.04", all.Totals.Amount)
 
 	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.MeterIDs = []string{"m_calls"} })
 	s.NoError(err)
 	s.Equal("0.04", resp.Totals.Amount)
 	s.Equal(1, s.assertLinesEqualInvoice("m_calls"), "the calls line equals its invoice line")
+}
+
+// finalRecorder records whether each multi-meter usage read deduplicates with FINAL.
+type finalRecorder struct {
+	*testutil.InMemoryMeterUsageStore
+	useFinal []bool
+}
+
+func (r *finalRecorder) GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error) {
+	r.useFinal = append(r.useFinal, params.UseFinal)
+	return r.InMemoryMeterUsageStore.GetUsageMultiMeter(ctx, params)
+}
+
+func (s *UsageAnalyticsSuite) TestOnlyInvoicesReadUsageWithFinal() {
+	ctx := s.GetContext()
+	params := s.params
+	recorder := &finalRecorder{InMemoryMeterUsageStore: s.GetStores().MeterUsageRepo.(*testutil.InMemoryMeterUsageStore)}
+	params.MeterUsageRepo = recorder
+
+	_, err := NewUsageAnalyticsService(params).GetBreakdown(ctx, &dto.UsageAnalyticsRequest{
+		ExternalCustomerID: "acme", StartTime: lo.ToPtr(queryOct1), EndTime: lo.ToPtr(queryNov1), MeterIDs: supportedMeters, Limit: 100,
+	})
+	s.NoError(err)
+	s.NotEmpty(recorder.useFinal)
+	s.NotContains(recorder.useFinal, true, "analytics reads billing usage without FINAL")
+
+	recorder.useFinal = nil
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.parent.ID)
+	s.NoError(err)
+	_, err = NewBillingService(params).PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription: sub, PeriodStart: queryOct1, PeriodEnd: queryNov1, ReferencePoint: types.ReferencePointPeriodEnd,
+	})
+	s.NoError(err)
+	s.NotEmpty(recorder.useFinal)
+	s.NotContains(recorder.useFinal, false, "invoices read usage with FINAL")
 }
 
 func (s *UsageAnalyticsSuite) TestChildSeesOnlyItsOwnEventsAtTheParentsPrices() {

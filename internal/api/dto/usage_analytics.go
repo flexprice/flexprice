@@ -200,6 +200,9 @@ type UsageAnalyticsResponse struct {
 	// UnappliedCouponIDs are coupons active in the range that apply_discounts cannot spread over events
 	// (fixed amount or one-time); the invoice may be lower by them.
 	UnappliedCouponIDs []string `json:"unapplied_coupon_ids,omitempty"`
+	// OmittedMeters are requested meters left out of every row and total, each with why: its price or
+	// aggregation cannot be spread over events yet. The invoice is higher by their amount.
+	OmittedMeters map[string]string `json:"omitted_meters,omitempty"`
 	// Object maps, keyed by ID, for the IDs on this page's rows; each is set only when requested in expand.
 	// Meters and features are those of the rows' prices.
 	Prices        map[string]*PriceResponse        `json:"prices,omitempty"`

@@ -1811,6 +1811,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// cumulative commitment support; falls back to raw-events CalculateCharges otherwise)
 		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			arrearLineItems,
 			periodStart,
@@ -1826,6 +1827,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For next period advance charges
 		advanceResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			advanceLineItems,
 			nextPeriodStart,
@@ -1855,6 +1857,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For current period arrear charges
 		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			classification.CurrentPeriodArrear,
 			periodStart,
@@ -1870,6 +1873,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For next period advance charges
 		advanceResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			classification.NextPeriodAdvance,
 			nextPeriodStart,
@@ -1946,6 +1950,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For current period arrear charges
 		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			arrearLineItems,
 			periodStart,
@@ -2365,7 +2370,7 @@ func (s *billingService) SumUsageAmountForSubscription(
 	sub *subscription.Subscription,
 	periodStart, periodEnd time.Time,
 ) (decimal.Decimal, error) {
-	result, err := s.calculateMeterUsageCharges(ctx, sub, sub.LineItems, periodStart, periodEnd, true, nil, nil)
+	result, err := s.calculateMeterUsageCharges(ctx, types.UsageSourceInvoiceCreation, sub, sub.LineItems, periodStart, periodEnd, true, nil, nil)
 	if err != nil {
 		return decimal.Zero, err
 	}
@@ -2384,9 +2389,11 @@ func (s *billingService) SumUsageAmountForSubscription(
 // GetMeterUsageBySubscription call per sub-window and emit one line item per
 // sub-window. Same-cadence USAGE line items keep today's single-call behavior.
 //
-// periodLineItems, when set, are the active line items at periodStart.
+// periodLineItems, when set, are the active line items at periodStart. source sets how usage is read:
+// only invoice creation deduplicates with FINAL.
 func (s *billingService) calculateMeterUsageCharges(
 	ctx context.Context,
+	source types.UsageSource,
 	sub *subscription.Subscription,
 	lineItems []*subscription.SubscriptionLineItem,
 	periodStart,
@@ -2453,14 +2460,14 @@ func (s *billingService) calculateMeterUsageCharges(
 					SubscriptionID: sub.ID,
 					StartTime:      w.Start,
 					EndTime:        w.End,
-					Source:         string(types.UsageSourceInvoiceCreation),
+					Source:         string(source),
 					LineItems:      windowLineItems,
 				})
 				if err != nil {
 					return nil, err
 				}
 
-				lines, cost, err := s.CalculateMeterUsageCharges(ctx, &windowSub, usage, w.Start, w.End, types.UsageSourceInvoiceCreation, asOfOverride)
+				lines, cost, err := s.CalculateMeterUsageCharges(ctx, &windowSub, usage, w.Start, w.End, source, asOfOverride)
 				if err != nil {
 					return nil, err
 				}
