@@ -548,6 +548,7 @@ meter_usage_tracking:
   consumer_group: "v1_meter_usage_tracking_service"
   topic_dlq: "meter_usage_tracking_service_dlq"
   redis_deduplication_enabled: false
+  redis_deduplication_ttl: "24h"
   rejected_event_webhook_enabled: false
   rejected_event_webhook_window: "10m"
 
@@ -654,6 +655,7 @@ bulk_meter_usage_tracking:
   consumer_group: "v1_bulk_meter_usage_tracking"
   topic_dlq: "staging_meter_usage_tracking_bulk_dlq"
   redis_deduplication_enabled: true
+  redis_deduplication_ttl: "24h"
   post_insert_side_effects_enabled: true
 
 integration_events:
