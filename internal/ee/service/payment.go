@@ -446,39 +446,27 @@ func (s *paymentService) selectWalletForPayment(ctx context.Context, invoice *in
 }
 
 // GetPayment gets a payment by ID
-func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.PaymentResponse, error) {
-	if id == "" {
+func (s *paymentService) GetPayment(ctx context.Context, req dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
+	if req.ID == "" {
 		return nil, ierr.NewError("payment_id is required").
 			WithHint("Payment ID is required").
 			Mark(ierr.ErrValidation)
 	}
 
-	p, err := s.PaymentRepo.Get(ctx, id)
+	p, err := s.PaymentRepo.Get(ctx, req.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Best-effort gateway sync for in-flight payments; errors are logged inside and suppressed here
-	// Not a loop var; synchronous reassignment, no closure/goroutine.
-	p, err = s.syncPaymentStatusFromGateway(ctx, p) // nosemgrep: trailofbits.go.invalid-usage-of-modified-variable.invalid-usage-of-modified-variable
-	if err != nil {
-		s.Logger.Error(ctx, "failed to sync payment status from gateway", "payment_id", p.ID, "error", err)
+	if !req.SkipGatewaySync {
+		// Best-effort gateway sync for in-flight payments; errors are logged inside and suppressed here
+		// Not a loop var; synchronous reassignment, no closure/goroutine.
+		p, err = s.syncPaymentStatusFromGateway(ctx, p) // nosemgrep: trailofbits.go.invalid-usage-of-modified-variable.invalid-usage-of-modified-variable
+		if err != nil {
+			s.Logger.Error(ctx, "failed to sync payment status from gateway", "payment_id", p.ID, "error", err)
+		}
 	}
 
-	return s.paymentResponse(ctx, p)
-}
-
-func (s *paymentService) GetStoredPayment(ctx context.Context, id string) (*dto.PaymentResponse, error) {
-	if id == "" {
-		return nil, ierr.NewError("payment_id is required").
-			WithHint("Payment ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	p, err := s.PaymentRepo.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
 	return s.paymentResponse(ctx, p)
 }
 

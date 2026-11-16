@@ -151,7 +151,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		"flexprice_payment_id", flexpricePaymentID)
 
 	// Get payment record
-	paymentRecord, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
+	paymentRecord, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		h.logger.Error(ctx, "failed to get payment record",
 			"error", err,
@@ -288,7 +288,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		"flexprice_payment_id", flexpricePaymentID)
 
 	// Get payment record
-	paymentRecord, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
+	paymentRecord, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		h.logger.Error(ctx, "failed to get payment record",
 			"error", err,

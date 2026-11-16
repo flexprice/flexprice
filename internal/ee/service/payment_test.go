@@ -373,7 +373,7 @@ func (s *PaymentServiceSuite) TestSyncPaymentStatusFromGateway_CheckoutStillFetc
 	s.Error(err, "the missing gateway connection must be consulted even for a checkout payment")
 }
 
-func (s *PaymentServiceSuite) TestGetStoredPayment_ArchivedWithoutGatewaySync() {
+func (s *PaymentServiceSuite) TestGetPayment_SkipGatewaySync() {
 	ctx := s.GetContext()
 	svc := s.service.(*paymentService)
 	svc.IntegrationFactory = s.GetIntegrationFactory()
@@ -393,7 +393,7 @@ func (s *PaymentServiceSuite) TestGetStoredPayment_ArchivedWithoutGatewaySync() 
 	_, syncErr := svc.syncPaymentStatusFromGateway(ctx, p)
 	s.Require().Error(syncErr, "the sync would consult the missing gateway connection")
 
-	got, err := svc.GetStoredPayment(ctx, p.ID)
+	got, err := svc.GetPayment(ctx, dto.GetPaymentRequest{ID: p.ID, SkipGatewaySync: true})
 	s.Require().NoError(err)
 	s.Equal(types.PaymentStatusPending, got.PaymentStatus)
 	s.Equal("plink_stored", lo.FromPtr(got.GatewayTrackingID))
@@ -1018,6 +1018,16 @@ func (s *PaymentServiceSuite) TestPaymentEvents_PublishedPerPath() {
 			name: "offline processed inline",
 			run:  func() string { return create(16, types.PaymentMethodTypeOffline, true) },
 			want: []types.WebhookEventName{types.WebhookEventPaymentCreated, types.WebhookEventPaymentPending, types.WebhookEventPaymentSuccess},
+		},
+		{
+			name: "checkout payment created",
+			run: func() string {
+				p := &payment.Payment{ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT), PaymentStatus: types.PaymentStatusInitiated,
+					GatewayMetadata: types.Metadata{paymentCheckoutMarker: "true"}}
+				svc.recordPaymentTransition(ctx, p, "")
+				return p.ID
+			},
+			want: []types.WebhookEventName{types.WebhookEventPaymentCreated},
 		},
 	}
 	for _, tt := range tests {

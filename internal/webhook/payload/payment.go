@@ -41,7 +41,7 @@ func (b *PaymentPayloadBuilder) BuildPayload(ctx context.Context, eventType type
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	payment, err := b.services.PaymentService.GetStoredPayment(ctx, paymentID)
+	payment, err := b.services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: paymentID, SkipGatewaySync: true})
 	if err != nil {
 		return nil, err
 	}
@@ -78,9 +78,17 @@ func (b *PaymentAttemptPayloadBuilder) BuildPayload(ctx context.Context, eventTy
 		return nil, err
 	}
 
-	payment, err := b.services.PaymentService.GetStoredPayment(ctx, event.PaymentID)
+	payments, err := b.services.PaymentService.ListPayments(ctx, &types.PaymentFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+		PaymentIDs:  []string{event.PaymentID},
+	})
 	if err != nil {
 		return nil, err
+	}
+	if len(payments.Items) == 0 {
+		return nil, ierr.NewError("payment not found").
+			WithReportableDetails(map[string]any{"payment_id": event.PaymentID}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	filter := types.NewDefaultCheckoutSessionFilter()
@@ -94,15 +102,12 @@ func (b *PaymentAttemptPayloadBuilder) BuildPayload(ctx context.Context, eventTy
 
 	var session *webhookDto.CheckoutSession
 	if sessions != nil && len(sessions.Items) > 0 {
-		item := sessions.Items[0]
-		// List leaves the payment block empty; the session's amount comes from this payment.
-		item.Payment = &dto.CheckoutPaymentBlock{ID: payment.ID, Status: payment.PaymentStatus, Amount: payment.Amount, Currency: payment.Currency}
-		session = webhookDto.NewCheckoutSession(item)
+		session = webhookDto.NewCheckoutSession(sessions.Items[0])
 	}
 
 	return json.Marshal(webhookDto.PaymentAttemptWebhookPayload{
 		EventType:       eventType,
-		Payment:         webhookDto.NewPayment(payment),
+		Payment:         webhookDto.NewPayment(payments.Items[0]),
 		Attempt:         webhookDto.NewPaymentAttempt(attempt),
 		CheckoutSession: session,
 	})

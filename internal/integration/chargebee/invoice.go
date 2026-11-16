@@ -962,10 +962,10 @@ func (s *InvoiceService) ProcessChargebeePaymentFromWebhook(
 		},
 	}
 
-	paymentModel, err := s.PaymentService.CreatePayment(ctx, &createPaymentReq)
+	paymentObj, err := s.PaymentService.CreatePayment(ctx, &createPaymentReq)
 	if err == nil {
 		// Chargebee has already captured it, so the payment is recorded as succeeded.
-		paymentModel, err = s.PaymentService.UpdatePayment(ctx, paymentModel.ID, dto.UpdatePaymentRequest{
+		paymentObj, err = s.PaymentService.UpdatePayment(ctx, paymentObj.ID, dto.UpdatePaymentRequest{
 			PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
 			GatewayPaymentID: &req.ChargebeeTransactionID,
 			SucceededAt:      &now,
@@ -982,7 +982,7 @@ func (s *InvoiceService) ProcessChargebeePaymentFromWebhook(
 	}
 
 	s.Logger.Info(ctx, "created payment record",
-		"payment_id", paymentModel.ID,
+		"payment_id", paymentObj.ID,
 		"flexprice_invoice_id", req.FlexpriceInvoiceID,
 		"chargebee_transaction_id", req.ChargebeeTransactionID,
 		"amount", req.Amount.String())
@@ -1000,7 +1000,7 @@ func (s *InvoiceService) ProcessChargebeePaymentFromWebhook(
 	}
 
 	s.Logger.Info(ctx, "successfully processed Chargebee payment",
-		"payment_id", paymentModel.ID,
+		"payment_id", paymentObj.ID,
 		"flexprice_invoice_id", req.FlexpriceInvoiceID,
 		"chargebee_transaction_id", req.ChargebeeTransactionID)
 

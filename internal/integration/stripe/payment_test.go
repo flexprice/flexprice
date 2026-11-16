@@ -287,7 +287,7 @@ func (f *checkoutTestPaymentService) UpdatePayment(_ context.Context, _ string, 
 	return &dto.PaymentResponse{}, nil
 }
 
-func (f *checkoutTestPaymentService) GetPayment(_ context.Context, _ string) (*dto.PaymentResponse, error) {
+func (f *checkoutTestPaymentService) GetPayment(_ context.Context, _ dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
 	return f.payment, nil
 }
 

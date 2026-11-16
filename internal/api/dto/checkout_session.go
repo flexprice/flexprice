@@ -11,7 +11,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/shopspring/decimal"
 )
 
 // PaymentParams groups payment-provider settings for checkout flows.
@@ -289,11 +288,9 @@ func ValidateCheckoutSessionForCompletion(session *domainCheckout.CheckoutSessio
 // CheckoutPaymentBlock is the customer-facing view of the payment a checkout
 // session is waiting on. Null until fulfilment has created one.
 type CheckoutPaymentBlock struct {
-	ID       string              `json:"id"`
-	Status   types.PaymentStatus `json:"status"`
-	Gateway  string              `json:"gateway,omitempty"`
-	Amount   decimal.Decimal     `json:"amount" swaggertype:"string"`
-	Currency string              `json:"currency"`
+	ID      string              `json:"id"`
+	Status  types.PaymentStatus `json:"status"`
+	Gateway string              `json:"gateway,omitempty"`
 }
 
 // CheckoutSessionResponse is the API response for a single checkout session.

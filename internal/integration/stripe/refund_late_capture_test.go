@@ -32,7 +32,7 @@ type fakeLateCapturePaymentSvc struct {
 	updateReqs []dto.UpdatePaymentRequest
 }
 
-func (f *fakeLateCapturePaymentSvc) GetPayment(_ context.Context, _ string) (*dto.PaymentResponse, error) {
+func (f *fakeLateCapturePaymentSvc) GetPayment(_ context.Context, _ dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
 	f.getCalls++
 	return f.payment, nil
 }

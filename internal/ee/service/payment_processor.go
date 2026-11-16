@@ -112,19 +112,14 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	if err != nil {
 		return paymentObj, err
 	}
-	isLink := paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink
 	if starting {
 		p.recordPaymentTransition(ctx, paymentObj, statusBefore)
-		// A link's pending is sent once its link exists (below).
-		if !isLink {
-			p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
-		}
+		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 	}
 
 	// Process payment based on payment method type
 	var processErr error
 	settledByWebhook := false
-	wasPending := paymentObj.PaymentStatus == types.PaymentStatusPending
 	switch paymentObj.PaymentMethodType {
 	case types.PaymentMethodTypeOffline:
 		// For offline payments, we just mark them as succeeded immediately
@@ -212,6 +207,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			paymentObj.PaymentStatus = types.PaymentStatusPending
 			paymentObj.SucceededAt = nil // Keep succeeded_at as nil
 			p.Logger.Info(ctx, "keeping payment link as pending", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
+			p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 		} else {
 			paymentObj.PaymentStatus = types.PaymentStatusSucceeded
 			succeededAt := clock.Now()
@@ -236,9 +232,6 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		return paymentObj, err
 	}
 	p.recordPaymentTransition(ctx, paymentObj, statusBeforeOutcome)
-	if isLink && !wasPending && paymentObj.PaymentStatus == types.PaymentStatusPending {
-		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
-	}
 
 	// If payment succeeded, handle post-processing
 	if paymentObj.PaymentStatus == types.PaymentStatusSucceeded {
@@ -1233,8 +1226,6 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 				"error", updateErr,
 				"payment_id", paymentObj.ID,
 			)
-		} else {
-			paymentObj.PaymentStatus = types.PaymentStatusFailed
 		}
 
 		return err

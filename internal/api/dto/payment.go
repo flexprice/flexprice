@@ -100,6 +100,12 @@ type RecordAttemptRequest struct {
 	Metadata         types.Metadata      `json:"metadata,omitempty"`
 }
 
+// GetPaymentRequest reads one payment. SkipGatewaySync returns it as saved, without syncing an in-flight payment from the gateway.
+type GetPaymentRequest struct {
+	ID              string
+	SkipGatewaySync bool
+}
+
 // PaymentResponse represents a payment response
 type PaymentResponse struct {
 	ID string `json:"id"`

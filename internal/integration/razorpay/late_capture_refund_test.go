@@ -47,7 +47,7 @@ type lateCapturePayments struct {
 	updates []types.PaymentStatus
 }
 
-func (p *lateCapturePayments) GetPayment(context.Context, string) (*dto.PaymentResponse, error) {
+func (p *lateCapturePayments) GetPayment(context.Context, dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
 	return &dto.PaymentResponse{ID: "pay_fp", PaymentStatus: p.status, Amount: decimal.NewFromInt(136)}, nil
 }
 
