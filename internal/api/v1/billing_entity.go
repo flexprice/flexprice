@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/rest/middleware"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -163,11 +164,12 @@ func (h *BillingEntityHandler) GetBranding(c *gin.Context) {
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /billing-entities/{id}/branding/{asset} [put]
 func (h *BillingEntityHandler) UploadBrandingAsset(c *gin.Context) {
-	req, err := readBrandingUpload(c)
+	data, err := readUploadedFile(c, "file", middleware.MaxBrandingUploadBodyBytes)
 	if err != nil {
 		c.Error(err)
 		return
 	}
+	req := dto.UploadBrandingAssetRequest{Asset: types.BrandingAsset(c.Param("asset")), Data: data}
 	resp, err := h.service.UploadBrandingAsset(c.Request.Context(), c.Param("id"), req)
 	if err != nil {
 		c.Error(err)

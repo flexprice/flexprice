@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/rest/middleware"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -131,11 +132,12 @@ func (h *EnvironmentHandler) GetBranding(c *gin.Context) {
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /environments/{id}/branding/{asset} [put]
 func (h *EnvironmentHandler) UploadBrandingAsset(c *gin.Context) {
-	req, err := readBrandingUpload(c)
+	data, err := readUploadedFile(c, "file", middleware.MaxBrandingUploadBodyBytes)
 	if err != nil {
 		c.Error(err)
 		return
 	}
+	req := dto.UploadBrandingAssetRequest{Asset: types.BrandingAsset(c.Param("asset")), Data: data}
 
 	resp, err := h.service.UploadBrandingAsset(c.Request.Context(), c.Param("id"), req)
 	if err != nil {
