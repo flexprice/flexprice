@@ -233,6 +233,9 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
+		if ierr.IsValidation(err) {
+			return nil
+		}
 		return err
 	}
 

@@ -655,7 +655,8 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 
 // publishInvoicePaymentFailed sends invoice.payment.failed for a payment of an invoice that just failed.
 func (s *paymentService) publishInvoicePaymentFailed(ctx context.Context, p *payment.Payment) {
-	if p.DestinationType != types.PaymentDestinationTypeInvoice {
+	autoCharge := p.Metadata[types.MetadataKeyPaymentTrigger] == types.PaymentTriggerInvoiceAutoCharge
+	if p.DestinationType != types.PaymentDestinationTypeInvoice || p.PaymentGateway == nil || (lo.FromPtr(p.GatewayPaymentID) == "" && !autoCharge) {
 		return
 	}
 	// Without a gateway payment ID the gateway rejected the charge before creating it.
@@ -665,7 +666,7 @@ func (s *paymentService) publishInvoicePaymentFailed(ctx context.Context, p *pay
 		Reason:              lo.Ternary(lo.FromPtr(p.GatewayPaymentID) == "", types.InvoicePaymentFailureReasonProviderError, types.InvoicePaymentFailureReasonDeclined),
 		PaymentID:           p.ID,
 		Error:               lo.FromPtr(p.ErrorMessage),
-		IsAutoChargeAttempt: p.Metadata[types.MetadataKeyPaymentTrigger] == types.PaymentTriggerInvoiceAutoCharge,
+		IsAutoChargeAttempt: autoCharge,
 	})
 }
 

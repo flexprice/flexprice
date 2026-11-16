@@ -101,6 +101,9 @@ func (s *webhookTestPaymentService) GetPayment(_ context.Context, _ dto.GetPayme
 func (s *webhookTestPaymentService) UpdatePayment(_ context.Context, _ string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error) {
 	s.updateCalls = append(s.updateCalls, req)
 	if req.PaymentStatus != nil {
+		if err := s.payment.PaymentStatus.ValidateTransitionTo(types.PaymentStatus(*req.PaymentStatus)); err != nil {
+			return nil, err
+		}
 		s.payment.PaymentStatus = types.PaymentStatus(*req.PaymentStatus)
 	}
 	return s.payment, nil
@@ -343,6 +346,18 @@ func (s *WebhookCheckoutBranchingSuite) TestNoSessionFound_NoOp() {
 	s.NoError(err)
 	s.Empty(s.checkoutSvc.completeCalls)
 	s.Empty(s.client.refundCalls)
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedPayment_NotRetried() {
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
+	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	event.Payload.Payment.Entity.ID = "pay_rzp_001"
+	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+
+	err := s.handler.handlePaymentCaptured(s.ctx, event, s.services)
+
+	s.NoError(err)
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_ExpiredSession_Refunds() {

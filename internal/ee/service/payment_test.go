@@ -911,7 +911,7 @@ func (s *PaymentServiceSuite) TestProcessPaymentCountsOutcome() {
 	s.Equal(before+1, r.Sum("payment.transitions", match))
 }
 
-func (s *PaymentServiceSuite) TestProcessPaymentFailurePublishesInvoicePaymentFailed() {
+func (s *PaymentServiceSuite) TestProcessPaymentFailureBeforeGatewaySkipsInvoicePaymentFailed() {
 	p := s.newMetricsPayment("pay_processor_failed", string(types.PaymentGatewayTypeStripe), types.PaymentMethodTypeUPI, types.PaymentStatusPending)
 	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
 
@@ -935,17 +935,7 @@ func (s *PaymentServiceSuite) TestProcessPaymentFailurePublishesInvoicePaymentFa
 	events := lo.Filter(s.GetPublishedWebhooks(), func(e *types.WebhookEvent, _ int) bool {
 		return e.EventName == types.WebhookEventInvoicePaymentFailed
 	})
-	s.Require().Len(events, 1)
-	var internal webhookDto.InternalInvoicePaymentFailedEvent
-	s.Require().NoError(json.Unmarshal(events[0].Payload, &internal))
-	s.Equal(webhookDto.InternalInvoicePaymentFailedEvent{
-		InvoiceID: s.testData.invoice.ID,
-		TenantID:  types.GetTenantID(s.GetContext()),
-		Provider:  types.SecretProviderStripe,
-		Reason:    types.InvoicePaymentFailureReasonProviderError,
-		PaymentID: p.ID,
-		Error:     lo.FromPtr(processed.ErrorMessage),
-	}, internal)
+	s.Empty(events)
 }
 
 // Creation counts as the first transition; checkout payments carry the checkout marker.
