@@ -66,7 +66,7 @@ func (s *emailNotificationService) composeInvoiceEmail(ctx context.Context, e *e
 	view := invoiceEmailView(inv, merchant, paidWith, clock.Now())
 	composed := &composedEmail{metadata: map[string]string{}}
 
-	cfg, err := s.settings(ctx)
+	cfg, err := GetSetting[types.EmailNotificationConfig](NewSettingsService(s.ServiceParams).(*settingsService), ctx, types.SettingKeyEmailNotificationConfig)
 	if err != nil {
 		return nil, err
 	}
