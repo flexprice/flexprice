@@ -42665,6 +42665,18 @@
         ],
         "x-speakeasy-name-override": "BillingTermValueType"
       },
+      "types.BrandingConfig": {
+        "type": "object",
+        "properties": {
+          "icon_key": {
+            "type": "string"
+          },
+          "logo_key": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BrandingConfig"
+      },
       "types.CancellationFeeType": {
         "type": "string",
         "description": "fixed; percentage is reserved and rejected as not supported yet",
@@ -43066,6 +43078,9 @@
       "types.SettingsOverride": {
         "type": "object",
         "properties": {
+          "branding_config": {
+            "$ref": "#/components/schemas/types.BrandingConfig"
+          },
           "subscription_config": {
             "$ref": "#/components/schemas/types.SubscriptionConfigOverride"
           }

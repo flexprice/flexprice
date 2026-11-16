@@ -260,9 +260,9 @@ func applyBillingEntityFilter(query *ent.BillingEntityQuery, f *types.BillingEnt
 	return query
 }
 
-// UpdateBrandingKey writes only the asset's key column, so a concurrent write of the other asset or of the entity's other fields is kept.
-func (r *billingEntityRepository) UpdateBrandingKey(ctx context.Context, id string, asset types.BrandingAsset, key *string) error {
-	span := StartRepositorySpan(ctx, "billing_entity", "update_branding_key", map[string]interface{}{
+// UpdateSettings writes only the settings column; nil clears it.
+func (r *billingEntityRepository) UpdateSettings(ctx context.Context, id string, settings *types.SettingsOverride) error {
+	span := StartRepositorySpan(ctx, "billing_entity", "update_settings", map[string]interface{}{
 		"billing_entity_id": id,
 	})
 	defer FinishSpan(span)
@@ -276,21 +276,16 @@ func (r *billingEntityRepository) UpdateBrandingKey(ctx context.Context, id stri
 		).
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
-	switch {
-	case asset == types.BrandingAssetLogo && key != nil:
-		update.SetLogoKey(*key)
-	case asset == types.BrandingAssetLogo:
-		update.ClearLogoKey()
-	case key != nil:
-		update.SetIconKey(*key)
-	default:
-		update.ClearIconKey()
+	if settings != nil {
+		update.SetSettings(settings)
+	} else {
+		update.ClearSettings()
 	}
 	count, err := update.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return ierr.WithError(err).
-			WithHint("Failed to update billing entity branding").
+			WithHint("Failed to update billing entity settings").
 			Mark(ierr.ErrDatabase)
 	}
 	if count == 0 {
@@ -315,8 +310,7 @@ func billingEntityFromEnt(e *ent.BillingEntity) *domain.BillingEntity {
 		BillingDetails:      e.BillingDetails,
 		Metadata:            e.Metadata,
 		EnvironmentID:       e.EnvironmentID,
-		LogoKey:             e.LogoKey,
-		IconKey:             e.IconKey,
+		Settings:            e.Settings,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

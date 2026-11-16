@@ -248,12 +248,11 @@ erDiagram
     string id
     string environment_id
     string name
-    string logo_key "new, nullable"
-    string icon_key "new, nullable"
+    jsonb settings "new, nullable: branding_config"
   }
 ```
 
-The environment's pair follows where the environment's invoice number prefix lives (an environment setting), and the entity's pair follows where the entity's own prefix lives (a column on the entity).
+The environment's pair is an environment setting. The entity's pair is an override of that setting stored on the entity, in the same `settings` column shape customers and subscriptions use to override environment settings (`SettingsOverride`), so both levels hold the same `BrandingConfig` type.
 
 **Environment: setting `branding_config`** (no schema change)
 
@@ -264,18 +263,19 @@ The environment's pair follows where the environment's invoice number prefix liv
 
 No row, or a field left out, means not uploaded. The generic settings API refuses writes and deletes of this key, as it does for `billing_entity_config`; only the upload and remove endpoints change it.
 
-**Billing entity: new columns**
+**Billing entity: new column**
 
 | Table | Column | Type | Null | Default | Why |
 |---|---|---|---|---|---|
-| billing_entities | logo_key | character varying | yes | null | Image key of the entity's logo; null means the entity has none. |
-| billing_entities | icon_key | character varying | yes | null | Image key of the entity's icon; null means the entity has none. |
+| billing_entities | settings | jsonb | yes | null | The environment settings this entity overrides, as `SettingsOverride`; only `branding_config` (`logo_key`, `icon_key`) is used. Null, or no `branding_config`, means the entity has no assets. |
+
+`branding_config` is accepted only on billing entities: customer and subscription create and update requests that carry it in their `settings` are rejected with a validation error. The entity's `settings` are not returned on the billing entity response and are written only by the branding upload and remove endpoints.
 
 - **Image key:** `<tenant id>/<environment id>/<sha256 of the stored bytes, hex>.<png|jpg>`, for both environment and billing entity assets. The extension sets the served `Content-Type`. Scoping by tenant and environment keeps each owner's images apart, so a later clean-up of a tenant or an environment touches no one else. The stored image can be larger than the upload after re-encoding; the 512 KB limit applies to the upload.
 - **Storage object:** the key under an `assets/` prefix in the invoice bucket, through a new public asset storage purpose (section 7).
 - **Public asset layer:** storing, serving and reading images by key is a generic layer (`PublicAssetService`) that any flow can use for images it serves publicly; each flow keeps its own upload rules (here: logo and icon dimensions and the 512 KB limit) and records the keys it uses. The key carries no flow name, so identical bytes in one environment are one object; objects are never deleted. Private files must not use this layer.
-- **Migration:** optional string fields on the billing entity ent schema, and its two nullable columns added in one versioned SQL migration; no backfill. Null is "not uploaded", which is a real state, not a default. The setting needs no migration.
-- **Writes:** the environment's setting is changed in a transaction that takes a lock on the environment's `branding_config`, reads the stored value bypassing the settings cache, sets one field and saves, so uploading the logo and the icon at the same time keeps both. A billing entity's key is written by an update of that one column, so it never overwrites the other key or the entity's other fields.
+- **Migration:** an optional JSON field on the billing entity ent schema, and its nullable `settings` column added in one versioned SQL migration; no backfill. Null is "no override", which is a real state, not a default. The environment setting needs no migration.
+- **Writes:** the environment's setting is changed in a transaction that takes a lock on the environment's `branding_config`, reads the stored value bypassing the settings cache, sets one field and saves, so uploading the logo and the icon at the same time keeps both. A billing entity's key is written the same way: a transaction that takes a lock on the entity's settings, reads the entity, sets one field of `branding_config` and writes only the `settings` column, so it never overwrites the other key or the entity's other fields.
 - **Reads:** the branding lookup and environment responses read `branding_config` from the database, not the per-pod settings cache, so an upload shows on every pod at once.
 - **Environment clone:** does not copy the logo or icon; a cloned environment starts with none, as clone today copies only features and plans.
 - **Config:** `assets.base_url`, the deployment's public API origin (scheme and host, for example `https://us.api.flexprice.io`), named like the existing `hosted_invoice.base_url`, `checkout.base_url` and `auth.saml.base_url`. Asset URLs are `<base_url>/v1/assets/<asset key>`. Clients only use URLs the API returns and never build them. When it is empty, URL fields are omitted and surfaces show their fallbacks, as an empty `hosted_invoice.base_url` already yields no hosted links.
@@ -348,7 +348,7 @@ sequenceDiagram
   alt not stored yet
     API->>Store: store branding/<key>
   end
-  API->>DB: set logo key in branding_config (environment) or logo_key column (entity)
+  API->>DB: set logo key in branding_config (environment setting or entity settings)
   API-->>Admin: 200 updated record with logo_url
 ```
 

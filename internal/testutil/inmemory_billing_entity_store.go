@@ -94,16 +94,12 @@ func (s *InMemoryBillingEntityStore) Update(ctx context.Context, e *billingentit
 }
 
 // checkUnique mirrors the database's partial unique indexes on default and prefix.
-func (s *InMemoryBillingEntityStore) UpdateBrandingKey(ctx context.Context, id string, asset types.BrandingAsset, key *string) error {
+func (s *InMemoryBillingEntityStore) UpdateSettings(ctx context.Context, id string, settings *types.SettingsOverride) error {
 	e, err := s.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	if asset == types.BrandingAssetLogo {
-		e.LogoKey = key
-	} else {
-		e.IconKey = key
-	}
+	e.Settings = settings
 	return s.InMemoryStore.Update(ctx, e.ID, copyBillingEntity(e))
 }
 

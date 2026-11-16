@@ -286,6 +286,10 @@ func (s *EnvironmentServiceSuite) TestParsePublicAssetPath() {
 	}
 }
 
+func brandedEntity(logo, icon *string) *billingentity.BillingEntity {
+	return &billingentity.BillingEntity{Settings: &types.SettingsOverride{BrandingConfig: &types.BrandingConfig{LogoKey: logo, IconKey: icon}}}
+}
+
 func (s *EnvironmentServiceSuite) TestSelectBrandingKeys() {
 	envLogo, envIcon := lo.ToPtr("t/e/envlogo.png"), lo.ToPtr("t/e/envicon.png")
 	entLogo, entIcon := lo.ToPtr("t/e/entlogo.png"), lo.ToPtr("t/e/enticon.png")
@@ -297,8 +301,8 @@ func (s *EnvironmentServiceSuite) TestSelectBrandingKeys() {
 		env                *types.BrandingConfig
 		wantLogo, wantIcon *string
 	}{
-		{name: "entity icon only never mixes in env logo", entity: &billingentity.BillingEntity{IconKey: entIcon}, env: env, wantIcon: entIcon},
-		{name: "entity with both", entity: &billingentity.BillingEntity{LogoKey: entLogo, IconKey: entIcon}, env: env, wantLogo: entLogo, wantIcon: entIcon},
+		{name: "entity icon only never mixes in env logo", entity: brandedEntity(nil, entIcon), env: env, wantIcon: entIcon},
+		{name: "entity with both", entity: brandedEntity(entLogo, entIcon), env: env, wantLogo: entLogo, wantIcon: entIcon},
 		{name: "entity with none uses env", entity: &billingentity.BillingEntity{}, env: env, wantLogo: envLogo, wantIcon: envIcon},
 		{name: "no entity uses env", env: env, wantLogo: envLogo, wantIcon: envIcon},
 		{name: "nothing anywhere", env: &types.BrandingConfig{}},

@@ -123,43 +123,15 @@ func (_u *BillingEntityUpdate) ClearMetadata() *BillingEntityUpdate {
 	return _u
 }
 
-// SetLogoKey sets the "logo_key" field.
-func (_u *BillingEntityUpdate) SetLogoKey(v string) *BillingEntityUpdate {
-	_u.mutation.SetLogoKey(v)
+// SetSettings sets the "settings" field.
+func (_u *BillingEntityUpdate) SetSettings(v *types.SettingsOverride) *BillingEntityUpdate {
+	_u.mutation.SetSettings(v)
 	return _u
 }
 
-// SetNillableLogoKey sets the "logo_key" field if the given value is not nil.
-func (_u *BillingEntityUpdate) SetNillableLogoKey(v *string) *BillingEntityUpdate {
-	if v != nil {
-		_u.SetLogoKey(*v)
-	}
-	return _u
-}
-
-// ClearLogoKey clears the value of the "logo_key" field.
-func (_u *BillingEntityUpdate) ClearLogoKey() *BillingEntityUpdate {
-	_u.mutation.ClearLogoKey()
-	return _u
-}
-
-// SetIconKey sets the "icon_key" field.
-func (_u *BillingEntityUpdate) SetIconKey(v string) *BillingEntityUpdate {
-	_u.mutation.SetIconKey(v)
-	return _u
-}
-
-// SetNillableIconKey sets the "icon_key" field if the given value is not nil.
-func (_u *BillingEntityUpdate) SetNillableIconKey(v *string) *BillingEntityUpdate {
-	if v != nil {
-		_u.SetIconKey(*v)
-	}
-	return _u
-}
-
-// ClearIconKey clears the value of the "icon_key" field.
-func (_u *BillingEntityUpdate) ClearIconKey() *BillingEntityUpdate {
-	_u.mutation.ClearIconKey()
+// ClearSettings clears the value of the "settings" field.
+func (_u *BillingEntityUpdate) ClearSettings() *BillingEntityUpdate {
+	_u.mutation.ClearSettings()
 	return _u
 }
 
@@ -264,17 +236,11 @@ func (_u *BillingEntityUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(billingentity.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.LogoKey(); ok {
-		_spec.SetField(billingentity.FieldLogoKey, field.TypeString, value)
+	if value, ok := _u.mutation.Settings(); ok {
+		_spec.SetField(billingentity.FieldSettings, field.TypeJSON, value)
 	}
-	if _u.mutation.LogoKeyCleared() {
-		_spec.ClearField(billingentity.FieldLogoKey, field.TypeString)
-	}
-	if value, ok := _u.mutation.IconKey(); ok {
-		_spec.SetField(billingentity.FieldIconKey, field.TypeString, value)
-	}
-	if _u.mutation.IconKeyCleared() {
-		_spec.ClearField(billingentity.FieldIconKey, field.TypeString)
+	if _u.mutation.SettingsCleared() {
+		_spec.ClearField(billingentity.FieldSettings, field.TypeJSON)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -390,43 +356,15 @@ func (_u *BillingEntityUpdateOne) ClearMetadata() *BillingEntityUpdateOne {
 	return _u
 }
 
-// SetLogoKey sets the "logo_key" field.
-func (_u *BillingEntityUpdateOne) SetLogoKey(v string) *BillingEntityUpdateOne {
-	_u.mutation.SetLogoKey(v)
+// SetSettings sets the "settings" field.
+func (_u *BillingEntityUpdateOne) SetSettings(v *types.SettingsOverride) *BillingEntityUpdateOne {
+	_u.mutation.SetSettings(v)
 	return _u
 }
 
-// SetNillableLogoKey sets the "logo_key" field if the given value is not nil.
-func (_u *BillingEntityUpdateOne) SetNillableLogoKey(v *string) *BillingEntityUpdateOne {
-	if v != nil {
-		_u.SetLogoKey(*v)
-	}
-	return _u
-}
-
-// ClearLogoKey clears the value of the "logo_key" field.
-func (_u *BillingEntityUpdateOne) ClearLogoKey() *BillingEntityUpdateOne {
-	_u.mutation.ClearLogoKey()
-	return _u
-}
-
-// SetIconKey sets the "icon_key" field.
-func (_u *BillingEntityUpdateOne) SetIconKey(v string) *BillingEntityUpdateOne {
-	_u.mutation.SetIconKey(v)
-	return _u
-}
-
-// SetNillableIconKey sets the "icon_key" field if the given value is not nil.
-func (_u *BillingEntityUpdateOne) SetNillableIconKey(v *string) *BillingEntityUpdateOne {
-	if v != nil {
-		_u.SetIconKey(*v)
-	}
-	return _u
-}
-
-// ClearIconKey clears the value of the "icon_key" field.
-func (_u *BillingEntityUpdateOne) ClearIconKey() *BillingEntityUpdateOne {
-	_u.mutation.ClearIconKey()
+// ClearSettings clears the value of the "settings" field.
+func (_u *BillingEntityUpdateOne) ClearSettings() *BillingEntityUpdateOne {
+	_u.mutation.ClearSettings()
 	return _u
 }
 
@@ -561,17 +499,11 @@ func (_u *BillingEntityUpdateOne) sqlSave(ctx context.Context) (_node *BillingEn
 	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(billingentity.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.LogoKey(); ok {
-		_spec.SetField(billingentity.FieldLogoKey, field.TypeString, value)
+	if value, ok := _u.mutation.Settings(); ok {
+		_spec.SetField(billingentity.FieldSettings, field.TypeJSON, value)
 	}
-	if _u.mutation.LogoKeyCleared() {
-		_spec.ClearField(billingentity.FieldLogoKey, field.TypeString)
-	}
-	if value, ok := _u.mutation.IconKey(); ok {
-		_spec.SetField(billingentity.FieldIconKey, field.TypeString, value)
-	}
-	if _u.mutation.IconKeyCleared() {
-		_spec.ClearField(billingentity.FieldIconKey, field.TypeString)
+	if _u.mutation.SettingsCleared() {
+		_spec.ClearField(billingentity.FieldSettings, field.TypeJSON)
 	}
 	_node = &BillingEntity{config: _u.config}
 	_spec.Assign = _node.assignValues

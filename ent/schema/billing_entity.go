@@ -56,15 +56,9 @@ func (BillingEntity) Fields() []ent.Field {
 			SchemaType(jsonb).
 			Optional(),
 
-		field.String("logo_key").
-			SchemaType(varchar("255")).
-			Optional().
-			Nillable(),
-
-		field.String("icon_key").
-			SchemaType(varchar("255")).
-			Optional().
-			Nillable(),
+		field.JSON("settings", &types.SettingsOverride{}).
+			SchemaType(jsonb).
+			Optional(),
 	}
 }
 

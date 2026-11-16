@@ -87,13 +87,21 @@ func checkBrandingDimensions(asset types.BrandingAsset, width, height int) error
 
 // selectBrandingKeys uses the entity's own pair when it has any asset, else the environment's.
 func selectBrandingKeys(entity *billingentity.BillingEntity, env *types.BrandingConfig) (logoKey, iconKey *string) {
-	if entity != nil && (entity.LogoKey != nil || entity.IconKey != nil) {
-		return entity.LogoKey, entity.IconKey
+	if own := entityBranding(entity); own.LogoKey != nil || own.IconKey != nil {
+		return own.LogoKey, own.IconKey
 	}
 	if env == nil {
 		return nil, nil
 	}
 	return env.LogoKey, env.IconKey
+}
+
+// entityBranding is the entity's own branding override, empty when it has none.
+func entityBranding(entity *billingentity.BillingEntity) types.BrandingConfig {
+	if entity == nil || entity.Settings == nil || entity.Settings.BrandingConfig == nil {
+		return types.BrandingConfig{}
+	}
+	return *entity.Settings.BrandingConfig
 }
 
 // environmentBranding reads the environment's branding_config from the database; none set means no assets.

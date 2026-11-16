@@ -38,10 +38,8 @@ const (
 	FieldBillingDetails = "billing_details"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
-	// FieldLogoKey holds the string denoting the logo_key field in the database.
-	FieldLogoKey = "logo_key"
-	// FieldIconKey holds the string denoting the icon_key field in the database.
-	FieldIconKey = "icon_key"
+	// FieldSettings holds the string denoting the settings field in the database.
+	FieldSettings = "settings"
 	// Table holds the table name of the billingentity in the database.
 	Table = "billing_entities"
 )
@@ -61,8 +59,7 @@ var Columns = []string{
 	FieldInvoiceNumberPrefix,
 	FieldBillingDetails,
 	FieldMetadata,
-	FieldLogoKey,
-	FieldIconKey,
+	FieldSettings,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -154,14 +151,4 @@ func ByIsDefault(opts ...sql.OrderTermOption) OrderOption {
 // ByInvoiceNumberPrefix orders the results by the invoice_number_prefix field.
 func ByInvoiceNumberPrefix(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInvoiceNumberPrefix, opts...).ToFunc()
-}
-
-// ByLogoKey orders the results by the logo_key field.
-func ByLogoKey(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldLogoKey, opts...).ToFunc()
-}
-
-// ByIconKey orders the results by the icon_key field.
-func ByIconKey(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldIconKey, opts...).ToFunc()
 }

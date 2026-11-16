@@ -7395,8 +7395,7 @@ type BillingEntityMutation struct {
 	invoice_number_prefix *string
 	billing_details       *types.BillingDetails
 	metadata              *map[string]string
-	logo_key              *string
-	icon_key              *string
+	settings              **types.SettingsOverride
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*BillingEntity, error)
@@ -7991,102 +7990,53 @@ func (m *BillingEntityMutation) ResetMetadata() {
 	delete(m.clearedFields, billingentity.FieldMetadata)
 }
 
-// SetLogoKey sets the "logo_key" field.
-func (m *BillingEntityMutation) SetLogoKey(s string) {
-	m.logo_key = &s
+// SetSettings sets the "settings" field.
+func (m *BillingEntityMutation) SetSettings(to *types.SettingsOverride) {
+	m.settings = &to
 }
 
-// LogoKey returns the value of the "logo_key" field in the mutation.
-func (m *BillingEntityMutation) LogoKey() (r string, exists bool) {
-	v := m.logo_key
+// Settings returns the value of the "settings" field in the mutation.
+func (m *BillingEntityMutation) Settings() (r *types.SettingsOverride, exists bool) {
+	v := m.settings
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldLogoKey returns the old "logo_key" field's value of the BillingEntity entity.
+// OldSettings returns the old "settings" field's value of the BillingEntity entity.
 // If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingEntityMutation) OldLogoKey(ctx context.Context) (v *string, err error) {
+func (m *BillingEntityMutation) OldSettings(ctx context.Context) (v *types.SettingsOverride, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldLogoKey is only allowed on UpdateOne operations")
+		return v, errors.New("OldSettings is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldLogoKey requires an ID field in the mutation")
+		return v, errors.New("OldSettings requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldLogoKey: %w", err)
+		return v, fmt.Errorf("querying old value for OldSettings: %w", err)
 	}
-	return oldValue.LogoKey, nil
+	return oldValue.Settings, nil
 }
 
-// ClearLogoKey clears the value of the "logo_key" field.
-func (m *BillingEntityMutation) ClearLogoKey() {
-	m.logo_key = nil
-	m.clearedFields[billingentity.FieldLogoKey] = struct{}{}
+// ClearSettings clears the value of the "settings" field.
+func (m *BillingEntityMutation) ClearSettings() {
+	m.settings = nil
+	m.clearedFields[billingentity.FieldSettings] = struct{}{}
 }
 
-// LogoKeyCleared returns if the "logo_key" field was cleared in this mutation.
-func (m *BillingEntityMutation) LogoKeyCleared() bool {
-	_, ok := m.clearedFields[billingentity.FieldLogoKey]
+// SettingsCleared returns if the "settings" field was cleared in this mutation.
+func (m *BillingEntityMutation) SettingsCleared() bool {
+	_, ok := m.clearedFields[billingentity.FieldSettings]
 	return ok
 }
 
-// ResetLogoKey resets all changes to the "logo_key" field.
-func (m *BillingEntityMutation) ResetLogoKey() {
-	m.logo_key = nil
-	delete(m.clearedFields, billingentity.FieldLogoKey)
-}
-
-// SetIconKey sets the "icon_key" field.
-func (m *BillingEntityMutation) SetIconKey(s string) {
-	m.icon_key = &s
-}
-
-// IconKey returns the value of the "icon_key" field in the mutation.
-func (m *BillingEntityMutation) IconKey() (r string, exists bool) {
-	v := m.icon_key
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldIconKey returns the old "icon_key" field's value of the BillingEntity entity.
-// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BillingEntityMutation) OldIconKey(ctx context.Context) (v *string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldIconKey is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldIconKey requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldIconKey: %w", err)
-	}
-	return oldValue.IconKey, nil
-}
-
-// ClearIconKey clears the value of the "icon_key" field.
-func (m *BillingEntityMutation) ClearIconKey() {
-	m.icon_key = nil
-	m.clearedFields[billingentity.FieldIconKey] = struct{}{}
-}
-
-// IconKeyCleared returns if the "icon_key" field was cleared in this mutation.
-func (m *BillingEntityMutation) IconKeyCleared() bool {
-	_, ok := m.clearedFields[billingentity.FieldIconKey]
-	return ok
-}
-
-// ResetIconKey resets all changes to the "icon_key" field.
-func (m *BillingEntityMutation) ResetIconKey() {
-	m.icon_key = nil
-	delete(m.clearedFields, billingentity.FieldIconKey)
+// ResetSettings resets all changes to the "settings" field.
+func (m *BillingEntityMutation) ResetSettings() {
+	m.settings = nil
+	delete(m.clearedFields, billingentity.FieldSettings)
 }
 
 // Where appends a list predicates to the BillingEntityMutation builder.
@@ -8123,7 +8073,7 @@ func (m *BillingEntityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BillingEntityMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 13)
 	if m.tenant_id != nil {
 		fields = append(fields, billingentity.FieldTenantID)
 	}
@@ -8160,11 +8110,8 @@ func (m *BillingEntityMutation) Fields() []string {
 	if m.metadata != nil {
 		fields = append(fields, billingentity.FieldMetadata)
 	}
-	if m.logo_key != nil {
-		fields = append(fields, billingentity.FieldLogoKey)
-	}
-	if m.icon_key != nil {
-		fields = append(fields, billingentity.FieldIconKey)
+	if m.settings != nil {
+		fields = append(fields, billingentity.FieldSettings)
 	}
 	return fields
 }
@@ -8198,10 +8145,8 @@ func (m *BillingEntityMutation) Field(name string) (ent.Value, bool) {
 		return m.BillingDetails()
 	case billingentity.FieldMetadata:
 		return m.Metadata()
-	case billingentity.FieldLogoKey:
-		return m.LogoKey()
-	case billingentity.FieldIconKey:
-		return m.IconKey()
+	case billingentity.FieldSettings:
+		return m.Settings()
 	}
 	return nil, false
 }
@@ -8235,10 +8180,8 @@ func (m *BillingEntityMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldBillingDetails(ctx)
 	case billingentity.FieldMetadata:
 		return m.OldMetadata(ctx)
-	case billingentity.FieldLogoKey:
-		return m.OldLogoKey(ctx)
-	case billingentity.FieldIconKey:
-		return m.OldIconKey(ctx)
+	case billingentity.FieldSettings:
+		return m.OldSettings(ctx)
 	}
 	return nil, fmt.Errorf("unknown BillingEntity field %s", name)
 }
@@ -8332,19 +8275,12 @@ func (m *BillingEntityMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetMetadata(v)
 		return nil
-	case billingentity.FieldLogoKey:
-		v, ok := value.(string)
+	case billingentity.FieldSettings:
+		v, ok := value.(*types.SettingsOverride)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetLogoKey(v)
-		return nil
-	case billingentity.FieldIconKey:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetIconKey(v)
+		m.SetSettings(v)
 		return nil
 	}
 	return fmt.Errorf("unknown BillingEntity field %s", name)
@@ -8388,11 +8324,8 @@ func (m *BillingEntityMutation) ClearedFields() []string {
 	if m.FieldCleared(billingentity.FieldMetadata) {
 		fields = append(fields, billingentity.FieldMetadata)
 	}
-	if m.FieldCleared(billingentity.FieldLogoKey) {
-		fields = append(fields, billingentity.FieldLogoKey)
-	}
-	if m.FieldCleared(billingentity.FieldIconKey) {
-		fields = append(fields, billingentity.FieldIconKey)
+	if m.FieldCleared(billingentity.FieldSettings) {
+		fields = append(fields, billingentity.FieldSettings)
 	}
 	return fields
 }
@@ -8420,11 +8353,8 @@ func (m *BillingEntityMutation) ClearField(name string) error {
 	case billingentity.FieldMetadata:
 		m.ClearMetadata()
 		return nil
-	case billingentity.FieldLogoKey:
-		m.ClearLogoKey()
-		return nil
-	case billingentity.FieldIconKey:
-		m.ClearIconKey()
+	case billingentity.FieldSettings:
+		m.ClearSettings()
 		return nil
 	}
 	return fmt.Errorf("unknown BillingEntity nullable field %s", name)
@@ -8470,11 +8400,8 @@ func (m *BillingEntityMutation) ResetField(name string) error {
 	case billingentity.FieldMetadata:
 		m.ResetMetadata()
 		return nil
-	case billingentity.FieldLogoKey:
-		m.ResetLogoKey()
-		return nil
-	case billingentity.FieldIconKey:
-		m.ResetIconKey()
+	case billingentity.FieldSettings:
+		m.ResetSettings()
 		return nil
 	}
 	return fmt.Errorf("unknown BillingEntity field %s", name)

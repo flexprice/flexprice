@@ -40141,6 +40141,17 @@ const docTemplate = `{
                 "BillingTermValueRemainder"
             ]
         },
+        "types.BrandingConfig": {
+            "type": "object",
+            "properties": {
+                "icon_key": {
+                    "type": "string"
+                },
+                "logo_key": {
+                    "type": "string"
+                }
+            }
+        },
         "types.CancellationFeeType": {
             "description": "fixed; percentage is reserved and rejected as not supported yet",
             "type": "string",
@@ -40515,6 +40526,14 @@ const docTemplate = `{
         "types.SettingsOverride": {
             "type": "object",
             "properties": {
+                "branding_config": {
+                    "description": "BrandingConfig is set only on billing entities, through their branding endpoints.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BrandingConfig"
+                        }
+                    ]
+                },
                 "subscription_config": {
                     "$ref": "#/definitions/types.SubscriptionConfigOverride"
                 }

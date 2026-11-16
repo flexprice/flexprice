@@ -786,6 +786,9 @@ func (r *UpdateSubscriptionRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
+	if err := rejectBillingEntityOnlySettings(r.Settings); err != nil {
+		return err
+	}
 
 	if r.ProrationBehavior != nil {
 		if err := r.ProrationBehavior.Validate(); err != nil {
@@ -1118,6 +1121,9 @@ func (r *CreateSubscriptionRequest) validateCommitments() error {
 func (r *CreateSubscriptionRequest) Validate() error {
 	err := validator.ValidateRequest(r)
 	if err != nil {
+		return err
+	}
+	if err := rejectBillingEntityOnlySettings(r.Settings); err != nil {
 		return err
 	}
 

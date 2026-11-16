@@ -43,10 +43,8 @@ type BillingEntity struct {
 	BillingDetails types.BillingDetails `json:"billing_details,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
-	// LogoKey holds the value of the "logo_key" field.
-	LogoKey *string `json:"logo_key,omitempty"`
-	// IconKey holds the value of the "icon_key" field.
-	IconKey      *string `json:"icon_key,omitempty"`
+	// Settings holds the value of the "settings" field.
+	Settings     *types.SettingsOverride `json:"settings,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -55,11 +53,11 @@ func (*BillingEntity) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case billingentity.FieldBillingDetails, billingentity.FieldMetadata:
+		case billingentity.FieldBillingDetails, billingentity.FieldMetadata, billingentity.FieldSettings:
 			values[i] = new([]byte)
 		case billingentity.FieldIsDefault:
 			values[i] = new(sql.NullBool)
-		case billingentity.FieldID, billingentity.FieldTenantID, billingentity.FieldStatus, billingentity.FieldCreatedBy, billingentity.FieldUpdatedBy, billingentity.FieldEnvironmentID, billingentity.FieldName, billingentity.FieldInvoiceNumberPrefix, billingentity.FieldLogoKey, billingentity.FieldIconKey:
+		case billingentity.FieldID, billingentity.FieldTenantID, billingentity.FieldStatus, billingentity.FieldCreatedBy, billingentity.FieldUpdatedBy, billingentity.FieldEnvironmentID, billingentity.FieldName, billingentity.FieldInvoiceNumberPrefix:
 			values[i] = new(sql.NullString)
 		case billingentity.FieldCreatedAt, billingentity.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -160,19 +158,13 @@ func (_m *BillingEntity) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
-		case billingentity.FieldLogoKey:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field logo_key", values[i])
-			} else if value.Valid {
-				_m.LogoKey = new(string)
-				*_m.LogoKey = value.String
-			}
-		case billingentity.FieldIconKey:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field icon_key", values[i])
-			} else if value.Valid {
-				_m.IconKey = new(string)
-				*_m.IconKey = value.String
+		case billingentity.FieldSettings:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field settings", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Settings); err != nil {
+					return fmt.Errorf("unmarshal field settings: %w", err)
+				}
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -246,15 +238,8 @@ func (_m *BillingEntity) String() string {
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
-	if v := _m.LogoKey; v != nil {
-		builder.WriteString("logo_key=")
-		builder.WriteString(*v)
-	}
-	builder.WriteString(", ")
-	if v := _m.IconKey; v != nil {
-		builder.WriteString("icon_key=")
-		builder.WriteString(*v)
-	}
+	builder.WriteString("settings=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Settings))
 	builder.WriteByte(')')
 	return builder.String()
 }

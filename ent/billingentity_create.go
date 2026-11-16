@@ -157,31 +157,9 @@ func (_c *BillingEntityCreate) SetMetadata(v map[string]string) *BillingEntityCr
 	return _c
 }
 
-// SetLogoKey sets the "logo_key" field.
-func (_c *BillingEntityCreate) SetLogoKey(v string) *BillingEntityCreate {
-	_c.mutation.SetLogoKey(v)
-	return _c
-}
-
-// SetNillableLogoKey sets the "logo_key" field if the given value is not nil.
-func (_c *BillingEntityCreate) SetNillableLogoKey(v *string) *BillingEntityCreate {
-	if v != nil {
-		_c.SetLogoKey(*v)
-	}
-	return _c
-}
-
-// SetIconKey sets the "icon_key" field.
-func (_c *BillingEntityCreate) SetIconKey(v string) *BillingEntityCreate {
-	_c.mutation.SetIconKey(v)
-	return _c
-}
-
-// SetNillableIconKey sets the "icon_key" field if the given value is not nil.
-func (_c *BillingEntityCreate) SetNillableIconKey(v *string) *BillingEntityCreate {
-	if v != nil {
-		_c.SetIconKey(*v)
-	}
+// SetSettings sets the "settings" field.
+func (_c *BillingEntityCreate) SetSettings(v *types.SettingsOverride) *BillingEntityCreate {
+	_c.mutation.SetSettings(v)
 	return _c
 }
 
@@ -376,13 +354,9 @@ func (_c *BillingEntityCreate) createSpec() (*BillingEntity, *sqlgraph.CreateSpe
 		_spec.SetField(billingentity.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := _c.mutation.LogoKey(); ok {
-		_spec.SetField(billingentity.FieldLogoKey, field.TypeString, value)
-		_node.LogoKey = &value
-	}
-	if value, ok := _c.mutation.IconKey(); ok {
-		_spec.SetField(billingentity.FieldIconKey, field.TypeString, value)
-		_node.IconKey = &value
+	if value, ok := _c.mutation.Settings(); ok {
+		_spec.SetField(billingentity.FieldSettings, field.TypeJSON, value)
+		_node.Settings = value
 	}
 	return _node, _spec
 }

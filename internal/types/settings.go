@@ -98,9 +98,11 @@ type SubscriptionConfig struct {
 	AutoCancellationEnabled bool `json:"auto_cancellation_enabled"`
 }
 
-// SettingsOverride holds the environment settings a customer or subscription overrides; unset fields inherit.
+// SettingsOverride holds the environment settings a customer, subscription or billing entity overrides; unset fields inherit.
 type SettingsOverride struct {
 	SubscriptionConfig *SubscriptionConfigOverride `json:"subscription_config,omitempty"`
+	// BrandingConfig is set only on billing entities, through their branding endpoints.
+	BrandingConfig *BrandingConfig `json:"branding_config,omitempty"`
 }
 
 // SubscriptionConfigOverride is the overridable subset of SubscriptionConfig.

@@ -16369,6 +16369,13 @@ definitions:
     - BillingTermValueFixed
     - BillingTermValuePercentage
     - BillingTermValueRemainder
+  types.BrandingConfig:
+    properties:
+      icon_key:
+        type: string
+      logo_key:
+        type: string
+    type: object
   types.CancellationFeeType:
     description: fixed; percentage is reserved and rejected as not supported yet
     enum:
@@ -16658,6 +16665,11 @@ definitions:
     - RevenueReportGroupByPOB
   types.SettingsOverride:
     properties:
+      branding_config:
+        allOf:
+        - $ref: '#/definitions/types.BrandingConfig'
+        description: BrandingConfig is set only on billing entities, through their
+          branding endpoints.
       subscription_config:
         $ref: '#/definitions/types.SubscriptionConfigOverride'
     type: object

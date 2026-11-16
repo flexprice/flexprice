@@ -520,11 +520,45 @@ func (s *billingEntityService) RemoveBrandingAsset(ctx context.Context, id strin
 	return s.saveBrandingKey(ctx, existing, asset, nil)
 }
 
+// saveBrandingKey sets one image key in the entity's branding override. The lock and the read inside
+// the transaction keep a concurrent write of the other asset from being lost.
 func (s *billingEntityService) saveBrandingKey(ctx context.Context, existing *billingentity.BillingEntity, asset types.BrandingAsset, key *string) (*dto.BrandingResponse, error) {
-	if err := s.BillingEntityRepo.UpdateBrandingKey(ctx, existing.ID, asset, key); err != nil {
-		return nil, err
-	}
-	updated, err := s.BillingEntityRepo.Get(ctx, existing.ID)
+	var updated *billingentity.BillingEntity
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: "billing_entity_settings:" + existing.TenantID + ":" + existing.ID}); err != nil {
+			return err
+		}
+		current, err := s.BillingEntityRepo.Get(txCtx, existing.ID)
+		if err != nil {
+			return err
+		}
+
+		branding := entityBranding(current)
+		if asset == types.BrandingAssetLogo {
+			branding.LogoKey = key
+		} else {
+			branding.IconKey = key
+		}
+		settings := types.SettingsOverride{}
+		if current.Settings != nil {
+			settings = *current.Settings
+		}
+		settings.BrandingConfig = nil
+		if branding.LogoKey != nil || branding.IconKey != nil {
+			settings.BrandingConfig = &branding
+		}
+		var stored *types.SettingsOverride
+		if settings.BrandingConfig != nil || settings.SubscriptionConfig != nil {
+			stored = &settings
+		}
+
+		if err := s.BillingEntityRepo.UpdateSettings(txCtx, current.ID, stored); err != nil {
+			return err
+		}
+		current.Settings = stored
+		updated = current
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -532,9 +566,10 @@ func (s *billingEntityService) saveBrandingKey(ctx context.Context, existing *bi
 }
 
 func (s *billingEntityService) brandingResponse(e *billingentity.BillingEntity) *dto.BrandingResponse {
+	own := entityBranding(e)
 	return &dto.BrandingResponse{
-		LogoURL: publicAssetURL(s.Config, e.LogoKey),
-		IconURL: publicAssetURL(s.Config, e.IconKey),
+		LogoURL: publicAssetURL(s.Config, own.LogoKey),
+		IconURL: publicAssetURL(s.Config, own.IconKey),
 	}
 }
 
