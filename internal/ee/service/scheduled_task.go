@@ -420,23 +420,29 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 
 	resp := dto.ToScheduledTaskResponse(task)
 	if req.RunNow {
-		resp.Run = s.runNow(ctx, task, req.ForceRunRequest())
+		run, err := s.runNow(ctx, task, req.ForceRunRequest())
+		if err != nil {
+			s.logger.Error(ctx, "run_now failed", "error", err, "scheduled_task_id", task.ID)
+			// Rollback: delete the created task
+			_ = s.repo.Delete(ctx, task.ID)
+			return nil, err
+		}
+		resp.Run = run
 	}
 	return resp, nil
 }
 
-// runNow starts a run; failure is logged and leaves the export.
-func (s *scheduledTaskService) runNow(ctx context.Context, task *scheduledtask.ScheduledTask, req dto.TriggerForceRunRequest) *dto.TriggerForceRunResponse {
+func (s *scheduledTaskService) runNow(ctx context.Context, task *scheduledtask.ScheduledTask, req dto.TriggerForceRunRequest) (*dto.TriggerForceRunResponse, error) {
 	if s.temporalClient == nil {
-		s.logger.Error(ctx, "run_now skipped", "error", "temporal client not configured", "scheduled_task_id", task.ID)
-		return nil
+		return nil, ierr.NewError("temporal client not configured").
+			WithHint("The export could not be started. Try again later.").
+			Mark(ierr.ErrInternal)
 	}
 	workflowID, startTime, endTime, mode, err := s.startForceRun(ctx, task, req)
 	if err != nil {
-		s.logger.Error(ctx, "run_now failed", "error", err, "scheduled_task_id", task.ID)
-		return nil
+		return nil, err
 	}
-	return forceRunResponse(workflowID, startTime, endTime, mode)
+	return forceRunResponse(workflowID, startTime, endTime, mode), nil
 }
 
 // GetScheduledTask retrieves a scheduled task by ID

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
@@ -21,6 +22,12 @@ type originRepoFake struct {
 	scheduledtask.Repository
 	created *scheduledtask.ScheduledTask
 	listed  *scheduledtask.ListFilters
+	deleted string
+}
+
+func (r *originRepoFake) Delete(_ context.Context, id string) error {
+	r.deleted = id
+	return nil
 }
 
 func (r *originRepoFake) Create(_ context.Context, t *scheduledtask.ScheduledTask) error {
@@ -302,16 +309,27 @@ func TestCreate_RunNow(t *testing.T) {
 		require.NotNil(t, resp.Run)
 		require.Equal(t, "wf_1", resp.Run.WorkflowID)
 	})
-	t.Run("trigger failure still returns the export", func(t *testing.T) {
+	t.Run("no temporal fails and rolls back", func(t *testing.T) {
 		repo := &originRepoFake{}
 		s := customerExportService(repo, &customerCountFake{})
 		s.temporalClient = nil
 		req := customersReq()
 		req.RunNow = true
 		resp, err := s.CreateScheduledTask(exportCtx(), req)
-		require.NoError(t, err)
-		require.NotEmpty(t, resp.ID)
-		require.Nil(t, resp.Run)
+		require.Error(t, err)
+		require.Nil(t, resp)
+		require.Equal(t, repo.created.ID, repo.deleted)
+	})
+	t.Run("start failure fails and rolls back", func(t *testing.T) {
+		repo := &originRepoFake{}
+		s := customerExportService(repo, &customerCountFake{})
+		s.temporalClient = &exportTemporalFake{runErr: errors.New("unavailable")}
+		req := customersReq()
+		req.RunNow = true
+		resp, err := s.CreateScheduledTask(exportCtx(), req)
+		require.Error(t, err)
+		require.Nil(t, resp)
+		require.Equal(t, repo.created.ID, repo.deleted)
 	})
 }
 
