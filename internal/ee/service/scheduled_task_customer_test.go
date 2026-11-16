@@ -292,6 +292,18 @@ func TestCreate_CustomerFilterNeedsCustomersPageOrigin(t *testing.T) {
 	require.True(t, ierr.IsValidation(err), "got %v", err)
 }
 
+func TestCreate_CustomersPageOriginNeedsFilter(t *testing.T) {
+	repo := &originRepoFake{}
+	s := customerExportService(repo, &customerCountFake{})
+	_, err := s.CreateScheduledTask(exportCtx(), dto.CreateScheduledTaskRequest{
+		EntityType: types.ScheduledTaskEntityTypeInvoice, Interval: types.ScheduledTaskIntervalManual, Enabled: true,
+		Origin: types.ExportOriginCustomersPage,
+	})
+	require.True(t, ierr.IsValidation(err), "got %v", err)
+	require.Contains(t, errText(err), "Exports created from the customers page need a customer_filter")
+	require.Nil(t, repo.created)
+}
+
 func TestCreate_ReportCustomerFilterNeedsCustomerDimension(t *testing.T) {
 	tests := []struct {
 		key string

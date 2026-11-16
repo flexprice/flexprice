@@ -149,6 +149,10 @@ func (r *CreateScheduledTaskRequest) validateOriginAndRun() error {
 		if err := cf.Validate(); err != nil {
 			return err
 		}
+	} else if r.Origin == types.ExportOriginCustomersPage {
+		return ierr.NewError("customer_filter required").
+			WithHint("Exports created from the customers page need a customer_filter").
+			Mark(ierr.ErrValidation)
 	}
 	if r.RunNow && r.Interval != types.ScheduledTaskIntervalManual {
 		return ierr.NewError("run_now requires a manual export").
