@@ -1,6 +1,7 @@
 package selfbilling
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -10,6 +11,34 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSelfBillingSummary_PlanJSON(t *testing.T) {
+	for _, name := range []string{"subscribed_terms", "default_offer", "no_plan"} {
+		t.Run(name, func(t *testing.T) {
+			fc := newFakeClient()
+			s, d := newTestService(fc)
+			seedTenant(t, d, "t1", types.TenantInternalStatusActive)
+			remote := &remoteSummary{}
+			if name != "no_plan" {
+				remote.plan = &dto.SelfBillingPlanResponse{ID: "plan_1", Name: "Self Serve"}
+			}
+			if name == "subscribed_terms" {
+				remote.subscription = &remoteSubscription{id: "sub1", status: types.SubscriptionStatusActive}
+			}
+			fc.summaries["us:t1"] = remote
+			got, err := s.Summary(tenantCtx("t1"), "t1")
+			require.NoError(t, err)
+			body, err := json.Marshal(got)
+			require.NoError(t, err)
+			var fields map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(body, &fields))
+			require.Contains(t, fields, "plan")
+			want, err := json.Marshal(remote.plan)
+			require.NoError(t, err)
+			assert.JSONEq(t, string(want), string(fields["plan"]))
+		})
+	}
+}
 
 func TestSummary_MapsSubscriptionAndInvoices(t *testing.T) {
 	fc := newFakeClient()
