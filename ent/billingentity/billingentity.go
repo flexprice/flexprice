@@ -38,6 +38,8 @@ const (
 	FieldBillingDetails = "billing_details"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldSettings holds the string denoting the settings field in the database.
+	FieldSettings = "settings"
 	// Table holds the table name of the billingentity in the database.
 	Table = "billing_entities"
 )
@@ -57,6 +59,7 @@ var Columns = []string{
 	FieldInvoiceNumberPrefix,
 	FieldBillingDetails,
 	FieldMetadata,
+	FieldSettings,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

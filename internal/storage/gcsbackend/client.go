@@ -180,6 +180,12 @@ func (c *client) UploadStream(ctx context.Context, req *fpstorage.StreamUploadRe
 
 func (c *client) Download(ctx context.Context, key string) ([]byte, error) {
 	r, err := c.gcs.Bucket(c.cfg.Bucket).Object(key).NewReader(ctx)
+	if errors.Is(err, storage.ErrObjectNotExist) {
+		return nil, ierr.WithError(err).
+			WithHint("object not found in GCS").
+			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, key).
+			Mark(ierr.ErrNotFound)
+	}
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("failed to download object from GCS").
@@ -259,6 +265,10 @@ func contentTypeFor(format fpstorage.UploadFormat, compressed bool) string {
 		return "application/pdf"
 	case fpstorage.UploadFormatParquet:
 		return "application/vnd.apache.parquet"
+	case fpstorage.UploadFormatPNG:
+		return "image/png"
+	case fpstorage.UploadFormatJPEG:
+		return "image/jpeg"
 	default:
 		return "application/octet-stream"
 	}

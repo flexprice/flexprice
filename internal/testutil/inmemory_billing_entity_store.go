@@ -94,6 +94,15 @@ func (s *InMemoryBillingEntityStore) Update(ctx context.Context, e *billingentit
 }
 
 // checkUnique mirrors the database's partial unique indexes on default and prefix.
+func (s *InMemoryBillingEntityStore) UpdateSettings(ctx context.Context, id string, settings *types.SettingsOverride) error {
+	e, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	e.Settings = settings
+	return s.InMemoryStore.Update(ctx, e.ID, copyBillingEntity(e))
+}
+
 func (s *InMemoryBillingEntityStore) checkUnique(ctx context.Context, e *billingentity.BillingEntity) error {
 	items, err := s.List(ctx, types.NewNoLimitBillingEntityFilter())
 	if err != nil {

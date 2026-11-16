@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/rest/middleware"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -82,6 +83,88 @@ func (h *EnvironmentHandler) UpdateEnvironment(c *gin.Context) {
 	}
 
 	resp, err := h.service.UpdateEnvironment(c.Request.Context(), id, req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Get an environment's logo and icon
+// @ID getEnvironmentBranding
+// @Description Get the environment's logo and icon URLs; a URL is omitted when that asset is not uploaded.
+// @Tags Environments
+// @x-scope "read"
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Environment ID"
+// @Success 200 {object} dto.BrandingResponse
+// @Failure 403 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /environments/{id}/branding [get]
+func (h *EnvironmentHandler) GetBranding(c *gin.Context) {
+	resp, err := h.service.GetBranding(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Upload an environment logo or icon
+// @ID uploadEnvironmentBrandingAsset
+// @Description Upload the environment's logo or icon as a PNG or JPEG of at most 512 KB. An icon must be square and at least 128 x 128 px; a logo at least 128 px on each side. Replaces the current asset.
+// @Tags Environments
+// @x-scope "write"
+// @Accept multipart/form-data
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Environment ID"
+// @Param asset path string true "Asset" Enums(logo, icon)
+// @Param file formData file true "PNG or JPEG image"
+// @Success 200 {object} dto.BrandingResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 403 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /environments/{id}/branding/{asset} [put]
+func (h *EnvironmentHandler) UploadBrandingAsset(c *gin.Context) {
+	data, err := readUploadedFile(c, "file", middleware.MaxBrandingUploadBodyBytes)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	req := dto.UploadBrandingAssetRequest{Asset: types.BrandingAsset(c.Param("asset")), Data: data}
+
+	resp, err := h.service.UploadBrandingAsset(c.Request.Context(), c.Param("id"), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Remove an environment logo or icon
+// @ID removeEnvironmentBrandingAsset
+// @Description Remove the environment's logo or icon. Image URLs handed out earlier keep working.
+// @Tags Environments
+// @x-scope "delete"
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Environment ID"
+// @Param asset path string true "Asset" Enums(logo, icon)
+// @Success 200 {object} dto.BrandingResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 403 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /environments/{id}/branding/{asset} [delete]
+func (h *EnvironmentHandler) RemoveBrandingAsset(c *gin.Context) {
+	resp, err := h.service.RemoveBrandingAsset(c.Request.Context(), c.Param("id"), types.BrandingAsset(c.Param("asset")))
 	if err != nil {
 		c.Error(err)
 		return

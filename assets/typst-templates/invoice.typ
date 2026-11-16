@@ -8,11 +8,31 @@
   if v == none { () } else { v }
 }
 
+// Logo fits 1.4cm tall, narrowed for very wide logos so it never passes 6cm.
+#let brand-logo(path) = context {
+  let size = measure(image(path))
+  if size.width / size.height * 1.4cm > 6cm {
+    image(path, width: 6cm)
+  } else {
+    image(path, height: 1.4cm)
+  }
+}
+
+#let brand-icon-and-name(path, name) = grid(
+  columns: (auto, auto),
+  gutter: 0.6em,
+  align: horizon,
+  image(path, height: 1.1cm),
+  text(weight: "bold", size: 1.3em)[#name],
+)
+
 #show: template.default-invoice.with(
   currency: invoice-data.at("currency", default: "$"),
   precision: invoice-data.at("precision", default: 2),
   banner-image: if "banner_image" in invoice-data {
-    image(invoice-data.banner_image, width: 30%)
+    brand-logo(invoice-data.banner_image)
+  } else if "biller_icon" in invoice-data {
+    brand-icon-and-name(invoice-data.biller_icon, invoice-data.at("biller", default: (:)).at("name", default: ""))
   },
   invoice-status: invoice-data.at("invoice_status", default: "DRAFT"),
   invoice-number: invoice-data.at("invoice_number", default: ""),

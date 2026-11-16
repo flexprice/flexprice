@@ -16,4 +16,6 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.BillingEntityFilter) (int, error)
 	ListByIDs(ctx context.Context, ids []string) ([]*BillingEntity, error)
 	Update(ctx context.Context, entity *BillingEntity) error
+	// UpdateSettings writes only the settings of an entity in ctx's environment; nil clears them.
+	UpdateSettings(ctx context.Context, id string, settings *types.SettingsOverride) error
 }

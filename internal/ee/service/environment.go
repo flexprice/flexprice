@@ -8,8 +8,11 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/environment"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 )
 
 type EnvironmentService interface {
@@ -17,6 +20,12 @@ type EnvironmentService interface {
 	GetEnvironment(ctx context.Context, id string) (*dto.EnvironmentResponse, error)
 	GetEnvironments(ctx context.Context, filter types.Filter) (*dto.ListEnvironmentsResponse, error)
 	UpdateEnvironment(ctx context.Context, id string, req dto.UpdateEnvironmentRequest) (*dto.EnvironmentResponse, error)
+	// GetBranding returns the environment's logo and icon URLs.
+	GetBranding(ctx context.Context, id string) (*dto.BrandingResponse, error)
+	// UploadBrandingAsset stores the environment's logo or icon.
+	UploadBrandingAsset(ctx context.Context, id string, req dto.UploadBrandingAssetRequest) (*dto.BrandingResponse, error)
+	// RemoveBrandingAsset clears the environment's logo or icon; the stored image stays.
+	RemoveBrandingAsset(ctx context.Context, id string, asset types.BrandingAsset) (*dto.BrandingResponse, error)
 	// CheckCloneAllowed rejects cloning from or into an environment with billing entities.
 	CheckCloneAllowed(ctx context.Context, environmentIDs ...string) error
 }
@@ -184,22 +193,9 @@ func (s *environmentService) UpdateEnvironment(ctx context.Context, id string, r
 		return nil, err
 	}
 
-	env, err := s.repo.Get(ctx, id)
+	env, err := s.accessibleEnvironment(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-
-	// Authorise the environment named in the path, not the one the caller
-	// happens to have selected: the two differ whenever the request omits
-	// X-Environment-ID, and only this check covers the target being written.
-	userID := types.GetUserID(ctx)
-	tenantID := types.GetTenantID(ctx)
-	if userID != "" && tenantID != "" {
-		if !s.envAccessService.HasEnvironmentAccess(ctx, userID, tenantID, id) {
-			return nil, ierr.NewErrorf("access denied to environment %s", id).
-				WithHint("You don't have access to this environment").
-				Mark(ierr.ErrPermissionDenied)
-		}
 	}
 
 	if req.Name != "" {
@@ -211,11 +207,126 @@ func (s *environmentService) UpdateEnvironment(ctx context.Context, id string, r
 			Mark(ierr.ErrValidation)
 	}
 	env.UpdatedAt = clock.Now()
-	env.UpdatedBy = userID
+	env.UpdatedBy = types.GetUserID(ctx)
 
 	if err := s.repo.Update(ctx, env); err != nil {
 		return nil, err
 	}
 
 	return dto.NewEnvironmentResponse(env), nil
+}
+
+// accessibleEnvironment loads the environment named in the path and checks the caller may access it.
+// It authorises the path's environment, not the caller's selected one: the two differ whenever
+// the request omits X-Environment-ID.
+func (s *environmentService) accessibleEnvironment(ctx context.Context, id string) (*environment.Environment, error) {
+	env, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	userID := types.GetUserID(ctx)
+	tenantID := types.GetTenantID(ctx)
+	if userID != "" && tenantID != "" {
+		if !s.envAccessService.HasEnvironmentAccess(ctx, userID, tenantID, id) {
+			return nil, ierr.NewErrorf("access denied to environment %s", id).
+				WithHint("You don't have access to this environment").
+				Mark(ierr.ErrPermissionDenied)
+		}
+	}
+	return env, nil
+}
+
+func (s *environmentService) GetBranding(ctx context.Context, id string) (*dto.BrandingResponse, error) {
+	env, err := s.accessibleEnvironment(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.brandingResponse(ctx, env.ID)
+}
+
+func (s *environmentService) UploadBrandingAsset(ctx context.Context, id string, req dto.UploadBrandingAssetRequest) (*dto.BrandingResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	env, err := s.accessibleEnvironment(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	img, err := processBrandingImage(req.Data, req.Asset)
+	if err != nil {
+		return nil, err
+	}
+	key, err := NewPublicAssetService(s.ServiceParams).StoreImage(ctx, env.ID, img)
+	if err != nil {
+		return nil, err
+	}
+	return s.saveBrandingKey(ctx, env, req.Asset, &key)
+}
+
+func (s *environmentService) RemoveBrandingAsset(ctx context.Context, id string, asset types.BrandingAsset) (*dto.BrandingResponse, error) {
+	if err := asset.Validate(); err != nil {
+		return nil, err
+	}
+	env, err := s.accessibleEnvironment(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.saveBrandingKey(ctx, env, asset, nil)
+}
+
+// saveBrandingKey sets one image key in the environment's branding_config. The lock and the uncached
+// read inside the transaction keep a concurrent write of the other asset from being lost.
+func (s *environmentService) saveBrandingKey(ctx context.Context, env *environment.Environment, asset types.BrandingAsset, key *string) (*dto.BrandingResponse, error) {
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: "branding_config:" + env.TenantID + ":" + env.ID}); err != nil {
+			return err
+		}
+		stored, err := s.SettingsRepo.GetByKeyUncached(txCtx, env.ID, types.SettingKeyBrandingConfig)
+		if err != nil && !ierr.IsNotFound(err) {
+			return err
+		}
+		cfg := types.BrandingConfig{}
+		if stored != nil {
+			if cfg, err = utils.ToStruct[types.BrandingConfig](stored.Value); err != nil {
+				return err
+			}
+		}
+		if asset == types.BrandingAssetLogo {
+			cfg.LogoKey = key
+		} else {
+			cfg.IconKey = key
+		}
+		value, err := utils.ToMap(cfg)
+		if err != nil {
+			return err
+		}
+		if stored == nil {
+			return s.SettingsRepo.Create(txCtx, &settings.Setting{
+				ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+				EnvironmentID: env.ID,
+				Key:           types.SettingKeyBrandingConfig,
+				Value:         value,
+				BaseModel:     types.GetDefaultBaseModel(txCtx),
+			})
+		}
+		stored.Value = value
+		return s.SettingsRepo.Update(txCtx, stored)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.brandingResponse(ctx, env.ID)
+}
+
+func (s *environmentService) brandingResponse(ctx context.Context, environmentID string) (*dto.BrandingResponse, error) {
+	cfg, err := environmentBranding(ctx, s.SettingsRepo, environmentID)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.BrandingResponse{
+		LogoURL: publicAssetURL(s.Config, cfg.LogoKey),
+		IconURL: publicAssetURL(s.Config, cfg.IconKey),
+	}, nil
 }

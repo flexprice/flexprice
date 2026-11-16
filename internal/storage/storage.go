@@ -23,6 +23,8 @@ const (
 	UploadFormatJSON    = storagetypes.UploadFormatJSON
 	UploadFormatPDF     = storagetypes.UploadFormatPDF
 	UploadFormatParquet = storagetypes.UploadFormatParquet
+	UploadFormatPNG     = storagetypes.UploadFormatPNG
+	UploadFormatJPEG    = storagetypes.UploadFormatJPEG
 )
 
 // UploadRequest describes an object to store. Key is the full object key

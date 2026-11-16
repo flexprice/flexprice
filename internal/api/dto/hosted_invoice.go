@@ -21,6 +21,8 @@ type HostedInvoiceResponse struct {
 type HostedInvoiceTenant struct {
 	Name           string                      `json:"name"`
 	BillingDetails tenant.TenantBillingDetails `json:"billing_details"`
+	LogoURL        string                      `json:"logo_url,omitempty"`
+	IconURL        string                      `json:"icon_url,omitempty"`
 }
 
 // NewHostedInvoice copies an invoice for the public hosted link without free-form metadata,

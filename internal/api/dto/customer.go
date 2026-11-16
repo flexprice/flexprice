@@ -183,6 +183,9 @@ func (r *CreateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
+	if err := rejectBillingEntityOnlySettings(r.Settings); err != nil {
+		return err
+	}
 
 	// Validate timezone is a valid IANA timezone name
 	if r.Timezone != "" && r.Timezone != types.DefaultTimezone {
@@ -241,6 +244,16 @@ func NormalizeBillingCurrency(code *string) *string {
 	return &trimmed
 }
 
+// rejectBillingEntityOnlySettings refuses overrides that only a billing entity may hold.
+func rejectBillingEntityOnlySettings(s *types.SettingsOverride) error {
+	if s == nil || s.BrandingConfig == nil {
+		return nil
+	}
+	return ierr.NewError("branding_config can only be set on a billing entity").
+		WithHint("branding_config can only be set on a billing entity, through its branding endpoints").
+		Mark(ierr.ErrValidation)
+}
+
 // NormalizeSettingsOverride returns nil when no override is set, so cleared overrides store as NULL.
 func NormalizeSettingsOverride(s *types.SettingsOverride) *types.SettingsOverride {
 	if s == nil || s.SubscriptionConfig == nil || lo.IsEmpty(*s.SubscriptionConfig) {
@@ -283,6 +296,9 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 
 func (r *UpdateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	if err := rejectBillingEntityOnlySettings(r.Settings); err != nil {
 		return err
 	}
 

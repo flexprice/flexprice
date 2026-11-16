@@ -1899,6 +1899,198 @@ const docTemplate = `{
                 }
             }
         },
+        "/billing-entities/{id}/branding": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get the billing entity's own logo and icon URLs; a URL is omitted when that asset is not uploaded. An entity with either asset uses only its own; one with none uses its environment's.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "Get a billing entity's logo and icon",
+                "operationId": "getBillingEntityBranding",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Billing entity ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BrandingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Billing entities not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/billing-entities/{id}/branding/{asset}": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Upload the billing entity's logo or icon as a PNG or JPEG of at most 512 KB. An icon must be square and at least 128 x 128 px; a logo at least 128 px on each side. An entity with either asset uses only its own; one with none uses its environment's.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "Upload a billing entity logo or icon",
+                "operationId": "uploadBillingEntityBrandingAsset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Billing entity ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "logo",
+                            "icon"
+                        ],
+                        "type": "string",
+                        "description": "Asset",
+                        "name": "asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "PNG or JPEG image",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BrandingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid image or billing entities not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Remove the billing entity's logo or icon. Image URLs handed out earlier keep working.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "Remove a billing entity logo or icon",
+                "operationId": "removeBillingEntityBrandingAsset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Billing entity ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "logo",
+                            "icon"
+                        ],
+                        "type": "string",
+                        "description": "Asset",
+                        "name": "asset",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BrandingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid asset or billing entities not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "delete"
+            }
+        },
         "/checkout/sessions": {
             "post": {
                 "security": [
@@ -5470,6 +5662,210 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/environments/{id}/branding": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get the environment's logo and icon URLs; a URL is omitted when that asset is not uploaded.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Environments"
+                ],
+                "summary": "Get an environment's logo and icon",
+                "operationId": "getEnvironmentBranding",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BrandingResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/environments/{id}/branding/{asset}": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Upload the environment's logo or icon as a PNG or JPEG of at most 512 KB. An icon must be square and at least 128 x 128 px; a logo at least 128 px on each side. Replaces the current asset.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Environments"
+                ],
+                "summary": "Upload an environment logo or icon",
+                "operationId": "uploadEnvironmentBrandingAsset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "logo",
+                            "icon"
+                        ],
+                        "type": "string",
+                        "description": "Asset",
+                        "name": "asset",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "PNG or JPEG image",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BrandingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Remove the environment's logo or icon. Image URLs handed out earlier keep working.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Environments"
+                ],
+                "summary": "Remove an environment logo or icon",
+                "operationId": "removeEnvironmentBrandingAsset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "logo",
+                            "icon"
+                        ],
+                        "type": "string",
+                        "description": "Asset",
+                        "name": "asset",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BrandingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "delete"
             }
         },
         "/environments/{id}/clone": {
@@ -19534,6 +19930,17 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/billingterm.Instalment"
                     }
+                }
+            }
+        },
+        "BrandingResponse": {
+            "type": "object",
+            "properties": {
+                "icon_url": {
+                    "type": "string"
+                },
+                "logo_url": {
+                    "type": "string"
                 }
             }
         },
@@ -39734,6 +40141,17 @@ const docTemplate = `{
                 "BillingTermValueRemainder"
             ]
         },
+        "types.BrandingConfig": {
+            "type": "object",
+            "properties": {
+                "icon_key": {
+                    "type": "string"
+                },
+                "logo_key": {
+                    "type": "string"
+                }
+            }
+        },
         "types.CancellationFeeType": {
             "description": "fixed; percentage is reserved and rejected as not supported yet",
             "type": "string",
@@ -40108,6 +40526,14 @@ const docTemplate = `{
         "types.SettingsOverride": {
             "type": "object",
             "properties": {
+                "branding_config": {
+                    "description": "BrandingConfig is set only on billing entities, through their branding endpoints.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BrandingConfig"
+                        }
+                    ]
+                },
                 "subscription_config": {
                     "$ref": "#/definitions/types.SubscriptionConfigOverride"
                 }

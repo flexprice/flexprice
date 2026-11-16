@@ -7395,6 +7395,7 @@ type BillingEntityMutation struct {
 	invoice_number_prefix *string
 	billing_details       *types.BillingDetails
 	metadata              *map[string]string
+	settings              **types.SettingsOverride
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*BillingEntity, error)
@@ -7989,6 +7990,55 @@ func (m *BillingEntityMutation) ResetMetadata() {
 	delete(m.clearedFields, billingentity.FieldMetadata)
 }
 
+// SetSettings sets the "settings" field.
+func (m *BillingEntityMutation) SetSettings(to *types.SettingsOverride) {
+	m.settings = &to
+}
+
+// Settings returns the value of the "settings" field in the mutation.
+func (m *BillingEntityMutation) Settings() (r *types.SettingsOverride, exists bool) {
+	v := m.settings
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSettings returns the old "settings" field's value of the BillingEntity entity.
+// If the BillingEntity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BillingEntityMutation) OldSettings(ctx context.Context) (v *types.SettingsOverride, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSettings is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSettings requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSettings: %w", err)
+	}
+	return oldValue.Settings, nil
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (m *BillingEntityMutation) ClearSettings() {
+	m.settings = nil
+	m.clearedFields[billingentity.FieldSettings] = struct{}{}
+}
+
+// SettingsCleared returns if the "settings" field was cleared in this mutation.
+func (m *BillingEntityMutation) SettingsCleared() bool {
+	_, ok := m.clearedFields[billingentity.FieldSettings]
+	return ok
+}
+
+// ResetSettings resets all changes to the "settings" field.
+func (m *BillingEntityMutation) ResetSettings() {
+	m.settings = nil
+	delete(m.clearedFields, billingentity.FieldSettings)
+}
+
 // Where appends a list predicates to the BillingEntityMutation builder.
 func (m *BillingEntityMutation) Where(ps ...predicate.BillingEntity) {
 	m.predicates = append(m.predicates, ps...)
@@ -8023,7 +8073,7 @@ func (m *BillingEntityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BillingEntityMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.tenant_id != nil {
 		fields = append(fields, billingentity.FieldTenantID)
 	}
@@ -8060,6 +8110,9 @@ func (m *BillingEntityMutation) Fields() []string {
 	if m.metadata != nil {
 		fields = append(fields, billingentity.FieldMetadata)
 	}
+	if m.settings != nil {
+		fields = append(fields, billingentity.FieldSettings)
+	}
 	return fields
 }
 
@@ -8092,6 +8145,8 @@ func (m *BillingEntityMutation) Field(name string) (ent.Value, bool) {
 		return m.BillingDetails()
 	case billingentity.FieldMetadata:
 		return m.Metadata()
+	case billingentity.FieldSettings:
+		return m.Settings()
 	}
 	return nil, false
 }
@@ -8125,6 +8180,8 @@ func (m *BillingEntityMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldBillingDetails(ctx)
 	case billingentity.FieldMetadata:
 		return m.OldMetadata(ctx)
+	case billingentity.FieldSettings:
+		return m.OldSettings(ctx)
 	}
 	return nil, fmt.Errorf("unknown BillingEntity field %s", name)
 }
@@ -8218,6 +8275,13 @@ func (m *BillingEntityMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetMetadata(v)
 		return nil
+	case billingentity.FieldSettings:
+		v, ok := value.(*types.SettingsOverride)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSettings(v)
+		return nil
 	}
 	return fmt.Errorf("unknown BillingEntity field %s", name)
 }
@@ -8260,6 +8324,9 @@ func (m *BillingEntityMutation) ClearedFields() []string {
 	if m.FieldCleared(billingentity.FieldMetadata) {
 		fields = append(fields, billingentity.FieldMetadata)
 	}
+	if m.FieldCleared(billingentity.FieldSettings) {
+		fields = append(fields, billingentity.FieldSettings)
+	}
 	return fields
 }
 
@@ -8285,6 +8352,9 @@ func (m *BillingEntityMutation) ClearField(name string) error {
 		return nil
 	case billingentity.FieldMetadata:
 		m.ClearMetadata()
+		return nil
+	case billingentity.FieldSettings:
+		m.ClearSettings()
 		return nil
 	}
 	return fmt.Errorf("unknown BillingEntity nullable field %s", name)
@@ -8329,6 +8399,9 @@ func (m *BillingEntityMutation) ResetField(name string) error {
 		return nil
 	case billingentity.FieldMetadata:
 		m.ResetMetadata()
+		return nil
+	case billingentity.FieldSettings:
+		m.ResetSettings()
 		return nil
 	}
 	return fmt.Errorf("unknown BillingEntity field %s", name)

@@ -42,7 +42,9 @@ type BillingEntity struct {
 	// BillingDetails holds the value of the "billing_details" field.
 	BillingDetails types.BillingDetails `json:"billing_details,omitempty"`
 	// Metadata holds the value of the "metadata" field.
-	Metadata     map[string]string `json:"metadata,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+	// Settings holds the value of the "settings" field.
+	Settings     *types.SettingsOverride `json:"settings,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -51,7 +53,7 @@ func (*BillingEntity) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case billingentity.FieldBillingDetails, billingentity.FieldMetadata:
+		case billingentity.FieldBillingDetails, billingentity.FieldMetadata, billingentity.FieldSettings:
 			values[i] = new([]byte)
 		case billingentity.FieldIsDefault:
 			values[i] = new(sql.NullBool)
@@ -156,6 +158,14 @@ func (_m *BillingEntity) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
+		case billingentity.FieldSettings:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field settings", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Settings); err != nil {
+					return fmt.Errorf("unmarshal field settings: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -227,6 +237,9 @@ func (_m *BillingEntity) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
+	builder.WriteString(", ")
+	builder.WriteString("settings=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Settings))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -55,6 +55,8 @@ type CustomerPortalService interface {
 	// GetPortalConfig returns the customer portal configuration for the current tenant/environment
 	GetPortalConfig(ctx context.Context) (*dto.SettingResponse, error)
 	GetIntegrations(ctx context.Context) (*dto.IntegrationsResponse, error)
+	// GetBranding returns the portal customer's issuer name, logo and icon
+	GetBranding(ctx context.Context) (*dto.PortalBrandingResponse, error)
 
 	// Wallet
 	TopUpWallet(ctx context.Context, walletID string, req *dto.PortalTopUpWalletRequest) (*dto.PortalTopUpWalletResponse, error)

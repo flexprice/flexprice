@@ -42,6 +42,7 @@ const (
 	SettingKeyTaxConfig                   SettingKey = "tax_config"
 	SettingKeyRevenueRecognitionConfig    SettingKey = "revenue_recognition_config"
 	SettingKeyBillingEntityConfig         SettingKey = "billing_entity_config"
+	SettingKeyBrandingConfig              SettingKey = "branding_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -70,6 +71,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyTaxConfig,
 		SettingKeyRevenueRecognitionConfig,
 		SettingKeyBillingEntityConfig,
+		SettingKeyBrandingConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -96,9 +98,11 @@ type SubscriptionConfig struct {
 	AutoCancellationEnabled bool `json:"auto_cancellation_enabled"`
 }
 
-// SettingsOverride holds the environment settings a customer or subscription overrides; unset fields inherit.
+// SettingsOverride holds the environment settings a customer, subscription or billing entity overrides; unset fields inherit.
 type SettingsOverride struct {
 	SubscriptionConfig *SubscriptionConfigOverride `json:"subscription_config,omitempty"`
+	// BrandingConfig is set only on billing entities, through their branding endpoints.
+	BrandingConfig *BrandingConfig `json:"branding_config,omitempty"`
 }
 
 // SubscriptionConfigOverride is the overridable subset of SubscriptionConfig.
@@ -984,6 +988,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: map[string]interface{}{"mode": string(BillingEntityModeOff)},
 			Description:  "Billing entities mode of the environment; set only by enabling billing entities",
 		},
+		SettingKeyBrandingConfig: {
+			Key:          SettingKeyBrandingConfig,
+			DefaultValue: map[string]interface{}{},
+			Description:  "Logo and icon image keys of the environment; set only by the environment branding endpoints",
+		},
 	}, nil
 }
 
@@ -1170,6 +1179,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return cfg.Validate()
 
+	case SettingKeyBrandingConfig:
+		cfg, err := utils.ToStruct[BrandingConfig](value)
+		if err != nil {
+			return err
+		}
+		return cfg.Validate()
+
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -1326,4 +1342,14 @@ type BillingEntityConfig struct {
 
 func (c BillingEntityConfig) Validate() error {
 	return c.Mode.Normalize().Validate()
+}
+
+// BrandingConfig holds the environment's branding image keys; nil means not uploaded.
+type BrandingConfig struct {
+	LogoKey *string `json:"logo_key,omitempty"`
+	IconKey *string `json:"icon_key,omitempty"`
+}
+
+func (c BrandingConfig) Validate() error {
+	return nil
 }

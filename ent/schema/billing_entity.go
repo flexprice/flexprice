@@ -55,6 +55,10 @@ func (BillingEntity) Fields() []ent.Field {
 		field.JSON("metadata", map[string]string{}).
 			SchemaType(jsonb).
 			Optional(),
+
+		field.JSON("settings", &types.SettingsOverride{}).
+			SchemaType(jsonb).
+			Optional(),
 	}
 }
 

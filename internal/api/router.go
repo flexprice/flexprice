@@ -89,6 +89,7 @@ type Handlers struct {
 	CustomerPortal *v1.CustomerPortalHandler
 	SelfBilling    *v1.SelfBillingHandler
 	HostedInvoice  *v1.HostedInvoiceHandler
+	PublicAsset    *v1.PublicAssetHandler
 }
 
 func NewRouter(
@@ -178,6 +179,9 @@ func NewRouter(
 		v1Public.POST("/auth/password/check", handlers.Auth.CheckPasswordLink)
 		v1Public.POST("/auth/password", handlers.Auth.SetPassword)
 
+		// Public assets (logos, icons) load on customer-facing pages and emails without a session.
+		v1Public.GET("/assets/:tenant_id/:environment_id/:file", handlers.PublicAsset.Get)
+
 		// SAML single sign-on. Public because these run before a session exists:
 		// the login redirect starts the flow, and the ACS callback is posted by
 		// the identity provider, which carries no credentials.
@@ -218,6 +222,8 @@ func NewRouter(
 			user.POST("/chat/verify", handlers.User.CreateSupportChatToken)
 		}
 
+		brandingBodyLimit := middleware.BodyLimitMiddleware(middleware.MaxBrandingUploadBodyBytes)
+
 		environment := v1Private.Group("/environments")
 		{
 			environment.POST("", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.CreateEnvironment)
@@ -225,6 +231,9 @@ func NewRouter(
 			environment.GET("/:id", read(types.EntityEnvironment, types.ActionRead), handlers.Environment.GetEnvironment)
 			environment.PUT("/:id", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.UpdateEnvironment)
 			environment.POST("/:id/clone", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.CloneEnvironment)
+			environment.GET("/:id/branding", read(types.EntityEnvironment, types.ActionRead), handlers.Environment.GetBranding)
+			environment.PUT("/:id/branding/:asset", brandingBodyLimit, write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.UploadBrandingAsset)
+			environment.DELETE("/:id/branding/:asset", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.RemoveBrandingAsset)
 		}
 
 		// Events routes
@@ -646,6 +655,9 @@ func NewRouter(
 			billingEntities.POST("", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.CreateBillingEntity)
 			billingEntities.GET("/:id", observe(types.EntityBillingEntity), handlers.BillingEntity.GetBillingEntity)
 			billingEntities.PUT("/:id", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.UpdateBillingEntity)
+			billingEntities.GET("/:id/branding", observe(types.EntityBillingEntity), handlers.BillingEntity.GetBranding)
+			billingEntities.PUT("/:id/branding/:asset", brandingBodyLimit, write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.UploadBrandingAsset)
+			billingEntities.DELETE("/:id/branding/:asset", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.RemoveBrandingAsset)
 		}
 
 		taxAssociations := tax.Group("/associations")
@@ -874,6 +886,7 @@ func NewRouter(
 
 		// Payment integrations — server-derived from the tenant's connections
 		customerPortalAPI.GET("/integrations", handlers.CustomerPortal.GetIntegrations)
+		customerPortalAPI.GET("/branding", handlers.CustomerPortal.GetBranding)
 
 		// Analytics
 		customerPortalAPI.POST("/analytics/revenue", handlers.CustomerPortal.GetAnalytics)

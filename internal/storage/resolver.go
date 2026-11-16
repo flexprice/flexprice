@@ -22,7 +22,17 @@ const (
 	// upload_id and resolves it to a key under this bucket — the caller never
 	// supplies a URL.
 	PurposeImport Purpose = "import"
+	// PurposePublicAsset stores publicly served images (such as logos and icons) in the invoice bucket.
+	PurposePublicAsset Purpose = "public_asset"
 )
+
+// bucketPurpose maps a purpose to the purpose whose bucket it shares.
+func bucketPurpose(purpose Purpose) Purpose {
+	if purpose == PurposePublicAsset {
+		return PurposeInvoice
+	}
+	return purpose
+}
 
 // Resolver selects the Storage for an operation. Platform storage (invoices,
 // managed exports) follows the deployment's own cloud and is resolved once and
@@ -161,7 +171,7 @@ func (r *resolver) signerFor(purpose Purpose) (string, error) {
 		return "", nil
 	}
 
-	switch purpose {
+	switch bucketPurpose(purpose) {
 	case PurposeInvoice:
 		signer := r.cfg.GCS.SignerServiceAccountEmail
 		if signer == "" {
@@ -191,21 +201,26 @@ func (r *resolver) signerFor(purpose Purpose) (string, error) {
 // issuing live bucket calls. Import has its own enabled flag on
 // FlexpriceS3Imports, checked in platformBucket.
 func (r *resolver) checkProviderEnabled(purpose Purpose) error {
-	if purpose != PurposeInvoice {
+	if bucketPurpose(purpose) != PurposeInvoice {
 		return nil
+	}
+
+	usage := "generate invoice pdf url"
+	if purpose == PurposePublicAsset {
+		usage = "store and serve public assets"
 	}
 
 	switch r.provider {
 	case ProviderS3:
 		if !r.cfg.S3.Enabled {
 			return ierr.NewError("s3 is not enabled").
-				WithHint("s3 is not enabled but is required to generate invoice pdf url.").
+				WithHintf("s3 is not enabled but is required to %s.", usage).
 				Mark(ierr.ErrSystem)
 		}
 	case ProviderGCS:
 		if !r.cfg.GCS.Enabled {
 			return ierr.NewError("gcs is not enabled").
-				WithHint("gcs is not enabled but is required to generate invoice pdf url.").
+				WithHintf("gcs is not enabled but is required to %s.", usage).
 				Mark(ierr.ErrSystem)
 		}
 	}
@@ -223,7 +238,7 @@ func (r *resolver) platformBucket(purpose Purpose) (bucket, region string, err e
 
 	switch r.providerFor(purpose) {
 	case ProviderS3:
-		switch purpose {
+		switch bucketPurpose(purpose) {
 		case PurposeInvoice:
 			region = r.cfg.S3.Region
 		case PurposeImport:
@@ -248,7 +263,7 @@ func (r *resolver) BucketConfigFor(purpose Purpose) (config.BucketConfig, error)
 
 	switch r.providerFor(purpose) {
 	case ProviderGCS:
-		switch purpose {
+		switch bucketPurpose(purpose) {
 		case PurposeInvoice:
 			bc = r.cfg.GCS.InvoiceBucketConfig
 		case PurposeExport:
@@ -260,7 +275,7 @@ func (r *resolver) BucketConfigFor(purpose Purpose) (config.BucketConfig, error)
 			return config.BucketConfig{}, unsupportedPurpose(purpose)
 		}
 	case ProviderS3:
-		switch purpose {
+		switch bucketPurpose(purpose) {
 		case PurposeInvoice:
 			bc = r.cfg.S3.InvoiceBucketConfig
 		case PurposeExport:
@@ -293,7 +308,7 @@ func (r *resolver) BucketConfigFor(purpose Purpose) (config.BucketConfig, error)
 
 	if bc.Bucket == "" {
 		return config.BucketConfig{}, ierr.NewErrorf("no %s bucket configured for storage provider %s", purpose, r.providerFor(purpose)).
-			WithHint(missingBucketHint(r.providerFor(purpose), purpose)).
+			WithHint(missingBucketHint(r.providerFor(purpose), bucketPurpose(purpose))).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -302,7 +317,7 @@ func (r *resolver) BucketConfigFor(purpose Purpose) (config.BucketConfig, error)
 
 func unsupportedPurpose(purpose Purpose) error {
 	return ierr.NewErrorf("unsupported storage purpose: %s", purpose).
-		WithHint("purpose must be 'invoice' or 'export'").
+		WithHint("purpose must be 'invoice', 'export', 'import' or 'public_asset'").
 		Mark(ierr.ErrValidation)
 }
 

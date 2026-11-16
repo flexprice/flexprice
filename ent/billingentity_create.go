@@ -157,6 +157,12 @@ func (_c *BillingEntityCreate) SetMetadata(v map[string]string) *BillingEntityCr
 	return _c
 }
 
+// SetSettings sets the "settings" field.
+func (_c *BillingEntityCreate) SetSettings(v *types.SettingsOverride) *BillingEntityCreate {
+	_c.mutation.SetSettings(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *BillingEntityCreate) SetID(v string) *BillingEntityCreate {
 	_c.mutation.SetID(v)
@@ -347,6 +353,10 @@ func (_c *BillingEntityCreate) createSpec() (*BillingEntity, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(billingentity.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
+	}
+	if value, ok := _c.mutation.Settings(); ok {
+		_spec.SetField(billingentity.FieldSettings, field.TypeJSON, value)
+		_node.Settings = value
 	}
 	return _node, _spec
 }

@@ -16,6 +16,9 @@ import (
 // throttles (see EventProcessing.RateLimit and friends).
 const MaxEventIngestionBodyBytes = 32 << 20 // 32 MiB
 
+// MaxBrandingUploadBodyBytes caps a logo or icon upload request body.
+const MaxBrandingUploadBodyBytes = 1 << 20 // 1 MiB
+
 // BodyLimitMiddleware caps the request body at limitBytes.
 //
 // MaxBytesReader enforces the limit while the body is read rather than

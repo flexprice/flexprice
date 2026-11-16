@@ -203,7 +203,7 @@ func (r *billingEntityRepository) Update(ctx context.Context, e *domain.BillingE
 	})
 	defer FinishSpan(span)
 
-	updated, err := r.client.Writer(ctx).BillingEntity.UpdateOneID(e.ID).
+	update := r.client.Writer(ctx).BillingEntity.UpdateOneID(e.ID).
 		Where(
 			entbillingentity.TenantID(types.GetTenantID(ctx)),
 			entbillingentity.EnvironmentID(types.GetEnvironmentID(ctx)),
@@ -213,8 +213,8 @@ func (r *billingEntityRepository) Update(ctx context.Context, e *domain.BillingE
 		SetBillingDetails(e.BillingDetails).
 		SetMetadata(e.Metadata).
 		SetUpdatedAt(clock.Now()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx))
+	updated, err := update.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
@@ -260,6 +260,44 @@ func applyBillingEntityFilter(query *ent.BillingEntityQuery, f *types.BillingEnt
 	return query
 }
 
+// UpdateSettings writes only the settings column; nil clears it.
+func (r *billingEntityRepository) UpdateSettings(ctx context.Context, id string, settings *types.SettingsOverride) error {
+	span := StartRepositorySpan(ctx, "billing_entity", "update_settings", map[string]interface{}{
+		"billing_entity_id": id,
+	})
+	defer FinishSpan(span)
+
+	update := r.client.Writer(ctx).BillingEntity.Update().
+		Where(
+			entbillingentity.ID(id),
+			entbillingentity.TenantID(types.GetTenantID(ctx)),
+			entbillingentity.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entbillingentity.Status(string(types.StatusPublished)),
+		).
+		SetUpdatedAt(clock.Now()).
+		SetUpdatedBy(types.GetUserID(ctx))
+	if settings != nil {
+		update.SetSettings(settings)
+	} else {
+		update.ClearSettings()
+	}
+	count, err := update.Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to update billing entity settings").
+			Mark(ierr.ErrDatabase)
+	}
+	if count == 0 {
+		return ierr.NewErrorf("billing entity %s not found", id).
+			WithHintf("Billing entity %s was not found", id).
+			Mark(ierr.ErrNotFound)
+	}
+
+	SetSpanSuccess(span)
+	return nil
+}
+
 func billingEntityFromEnt(e *ent.BillingEntity) *domain.BillingEntity {
 	if e == nil {
 		return nil
@@ -272,6 +310,7 @@ func billingEntityFromEnt(e *ent.BillingEntity) *domain.BillingEntity {
 		BillingDetails:      e.BillingDetails,
 		Metadata:            e.Metadata,
 		EnvironmentID:       e.EnvironmentID,
+		Settings:            e.Settings,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

@@ -36,6 +36,12 @@ type BillingEntityService interface {
 	Get(ctx context.Context, id string) (*dto.BillingEntityResponse, error)
 	List(ctx context.Context, filter *types.BillingEntityFilter) (*dto.ListBillingEntitiesResponse, error)
 	Update(ctx context.Context, id string, req dto.UpdateBillingEntityRequest) (*dto.BillingEntityResponse, error)
+	// GetBranding returns the entity's own logo and icon URLs.
+	GetBranding(ctx context.Context, id string) (*dto.BrandingResponse, error)
+	// UploadBrandingAsset stores the entity's logo or icon.
+	UploadBrandingAsset(ctx context.Context, id string, req dto.UploadBrandingAssetRequest) (*dto.BrandingResponse, error)
+	// RemoveBrandingAsset clears the entity's logo or icon; the stored image stays.
+	RemoveBrandingAsset(ctx context.Context, id string, asset types.BrandingAsset) (*dto.BrandingResponse, error)
 }
 
 type billingEntityService struct {
@@ -464,6 +470,107 @@ func (s *billingEntityService) Update(ctx context.Context, id string, req dto.Up
 		return nil, err
 	}
 	return &dto.BillingEntityResponse{BillingEntity: updated}, nil
+}
+
+func (s *billingEntityService) GetBranding(ctx context.Context, id string) (*dto.BrandingResponse, error) {
+	if err := s.requireEnabled(ctx); err != nil {
+		return nil, err
+	}
+	entity, err := s.BillingEntityRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.brandingResponse(entity), nil
+}
+
+func (s *billingEntityService) UploadBrandingAsset(ctx context.Context, id string, req dto.UploadBrandingAssetRequest) (*dto.BrandingResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.requireEnabled(ctx); err != nil {
+		return nil, err
+	}
+	existing, err := s.BillingEntityRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	img, err := processBrandingImage(req.Data, req.Asset)
+	if err != nil {
+		return nil, err
+	}
+	key, err := NewPublicAssetService(s.ServiceParams).StoreImage(ctx, existing.EnvironmentID, img)
+	if err != nil {
+		return nil, err
+	}
+	return s.saveBrandingKey(ctx, existing, req.Asset, &key)
+}
+
+func (s *billingEntityService) RemoveBrandingAsset(ctx context.Context, id string, asset types.BrandingAsset) (*dto.BrandingResponse, error) {
+	if err := asset.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.requireEnabled(ctx); err != nil {
+		return nil, err
+	}
+	existing, err := s.BillingEntityRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.saveBrandingKey(ctx, existing, asset, nil)
+}
+
+// saveBrandingKey sets one image key in the entity's branding override. The lock and the read inside
+// the transaction keep a concurrent write of the other asset from being lost.
+func (s *billingEntityService) saveBrandingKey(ctx context.Context, existing *billingentity.BillingEntity, asset types.BrandingAsset, key *string) (*dto.BrandingResponse, error) {
+	var updated *billingentity.BillingEntity
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: "billing_entity_settings:" + existing.TenantID + ":" + existing.ID}); err != nil {
+			return err
+		}
+		current, err := s.BillingEntityRepo.Get(txCtx, existing.ID)
+		if err != nil {
+			return err
+		}
+
+		branding := entityBranding(current)
+		if asset == types.BrandingAssetLogo {
+			branding.LogoKey = key
+		} else {
+			branding.IconKey = key
+		}
+		settings := types.SettingsOverride{}
+		if current.Settings != nil {
+			settings = *current.Settings
+		}
+		settings.BrandingConfig = nil
+		if branding.LogoKey != nil || branding.IconKey != nil {
+			settings.BrandingConfig = &branding
+		}
+		var stored *types.SettingsOverride
+		if settings.BrandingConfig != nil || settings.SubscriptionConfig != nil {
+			stored = &settings
+		}
+
+		if err := s.BillingEntityRepo.UpdateSettings(txCtx, current.ID, stored); err != nil {
+			return err
+		}
+		current.Settings = stored
+		updated = current
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.brandingResponse(updated), nil
+}
+
+func (s *billingEntityService) brandingResponse(e *billingentity.BillingEntity) *dto.BrandingResponse {
+	own := entityBranding(e)
+	return &dto.BrandingResponse{
+		LogoURL: publicAssetURL(s.Config, own.LogoKey),
+		IconURL: publicAssetURL(s.Config, own.IconKey),
+	}
 }
 
 // providerConnected reports whether the billing entity in ctx has a connection for the provider; without one in ctx it is true.

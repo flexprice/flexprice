@@ -699,6 +699,16 @@ func MetadataNotNil() predicate.BillingEntity {
 	return predicate.BillingEntity(sql.FieldNotNull(FieldMetadata))
 }
 
+// SettingsIsNil applies the IsNil predicate on the "settings" field.
+func SettingsIsNil() predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldIsNull(FieldSettings))
+}
+
+// SettingsNotNil applies the NotNil predicate on the "settings" field.
+func SettingsNotNil() predicate.BillingEntity {
+	return predicate.BillingEntity(sql.FieldNotNull(FieldSettings))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.BillingEntity) predicate.BillingEntity {
 	return predicate.BillingEntity(sql.AndPredicates(predicates...))

@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/rest/middleware"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -117,6 +118,82 @@ func (h *BillingEntityHandler) UpdateBillingEntity(c *gin.Context) {
 		return
 	}
 	resp, err := h.service.Update(c.Request.Context(), c.Param("id"), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Get a billing entity's logo and icon
+// @ID getBillingEntityBranding
+// @Description Get the billing entity's own logo and icon URLs; a URL is omitted when that asset is not uploaded. An entity with either asset uses only its own; one with none uses its environment's.
+// @Tags Billing Entities
+// @x-scope "read"
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Billing entity ID"
+// @Success 200 {object} dto.BrandingResponse
+// @Failure 400 {object} ierr.ErrorResponse "Billing entities not enabled"
+// @Failure 404 {object} ierr.ErrorResponse "Not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /billing-entities/{id}/branding [get]
+func (h *BillingEntityHandler) GetBranding(c *gin.Context) {
+	resp, err := h.service.GetBranding(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Upload a billing entity logo or icon
+// @ID uploadBillingEntityBrandingAsset
+// @Description Upload the billing entity's logo or icon as a PNG or JPEG of at most 512 KB. An icon must be square and at least 128 x 128 px; a logo at least 128 px on each side. An entity with either asset uses only its own; one with none uses its environment's.
+// @Tags Billing Entities
+// @x-scope "write"
+// @Accept multipart/form-data
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Billing entity ID"
+// @Param asset path string true "Asset" Enums(logo, icon)
+// @Param file formData file true "PNG or JPEG image"
+// @Success 200 {object} dto.BrandingResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid image or billing entities not enabled"
+// @Failure 404 {object} ierr.ErrorResponse "Not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /billing-entities/{id}/branding/{asset} [put]
+func (h *BillingEntityHandler) UploadBrandingAsset(c *gin.Context) {
+	data, err := readUploadedFile(c, "file", middleware.MaxBrandingUploadBodyBytes)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	req := dto.UploadBrandingAssetRequest{Asset: types.BrandingAsset(c.Param("asset")), Data: data}
+	resp, err := h.service.UploadBrandingAsset(c.Request.Context(), c.Param("id"), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Remove a billing entity logo or icon
+// @ID removeBillingEntityBrandingAsset
+// @Description Remove the billing entity's logo or icon. Image URLs handed out earlier keep working.
+// @Tags Billing Entities
+// @x-scope "delete"
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Billing entity ID"
+// @Param asset path string true "Asset" Enums(logo, icon)
+// @Success 200 {object} dto.BrandingResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid asset or billing entities not enabled"
+// @Failure 404 {object} ierr.ErrorResponse "Not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /billing-entities/{id}/branding/{asset} [delete]
+func (h *BillingEntityHandler) RemoveBrandingAsset(c *gin.Context) {
+	resp, err := h.service.RemoveBrandingAsset(c.Request.Context(), c.Param("id"), types.BrandingAsset(c.Param("asset")))
 	if err != nil {
 		c.Error(err)
 		return

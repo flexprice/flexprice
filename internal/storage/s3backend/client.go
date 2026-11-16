@@ -286,6 +286,14 @@ func (c *client) Download(ctx context.Context, key string) ([]byte, error) {
 		Key:    aws.String(key),
 	})
 	if err != nil {
+		var nsk *types.NoSuchKey
+		var nf *types.NotFound
+		if errors.As(err, &nsk) || errors.As(err, &nf) {
+			return nil, ierr.WithError(err).
+				WithHint("object not found in S3").
+				WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, key).
+				Mark(ierr.ErrNotFound)
+		}
 		return nil, ierr.WithError(err).
 			WithHint("failed to download object from S3").
 			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, key).
@@ -426,6 +434,10 @@ func contentTypeFor(format storagetypes.UploadFormat, compressed bool) string {
 		return "application/pdf"
 	case storagetypes.UploadFormatParquet:
 		return "application/vnd.apache.parquet"
+	case storagetypes.UploadFormatPNG:
+		return "image/png"
+	case storagetypes.UploadFormatJPEG:
+		return "image/jpeg"
 	default:
 		return "application/octet-stream"
 	}

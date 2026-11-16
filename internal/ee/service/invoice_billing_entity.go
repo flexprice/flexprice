@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -65,4 +66,23 @@ func billingEntityAsTenant(t *tenant.Tenant, billingEntity *types.InvoiceBilling
 	biller.Name = billingEntity.Name
 	biller.BillingDetails = billingentity.ToTenantBillingDetails(billingEntity.BillingDetails)
 	return biller
+}
+
+func (s *invoiceService) GetInvoiceIssuerBranding(ctx context.Context, inv *invoice.Invoice) (*IssuerBranding, error) {
+	ctx = types.SetEnvironmentID(ctx, inv.EnvironmentID)
+
+	issuer, err := s.GetInvoiceBillingEntity(ctx, inv)
+	if err != nil {
+		return nil, err
+	}
+	if issuer == nil {
+		return tenantIssuerBranding(ctx, s.ServiceParams, inv.EnvironmentID)
+	}
+
+	// An entity no longer published reads as none.
+	entity, err := s.BillingEntityRepo.Get(ctx, issuer.BillingEntityID)
+	if err != nil && !ierr.IsNotFound(err) {
+		return nil, err
+	}
+	return issuerBranding(ctx, s.ServiceParams, issuer.Name, entity, inv.EnvironmentID)
 }

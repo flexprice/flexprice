@@ -123,6 +123,18 @@ func (_u *BillingEntityUpdate) ClearMetadata() *BillingEntityUpdate {
 	return _u
 }
 
+// SetSettings sets the "settings" field.
+func (_u *BillingEntityUpdate) SetSettings(v *types.SettingsOverride) *BillingEntityUpdate {
+	_u.mutation.SetSettings(v)
+	return _u
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (_u *BillingEntityUpdate) ClearSettings() *BillingEntityUpdate {
+	_u.mutation.ClearSettings()
+	return _u
+}
+
 // Mutation returns the BillingEntityMutation object of the builder.
 func (_u *BillingEntityUpdate) Mutation() *BillingEntityMutation {
 	return _u.mutation
@@ -223,6 +235,12 @@ func (_u *BillingEntityUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(billingentity.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Settings(); ok {
+		_spec.SetField(billingentity.FieldSettings, field.TypeJSON, value)
+	}
+	if _u.mutation.SettingsCleared() {
+		_spec.ClearField(billingentity.FieldSettings, field.TypeJSON)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -335,6 +353,18 @@ func (_u *BillingEntityUpdateOne) SetMetadata(v map[string]string) *BillingEntit
 // ClearMetadata clears the value of the "metadata" field.
 func (_u *BillingEntityUpdateOne) ClearMetadata() *BillingEntityUpdateOne {
 	_u.mutation.ClearMetadata()
+	return _u
+}
+
+// SetSettings sets the "settings" field.
+func (_u *BillingEntityUpdateOne) SetSettings(v *types.SettingsOverride) *BillingEntityUpdateOne {
+	_u.mutation.SetSettings(v)
+	return _u
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (_u *BillingEntityUpdateOne) ClearSettings() *BillingEntityUpdateOne {
+	_u.mutation.ClearSettings()
 	return _u
 }
 
@@ -468,6 +498,12 @@ func (_u *BillingEntityUpdateOne) sqlSave(ctx context.Context) (_node *BillingEn
 	}
 	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(billingentity.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Settings(); ok {
+		_spec.SetField(billingentity.FieldSettings, field.TypeJSON, value)
+	}
+	if _u.mutation.SettingsCleared() {
+		_spec.ClearField(billingentity.FieldSettings, field.TypeJSON)
 	}
 	_node = &BillingEntity{config: _u.config}
 	_spec.Assign = _node.assignValues

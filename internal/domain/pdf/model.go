@@ -7,11 +7,21 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 )
 
+// Image is an encoded image and its file extension.
+type Image struct {
+	Data []byte
+	Ext  string
+}
+
 // InvoiceData represents the data model for invoice PDF generation
 type InvoiceData struct {
-	Currency                   string     `json:"currency"`
-	Precision                  int32      `json:"precision"`
-	BannerImage                string     `json:"banner_image,omitempty"`
+	Currency    string `json:"currency"`
+	Precision   int32  `json:"precision"`
+	BannerImage string `json:"banner_image,omitempty"`
+	BillerIcon  string `json:"biller_icon,omitempty"`
+	// Logo and Icon are the issuer's branding images; the renderer writes them to files for the template.
+	Logo                       *Image     `json:"-"`
+	Icon                       *Image     `json:"-"`
 	ID                         string     `json:"id"`
 	InvoiceStatus              string     `json:"invoice_status"`
 	InvoiceNumber              string     `json:"invoice_number"`

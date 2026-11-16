@@ -105,15 +105,20 @@ func requireSuperAdminToReadSAMLConfig(ctx context.Context, key types.SettingKey
 	return nil
 }
 
-// rejectAPIReadOnlySetting refuses any settings API write or delete of a key only Flexprice changes.
+// rejectAPIReadOnlySetting refuses any settings API write or delete of a key that only its own flow changes.
 // To protect some fields of a key the API may still write, use apiImmutableSettingFields.
 func rejectAPIReadOnlySetting(key types.SettingKey) error {
-	if key != types.SettingKeyBillingEntityConfig {
-		return nil
+	switch key {
+	case types.SettingKeyBillingEntityConfig:
+		return ierr.NewError("billing_entity_config cannot be changed through the settings API").
+			WithHint("The billing entities mode changes only by enabling billing entities").
+			Mark(ierr.ErrValidation)
+	case types.SettingKeyBrandingConfig:
+		return ierr.NewError("branding_config cannot be changed through the settings API").
+			WithHint("Upload or remove the logo and icon through the environment branding endpoints").
+			Mark(ierr.ErrValidation)
 	}
-	return ierr.NewError("billing_entity_config cannot be changed through the settings API").
-		WithHint("The billing entities mode changes only by enabling billing entities").
-		Mark(ierr.ErrValidation)
+	return nil
 }
 
 // apiImmutableSettingFields lists the fields of a setting that the settings API
@@ -410,6 +415,8 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.RevenueAnalyticsConfig](s, ctx, key)
 	case types.SettingKeyBillingEntityConfig:
 		return getSettingByKey[types.BillingEntityConfig](s, ctx, key)
+	case types.SettingKeyBrandingConfig:
+		return getSettingByKey[types.BrandingConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
