@@ -246,3 +246,18 @@ func TestBillingConfig_HasSecureZapierWebhookURL(t *testing.T) {
 		})
 	}
 }
+
+func TestSkipDistinctMeterPrefilterFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.False(t, cfg.MeterUsage.SkipDistinctMeterPrefilter)
+
+	t.Setenv("FLEXPRICE_METER_USAGE_SKIP_DISTINCT_METER_PREFILTER", "true")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.True(t, cfg.MeterUsage.SkipDistinctMeterPrefilter)
+}

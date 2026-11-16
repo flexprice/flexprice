@@ -551,6 +551,9 @@ meter_usage_tracking:
   rejected_event_webhook_enabled: false
   rejected_event_webhook_window: "10m"
 
+meter_usage:
+  skip_distinct_meter_prefilter: false
+
 meter_usage_tracking_lazy:
   enabled: true
   topic: "events_lazy"
