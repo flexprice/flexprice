@@ -18,8 +18,8 @@ The send path must stay generic: custom domains (Phase 2), receipts, payment fai
 | Area | Decision |
 |---|---|
 | Provider | Resend, behind a `Provider` interface |
-| Account | Existing Resend account (us-east-1), shared by all regions, India included |
-| Domain | New `mail.flexprice.io`; root `flexprice.io` stays with Supabase Auth |
+| Account | Prod: existing Resend team (us-east-1), shared by US, Canada and India. Staging: its own Resend team |
+| Domain | New `mail.flexprice.io` (prod) and `staging.mail.flexprice.io` (staging); root `flexprice.io` stays with Supabase Auth |
 | From | `"<Tenant name>" <invoices+<tenant_id>@mail.flexprice.io>`; `<tenant_id>` is the lowercased `tenant.id` (unique, immutable, no migration, same in sandbox and production) |
 | Reply-To | Tenant `billing_details.help_email`, else `billing_details.email`; one is required |
 | To / CC | `customer.email`; manual send can override |
@@ -56,7 +56,7 @@ flowchart TD
 ```
 
 - Auto-send writes a `skipped` row instead of sending when the customer has no email or the invoice total is 0. Manual send still works for zero-amount invoices.
-- Every region's webhook receives every event (one account); each region drops events whose `tags.region` is not its own.
+- Every prod region's webhook receives every prod event (one prod team); each region drops events whose `tags.region` is not its own. Staging receives only its own events.
 
 ## Data model
 
@@ -73,7 +73,7 @@ New table `email_log` (`BaseMixin` + `EnvironmentMixin`):
 | `to_addresses`, `cc_addresses` | jsonb | Arrays |
 | `subject` | text | As sent |
 | `provider` | varchar(20) | `resend` |
-| `provider_message_id` | varchar(100), null | Set when the API accepts |
+| `provider_message_id` | varchar(100), null | Set when the API accepts, or by the first delivery event |
 | `delivery_status` | varchar(30) | See Delivery tracking |
 | `status_reason` | text, null | Provider detail |
 | `sent_at`, `delivered_at` | timestamptz, null | |
@@ -82,7 +82,7 @@ New table `email_log` (`BaseMixin` + `EnvironmentMixin`):
 `delivery_status` is separate from `BaseMixin.status`, which stays `published` / `archived`. `created_by` / `created_at` record who requested the send and when, from the request context: the user who clicked Send, or for auto sends the actor that finalized the invoice.
 
 Indexes:
-- Unique `(provider, provider_message_id)` where not null: webhook lookup.
+- Unique `(provider, provider_message_id)` where not null: one email per provider message.
 - `(tenant_id, environment_id, entity_type, entity_id, created_at DESC)`: invoice Emails panel.
 - Partial unique `(tenant_id, environment_id, entity_id, template_key)` where `trigger = 'auto'`: one auto email per invoice.
 - `(tenant_id, environment_id, delivery_status, created_at)`: search.
@@ -127,9 +127,11 @@ stateDiagram-v2
 
 Handler rules:
 - Verify the Svix signature; reject events older than 5 minutes.
-- Drop (200) when `tags.region` ≠ `email.region_tag`, before any lookup or log. Drop unknown `provider_message_id` too.
+- Drop (200) when `tags.region` ≠ `email.region_tag`, before any lookup or log. Drop events missing the tenant, environment or email id tag.
+- Tags are routing hints, not proof of who sent the email: find the email by its `email_log_id` tag within the tagged tenant and environment, so a wrong tag finds nothing. Drop unknown emails.
+- If the email already has a `provider_message_id`, drop events for a different one. If not, the event fills it in, so an event that arrives before the dispatcher stores the id still applies.
 - Forward only: `queued < sent < delivery_delayed < delivered < complained`; `bounced`, `failed`, `suppressed` are final. Replays change nothing, so no dedupe column.
-- Never log webhook bodies (customer emails; staging sees prod events).
+- Never log webhook bodies (customer emails; prod regions see each other's events).
 - No event 72 h after `sent`: UI shows "No delivery confirmation". No polling.
 
 ## APIs and UI
@@ -167,9 +169,9 @@ A one-column copy of the hosted invoice page, with its labels and states.
 
 ## One-time setup
 
-1. Add `mail.flexprice.io` in Resend (us-east-1); add its DKIM, return-path MX, SPF and DMARC (`p=none`) records in Cloudflare via Terraform; verify.
+1. Add `mail.flexprice.io` to the prod Resend team and `staging.mail.flexprice.io` to the staging team (us-east-1); add their DKIM, return-path MX, SPF and DMARC (`p=none`) records in Cloudflare via Terraform; verify.
 2. Turn off open and click tracking.
-3. One `sending_access` API key restricted to `mail.flexprice.io`, shared by all deployments.
+3. One `sending_access` API key per team, restricted to its domain; the prod key is shared by US, Canada and India.
 4. One webhook per deployment → `/v1/webhooks/email/resend`, own signing secret each.
 5. Config per deployment:
 
@@ -180,7 +182,7 @@ email:
   resend:
     api_key: ${FLEXPRICE_EMAIL_RESEND_API_KEY}
     webhook_secret: ${FLEXPRICE_EMAIL_RESEND_WEBHOOK_SECRET}
-  sender_domain: mail.flexprice.io
+  sender_domain: mail.flexprice.io  # staging.mail.flexprice.io on staging
   sender_local_part: invoices
   region_tag: us            # us | ca | in | staging
 ```
@@ -197,7 +199,7 @@ type Provider interface {
 }
 ```
 
-- Resend adapter sends with `Idempotency-Key = email_log.id`, tags (tenant, environment, email id, region) and our own `Message-ID: <email_log.id@mail.flexprice.io>`.
+- Resend adapter sends with `Idempotency-Key = email_log.id`, tags (tenant, environment, email id, region) and our own `Message-ID: <email_log.id@<sender_domain>>`.
 - Service `internal/ee/service/email_notification.go`: `SendInvoiceEmail` loads invoice, customer, tenant and setting and inserts `queued`; nothing else happens in the request.
 - `EmailDispatchWorkflow` (Temporal schedule, every minute, one run at a time) lists environments with queued emails, takes one email from each in turn (manual sends first, then oldest) and sends up to 400 emails per run, one at a time. A composer per `template_key` builds each email's content.
 - An email that cannot be sent now stays `queued` and nothing is written: a 429 ends the run, 20 provider errors in a row end it, a PDF that cannot be produced is retried. A 409 for a send Resend is still processing stays `queued`; any other 409 (Resend already has the idempotency key) counts as sent; any other 4xx marks `failed`, and so does an email still queued after 24 hours. An email queued before the environment turned emails off is marked `skipped`.
@@ -209,7 +211,7 @@ type Provider interface {
 | Layer | Needs | Covers |
 |---|---|---|
 | Unit, fake `Provider` | Nothing | Setting validation, From/Reply-To, skip rules, status rank |
-| Webhook handler | Signed fixtures in `testdata/` | Signature, region drop, forward-only, unknown id |
+| Webhook handler | Signed fixtures in `testdata/` | Signature, region drop, forward-only, unknown email, other message id |
 | Docker, `provider: local` | Nothing | Finalize / Send → dispatcher → `email_log` |
 | Real Resend | API key + tunnel | Real send, PDF, delivery events via `delivered@`, `bounced@`, `complained@`, `suppressed@resend.dev` |
 
