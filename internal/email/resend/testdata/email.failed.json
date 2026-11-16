@@ -8,6 +8,6 @@
     "to": ["someone@example.com"],
     "subject": "Invoice INV-0001 from Acme",
     "failed": {"reason": "reached_daily_quota"},
-    "tags": [{"name": "region", "value": "us"}, {"name": "email_log_id", "value": "email_01jx"}]
+    "tags": [{"name": "region", "value": "us"}, {"name": "email_log_id", "value": "email_01jx"}, {"name": "tenant_id", "value": "tenant_01jx"}, {"name": "environment_id", "value": "env_01jx"}]
   }
 }

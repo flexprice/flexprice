@@ -6,11 +6,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/email/emailtypes"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // backend writes each email to disk instead of sending it, for local runs.
@@ -41,11 +43,16 @@ func (b *backend) Send(ctx context.Context, msg emailtypes.OutboundEmail) (email
 	return emailtypes.SendResult{ProviderMessageID: "local_" + msg.IdempotencyKey}, nil
 }
 
+// localEvent is a simulated delivery event.
 type localEvent struct {
 	ProviderMessageID string                    `json:"provider_message_id"`
+	TenantID          string                    `json:"tenant_id"`
+	EnvironmentID     string                    `json:"environment_id"`
+	EmailLogID        string                    `json:"email_log_id"`
 	Region            string                    `json:"region"`
 	Status            types.EmailDeliveryStatus `json:"status"`
 	Reason            string                    `json:"reason"`
+	OccurredAt        *time.Time                `json:"occurred_at"`
 }
 
 // ParseEvents accepts one unsigned event, so local runs can simulate delivery outcomes.
@@ -59,8 +66,12 @@ func (b *backend) ParseEvents(_ context.Context, body []byte, _ http.Header) ([]
 	}
 	return []emailtypes.DeliveryEvent{{
 		ProviderMessageID: e.ProviderMessageID,
+		TenantID:          e.TenantID,
+		EnvironmentID:     e.EnvironmentID,
+		EmailLogID:        e.EmailLogID,
 		Region:            e.Region,
 		Status:            e.Status,
 		Reason:            e.Reason,
+		OccurredAt:        lo.FromPtr(e.OccurredAt),
 	}}, nil
 }

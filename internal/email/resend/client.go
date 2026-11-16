@@ -151,6 +151,9 @@ func (b *backend) ParseEvents(_ context.Context, body []byte, hdr http.Header) (
 	}
 	return []emailtypes.DeliveryEvent{{
 		ProviderMessageID: p.Data.EmailID,
+		TenantID:          p.Data.Tags[emailtypes.TagTenantID],
+		EnvironmentID:     p.Data.Tags[emailtypes.TagEnvironmentID],
+		EmailLogID:        p.Data.Tags[emailtypes.TagEmailLogID],
 		Region:            p.Data.Tags[emailtypes.TagRegion],
 		Status:            status,
 		Reason:            reason,
