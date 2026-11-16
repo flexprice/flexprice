@@ -150,9 +150,6 @@ func (s *usageAnalyticsService) GetBreakdown(ctx context.Context, req *dto.Usage
 	}
 	resp.UnappliedCouponIDs = lo.Keys(in.unappliedCoupons)
 	sort.Strings(resp.UnappliedCouponIDs)
-	if len(in.excluded) > 0 {
-		resp.OmittedMeters = in.excluded
-	}
 	return resp, nil
 }
 

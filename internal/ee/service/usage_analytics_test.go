@@ -287,14 +287,12 @@ func (s *UsageAnalyticsSuite) TestGroupByDefaultsToMeter() {
 	s.Equal(map[string]string{"m_tokens": "13000.00", "m_calls": "0.04", "m_scaled": "20.00"}, amountByGroup(resp, "meter_id"))
 }
 
-func (s *UsageAnalyticsSuite) TestUnsupportedMeterIsOmittedAndListed() {
+func (s *UsageAnalyticsSuite) TestUnsupportedMeterIsLeftOut() {
 	all, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.MeterIDs = nil })
 	s.NoError(err)
-	s.Equal(map[string]string{"m_tiered": excludedNotFlatPrice}, all.OmittedMeters)
 
 	supported, err := s.query(nil)
 	s.NoError(err)
-	s.Nil(supported.OmittedMeters)
 	// 13,000 tokens + 4 calls × 0.01 + 40 scaled × 0.5; the tiered $ never appears.
 	for _, resp := range []*dto.UsageAnalyticsResponse{all, supported} {
 		s.Equal("13020.04", resp.Totals.Amount)
@@ -320,7 +318,6 @@ func (s *UsageAnalyticsSuite) TestEntitlementsAndGrantsExcludeTheirMeters() {
 
 	all, err := s.query(nil)
 	s.NoError(err)
-	s.Equal(map[string]string{"m_calls": excludedEntitlement, "m_scaled": excludedEntitlement}, all.OmittedMeters)
 	s.Equal("13000.00", all.Totals.Amount)
 
 	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.MeterIDs = []string{"m_tokens"} })
@@ -353,7 +350,6 @@ func (s *UsageAnalyticsSuite) TestSubscriptionGrantExcludesTheLinesBillingLowere
 	// Billing spreads the $10 over the tokens and scaled lines; calls stay at their flat price.
 	all, err := s.query(nil)
 	s.NoError(err)
-	s.Equal(map[string]string{"m_scaled": excludedEntitlement, "m_tokens": excludedEntitlement}, all.OmittedMeters)
 	s.Equal("0.04", all.Totals.Amount)
 
 	resp, err := s.query(func(r *dto.UsageAnalyticsRequest) { r.MeterIDs = []string{"m_calls"} })
