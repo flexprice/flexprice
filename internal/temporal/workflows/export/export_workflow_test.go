@@ -309,9 +309,11 @@ func TestExecuteExportWorkflow_CompleteTaskFailureMarksRunFailed(t *testing.T) {
 	require.Len(t, r.statuses, 2)
 	require.Equal(t, types.TaskStatusProcessing, r.statuses[0].Status)
 	require.Equal(t, types.TaskStatusFailed, r.statuses[1].Status)
-	require.Equal(t, "The file was written but the run could not be completed.", r.statuses[1].Error)
+	require.Equal(t, "The file was delivered but the run status could not be saved", r.statuses[1].Error)
 	require.Len(t, r.recorded, 1)
-	require.Equal(t, types.ExportDeliveryStatusFailed, r.recorded[0].Deliveries[0].Status)
+	file := r.recorded[0].Deliveries[0]
+	require.Equal(t, types.ExportDeliveryStatusDelivered, file.Status)
+	require.Empty(t, file.Detail)
 }
 
 func TestExecuteExportWorkflow_CompleteTaskFailureButRowCompletedDeliversCompleted(t *testing.T) {

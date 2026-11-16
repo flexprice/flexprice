@@ -13,7 +13,7 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-const completeFailedMessage = "The file was written but the run could not be completed."
+const completeFailedMessage = "The file was delivered but the run status could not be saved"
 
 var temporalScheduledStartTimeKey = temporal.NewSearchAttributeKeyTime("TemporalScheduledStartTime")
 
@@ -273,7 +273,8 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 				var appErr *temporal.ApplicationError
 				alreadyCompleted := errors.As(statusErr, &appErr) && appErr.Type() == export.TaskAlreadyCompletedErrType
 				if !alreadyCompleted {
-					deliverRun(ctx, &taskDetails, taskID, types.TaskStatusFailed, 0, runErr)
+					// File landed; only the status write failed.
+					deliverRun(ctx, &taskDetails, taskID, types.TaskStatusFailed, 0, nil)
 					return &ExecuteExportWorkflowOutput{TaskID: taskID}, runErr
 				}
 				logger.Info("Task already completed; delivering as completed", "task_id", taskID)
