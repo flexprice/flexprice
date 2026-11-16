@@ -679,8 +679,8 @@ checkout:
 hosted_invoice:
   base_url: ""
 
-# Public API origin for branding image URLs, e.g. https://us.api.flexprice.io. Empty returns no image URLs.
-branding:
+# Public API origin for public asset URLs (logos, icons), e.g. https://us.api.flexprice.io. Empty returns no asset URLs.
+assets:
   base_url: ""
 
 # Off rejects enabling billing entities for any environment (FLEXPRICE_BILLING_ENTITIES_ENABLED).

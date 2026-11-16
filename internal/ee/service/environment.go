@@ -248,7 +248,11 @@ func (s *environmentService) UploadBrandingAsset(ctx context.Context, id string,
 		return nil, err
 	}
 
-	key, err := NewBrandingService(s.ServiceParams).StoreImage(ctx, env.ID, req.Asset, req.Data)
+	img, err := processBrandingImage(req.Data, req.Asset)
+	if err != nil {
+		return nil, err
+	}
+	key, err := NewPublicAssetService(s.ServiceParams).StoreImage(ctx, env.ID, img)
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +320,7 @@ func (s *environmentService) environmentResponse(ctx context.Context, env *envir
 		return nil, err
 	}
 	resp := dto.NewEnvironmentResponse(env)
-	resp.LogoURL = brandingImageURL(s.Config, cfg.LogoKey)
-	resp.IconURL = brandingImageURL(s.Config, cfg.IconKey)
+	resp.LogoURL = publicAssetURL(s.Config, cfg.LogoKey)
+	resp.IconURL = publicAssetURL(s.Config, cfg.IconKey)
 	return resp, nil
 }

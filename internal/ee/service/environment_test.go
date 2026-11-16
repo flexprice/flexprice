@@ -253,11 +253,11 @@ func (s *EnvironmentServiceSuite) TestProcessBrandingImage() {
 		b, err := processBrandingImage(data, types.BrandingAssetLogo)
 		s.Require().NoError(err)
 		s.Equal(a.Hash(), b.Hash())
-		s.Equal("tenant_1/env_1/"+a.Hash()+".png", brandingImageKey("tenant_1", "env_1", a))
+		s.Equal("tenant_1/env_1/"+a.Hash()+".png", publicAssetKey("tenant_1", "env_1", a))
 	})
 }
 
-func (s *EnvironmentServiceSuite) TestParseBrandingImageKey() {
+func (s *EnvironmentServiceSuite) TestParsePublicAssetPath() {
 	hash := strings.Repeat("ab", 32)
 	tests := []struct {
 		name, tenant, env, file string
@@ -275,7 +275,7 @@ func (s *EnvironmentServiceSuite) TestParseBrandingImageKey() {
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			key, ext, gotHash, ok := parseBrandingImageKey(tt.tenant, tt.env, tt.file)
+			key, ext, gotHash, ok := parsePublicAssetPath(tt.tenant, tt.env, tt.file)
 			s.Equal(tt.ok, ok)
 			if tt.ok {
 				s.Equal(tt.tenant+"/"+tt.env+"/"+tt.file, key)

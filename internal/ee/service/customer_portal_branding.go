@@ -27,8 +27,8 @@ func (s *customerPortalService) GetBranding(ctx context.Context) (*dto.PortalBra
 
 	return &dto.PortalBrandingResponse{
 		Name:    brand.Name(),
-		LogoURL: brandingImageURL(s.Config, brand.LogoKey()),
-		IconURL: brandingImageURL(s.Config, brand.IconKey()),
+		LogoURL: publicAssetURL(s.Config, brand.LogoKey()),
+		IconURL: publicAssetURL(s.Config, brand.IconKey()),
 	}, nil
 }
 

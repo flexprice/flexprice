@@ -89,7 +89,7 @@ type Handlers struct {
 	CustomerPortal *v1.CustomerPortalHandler
 	SelfBilling    *v1.SelfBillingHandler
 	HostedInvoice  *v1.HostedInvoiceHandler
-	Branding       *v1.BrandingHandler
+	PublicAsset    *v1.PublicAssetHandler
 }
 
 func NewRouter(
@@ -179,8 +179,8 @@ func NewRouter(
 		v1Public.POST("/auth/password/check", handlers.Auth.CheckPasswordLink)
 		v1Public.POST("/auth/password", handlers.Auth.SetPassword)
 
-		// Branding images load on customer-facing pages and emails without a session.
-		v1Public.GET("/branding/images/:tenant_id/:environment_id/:file", handlers.Branding.GetImage)
+		// Public assets (logos, icons) load on customer-facing pages and emails without a session.
+		v1Public.GET("/assets/:tenant_id/:environment_id/:file", handlers.PublicAsset.Get)
 
 		// SAML single sign-on. Public because these run before a session exists:
 		// the login redirect starts the flow, and the ACS callback is posted by

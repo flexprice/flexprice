@@ -23,22 +23,6 @@ func (r *UploadBrandingAssetRequest) Validate() error {
 	return nil
 }
 
-// BrandingImageRequest addresses a public branding image by its path segments.
-type BrandingImageRequest struct {
-	TenantID      string
-	EnvironmentID string
-	File          string
-	IfNoneMatch   string
-}
-
-// BrandingImage is a stored branding image; NotModified means the caller's cached copy is current.
-type BrandingImage struct {
-	Data        []byte
-	ContentType string
-	ETag        string
-	NotModified bool
-}
-
 // PortalBrandingResponse is the issuer shown in the customer portal.
 type PortalBrandingResponse struct {
 	Name    string `json:"name"`

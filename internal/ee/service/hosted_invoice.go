@@ -125,8 +125,8 @@ func (s *hostedInvoiceService) GetInvoice(ctx context.Context) (*dto.HostedInvoi
 		Tenant: dto.HostedInvoiceTenant{
 			Name:           t.Name,
 			BillingDetails: t.BillingDetails,
-			LogoURL:        brandingImageURL(s.Config, brand.LogoKey()),
-			IconURL:        brandingImageURL(s.Config, brand.IconKey()),
+			LogoURL:        publicAssetURL(s.Config, brand.LogoKey()),
+			IconURL:        publicAssetURL(s.Config, brand.IconKey()),
 		},
 		Invoice: dto.NewHostedInvoice(inv),
 		Payments: lo.Map(payments.Items, func(p *dto.PaymentResponse, _ int) *dto.HostedInvoicePayment {

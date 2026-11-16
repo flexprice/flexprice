@@ -156,7 +156,7 @@ Variation: the invoice's PDF comes from a connected billing provider or an exter
 
 | Piece | What it gives us | Reuse as-is / extend / replace |
 |---|---|---|
-| Platform storage | Upload, download and existence checks on Flexprice-owned buckets, chosen per deployment; callers pick a bucket by purpose (invoice, export, import). Existence checks report not-found the same way on S3 and GCS; download reports every failure, not-found included, as a server error. No delete operation exists | Extend: a branding purpose that resolves to the invoice bucket under its own key prefix, so no new bucket or infra; image content types added to uploads; download reports not-found distinctly; the storage-off check extended to it |
+| Platform storage | Upload, download and existence checks on Flexprice-owned buckets, chosen per deployment; callers pick a bucket by purpose (invoice, export, import). Existence checks report not-found the same way on S3 and GCS; download reports every failure, not-found included, as a server error. No delete operation exists | Extend: a public asset purpose that resolves to the invoice bucket under its own key prefix, so no new bucket or infra; image content types added to uploads; download reports not-found distinctly; the storage-off check extended to it |
 | Security headers | `nosniff` on every API response | Reuse as-is |
 | Request body limit | Cuts a request body off while it is read | Reuse as-is, set to 1 MiB on the upload routes |
 | Environment API and its write permission | Environment read, update and clone; writes guarded by environment write permission; responses have their own shape, separate from the stored record | Extend: logo and icon URLs on read; upload and remove endpoints under the same permission |
@@ -189,7 +189,7 @@ flowchart LR
   subgraph api[Flexprice API]
     entityapi[Environment and billing entity API<br/>plus upload and remove]:::new
     lookup[Branding lookup<br/>issuer to name, logo, icon]:::new
-    image[Public image endpoint]:::new
+    image[Public asset endpoint]:::new
     hosted[Hosted invoice API]
     cportal[Customer portal API]
     pdf[Invoice PDF pipeline]:::new
@@ -272,12 +272,13 @@ No row, or a field left out, means not uploaded. The generic settings API refuse
 | billing_entities | icon_key | character varying | yes | null | Image key of the entity's icon; null means the entity has none. |
 
 - **Image key:** `<tenant id>/<environment id>/<sha256 of the stored bytes, hex>.<png|jpg>`, for both environment and billing entity assets. The extension sets the served `Content-Type`. Scoping by tenant and environment keeps each owner's images apart, so a later clean-up of a tenant or an environment touches no one else. The stored image can be larger than the upload after re-encoding; the 512 KB limit applies to the upload.
-- **Storage object:** the key under a `branding/` prefix in the invoice bucket, through a new branding storage purpose (section 7).
+- **Storage object:** the key under an `assets/` prefix in the invoice bucket, through a new public asset storage purpose (section 7).
+- **Public asset layer:** storing, serving and reading images by key is a generic layer (`PublicAssetService`) that any flow can use for images it serves publicly; each flow keeps its own upload rules (here: logo and icon dimensions and the 512 KB limit) and records the keys it uses. The key carries no flow name, so identical bytes in one environment are one object; objects are never deleted. Private files must not use this layer.
 - **Migration:** optional string fields on the billing entity ent schema, and its two nullable columns added in one versioned SQL migration; no backfill. Null is "not uploaded", which is a real state, not a default. The setting needs no migration.
 - **Writes:** the environment's setting is changed in a transaction that takes a lock on the environment's `branding_config`, reads the stored value bypassing the settings cache, sets one field and saves, so uploading the logo and the icon at the same time keeps both. A billing entity's key is written by an update of that one column, so it never overwrites the other key or the entity's other fields.
 - **Reads:** the branding lookup and environment responses read `branding_config` from the database, not the per-pod settings cache, so an upload shows on every pod at once.
 - **Environment clone:** does not copy the logo or icon; a cloned environment starts with none, as clone today copies only features and plans.
-- **Config:** `branding.base_url`, the deployment's public API origin (scheme and host, for example `https://us.api.flexprice.io`), named like the existing `hosted_invoice.base_url`, `checkout.base_url` and `auth.saml.base_url`. Image URLs are `<base_url>/v1/branding/images/<image key>`. When it is empty, URL fields are omitted and surfaces show their fallbacks, as an empty `hosted_invoice.base_url` already yields no hosted links.
+- **Config:** `assets.base_url`, the deployment's public API origin (scheme and host, for example `https://us.api.flexprice.io`), named like the existing `hosted_invoice.base_url`, `checkout.base_url` and `auth.saml.base_url`. Asset URLs are `<base_url>/v1/assets/<asset key>`. Clients only use URLs the API returns and never build them. When it is empty, URL fields are omitted and surfaces show their fallbacks, as an empty `hosted_invoice.base_url` already yields no hosted links.
 
 ### 9.2 API contracts
 
@@ -294,7 +295,7 @@ No row, or a field left out, means not uploaded. The generic settings API refuse
 | 400 | Entity route while billing entities are not enabled, with the same error other billing-entity calls return (FR-8). |
 | 403 | Missing write permission (NFR-5). |
 | 404 | Environment not in the caller's tenant, or billing entity not in the caller's tenant and environment (NFR-6). |
-| 500 | Platform storage switched off or without a bucket, with a message saying branding storage is not configured (the existing storage errors are worded for PDFs). |
+| 500 | Platform storage switched off or without a bucket, with a message saying public asset storage is not configured (the existing storage errors are worded for PDFs). |
 
 **Remove an asset**
 - `DELETE /v1/environments/{id}/branding/{asset}` and `DELETE /v1/billing-entities/{id}/branding/{asset}`.
@@ -308,13 +309,13 @@ No row, or a field left out, means not uploaded. The generic settings API refuse
 {
   "id": "be_01…",
   "name": "Acme India",
-  "logo_url": "https://us.api.flexprice.io/v1/branding/images/tenant_01…/env_01…/9f2c…e1.png",
-  "icon_url": "https://us.api.flexprice.io/v1/branding/images/tenant_01…/env_01…/41ab…7d.png"
+  "logo_url": "https://us.api.flexprice.io/v1/assets/tenant_01…/env_01…/9f2c…e1.png",
+  "icon_url": "https://us.api.flexprice.io/v1/assets/tenant_01…/env_01…/41ab…7d.png"
 }
 ```
 
 **Serve an image**
-- `GET /v1/branding/images/{tenant_id}/{environment_id}/{file}`, in the existing unauthenticated `/v1` route group, outside the hosted invoice token group (section 6). The global CORS and security headers it inherits do not block cross-origin `<img>` loads.
+- `GET /v1/assets/{tenant_id}/{environment_id}/{file}`, the public asset endpoint, in the existing unauthenticated `/v1` route group, outside the hosted invoice token group (section 6). The global CORS and security headers it inherits do not block cross-origin `<img>` loads.
 - `200`: image bytes, `Content-Type` from the key's extension, `Cache-Control: public, max-age=31536000, immutable`, `ETag` set to the quoted hash (NFR-4, NFR-8).
 - `304`: `If-None-Match` matches.
 - `404`: the path does not match `<tenant id>/<environment id>/<64 hex>.<png|jpg>`, or storage reports no such object (download extended to say so, section 7). The format check runs before storage (NFR-7).
@@ -327,7 +328,7 @@ No row, or a field left out, means not uploaded. The generic settings API refuse
 ```json
 {
   "name": "Acme India",
-  "logo_url": "https://us.api.flexprice.io/v1/branding/images/tenant_01…/env_01…/9f2c…e1.png"
+  "logo_url": "https://us.api.flexprice.io/v1/assets/tenant_01…/env_01…/9f2c…e1.png"
 }
 ```
 
@@ -434,5 +435,5 @@ Alt text on every logo and icon is the issuer's name (NFR-12). Only the billing 
 |---|---|---|
 | Add a server-side image cache or a CDN after launch? | Paras | Nothing in v1 |
 | Per-IP rate limiting for public endpoints? | Backend team | Nothing in v1 |
-| `branding.base_url` value for each region (US, CA, India, staging) and for self-hosted deployments. | Infra | Release |
+| `assets.base_url` value for each region (US, CA, India, staging) and for self-hosted deployments. | Infra | Release |
 | Which asset the invoice email header uses (logo, or icon + name). | Invoice email work | Email integration |

@@ -22,13 +22,13 @@ const (
 	// upload_id and resolves it to a key under this bucket — the caller never
 	// supplies a URL.
 	PurposeImport Purpose = "import"
-	// PurposeBranding stores tenant logos and icons in the invoice bucket.
-	PurposeBranding Purpose = "branding"
+	// PurposePublicAsset stores publicly served images (such as logos and icons) in the invoice bucket.
+	PurposePublicAsset Purpose = "public_asset"
 )
 
 // bucketPurpose maps a purpose to the purpose whose bucket it shares.
 func bucketPurpose(purpose Purpose) Purpose {
-	if purpose == PurposeBranding {
+	if purpose == PurposePublicAsset {
 		return PurposeInvoice
 	}
 	return purpose
@@ -206,8 +206,8 @@ func (r *resolver) checkProviderEnabled(purpose Purpose) error {
 	}
 
 	usage := "generate invoice pdf url"
-	if purpose == PurposeBranding {
-		usage = "store and serve branding images"
+	if purpose == PurposePublicAsset {
+		usage = "store and serve public assets"
 	}
 
 	switch r.provider {
@@ -317,7 +317,7 @@ func (r *resolver) BucketConfigFor(purpose Purpose) (config.BucketConfig, error)
 
 func unsupportedPurpose(purpose Purpose) error {
 	return ierr.NewErrorf("unsupported storage purpose: %s", purpose).
-		WithHint("purpose must be 'invoice', 'export', 'import' or 'branding'").
+		WithHint("purpose must be 'invoice', 'export', 'import' or 'public_asset'").
 		Mark(ierr.ErrValidation)
 }
 

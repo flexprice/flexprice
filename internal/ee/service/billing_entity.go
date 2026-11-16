@@ -482,7 +482,11 @@ func (s *billingEntityService) UploadBrandingAsset(ctx context.Context, id strin
 		return nil, err
 	}
 
-	key, err := NewBrandingService(s.ServiceParams).StoreImage(ctx, existing.EnvironmentID, req.Asset, req.Data)
+	img, err := processBrandingImage(req.Data, req.Asset)
+	if err != nil {
+		return nil, err
+	}
+	key, err := NewPublicAssetService(s.ServiceParams).StoreImage(ctx, existing.EnvironmentID, img)
 	if err != nil {
 		return nil, err
 	}
@@ -517,8 +521,8 @@ func (s *billingEntityService) saveBrandingKey(ctx context.Context, existing *bi
 func (s *billingEntityService) entityResponse(e *billingentity.BillingEntity) *dto.BillingEntityResponse {
 	return &dto.BillingEntityResponse{
 		BillingEntity: e,
-		LogoURL:       brandingImageURL(s.Config, e.LogoKey),
-		IconURL:       brandingImageURL(s.Config, e.IconKey),
+		LogoURL:       publicAssetURL(s.Config, e.LogoKey),
+		IconURL:       publicAssetURL(s.Config, e.IconKey),
 	}
 }
 

@@ -3955,7 +3955,7 @@ func (s *invoiceService) brandingImagesForPDF(ctx context.Context, inv *invoice.
 		return nil, nil
 	}
 
-	data, err := NewBrandingService(s.ServiceParams).ReadImage(ctx, *key)
+	data, err := NewPublicAssetService(s.ServiceParams).Read(ctx, *key)
 	if err != nil {
 		s.Logger.Error(ctx, "branding image read failed, rendering invoice without it", "error", err, "invoice_id", inv.ID, "key", *key)
 		return nil, nil
