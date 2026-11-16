@@ -19,16 +19,16 @@ type EmailLog struct {
 	Trigger           types.EmailTrigger        `json:"trigger"`
 	FromAddress       string                    `json:"from_address"`
 	ReplyTo           string                    `json:"reply_to"`
-	ToAddresses       []string                  `json:"to_addresses" activity:"drop"`
-	CCAddresses       []string                  `json:"cc_addresses" activity:"drop"`
+	ToAddresses       []string                  `json:"to_addresses"`
+	CCAddresses       []string                  `json:"cc_addresses"`
 	Subject           string                    `json:"subject"`
 	Provider          types.EmailProvider       `json:"provider"`
 	ProviderMessageID *string                   `json:"provider_message_id,omitempty"`
 	DeliveryStatus    types.EmailDeliveryStatus `json:"delivery_status"`
-	StatusReason      *string                   `json:"status_reason,omitempty" activity:"drop"`
+	StatusReason      *string                   `json:"status_reason,omitempty"`
 	SentAt            *time.Time                `json:"sent_at,omitempty"`
 	DeliveredAt       *time.Time                `json:"delivered_at,omitempty"`
-	Metadata          types.Metadata            `json:"metadata,omitempty" activity:"drop"`
+	Metadata          types.Metadata            `json:"metadata,omitempty"`
 	types.BaseModel
 }
 
