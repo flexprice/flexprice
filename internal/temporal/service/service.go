@@ -486,6 +486,8 @@ var exclusiveWorkflowIDKeys = map[types.TemporalWorkflowType]string{
 
 	types.TemporalProcessSubscriptionBillingWorkflow: "process_subscription_billing",
 	types.TemporalProcessInvoiceWorkflow:             "process_invoice",
+
+	types.TemporalRazorpayInvoiceSyncWorkflow: "razorpay_invoice_sync",
 }
 
 func (s *temporalService) generateWorkflowID(workflowType types.TemporalWorkflowType, params interface{}) string {
