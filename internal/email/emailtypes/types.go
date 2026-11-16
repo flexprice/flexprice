@@ -51,8 +51,13 @@ type SendResult struct {
 	ProviderMessageID string
 }
 
+// DeliveryEvent is one delivery outcome reported by a provider. TenantID, EnvironmentID, EmailLogID
+// and Region come from the tags the email was sent with.
 type DeliveryEvent struct {
 	ProviderMessageID string
+	TenantID          string
+	EnvironmentID     string
+	EmailLogID        string
 	Region            string
 	Status            types.EmailDeliveryStatus
 	Reason            string
