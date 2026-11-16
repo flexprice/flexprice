@@ -80,3 +80,10 @@ type PortalPaginatedRequest struct {
 	Page  int `form:"page" json:"page" example:"1"`
 	Limit int `form:"limit" json:"limit" example:"20"`
 }
+
+// PortalBrandingResponse is the issuer shown in the customer portal.
+type PortalBrandingResponse struct {
+	Name    string `json:"name"`
+	LogoURL string `json:"logo_url,omitempty"`
+	IconURL string `json:"icon_url,omitempty"`
+}

@@ -330,3 +330,47 @@ func (s *environmentService) brandingResponse(ctx context.Context, environmentID
 		IconURL: publicAssetURL(s.Config, cfg.IconKey),
 	}, nil
 }
+
+const (
+	brandingMaxUploadBytes = 512 * 1024
+	brandingMinSide        = 128
+)
+
+// processBrandingImage checks a logo or icon upload and re-encodes it.
+func processBrandingImage(data []byte, asset types.BrandingAsset) (*processedImage, error) {
+	return processImage(data, brandingMaxUploadBytes, func(width, height int) error {
+		return checkBrandingDimensions(asset, width, height)
+	})
+}
+
+func checkBrandingDimensions(asset types.BrandingAsset, width, height int) error {
+	if asset == types.BrandingAssetIcon {
+		if width != height {
+			return imageRejection("Icon must be square")
+		}
+		if width < brandingMinSide {
+			return imageRejection("Icon must be at least 128 x 128 px")
+		}
+		return nil
+	}
+	if width < brandingMinSide || height < brandingMinSide {
+		return imageRejection("Logo must be at least 128 px on each side")
+	}
+	return nil
+}
+
+// environmentBranding reads the environment's branding_config from the database; none set means no assets.
+func environmentBranding(ctx context.Context, repo settings.Repository, environmentID string) (*types.BrandingConfig, error) {
+	stored, err := repo.GetByKeyUncached(ctx, environmentID, types.SettingKeyBrandingConfig)
+	if ierr.IsNotFound(err) {
+		return &types.BrandingConfig{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := utils.ToStruct[types.BrandingConfig](stored.Value)
+	if err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}

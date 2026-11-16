@@ -86,3 +86,50 @@ func (s *invoiceService) GetInvoiceIssuerBranding(ctx context.Context, inv *invo
 	}
 	return issuerBranding(ctx, s.ServiceParams, issuer.Name, entity, inv.EnvironmentID)
 }
+
+// IssuerBranding is an issuer's name and branding image keys.
+type IssuerBranding struct {
+	name    string
+	logoKey *string
+	iconKey *string
+}
+
+func (b *IssuerBranding) Name() string {
+	if b == nil {
+		return ""
+	}
+	return b.name
+}
+
+func (b *IssuerBranding) LogoKey() *string {
+	if b == nil {
+		return nil
+	}
+	return b.logoKey
+}
+
+func (b *IssuerBranding) IconKey() *string {
+	if b == nil {
+		return nil
+	}
+	return b.iconKey
+}
+
+// tenantIssuerBranding is the tenant's name with its environment's pair.
+func tenantIssuerBranding(ctx context.Context, params ServiceParams, environmentID string) (*IssuerBranding, error) {
+	t, err := params.TenantRepo.GetByID(ctx, types.GetTenantID(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return issuerBranding(ctx, params, t.Name, nil, environmentID)
+}
+
+// issuerBranding is the issuer's name with the entity's own pair when it has any asset, else its environment's.
+func issuerBranding(ctx context.Context, params ServiceParams, name string, entity *billingentity.BillingEntity, environmentID string) (*IssuerBranding, error) {
+	cfg, err := environmentBranding(ctx, params.SettingsRepo, environmentID)
+	if err != nil {
+		return nil, err
+	}
+	logoKey, iconKey := selectBrandingKeys(entity, cfg)
+	return &IssuerBranding{name: name, logoKey: logoKey, iconKey: iconKey}, nil
+}

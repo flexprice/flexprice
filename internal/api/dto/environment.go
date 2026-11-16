@@ -99,3 +99,27 @@ func NewEnvironmentResponse(e *environment.Environment) *EnvironmentResponse {
 		UpdatedAt: e.UpdatedAt.Format(time.RFC3339),
 	}
 }
+
+// UploadBrandingAssetRequest is one logo or icon upload, read from the multipart field "file".
+type UploadBrandingAssetRequest struct {
+	Asset types.BrandingAsset
+	Data  []byte
+}
+
+func (r *UploadBrandingAssetRequest) Validate() error {
+	if err := r.Asset.Validate(); err != nil {
+		return err
+	}
+	if len(r.Data) == 0 {
+		return ierr.NewError("Upload the image in a form field named file").
+			WithHint("Upload the image in a form field named file").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// BrandingResponse is an environment's or billing entity's logo and icon URLs, omitted when not uploaded.
+type BrandingResponse struct {
+	LogoURL string `json:"logo_url,omitempty"`
+	IconURL string `json:"icon_url,omitempty"`
+}

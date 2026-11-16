@@ -645,3 +645,22 @@ func requireSameBillingEntity(ctx context.Context, params ServiceParams, custome
 	}
 	return nil
 }
+
+// selectBrandingKeys uses the entity's own pair when it has any asset, else the environment's.
+func selectBrandingKeys(entity *billingentity.BillingEntity, env *types.BrandingConfig) (logoKey, iconKey *string) {
+	if own := entityBranding(entity); own.LogoKey != nil || own.IconKey != nil {
+		return own.LogoKey, own.IconKey
+	}
+	if env == nil {
+		return nil, nil
+	}
+	return env.LogoKey, env.IconKey
+}
+
+// entityBranding is the entity's own branding override, empty when it has none.
+func entityBranding(entity *billingentity.BillingEntity) types.BrandingConfig {
+	if entity == nil || entity.Settings == nil || entity.Settings.BrandingConfig == nil {
+		return types.BrandingConfig{}
+	}
+	return *entity.Settings.BrandingConfig
+}
