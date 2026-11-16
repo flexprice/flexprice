@@ -1,12 +1,14 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestSAMLConfigValidate covers the boot-time gate. The alternative to failing
@@ -284,6 +286,13 @@ func TestDeduplicationTTLFromYAMLAndEnv(t *testing.T) {
 }
 
 func TestBulkBatchingFromYAMLAndEnv(t *testing.T) {
+	for _, name := range []string{
+		"FLEXPRICE_BULK_METER_USAGE_TRACKING_BATCH_DEDUP_LOCKS",
+		"FLEXPRICE_BULK_METER_USAGE_TRACKING_INSERT_CHUNK_SIZE",
+	} {
+		t.Setenv(name, "")
+		require.NoError(t, os.Unsetenv(name))
+	}
 	cfg, err := NewConfig()
 	if err != nil {
 		t.Fatalf("NewConfig() error: %v", err)
