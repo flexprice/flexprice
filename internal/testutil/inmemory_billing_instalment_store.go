@@ -58,6 +58,7 @@ func billingInstalmentMatches(in *billingterm.Instalment, f *billingterm.Instalm
 		len(f.Statuses) > 0 && !lo.Contains(f.Statuses, in.InstalmentStatus),
 		len(f.Deliveries) > 0 && !lo.Contains(f.Deliveries, in.Delivery),
 		f.BillOnOrBefore != nil && in.BillOn.After(*f.BillOnOrBefore),
+		f.BillOnIn != nil && (in.BillOn.Before(f.BillOnIn.Start) || !in.BillOn.Before(f.BillOnIn.End)),
 		len(f.InvoiceIDs) > 0 && (in.InvoiceID == nil || !lo.Contains(f.InvoiceIDs, *in.InvoiceID)),
 		len(f.IDs) > 0 && !lo.Contains(f.IDs, in.ID):
 		return false

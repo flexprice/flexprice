@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/group"
@@ -905,6 +906,51 @@ func (s *CommitmentServiceSuite) TestTerminate_FixedFeeObject() {
 	s.Require().Len(lines, 1)
 	s.requireLine(lines[0], types.CommitmentLineCancellationFee, "250.5", created.ID)
 	s.Equal(created.InvoiceLabel+" (cancellation fee)", lo.FromPtr(lines[0].DisplayName))
+
+	// The fee is an instalment of its own kind, claimed by the termination invoice, though the commitment has no terms.
+	fees := s.feesOf(created.ID)
+	s.Require().Len(fees, 1)
+	fee := fees[0]
+	s.Equal(fee.ID, lo.FromPtr(lines[0].BillingInstalmentID))
+	s.Nil(fee.BillingTermID)
+	s.Equal(types.InstalmentStatusInvoiced, fee.InstalmentStatus)
+	s.Equal(inv.ID, lo.FromPtr(fee.InvoiceID))
+	s.NotNil(fee.InvoicedAt)
+	s.True(fee.Amount.Equal(dec("250.5")), "fee %s", fee.Amount)
+	s.True(fee.BillOn.Equal(at), "bill on %s", fee.BillOn)
+	s.True(fee.ServicePeriodStart.Equal(at) && fee.ServicePeriodEnd.Equal(lo.FromPtr(lines[0].PeriodEnd)))
+}
+
+// feesOf returns the commitment's cancellation fee instalments.
+func (s *CommitmentServiceSuite) feesOf(commitmentID string) []*billingterm.Instalment {
+	listed, err := s.GetStores().BillingInstalmentRepo.List(s.GetContext(), &billingterm.InstalmentFilter{
+		OwnerType: types.BillingTermOwnerCommitment,
+		OwnerIDs:  []string{commitmentID},
+	})
+	s.Require().NoError(err)
+	return lo.Filter(listed, func(inst *billingterm.Instalment, _ int) bool {
+		return inst.Kind == types.InstalmentKindCancellationFee
+	})
+}
+
+// Voiding the termination invoice waives the fee: its instalment is cancelled, not put back on schedule.
+func (s *CommitmentServiceSuite) TestTerminate_VoidingTheInvoiceCancelsTheFee() {
+	ctx := s.GetContext()
+	created := s.createChargeable(true)
+	at := created.StartDate.AddDate(0, 3, 0)
+	resp, err := s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt:     &at,
+		CancellationFee: fixedFee("40"),
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.TerminationInvoiceID)
+
+	_, err = NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite)).VoidInvoice(ctx, *resp.TerminationInvoiceID, dto.InvoiceVoidRequest{})
+	s.Require().NoError(err)
+
+	fees := s.feesOf(created.ID)
+	s.Require().Len(fees, 1)
+	s.Equal(types.InstalmentStatusCancelled, fees[0].InstalmentStatus)
 }
 
 func (s *CommitmentServiceSuite) TestTerminate_WithoutFeeCreatesNoInvoice() {
