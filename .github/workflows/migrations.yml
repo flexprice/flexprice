@@ -105,14 +105,15 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'develop' }}
         run: ./scripts/migrations/order-check.sh migrations/versioned/postgres "origin/$BASE_REF"
 
-      # Disabled 2026-08-25. migrations/versioned/clickhouse/ is the old
-      # incremental set and does not describe the real cluster: it creates 3 of
-      # the 8 tables the app queries, and disagrees with
-      # migrations/baseline/clickhouse_baseline_20260819.sql. Gating on it would
-      # assert something we know to be wrong. Re-enable once the ClickHouse set
-      # is re-derived from a live cluster.
-      # - name: ClickHouse — one statement per file
-      #   run: make migrate-check-clickhouse
+      # Sets re-derived from live clusters.
+      - name: ClickHouse — one statement per file
+        run: make migrate-check-clickhouse
+
+      - name: ClickHouse — replicated and single-node sets stay separate
+        run: make migrate-check-clickhouse-replication
+
+      - name: ClickHouse — the three sets define the same schema
+        run: make migrate-check-clickhouse-parity
 
       - name: Replay from zero — does a fresh install work?
         # Exactly what a new client gets: the timeline from empty, baseline included.
