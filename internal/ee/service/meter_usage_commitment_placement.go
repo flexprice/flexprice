@@ -61,10 +61,8 @@ type commitmentLine struct {
 	lineID       string
 }
 
-// windowPlacer lays what a billing period's window commitments bill each line on the display windows the waterfall
-// drew it in: utilized where a commitment took the line's usage, overage and plain usage where usage was left, and the
-// true-up where capacity went unused, so an idle window carries its own unused capacity. Period commitments pool their
-// capacity over the whole period, so their lines are not placed.
+// windowPlacer lays what a period's window commitments bill each line on the display windows the waterfall drew it in:
+// utilized where usage was taken, overage where it was left, true-up where capacity went unused.
 type windowPlacer struct {
 	currency string
 	grain    types.WindowSize                     // the request's window size; empty places nothing
@@ -254,10 +252,8 @@ func (p *windowPlacer) beyond(lineID string) types.CommitmentInfo {
 	return p.placed[lineID][last]
 }
 
-// placeGroupShares lays each group's share of a billing period on the windows where the line's charges fell. A group's
-// utilized and overage follow its own usage in each window; its true-up follows the line's unused capacity, shared by
-// the group's part of the period. weights are the groups' period weights, which split shares, so a group's total does
-// not depend on the display window.
+// placeGroupShares lays each group's period share, split by weights, on the windows the line's charges fell in:
+// utilized and overage by the group's own usage there, true-up by the line's unused capacity.
 func placeGroupShares(
 	groups []*events.DetailedUsageAnalytic,
 	shares []types.CommitmentInfo,
