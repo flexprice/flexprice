@@ -45,7 +45,7 @@ func (r *lineItemRepositoryWithTerminationHook) GetForUpdate(ctx context.Context
 		if err != nil {
 			return nil, err
 		}
-		item.EndDate = r.endDate
+		item = subscription.NewSubscriptionLineItemBuilder(item).WithEndDate(r.endDate).Build()
 		if err := r.LineItemRepository.Update(ctx, item); err != nil {
 			return nil, err
 		}
