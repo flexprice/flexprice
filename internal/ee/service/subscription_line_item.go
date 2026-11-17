@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -802,8 +803,8 @@ func (s *subscriptionService) linkReplacementVersion(
 	if assoc.StartDate == nil || !assoc.StartDate.After(replacement.StartDate) {
 		return nil
 	}
-	assoc.StartDate = lo.ToPtr(replacement.StartDate)
-	return s.AddonAssociationRepo.Update(ctx, assoc)
+	moved := addonassociation.NewAddonAssociationBuilder(assoc).WithStartDate(replacement.StartDate).Build()
+	return s.AddonAssociationRepo.Update(ctx, moved)
 }
 
 // UpdateSubscriptionLineItem updates a subscription line item by terminating the existing one and creating a new one
