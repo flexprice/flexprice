@@ -389,29 +389,23 @@ func TestRequirePermission_Suspended(t *testing.T) {
 	}
 }
 
-func TestRequirePermission_Shadow(t *testing.T) {
+func TestRequirePermission_Read(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	pm := NewPermissionMiddleware(realRBACService(t), newTestLogger(t))
 
 	tests := []struct {
-		name   string
-		roles  []string
-		shadow bool
-		want   int
+		name  string
+		roles []string
+		want  int
 	}{
-		{"shadow lets an under-scoped key through", []string{types.RoleEventIngestor.String()}, true, http.StatusOK},
-		{"shadow lets a caller with no roles through", nil, true, http.StatusOK},
-		{"shadow passes an authorized reader", []string{types.RoleAllReader.String()}, true, http.StatusOK},
-		{"enforced gate still denies an under-scoped key", []string{types.RoleEventIngestor.String()}, false, http.StatusForbidden},
+		{"denies an event_ingestor key", []string{types.RoleEventIngestor.String()}, http.StatusForbidden},
+		{"denies an event_reader key", []string{types.RoleEventReader.String()}, http.StatusForbidden},
+		{"denies a caller with no roles", nil, http.StatusForbidden},
+		{"allows an all_reader key", []string{types.RoleAllReader.String()}, http.StatusOK},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var opts []PermissionOption
-			if tt.shadow {
-				opts = append(opts, Shadow())
-			}
-
 			r := gin.New()
 			r.Use(func(c *gin.Context) {
 				ctx := c.Request.Context()
@@ -421,7 +415,7 @@ func TestRequirePermission_Shadow(t *testing.T) {
 				c.Request = c.Request.WithContext(ctx)
 				c.Next()
 			})
-			r.GET("/customers/:id", pm.RequirePermission(types.EntityCustomer, types.ActionRead, opts...), func(c *gin.Context) {
+			r.GET("/customers/:id", pm.RequirePermission(types.EntityCustomer, types.ActionRead), func(c *gin.Context) {
 				c.Status(http.StatusOK)
 			})
 
