@@ -139,7 +139,7 @@ type UpdateCustomerRequest struct {
 	// contact_persons replaces the customer's contact persons when provided; at most one may be primary
 	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive"`
 
-	// settings replaces the customer's setting overrides when provided; send {} to inherit the environment settings
+	// settings merges into the customer's setting overrides when provided; send {} to inherit the environment settings
 	Settings *types.SettingsOverride `json:"settings,omitempty"`
 
 	// metadata contains updated key-value pairs that will replace existing metadata
@@ -247,6 +247,22 @@ func NormalizeSettingsOverride(s *types.SettingsOverride) *types.SettingsOverrid
 		return nil
 	}
 	return s
+}
+
+func MergeSettingsOverride(existing, update *types.SettingsOverride) *types.SettingsOverride {
+	update = NormalizeSettingsOverride(update)
+	existing = NormalizeSettingsOverride(existing)
+	if update == nil || existing == nil {
+		return update
+	}
+	merged := *existing.SubscriptionConfig
+	if update.SubscriptionConfig.GracePeriodDays != nil {
+		merged.GracePeriodDays = update.SubscriptionConfig.GracePeriodDays
+	}
+	if update.SubscriptionConfig.AutoCancellationEnabled != nil {
+		merged.AutoCancellationEnabled = update.SubscriptionConfig.AutoCancellationEnabled
+	}
+	return &types.SettingsOverride{SubscriptionConfig: &merged}
 }
 
 func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Customer {

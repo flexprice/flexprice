@@ -2124,7 +2124,7 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 	}
 
 	if req.Settings != nil {
-		subscription.Settings = dto.NormalizeSettingsOverride(req.Settings)
+		subscription.Settings = dto.MergeSettingsOverride(subscription.Settings, req.Settings)
 	}
 
 	if req.CancelAtPeriodEnd != nil {

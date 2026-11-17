@@ -10508,7 +10508,7 @@ definitions:
       settings:
         allOf:
         - $ref: '#/definitions/types.SettingsOverride'
-        description: settings replaces the customer's setting overrides when provided;
+        description: settings merges into the customer's setting overrides when provided;
           send {} to inherit the environment settings
       tax_treatment:
         allOf:
@@ -10889,7 +10889,7 @@ definitions:
       settings:
         allOf:
         - $ref: '#/definitions/types.SettingsOverride'
-        description: Settings replaces the subscription's setting overrides when provided;
+        description: Settings merges into the subscription's setting overrides when provided;
           send {} to inherit.
       status:
         $ref: '#/definitions/types.SubscriptionStatus'

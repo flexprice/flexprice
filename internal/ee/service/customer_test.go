@@ -495,6 +495,14 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 			wantGrace: lo.ToPtr(0),
 		},
 		{
+			name: "settings_merged",
+			id:   "cust-1",
+			request: dto.UpdateCustomerRequest{
+				Settings: &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{AutoCancellationEnabled: lo.ToPtr(false)}},
+			},
+			wantGrace: lo.ToPtr(0),
+		},
+		{
 			name:          "settings_cleared",
 			id:            "cust-1",
 			request:       dto.UpdateCustomerRequest{Settings: &types.SettingsOverride{}},
