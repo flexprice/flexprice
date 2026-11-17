@@ -731,7 +731,10 @@ func (s *EntitlementServiceSuite) TestCreateBulkEntitlement() {
 		s.Equal(testPlan1.ID, ent2.Entitlement.EntityID)
 		s.Equal(meteredFeature.ID, ent2.Entitlement.FeatureID)
 		s.Equal(types.FeatureTypeMetered, ent2.Entitlement.FeatureType)
-		s.Equal(int64(1000), *ent2.Entitlement.UsageLimit)
+		// Bulk create puts a metered entitlement on the grant model, as single create does.
+		s.True(ent2.Entitlement.HasGrantConfig())
+		s.Equal("1000", ent2.Entitlement.GrantQuota.String())
+		s.Nil(ent2.Entitlement.UsageLimit)
 		s.Equal(types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY, ent2.Entitlement.UsageResetPeriod)
 		s.True(ent2.Entitlement.IsSoftLimit)
 		s.NotNil(ent2.Feature)
@@ -1515,4 +1518,51 @@ func (s *EntitlementServiceSuite) TestOverrideRefusedWhenSeveralEntitlementsFeed
 	_, err = s.service.CreateEntitlement(ctx, second)
 	s.Require().Error(err)
 	s.Contains(err.Error(), "more than one entitlement")
+}
+
+// A grant-backed entitlement bills from grant_quota, so an update that still sends the
+// deprecated usage_limit must move the quota rather than be silently ignored.
+func (s *EntitlementServiceSuite) TestUpdateEntitlement_UsageLimitSetsGrantQuota() {
+	ctx := s.GetContext()
+
+	m := &meter.Meter{
+		ID:          "meter-update-limit",
+		Name:        "Update Limit Meter",
+		EventName:   "update_limit_calls",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.service.(*entitlementService).MeterRepo.(*testutil.InMemoryMeterStore).CreateMeter(ctx, m))
+	f := &feature.Feature{ID: "feat-update-limit", Name: "Update Limit", Type: types.FeatureTypeMetered, MeterID: m.ID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, f))
+	p := &plan.Plan{ID: "plan-update-limit", Name: "Update Limit Plan", BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, p))
+
+	created, err := s.service.CreateEntitlement(ctx, dto.CreateEntitlementRequest{
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    p.ID,
+		FeatureID:   f.ID,
+		FeatureType: types.FeatureTypeMetered,
+		IsEnabled:   true,
+		UsageLimit:  lo.ToPtr(int64(1000)),
+	})
+	s.Require().NoError(err)
+	s.Require().True(created.Entitlement.HasGrantConfig())
+
+	s.Run("usage_limit becomes the quota", func() {
+		got, err := s.service.UpdateEntitlement(ctx, created.Entitlement.ID, dto.UpdateEntitlementRequest{UsageLimit: lo.ToPtr(int64(1500))})
+		s.Require().NoError(err)
+		s.Equal("1500", got.Entitlement.GrantQuota.String())
+		s.Nil(got.Entitlement.UsageLimit)
+	})
+
+	s.Run("an explicit grant_quota wins", func() {
+		got, err := s.service.UpdateEntitlement(ctx, created.Entitlement.ID, dto.UpdateEntitlementRequest{
+			UsageLimit: lo.ToPtr(int64(50)),
+			GrantQuota: lo.ToPtr(decimal.NewFromInt(2000)),
+		})
+		s.Require().NoError(err)
+		s.Equal("2000", got.Entitlement.GrantQuota.String())
+		s.Nil(got.Entitlement.UsageLimit)
+	})
 }
