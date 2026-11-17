@@ -776,7 +776,7 @@ type UpdateSubscriptionRequest struct {
 	// ProrationBehavior updates the stored behavior. Omit to leave it unchanged.
 	ProrationBehavior *types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
-	// Settings replaces the subscription's setting overrides when provided; send {} to inherit.
+	// Settings merges into the subscription's setting overrides when provided; send {} to inherit.
 	Settings *types.SettingsOverride `json:"settings,omitempty"`
 }
 

@@ -32332,7 +32332,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "settings": {
-                    "description": "settings replaces the customer's setting overrides when provided; send {} to inherit the environment settings",
+                    "description": "settings merges into the customer's setting overrides when provided; send {} to inherit the environment settings",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.SettingsOverride"
@@ -32870,7 +32870,7 @@ const docTemplate = `{
                     ]
                 },
                 "settings": {
-                    "description": "Settings replaces the subscription's setting overrides when provided; send {} to inherit.",
+                    "description": "Settings merges into the subscription's setting overrides when provided; send {} to inherit.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.SettingsOverride"
