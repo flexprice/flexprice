@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	optimizePartitionTimeout = time.Hour
+	optimizePartitionTimeout = 30 * time.Minute
 	optimizeMinFreeFactor    = 3
 	defaultOptimizeLookback  = 7
 )
