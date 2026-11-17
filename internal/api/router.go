@@ -842,7 +842,7 @@ func NewRouter(
 	// this handler may write.
 	customerPortalAPI.Use(middleware.TenantStatusMiddleware(tenantService, logger))
 	customerPortalAPI.Use(middleware.ErrorHandler())
-	blockSuspended := middleware.BlockWhenSuspended()
+	blockSuspended := middleware.BlockWhenSuspended(tenantService)
 	{
 		// Customer specific
 		customerPortalAPI.GET("/info", handlers.CustomerPortal.GetCustomer)

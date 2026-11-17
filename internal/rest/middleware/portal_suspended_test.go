@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/types"
@@ -33,8 +34,9 @@ func TestPortalInfoRouteWithSessionToken(t *testing.T) {
 			log := newTestLogger(t)
 			r := gin.New()
 			r.Use(SessionTokenAuthMiddleware(cfg, log))
-			r.Use(TenantStatusMiddleware(&mockTenantService{status: tt.status}, log))
-			r.PUT("/info", BlockWhenSuspended(), func(c *gin.Context) { c.Status(http.StatusOK) })
+			tenants := &mockTenantService{status: tt.status}
+			r.Use(TenantStatusMiddleware(tenants, log))
+			r.PUT("/info", BlockWhenSuspended(tenants), func(c *gin.Context) { c.Status(http.StatusOK) })
 
 			req := httptest.NewRequest(http.MethodPut, "/info", nil)
 			req.Header.Set(types.HeaderSessionToken, token)
@@ -47,12 +49,15 @@ func TestPortalInfoRouteWithSessionToken(t *testing.T) {
 
 func TestPortalBlockWhenSuspended(t *testing.T) {
 	tests := []struct {
-		name       string
-		status     types.TenantInternalStatus
-		wantStatus int
+		name        string
+		status      types.TenantInternalStatus
+		tenant      *dto.TenantResponse
+		wantStatus  int
+		wantMessage string
 	}{
-		{"suspended tenant rejected", types.TenantInternalStatusSuspended, http.StatusForbidden},
-		{"active tenant allowed", types.TenantInternalStatusActive, http.StatusOK},
+		{"suspended tenant rejected with tenant name", types.TenantInternalStatusSuspended, &dto.TenantResponse{Name: "Acme"}, http.StatusForbidden, "This action is unavailable, contact Acme."},
+		{"suspended tenant rejected without tenant name", types.TenantInternalStatusSuspended, nil, http.StatusForbidden, "This action is unavailable, contact the business that shared this portal."},
+		{"active tenant allowed", types.TenantInternalStatusActive, nil, http.StatusOK, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -62,14 +67,16 @@ func TestPortalBlockWhenSuspended(t *testing.T) {
 				c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), types.CtxTenantID, "tenant_1"))
 				c.Next()
 			})
-			r.Use(TenantStatusMiddleware(&mockTenantService{status: tt.status}, newTestLogger(t)))
-			r.PUT("/info", BlockWhenSuspended(), func(c *gin.Context) { c.Status(http.StatusOK) })
+			tenants := &mockTenantService{status: tt.status, tenant: tt.tenant}
+			r.Use(TenantStatusMiddleware(tenants, newTestLogger(t)))
+			r.PUT("/info", BlockWhenSuspended(tenants), func(c *gin.Context) { c.Status(http.StatusOK) })
 
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/info", nil))
 			assert.Equal(t, tt.wantStatus, w.Code)
-			if tt.wantStatus == http.StatusForbidden {
-				assert.JSONEq(t, `{"message":"tenant account is suspended"}`, w.Body.String())
+			if tt.wantMessage != "" {
+				assert.NotContains(t, w.Body.String(), "suspended")
+				assert.JSONEq(t, `{"message":"`+tt.wantMessage+`"}`, w.Body.String())
 			}
 		})
 	}

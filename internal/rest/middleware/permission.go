@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/types"
@@ -55,12 +56,21 @@ func abortIfSuspended(c *gin.Context) bool {
 	return true
 }
 
-// BlockWhenSuspended rejects writes from suspended tenants on routes without RBAC.
-func BlockWhenSuspended() gin.HandlerFunc {
+// BlockWhenSuspended rejects portal writes from suspended tenants without naming the suspension.
+func BlockWhenSuspended(tenantService service.TenantService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !abortIfSuspended(c) {
+		ctx := c.Request.Context()
+		if types.GetTenantInternalStatus(ctx) != types.TenantInternalStatusSuspended {
 			c.Next()
+			return
 		}
+		contact := "the business that shared this portal"
+		if t, err := tenantService.GetTenantByID(ctx, types.GetTenantID(ctx)); err == nil && t != nil && t.Name != "" {
+			contact = t.Name
+		}
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"message": "This action is unavailable, contact " + contact + ".",
+		})
 	}
 }
 
