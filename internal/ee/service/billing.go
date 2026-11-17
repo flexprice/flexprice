@@ -3188,6 +3188,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 	entitlementsReq := &dto.GetCustomerEntitlementsRequest{
 		SubscriptionIDs: req.SubscriptionIDs,
 		FeatureIDs:      featureIDs,
+		RefreshGrants:   req.RefreshGrants,
 	}
 
 	entitlements, err := s.GetCustomerEntitlements(ctx, customerID, entitlementsReq)
