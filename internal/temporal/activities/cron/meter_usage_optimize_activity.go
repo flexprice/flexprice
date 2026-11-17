@@ -74,7 +74,8 @@ WHERE database = currentDatabase() AND table = 'meter_usage' AND active
   AND partition_id < toString(toYYYYMMDD(today()))
 GROUP BY partition_id
 HAVING parts > 1
-ORDER BY partition_id`, lookback)
+ORDER BY partition_id
+SETTINGS max_memory_usage = 96636764160`, lookback)
 	if err := a.conn.Select(ctx, &partitions, listQuery); err != nil {
 		return nil, fmt.Errorf("list meter_usage partitions: %w", err)
 	}
@@ -108,14 +109,14 @@ func (a *MeterUsageOptimizeActivities) optimizePartition(ctx context.Context, p 
 	}
 
 	var disks []meterUsageDisk
-	if err := a.conn.Select(ctx, &disks, `SELECT free_space FROM system.disks WHERE name = 'default'`); err != nil {
+	if err := a.conn.Select(ctx, &disks, `SELECT free_space FROM system.disks WHERE name = 'default' SETTINGS max_memory_usage = 96636764160`); err != nil {
 		return fmt.Errorf("read free disk space: %w", err)
 	}
 	if len(disks) == 0 {
 		return fmt.Errorf("default disk not found")
 	}
 	if disks[0].FreeSpace < optimizeMinFreeFactor*p.Bytes {
-		activity.GetLogger(ctx).Warn("Low disk space, skipping partition",
+		activity.GetLogger(ctx).Info("Low disk space, skipping partition",
 			"partition", p.PartitionID, "bytes", p.Bytes, "free_space", disks[0].FreeSpace)
 		return errOptimizeSkipped
 	}
@@ -123,7 +124,7 @@ func (a *MeterUsageOptimizeActivities) optimizePartition(ctx context.Context, p 
 	start := clock.Now()
 	pctx, cancel := context.WithTimeout(ctx, optimizePartitionTimeout)
 	defer cancel()
-	query := fmt.Sprintf(`OPTIMIZE TABLE meter_usage PARTITION ID '%s' FINAL SETTINGS optimize_throw_if_noop = 1`, p.PartitionID)
+	query := fmt.Sprintf(`OPTIMIZE TABLE meter_usage PARTITION ID '%s' FINAL SETTINGS optimize_throw_if_noop = 1, max_memory_usage = 96636764160`, p.PartitionID)
 	if err := a.conn.Exec(pctx, query); err != nil {
 		return fmt.Errorf("optimize partition %s: %w", p.PartitionID, err)
 	}

@@ -17,11 +17,13 @@ type fakeOptimizeConn struct {
 	free       uint64
 	execErr    map[string]error
 	selects    int
+	queries    []string
 	execs      []string
 }
 
 func (f *fakeOptimizeConn) Select(_ context.Context, dest any, query string, _ ...any) error {
 	f.selects++
+	f.queries = append(f.queries, query)
 	v := reflect.ValueOf(dest).Elem()
 	if strings.Contains(query, "system.disks") {
 		v.Set(reflect.ValueOf([]meterUsageDisk{{FreeSpace: f.free}}))
@@ -75,6 +77,19 @@ func TestOptimizeMeterUsage_InvalidPartitionIDNeverExecuted(t *testing.T) {
 	require.Error(t, err)
 	require.Len(t, conn.execs, 1)
 	require.Contains(t, conn.execs[0], "PARTITION ID '20261116' FINAL SETTINGS optimize_throw_if_noop = 1")
+}
+
+func TestOptimizeMeterUsage_EveryQueryHasMemoryCap(t *testing.T) {
+	conn := &fakeOptimizeConn{
+		free:       1 << 40,
+		partitions: []meterUsagePartition{{PartitionID: "20261116", Parts: 3, Bytes: 10}},
+	}
+	err, o, _, _ := runOptimize(t, conn, true)
+	require.NoError(t, err)
+	require.Equal(t, 1, o)
+	for _, q := range append(conn.queries, conn.execs...) {
+		require.Contains(t, q, "max_memory_usage = 96636764160")
+	}
 }
 
 func TestOptimizeMeterUsage_LowDiskSkips(t *testing.T) {
