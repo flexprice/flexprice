@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/config"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"go.temporal.io/sdk/activity"
@@ -119,7 +120,7 @@ func (a *MeterUsageOptimizeActivities) optimizePartition(ctx context.Context, p 
 		return errOptimizeSkipped
 	}
 
-	start := time.Now()
+	start := clock.Now()
 	pctx, cancel := context.WithTimeout(ctx, optimizePartitionTimeout)
 	defer cancel()
 	query := fmt.Sprintf(`OPTIMIZE TABLE meter_usage PARTITION ID '%s' FINAL SETTINGS optimize_throw_if_noop = 1`, p.PartitionID)
@@ -127,6 +128,6 @@ func (a *MeterUsageOptimizeActivities) optimizePartition(ctx context.Context, p 
 		return fmt.Errorf("optimize partition %s: %w", p.PartitionID, err)
 	}
 	activity.GetLogger(ctx).Info("Meter usage partition optimized",
-		"partition", p.PartitionID, "parts_before", p.Parts, "bytes", p.Bytes, "duration", time.Since(start).String())
+		"partition", p.PartitionID, "parts_before", p.Parts, "bytes", p.Bytes, "duration", clock.Now().Sub(start).String())
 	return nil
 }
