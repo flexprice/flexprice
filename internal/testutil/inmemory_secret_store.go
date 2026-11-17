@@ -150,8 +150,6 @@ func (s *InMemorySecretStore) Delete(ctx context.Context, id string) error {
 	return s.InMemoryStore.Delete(ctx, id)
 }
 
-func (s *InMemorySecretStore) InvalidateCache(context.Context, []*secret.Secret) {}
-
 func (s *InMemorySecretStore) RevokeByUserID(ctx context.Context, userID string) ([]*secret.Secret, error) {
 	allEnvs := types.SetEnvironmentID(ctx, "")
 	secrets, err := s.InMemoryStore.List(allEnvs, &types.SecretFilter{

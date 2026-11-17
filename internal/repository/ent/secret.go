@@ -328,15 +328,18 @@ func (r *secretRepository) RevokeByUserID(ctx context.Context, userID string) ([
 			WithReportableDetails(map[string]interface{}{"user_id": userID}).
 			Mark(ierr.ErrDatabase)
 	}
-	return domainSecret.FromEntList(revoked), nil
+	secrets := domainSecret.FromEntList(revoked)
+	r.invalidateCache(ctx, secrets)
+	return secrets, nil
 }
 
-func (r *secretRepository) InvalidateCache(ctx context.Context, secrets []*domainSecret.Secret) {
-	// Auth lookups cache without tenant/env scope.
-	cacheCtx := types.SetEnvironmentID(types.SetTenantID(ctx, ""), "")
-	for _, s := range secrets {
-		r.DeleteCache(cacheCtx, s.Value)
-	}
+// invalidateCache evicts the secrets once the surrounding transaction commits.
+func (r *secretRepository) invalidateCache(ctx context.Context, secrets []*domainSecret.Secret) {
+	afterCommit(ctx, func() {
+		for _, s := range secrets {
+			r.DeleteCache(ctx, s.Value)
+		}
+	})
 }
 
 type SecretQuery = *ent.SecretQuery

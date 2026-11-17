@@ -30,11 +30,8 @@ type Repository interface {
 	GetAPIKeyByValue(ctx context.Context, value string) (*Secret, error)
 
 	// RevokeByUserID deletes every published secret owned by the user, across environments.
-	// It returns the revoked secrets; call InvalidateCache after commit.
+	// Their auth cache entries are evicted after commit.
 	RevokeByUserID(ctx context.Context, userID string) ([]*Secret, error)
-
-	// InvalidateCache evicts the secrets from the auth cache
-	InvalidateCache(ctx context.Context, secrets []*Secret)
 
 	// UpdateLastUsed updates the last used timestamp of a secret
 	UpdateLastUsed(ctx context.Context, id string) error

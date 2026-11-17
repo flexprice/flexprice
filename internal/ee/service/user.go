@@ -906,16 +906,13 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 	provider := newProvider(s.cfg)
 
 	if existingUser.Status != types.StatusPublished {
-		revoked, err := s.secretRepo.RevokeByUserID(ctx, id)
-		if err != nil {
+		if _, err := s.secretRepo.RevokeByUserID(ctx, id); err != nil {
 			return err
 		}
-		s.secretRepo.InvalidateCache(ctx, revoked)
 		s.userRepo.DeleteCache(ctx, id)
 		return s.removeProviderLogin(ctx, provider, actorUserID, id, tenantID)
 	}
 
-	var revoked []*domainSecret.Secret
 	err = s.db.WithTx(ctx, func(ctx context.Context) error {
 		if err := s.db.LockWithWait(ctx, postgres.LockRequest{Key: "user_removal:" + tenantID}); err != nil {
 			return ierr.WithError(err).
@@ -936,8 +933,7 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 				Mark(ierr.ErrValidation)
 		}
 
-		revoked, err = s.secretRepo.RevokeByUserID(ctx, id)
-		if err != nil {
+		if _, err := s.secretRepo.RevokeByUserID(ctx, id); err != nil {
 			return err
 		}
 
@@ -946,8 +942,6 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	s.secretRepo.InvalidateCache(ctx, revoked)
-	s.userRepo.DeleteCache(ctx, id)
 
 	return s.removeProviderLogin(ctx, provider, actorUserID, id, tenantID)
 }

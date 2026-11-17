@@ -257,7 +257,7 @@ func (r *userRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	SetSpanSuccess(span)
-	r.DeleteCache(ctx, id)
+	afterCommit(ctx, func() { r.DeleteCache(ctx, id) })
 	return nil
 }
 
