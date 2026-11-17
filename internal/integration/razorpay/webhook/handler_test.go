@@ -6,6 +6,7 @@ package webhook
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -36,7 +37,9 @@ import (
 
 type webhookTestRazorpayClient struct {
 	razorpay.RazorpayClient
-	refundCalls []string // razorpayPaymentID per call
+	refundCalls  []string // razorpayPaymentID per call
+	refundErrors []error
+	refundStatus string
 }
 
 func (c *webhookTestRazorpayClient) GetConnection(_ context.Context) (*connection.Connection, error) {
@@ -44,11 +47,21 @@ func (c *webhookTestRazorpayClient) GetConnection(_ context.Context) (*connectio
 }
 
 func (c *webhookTestRazorpayClient) FetchPayment(_ context.Context, _ string) (map[string]interface{}, error) {
-	return map[string]interface{}{"refund_status": nil}, nil
+	var refundStatus interface{}
+	if c.refundStatus != "" {
+		refundStatus = c.refundStatus
+	}
+	return map[string]interface{}{"refund_status": refundStatus}, nil
 }
 
 func (c *webhookTestRazorpayClient) RefundPayment(_ context.Context, paymentID string, _ int64, _ string) (map[string]interface{}, error) {
 	c.refundCalls = append(c.refundCalls, paymentID)
+	if len(c.refundErrors) > 0 {
+		err := c.refundErrors[0]
+		c.refundErrors = c.refundErrors[1:]
+		return nil, err
+	}
+	c.refundStatus = "full"
 	return map[string]interface{}{"id": "rfnd_test001"}, nil
 }
 
@@ -666,6 +679,31 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedPaymentIsRefun
 	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
 	s.Require().Len(s.paymentSvc.updateCalls, 1)
 	s.Equal("rfnd_test001", (*s.paymentSvc.updateCalls[0].Metadata)["razorpay_refund_id"])
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedPaymentRefundRetriesAndDuplicateIsIdempotent() {
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
+	s.client.refundErrors = []error{errors.New("temporary refund error")}
+	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	event.Payload.Payment.Entity.ID = "pay_rzp_late"
+	event.Payload.Payment.Entity.Amount = 50000
+	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+
+	err := s.handler.HandleWebhookEvent(s.ctx, event, "env_test", s.services)
+	s.Require().Error(err)
+	s.ErrorContains(err, "temporary refund error")
+	s.Equal([]string{"pay_rzp_late"}, s.client.refundCalls)
+	s.Empty(s.paymentSvc.updateCalls, "a failed provider refund must not be recorded as refunded")
+
+	s.NoError(s.handler.HandleWebhookEvent(s.ctx, event, "env_test", s.services))
+	s.Equal([]string{"pay_rzp_late", "pay_rzp_late"}, s.client.refundCalls)
+	s.Require().Len(s.paymentSvc.updateCalls, 1)
+	s.Equal("rfnd_test001", (*s.paymentSvc.updateCalls[0].Metadata)["razorpay_refund_id"])
+
+	s.NoError(s.handler.HandleWebhookEvent(s.ctx, event, "env_test", s.services))
+	s.Equal([]string{"pay_rzp_late", "pay_rzp_late"}, s.client.refundCalls)
+	s.Len(s.paymentSvc.updateCalls, 1, "a repeated delivery must not submit or record a second refund")
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
 }
 
 type recordingPublisher struct {

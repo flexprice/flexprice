@@ -207,6 +207,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 				"error", err,
 				"flexprice_payment_id", flexpricePaymentID,
 				"razorpay_payment_id", payment.ID)
+			return err
 		}
 		return nil
 	}
