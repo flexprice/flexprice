@@ -938,6 +938,26 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Backda
 	s.assertEndDate(s.reloadLineItem(resp.SubscriptionLineItem.ID), cancelAt, "the replacement is the live version and ends")
 }
 
+// Deleting a retired scheduled version must not reopen the predecessor its replacement now follows.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_RetiredVersionRejected() {
+	original := s.testData.lineItem
+	scheduled := s.scheduleVersion(original.ID, 75, time.Now().UTC().Add(10*24*time.Hour))
+
+	effective := original.StartDate.Add(24 * time.Hour)
+	resp, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), scheduled.ID, dto.UpdateSubscriptionLineItemRequest{
+		EffectiveFrom: &effective,
+	})
+	s.NoError(err)
+
+	err = s.revertScheduledVersion(scheduled.ID)
+	s.Error(err)
+	s.Contains(err.Error(), "line item is not active")
+
+	cut := s.reloadLineItem(original.ID)
+	s.assertEndDate(cut, effective, "the predecessor must stay cut at the replacement's start")
+	s.Equal(resp.SubscriptionLineItem.ID, lo.FromPtr(cut.SuccessorLineItemID))
+}
+
 // The replacement cannot start before the subscription; nothing is changed on rejection.
 func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_BackdatedVersion_BeforeSubscriptionStartRejected() {
 	original := s.testData.lineItem

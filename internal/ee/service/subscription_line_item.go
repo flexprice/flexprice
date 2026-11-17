@@ -366,6 +366,16 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 	if err != nil {
 		return nil, err
 	}
+	// Reverting a removed version again would reopen a predecessor its replacement already follows.
+	if lineItem.Status != types.StatusPublished {
+		return nil, ierr.NewError("line item is not active").
+			WithHint("This line item was already removed or replaced").
+			WithReportableDetails(map[string]interface{}{
+				"line_item_id": lineItemID,
+				"status":       lineItem.Status,
+			}).
+			Mark(ierr.ErrValidation)
+	}
 
 	sub, err := s.SubRepo.Get(ctx, lineItem.SubscriptionID)
 	if err != nil {
