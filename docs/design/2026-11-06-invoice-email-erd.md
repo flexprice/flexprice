@@ -207,7 +207,7 @@ type Provider interface {
 - Service `internal/ee/service/email_notification.go`: `SendInvoiceEmail` loads invoice, customer, tenant and setting and inserts `queued`; nothing else happens in the request.
 - `EmailDispatchWorkflow` (Temporal schedule, every minute, one run at a time) lists environments with queued emails, takes one email from each in turn (manual sends first, then oldest) and sends up to 400 emails per run, one at a time. A composer per `template_key` builds each email's content.
 - An email that cannot be sent now stays `queued` and nothing is written: a 429 ends the run, 20 provider errors in a row end it, a PDF that cannot be produced is retried. A 409 for a send Resend is still processing stays `queued`; any other 409 (Resend already has the idempotency key) counts as sent; any other 4xx marks `failed`, and so does an email still queued after 24 hours. An email queued before the environment turned emails off is marked `skipped`.
-- Auto trigger is the `email-events-consumer` group on `webhook.topic`, handling `invoice.update.finalized` only; the one-auto-email index stops redelivery from double-sending.
+- Auto trigger is the `email-events-consumer` group on `webhook.topic`, handling `invoice.update.finalized` only; the one-auto-email index stops redelivery from double-sending. A new group starts at the newest offset, so invoices finalized before it joined are never emailed late.
 - Everything ships behind `email.enabled` plus a set `email.provider`; with no provider, customer emails stay off.
 
 ## Testing
