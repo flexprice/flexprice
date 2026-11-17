@@ -67,6 +67,8 @@ func (a *PaymentMethodAdapter) CreateSetupLink(ctx context.Context, req interfac
 		Currency:                 "INR",
 		Description:              "Bank account mandate (eNACH)",
 		ExpireBy:                 clock.Now().Add(enachSetupLinkExpiry).Unix(),
+		EmailNotify:              req.NotifyCustomer,
+		SMSNotify:                req.NotifyCustomer,
 		Notes:                    map[string]interface{}{"flexprice_customer_id": req.CustomerID},
 		SubscriptionRegistration: SubscriptionRegistration{Method: "emandate"},
 	}

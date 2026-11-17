@@ -120,6 +120,7 @@ type CreateSetupIntentRequest struct {
 	SetDefault         bool                 `json:"set_default,omitempty"`          // Whether to set the payment method as default when setup succeeds
 	Metadata           types.Metadata       `json:"metadata,omitempty"`
 	MaxAmount          *decimal.Decimal     `json:"max_amount,omitempty" swaggertype:"string"` // Razorpay eNACH per-debit ceiling in INR; defaults to ₹99,999
+	NotifyCustomer     bool                 `json:"notify_customer,omitempty"`                 // Razorpay emails and texts the setup link to the customer
 }
 
 // SetupIntentResponse represents a response from creating a Setup Intent session

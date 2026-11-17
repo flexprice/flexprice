@@ -1060,7 +1060,7 @@ func (s *invoiceService) attachInFlightCharges(ctx context.Context, items []*dto
 		return err
 	}
 
-	inFlight := lo.KeyBy(lo.Filter(pymnts, func(p *payment.Payment, _ int) bool { return payments.IsChargeInFlight(p) }),
+	inFlight := lo.KeyBy(lo.Filter(pymnts, func(p *payment.Payment, _ int) bool { return p.IsChargeInFlight() }),
 		func(p *payment.Payment) string { return p.DestinationID })
 	for _, r := range items {
 		if p, ok := inFlight[r.ID]; ok {

@@ -171,10 +171,11 @@ func (h *SetupIntentHandler) createAdapterSetupIntent(c *gin.Context, customerID
 	}
 
 	link, err := provider.CreateSetupLink(ctx, interfaces.SetupLinkRequest{
-		CustomerID: customerID,
-		ReturnURL:  req.SuccessURL,
-		MaxAmount:  req.MaxAmount,
-		SetDefault: req.SetDefault,
+		CustomerID:     customerID,
+		ReturnURL:      req.SuccessURL,
+		MaxAmount:      req.MaxAmount,
+		SetDefault:     req.SetDefault,
+		NotifyCustomer: req.NotifyCustomer,
 	})
 	if err != nil {
 		h.log.Error(ctx, "Failed to create setup link", "provider", gateway, "customer_id", customerID, "error", err)

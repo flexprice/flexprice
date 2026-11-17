@@ -174,7 +174,7 @@ func (p *Payment) IsPaymentPaid() bool {
 // Like a link, it is INITIATED until the gateway has it and PENDING until the webhook settles it.
 func (p *Payment) SettlesByWebhook() bool {
 	return p != nil && p.PaymentGateway != nil && *p.PaymentGateway == string(types.PaymentGatewayTypeRazorpay) &&
-		(p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI)
+		p.PaymentMethodType.IsSavedMethod()
 }
 
 // IsChargeInFlight reports whether a charge was submitted to the gateway and awaits its outcome.

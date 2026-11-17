@@ -633,35 +633,20 @@ func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo pay
 	return lock, nil
 }
 
-// ChargeInFlight reports whether a saved-method payment other than excludeID is still open on the invoice.
+// ChargeInFlight reports whether a charge other than excludeID is in flight on the invoice.
 func ChargeInFlight(ctx context.Context, paymentRepo payment.Repository, invoiceID, excludeID string) (bool, error) {
 	filter := types.NewNoLimitPaymentFilter()
 	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
 	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentStatuses = []types.PaymentStatus{types.PaymentStatusPending, types.PaymentStatusProcessing}
 	pymnts, err := paymentRepo.List(ctx, filter)
 	if err != nil {
 		return false, err
 	}
 
 	return lo.ContainsBy(pymnts, func(p *payment.Payment) bool {
-		return p.ID != excludeID && IsChargeInFlight(p)
+		return p.ID != excludeID && p.IsChargeInFlight()
 	}), nil
-}
-
-// IsChargeInFlight reports whether p is a saved-method debit the gateway may still settle.
-func IsChargeInFlight(p *payment.Payment) bool {
-	if !p.PaymentMethodType.IsSavedMethod() {
-		return false
-	}
-	switch p.PaymentStatus {
-	case types.PaymentStatusPending, types.PaymentStatusProcessing:
-		return true
-	case types.PaymentStatusInitiated:
-		// An INITIATED payment never sent to the gateway (process_payment false) is not a debit.
-		return lo.FromPtr(p.GatewayPaymentID) != "" || lo.FromPtr(p.GatewayTrackingID) != ""
-	default:
-		return false
-	}
 }
 
 func errChargeInFlight(invoiceID string) error {

@@ -616,6 +616,7 @@ func (s *PaymentLifecycleSuite) TestLockInvoiceCharge_InFlightCharges() {
 	}{
 		{name: "pending razorpay card charge", method: types.PaymentMethodTypeCard, gateway: &razorpay, status: types.PaymentStatusPending, inFlight: true},
 		{name: "processing charge", method: types.PaymentMethodTypeCard, gateway: &razorpay, status: types.PaymentStatusProcessing, inFlight: true},
+		{name: "pending razorpay enach debit", method: types.PaymentMethodTypeENACH, gateway: &razorpay, status: types.PaymentStatusPending, inFlight: true},
 		{name: "pending payment link", method: types.PaymentMethodTypePaymentLink, gateway: &razorpay, status: types.PaymentStatusPending},
 		{name: "initiated razorpay upi charge", method: types.PaymentMethodTypeUPI, gateway: &razorpay, status: types.PaymentStatusInitiated},
 		{name: "pending stripe card charge", method: types.PaymentMethodTypeCard, status: types.PaymentStatusPending},
