@@ -128,7 +128,8 @@ Each period's charges stay on that period's groups, shared by the usage billing 
 buckets, not a window's peak. A window commitment's lines then lay each charge on the display window it fell in, as the
 waterfall drew it (`windowPlacer`): utilized where a commitment took the line's usage, overage and plain usage where
 usage was left, and the true-up where a bucket's capacity went unused, so an idle window carries its own unused
-capacity. Buckets past the range, the rest of a projected open period, count in the range's last window. A group keeps
+capacity. Buckets past the range, the rest of a projected open period, are left out of the windows and the line's
+total: the range does not owe them yet. A group keeps
 its share of the period, so its total does not depend on the display window; it lays its utilized and overage where its
 own usage fell and its true-up by the line's unused capacity (`placeGroupShares`). A line a charge cannot be placed for,
 or a period commitment's line, whose pool spans the period, has its charges shared over its points by usage.

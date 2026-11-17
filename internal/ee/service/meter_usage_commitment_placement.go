@@ -67,7 +67,9 @@ type commitmentLine struct {
 // capacity over the whole period, so their lines are not placed.
 type windowPlacer struct {
 	currency string
-	starts   []time.Time                          // display window starts, ascending
+	grain    types.WindowSize                     // the request's window size; empty places nothing
+	end      time.Time                            // the range's end in the period; buckets from it on are not billed yet
+	starts   []time.Time                          // display window starts, ascending; end stands for the buckets past it
 	lines    map[string]bool                      // line item IDs a window commitment bills
 	used     map[commitmentLine][]decimal.Decimal // per display window
 	unused   map[string][]decimal.Decimal         // by commitment ID
@@ -78,8 +80,7 @@ type windowPlacer struct {
 }
 
 // newWindowPlacer cuts the buckets of b's window stacks into display windows of window, coarsened to the bucket as
-// analytics points are. A bucket outside period counts in the period's nearest window, so the rest of a projected open
-// period lands on the range's last window. No window size places nothing.
+// analytics points are. Buckets from period's end on, the rest of a projected open period, are set apart as beyond.
 func newWindowPlacer(
 	l *commitmentLoader,
 	b *commitmentBilling,
@@ -89,6 +90,8 @@ func newWindowPlacer(
 ) *windowPlacer {
 	p := &windowPlacer{
 		currency: l.sub.Currency,
+		grain:    window,
+		end:      period.End,
 		lines:    map[string]bool{},
 		used:     map[commitmentLine][]decimal.Decimal{},
 		unused:   map[string][]decimal.Decimal{},
@@ -97,11 +100,6 @@ func newWindowPlacer(
 		placed:   map[string][]types.CommitmentInfo{},
 		unplaced: map[string]bool{},
 	}
-	if window == "" {
-		return p
-	}
-
-	last := period.End.Add(-time.Nanosecond)
 	keyOf := make([][]time.Time, len(b.stacks))
 	for si, stack := range b.stacks {
 		if stack.Measurement != types.CommitmentMeasurementWindow || len(stack.Commitments) == 0 {
@@ -111,7 +109,10 @@ func newWindowPlacer(
 		windows := newPointWindows(window.Max(l.scopeByCommitment[stack.Commitments[0].ID].bucket), anchor)
 		keyOf[si] = make([]time.Time, len(stack.Windows))
 		for w, t := range stack.Windows {
-			keyOf[si][w] = windows.startOf(minTime(maxTime(t, period.Start), last))
+			keyOf[si][w] = period.End
+			if t.Before(period.End) {
+				keyOf[si][w] = windows.startOf(maxTime(t, period.Start))
+			}
 		}
 
 		for _, line := range stack.Lines {
@@ -225,21 +226,32 @@ func (p *windowPlacer) place(lineID string, weights []decimal.Decimal, charge in
 	}
 }
 
-// windows returns where a line's charges belong, or nil when the line is not placed: a period commitment bills it, or
-// one of its charges fell in no window.
+// windows returns where a line's charges belong, or nil when the line is not placed: a period commitment bills it,
+// one of its charges fell in no window, or the request has no window size.
 func (p *windowPlacer) windows(lineID string) []billedWindow {
-	if p.unplaced[lineID] {
+	if p.unplaced[lineID] || p.grain == "" {
 		return nil
 	}
 
 	var out []billedWindow
 	for i, info := range p.placed[lineID] {
-		if carriesCharge(&info) {
+		if carriesCharge(&info) && p.starts[i].Before(p.end) {
 			out = append(out, billedWindow{start: p.starts[i], billed: info})
 		}
 	}
 
 	return out
+}
+
+// beyond returns what a line's buckets past the range bill. The range does not owe it yet, so it leaves the line's
+// total. A line that is not placed keeps it.
+func (p *windowPlacer) beyond(lineID string) types.CommitmentInfo {
+	last := len(p.starts) - 1
+	if last < 0 || p.unplaced[lineID] || p.placed[lineID] == nil || !p.starts[last].Equal(p.end) {
+		return types.CommitmentInfo{}
+	}
+
+	return p.placed[lineID][last]
 }
 
 // placeGroupShares lays each group's share of a billing period on the windows where the line's charges fell. A group's

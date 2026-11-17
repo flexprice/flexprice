@@ -57,6 +57,7 @@ func TestWindowPlacer(t *testing.T) {
 		periodHours int
 		trueUp      string // what the floor leaves for the true-up row
 		want        []placedWindow
+		beyond      string // the true-up of the hours past the range
 	}{
 		{
 			name:        "each hour carries its own charges",
@@ -74,8 +75,8 @@ func TestWindowPlacer(t *testing.T) {
 			},
 		},
 		{
-			// A projected open period's later hours have no window in the range, so they join its last one.
-			name:        "hours past the range join its last window",
+			// A projected open period's later hours are not owed in the range.
+			name:        "hours past the range are left out",
 			measurement: types.CommitmentMeasurementWindow,
 			window:      types.WindowSizeHour,
 			periodHours: 3,
@@ -83,8 +84,9 @@ func TestWindowPlacer(t *testing.T) {
 			want: []placedWindow{
 				{hour: 0, utilized: "2", overage: "2"},
 				{hour: 1, trueUp: "2"},
-				{hour: 2, trueUp: "8"},
+				{hour: 2, trueUp: "2"},
 			},
+			beyond: "6",
 		},
 		{
 			name:        "a coarser request window adds its hours up",
@@ -107,6 +109,13 @@ func TestWindowPlacer(t *testing.T) {
 			periodHours: 6,
 			trueUp:      "10",
 		},
+		{
+			name:        "no request window still leaves out the hours past the range",
+			measurement: types.CommitmentMeasurementWindow,
+			periodHours: 3,
+			trueUp:      "10",
+			beyond:      "6",
+		},
 	}
 
 	for _, tt := range tests {
@@ -117,6 +126,14 @@ func TestWindowPlacer(t *testing.T) {
 			p.utilized("cmt_w", "li_w", intDec(2), intDec(2))
 			p.overage("li_w", types.CommitmentLineOverage, intDec(2), intDec(1))
 			p.trueUp("cmt_w", "li_w", decimal.RequireFromString(tt.trueUp), decimal.RequireFromString(tt.trueUp))
+
+			beyond := p.beyond("li_w")
+			wantBeyond := decimal.Zero
+			if tt.beyond != "" {
+				wantBeyond = decimal.RequireFromString(tt.beyond)
+			}
+			require.True(t, beyond.ComputedTrueUpAmount.Equal(wantBeyond), "beyond %s", beyond.ComputedTrueUpAmount)
+			require.True(t, beyond.ComputedCommitmentUtilizedAmount.IsZero() && beyond.ComputedOverageAmount.IsZero())
 
 			got := p.windows("li_w")
 			if tt.want == nil {

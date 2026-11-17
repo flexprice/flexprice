@@ -3606,6 +3606,12 @@ func (s *meterUsageService) periodCommitments(
 			continue
 		}
 
+		beyond := placer.beyond(lineID)
+		for _, c := range billedCharges {
+			*c.amount(breakdownByLine[lineID]) = c.amount(breakdownByLine[lineID]).Sub(*c.amount(&beyond))
+			*c.quantity(breakdownByLine[lineID]) = c.quantity(breakdownByLine[lineID]).Sub(*c.quantity(&beyond))
+		}
+
 		if windows := placer.windows(lineID); windows != nil {
 			windowsByLine[lineID] = windows
 		}
