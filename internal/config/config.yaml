@@ -674,7 +674,6 @@ integration_events:
 email_events:
   enabled: true
   consumer_group: "email-events-consumer"
-  rate_limit: 10
 
 onboarding_events:
   enabled: true

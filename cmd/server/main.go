@@ -931,7 +931,8 @@ func provideEmailEventsPubSub(
 	if !cfg.EmailEvents.Enabled || !cfg.Email.IsProviderConfigured() {
 		return types.EmailEventsPubSub{}
 	}
-	pubSub, err := kafkaPubsub.NewPubSubFromConfig(cfg, logger, cfg.EmailEvents.ConsumerGroup)
+	// A new group skips the topic's history so old invoices are never emailed late.
+	pubSub, err := kafkaPubsub.NewPubSubFromConfig(cfg, logger, cfg.EmailEvents.ConsumerGroup, kafkaPubsub.StartAtNewest())
 	if err != nil {
 		logger.Fatalw("failed to create pubsub for email events", "error", err)
 		return types.EmailEventsPubSub{}

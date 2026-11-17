@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Shopify/sarama"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -21,7 +22,15 @@ type Consumer struct {
 	cfg        *config.Configuration
 }
 
-func NewConsumer(cfg *config.Configuration, consumerGroupID string) (*Consumer, error) {
+// ConsumerOption adjusts the Sarama config of one consumer.
+type ConsumerOption func(*sarama.Config)
+
+// StartAtNewest makes a consumer group with no committed offset start at the newest message.
+func StartAtNewest() ConsumerOption {
+	return func(c *sarama.Config) { c.Consumer.Offsets.Initial = sarama.OffsetNewest }
+}
+
+func NewConsumer(cfg *config.Configuration, consumerGroupID string, opts ...ConsumerOption) (*Consumer, error) {
 	// enableDebugLogs allows watermill DEBUG messages in debug mode.
 	// TRACE is never enabled — it logs every individual message sent/received, which is too noisy.
 	enableDebugLogs := cfg.Logging.Level == types.LogLevelDebug
@@ -39,6 +48,9 @@ func NewConsumer(cfg *config.Configuration, consumerGroupID string) (*Consumer, 
 	saramaConfig.Consumer.Fetch.Default = 1024 * 1024          // Default fetch size (1MB)
 	saramaConfig.Consumer.MaxWaitTime = 100 * time.Millisecond // Max time to wait for new data
 	saramaConfig.Consumer.MaxProcessingTime = 500 * time.Millisecond
+	for _, opt := range opts {
+		opt(saramaConfig)
+	}
 
 	subscriber, err := kafka.NewSubscriber(
 		kafka.SubscriberConfig{
