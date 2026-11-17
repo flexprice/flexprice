@@ -24,6 +24,7 @@ import (
 type mockTenantService struct {
 	status types.TenantInternalStatus
 	err    error
+	tenant *dto.TenantResponse
 }
 
 func (m *mockTenantService) GetTenantInternalStatus(_ context.Context, _ string) (types.TenantInternalStatus, error) {
@@ -33,7 +34,7 @@ func (m *mockTenantService) CreateTenant(_ context.Context, _ dto.CreateTenantRe
 	return nil, nil
 }
 func (m *mockTenantService) GetTenantByID(_ context.Context, _ string) (*dto.TenantResponse, error) {
-	return nil, nil
+	return m.tenant, nil
 }
 func (m *mockTenantService) AssignTenantToUser(_ context.Context, _ dto.AssignTenantRequest) error {
 	return nil
