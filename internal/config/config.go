@@ -1194,6 +1194,7 @@ type EmailConfig struct {
 type EmailEventsConfig struct {
 	Enabled       bool   `mapstructure:"enabled" default:"true"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"email-events-consumer"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
 }
 
 type ResendEmailConfig struct {
@@ -1309,6 +1310,7 @@ func NewConfig() (*Configuration, error) {
 	v.SetDefault("email.sender_local_part", "invoices")
 	v.SetDefault("email_events.enabled", true)
 	v.SetDefault("email_events.consumer_group", "email-events-consumer")
+	v.SetDefault("email_events.rate_limit", 10)
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {

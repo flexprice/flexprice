@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -18,18 +20,21 @@ func (s *emailNotificationService) RegisterHandler(router *pubsubRouter.Router, 
 		return
 	}
 
-	// No throttle: nearly every message on the shared topic is skipped, and the dispatcher paces sending.
+	throttle := middleware.NewThrottle(cfg.EmailEvents.RateLimit, time.Second)
+
 	router.AddNoPublishHandler(
 		"email_events_handler",
 		cfg.Webhook.Topic,
 		cfg.Kafka.TopicDLQ,
 		s.EmailEventsPubSub.PubSub,
 		s.processEmailEvent,
+		throttle.Middleware,
 	)
 
 	s.Logger.Info(context.Background(), "registered email events handler",
 		"topic", cfg.Webhook.Topic,
 		"consumer_group", cfg.EmailEvents.ConsumerGroup,
+		"rate_limit", cfg.EmailEvents.RateLimit,
 	)
 }
 
