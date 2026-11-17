@@ -667,7 +667,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupArchive
 	session, draftSub, draft := s.seedPayFirstSubscriptionCheckout("plan_cleanup_draft")
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil, false))
 
 	archived, err := s.GetStores().SubscriptionRepo.Get(ctx, draftSub.ID)
 	s.Require().NoError(err)
@@ -703,7 +703,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupWithDup
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil, false))
 
 	archived, err := s.GetStores().SubscriptionRepo.Get(ctx, draftSub.ID)
 	s.Require().NoError(err)
@@ -746,7 +746,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupLegacyR
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil, false))
 
 	archived, err := s.GetStores().SubscriptionRepo.Get(ctx, draftSub.ID)
 	s.Require().NoError(err)
@@ -856,7 +856,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupSkipsAc
 	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, draftSub))
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil, false))
 
 	live, err := s.GetStores().SubscriptionRepo.Get(ctx, draftSub.ID)
 	s.Require().NoError(err)
@@ -881,7 +881,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupArchive
 	s.Require().NotNil(s.firstApplicationFor(grantID))
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil, false))
 
 	published := types.NewNoLimitQueryFilter()
 	published.Status = lo.ToPtr(types.StatusPublished)

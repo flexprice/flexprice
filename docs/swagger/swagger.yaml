@@ -4752,6 +4752,65 @@ definitions:
     - entity_type
     - provider_type
     type: object
+  EmailLogResponse:
+    properties:
+      cc_addresses:
+        items:
+          type: string
+        type: array
+      created_at:
+        type: string
+      created_by:
+        type: string
+      customer_id:
+        type: string
+      delivered_at:
+        type: string
+      delivery_status:
+        $ref: '#/definitions/types.EmailDeliveryStatus'
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.SystemEntityType'
+      environment_id:
+        type: string
+      from_address:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      provider:
+        $ref: '#/definitions/types.EmailProvider'
+      provider_message_id:
+        type: string
+      reply_to:
+        type: string
+      sent_at:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      status_reason:
+        type: string
+      subject:
+        type: string
+      template_key:
+        $ref: '#/definitions/types.EmailTemplateKey'
+      tenant_id:
+        type: string
+      to_addresses:
+        items:
+          type: string
+        type: array
+      trigger:
+        $ref: '#/definitions/types.EmailTrigger'
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
   EntitlementResponse:
     properties:
       addon:
@@ -5438,8 +5497,9 @@ definitions:
         type: array
       instalments:
         description: |-
-          Instalments lists, with expand "instalments", the instalments invoiced in the range for the v2 commitments covering
-          a queried meter; it is empty with property or source filters, or when no usage line runs in the range.
+          Instalments lists, with expand "instalments", the instalments of the v2 commitments covering a queried meter that
+          were invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source
+          filters, or when no usage line runs in the range.
         items:
           $ref: '#/definitions/UsageAnalyticInstalment'
         type: array
@@ -5453,8 +5513,9 @@ definitions:
         description: TotalCost is the final cost after discount (Subtotal - TotalDiscount)
         type: string
       total_cost_with_instalments:
-        description: TotalCostWithInstalments is TotalCost plus the amounts of Instalments,
-          set when expand includes "instalments".
+        description: |-
+          TotalCostWithInstalments is TotalCost plus the amounts of the invoiced Instalments, set when expand includes
+          "instalments". Scheduled instalments are not billed yet, so they are left out.
         type: string
       total_discount:
         type: string
@@ -6583,6 +6644,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListEmailLogsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/EmailLogResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListEntityIntegrationMappingsResponse:
     properties:
       items:
@@ -6895,6 +6965,8 @@ definitions:
     type: object
   PaymentGatewayOptions:
     properties:
+      razorpay:
+        $ref: '#/definitions/RazorpayPaymentGatewayOptions'
       stripe:
         $ref: '#/definitions/StripePaymentGatewayOptions'
     type: object
@@ -7433,6 +7505,13 @@ definitions:
         type: array
       provider:
         $ref: '#/definitions/types.PaymentGatewayType'
+    type: object
+  RazorpayPaymentGatewayOptions:
+    properties:
+      notify_customer:
+        description: NotifyCustomer lets Razorpay SMS/email the payment link to the
+          customer.
+        type: boolean
     type: object
   RefundResponse:
     properties:
@@ -8279,6 +8358,23 @@ definitions:
         type: string
       usage:
         $ref: '#/definitions/CustomerUsageSummaryResponse'
+    type: object
+  SendInvoiceEmailRequest:
+    properties:
+      cc:
+        items:
+          type: string
+        maxItems: 50
+        type: array
+      idempotency_key:
+        maxLength: 128
+        minLength: 1
+        type: string
+      to:
+        items:
+          type: string
+        maxItems: 50
+        type: array
     type: object
   SourceUsageItem:
     properties:
@@ -10860,12 +10956,20 @@ definitions:
     properties:
       amount:
         type: string
+      bill_on:
+        description: when it becomes billable
+        type: string
       commitment_id:
         type: string
       currency:
         type: string
       id:
         type: string
+      instalment_status:
+        allOf:
+        - $ref: '#/definitions/types.InstalmentStatus'
+        description: InstalmentStatus is invoiced, or scheduled for an instalment
+          due in the range that no invoice has billed yet.
       invoice_id:
         type: string
       invoice_label:
@@ -10873,6 +10977,11 @@ definitions:
       invoiced_at:
         description: when the invoice billing it was finalized
         type: string
+      kind:
+        allOf:
+        - $ref: '#/definitions/types.InstalmentKind'
+        description: Kind tells a regular instalment from a termination's settlement
+          and its cancellation_fee.
       service_period_end:
         type: string
       service_period_start:
@@ -11170,6 +11279,11 @@ definitions:
         $ref: '#/definitions/types.AutoTopup'
       balance:
         type: string
+      balance_alert_status:
+        allOf:
+        - $ref: '#/definitions/types.AlertState'
+        description: BalanceAlertStatus is ok, info, warning, or in_alarm. Absent
+          when wallet alerts are off.
       balance_updated_at:
         type: string
       config:
@@ -12324,6 +12438,10 @@ definitions:
         type: boolean
       max_mandate_limit:
         type: string
+      notify_customer:
+        description: NotifyCustomer lets the gateway email/SMS the payment link to
+          the customer.
+        type: boolean
       payment_method:
         $ref: '#/definitions/types.PaymentMethodType'
     type: object
@@ -15364,6 +15482,7 @@ definitions:
     - checkout.session.completed
     - checkout.session.failed
     - checkout.session.expired
+    - checkout.session.cancelled
     - event.rejected
     type: string
     x-enum-varnames:
@@ -15439,6 +15558,7 @@ definitions:
     - WebhookEventCheckoutSessionCompleted
     - WebhookEventCheckoutSessionFailed
     - WebhookEventCheckoutSessionExpired
+    - WebhookEventCheckoutSessionCancelled
     - WebhookEventEventRejected
   types.WindowSize:
     enum:
@@ -16430,6 +16550,50 @@ definitions:
     - ContractStatusActive
     - ContractStatusEnded
     - ContractStatusCancelled
+  types.EmailDeliveryStatus:
+    enum:
+    - queued
+    - sent
+    - delivery_delayed
+    - delivered
+    - bounced
+    - complained
+    - failed
+    - suppressed
+    - skipped
+    type: string
+    x-enum-varnames:
+    - EmailDeliveryStatusQueued
+    - EmailDeliveryStatusSent
+    - EmailDeliveryStatusDeliveryDelayed
+    - EmailDeliveryStatusDelivered
+    - EmailDeliveryStatusBounced
+    - EmailDeliveryStatusComplained
+    - EmailDeliveryStatusFailed
+    - EmailDeliveryStatusSuppressed
+    - EmailDeliveryStatusSkipped
+  types.EmailProvider:
+    enum:
+    - resend
+    - local
+    type: string
+    x-enum-varnames:
+    - EmailProviderResend
+    - EmailProviderLocal
+  types.EmailTemplateKey:
+    enum:
+    - invoice_finalized
+    type: string
+    x-enum-varnames:
+    - EmailTemplateInvoiceFinalized
+  types.EmailTrigger:
+    enum:
+    - auto
+    - manual
+    type: string
+    x-enum-varnames:
+    - EmailTriggerAuto
+    - EmailTriggerManual
   types.EntitlementGrantScopeEntityType:
     enum:
     - feature
@@ -16468,10 +16632,12 @@ definitions:
     enum:
     - instalment
     - settlement
+    - cancellation_fee
     type: string
     x-enum-varnames:
     - InstalmentKindInstalment
     - InstalmentKindSettlement
+    - InstalmentKindCancellationFee
   types.InstalmentStatus:
     enum:
     - scheduled
@@ -16661,6 +16827,44 @@ definitions:
         minimum: 0
         type: integer
     type: object
+  types.SystemEntityType:
+    enum:
+    - feature
+    - customer
+    - plan
+    - subscription
+    - invoice
+    - payment
+    - credit_note
+    - refund
+    - wallet
+    - entitlement
+    - checkout_session
+    - payment_method
+    - price
+    - event
+    - commitment
+    - billing_term
+    - billing_instalment
+    type: string
+    x-enum-varnames:
+    - SystemEntityTypeFeature
+    - SystemEntityTypeCustomer
+    - SystemEntityTypePlan
+    - SystemEntityTypeSubscription
+    - SystemEntityTypeInvoice
+    - SystemEntityTypePayment
+    - SystemEntityTypeCreditNote
+    - SystemEntityTypeRefund
+    - SystemEntityTypeWallet
+    - SystemEntityTypeEntitlement
+    - SystemEntityTypeCheckoutSession
+    - SystemEntityTypePaymentMethod
+    - SystemEntityTypePrice
+    - SystemEntityTypeEvent
+    - SystemEntityTypeCommitment
+    - SystemEntityTypeBillingTerm
+    - SystemEntityTypeBillingInstalment
   types.TenantInternalStatus:
     enum:
     - trialing
@@ -22500,6 +22704,81 @@ paths:
       summary: Trigger invoice communication webhook
       tags:
       - Invoices
+  /invoices/{id}/email:
+    post:
+      consumes:
+      - application/json
+      description: Use when you want Flexprice to email a finalized invoice to the
+        customer, with a link to the hosted invoice and the PDF attached. Sends to
+        the customer's email unless `to` is given. Returns the queued email; delivery
+        happens in the background.
+      operationId: sendInvoiceEmail
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Recipients overriding the customer's email
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/SendInvoiceEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/EmailLogResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Email invoice to customer
+      tags:
+      - Invoices
+  /invoices/{id}/emails:
+    get:
+      description: Use when showing which emails were sent for an invoice and whether
+        each was delivered. Newest first.
+      operationId: listInvoiceEmails
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListEmailLogsResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List invoice emails
+      tags:
+      - Invoices
   /invoices/{id}/finalize:
     post:
       consumes:
@@ -28137,6 +28416,22 @@ paths:
       summary: billing_terms.updated
       tags:
       - Commitment and billing terms
+  /webhook-events/checkout.session.cancelled:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a Checkout Session is cancelled through the API, alongside
+        checkout.session.expired. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
+      summary: checkout.session.cancelled
+      tags:
+      - Checkout
   /webhook-events/checkout.session.completed:
     post:
       consumes:

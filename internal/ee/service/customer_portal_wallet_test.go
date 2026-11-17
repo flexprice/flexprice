@@ -114,6 +114,45 @@ func (s *PortalWalletSuite) buildParams() ServiceParams {
 	}
 }
 
+func (s *PortalWalletSuite) setWalletAlertConfig(cfg types.AlertSettings) {
+	value, err := utils.ToMap(cfg)
+	s.NoError(err)
+	s.NoError(s.GetStores().SettingsRepo.Create(s.ctx, &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeyWalletBalanceAlertConfig,
+		Value:         value,
+		EnvironmentID: types.GetEnvironmentID(s.ctx),
+		BaseModel:     types.GetDefaultBaseModel(s.ctx),
+	}))
+}
+
+func (s *PortalWalletSuite) TestGetWallets_SetsBalanceAlertStatus() {
+	s.setWalletAlertConfig(types.AlertSettings{
+		AlertEnabled: lo.ToPtr(true),
+		Warning:      &types.AlertThreshold{Threshold: decimal.NewFromInt(100), Condition: types.AlertConditionBelow},
+		Critical:     &types.AlertThreshold{Threshold: decimal.Zero, Condition: types.AlertConditionBelow},
+	})
+
+	wallets, err := s.svc.GetWallets(s.ctx)
+	s.NoError(err)
+	s.Require().Len(wallets, 1)
+	s.Require().NotNil(wallets[0].BalanceAlertStatus)
+	s.Equal(types.AlertStateWarning, *wallets[0].BalanceAlertStatus)
+}
+
+func (s *PortalWalletSuite) TestGetWallets_OmitsStatusWhenNothingToEvaluate() {
+	s.setWalletAlertConfig(types.AlertSettings{
+		AlertEnabled:       lo.ToPtr(true),
+		AlertThresholdType: types.AlertThresholdTypePercentage,
+		Warning:            &types.AlertThreshold{Threshold: decimal.NewFromInt(25), Condition: types.AlertConditionBelow},
+	})
+
+	wallets, err := s.svc.GetWallets(s.ctx)
+	s.NoError(err)
+	s.Require().Len(wallets, 1)
+	s.Nil(wallets[0].BalanceAlertStatus)
+}
+
 func (s *PortalWalletSuite) connect(providers ...types.SecretProvider) {
 	for _, p := range providers {
 		conn := &connection.Connection{

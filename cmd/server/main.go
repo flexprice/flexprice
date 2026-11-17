@@ -29,6 +29,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
 	revenuereportsvc "github.com/flexprice/flexprice/internal/ee/service/revenuereport"
 	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
+	"github.com/flexprice/flexprice/internal/email"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
@@ -197,6 +198,7 @@ func main() {
 			repository.NewTaxRateRepository,
 			repository.NewFXRateRepository,
 			repository.NewHostedInvoiceTokenRepository,
+			repository.NewEmailLogRepository,
 			repository.NewTaxAssociationRepository,
 			repository.NewCouponRepository,
 			repository.NewCouponAssociationRepository,
@@ -274,6 +276,8 @@ func main() {
 			// (invoices/exports/imports). Provided before service params so any
 			// service can reach it via ServiceParams.StorageResolver.
 			provideStorageResolver,
+			// Customer email provider (resend or log), chosen by email.provider.
+			email.NewProvider,
 			syncExport.NewExportService,
 			fx.Annotate(service.NewServiceParams, fx.ResultTags(`name:"base"`)),
 			service.NewOAuthService,
@@ -335,6 +339,7 @@ func main() {
 			provideBillingEntityScope,
 			service.NewHostedInvoiceTokenService,
 			service.NewHostedInvoiceService,
+			service.NewEmailNotificationService,
 			service.NewCouponService,
 			service.NewCommitmentService,
 			service.NewCouponAssociationService,
@@ -464,6 +469,7 @@ func provideHandlers(
 	costsheetUsageTrackingService service.CostSheetUsageTrackingService,
 	customerPortalService service.CustomerPortalService,
 	hostedInvoiceService service.HostedInvoiceService,
+	emailNotificationService service.EmailNotificationService,
 	dashboardService service.DashboardService,
 	workflowService service.WorkflowService,
 	meterUsageService service.MeterUsageService,
@@ -538,6 +544,7 @@ func provideHandlers(
 		CustomerPortal:           v1.NewCustomerPortalHandler(customerPortalService, logger),
 		SelfBilling:              v1.NewSelfBillingHandler(selfBillingService),
 		HostedInvoice:            v1.NewHostedInvoiceHandler(hostedInvoiceService, logger),
+		EmailNotification:        v1.NewEmailNotificationHandler(emailNotificationService, logger),
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),

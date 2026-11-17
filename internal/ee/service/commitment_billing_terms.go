@@ -29,7 +29,11 @@ func (s *commitmentService) planInstalments(
 	invoiced []*billingterm.Instalment,
 	from time.Time,
 ) ([]*billingterm.Instalment, error) {
-	left := c.CollectionTotal().Sub(sumInstalments(invoiced))
+	// A cancellation fee is charged on top of the total, so it collects none of it.
+	collected := lo.Reject(invoiced, func(inst *billingterm.Instalment, _ int) bool {
+		return inst.Kind == types.InstalmentKindCancellationFee
+	})
+	left := c.CollectionTotal().Sub(sumInstalments(collected))
 	if !left.IsPositive() {
 		return nil, ierr.Validationf("billing_terms: the commitment is fully invoiced; nothing is left to plan")
 	}
@@ -463,8 +467,12 @@ func owedAtTermination(inst *billingterm.Instalment, terminatedAt time.Time) boo
 }
 
 // cancelledByTermination reports whether c, the instalment's commitment, was terminated without owing the instalment,
-// so the instalment is never billed.
+// so the instalment is never billed. The termination's own cancellation fee is always owed.
 func cancelledByTermination(c *commitment.Commitment, inst *billingterm.Instalment) bool {
+	if inst.Kind == types.InstalmentKindCancellationFee {
+		return false
+	}
+
 	return c != nil && c.CommitmentStatus == types.CommitmentStatusTerminated && c.TerminatedAt != nil &&
 		!owedAtTermination(inst, *c.TerminatedAt)
 }
@@ -500,7 +508,7 @@ func (s *commitmentService) settleEnded(ctx context.Context, c *commitment.Commi
 		return err
 	}
 
-	_, err = s.billTermination(ctx, c, sub, end, decimal.Zero, settlement)
+	_, err = s.billTermination(ctx, c, sub, []*billingterm.Instalment{settlement})
 	return err
 }
 

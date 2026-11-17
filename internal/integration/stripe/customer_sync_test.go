@@ -37,6 +37,7 @@ type syncTestCustomerService struct {
 	stripeID       string
 	updateCalls    []dto.UpdateCustomerRequest
 	updateErr      error
+	created        []dto.CreateCustomerRequest
 }
 
 func (s *syncTestCustomerService) GetCustomer(_ context.Context, _ string) (*dto.CustomerResponse, error) {
@@ -48,6 +49,11 @@ func (s *syncTestCustomerService) GetCustomer(_ context.Context, _ string) (*dto
 		s.customer.Metadata["stripe_customer_id"] = s.stripeID
 	}
 	return &dto.CustomerResponse{Customer: s.customer}, nil
+}
+
+func (s *syncTestCustomerService) CreateCustomer(_ context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error) {
+	s.created = append(s.created, req)
+	return &dto.CustomerResponse{Customer: &customer.Customer{ID: "cust_test", Name: req.Name, Email: req.Email}}, nil
 }
 
 func (s *syncTestCustomerService) UpdateCustomer(_ context.Context, _ string, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error) {
@@ -387,6 +393,42 @@ func TestCustomerUpdateParams(t *testing.T) {
 			assert.Equal(t, tt.customer.Name, *params.Name)
 			assert.Equal(t, tt.customer.Email, *params.Email)
 			assert.Equal(t, tt.wantAddress, params.Address)
+		})
+	}
+}
+
+func TestCreateCustomerFromStripe_NameFallsBackToEmail(t *testing.T) {
+	tests := []struct {
+		name      string
+		stripe    *stripeapi.Customer
+		wantName  string
+		wantEmail string
+	}{
+		{
+			name:      "blank stripe name uses email",
+			stripe:    &stripeapi.Customer{ID: "cus_noname", Email: "ada@example.com"},
+			wantName:  "ada@example.com",
+			wantEmail: "ada@example.com",
+		},
+		{
+			name:      "stripe name is kept",
+			stripe:    &stripeapi.Customer{ID: "cus_named", Name: "Ada Lovelace", Email: "ada@example.com"},
+			wantName:  "Ada Lovelace",
+			wantEmail: "ada@example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			customers := &syncTestCustomerService{}
+			svc := NewCustomerService(testClient(), nil, nil, nil, logger.NewNoopLogger())
+
+			err := svc.CreateCustomerFromStripe(context.Background(), tt.stripe, "env_test", customers)
+			require.NoError(t, err)
+			require.Len(t, customers.created, 1)
+			assert.Equal(t, tt.wantName, customers.created[0].Name)
+			assert.Equal(t, tt.wantEmail, customers.created[0].Email)
+			assert.Equal(t, tt.stripe.ID, customers.created[0].ExternalID)
 		})
 	}
 }

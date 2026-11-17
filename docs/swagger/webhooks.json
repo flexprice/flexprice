@@ -37,6 +37,59 @@
     }
   ],
   "webhooks": {
+    "checkout.session.cancelled": {
+      "post": {
+        "tags": [
+          "Checkout"
+        ],
+        "summary": "checkout.session.cancelled",
+        "description": "Fired when a Checkout Session is cancelled through the API, alongside checkout.session.expired.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SvixId"
+          },
+          {
+            "$ref": "#/components/parameters/SvixTimestamp"
+          },
+          {
+            "$ref": "#/components/parameters/SvixSignature"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "checkout_session": {
+                    "$ref": "#/components/schemas/webhookDto.CheckoutSession"
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "checkout.session.cancelled"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Return any 2xx status to acknowledge receipt."
+          }
+        },
+        "x-mint": {
+          "metadata": {
+            "title": "Checkout session cancelled",
+            "sidebarTitle": "checkout.session.cancelled"
+          },
+          "href": "/api-reference/webhook-events/checkoutsessioncancelled"
+        }
+      }
+    },
     "checkout.session.completed": {
       "post": {
         "tags": [
@@ -5329,11 +5382,13 @@
         "type": "string",
         "enum": [
           "instalment",
-          "settlement"
+          "settlement",
+          "cancellation_fee"
         ],
         "x-enum-varnames": [
           "InstalmentKindInstalment",
-          "InstalmentKindSettlement"
+          "InstalmentKindSettlement",
+          "InstalmentKindCancellationFee"
         ],
         "x-speakeasy-name-override": "InstalmentKind"
       },

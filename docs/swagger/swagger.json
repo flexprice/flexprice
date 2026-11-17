@@ -7312,6 +7312,117 @@
                 }
             }
         },
+        "/invoices/{id}/email": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you want Flexprice to email a finalized invoice to the customer, with a link to the hosted invoice and the PDF attached. Sends to the customer's email unless `to` is given. Returns the queued email; delivery happens in the background.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Email invoice to customer",
+                "operationId": "sendInvoiceEmail",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Recipients overriding the customer's email",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/SendInvoiceEmailRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/EmailLogResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/invoices/{id}/emails": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when showing which emails were sent for an invoice and whether each was delivered. Newest first.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "List invoice emails",
+                "operationId": "listInvoiceEmails",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListEmailLogsResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/invoices/{id}/finalize": {
             "post": {
                 "security": [
@@ -15609,6 +15720,29 @@
                 }
             }
         },
+        "/webhook-events/checkout.session.cancelled": {
+            "post": {
+                "description": "Fired when a Checkout Session is cancelled through the API, alongside checkout.session.expired. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "checkout.session.cancelled",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.CheckoutSessionWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/checkout.session.completed": {
             "post": {
                 "description": "Fired when payment is confirmed; the subscription is now active and the invoice is finalized. Doc-only for parsing.",
@@ -23503,6 +23637,95 @@
                 }
             }
         },
+        "EmailLogResponse": {
+            "type": "object",
+            "properties": {
+                "cc_addresses": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "delivered_at": {
+                    "type": "string"
+                },
+                "delivery_status": {
+                    "$ref": "#/definitions/types.EmailDeliveryStatus"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.SystemEntityType"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "from_address": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.EmailProvider"
+                },
+                "provider_message_id": {
+                    "type": "string"
+                },
+                "reply_to": {
+                    "type": "string"
+                },
+                "sent_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "status_reason": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "template_key": {
+                    "$ref": "#/definitions/types.EmailTemplateKey"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "to_addresses": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "trigger": {
+                    "$ref": "#/definitions/types.EmailTrigger"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
         "EntitlementResponse": {
             "type": "object",
             "properties": {
@@ -24454,7 +24677,7 @@
                     }
                 },
                 "instalments": {
-                    "description": "Instalments lists, with expand \"instalments\", the instalments invoiced in the range for the v2 commitments covering\na queried meter; it is empty with property or source filters, or when no usage line runs in the range.",
+                    "description": "Instalments lists, with expand \"instalments\", the instalments of the v2 commitments covering a queried meter that\nwere invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source\nfilters, or when no usage line runs in the range.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/UsageAnalyticInstalment"
@@ -24474,7 +24697,7 @@
                     "type": "string"
                 },
                 "total_cost_with_instalments": {
-                    "description": "TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes \"instalments\".",
+                    "description": "TotalCostWithInstalments is TotalCost plus the amounts of the invoiced Instalments, set when expand includes\n\"instalments\". Scheduled instalments are not billed yet, so they are left out.",
                     "type": "string"
                 },
                 "total_discount": {
@@ -25898,6 +26121,20 @@
                 }
             }
         },
+        "ListEmailLogsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/EmailLogResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "ListEntityIntegrationMappingsResponse": {
             "type": "object",
             "properties": {
@@ -26332,6 +26569,9 @@
         "PaymentGatewayOptions": {
             "type": "object",
             "properties": {
+                "razorpay": {
+                    "$ref": "#/definitions/RazorpayPaymentGatewayOptions"
+                },
                 "stripe": {
                     "$ref": "#/definitions/StripePaymentGatewayOptions"
                 }
@@ -27077,6 +27317,15 @@
                 },
                 "provider": {
                     "$ref": "#/definitions/types.PaymentGatewayType"
+                }
+            }
+        },
+        "RazorpayPaymentGatewayOptions": {
+            "type": "object",
+            "properties": {
+                "notify_customer": {
+                    "description": "NotifyCustomer lets Razorpay SMS/email the payment link to the customer.",
+                    "type": "boolean"
                 }
             }
         },
@@ -28219,6 +28468,30 @@
                 },
                 "usage": {
                     "$ref": "#/definitions/CustomerUsageSummaryResponse"
+                }
+            }
+        },
+        "SendInvoiceEmailRequest": {
+            "type": "object",
+            "properties": {
+                "cc": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "idempotency_key": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "minLength": 1
+                },
+                "to": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -31491,6 +31764,10 @@
                 "amount": {
                     "type": "string"
                 },
+                "bill_on": {
+                    "description": "when it becomes billable",
+                    "type": "string"
+                },
                 "commitment_id": {
                     "type": "string"
                 },
@@ -31499,6 +31776,10 @@
                 },
                 "id": {
                     "type": "string"
+                },
+                "instalment_status": {
+                    "description": "InstalmentStatus is invoiced, or scheduled for an instalment due in the range that no invoice has billed yet.",
+                    "$ref": "#/definitions/types.InstalmentStatus"
                 },
                 "invoice_id": {
                     "type": "string"
@@ -31509,6 +31790,10 @@
                 "invoiced_at": {
                     "description": "when the invoice billing it was finalized",
                     "type": "string"
+                },
+                "kind": {
+                    "description": "Kind tells a regular instalment from a termination's settlement and its cancellation_fee.",
+                    "$ref": "#/definitions/types.InstalmentKind"
                 },
                 "service_period_end": {
                     "type": "string"
@@ -31906,6 +32191,10 @@
                 },
                 "balance": {
                     "type": "string"
+                },
+                "balance_alert_status": {
+                    "description": "BalanceAlertStatus is ok, info, warning, or in_alarm. Absent when wallet alerts are off.",
+                    "$ref": "#/definitions/types.AlertState"
                 },
                 "balance_updated_at": {
                     "type": "string"
@@ -33455,6 +33744,10 @@
                 },
                 "max_mandate_limit": {
                     "type": "string"
+                },
+                "notify_customer": {
+                    "description": "NotifyCustomer lets the gateway email/SMS the payment link to the customer.",
+                    "type": "boolean"
                 },
                 "payment_method": {
                     "$ref": "#/definitions/types.PaymentMethodType"
@@ -37382,6 +37675,7 @@
                 "checkout.session.completed",
                 "checkout.session.failed",
                 "checkout.session.expired",
+                "checkout.session.cancelled",
                 "event.rejected"
             ],
             "x-enum-varnames": [
@@ -37457,6 +37751,7 @@
                 "WebhookEventCheckoutSessionCompleted",
                 "WebhookEventCheckoutSessionFailed",
                 "WebhookEventCheckoutSessionExpired",
+                "WebhookEventCheckoutSessionCancelled",
                 "WebhookEventEventRejected"
             ]
         },
@@ -38748,6 +39043,62 @@
                 "ContractStatusCancelled"
             ]
         },
+        "types.EmailDeliveryStatus": {
+            "type": "string",
+            "enum": [
+                "queued",
+                "sent",
+                "delivery_delayed",
+                "delivered",
+                "bounced",
+                "complained",
+                "failed",
+                "suppressed",
+                "skipped"
+            ],
+            "x-enum-varnames": [
+                "EmailDeliveryStatusQueued",
+                "EmailDeliveryStatusSent",
+                "EmailDeliveryStatusDeliveryDelayed",
+                "EmailDeliveryStatusDelivered",
+                "EmailDeliveryStatusBounced",
+                "EmailDeliveryStatusComplained",
+                "EmailDeliveryStatusFailed",
+                "EmailDeliveryStatusSuppressed",
+                "EmailDeliveryStatusSkipped"
+            ]
+        },
+        "types.EmailProvider": {
+            "type": "string",
+            "enum": [
+                "resend",
+                "local"
+            ],
+            "x-enum-varnames": [
+                "EmailProviderResend",
+                "EmailProviderLocal"
+            ]
+        },
+        "types.EmailTemplateKey": {
+            "type": "string",
+            "enum": [
+                "invoice_finalized"
+            ],
+            "x-enum-varnames": [
+                "EmailTemplateInvoiceFinalized"
+            ]
+        },
+        "types.EmailTrigger": {
+            "type": "string",
+            "enum": [
+                "auto",
+                "manual"
+            ],
+            "x-enum-varnames": [
+                "EmailTriggerAuto",
+                "EmailTriggerManual"
+            ]
+        },
         "types.EntitlementGrantScopeEntityType": {
             "type": "string",
             "enum": [
@@ -38798,11 +39149,13 @@
             "type": "string",
             "enum": [
                 "instalment",
-                "settlement"
+                "settlement",
+                "cancellation_fee"
             ],
             "x-enum-varnames": [
                 "InstalmentKindInstalment",
-                "InstalmentKindSettlement"
+                "InstalmentKindSettlement",
+                "InstalmentKindCancellationFee"
             ]
         },
         "types.InstalmentStatus": {
@@ -39048,6 +39401,47 @@
                     "minimum": 0
                 }
             }
+        },
+        "types.SystemEntityType": {
+            "type": "string",
+            "enum": [
+                "feature",
+                "customer",
+                "plan",
+                "subscription",
+                "invoice",
+                "payment",
+                "credit_note",
+                "refund",
+                "wallet",
+                "entitlement",
+                "checkout_session",
+                "payment_method",
+                "price",
+                "event",
+                "commitment",
+                "billing_term",
+                "billing_instalment"
+            ],
+            "x-enum-varnames": [
+                "SystemEntityTypeFeature",
+                "SystemEntityTypeCustomer",
+                "SystemEntityTypePlan",
+                "SystemEntityTypeSubscription",
+                "SystemEntityTypeInvoice",
+                "SystemEntityTypePayment",
+                "SystemEntityTypeCreditNote",
+                "SystemEntityTypeRefund",
+                "SystemEntityTypeWallet",
+                "SystemEntityTypeEntitlement",
+                "SystemEntityTypeCheckoutSession",
+                "SystemEntityTypePaymentMethod",
+                "SystemEntityTypePrice",
+                "SystemEntityTypeEvent",
+                "SystemEntityTypeCommitment",
+                "SystemEntityTypeBillingTerm",
+                "SystemEntityTypeBillingInstalment"
+            ]
         },
         "types.TenantInternalStatus": {
             "type": "string",

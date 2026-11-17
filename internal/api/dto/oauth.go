@@ -125,14 +125,14 @@ func (r *CompleteOAuthRequest) Validate() error {
 				WithHint("QuickBooks realm_id must be provided to complete the OAuth flow").
 				Mark(errors.ErrValidation)
 		}
-		return nil
+		return types.ValidateQuickBooksRealmID(r.RealmID)
 	case types.OAuthProviderZohoBooks:
 		if r.OrganizationID == "" {
 			return errors.NewError("organization_id is required for Zoho Books OAuth").
 				WithHint("Zoho organization_id must be provided to complete the OAuth flow").
 				Mark(errors.ErrValidation)
 		}
-		return nil
+		return types.ValidateZohoOrganizationID(r.OrganizationID)
 
 	default:
 		return errors.NewError("unsupported OAuth provider").

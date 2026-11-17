@@ -391,25 +391,32 @@ type GetUsageAnalyticsResponse struct {
 	Currency        string               `json:"currency"`
 	Items           []UsageAnalyticItem  `json:"items"`
 	CustomAnalytics []CustomAnalyticItem `json:"custom_analytics,omitempty"`
-	// Instalments lists, with expand "instalments", the instalments invoiced in the range for the v2 commitments covering
-	// a queried meter; it is empty with property or source filters, or when no usage line runs in the range.
+	// Instalments lists, with expand "instalments", the instalments of the v2 commitments covering a queried meter that
+	// were invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source
+	// filters, or when no usage line runs in the range.
 	Instalments []UsageAnalyticInstalment `json:"instalments,omitempty"`
-	// TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes "instalments".
+	// TotalCostWithInstalments is TotalCost plus the amounts of the invoiced Instalments, set when expand includes
+	// "instalments". Scheduled instalments are not billed yet, so they are left out.
 	TotalCostWithInstalments *decimal.Decimal `json:"total_cost_with_instalments,omitempty" swaggertype:"string"`
 }
 
-// UsageAnalyticInstalment is one commitment instalment billed inside an analytics range.
+// UsageAnalyticInstalment is one commitment instalment billed, or scheduled to be billed, inside an analytics range.
 type UsageAnalyticInstalment struct {
-	ID                 string          `json:"id"`
-	CommitmentID       string          `json:"commitment_id"`
-	SubscriptionID     string          `json:"subscription_id,omitempty"`
-	InvoiceID          string          `json:"invoice_id,omitempty"`
-	InvoiceLabel       string          `json:"invoice_label"`
-	Amount             decimal.Decimal `json:"amount" swaggertype:"string"`
-	Currency           string          `json:"currency"`
-	InvoicedAt         *time.Time      `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
-	ServicePeriodStart time.Time       `json:"service_period_start"`
-	ServicePeriodEnd   time.Time       `json:"service_period_end"`
+	ID             string `json:"id"`
+	CommitmentID   string `json:"commitment_id"`
+	SubscriptionID string `json:"subscription_id,omitempty"`
+	InvoiceID      string `json:"invoice_id,omitempty"`
+	// Kind tells a regular instalment from a termination's settlement and its cancellation_fee.
+	Kind types.InstalmentKind `json:"kind"`
+	// InstalmentStatus is invoiced, or scheduled for an instalment due in the range that no invoice has billed yet.
+	InstalmentStatus   types.InstalmentStatus `json:"instalment_status"`
+	InvoiceLabel       string                 `json:"invoice_label"`
+	Amount             decimal.Decimal        `json:"amount" swaggertype:"string"`
+	Currency           string                 `json:"currency"`
+	BillOn             time.Time              `json:"bill_on"`               // when it becomes billable
+	InvoicedAt         *time.Time             `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
+	ServicePeriodStart time.Time              `json:"service_period_start"`
+	ServicePeriodEnd   time.Time              `json:"service_period_end"`
 }
 
 // UsageAnalyticItem represents a single analytic item in the response

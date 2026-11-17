@@ -1256,7 +1256,7 @@ func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtFinalization() {
 	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
 
 	finalizeStart := time.Now().UTC()
-	processor := &paymentProcessor{ServiceParams: s.service.(*invoiceService).ServiceParams}
+	processor := NewPaymentProcessorService(s.service.(*invoiceService).ServiceParams).(*paymentProcessor)
 	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
 
 	got, err := s.invoiceRepo.Get(ctx, draft.ID)
@@ -1303,7 +1303,7 @@ func (s *InvoiceServiceSuite) TestPaidDraftFinalizesWhenDatingFails() {
 	}
 	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
 
-	processor := &paymentProcessor{ServiceParams: s.service.(*invoiceService).ServiceParams}
+	processor := NewPaymentProcessorService(s.service.(*invoiceService).ServiceParams).(*paymentProcessor)
 	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
 
 	got, err := s.invoiceRepo.Get(ctx, draft.ID)
@@ -3942,7 +3942,8 @@ func (s *InvoiceServiceSuite) TestAutoChargeRazorpayInvoice() {
 		wantPaymentState types.PaymentStatus
 		wantReason       types.InvoicePaymentFailureReason
 	}{
-		{name: "charged", collectionMethod: types.CollectionMethodChargeAutomatically, tokens: []*interfaces.ProviderPaymentMethod{usableCard}, wantCharged: true, wantPaymentState: types.PaymentStatusProcessing},
+		{name: "charged", collectionMethod: types.CollectionMethodChargeAutomatically, tokens: []*interfaces.ProviderPaymentMethod{usableCard}, wantCharged: true, wantPaymentState: types.PaymentStatusPending},
+		{name: "already submitted", collectionMethod: types.CollectionMethodChargeAutomatically, tokens: []*interfaces.ProviderPaymentMethod{usableCard}, priorStatus: types.PaymentStatusPending, wantCharged: true, wantPaymentState: types.PaymentStatusPending},
 		{name: "no usable token", collectionMethod: types.CollectionMethodChargeAutomatically, wantReason: types.InvoicePaymentFailureReasonPaymentMethodUnavailable},
 		{name: "submission error", collectionMethod: types.CollectionMethodChargeAutomatically, tokens: []*interfaces.ProviderPaymentMethod{usableCard}, createOrderErr: errors.New("gateway down"), wantPaymentState: types.PaymentStatusFailed, wantReason: types.InvoicePaymentFailureReasonProviderError},
 		{name: "previous attempt failed", collectionMethod: types.CollectionMethodChargeAutomatically, tokens: []*interfaces.ProviderPaymentMethod{usableCard}, priorStatus: types.PaymentStatusFailed, wantCharged: true, wantPaymentState: types.PaymentStatusFailed},
@@ -4017,7 +4018,7 @@ func (s *InvoiceServiceSuite) TestAutoChargeRazorpayInvoice() {
 			} else {
 				s.Require().Len(payments, 1)
 				s.Equal(tt.wantPaymentState, payments[0].PaymentStatus)
-				if tt.wantPaymentState == types.PaymentStatusProcessing {
+				if tt.priorStatus == "" && tt.wantPaymentState == types.PaymentStatusPending {
 					s.Equal("pay_rzp_1", lo.FromPtr(payments[0].GatewayPaymentID))
 				}
 			}

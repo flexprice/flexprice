@@ -547,6 +547,8 @@ type WalletBalanceResponse struct {
 	CurrentPeriodUsage        *decimal.Decimal       `json:"current_period_usage,omitempty" swaggertype:"string"`
 	UnpaidInvoicesAmount      *decimal.Decimal       `json:"unpaid_invoices_amount,omitempty" swaggertype:"string"`
 	CreditsAvailableBreakdown *types.CreditBreakdown `json:"credits_available_breakdown,omitempty"`
+	// BalanceAlertStatus is ok, info, warning, or in_alarm. Absent when wallet alerts are off.
+	BalanceAlertStatus *types.AlertState `json:"balance_alert_status,omitempty"`
 	// IsCachedFallback is true whenever the response is sourced from cache:
 	// either an explicit cache request, or fallback after a real-time failure.
 	// Clients should treat the absence of this field as if it were true and

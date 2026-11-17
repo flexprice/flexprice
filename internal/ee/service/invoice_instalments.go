@@ -327,8 +327,8 @@ func (s *invoiceService) billedInstalmentIDs(ctx context.Context, invoiceID stri
 	}), nil
 }
 
-// rescheduleInstalments puts a voided invoice's instalments back on schedule and cancels those a termination no longer
-// owes, in the void transaction and under their commitments' locks, so an edit never sees the void half done.
+// rescheduleInstalments puts a voided invoice's instalments back on schedule, cancelling those a termination no longer
+// owes and its cancellation fee. It runs in the void transaction, under their commitments' locks.
 func (s *invoiceService) rescheduleInstalments(ctx context.Context, invoiceID string) error {
 	ids, err := s.billedInstalmentIDs(ctx, invoiceID)
 	if err != nil || len(ids) == 0 {
@@ -357,7 +357,7 @@ func (s *invoiceService) rescheduleInstalments(ctx context.Context, invoiceID st
 
 	var cancelIDs []string
 	for _, inst := range billed {
-		if cancelledByTermination(byID[inst.OwnerID], inst) {
+		if inst.Kind == types.InstalmentKindCancellationFee || cancelledByTermination(byID[inst.OwnerID], inst) {
 			cancelIDs = append(cancelIDs, inst.ID)
 		}
 	}

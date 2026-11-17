@@ -58,7 +58,7 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		}
 	}()
 
-	existingPayment, err := paymentService.GetPayment(ctx, flexpricePaymentID)
+	existingPayment, err := paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		return ierr.WithError(err).
 			WithMessage("failed to get payment record for refund").
