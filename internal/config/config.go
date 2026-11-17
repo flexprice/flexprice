@@ -615,6 +615,15 @@ type ClickHouseConfig struct {
 	Password       string `mapstructure:"password" validate:"required"`
 	Database       string `mapstructure:"database" validate:"required"`
 	MaxMemoryUsage int64  `mapstructure:"max_memory_usage" validate:"required"`
+
+	MeterUsageOptimize MeterUsageOptimizeConfig `mapstructure:"meter_usage_optimize" validate:"omitempty"`
+}
+
+// MeterUsageOptimizeConfig gates the daily OPTIMIZE FINAL of closed
+// meter_usage day-partitions. Off by default.
+type MeterUsageOptimizeConfig struct {
+	Enabled      bool `mapstructure:"enabled" default:"false"`
+	LookbackDays int  `mapstructure:"lookback_days" default:"7"`
 }
 
 // ReportsConfig is the reports ClickHouse login.

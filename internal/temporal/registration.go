@@ -3,6 +3,7 @@ package temporal
 import (
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
 	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
@@ -68,6 +69,7 @@ type cronActivityBundle struct {
 	marketplaceReport            *marketplaceActivities.ReportActivities
 	dailyDraftAndCompute         *cronActivities.DailyDraftAndComputeActivities
 	revenueRollup                *cronActivities.RevenueRollupActivities
+	meterUsageOptimize           *cronActivities.MeterUsageOptimizeActivities
 	revenueRecognition           *cronActivities.RevenueRecognitionActivities
 	selfBillingHourly            *cronActivities.SelfBillingHourlyActivities
 	commitment                   *cronActivities.CommitmentCronActivities
@@ -79,6 +81,7 @@ func RegisterWorkflowsAndActivities(
 	temporalService temporalService.TemporalService,
 	params service.ServiceParams,
 	webhookService *webhook.WebhookService,
+	chStore *clickhouse.ClickHouseStore,
 ) error {
 	// Create workflow tracking activity (follows standard activity pattern)
 	workflowTrackingActivities := workflowActivities.NewWorkflowTrackingActivities(
@@ -355,6 +358,7 @@ func RegisterWorkflowsAndActivities(
 		marketplaceReport:            marketplaceReportActivities,
 		dailyDraftAndCompute:         cronActivities.NewDailyDraftAndComputeActivities(service.NewInvoiceService(params), subscriptionService, params.Logger),
 		revenueRollup:                cronActivities.NewRevenueRollupActivities(revenue.New(params), params.Config, params.Logger),
+		meterUsageOptimize:           cronActivities.NewMeterUsageOptimizeActivities(chStore.GetConn(), params.Config),
 		revenueRecognition:           cronActivities.NewRevenueRecognitionActivities(params.JournalService, params.Logger),
 		selfBillingHourly:            cronActivities.NewSelfBillingHourlyActivities(selfbilling.New(params), params.Logger),
 		commitment:                   cronActivities.NewCommitmentCronActivities(service.NewCommitmentService(params), params.Logger),
@@ -612,6 +616,7 @@ func buildWorkerConfig(
 			cronWorkflows.MarketplaceUsageReportWorkflow,
 			cronWorkflows.DailyDraftAndComputeWorkflow,
 			cronWorkflows.RevenueRollupWorkflow,
+			cronWorkflows.MeterUsageOptimizeWorkflow,
 			cronWorkflows.RevenueRecognitionWorkflow,
 			cronWorkflows.RevenueRecognitionBackfillWorkflow,
 			cronWorkflows.SelfBillingHourlyWorkflow,
@@ -637,6 +642,7 @@ func buildWorkerConfig(
 			cron.dailyDraftAndCompute.DailyDraftAndComputeActivity,
 			cron.revenueRollup.RollupDirtyActivity,
 			cron.revenueRollup.ReconcileBookedInvoicesActivity,
+			cron.meterUsageOptimize.OptimizeMeterUsageActivity,
 			cron.revenueRecognition.RecognizeRevenueActivity,
 			cron.revenueRecognition.BackfillRevenueActivity,
 			cron.selfBillingHourly.SelfBillingHourlyActivity,

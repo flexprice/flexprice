@@ -696,6 +696,7 @@ func startServer(
 	activityConsumer *activity.Consumer,
 	emailNotificationService service.EmailNotificationService,
 	params service.ServiceParams,
+	chStore *clickhouse.ClickHouseStore,
 ) {
 	mode := cfg.Deployment.Mode
 	if mode == "" {
@@ -712,7 +713,7 @@ func startServer(
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, true)
 		startRouter(lc, router, log)
-		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
+		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService, chStore)
 
 		// Registered last so fx's reverse-order stop drains HTTP before deps close.
 		startAPIServer(lc, r, cfg, log)
@@ -730,7 +731,7 @@ func startServer(
 		// consumed and delivered via Svix/native in the same process.
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, false)
 		startRouter(lc, router, log)
-		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
+		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService, chStore)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal(context.Background(), "Kafka consumer required for consumer mode")
@@ -753,6 +754,7 @@ func startTemporalWorker(
 	temporalService temporalservice.TemporalService,
 	params service.ServiceParams,
 	webhookService *webhook.WebhookService,
+	chStore *clickhouse.ClickHouseStore,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) (err error) {
@@ -773,7 +775,7 @@ func startTemporalWorker(
 			}
 
 			// Register workflows and activities first (this creates the workers)
-			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params, webhookService); err != nil {
+			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params, webhookService, chStore); err != nil {
 				return fmt.Errorf("failed to register workflows and activities: %w", err)
 			}
 
