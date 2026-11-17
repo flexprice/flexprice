@@ -1136,6 +1136,32 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Onetim
 	_, err := s.service.UpdateSubscriptionLineItem(ctx, onetimeItem.ID, req)
 	s.Error(err, "one-time line items must never be backdated")
 	s.Contains(err.Error(), "already terminated")
+
+	itemsBefore, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(ctx, s.testData.subscription)
+	s.NoError(err)
+	itemIDsBefore := lo.Map(itemsBefore, func(item *subscription.SubscriptionLineItem, _ int) string { return item.ID })
+
+	backdatedEffectiveFrom := onetimeItem.StartDate.Add(-24 * time.Hour)
+	s.True(s.testData.subscription.StartDate.Before(backdatedEffectiveFrom))
+	s.True(backdatedEffectiveFrom.Before(onetimeItem.StartDate))
+	req.EffectiveFrom = &backdatedEffectiveFrom
+
+	_, err = s.service.UpdateSubscriptionLineItem(ctx, onetimeItem.ID, req)
+	s.Require().Error(err, "one-time line items must remain excluded from backdated versioning")
+	s.Contains(err.Error(), "already terminated")
+
+	unchanged, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, onetimeItem.ID)
+	s.NoError(err)
+	s.Equal(types.StatusPublished, unchanged.Status)
+	s.Equal(onetimeItem.PriceID, unchanged.PriceID)
+	s.Equal(onetimeItem.StartDate, unchanged.StartDate)
+	s.Equal(onetimeItem.EndDate, unchanged.EndDate)
+	s.Nil(unchanged.SuccessorLineItemID)
+
+	itemsAfter, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(ctx, s.testData.subscription)
+	s.NoError(err)
+	itemIDsAfter := lo.Map(itemsAfter, func(item *subscription.SubscriptionLineItem, _ int) string { return item.ID })
+	s.ElementsMatch(itemIDsBefore, itemIDsAfter, "a rejected backdated update must not create a replacement")
 }
 
 // TestUpdateSubscriptionLineItem_EffectiveFromEqualsExistingEndDate_Allowed verifies an effective
