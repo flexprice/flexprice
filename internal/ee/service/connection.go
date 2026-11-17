@@ -732,6 +732,12 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		}
 	}
 
+	if conn.ProviderType == types.SecretProviderQuickBooks && conn.EncryptedSecretData.QuickBooks != nil {
+		if err := conn.EncryptedSecretData.QuickBooks.Validate(); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := s.applyManagedStorageConfig(ctx, conn); err != nil {
 		return nil, err
 	}
