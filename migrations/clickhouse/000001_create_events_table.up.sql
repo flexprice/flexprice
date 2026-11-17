@@ -12,7 +12,12 @@ CREATE TABLE IF NOT EXISTS flexprice.events (
     CONSTRAINT check_event_name CHECK event_name != '',
     CONSTRAINT check_tenant_id CHECK tenant_id != '',
     CONSTRAINT check_event_id CHECK id != '',
-    CONSTRAINT check_environment_id CHECK environment_id != ''
+    CONSTRAINT check_environment_id CHECK environment_id != '',
+    PROJECTION proj_by_customer_event
+    (
+        SELECT *
+        ORDER BY tenant_id, environment_id, external_customer_id, event_name, timestamp, id
+    )
 )
 ENGINE = ReplacingMergeTree(ingested_at)
 PARTITION BY toYYYYMMDD(timestamp)
@@ -21,7 +26,8 @@ ORDER BY (tenant_id, environment_id, timestamp, id)
 SETTINGS index_granularity = 16384,
     parts_to_delay_insert = 200,
     parts_to_throw_insert = 400,
-    max_bytes_to_merge_at_max_space_in_pool = 5368709120; -- 5 GiB
+    max_bytes_to_merge_at_max_space_in_pool = 5368709120,
+    deduplicate_merge_projection_mode = 'rebuild';
 
 -- Bloom Filter for external_customer_id
 ALTER TABLE flexprice.events
