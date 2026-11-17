@@ -27,6 +27,8 @@ type fixLineItemPriceEndDatesScript struct {
 	priceRepo        price.Repository
 	subscriptionRepo subscription.Repository
 	lineItemRepo     subscription.LineItemRepository
+
+	subscriptionPageSize int
 }
 
 // FixLineItemPriceEndDates sets the price's end date on plan line items of active and trialing
@@ -110,76 +112,91 @@ func (s *fixLineItemPriceEndDatesScript) run(ctx context.Context, writer *csv.Wr
 			continue
 		}
 
-		subs, err := s.subscriptionRepo.ListAll(ctx, &types.SubscriptionFilter{
-			QueryFilter: types.NewNoLimitQueryFilter(),
-			PlanID:      p.ID,
-			SubscriptionStatus: []types.SubscriptionStatus{
-				types.SubscriptionStatusActive,
-				types.SubscriptionStatusTrialing,
-			},
-			WithLineItems: true,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to list subscriptions of plan %s: %w", p.ID, err)
-		}
-		log.Printf("Plan %s: %d prices with an end date, %d subscriptions\n", p.ID, len(pricesWithEndDate), len(subs)) // #nosec G706 -- operator tooling
+		log.Printf("Plan %s: %d prices with an end date\n", p.ID, len(pricesWithEndDate)) // #nosec G706 -- operator tooling
 
-		for _, sub := range subs {
-			for _, item := range sub.GetLineItems() {
-				endingPrice, ok := pricesWithEndDate[item.PriceID]
-				if !ok {
-					continue
-				}
+		// Paged because one query loading line items for millions of subscriptions exceeds the Postgres
+		// parameter limit. Ids are time ordered, so subscriptions created mid-run land on later pages.
+		for offset := 0; ; offset += s.subscriptionPageSize {
+			subs, err := s.subscriptionRepo.List(ctx, &types.SubscriptionFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(s.subscriptionPageSize),
+					Offset: lo.ToPtr(offset),
+					Sort:   lo.ToPtr("id"),
+					Order:  lo.ToPtr("asc"),
+				},
+				PlanID: p.ID,
+				SubscriptionStatus: []types.SubscriptionStatus{
+					types.SubscriptionStatusActive,
+					types.SubscriptionStatusTrialing,
+				},
+				WithLineItems: true,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to list subscriptions of plan %s: %w", p.ID, err)
+			}
 
-				// A line item with an end date may have been adjusted on purpose, so it is left as is
-				action := "skipped_has_end_date"
-				lineItemEndDate := item.EndDate
-				if item.EndDate.IsZero() {
-					action = "dry_run"
-					lineItemEndDate = *endingPrice.EndDate
-					// Same clamp as plan price sync: a price that ended before the line started ends it at its start
-					if lineItemEndDate.Before(item.StartDate) {
-						lineItemEndDate = item.StartDate
+			for _, sub := range subs {
+				for _, item := range sub.GetLineItems() {
+					endingPrice, ok := pricesWithEndDate[item.PriceID]
+					if !ok {
+						continue
 					}
-					if !dryRun {
-						baseModel := item.BaseModel
-						baseModel.UpdatedBy = userID
-						fixed := subscription.NewSubscriptionLineItemBuilder(item).
-							WithEndDate(lineItemEndDate).
-							WithBaseModel(baseModel).
-							Build()
-						if err := s.lineItemRepo.Update(ctx, fixed); err != nil {
-							log.Printf("Failed to update line item %s: %v\n", item.ID, err) // #nosec G706 -- operator tooling
-							action = "failed"
-						} else {
-							action = "updated"
+
+					// A line item with an end date may have been adjusted on purpose, so it is left as is
+					action := "skipped_has_end_date"
+					lineItemEndDate := item.EndDate
+					if item.EndDate.IsZero() {
+						action = "dry_run"
+						lineItemEndDate = *endingPrice.EndDate
+						// Same clamp as plan price sync: a price that ended before the line started ends it at its start
+						if lineItemEndDate.Before(item.StartDate) {
+							lineItemEndDate = item.StartDate
+						}
+						if !dryRun {
+							baseModel := item.BaseModel
+							baseModel.UpdatedBy = userID
+							fixed := subscription.NewSubscriptionLineItemBuilder(item).
+								WithEndDate(lineItemEndDate).
+								WithBaseModel(baseModel).
+								Build()
+							if err := s.lineItemRepo.Update(ctx, fixed); err != nil {
+								log.Printf("Failed to update line item %s: %v\n", item.ID, err) // #nosec G706 -- operator tooling
+								action = "failed"
+							} else {
+								action = "updated"
+							}
 						}
 					}
-				}
 
-				switch action {
-				case "skipped_has_end_date":
-					skipped++
-				case "failed":
-					failed++
-				default:
-					updated++
-				}
+					switch action {
+					case "skipped_has_end_date":
+						skipped++
+					case "failed":
+						failed++
+					default:
+						updated++
+					}
 
-				if err := writer.Write([]string{
-					p.Name,
-					p.ID,
-					endingPrice.ID,
-					sub.ID,
-					item.ID,
-					formatOptionalTime(lo.FromPtr(endingPrice.StartDate)),
-					endingPrice.EndDate.Format(time.RFC3339),
-					item.StartDate.Format(time.RFC3339),
-					lineItemEndDate.Format(time.RFC3339),
-					action,
-				}); err != nil {
-					return fmt.Errorf("failed to write report row: %w", err)
+					if err := writer.Write([]string{
+						p.Name,
+						p.ID,
+						endingPrice.ID,
+						sub.ID,
+						item.ID,
+						formatOptionalTime(lo.FromPtr(endingPrice.StartDate)),
+						endingPrice.EndDate.Format(time.RFC3339),
+						item.StartDate.Format(time.RFC3339),
+						lineItemEndDate.Format(time.RFC3339),
+						action,
+					}); err != nil {
+						return fmt.Errorf("failed to write report row: %w", err)
+					}
 				}
+			}
+
+			log.Printf("Plan %s: %d subscriptions checked\n", p.ID, offset+len(subs)) // #nosec G706 -- operator tooling
+			if len(subs) < s.subscriptionPageSize {
+				break
 			}
 		}
 	}
@@ -217,9 +234,10 @@ func newFixLineItemPriceEndDatesScript() (*fixLineItemPriceEndDatesScript, error
 	redisCache := cache.NewRedisCache()
 
 	return &fixLineItemPriceEndDatesScript{
-		planRepo:         entRepo.NewPlanRepository(client, logr, cache.NewInMemoryCache()),
-		priceRepo:        entRepo.NewPriceRepository(client, logr, redisCache),
-		subscriptionRepo: entRepo.NewSubscriptionRepository(client, logr, redisCache),
-		lineItemRepo:     entRepo.NewSubscriptionLineItemRepository(client, logr),
+		planRepo:             entRepo.NewPlanRepository(client, logr, cache.NewInMemoryCache()),
+		priceRepo:            entRepo.NewPriceRepository(client, logr, redisCache),
+		subscriptionRepo:     entRepo.NewSubscriptionRepository(client, logr, redisCache),
+		lineItemRepo:         entRepo.NewSubscriptionLineItemRepository(client, logr),
+		subscriptionPageSize: 1000,
 	}, nil
 }
