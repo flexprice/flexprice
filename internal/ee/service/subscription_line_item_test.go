@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -32,26 +33,48 @@ type SubscriptionLineItemServiceSuite struct {
 	}
 }
 
-type lineItemRepositoryWithTerminationHook struct {
+type lineItemRepository interface {
 	subscription.LineItemRepository
+}
+
+type lineItemRepositoryWithTerminationHook struct {
+	lineItemRepository
 	targetID   string
 	endDate    time.Time
 	terminated bool
 }
 
+func newLineItemRepositoryWithTerminationHook(repo subscription.LineItemRepository, targetID string, endDate time.Time) *lineItemRepositoryWithTerminationHook {
+	if repo == nil {
+		return nil
+	}
+	return &lineItemRepositoryWithTerminationHook{
+		lineItemRepository: repo,
+		targetID:           targetID,
+		endDate:            endDate,
+	}
+}
+
 func (r *lineItemRepositoryWithTerminationHook) GetForUpdate(ctx context.Context, id string) (*subscription.SubscriptionLineItem, error) {
+	if r == nil || r.lineItemRepository == nil {
+		return nil, errors.New("subscription line item repository is required")
+	}
 	if id == r.targetID && !r.terminated {
-		item, err := r.LineItemRepository.Get(ctx, id)
+		item, err := r.lineItemRepository.Get(ctx, id)
 		if err != nil {
 			return nil, err
 		}
 		item = subscription.NewSubscriptionLineItemBuilder(item).WithEndDate(r.endDate).Build()
-		if err := r.LineItemRepository.Update(ctx, item); err != nil {
+		if err := r.lineItemRepository.Update(ctx, item); err != nil {
 			return nil, err
 		}
 		r.terminated = true
 	}
-	return r.LineItemRepository.GetForUpdate(ctx, id)
+	return r.lineItemRepository.GetForUpdate(ctx, id)
+}
+
+func (r *lineItemRepositoryWithTerminationHook) wasTerminated() bool {
+	return r != nil && r.terminated
 }
 
 func TestSubscriptionLineItemService(t *testing.T) {
@@ -1246,11 +1269,8 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Onetim
 
 	baseRepo := s.GetStores().SubscriptionLineItemRepo
 	concurrentEndDate := time.Now().UTC().Add(24 * time.Hour)
-	repoWithHook := &lineItemRepositoryWithTerminationHook{
-		LineItemRepository: baseRepo,
-		targetID:           onetimeItem.ID,
-		endDate:            concurrentEndDate,
-	}
+	repoWithHook := newLineItemRepositoryWithTerminationHook(baseRepo, onetimeItem.ID, concurrentEndDate)
+	s.Require().NotNil(repoWithHook)
 	service, ok := s.service.(*subscriptionService)
 	s.Require().True(ok)
 	service.SubscriptionLineItemRepo = repoWithHook
@@ -1258,7 +1278,7 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Onetim
 	_, err = s.service.UpdateSubscriptionLineItem(ctx, onetimeItem.ID, req)
 	s.Require().Error(err, "termination that arrives before the locked read must reject backdated replacement")
 	s.Contains(err.Error(), "already terminated")
-	s.True(repoWithHook.terminated, "the repository hook must simulate termination before the locked read")
+	s.True(repoWithHook.wasTerminated(), "the repository hook must simulate termination before the locked read")
 
 	unchanged, err := baseRepo.Get(ctx, onetimeItem.ID)
 	s.Require().NoError(err)
