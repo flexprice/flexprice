@@ -76,6 +76,7 @@ type Configuration struct {
 	RawEventsReprocessing  RawEventsReprocessingConfig  `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption    RawEventConsumptionConfig    `mapstructure:"raw_event_consumption" validate:"required"`
 	IntegrationEvents      IntegrationEventsConfig      `mapstructure:"integration_events" validate:"omitempty"`
+	EmailEvents            EmailEventsConfig            `mapstructure:"email_events" validate:"omitempty"`
 	OnboardingEvents       OnboardingEventsConfig       `mapstructure:"onboarding_events" validate:"omitempty"`
 	WebhookRetryJob        WebhookRetryJobConfig        `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                 GeminiConfig                 `mapstructure:"gemini" validate:"omitempty"`
@@ -1189,6 +1190,13 @@ type EmailConfig struct {
 	RegionTag       string            `mapstructure:"region_tag" validate:"omitempty"`
 }
 
+// EmailEventsConfig is the consumer group that auto-sends customer emails from webhook.topic events.
+type EmailEventsConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"email-events-consumer"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
+}
+
 type ResendEmailConfig struct {
 	APIKey        string `mapstructure:"api_key" validate:"omitempty"`
 	WebhookSecret string `mapstructure:"webhook_secret" validate:"omitempty"`
@@ -1300,6 +1308,9 @@ func NewConfig() (*Configuration, error) {
 	// Customer email sender defaults, for deploys whose config.yaml (a Helm ConfigMap) predates these keys.
 	v.SetDefault("email.sender_domain", "mail.flexprice.io")
 	v.SetDefault("email.sender_local_part", "invoices")
+	v.SetDefault("email_events.enabled", true)
+	v.SetDefault("email_events.consumer_group", "email-events-consumer")
+	v.SetDefault("email_events.rate_limit", 10)
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {

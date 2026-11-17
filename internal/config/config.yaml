@@ -670,6 +670,12 @@ integration_events:
   consumer_group: "integration-events-consumer"
   rate_limit: 10
 
+# Auto-sends customer emails from finalized-invoice events on webhook.topic; also needs email.provider set.
+email_events:
+  enabled: true
+  consumer_group: "email-events-consumer"
+  rate_limit: 10
+
 onboarding_events:
   enabled: true
   topic: "onboarding_events"

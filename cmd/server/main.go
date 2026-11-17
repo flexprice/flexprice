@@ -251,6 +251,7 @@ func main() {
 	opts = append(opts,
 		fx.Provide(
 			provideWalletBalanceAlertPubSub,
+			provideEmailEventsPubSub,
 		),
 	)
 
@@ -523,7 +524,7 @@ func provideHandlers(
 		UsageRecord:              v1.NewUsageRecordHandler(usageRecordService, logger),
 		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, connectionService, logger),
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
-		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, refundService, db, webhookService, billingEntityService),
+		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, refundService, db, webhookService, billingEntityService, emailNotificationService),
 		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, temporalService, logger),
 		Product:                  v1.NewProductHandler(productService, logger),
@@ -693,6 +694,7 @@ func startServer(
 	rawEventConsumptionSvc service.RawEventConsumptionService,
 	meterUsageTrackingSvc service.MeterUsageTrackingService,
 	activityConsumer *activity.Consumer,
+	emailNotificationService service.EmailNotificationService,
 	params service.ServiceParams,
 ) {
 	mode := cfg.Deployment.Mode
@@ -708,7 +710,7 @@ func startServer(
 			log.Fatal(context.Background(), "Kafka consumer required for local mode")
 		}
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, true)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, true)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 
@@ -716,7 +718,7 @@ func startServer(
 		startAPIServer(lc, r, cfg, log)
 	case types.ModeAPI:
 		// Register all handlers and start router once (no event consumption)
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, false)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, false)
 		startRouter(lc, router, log)
 
 		// Registered last so fx's reverse-order stop drains HTTP before deps close.
@@ -726,7 +728,7 @@ func startServer(
 		// Register webhook handler and start router so that webhook events
 		// published by temporal activities (e.g. invoice finalization) are
 		// consumed and delivered via Svix/native in the same process.
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, false)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, false)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 	case types.ModeConsumer:
@@ -735,7 +737,7 @@ func startServer(
 		}
 
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, true)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, true)
 		startRouter(lc, router, log)
 	case types.ModeAdmin:
 		startAPIServer(lc, adminRouter, cfg, log)
@@ -847,6 +849,7 @@ func registerRouterHandlers(
 	rawEventConsumptionSvc service.RawEventConsumptionService,
 	meterUsageTrackingSvc service.MeterUsageTrackingService,
 	activityConsumer *activity.Consumer,
+	emailNotificationService service.EmailNotificationService,
 	cfg *config.Configuration,
 	includeProcessingHandlers bool,
 ) {
@@ -864,6 +867,7 @@ func registerRouterHandlers(
 		meterUsageTrackingSvc.RegisterHandlerLazy(router, cfg)
 		meterUsageTrackingSvc.RegisterBulkHandler(router, cfg)
 		activityConsumer.RegisterHandler(router, cfg)
+		emailNotificationService.RegisterHandler(router, cfg)
 	}
 }
 
@@ -918,6 +922,21 @@ func provideActivityPubSub(
 		return types.ActivityPubSub{}
 	}
 	return types.ActivityPubSub{PubSub: pubSub}
+}
+
+func provideEmailEventsPubSub(
+	cfg *config.Configuration,
+	logger *logger.Logger,
+) types.EmailEventsPubSub {
+	if !cfg.EmailEvents.Enabled || !cfg.Email.IsProviderConfigured() {
+		return types.EmailEventsPubSub{}
+	}
+	pubSub, err := kafkaPubsub.NewPubSubFromConfig(cfg, logger, cfg.EmailEvents.ConsumerGroup)
+	if err != nil {
+		logger.Fatalw("failed to create pubsub for email events", "error", err)
+		return types.EmailEventsPubSub{}
+	}
+	return types.EmailEventsPubSub{PubSub: pubSub}
 }
 
 // serviceParamsProviders build the ServiceParams every service consumes from the base params.

@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -80,6 +81,35 @@ func (h *EmailNotificationHandler) ListInvoiceEmails(c *gin.Context) {
 	}
 
 	resp, err := h.emailNotificationService.ListInvoiceEmails(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// QueryEmails godoc
+// @Summary Search emails
+// @ID queryEmail
+// @Description Use when reviewing emails sent to customers, for example every bounced email this month or every email to one customer. Filter by delivery status, trigger, customer, document and date. Newest first; paginated.
+// @Tags Invoices
+// @x-scope "read"
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param filter body types.EmailLogFilter true "Filter"
+// @Success 200 {object} dto.ListEmailLogsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /emails/search [post]
+func (h *EmailNotificationHandler) QueryEmails(c *gin.Context) {
+	var filter types.EmailLogFilter
+	if err := c.ShouldBindJSON(&filter); err != nil {
+		c.Error(ierr.WithError(err).WithHint("Invalid filter parameters").Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.emailNotificationService.ListEmails(c.Request.Context(), &filter)
 	if err != nil {
 		c.Error(err)
 		return

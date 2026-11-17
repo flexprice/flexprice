@@ -987,9 +987,13 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Description:  "Billing entities mode of the environment; set only by enabling billing entities",
 		},
 		SettingKeyEmailNotificationConfig: {
-			Key:          SettingKeyEmailNotificationConfig,
-			DefaultValue: map[string]interface{}{"enabled": false, "attach_invoice_pdf": true},
-			Description:  "How Flexprice emails customers in this environment",
+			Key: SettingKeyEmailNotificationConfig,
+			DefaultValue: map[string]interface{}{
+				"enabled":            false,
+				"attach_invoice_pdf": true,
+				"auto_send":          map[string]interface{}{"enabled": false, "entities": []string{string(SystemEntityTypeInvoice)}},
+			},
+			Description: "How Flexprice emails customers in this environment",
 		},
 	}, nil
 }
@@ -1178,11 +1182,8 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		return cfg.Validate()
 
 	case SettingKeyEmailNotificationConfig:
-		cfg, err := utils.ToStruct[EmailNotificationConfig](value)
-		if err != nil {
-			return err
-		}
-		return cfg.Validate()
+		// Lenient here: a partial update fragment may omit fields the merged result already has.
+		return nil
 
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
@@ -1348,8 +1349,43 @@ type EmailNotificationConfig struct {
 	Enabled bool `json:"enabled"`
 	// AttachInvoicePDF attaches the invoice PDF to invoice emails.
 	AttachInvoicePDF bool `json:"attach_invoice_pdf"`
+	// AutoSend emails the customer when a document of a listed type is finalized.
+	AutoSend EmailAutoSendConfig `json:"auto_send"`
+}
+
+type EmailAutoSendConfig struct {
+	Enabled  bool               `json:"enabled"`
+	Entities []SystemEntityType `json:"entities"`
 }
 
 func (c EmailNotificationConfig) Validate() error {
+	if !c.AutoSend.Enabled {
+		return nil
+	}
+	if !c.Enabled {
+		return ierr.NewError("auto-send needs emails to be enabled").
+			WithHint("Turn on emails before auto-send, and turn off auto-send before emails").
+			Mark(ierr.ErrValidation)
+	}
+	if len(c.AutoSend.Entities) == 0 {
+		return ierr.NewError("auto-send has no document types").
+			WithHint("Choose at least one document type to email automatically").
+			Mark(ierr.ErrValidation)
+	}
+	for _, e := range c.AutoSend.Entities {
+		if e == "" {
+			return ierr.NewError("empty auto-send document type").
+				WithHint("Document types to email automatically cannot be empty").
+				Mark(ierr.ErrValidation)
+		}
+		if err := validateEnum("auto_send.entities", e, []SystemEntityType{SystemEntityTypeInvoice}); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// AutoSends reports whether finalizing a document of this type emails the customer.
+func (c EmailNotificationConfig) AutoSends(entity SystemEntityType) bool {
+	return c.Enabled && c.AutoSend.Enabled && lo.Contains(c.AutoSend.Entities, entity)
 }
