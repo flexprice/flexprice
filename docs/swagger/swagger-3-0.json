@@ -35405,6 +35405,9 @@
           "balance": {
             "type": "string"
           },
+          "balance_alert_status": {
+            "$ref": "#/components/schemas/types.AlertState"
+          },
           "balance_updated_at": {
             "type": "string",
             "format": "date-time"
