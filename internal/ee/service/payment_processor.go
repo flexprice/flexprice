@@ -190,6 +190,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	}
 
 	statusBeforeOutcome := paymentObj.PaymentStatus
+	linkPending := false
 	// Update payment status based on processing result
 	if processErr != nil {
 		// For payment links, if the error occurred during payment link creation,
@@ -222,7 +223,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			paymentObj.PaymentStatus = types.PaymentStatusPending
 			paymentObj.SucceededAt = nil // Keep succeeded_at as nil
 			p.Logger.Info(ctx, "keeping payment link as pending", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
-			p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
+			linkPending = true
 		} else {
 			paymentObj.PaymentStatus = types.PaymentStatusSucceeded
 			succeededAt := clock.Now()
@@ -248,6 +249,9 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		return paymentObj, err
 	}
 	p.recordPaymentTransition(ctx, paymentObj, statusBeforeOutcome)
+	if linkPending {
+		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
+	}
 
 	// If payment succeeded, handle post-processing
 	if paymentObj.PaymentStatus == types.PaymentStatusSucceeded {
