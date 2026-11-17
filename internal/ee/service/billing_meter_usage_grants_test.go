@@ -7,12 +7,14 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	eventsDomain "github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -759,10 +761,10 @@ func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrantBilling_MonthlyG
 
 	// billedSince refreshes the grant at `at` and prices usage since `from`, as the threshold job does.
 	billedSince := func(from, at time.Time) decimal.Decimal {
-		grants, meta, err := s.grantService.EnsureGrantsForSubscriptions(ctx, s.customerOf(fx.sub), []*subscription.Subscription{fx.sub}, at)
+		grants, _, err := s.grantService.EnsureGrantsForSubscriptions(ctx, s.customerOf(fx.sub), []*subscription.Subscription{fx.sub}, at)
 		s.Require().NoError(err)
 		s.Require().Len(grants, 1, "the threshold invoice must not open a second monthly window")
-		s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(ctx, s.customerOf(fx.sub), meta, grants, at))
+		s.Require().NoError(s.evalAlertService().EvaluateAndAlertEntitlementGrants(ctx, s.customerOf(fx.sub), []*subscription.Subscription{fx.sub}, at))
 		// The threshold check's calculation, with the clock at `at` (the fixture subscription starts now).
 		result, err := s.subGrantBilling().calculateMeterUsageCharges(ctx, types.UsageSourceInvoiceCreation, fx.sub, fx.sub.LineItems, from, at, true, &at, nil)
 		s.Require().NoError(err)
@@ -841,14 +843,15 @@ func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrantBilling_Refreshe
 	// The invoice's own line list must survive the refresh.
 	fx.sub.LineItems = items[:1]
 	at := start.Add(2 * time.Hour)
-	s.Require().NoError(refreshSubscriptionEntitlementGrantUsage(s.GetContext(), s.buildServiceParams(), fx.sub, start, fx.sub.CurrentPeriodEnd, at))
+	s.Require().NoError(NewAlertService(s.buildServiceParams()).EvaluateAndAlertEntitlementGrants(s.GetContext(), s.customerOf(fx.sub), []*subscription.Subscription{fx.sub}, at))
 	s.Len(fx.sub.LineItems, 1, "refresh replaced the caller's line items")
 	fx.sub.LineItems = items
 
 	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), g.ID)
 	s.Require().NoError(err)
 	s.True(decimal.NewFromInt(30).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
-	s.Nil(stored.LastComputedAt, "finalizing is alert evaluation's job")
+	s.Require().NotNil(stored.LastComputedAt)
+	s.True(at.Equal(*stored.LastComputedAt), "measured through the invoice's as-of")
 
 	lines := invoiceLines(fx, "10", "20")
 	reduction := s.applySubGrants(fx, lines, subGrantBlockers{})
@@ -871,15 +874,15 @@ func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrantBilling_RefreshS
 	items, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(s.GetContext(), fx.sub)
 	s.Require().NoError(err)
 	fx.sub.LineItems = items
-	s.Require().NoError(refreshSubscriptionEntitlementGrantUsage(s.GetContext(), s.buildServiceParams(), fx.sub, start, fx.sub.CurrentPeriodEnd, start.Add(2*time.Hour)))
+	s.Require().NoError(NewAlertService(s.buildServiceParams()).EvaluateAndAlertEntitlementGrants(s.GetContext(), s.customerOf(fx.sub), []*subscription.Subscription{fx.sub}, start.Add(2*time.Hour)))
 
 	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), g.ID)
 	s.Require().NoError(err)
 	s.True(decimal.NewFromInt(40).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
 }
 
-// Billing refreshes an ended window's usage but leaves it unfinalized, so alert evaluation still sees it.
-func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrantBilling_RefreshLeavesEndedWindowToAlerts() {
+// Billing measures an ended window one last time and finalizes it.
+func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrantBilling_RefreshFinalizesEndedWindow() {
 	fx := s.newSubGrantFixture("bill-ended", dailySubscriptionEntitlementGrant(20, types.EntitlementGrantAllocationBehaviorFirstUsage))
 	start := fx.sub.CurrentPeriodStart
 	end := start.Add(24 * time.Hour)
@@ -889,13 +892,18 @@ func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrantBilling_RefreshL
 	items, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(s.GetContext(), fx.sub)
 	s.Require().NoError(err)
 	fx.sub.LineItems = items
-	s.Require().NoError(refreshSubscriptionEntitlementGrantUsage(s.GetContext(), s.buildServiceParams(), fx.sub, start, fx.sub.CurrentPeriodEnd, end.Add(time.Hour)))
+	s.Require().NoError(NewAlertService(s.buildServiceParams()).EvaluateAndAlertEntitlementGrants(s.GetContext(), s.customerOf(fx.sub), []*subscription.Subscription{fx.sub}, end.Add(time.Hour)))
 
 	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), g.ID)
 	s.Require().NoError(err)
 	s.True(decimal.NewFromInt(30).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
 	s.Equal(types.EntitlementGrantStatusExhausted, stored.GrantStatus)
-	s.Nil(stored.LastComputedAt, "an ended window stays open to alert evaluation")
+	s.Require().NotNil(stored.LastComputedAt)
+	s.False(stored.LastComputedAt.Before(end), "the ended window is finalized")
+	logs, err := s.GetStores().AlertLogsRepo.ListByEntity(s.GetContext(), types.AlertEntityTypeEntitlementGrant, g.ID, 10)
+	s.Require().NoError(err)
+	s.Require().Len(logs, 1, "billing fires the exhaustion alert")
+	s.Equal(types.AlertStateInAlarm, logs[0].AlertStatus)
 }
 
 // ---------------------------------------------------------------------------
@@ -1082,4 +1090,237 @@ func TestAdjustMeterUsageGrants_UnlimitedGrantNeverMeasured(t *testing.T) {
 	g.Unlimited = true
 	got := billSplit(t, newTestBillingService(), nil, []*entitlementgrant.EntitlementGrant{g}, splitLines(300, 200))
 	require.True(t, got[0].IsZero() && got[1].IsZero(), "overage %v, want zero on both lines", got)
+}
+
+// Events that land after the last alert evaluation reach a feature grant's stored usage before billing.
+func (s *EntitlementGrantSuite) TestFeatureEntitlementGrantBilling_RefreshesStaleUsageBeforeBilling() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	start := sub.CurrentPeriodStart
+	evaluatedAt := start.Add(time.Hour + time.Minute)
+	s.seedMeterUsage(cust.ExternalID, m.ID, start.Add(time.Hour), 50)
+	grants, _, err := s.grantService.EnsureGrantsForSubscriptions(ctx, cust, []*subscription.Subscription{sub}, evaluatedAt)
+	s.Require().NoError(err)
+	s.Require().Len(grants, 1)
+	params := s.buildServiceParams()
+	s.Require().NoError(NewAlertService(params).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, evaluatedAt))
+
+	s.seedMeterUsage(cust.ExternalID, m.ID, start.Add(2*time.Hour), 80)
+	billedAt := start.Add(3 * time.Hour)
+	s.Require().NoError(NewAlertService(params).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, billedAt))
+
+	stored, err := s.GetStores().EntitlementGrantRepo.Get(ctx, grants[0].ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(130).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
+	s.Equal(types.EntitlementGrantStatusExhausted, stored.GrantStatus)
+	s.Require().NotNil(stored.LastComputedAt)
+	s.True(billedAt.Equal(*stored.LastComputedAt), "measured through the invoice's as-of")
+}
+
+// Compute after rollover opens and measures a window the alert workflow never opened in the invoice period.
+func (s *EntitlementGrantSuite) TestFeatureEntitlementGrantBilling_OpensMissingWindowAfterRollover() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
+	s.seedMeterUsage(cust.ExternalID, m.ID, periodStart.Add(time.Hour), 150)
+
+	sub.CurrentPeriodStart = periodEnd
+	sub.CurrentPeriodEnd = periodEnd.Add(periodEnd.Sub(periodStart))
+	sub.BillingPeriodCount = 1
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	_, err := s.subGrantBilling().PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   sub,
+		PeriodStart:    periodStart,
+		PeriodEnd:      periodEnd,
+		ReferencePoint: types.ReferencePointPeriodEnd,
+		AsOf:           periodEnd.Add(time.Hour),
+	})
+	s.Require().NoError(err)
+
+	grants, err := s.GetStores().EntitlementGrantRepo.List(ctx, types.NewNoLimitEntitlementGrantFilter().
+		WithSubscriptionIDs(sub.ID).WithCycleOverlap(periodStart, periodEnd))
+	s.Require().NoError(err)
+	s.Require().Len(grants, 1, "the invoice period's window is opened")
+	g := grants[0]
+	s.False(g.ValidFrom.Before(periodStart))
+	s.False(g.ValidTo.After(periodEnd))
+	s.True(decimal.NewFromInt(150).Equal(g.Usage), "stored usage: got %s", g.Usage)
+	s.Equal(types.EntitlementGrantStatusExhausted, g.GrantStatus)
+}
+
+func (s *EntitlementGrantSuite) listSubscriptionGrants(sub *subscription.Subscription) []*entitlementgrant.EntitlementGrant {
+	grants, err := s.GetStores().EntitlementGrantRepo.List(s.GetContext(), types.NewNoLimitEntitlementGrantFilter().WithSubscriptionIDs(sub.ID))
+	s.Require().NoError(err)
+	return grants
+}
+
+// Events that reach meter_usage after an alert run finalized the window (consumer lag, DLQ replay)
+// are still counted when the invoice is computed.
+func (s *EntitlementGrantSuite) TestFeatureEntitlementGrantBilling_RemeasuresFinalizedWindowForLateEvents() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	start := sub.CurrentPeriodStart
+	alerts := NewAlertService(s.buildServiceParams())
+	s.seedMeterUsage(cust.ExternalID, m.ID, start.Add(time.Hour), 120)
+	s.Require().NoError(alerts.EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, start.Add(time.Hour+time.Minute)))
+	grants := s.listSubscriptionGrants(sub)
+	s.Require().Len(grants, 1)
+	end := start.Add(2 * time.Hour)
+	s.Require().NoError(s.GetStores().EntitlementGrantRepo.CloseWindow(ctx, grants[0].ID, end))
+	s.Require().NoError(alerts.EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, end.Add(time.Minute)))
+	finalized, err := s.GetStores().EntitlementGrantRepo.Get(ctx, grants[0].ID)
+	s.Require().NoError(err)
+	s.Require().False(finalized.LastComputedAt.Before(finalized.ValidTo), "precondition: the window is finalized")
+
+	s.seedMeterUsage(cust.ExternalID, m.ID, end.Add(-time.Minute), 30) // late: lands after finalization
+	s.Require().NoError(s.subGrantBilling().refreshEntitlementGrantsForInvoice(ctx, sub, start, sub.CurrentPeriodEnd, end.Add(time.Hour)))
+
+	stored, err := s.GetStores().EntitlementGrantRepo.Get(ctx, grants[0].ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(150).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
+}
+
+// A repeat compute at the same as-of still picks up events that landed after the first one finalized the window.
+func (s *EntitlementGrantSuite) TestFeatureEntitlementGrantBilling_RepeatComputeAtSameAsOfPicksUpLateEvents() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	start := sub.CurrentPeriodStart
+	s.seedMeterUsage(cust.ExternalID, m.ID, start.Add(time.Hour), 120)
+	s.Require().NoError(NewAlertService(s.buildServiceParams()).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, start.Add(time.Hour+time.Minute)))
+	g := s.listSubscriptionGrants(sub)[0]
+	end := start.Add(2 * time.Hour)
+	s.Require().NoError(s.GetStores().EntitlementGrantRepo.CloseWindow(ctx, g.ID, end))
+	asOf := end.Add(time.Hour)
+	billing := s.subGrantBilling()
+
+	s.Require().NoError(billing.refreshEntitlementGrantsForInvoice(ctx, sub, start, sub.CurrentPeriodEnd, asOf))
+	first, err := s.GetStores().EntitlementGrantRepo.Get(ctx, g.ID)
+	s.Require().NoError(err)
+	s.Require().True(first.LastComputedAt.Equal(asOf), "precondition: the first compute finalized the window at the as-of")
+
+	s.seedMeterUsage(cust.ExternalID, m.ID, end.Add(-time.Minute), 30) // late: lands between the two computes
+	s.Require().NoError(billing.refreshEntitlementGrantsForInvoice(ctx, sub, start, sub.CurrentPeriodEnd, asOf))
+
+	stored, err := s.GetStores().EntitlementGrantRepo.Get(ctx, g.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(150).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
+}
+
+// A plan change bills a partial period inside the current cycle; the window it opens spans the real
+// cycle with one quota, not a sliver that ends at the change.
+func (s *EntitlementGrantSuite) TestFeatureEntitlementGrantBilling_PartialPeriodOpensRealWindow() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	start := sub.CurrentPeriodStart
+	s.seedMeterUsage(cust.ExternalID, m.ID, start.Add(time.Hour), 10)
+	changeAt := start.Add(2 * time.Hour)
+
+	s.Require().NoError(s.subGrantBilling().refreshEntitlementGrantsForInvoice(ctx, sub, start, changeAt, changeAt))
+	s.Require().NoError(NewAlertService(s.buildServiceParams()).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, changeAt.Add(time.Hour)))
+
+	grants := s.listSubscriptionGrants(sub)
+	s.Require().Len(grants, 1, "one window for the cycle")
+	s.True(grants[0].ValidTo.Equal(sub.CurrentPeriodEnd), "window ends with the cycle: got %s", grants[0].ValidTo)
+}
+
+func (s *EntitlementGrantSuite) TestUpdateSnapshot_OlderMeasurementDoesNotOverwriteNewer() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	start := sub.CurrentPeriodStart
+	s.seedMeterUsage(cust.ExternalID, m.ID, start.Add(time.Hour), 120)
+	s.Require().NoError(NewAlertService(s.buildServiceParams()).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, start.Add(2*time.Hour)))
+	g := s.listSubscriptionGrants(sub)[0]
+
+	s.Require().NoError(s.GetStores().EntitlementGrantRepo.UpdateSnapshot(ctx, grantUsageSnapshot(g, decimal.NewFromInt(80), start.Add(time.Hour))))
+
+	stored, err := s.GetStores().EntitlementGrantRepo.Get(ctx, g.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(120).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
+	s.Equal(types.EntitlementGrantStatusExhausted, stored.GrantStatus)
+}
+
+type failingAlertLogsRepo struct{ alertlogs.Repository }
+
+func (failingAlertLogsRepo) Create(context.Context, *alertlogs.AlertLog) error {
+	return ierr.NewError("alert log store unavailable").Mark(ierr.ErrDatabase)
+}
+
+// A failed alert write must not block billing: usage is still measured and stored.
+func (s *EntitlementGrantSuite) TestEvaluate_AlertFailureDoesNotBlock() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	start := sub.CurrentPeriodStart
+	s.seedMeterUsage(cust.ExternalID, m.ID, start.Add(time.Hour), 120) // exhausts the 100 quota, so an alert is due
+	params := s.buildServiceParams()
+	params.AlertLogsRepo = failingAlertLogsRepo{Repository: params.AlertLogsRepo}
+
+	s.Require().NoError(NewAlertService(params).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, start.Add(2*time.Hour)))
+
+	stored := s.listSubscriptionGrants(sub)[0]
+	s.True(decimal.NewFromInt(120).Equal(stored.Usage), "stored usage: got %s", stored.Usage)
+}
+
+func (s *EntitlementGrantSuite) withRefreshOnRead(enabled bool) {
+	cfg := s.GetConfig()
+	previous := cfg.EntitlementGrants.RefreshOnRead
+	cfg.EntitlementGrants.RefreshOnRead = enabled
+	s.T().Cleanup(func() { cfg.EntitlementGrants.RefreshOnRead = previous })
+}
+
+func grantUsageInResponse(features []*dto.AggregatedFeature, featureID string) *decimal.Decimal {
+	for _, f := range features {
+		if f.Feature != nil && f.Feature.ID == featureID && f.Entitlement != nil && f.Entitlement.GrantState != nil && len(f.Entitlement.GrantState.Allowances) > 0 {
+			return &f.Entitlement.GrantState.Allowances[0].Usage
+		}
+	}
+	return nil
+}
+
+// A customer read with refresh_grants returns freshly measured grant usage, only when the config allows it.
+func (s *EntitlementGrantSuite) TestCustomerEntitlementsRead_RefreshGrantsFollowsConfig() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	// The read evaluates at the real clock, and this fixture's period starts now.
+	s.seedMeterUsage(cust.ExternalID, m.ID, sub.CurrentPeriodStart, 60)
+	read := func() *dto.CustomerEntitlementsResponse {
+		resp, err := s.subGrantBilling().GetCustomerEntitlementsForSubscriptions(ctx, cust.ID, []*subscription.Subscription{sub},
+			&dto.GetCustomerEntitlementsRequest{RefreshGrants: true})
+		s.Require().NoError(err)
+		return resp
+	}
+
+	s.withRefreshOnRead(false)
+	read()
+	s.Empty(s.listSubscriptionGrants(sub), "disabled in config: the read changes nothing")
+
+	s.withRefreshOnRead(true)
+	usage := grantUsageInResponse(read().Features, "feature-recovery")
+	s.Require().NotNil(usage, "the response carries the grant state")
+	s.True(decimal.NewFromInt(60).Equal(*usage), "returned usage: got %s", usage)
+}
+
+// The subscription read refreshes only live subscriptions: window opening ignores status.
+func (s *EntitlementGrantSuite) TestSubscriptionEntitlementsRead_RefreshesOnlyLiveSubscriptions() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	s.seedMeterUsage(cust.ExternalID, m.ID, sub.CurrentPeriodStart, 60)
+	s.withRefreshOnRead(true)
+	subSvc := NewSubscriptionService(s.buildServiceParams())
+	read := func() *dto.SubscriptionEntitlementsResponse {
+		resp, err := subSvc.GetActiveAggregatedSubscriptionEntitlements(ctx, sub.ID, &dto.GetSubscriptionEntitlementsRequest{RefreshGrants: true})
+		s.Require().NoError(err)
+		return resp
+	}
+
+	sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+	read()
+	s.Empty(s.listSubscriptionGrants(sub), "a cancelled subscription is not refreshed")
+
+	sub.SubscriptionStatus = types.SubscriptionStatusActive
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+	usage := grantUsageInResponse(read().Features, "feature-recovery")
+	s.Require().NotNil(usage, "the response carries the grant state")
+	s.True(decimal.NewFromInt(60).Equal(*usage), "returned usage: got %s", usage)
 }

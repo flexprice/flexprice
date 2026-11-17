@@ -200,8 +200,9 @@ func (r *entitlementGrantRepository) UpdateSnapshot(ctx context.Context, g *doma
 	})
 	defer FinishSpan(span)
 
-	q := r.client.Writer(ctx).EntitlementGrant.UpdateOneID(g.ID).
+	q := r.client.Writer(ctx).EntitlementGrant.Update().
 		Where(
+			entitlementgrant.ID(g.ID),
 			entitlementgrant.TenantID(g.TenantID),
 			entitlementgrant.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
@@ -210,17 +211,19 @@ func (r *entitlementGrantRepository) UpdateSnapshot(ctx context.Context, g *doma
 		SetNillableLastComputedAt(g.LastComputedAt).
 		SetNillableQuotaCrossedAt(g.QuotaCrossedAt).
 		SetUpdatedAt(clock.Now())
+	// Concurrent evaluators race: an older measurement must not overwrite a newer one. A rejected guard is a no-op.
+	if g.LastComputedAt != nil {
+		q.Where(entitlementgrant.Or(
+			entitlementgrant.LastComputedAtIsNil(),
+			entitlementgrant.LastComputedAtLTE(*g.LastComputedAt),
+		))
+	}
 	if g.QuotaCrossedAt == nil {
 		q.ClearQuotaCrossedAt()
 	}
 
-	if err := q.Exec(ctx); err != nil {
+	if _, err := q.Save(ctx); err != nil {
 		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHint("Entitlement grant not found for snapshot update").
-				Mark(ierr.ErrNotFound)
-		}
 		return ierr.WithError(err).
 			WithHint("Failed to update entitlement grant snapshot").
 			Mark(ierr.ErrDatabase)
