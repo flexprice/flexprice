@@ -300,7 +300,7 @@ func (s *customerPortalService) GetWallets(ctx context.Context) ([]*dto.WalletBa
 		return nil, ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
 	}
 
-	walletService := NewWalletService(s.ServiceParams).(*walletService)
+	walletService := NewWalletService(s.ServiceParams)
 
 	// Only pass ID - validation requires either ID or LookupKey, not both
 	getWalletsReq := &dto.GetCustomerWalletsRequest{
@@ -311,26 +311,13 @@ func (s *customerPortalService) GetWallets(ctx context.Context) ([]*dto.WalletBa
 		return nil, err
 	}
 
-	// Status uses the balance the portal shows. A wallet that cannot be evaluated is listed without one.
-	settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
-	tenantConfig, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
-	if err != nil {
-		s.Logger.Info(ctx, "failed to load wallet balance alert config for portal", "error", err)
-		return wallets, nil
-	}
+	// The list carries the stored balance, which is the figure the portal shows, so the status uses it too.
+	// A wallet that cannot be evaluated is listed without one.
 	for _, w := range wallets {
 		if w == nil || w.Wallet == nil {
 			continue
 		}
-		balance := w.Wallet.Balance
-		if w.RealTimeBalance != nil {
-			balance = *w.RealTimeBalance
-		}
-		creditBalance := w.Wallet.CreditBalance
-		if w.RealTimeCreditBalance != nil {
-			creditBalance = *w.RealTimeCreditBalance
-		}
-		status, err := walletService.balanceAlertStatus(ctx, w.Wallet, &tenantConfig, creditBalance, balance)
+		status, err := walletService.BalanceAlertStatus(ctx, w.Wallet, w.Wallet.CreditBalance, w.Wallet.Balance)
 		if err != nil {
 			s.Logger.Info(ctx, "failed to evaluate wallet balance alert status for portal",
 				"error", err,
