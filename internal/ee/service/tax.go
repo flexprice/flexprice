@@ -1061,11 +1061,15 @@ func (s *taxService) PrepareTaxRatesFromApplied(ctx context.Context, inv *invoic
 	behaviorByRateID := make(map[string]types.TaxBehavior, len(applied.Items))
 	rateIDs := make([]string, 0, len(applied.Items))
 	for _, a := range applied.Items {
-		if _, seen := behaviorByRateID[*a.TaxRateID]; seen {
+		rateID := lo.FromPtr(a.TaxRateID)
+		if rateID == "" {
 			continue
 		}
-		behaviorByRateID[*a.TaxRateID] = a.TaxBehavior
-		rateIDs = append(rateIDs, *a.TaxRateID)
+		if _, seen := behaviorByRateID[rateID]; seen {
+			continue
+		}
+		behaviorByRateID[rateID] = a.TaxBehavior
+		rateIDs = append(rateIDs, rateID)
 	}
 
 	// Fetch each recorded rate by id, archived or not: the invoice was taxed with it. A rate that
