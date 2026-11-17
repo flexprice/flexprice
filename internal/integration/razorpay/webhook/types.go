@@ -23,6 +23,14 @@ const (
 	EventPaymentLinkPaid      RazorpayEventType = "payment_link.paid"
 	EventPaymentLinkCancelled RazorpayEventType = "payment_link.cancelled"
 	EventPaymentLinkExpired   RazorpayEventType = "payment_link.expired"
+
+	// Mandate (saved token) events
+	EventTokenConfirmed RazorpayEventType = "token.confirmed"
+	EventTokenRejected  RazorpayEventType = "token.rejected"
+	EventTokenCancelled RazorpayEventType = "token.cancelled"
+
+	// Invoice events; a mandate setup link is a Razorpay invoice
+	EventInvoiceExpired RazorpayEventType = "invoice.expired"
 )
 
 // RazorpayPaymentMethod represents the payment method used in Razorpay
@@ -36,6 +44,7 @@ const (
 	RazorpayPaymentMethodEMI        RazorpayPaymentMethod = "emi"
 	RazorpayPaymentMethodCardless   RazorpayPaymentMethod = "cardless_emi"
 	RazorpayPaymentMethodPaylater   RazorpayPaymentMethod = "paylater"
+	RazorpayPaymentMethodEmandate   RazorpayPaymentMethod = "emandate" // eNACH
 )
 
 // RazorpayWebhookEvent represents a Razorpay webhook event
@@ -53,6 +62,18 @@ type RazorpayWebhookPayload struct {
 	Payment     PayloadPayment     `json:"payment"`
 	PaymentLink PayloadPaymentLink `json:"payment_link"`
 	Refund      PayloadRefund      `json:"refund"`
+	Token       PayloadToken       `json:"token"`
+	Invoice     PayloadInvoice     `json:"invoice"`
+}
+
+// PayloadInvoice represents the invoice entity in the webhook payload
+type PayloadInvoice struct {
+	Entity PaymentLinkEntity `json:"entity"`
+}
+
+// PayloadToken holds the raw token so it can go through razorpay.NormalizeRazorpayToken.
+type PayloadToken struct {
+	Entity map[string]interface{} `json:"entity"`
 }
 
 // PayloadPayment represents the payment entity in the webhook payload
@@ -98,6 +119,7 @@ type Payment struct {
 	Status           string        `json:"status"`            // created, authorized, captured, refunded, failed
 	OrderID          string        `json:"order_id"`          // Razorpay order ID
 	InvoiceID        string        `json:"invoice_id"`        // Razorpay invoice ID
+	TokenID          string        `json:"token_id"`          // Mandate token ID (if a mandate registration)
 	Method           string        `json:"method"`            // Payment method (card, netbanking, wallet, upi)
 	Description      string        `json:"description"`       // Payment description
 	CardID           string        `json:"card_id"`           // Card ID (if payment method is card)

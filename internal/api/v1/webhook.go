@@ -33,6 +33,7 @@ import (
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/types"
 	flexwebhook "github.com/flexprice/flexprice/internal/webhook"
+	"github.com/flexprice/flexprice/internal/webhook/publisher"
 )
 
 // WebhookHandler handles webhook-related endpoints
@@ -53,6 +54,7 @@ type WebhookHandler struct {
 	webhookService                  *flexwebhook.WebhookService
 	billingEntityService            service.BillingEntityService
 	emailNotificationService        service.EmailNotificationService
+	webhookPublisher                publisher.WebhookPublisher
 }
 
 // NewWebhookHandler creates a new webhook handler
@@ -73,6 +75,7 @@ func NewWebhookHandler(
 	webhookService *flexwebhook.WebhookService,
 	billingEntityService service.BillingEntityService,
 	emailNotificationService service.EmailNotificationService,
+	webhookPublisher publisher.WebhookPublisher,
 ) *WebhookHandler {
 	return &WebhookHandler{
 		config:                          cfg,
@@ -91,6 +94,7 @@ func NewWebhookHandler(
 		webhookService:                  webhookService,
 		billingEntityService:            billingEntityService,
 		emailNotificationService:        emailNotificationService,
+		webhookPublisher:                webhookPublisher,
 	}
 }
 
@@ -588,6 +592,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
 		CheckoutSessionService:          h.checkoutSessionService,
 		RefundService:                   h.refundService,
+		WebhookPublisher:                h.webhookPublisher,
 		DB:                              h.db,
 	}
 
