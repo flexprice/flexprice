@@ -615,6 +615,8 @@ type ClickHouseConfig struct {
 	Password       string `mapstructure:"password" validate:"required"`
 	Database       string `mapstructure:"database" validate:"required"`
 	MaxMemoryUsage int64  `mapstructure:"max_memory_usage" validate:"required"`
+	// Picks the replicated dbmate set.
+	Replicated bool `mapstructure:"replicated"`
 }
 
 // ReportsConfig is the reports ClickHouse login.

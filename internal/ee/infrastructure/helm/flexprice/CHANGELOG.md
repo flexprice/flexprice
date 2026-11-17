@@ -9,6 +9,11 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.11.0] - 2026-11-17
+
+### Added
+- `clickhouse.replicated` (default `false`): sets `FLEXPRICE_CLICKHOUSE_REPLICATED`, which switches the `clickhouse` migration step to dbmate on `migrations/versioned/clickhouse/replicated`.
+
 ## [1.7.0] - 2026-10-01
 
 ### Added

@@ -1,10 +1,13 @@
 package main
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/flexprice/flexprice/internal/config"
 )
 
 func TestSplitSQL(t *testing.T) {
@@ -109,5 +112,39 @@ func TestSplitSQL_MigrationFiles(t *testing.T) {
 				t.Fatal("no statements")
 			}
 		})
+	}
+}
+
+func chTestConfig() config.ClickHouseConfig {
+	return config.ClickHouseConfig{
+		Address:  "ch.internal:9000",
+		Username: "migrator",
+		Password: "p@ss/w:rd?#",
+		Database: "flexprice",
+	}
+}
+
+func TestClickHouseMigrationURL(t *testing.T) {
+	u, err := url.Parse(clickhouseMigrationURL(chTestConfig()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"on_cluster":                    "true",
+		"cluster_macro":                 "{cluster}",
+		"replica_macro":                 "{replica}",
+		"zoo_path":                      "/clickhouse/tables/{installation}/{shard}/flexprice/schema_migrations",
+		"max_memory_usage":              "96636764160",
+		"insert_quorum":                 "auto",
+		"insert_quorum_parallel":        "0",
+		"select_sequential_consistency": "1",
+	}
+	if pw, _ := u.User.Password(); pw != "p@ss/w:rd?#" {
+		t.Fatalf("password did not round-trip: %q", pw)
+	}
+	for k, v := range want {
+		if got := u.Query().Get(k); got != v {
+			t.Errorf("%s = %q, want %q", k, got, v)
+		}
 	}
 }

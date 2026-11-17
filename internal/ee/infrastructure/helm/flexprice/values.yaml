@@ -896,6 +896,8 @@ clickhouse:
   # the legacy hardcoded value documented in CLAUDE.md. Lower for shared
   # clusters or tighter resource isolation.
   maxMemoryUsageGB: 90
+  # Replicated: clickhouse step uses dbmate.
+  replicated: false
 
   # ── external mode ────────────────────────────────────────────────────────────
   # address: "my-clickhouse.example.com:9000"

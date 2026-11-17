@@ -400,26 +400,15 @@ func runVersionedMigrations(dir string, statusOnly bool) error {
 
 	fmt.Fprintf(os.Stderr, "dbmate %s against %s:%d/%s (dir %s)\n",
 		action, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName, dir)
+	return runDbmate(bin, dsn, dir, action)
+}
 
-	// --no-dump-schema: dbmate writes schema.sql after a successful run by
-	// default, which needs pg_dump on PATH and a writable tree. Neither holds in
-	// the deployment image, and the dump is a local development convenience.
-	// No timeout on the migration itself, so the context is never cancelled: a
-	// CREATE INDEX CONCURRENTLY on a large table legitimately runs for a long
-	// time, and killing it mid-build leaves an INVALID index. The Job's
-	// activeDeadlineSeconds (Helm) or the workflow's wait (ECS) is the bound.
-	//
-	// `bin` is resolved by resolveDbmate from the fixed dbmateSearchPath list,
-	// never from input. `dir` is an operator-supplied flag passed as its own argv
-	// element, not through a shell, so neither can inject a command.
+// No timeout; the Job deadline bounds it.
+func runDbmate(bin, dsn, dir, action string) error {
 	c := exec.CommandContext(context.Background(), bin, "--migrations-dir", dir, "--no-dump-schema", action) // #nosec G204 -- bin from fixed candidate list, argv not shell // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	c.Env = append(os.Environ(), "DATABASE_URL="+dsn)
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
-
-	// No timeout on the migration itself. A CREATE INDEX CONCURRENTLY on a large
-	// table legitimately runs for a long time, and killing it mid-build leaves an
-	// INVALID index. The Job's activeDeadlineSeconds is the bound that matters.
 	if err := c.Run(); err != nil {
 		return fmt.Errorf("dbmate %s: %w", action, err)
 	}

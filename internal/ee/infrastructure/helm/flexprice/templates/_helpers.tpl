@@ -470,6 +470,10 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.clickhouse.tlsSkipVerify | default false | quote }}
 - name: FLEXPRICE_CLICKHOUSE_MAX_MEMORY_USAGE
   value: {{ .Values.clickhouse.maxMemoryUsageGB | default 90 | quote }}
+{{- if .Values.clickhouse.replicated }}
+- name: FLEXPRICE_CLICKHOUSE_REPLICATED
+  value: "true"
+{{- end }}
 {{- /* ---- Kafka ---- */}}
 - name: FLEXPRICE_KAFKA_BROKERS
   value: {{ include "flexprice.kafkaBrokers" . | quote }}
