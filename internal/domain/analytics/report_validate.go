@@ -9,6 +9,31 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// FilterCustomerStatus filters by the owning customer's status.
+const FilterCustomerStatus = "customer_status"
+
+// ValidCustomerStatus reports whether v is a filterable status.
+func ValidCustomerStatus(v string) bool {
+	return v == string(types.StatusPublished) || v == string(types.StatusArchived)
+}
+
+// CheckCustomerStatusFilter validates operator arity and values.
+func CheckCustomerStatusFilter(op string, values []string) error {
+	if op == "eq" && len(values) > 1 {
+		return ierr.NewError("customer_status eq takes one value").
+			WithHint("use op in for several statuses").
+			Mark(ierr.ErrValidation)
+	}
+	for _, v := range values {
+		if !ValidCustomerStatus(v) {
+			return ierr.NewErrorf("customer_status %q not allowed", v).
+				WithHint("customer_status must be one of: published, archived").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
 type ReportQueryFilter struct {
 	Field string
 	Op    string
@@ -155,15 +180,21 @@ func (req *ReportQuery) ValidateAgainst(e *ReportCatalogEntry, maxRows int) erro
 		}
 	}
 	for _, f := range req.Filters {
-		if !slices.Contains(dims, f.Field) && !(f.Field == "currency" && hasCurrency) {
+		isStatus := f.Field == FilterCustomerStatus && slices.Contains(dims, "customer_id")
+		if !slices.Contains(dims, f.Field) && !(f.Field == "currency" && hasCurrency) && !isStatus {
 			return ierr.NewErrorf("filter field %q not allowed", f.Field).
-				WithHint("filter fields must be one of: currency, " + strings.Join(dims, ", ")).
+				WithHint("filter fields must be one of: currency, " + FilterCustomerStatus + " (reports by customer), " + strings.Join(dims, ", ")).
 				Mark(ierr.ErrValidation)
 		}
 		if (f.Op != "eq" && f.Op != "in") || len(f.Value) == 0 || (f.Op == "eq" && len(f.Value) != 1) {
 			return ierr.NewErrorf("filter on %q invalid", f.Field).
 				WithHint("op must be eq (1 value) or in (1+ values)").
 				Mark(ierr.ErrValidation)
+		}
+		if isStatus {
+			if err := CheckCustomerStatusFilter(f.Op, f.Value); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
