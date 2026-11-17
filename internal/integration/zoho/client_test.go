@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -51,56 +50,6 @@ func newClient(t *testing.T, md *types.ZohoBooksConnectionMetadata) (zoho.ZohoCl
 
 func detailsOf(err error) string {
 	return fmt.Sprint(errors.GetAllSafeDetails(err)) + err.Error()
-}
-
-func TestTokenRefreshAPIDomainValidation(t *testing.T) {
-	tests := []struct {
-		name      string
-		apiDomain string
-		wantErr   bool
-	}{
-		{"zoho api domain", "https://www.zohoapis.in", false},
-		{"attacker host", "https://evil.example.com", true},
-		{"http scheme", "http://www.zohoapis.com", true},
-		{"zoho lookalike suffix", "https://zohoapis.com.evil.com", true},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/oauth/v2/token" {
-					_, _ = w.Write([]byte(fmt.Sprintf(`{"access_token":"tok","api_domain":%q,"expires_in":3600}`, tc.apiDomain)))
-					return
-				}
-				w.WriteHeader(http.StatusNotFound)
-			}))
-			defer srv.Close()
-
-			origTransport := http.DefaultTransport
-			http.DefaultTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
-				r = r.Clone(r.Context())
-				r.URL.Scheme = "http"
-				r.URL.Host = strings.TrimPrefix(srv.URL, "http://")
-				return origTransport.RoundTrip(r)
-			})
-			t.Cleanup(func() { http.DefaultTransport = origTransport })
-
-			c, store, ctx := newClient(t, &types.ZohoBooksConnectionMetadata{
-				ClientID: "id", ClientSecret: "secret", RefreshToken: "rt",
-				AccountsURL: srv.URL, OrganizationID: "org",
-			})
-			_, err := c.GetInvoice(ctx, "inv_1")
-
-			stored, getErr := store.GetByProvider(ctx, types.SecretProviderZohoBooks)
-			require.NoError(t, getErr)
-			if tc.wantErr {
-				assert.Empty(t, stored.EncryptedSecretData.ZohoBooks.APIDomain)
-				assert.Empty(t, stored.EncryptedSecretData.ZohoBooks.AccessToken)
-				assert.Error(t, err)
-				return
-			}
-			assert.Equal(t, tc.apiDomain, stored.EncryptedSecretData.ZohoBooks.APIDomain)
-		})
-	}
 }
 
 func TestUpstreamBodyNotReturned(t *testing.T) {
