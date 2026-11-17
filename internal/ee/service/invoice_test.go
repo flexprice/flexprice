@@ -886,8 +886,8 @@ func (s *InvoiceServiceSuite) TestVoidInvoice_RefusedWhileDebitInFlight() {
 
 	_, err = s.service.VoidInvoice(ctx, resp.ID, dto.InvoiceVoidRequest{})
 	s.Require().Error(err)
-	s.True(ierr.IsValidation(err))
-	s.Contains(err.Error(), "a payment is in progress")
+	s.True(ierr.IsAlreadyExists(err))
+	s.Contains(err.Error(), "a charge is already in progress")
 
 	pymnt.PaymentStatus = types.PaymentStatusFailed
 	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, pymnt))

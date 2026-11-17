@@ -1923,7 +1923,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 			return err
 		}
 		if inFlight {
-			return errInvoiceChargeInFlight(id)
+			return payments.ErrChargeInFlight(id)
 		}
 
 		if err := validateInvoiceVoidable(inv); err != nil {
