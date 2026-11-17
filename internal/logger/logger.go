@@ -165,7 +165,7 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 			scopeName = string(cfg.Deployment.Mode)
 		}
 		otelCore := otelzap.NewCore(scopeName, otelzap.WithLoggerProvider(otelLogProvider))
-		otelTeeCore, incrErr := zapcore.NewIncreaseLevelCore(otelCore, config.Level)
+		otelTeeCore, incrErr := zapcore.NewIncreaseLevelCore(newScalarCore(otelCore), config.Level)
 		if incrErr != nil {
 			return nil, incrErr
 		}

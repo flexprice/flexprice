@@ -3354,10 +3354,10 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 				if ctxErr == context.DeadlineExceeded {
 					message = "wallet balance computation timed out"
 				}
-				s.Logger.Error(ctx, message, "wallet_id", walletID, "error", err.Error())
+				s.Logger.Info(ctx, message, "wallet_id", walletID, "error", err.Error())
 				return s.buildResponseFromCachedBalance(w, *cached), nil
 			}
-			s.Logger.Error(ctx, "wallet balance fallback to cache",
+			s.Logger.Info(ctx, "wallet balance fallback to cache",
 				"wallet_id", walletID,
 				"tenant_id", types.GetTenantID(ctx),
 				"environment_id", types.GetEnvironmentID(ctx),
@@ -3625,10 +3625,10 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 				if ctxErr == context.DeadlineExceeded {
 					message = "wallet balance computation timed out"
 				}
-				s.Logger.Error(ctx, message, "wallet_id", walletID, "error", err.Error())
+				s.Logger.Info(ctx, message, "wallet_id", walletID, "error", err.Error())
 				return s.buildResponseFromCachedBalance(w, *cached), nil
 			}
-			s.Logger.Error(ctx, "wallet balance fallback to cache",
+			s.Logger.Info(ctx, "wallet balance fallback to cache",
 				"wallet_id", walletID,
 				"tenant_id", types.GetTenantID(ctx),
 				"environment_id", types.GetEnvironmentID(ctx),

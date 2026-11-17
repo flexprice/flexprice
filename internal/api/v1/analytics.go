@@ -370,7 +370,9 @@ func (h *AnalyticsHandler) RunReport(c *gin.Context) {
 
 	res, err := h.svc.RunReport(ctx, key, &req)
 	if err != nil {
-		h.log.Error(ctx, "failed to run analytics report", "error", err, "report_key", key)
+		if ierr.IsServerError(err) {
+			h.log.Error(ctx, "failed to run analytics report", "error", err, "report_key", key)
+		}
 		c.Error(err)
 		return
 	}

@@ -182,6 +182,13 @@ func IsNotImplemented(err error) bool {
 	return errors.Is(err, ErrNotImplemented)
 }
 
+// IsServerError reports whether err resolves to a 5xx status. Errors that map
+// to 4xx are client or business outcomes and should not be logged at Error.
+func IsServerError(err error) bool {
+	status, _ := ResolveError(err)
+	return status >= http.StatusInternalServerError
+}
+
 // ResolveError returns both the HTTP status code and machine-readable error
 // code for the given error in a single pass over errMappings.
 func ResolveError(err error) (httpStatus int, code ErrorCode) {

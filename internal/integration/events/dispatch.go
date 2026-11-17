@@ -466,6 +466,14 @@ func executeCustomerWorkflow(
 	customerID string,
 ) error {
 	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, workflowType, input)
+	if ierr.IsAlreadyExists(err) {
+		log.Info(ctx, "integration_events: workflow already running",
+			"provider", provider,
+			"workflow_type", workflowType,
+			"customer_id", customerID,
+		)
+		return err
+	}
 	if err != nil {
 		log.Error(ctx, "integration_events: failed to start workflow",
 			"provider", provider,

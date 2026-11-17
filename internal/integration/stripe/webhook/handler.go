@@ -156,6 +156,24 @@ func (h *Handler) handleCustomerCreated(ctx context.Context, event *stripeapi.Ev
 }
 
 // handlePaymentIntentSucceeded handles payment_intent.succeeded webhook
+// logPaymentLookupSkip logs a webhook skipped because its payment couldn't be loaded.
+// A Stripe account can serve several environments, so a payment that lives in
+// another environment is expected and only logged at Info.
+func (h *Handler) logPaymentLookupSkip(ctx context.Context, err error, flexpricePaymentID, paymentIntentID, eventID string) {
+	if ierr.IsNotFound(err) {
+		h.logger.Info(ctx, "payment not found in this environment, skipping event",
+			"flexprice_payment_id", flexpricePaymentID,
+			"payment_intent_id", paymentIntentID,
+			"event_id", eventID)
+		return
+	}
+	h.logger.Error(ctx, "failed to get FlexPrice payment, skipping event",
+		"error", err,
+		"flexprice_payment_id", flexpricePaymentID,
+		"payment_intent_id", paymentIntentID,
+		"event_id", eventID)
+}
+
 func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *stripeapi.Event, environmentID string, services *ServiceDependencies) error {
 	// Parse webhook to get payment intent ID
 	var webhookPaymentIntent stripeapi.PaymentIntent
@@ -209,11 +227,7 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 
 		payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 		if err != nil {
-			h.logger.Error(ctx, "failed to get FlexPrice payment, skipping event",
-				"error", err,
-				"flexprice_payment_id", flexpricePaymentID,
-				"payment_intent_id", paymentIntent.ID,
-				"event_id", event.ID)
+			h.logPaymentLookupSkip(ctx, err, flexpricePaymentID, paymentIntent.ID, event.ID)
 			return nil
 		}
 
@@ -284,11 +298,7 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 	// Get payment record by flexprice_payment_id
 	payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
-		h.logger.Error(ctx, "failed to get payment record, skipping event",
-			"error", err,
-			"flexprice_payment_id", flexpricePaymentID,
-			"payment_intent_id", paymentIntentID,
-			"event_id", event.ID)
+		h.logPaymentLookupSkip(ctx, err, flexpricePaymentID, paymentIntentID, event.ID)
 		return nil
 	}
 
@@ -969,7 +979,7 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	// get payment from database
 	payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
-		h.logger.Error(ctx, "failed to get payment from database, skipping event", "error", err, "event_id", event.ID)
+		h.logPaymentLookupSkip(ctx, err, flexpricePaymentID, "", event.ID)
 		return nil
 	}
 

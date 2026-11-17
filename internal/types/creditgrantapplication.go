@@ -34,6 +34,10 @@ const (
 	ApplicationStatusCancelled ApplicationStatus = "cancelled"
 )
 
+// MaxFailedCreditGrantApplicationRetries bounds how often the scheduled cron
+// (every 15 min) retries a failed application: about a day of retries.
+const MaxFailedCreditGrantApplicationRetries = 96
+
 func (s ApplicationStatus) String() string {
 	return string(s)
 }

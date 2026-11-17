@@ -10,6 +10,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/config"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
@@ -263,9 +264,14 @@ func (c *Client) withTx(ctx context.Context, fn func(ctx context.Context) error)
 			err = fmt.Errorf("rolling back transaction: %v (original error: %w)", rerr, err)
 		}
 		types.DiscardPostCommitHooks(txCtx)
-		c.logger.Error(ctx, "rolling back transaction due to error",
-			"error", err,
-		)
+		// The caller owns the error; only unexpected failures are worth an Error here.
+		if ierr.IsServerError(err) {
+			c.logger.Error(ctx, "rolling back transaction due to error",
+				"error", err,
+			)
+		} else {
+			c.logger.Debug(ctx, "rolling back transaction", "error", err)
+		}
 		return err
 	}
 

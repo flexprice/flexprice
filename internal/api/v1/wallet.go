@@ -293,7 +293,6 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 
 	var req dto.TopUpWalletRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -302,7 +301,9 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 
 	wallet, err := h.walletService.TopUpWallet(c.Request.Context(), walletID, &req)
 	if err != nil {
-		h.logger.Error(c.Request.Context(), "Failed to top up wallet", "error", err)
+		if ierr.IsServerError(err) {
+			h.logger.Error(c.Request.Context(), "Failed to top up wallet", "error", err, "wallet_id", walletID)
+		}
 		c.Error(err)
 		return
 	}

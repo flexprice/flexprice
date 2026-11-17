@@ -427,8 +427,11 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 
 	var totalCount uint64
 
-	baseQuery := `
-		SELECT 
+	// baseQuery holds only FROM/WHERE so the count can run directly on events.
+	// Counting over a column-selecting subquery fails with "Block structure
+	// mismatch in UnionStep" when only some parts have a projection materialized.
+	selectClause := `
+		SELECT
 			id,
 			external_customer_id,
 			customer_id,
@@ -438,7 +441,8 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 			source,
 			properties,
 			environment_id,
-			ingested_at
+			ingested_at`
+	baseQuery := `
 		FROM events
 		WHERE tenant_id = ?
 	`
@@ -512,7 +516,7 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 
 	// Count total if requested
 	if params.CountTotal {
-		countQuery := "SELECT COUNT(*) FROM (" + baseQuery + ") AS filtered_events"
+		countQuery := "SELECT count()" + baseQuery
 		err := r.store.GetConn().QueryRow(ctx, countQuery, args...).Scan(&totalCount)
 		if err != nil {
 			SetSpanError(span, err)
@@ -533,7 +537,7 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 		params.Order = lo.ToPtr("DESC")
 	}
 
-	baseQuery += " ORDER BY " + strings.ToLower(*params.Sort) + " " + strings.ToUpper(*params.Order) + ", id DESC"
+	baseQuery = selectClause + baseQuery + " ORDER BY " + strings.ToLower(*params.Sort) + " " + strings.ToUpper(*params.Order) + ", id DESC"
 
 	// Apply limit and offset for pagination if using offset-based pagination
 	if params.PageSize > 0 {

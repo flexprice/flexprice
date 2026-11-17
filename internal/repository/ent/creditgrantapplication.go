@@ -377,9 +377,14 @@ func (r *creditGrantApplicationRepository) FindAllScheduledApplications(ctx cont
 
 	applications, err := client.CreditGrantApplication.Query().
 		Where(
-			cga.ApplicationStatusIn(
-				types.ApplicationStatusPending,
-				types.ApplicationStatusFailed,
+			cga.Or(
+				cga.ApplicationStatus(types.ApplicationStatusPending),
+				// Failed applications stop being picked up after MaxFailedCreditGrantApplicationRetries;
+				// a non-transient failure (e.g. a wallet conflict) otherwise retries every run forever.
+				cga.And(
+					cga.ApplicationStatus(types.ApplicationStatusFailed),
+					cga.RetryCountLT(types.MaxFailedCreditGrantApplicationRetries),
+				),
 			),
 			cga.ScheduledForLT(clock.Now()),
 			cga.Status(string(types.StatusPublished)),

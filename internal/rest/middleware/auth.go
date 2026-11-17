@@ -333,7 +333,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 
 		claims, err := validate(c.Request.Context(), tokenString)
 		if err != nil {
-			logger.Error(c.Request.Context(), "failed to validate token", "error", err)
+			logger.Info(c.Request.Context(), "token validation failed", "error", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
@@ -404,7 +404,7 @@ func SessionTokenAuthMiddleware(cfg *config.Configuration, logger *logger.Logger
 
 		claims, err := authProvider.ValidateSessionToken(c.Request.Context(), authHeader)
 		if err != nil {
-			logger.Error(c.Request.Context(), "failed to validate session token", "error", err)
+			logger.Info(c.Request.Context(), "session token validation failed", "error", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired session token"})
 			c.Abort()
 			return
