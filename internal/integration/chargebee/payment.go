@@ -84,16 +84,7 @@ func (s *PaymentService) RefundLateCapturedPayment(
 			Mark(ierr.ErrInternal)
 	}
 
-	updateReq := dto.UpdatePaymentRequest{
-		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
-		RefundedAt:       lo.ToPtr(clock.Now()),
-		GatewayPaymentID: lo.ToPtr(chargebeeTransactionID),
-	}
-	if refundID != "" {
-		metadata := lo.Assign(existingPayment.Metadata, types.Metadata{"chargebee_refund_id": refundID})
-		updateReq.Metadata = &metadata
-	}
-	if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq); err != nil {
+	if err := s.recordLateCaptureRefund(ctx, existingPayment, chargebeeTransactionID, refundID, paymentService); err != nil {
 		return ierr.WithError(err).
 			WithMessage("refund confirmed at Chargebee but failed to update FlexPrice payment status").
 			WithReportableDetails(map[string]interface{}{
@@ -110,8 +101,57 @@ func (s *PaymentService) RefundLateCapturedPayment(
 	return nil
 }
 
+func (s *PaymentService) recordLateCaptureRefund(
+	ctx context.Context,
+	existingPayment *dto.PaymentResponse,
+	chargebeeTransactionID string,
+	refundID string,
+	paymentService interfaces.PaymentService,
+) error {
+	now := clock.Now()
+	metadata := existingPayment.Metadata
+	if refundID != "" {
+		metadata = lo.Assign(existingPayment.Metadata, types.Metadata{"chargebee_refund_id": refundID})
+	}
+
+	switch existingPayment.PaymentStatus {
+	case types.PaymentStatusInitiated, types.PaymentStatusPending, types.PaymentStatusProcessing:
+		if _, err := paymentService.UpdatePayment(ctx, existingPayment.ID, dto.UpdatePaymentRequest{
+			PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
+			SucceededAt:      lo.ToPtr(now),
+			GatewayPaymentID: lo.ToPtr(chargebeeTransactionID),
+		}); err != nil {
+			return err
+		}
+	case types.PaymentStatusFailed, types.PaymentStatusVoided:
+		s.logger.Info(ctx, "late-captured payment is in a final status, recording refund reference only",
+			"payment_id", existingPayment.ID, "status", existingPayment.PaymentStatus)
+		_, err := paymentService.UpdatePayment(ctx, existingPayment.ID, dto.UpdatePaymentRequest{
+			GatewayPaymentID: lo.ToPtr(chargebeeTransactionID),
+			Metadata:         &metadata,
+		})
+		return err
+	case types.PaymentStatusSucceeded, types.PaymentStatusOverpaid:
+	default:
+		return ierr.NewError("payment status cannot be recorded as a late capture refund").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":     existingPayment.ID,
+				"payment_status": existingPayment.PaymentStatus,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	_, err := paymentService.UpdatePayment(ctx, existingPayment.ID, dto.UpdatePaymentRequest{
+		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
+		RefundedAt:       lo.ToPtr(now),
+		GatewayPaymentID: lo.ToPtr(chargebeeTransactionID),
+		Metadata:         &metadata,
+	})
+	return err
+}
+
 // ensureRefunded submits the refund unless Chargebee already shows nothing left to
-// refund. Returns the refund transaction id, empty when the refund was already done.
+// refund. Returns the refund transaction id, including an existing linked refund.
 func (s *PaymentService) ensureRefunded(ctx context.Context, transactionID string, amountMinor int64, flexpricePaymentID string) (string, error) {
 	if txn, err := s.client.RetrieveTransaction(ctx, transactionID); err != nil {
 		s.logger.Info(ctx, "failed to read chargebee transaction before refunding, proceeding anyway",
@@ -119,7 +159,7 @@ func (s *PaymentService) ensureRefunded(ctx context.Context, transactionID strin
 	} else if AmountRefunded(txn) >= txn.Amount {
 		s.logger.Info(ctx, "chargebee transaction is already fully refunded, skipping duplicate submission",
 			"chargebee_transaction_id", transactionID)
-		return "", nil
+		return refundIDFromTransaction(txn), nil
 	}
 
 	refund, err := s.client.RefundTransaction(ctx, transactionID, amountMinor,
