@@ -864,11 +864,6 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 	}
 
 	if isBackdatedVersion(existingLineItem, req.EffectiveFrom, endDate) {
-		if existingLineItem.BillingPeriod == types.BILLING_PERIOD_ONETIME {
-			if err := validateLineItemEndDateChange(existingLineItem, endDate); err != nil {
-				return nil, err
-			}
-		}
 		return s.replaceLineItemVersionFrom(ctx, sub, lineItemID, req, endDate)
 	}
 	if req.EffectiveFrom != nil && !req.ShouldCreateNewLineItem() {
@@ -1165,6 +1160,11 @@ func (s *subscriptionService) replaceLineItemVersionFrom(
 			return err
 		} else if successor != nil {
 			return alreadyScheduledVersionError(lineItemID, successor.ID)
+		}
+		if locked.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+			if err := validateLineItemEndDateChange(locked, from); err != nil {
+				return err
+			}
 		}
 
 		// Retire before the override repoints locked's PriceID, so retired rows keep the price they billed with.
