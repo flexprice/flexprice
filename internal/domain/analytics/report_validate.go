@@ -12,7 +12,27 @@ import (
 // FilterCustomerStatus filters by the owning customer's status.
 const FilterCustomerStatus = "customer_status"
 
-var CustomerStatusValues = []string{string(types.StatusPublished), string(types.StatusArchived)}
+// ValidCustomerStatus reports whether v is a filterable status.
+func ValidCustomerStatus(v string) bool {
+	return v == string(types.StatusPublished) || v == string(types.StatusArchived)
+}
+
+// CheckCustomerStatusFilter validates operator arity and values.
+func CheckCustomerStatusFilter(op string, values []string) error {
+	if op == "eq" && len(values) > 1 {
+		return ierr.NewError("customer_status eq takes one value").
+			WithHint("use op in for several statuses").
+			Mark(ierr.ErrValidation)
+	}
+	for _, v := range values {
+		if !ValidCustomerStatus(v) {
+			return ierr.NewErrorf("customer_status %q not allowed", v).
+				WithHint("customer_status must be one of: published, archived").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
 
 type ReportQueryFilter struct {
 	Field string
@@ -172,12 +192,8 @@ func (req *ReportQuery) ValidateAgainst(e *ReportCatalogEntry, maxRows int) erro
 				Mark(ierr.ErrValidation)
 		}
 		if isStatus {
-			for _, v := range f.Value {
-				if !slices.Contains(CustomerStatusValues, v) {
-					return ierr.NewErrorf("customer_status %q not allowed", v).
-						WithHint("customer_status must be one of: " + strings.Join(CustomerStatusValues, ", ")).
-						Mark(ierr.ErrValidation)
-				}
+			if err := CheckCustomerStatusFilter(f.Op, f.Value); err != nil {
+				return err
 			}
 		}
 	}

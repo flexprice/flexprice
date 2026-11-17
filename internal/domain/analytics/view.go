@@ -208,6 +208,9 @@ func (v ViewDefinition) validateBilling() error {
 			continue
 		}
 		if f.Field == FilterCustomerStatus && slices.Contains(bm.Dimensions, "customer_id") {
+			if err := checkViewCustomerStatus(f); err != nil {
+				return err
+			}
 			continue
 		}
 		if !slices.Contains(bm.Dimensions, f.Field) {
@@ -215,6 +218,16 @@ func (v ViewDefinition) validateBilling() error {
 		}
 	}
 	return v.validateCommon()
+}
+
+// checkViewCustomerStatus skips variable placeholders; they resolve later.
+func checkViewCustomerStatus(f *Filter) error {
+	if len(f.Value) == 1 {
+		if _, isVar := varPlaceholder(f.Value[0]); isVar {
+			return nil
+		}
+	}
+	return CheckCustomerStatusFilter(string(f.Op), f.Value)
 }
 
 func (v ViewDefinition) validateCommon() error {

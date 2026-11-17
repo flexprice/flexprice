@@ -41,6 +41,11 @@ func ResolveVariables(def *ViewDefinition, supplied map[string][]string) (*Resol
 			}
 			return nil, ierr.NewError(fmt.Sprintf("filter %q has no value", f.Field)).Mark(ierr.ErrValidation)
 		}
+		if f.Field == FilterCustomerStatus {
+			if err := CheckCustomerStatusFilter(string(f.Op), val); err != nil {
+				return nil, err
+			}
+		}
 		rv.Filters = append(rv.Filters, &Filter{Field: f.Field, Op: f.Op, Value: val})
 	}
 
