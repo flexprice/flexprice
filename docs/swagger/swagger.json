@@ -15645,7 +15645,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.cancelled",
                 "responses": {
@@ -15668,7 +15668,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.created",
                 "responses": {
@@ -15691,7 +15691,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.invoiced",
                 "responses": {
@@ -15714,7 +15714,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.updated",
                 "responses": {
@@ -15737,7 +15737,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_terms.created",
                 "responses": {
@@ -15760,7 +15760,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_terms.updated",
                 "responses": {
@@ -15783,7 +15783,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.cancelled",
                 "responses": {
@@ -15806,7 +15806,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.completed",
                 "responses": {
@@ -15829,7 +15829,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.expired",
                 "responses": {
@@ -15852,7 +15852,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.failed",
                 "responses": {
@@ -15875,7 +15875,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.initiated",
                 "responses": {
@@ -15898,7 +15898,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.created",
                 "responses": {
@@ -15921,7 +15921,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.terminated",
                 "responses": {
@@ -15944,7 +15944,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.updated",
                 "responses": {
@@ -15967,7 +15967,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Credit note"
                 ],
                 "summary": "credit_note.created",
                 "responses": {
@@ -15990,7 +15990,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Credit note"
                 ],
                 "summary": "credit_note.updated",
                 "responses": {
@@ -16013,7 +16013,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.created",
                 "responses": {
@@ -16036,7 +16036,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.deleted",
                 "responses": {
@@ -16059,7 +16059,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.updated",
                 "responses": {
@@ -16082,7 +16082,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.created",
                 "responses": {
@@ -16105,7 +16105,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.deleted",
                 "responses": {
@@ -16128,7 +16128,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.updated",
                 "responses": {
@@ -16151,7 +16151,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Usage ingestion"
                 ],
                 "summary": "event.rejected",
                 "responses": {
@@ -16174,7 +16174,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.created",
                 "responses": {
@@ -16197,7 +16197,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.deleted",
                 "responses": {
@@ -16220,7 +16220,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.updated",
                 "responses": {
@@ -16243,7 +16243,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.wallet_balance.alert",
                 "responses": {
@@ -16266,7 +16266,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.communication.triggered",
                 "responses": {
@@ -16289,7 +16289,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.create.drafted",
                 "responses": {
@@ -16312,7 +16312,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.payment.failed",
                 "responses": {
@@ -16335,7 +16335,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.payment.overdue",
                 "responses": {
@@ -16358,7 +16358,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.sync.failed",
                 "responses": {
@@ -16381,7 +16381,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.sync.success",
                 "responses": {
@@ -16404,7 +16404,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update",
                 "responses": {
@@ -16427,7 +16427,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.finalized",
                 "responses": {
@@ -16450,7 +16450,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.payment",
                 "responses": {
@@ -16473,7 +16473,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.voided",
                 "responses": {
@@ -16496,7 +16496,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.attempt.failed",
                 "responses": {
@@ -16519,7 +16519,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.created",
                 "responses": {
@@ -16542,7 +16542,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.failed",
                 "responses": {
@@ -16565,7 +16565,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.pending",
                 "responses": {
@@ -16588,7 +16588,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.success",
                 "responses": {
@@ -16611,7 +16611,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.updated",
                 "responses": {
@@ -16634,7 +16634,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.created",
                 "responses": {
@@ -16657,7 +16657,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.failed",
                 "responses": {
@@ -16680,7 +16680,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.succeeded",
                 "responses": {
@@ -16703,7 +16703,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.activated",
                 "responses": {
@@ -16726,7 +16726,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.cancelled",
                 "responses": {
@@ -16749,7 +16749,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.created",
                 "responses": {
@@ -16772,7 +16772,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.draft.created",
                 "responses": {
@@ -16795,7 +16795,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.group_spend.threshold_reached",
                 "responses": {
@@ -16818,7 +16818,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.group_spend.threshold_recovered",
                 "responses": {
@@ -16841,7 +16841,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.line_item_spend.threshold_reached",
                 "responses": {
@@ -16864,7 +16864,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.line_item_spend.threshold_recovered",
                 "responses": {
@@ -16887,7 +16887,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.paused",
                 "responses": {
@@ -16910,7 +16910,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.created",
                 "responses": {
@@ -16933,7 +16933,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.deleted",
                 "responses": {
@@ -16956,7 +16956,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.updated",
                 "responses": {
@@ -16979,7 +16979,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.plan_changed",
                 "responses": {
@@ -17002,7 +17002,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.renewal.due",
                 "responses": {
@@ -17025,7 +17025,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.resumed",
                 "responses": {
@@ -17048,7 +17048,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.spend.threshold_reached",
                 "responses": {
@@ -17071,7 +17071,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.spend.threshold_recovered",
                 "responses": {
@@ -17094,7 +17094,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.updated",
                 "responses": {
@@ -17117,7 +17117,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.created",
                 "responses": {
@@ -17140,7 +17140,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.credit_balance.dropped",
                 "responses": {
@@ -17163,7 +17163,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.credit_balance.recovered",
                 "responses": {
@@ -17186,7 +17186,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.dropped",
                 "responses": {
@@ -17209,7 +17209,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.recovered",
                 "responses": {
@@ -17232,7 +17232,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.updated",
                 "responses": {
@@ -17255,7 +17255,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.terminated",
                 "responses": {
@@ -17278,7 +17278,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.transaction.created",
                 "responses": {
@@ -17301,7 +17301,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.transaction.updated",
                 "responses": {
@@ -17324,7 +17324,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.updated",
                 "responses": {
@@ -32246,7 +32246,7 @@
                     "type": "string"
                 },
                 "balance_alert_status": {
-                    "description": "BalanceAlertStatus is where the balance stands against the wallet's alert\nthresholds now (ok, info, warning or in_alarm), from the same settings\nthe balance alerts use. Set by the customer portal's wallet list; absent\nwhen wallet alerts are off.",
+                    "description": "BalanceAlertStatus is ok, info, warning, or in_alarm. Absent when wallet alerts are off.",
                     "$ref": "#/definitions/types.AlertState"
                 },
                 "balance_updated_at": {

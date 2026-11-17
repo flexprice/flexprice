@@ -47,6 +47,7 @@ swagger-3-0:
 		-d @docs/swagger/swagger.json > docs/swagger/swagger-3-0.json
 	@echo "Conversion complete. Output saved to docs/swagger/swagger-3-0.json"
 	@node scripts/fix_swagger_internal_types.mjs
+	@node scripts/build_webhooks_spec.mjs
 	@./scripts/update_swagger_servers.sh
 
 .PHONY: swagger-fix-refs
