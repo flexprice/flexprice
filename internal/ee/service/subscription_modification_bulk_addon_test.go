@@ -808,6 +808,33 @@ func (s *SubscriptionServiceSuite) TestGroupedModify_NetsGroupOntoOneParentInvoi
 	s.Equal(parent.ID, ended[0].SubscriptionID)
 }
 
+func (s *SubscriptionServiceSuite) TestGroupedModify_PriceOverride_PreviewQuotesTheOverriddenAmount() {
+	ctx := s.GetContext()
+	parent, child := s.seedAddonGroup()
+	s.seedFixedPriceAddon("addon_grp_override", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+
+	add := s.modifyAdd("addon_grp_override", parent.CurrentPeriodStart.Add(15*24*time.Hour))
+	add.OverrideLineItems = []dto.OverrideLineItemRequest{{
+		PriceID: "price_addon_grp_override",
+		Amount:  lo.ToPtr(decimal.NewFromInt(10)),
+	}}
+	req := s.groupedModifyRequest(dto.GroupedInvoicingChange{SubscriptionID: child.ID, AddonBulkParams: &dto.SubModifyBulkAddonParams{
+		Adds: []*dto.AddAddonToSubscriptionRequest{add},
+	}})
+
+	preview, err := s.modificationService().Preview(ctx, parent.ID, req)
+	s.Require().NoError(err)
+	s.Require().Len(preview.ChangedResources.Invoices, 1)
+
+	_, err = s.modificationService().Execute(ctx, parent.ID, req)
+	s.Require().NoError(err)
+
+	invoices := s.oneOffInvoicesFor(parent.ID)
+	s.Require().Len(invoices, 1)
+	quoted := preview.ChangedResources.Invoices[0].Invoice.AmountDue
+	s.True(approxEqual(invoices[0].AmountDue, quoted), "execute charged %s, preview quoted %s", invoices[0].AmountDue, quoted)
+}
+
 func (s *SubscriptionServiceSuite) TestGroupedModify_InvalidTargetsRejectedWithNothingPersisted() {
 	ctx := s.GetContext()
 	parent, child := s.seedAddonGroup()

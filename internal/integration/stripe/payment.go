@@ -1088,7 +1088,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymen
 	)
 
 	// Get the payment record
-	payment, err := paymentService.GetPayment(ctx, paymentID)
+	payment, err := paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: paymentID})
 	if err != nil {
 		s.logger.Error(ctx, "failed to get payment record for reconciliation",
 			"error", err,
@@ -2171,7 +2171,7 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		}
 	}()
 
-	existingPayment, err := paymentService.GetPayment(ctx, flexpricePaymentID)
+	existingPayment, err := paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		return ierr.WithError(err).
 			WithMessage("failed to get payment record for refund").

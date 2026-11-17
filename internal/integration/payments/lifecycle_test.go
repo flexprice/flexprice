@@ -1,7 +1,6 @@
 package payments_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -9,13 +8,12 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -607,54 +605,46 @@ func (s *PaymentLifecycleSuite) TestFullLifecycle_Invoice() {
 	s.Equal(types.PaymentStatusSucceeded, payment.PaymentStatus)
 }
 
-func TestChargeInFlight(t *testing.T) {
-	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "tenant_1"), "env_1")
-	pymnt := func(id string, method types.PaymentMethodType, status types.PaymentStatus) *payment.Payment {
-		return &payment.Payment{
-			ID:                id,
-			IdempotencyKey:    id,
-			DestinationType:   types.PaymentDestinationTypeInvoice,
-			DestinationID:     "inv_1",
-			PaymentMethodType: method,
-			PaymentStatus:     status,
-			EnvironmentID:     "env_1",
-			BaseModel:         types.GetDefaultBaseModel(ctx),
-		}
-	}
-
-	submitted := func(p *payment.Payment) *payment.Payment {
-		p.GatewayTrackingID = lo.ToPtr("order_1")
-		return p
-	}
-
+func (s *PaymentLifecycleSuite) TestLockInvoiceCharge_InFlightCharges() {
+	razorpay := string(types.PaymentGatewayTypeRazorpay)
 	tests := []struct {
-		name      string
-		payments  []*payment.Payment
-		excludeID string
-		want      bool
+		name     string
+		method   types.PaymentMethodType
+		gateway  *string
+		status   types.PaymentStatus
+		inFlight bool
 	}{
-		{name: "no payments"},
-		{name: "failed only", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusFailed)}},
-		{name: "initiated mandate charge sent to the gateway", payments: []*payment.Payment{submitted(pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusInitiated))}, want: true},
-		{name: "initiated charge never sent to the gateway", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusInitiated)}},
-		{name: "pending upi charge", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeUPI, types.PaymentStatusPending)}, want: true},
-		{name: "processing card charge", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeCard, types.PaymentStatusProcessing)}, want: true},
-		{name: "pending payment link", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypePaymentLink, types.PaymentStatusInitiated)}},
-		{name: "excluded payment", payments: []*payment.Payment{submitted(pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusInitiated))}, excludeID: "pay_1"},
-		{name: "succeeded charge", payments: []*payment.Payment{pymnt("pay_1", types.PaymentMethodTypeENACH, types.PaymentStatusSucceeded)}},
+		{name: "pending razorpay card charge", method: types.PaymentMethodTypeCard, gateway: &razorpay, status: types.PaymentStatusPending, inFlight: true},
+		{name: "processing charge", method: types.PaymentMethodTypeCard, gateway: &razorpay, status: types.PaymentStatusProcessing, inFlight: true},
+		{name: "pending payment link", method: types.PaymentMethodTypePaymentLink, gateway: &razorpay, status: types.PaymentStatusPending},
+		{name: "initiated razorpay upi charge", method: types.PaymentMethodTypeUPI, gateway: &razorpay, status: types.PaymentStatusInitiated},
+		{name: "pending stripe card charge", method: types.PaymentMethodTypeCard, status: types.PaymentStatusPending},
 	}
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			invoiceID := "inv_lock_" + string(rune('a'+i))
+			s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, &payment.Payment{
+				ID:                "pay_" + invoiceID,
+				IdempotencyKey:    "pay_" + invoiceID,
+				DestinationType:   types.PaymentDestinationTypeInvoice,
+				DestinationID:     invoiceID,
+				PaymentMethodType: tt.method,
+				PaymentGateway:    tt.gateway,
+				Amount:            decimal.NewFromInt(10),
+				Currency:          "inr",
+				PaymentStatus:     tt.status,
+				EnvironmentID:     types.GetEnvironmentID(ctx),
+				BaseModel:         types.GetDefaultBaseModel(ctx),
+			}))
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			repo := testutil.NewInMemoryPaymentStore()
-			for _, p := range tt.payments {
-				require.NoError(t, repo.Create(ctx, p))
+			lock, err := payments.LockInvoiceCharge(ctx, s.GetLocker(), s.GetStores().PaymentRepo, types.GetEnvironmentID(ctx), invoiceID, "")
+			if tt.inFlight {
+				s.True(ierr.IsAlreadyExists(err))
+				return
 			}
-
-			got, err := payments.ChargeInFlight(ctx, repo, "inv_1", tt.excludeID)
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
+			s.Require().NoError(err)
+			s.NoError(lock.Release(ctx))
 		})
 	}
 }

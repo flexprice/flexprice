@@ -4752,6 +4752,65 @@ definitions:
     - entity_type
     - provider_type
     type: object
+  EmailLogResponse:
+    properties:
+      cc_addresses:
+        items:
+          type: string
+        type: array
+      created_at:
+        type: string
+      created_by:
+        type: string
+      customer_id:
+        type: string
+      delivered_at:
+        type: string
+      delivery_status:
+        $ref: '#/definitions/types.EmailDeliveryStatus'
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.SystemEntityType'
+      environment_id:
+        type: string
+      from_address:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      provider:
+        $ref: '#/definitions/types.EmailProvider'
+      provider_message_id:
+        type: string
+      reply_to:
+        type: string
+      sent_at:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      status_reason:
+        type: string
+      subject:
+        type: string
+      template_key:
+        $ref: '#/definitions/types.EmailTemplateKey'
+      tenant_id:
+        type: string
+      to_addresses:
+        items:
+          type: string
+        type: array
+      trigger:
+        $ref: '#/definitions/types.EmailTrigger'
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
   EntitlementResponse:
     properties:
       addon:
@@ -5438,8 +5497,9 @@ definitions:
         type: array
       instalments:
         description: |-
-          Instalments lists, with expand "instalments", the instalments invoiced in the range for the v2 commitments covering
-          a queried meter; it is empty with property or source filters, or when no usage line runs in the range.
+          Instalments lists, with expand "instalments", the instalments of the v2 commitments covering a queried meter that
+          were invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source
+          filters, or when no usage line runs in the range.
         items:
           $ref: '#/definitions/UsageAnalyticInstalment'
         type: array
@@ -5453,8 +5513,9 @@ definitions:
         description: TotalCost is the final cost after discount (Subtotal - TotalDiscount)
         type: string
       total_cost_with_instalments:
-        description: TotalCostWithInstalments is TotalCost plus the amounts of Instalments,
-          set when expand includes "instalments".
+        description: |-
+          TotalCostWithInstalments is TotalCost plus the amounts of the invoiced Instalments, set when expand includes
+          "instalments". Scheduled instalments are not billed yet, so they are left out.
         type: string
       total_discount:
         type: string
@@ -6615,6 +6676,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListEmailLogsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/EmailLogResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListEntityIntegrationMappingsResponse:
     properties:
       items:
@@ -6927,6 +6997,8 @@ definitions:
     type: object
   PaymentGatewayOptions:
     properties:
+      razorpay:
+        $ref: '#/definitions/RazorpayPaymentGatewayOptions'
       stripe:
         $ref: '#/definitions/StripePaymentGatewayOptions'
     type: object
@@ -6994,6 +7066,10 @@ definitions:
       refunded_at:
         type: string
       save_card_and_make_default:
+        type: boolean
+      submitted_for_processing:
+        description: SubmittedForProcessing is true while the gateway has the charge
+          and its outcome is pending; it can't be processed again.
         type: boolean
       succeeded_at:
         type: string
@@ -7474,6 +7550,13 @@ definitions:
         type: array
       provider:
         $ref: '#/definitions/types.PaymentGatewayType'
+    type: object
+  RazorpayPaymentGatewayOptions:
+    properties:
+      notify_customer:
+        description: NotifyCustomer lets Razorpay SMS/email the payment link to the
+          customer.
+        type: boolean
     type: object
   RefundResponse:
     properties:
@@ -8241,6 +8324,10 @@ definitions:
         type: string
       name:
         type: string
+      plan_id:
+        description: PlanID is the offered plan to buy; empty means the default plan,
+          or a negotiated trial's own plan.
+        type: string
       tax_id:
         type: string
     required:
@@ -8316,8 +8403,13 @@ definitions:
         items:
           $ref: '#/definitions/SelfBillingInvoice'
         type: array
-      plan:
-        $ref: '#/definitions/SelfBillingPlanResponse'
+      plans:
+        description: |-
+          Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.
+          The first plan is the default.
+        items:
+          $ref: '#/definitions/SelfBillingPlanResponse'
+        type: array
       status:
         $ref: '#/definitions/types.TenantInternalStatus'
       subscription_status:
@@ -8326,6 +8418,23 @@ definitions:
         type: string
       usage:
         $ref: '#/definitions/CustomerUsageSummaryResponse'
+    type: object
+  SendInvoiceEmailRequest:
+    properties:
+      cc:
+        items:
+          type: string
+        maxItems: 50
+        type: array
+      idempotency_key:
+        maxLength: 128
+        minLength: 1
+        type: string
+      to:
+        items:
+          type: string
+        maxItems: 50
+        type: array
     type: object
   SetupIntentResponse:
     properties:
@@ -10928,12 +11037,20 @@ definitions:
     properties:
       amount:
         type: string
+      bill_on:
+        description: when it becomes billable
+        type: string
       commitment_id:
         type: string
       currency:
         type: string
       id:
         type: string
+      instalment_status:
+        allOf:
+        - $ref: '#/definitions/types.InstalmentStatus'
+        description: InstalmentStatus is invoiced, or scheduled for an instalment
+          due in the range that no invoice has billed yet.
       invoice_id:
         type: string
       invoice_label:
@@ -10941,6 +11058,11 @@ definitions:
       invoiced_at:
         description: when the invoice billing it was finalized
         type: string
+      kind:
+        allOf:
+        - $ref: '#/definitions/types.InstalmentKind'
+        description: Kind tells a regular instalment from a termination's settlement
+          and its cancellation_fee.
       service_period_end:
         type: string
       service_period_start:
@@ -11238,6 +11360,11 @@ definitions:
         $ref: '#/definitions/types.AutoTopup'
       balance:
         type: string
+      balance_alert_status:
+        allOf:
+        - $ref: '#/definitions/types.AlertState'
+        description: BalanceAlertStatus is ok, info, warning, or in_alarm. Absent
+          when wallet alerts are off.
       balance_updated_at:
         type: string
       config:
@@ -12392,6 +12519,10 @@ definitions:
         type: boolean
       max_mandate_limit:
         type: string
+      notify_customer:
+        description: NotifyCustomer lets the gateway email/SMS the payment link to
+          the customer.
+        type: boolean
       payment_method:
         $ref: '#/definitions/types.PaymentMethodType'
     type: object
@@ -15436,6 +15567,7 @@ definitions:
     - checkout.session.completed
     - checkout.session.failed
     - checkout.session.expired
+    - checkout.session.cancelled
     - event.rejected
     type: string
     x-enum-varnames:
@@ -15511,6 +15643,7 @@ definitions:
     - WebhookEventCheckoutSessionCompleted
     - WebhookEventCheckoutSessionFailed
     - WebhookEventCheckoutSessionExpired
+    - WebhookEventCheckoutSessionCancelled
     - WebhookEventEventRejected
   types.WindowSize:
     enum:
@@ -16515,6 +16648,93 @@ definitions:
     - ContractStatusActive
     - ContractStatusEnded
     - ContractStatusCancelled
+  types.EmailDeliveryStatus:
+    enum:
+    - queued
+    - sent
+    - delivery_delayed
+    - delivered
+    - bounced
+    - complained
+    - failed
+    - suppressed
+    - skipped
+    type: string
+    x-enum-varnames:
+    - EmailDeliveryStatusQueued
+    - EmailDeliveryStatusSent
+    - EmailDeliveryStatusDeliveryDelayed
+    - EmailDeliveryStatusDelivered
+    - EmailDeliveryStatusBounced
+    - EmailDeliveryStatusComplained
+    - EmailDeliveryStatusFailed
+    - EmailDeliveryStatusSuppressed
+    - EmailDeliveryStatusSkipped
+  types.EmailLogFilter:
+    properties:
+      customer_ids:
+        items:
+          type: string
+        type: array
+      delivery_statuses:
+        items:
+          $ref: '#/definitions/types.EmailDeliveryStatus'
+        type: array
+      end_time:
+        type: string
+      entity_ids:
+        items:
+          type: string
+        type: array
+      entity_type:
+        $ref: '#/definitions/types.SystemEntityType'
+      expand:
+        type: string
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        type: string
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      triggers:
+        items:
+          $ref: '#/definitions/types.EmailTrigger'
+        type: array
+    type: object
+  types.EmailProvider:
+    enum:
+    - resend
+    - local
+    type: string
+    x-enum-varnames:
+    - EmailProviderResend
+    - EmailProviderLocal
+  types.EmailTemplateKey:
+    enum:
+    - invoice_finalized
+    type: string
+    x-enum-varnames:
+    - EmailTemplateInvoiceFinalized
+  types.EmailTrigger:
+    enum:
+    - auto
+    - manual
+    type: string
+    x-enum-varnames:
+    - EmailTriggerAuto
+    - EmailTriggerManual
   types.EntitlementGrantScopeEntityType:
     enum:
     - feature
@@ -16553,10 +16773,12 @@ definitions:
     enum:
     - instalment
     - settlement
+    - cancellation_fee
     type: string
     x-enum-varnames:
     - InstalmentKindInstalment
     - InstalmentKindSettlement
+    - InstalmentKindCancellationFee
   types.InstalmentStatus:
     enum:
     - scheduled
@@ -16768,6 +16990,44 @@ definitions:
         minimum: 0
         type: integer
     type: object
+  types.SystemEntityType:
+    enum:
+    - feature
+    - customer
+    - plan
+    - subscription
+    - invoice
+    - payment
+    - credit_note
+    - refund
+    - wallet
+    - entitlement
+    - checkout_session
+    - payment_method
+    - price
+    - event
+    - commitment
+    - billing_term
+    - billing_instalment
+    type: string
+    x-enum-varnames:
+    - SystemEntityTypeFeature
+    - SystemEntityTypeCustomer
+    - SystemEntityTypePlan
+    - SystemEntityTypeSubscription
+    - SystemEntityTypeInvoice
+    - SystemEntityTypePayment
+    - SystemEntityTypeCreditNote
+    - SystemEntityTypeRefund
+    - SystemEntityTypeWallet
+    - SystemEntityTypeEntitlement
+    - SystemEntityTypeCheckoutSession
+    - SystemEntityTypePaymentMethod
+    - SystemEntityTypePrice
+    - SystemEntityTypeEvent
+    - SystemEntityTypeCommitment
+    - SystemEntityTypeBillingTerm
+    - SystemEntityTypeBillingInstalment
   types.TenantInternalStatus:
     enum:
     - trialing
@@ -21271,6 +21531,42 @@ paths:
       summary: Get Customer Wallets
       tags:
       - Wallets
+  /emails/search:
+    post:
+      consumes:
+      - application/json
+      description: Use when reviewing emails sent to customers, for example every
+        bounced email this month or every email to one customer. Filter by delivery
+        status, trigger, customer, document and date. Newest first; paginated.
+      operationId: queryEmail
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.EmailLogFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListEmailLogsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Search emails
+      tags:
+      - Invoices
+      x-scope: read
   /entitlements:
     post:
       consumes:
@@ -22638,6 +22934,81 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Trigger invoice communication webhook
+      tags:
+      - Invoices
+  /invoices/{id}/email:
+    post:
+      consumes:
+      - application/json
+      description: Use when you want Flexprice to email a finalized invoice to the
+        customer, with a link to the hosted invoice and the PDF attached. Sends to
+        the customer's email unless `to` is given. Returns the queued email; delivery
+        happens in the background.
+      operationId: sendInvoiceEmail
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Recipients overriding the customer's email
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/SendInvoiceEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/EmailLogResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Email invoice to customer
+      tags:
+      - Invoices
+  /invoices/{id}/emails:
+    get:
+      description: Use when showing which emails were sent for an invoice and whether
+        each was delivered. Newest first.
+      operationId: listInvoiceEmails
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListEmailLogsResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List invoice emails
       tags:
       - Invoices
   /invoices/{id}/finalize:
@@ -27640,8 +28011,9 @@ paths:
       - Users
   /users/{id}/remove:
     post:
-      description: Remove a human user (type=user) from the current tenant. Not supported
-        for service accounts; use DELETE /users/{id} for those.
+      description: Remove a human user (type=user) from the current tenant. Also revokes
+        every API key the user owns, in all environments. Not supported for service
+        accounts; use DELETE /users/{id} for those.
       operationId: removeUser
       parameters:
       - description: User ID
@@ -28279,7 +28651,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.cancelled
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_instalment.created:
     post:
       consumes:
@@ -28295,7 +28667,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.created
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_instalment.invoiced:
     post:
       consumes:
@@ -28311,7 +28683,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.invoiced
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_instalment.updated:
     post:
       consumes:
@@ -28327,7 +28699,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.updated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_terms.created:
     post:
       consumes:
@@ -28343,7 +28715,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingTermsWebhookPayload'
       summary: billing_terms.created
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_terms.updated:
     post:
       consumes:
@@ -28359,7 +28731,23 @@ paths:
             $ref: '#/definitions/webhookDto.BillingTermsWebhookPayload'
       summary: billing_terms.updated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
+  /webhook-events/checkout.session.cancelled:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a Checkout Session is cancelled through the API, alongside
+        checkout.session.expired. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
+      summary: checkout.session.cancelled
+      tags:
+      - Checkout
   /webhook-events/checkout.session.completed:
     post:
       consumes:
@@ -28375,7 +28763,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.completed
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/checkout.session.expired:
     post:
       consumes:
@@ -28391,7 +28779,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.expired
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/checkout.session.failed:
     post:
       consumes:
@@ -28407,7 +28795,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.failed
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/checkout.session.initiated:
     post:
       consumes:
@@ -28423,7 +28811,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.initiated
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/commitment.created:
     post:
       consumes:
@@ -28439,7 +28827,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommitmentWebhookPayload'
       summary: commitment.created
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/commitment.terminated:
     post:
       consumes:
@@ -28454,7 +28842,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommitmentWebhookPayload'
       summary: commitment.terminated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/commitment.updated:
     post:
       consumes:
@@ -28470,7 +28858,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommitmentWebhookPayload'
       summary: commitment.updated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/credit_note.created:
     post:
       consumes:
@@ -28485,7 +28873,7 @@ paths:
             $ref: '#/definitions/webhookDto.CreditNoteWebhookPayload'
       summary: credit_note.created
       tags:
-      - Webhook Events
+      - Credit note
   /webhook-events/credit_note.updated:
     post:
       consumes:
@@ -28500,7 +28888,7 @@ paths:
             $ref: '#/definitions/webhookDto.CreditNoteWebhookPayload'
       summary: credit_note.updated
       tags:
-      - Webhook Events
+      - Credit note
   /webhook-events/customer.created:
     post:
       consumes:
@@ -28515,7 +28903,7 @@ paths:
             $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
       summary: customer.created
       tags:
-      - Webhook Events
+      - Customer
   /webhook-events/customer.deleted:
     post:
       consumes:
@@ -28530,7 +28918,7 @@ paths:
             $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
       summary: customer.deleted
       tags:
-      - Webhook Events
+      - Customer
   /webhook-events/customer.updated:
     post:
       consumes:
@@ -28545,7 +28933,7 @@ paths:
             $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
       summary: customer.updated
       tags:
-      - Webhook Events
+      - Customer
   /webhook-events/entitlement.created:
     post:
       consumes:
@@ -28560,7 +28948,7 @@ paths:
             $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
       summary: entitlement.created
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/entitlement.deleted:
     post:
       consumes:
@@ -28575,7 +28963,7 @@ paths:
             $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
       summary: entitlement.deleted
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/entitlement.updated:
     post:
       consumes:
@@ -28590,7 +28978,7 @@ paths:
             $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
       summary: entitlement.updated
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/event.rejected:
     post:
       consumes:
@@ -28608,7 +28996,7 @@ paths:
             $ref: '#/definitions/webhookDto.RejectedEventWebhookPayload'
       summary: event.rejected
       tags:
-      - Webhook Events
+      - Usage ingestion
   /webhook-events/feature.created:
     post:
       consumes:
@@ -28623,7 +29011,7 @@ paths:
             $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
       summary: feature.created
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/feature.deleted:
     post:
       consumes:
@@ -28638,7 +29026,7 @@ paths:
             $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
       summary: feature.deleted
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/feature.updated:
     post:
       consumes:
@@ -28653,7 +29041,7 @@ paths:
             $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
       summary: feature.updated
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/feature.wallet_balance.alert:
     post:
       consumes:
@@ -28669,7 +29057,7 @@ paths:
             $ref: '#/definitions/webhookDto.AlertWebhookPayload'
       summary: feature.wallet_balance.alert
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/invoice.communication.triggered:
     post:
       consumes:
@@ -28688,7 +29076,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommunicationWebhookPayload'
       summary: invoice.communication.triggered
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.create.drafted:
     post:
       consumes:
@@ -28707,7 +29095,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.create.drafted
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.payment.failed:
     post:
       consumes:
@@ -28724,7 +29112,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoicePaymentFailedWebhookPayload'
       summary: invoice.payment.failed
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.payment.overdue:
     post:
       consumes:
@@ -28743,7 +29131,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.payment.overdue
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.sync.failed:
     post:
       consumes:
@@ -28759,7 +29147,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceSyncWebhookPayload'
       summary: invoice.sync.failed
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.sync.success:
     post:
       consumes:
@@ -28774,7 +29162,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceSyncWebhookPayload'
       summary: invoice.sync.success
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update:
     post:
       consumes:
@@ -28793,7 +29181,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update.finalized:
     post:
       consumes:
@@ -28812,7 +29200,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.finalized
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update.payment:
     post:
       consumes:
@@ -28831,7 +29219,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.payment
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update.voided:
     post:
       consumes:
@@ -28850,7 +29238,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.voided
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/payment.attempt.failed:
     post:
       consumes:
@@ -28866,7 +29254,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentAttemptWebhookPayload'
       summary: payment.attempt.failed
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.created:
     post:
       consumes:
@@ -28881,7 +29269,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.created
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.failed:
     post:
       consumes:
@@ -28896,7 +29284,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.failed
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.pending:
     post:
       consumes:
@@ -28911,7 +29299,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.pending
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.success:
     post:
       consumes:
@@ -28926,7 +29314,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.success
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.updated:
     post:
       consumes:
@@ -28941,7 +29329,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.updated
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/refund.created:
     post:
       consumes:
@@ -28957,7 +29345,7 @@ paths:
             $ref: '#/definitions/webhookDto.RefundWebhookPayload'
       summary: refund.created
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/refund.failed:
     post:
       consumes:
@@ -28973,7 +29361,7 @@ paths:
             $ref: '#/definitions/webhookDto.RefundWebhookPayload'
       summary: refund.failed
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/refund.succeeded:
     post:
       consumes:
@@ -28989,7 +29377,7 @@ paths:
             $ref: '#/definitions/webhookDto.RefundWebhookPayload'
       summary: refund.succeeded
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/subscription.activated:
     post:
       consumes:
@@ -29004,7 +29392,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.activated
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.cancelled:
     post:
       consumes:
@@ -29020,7 +29408,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.cancelled
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.created:
     post:
       consumes:
@@ -29035,7 +29423,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.created
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.draft.created:
     post:
       consumes:
@@ -29051,7 +29439,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.draft.created
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.group_spend.threshold_reached:
     post:
       consumes:
@@ -29068,7 +29456,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.group_spend.threshold_reached
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.group_spend.threshold_recovered:
     post:
       consumes:
@@ -29085,7 +29473,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.group_spend.threshold_recovered
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.line_item_spend.threshold_reached:
     post:
       consumes:
@@ -29102,7 +29490,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.line_item_spend.threshold_reached
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.line_item_spend.threshold_recovered:
     post:
       consumes:
@@ -29119,7 +29507,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.line_item_spend.threshold_recovered
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.paused:
     post:
       consumes:
@@ -29134,7 +29522,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.paused
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.phase.created:
     post:
       consumes:
@@ -29149,7 +29537,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
       summary: subscription.phase.created
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.phase.deleted:
     post:
       consumes:
@@ -29164,7 +29552,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
       summary: subscription.phase.deleted
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.phase.updated:
     post:
       consumes:
@@ -29179,7 +29567,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
       summary: subscription.phase.updated
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.plan_changed:
     post:
       consumes:
@@ -29195,7 +29583,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.plan_changed
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.renewal.due:
     post:
       consumes:
@@ -29211,7 +29599,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.renewal.due
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.resumed:
     post:
       consumes:
@@ -29226,7 +29614,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.resumed
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.spend.threshold_reached:
     post:
       consumes:
@@ -29243,7 +29631,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.spend.threshold_reached
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.spend.threshold_recovered:
     post:
       consumes:
@@ -29260,7 +29648,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.spend.threshold_recovered
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.updated:
     post:
       consumes:
@@ -29276,7 +29664,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.updated
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/wallet.created:
     post:
       consumes:
@@ -29291,7 +29679,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.created
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.credit_balance.dropped:
     post:
       consumes:
@@ -29307,7 +29695,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.credit_balance.dropped
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.credit_balance.recovered:
     post:
       consumes:
@@ -29323,7 +29711,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.credit_balance.recovered
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.ongoing_balance.dropped:
     post:
       consumes:
@@ -29339,7 +29727,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.ongoing_balance.dropped
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.ongoing_balance.recovered:
     post:
       consumes:
@@ -29355,7 +29743,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.ongoing_balance.recovered
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.ongoing_balance.updated:
     post:
       consumes:
@@ -29371,7 +29759,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.ongoing_balance.updated
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.terminated:
     post:
       consumes:
@@ -29386,7 +29774,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.terminated
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.transaction.created:
     post:
       consumes:
@@ -29402,7 +29790,7 @@ paths:
             $ref: '#/definitions/webhookDto.TransactionWebhookPayload'
       summary: wallet.transaction.created
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.transaction.updated:
     post:
       consumes:
@@ -29418,7 +29806,7 @@ paths:
             $ref: '#/definitions/webhookDto.TransactionUpdatedWebhookPayload'
       summary: wallet.transaction.updated
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.updated:
     post:
       consumes:
@@ -29433,7 +29821,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.updated
       tags:
-      - Webhook Events
+      - Wallet
   /workflows/search:
     post:
       consumes:

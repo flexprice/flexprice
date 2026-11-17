@@ -675,6 +675,32 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 	}
 }
 
+func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest_DoesNotGenerateMemo() {
+	for _, referencePoint := range []types.InvoiceReferencePoint{
+		types.ReferencePointPeriodStart,
+		types.ReferencePointPeriodEnd,
+		types.ReferencePointPreview,
+		types.ReferencePointInternalPreview,
+		types.ReferencePointRevenueFacts,
+		types.ReferencePointCancel,
+	} {
+		s.Run(string(referencePoint), func() {
+			sub, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(s.GetContext(), s.testData.subscription.ID)
+			s.Require().NoError(err)
+			req, err := s.service.PrepareSubscriptionInvoiceRequest(s.GetContext(), &dto.PrepareSubscriptionInvoiceRequestParams{
+				Subscription:   sub,
+				PeriodStart:    sub.CurrentPeriodStart,
+				PeriodEnd:      sub.CurrentPeriodEnd,
+				ReferencePoint: referencePoint,
+			})
+			s.Require().NoError(err)
+			s.Require().NotEmpty(req.LineItems)
+			s.Empty(req.Description)
+			s.Equal(sub.ID, *req.SubscriptionID)
+		})
+	}
+}
+
 func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest_IncludesHistoricalLineItemsWhenSubscriptionAdvanced() {
 	ctx := s.GetContext()
 	oldStart := s.testData.subscription.CurrentPeriodStart
@@ -5925,7 +5951,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_MonthlyMeterOnQuart
 	// March: ts in Mar window, QtyTotal=300
 	seedMeterUsage(time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC), decimal.NewFromInt(300))
 
-	result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, quarterStart, quarterEnd, true, nil, nil)
+	result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, types.UsageSourceInvoiceCreation, sub, sub.LineItems, quarterStart, quarterEnd, true, nil, nil)
 	s.Require().NoError(err)
 	s.Require().Len(result.UsageCharges, 3, "one usage line item per month")
 
@@ -6030,7 +6056,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_LongerCadenceUsage_
 				}}))
 			}
 
-			result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, feb1, mar1, true, nil, nil)
+			result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, types.UsageSourceInvoiceCreation, sub, sub.LineItems, feb1, mar1, true, nil, nil)
 			s.Require().NoError(err, "a longer usage item must not fail the invoice")
 			s.Require().Len(result.UsageCharges, 1)
 			s.Equal(feb1, *result.UsageCharges[0].PeriodStart)

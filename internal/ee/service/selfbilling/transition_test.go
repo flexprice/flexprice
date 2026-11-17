@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/environment"
+	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -200,7 +201,13 @@ func TestUpdateTenantStatus_Alerts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s, d := newTestService(newFakeClient())
 			sink := newAlertSink(t, s)
-			seedTenant(t, d, "t1", tt.from)
+			require.NoError(t, d.tenants.Create(context.Background(), &tenant.Tenant{
+				ID:             "t1",
+				Name:           "t1",
+				Status:         types.StatusPublished,
+				InternalStatus: tt.from,
+				BillingDetails: tenant.TenantBillingDetails{Email: "a@acme.io"},
+			}))
 			tn, err := d.tenants.GetByID(context.Background(), "t1")
 			require.NoError(t, err)
 
@@ -218,6 +225,7 @@ func TestUpdateTenantStatus_Alerts(t *testing.T) {
 				Event:      tt.wantEvent,
 				TenantID:   "t1",
 				TenantName: "t1",
+				Email:      "a@acme.io",
 				Region:     "us",
 				FromStatus: tt.from,
 				ToStatus:   tt.wantTo,

@@ -38,6 +38,8 @@ const (
 	ScheduleIDSelfBillingHourly ScheduleID = "self-billing-hourly"
 	// ScheduleIDBillingInstalmentsDue drives BillingInstalmentsDueWorkflow, billing due separate-invoice instalments.
 	ScheduleIDBillingInstalmentsDue ScheduleID = "billing-instalments-due"
+	// ScheduleIDEmailDispatch drives EmailDispatchWorkflow, sending queued customer emails.
+	ScheduleIDEmailDispatch ScheduleID = "email-dispatch"
 )
 
 // String returns the raw schedule id.
@@ -67,6 +69,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDRevenueRecognition,
 		ScheduleIDSelfBillingHourly,
 		ScheduleIDBillingInstalmentsDue,
+		ScheduleIDEmailDispatch,
 	}
 }
 

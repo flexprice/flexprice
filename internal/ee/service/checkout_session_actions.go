@@ -116,21 +116,22 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		return nil, err
 	}
 
-	req := interfaces.CheckoutProviderRequest{
-		InvoiceID:  *session.CheckoutInvoiceID,
-		CustomerID: session.CustomerID,
-		Amount:     payResp.Amount,
-		Currency:   payResp.Currency,
-		PaymentID:  payResp.ID,
-		SuccessURL: lo.FromPtr(session.SuccessURL),
-		FailureURL: lo.FromPtr(session.FailureURL),
-		CancelURL:  lo.FromPtr(session.CancelURL),
-		Metadata:   session.Metadata,
-		ExpiresAt:  &linkExpiresAt,
-		LineItems:  checkoutLineItemsFor(inv),
-	}
-
 	cfg := lo.FromPtr(session.PaymentProviderConfig.ToCheckoutPaymentProviderConfig())
+
+	req := interfaces.CheckoutProviderRequest{
+		InvoiceID:      *session.CheckoutInvoiceID,
+		CustomerID:     session.CustomerID,
+		Amount:         payResp.Amount,
+		Currency:       payResp.Currency,
+		PaymentID:      payResp.ID,
+		SuccessURL:     lo.FromPtr(session.SuccessURL),
+		FailureURL:     lo.FromPtr(session.FailureURL),
+		CancelURL:      lo.FromPtr(session.CancelURL),
+		Metadata:       session.Metadata,
+		ExpiresAt:      &linkExpiresAt,
+		LineItems:      checkoutLineItemsFor(inv),
+		NotifyCustomer: cfg.NotifyCustomer,
+	}
 
 	var resp *interfaces.CheckoutProviderResponse
 
@@ -158,6 +159,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			CancelURL:       req.CancelURL,
 			Metadata:        req.Metadata,
 			LineItems:       req.LineItems,
+			NotifyCustomer:  req.NotifyCustomer,
 		}
 
 		// Prefer an existing confirmed token (off-session). If none / amount above

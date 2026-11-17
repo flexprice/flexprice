@@ -353,7 +353,7 @@ func (s *WalletServiceSuite) TestCompleteWalletTopupCheckout_CreditsWalletAndBon
 	s.Equal(types.InvoiceStatusFinalized, finalInv.InvoiceStatus)
 
 	paySvc := NewPaymentService(params)
-	finalPay, err := paySvc.GetPayment(ctx, payResp.ID)
+	finalPay, err := paySvc.GetPayment(ctx, dto.GetPaymentRequest{ID: payResp.ID})
 	s.Require().NoError(err)
 	s.Equal(types.PaymentStatusSucceeded, finalPay.PaymentStatus)
 

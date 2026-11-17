@@ -228,10 +228,14 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 	}
 
 	linkReq := AuthorizationLinkRequest{
-		Customer:    linkCustomer(c),
-		Amount:      toPaise(req.Amount),
-		Currency:    strings.ToUpper(req.Currency),
-		Description: "Subscription authorization",
+		Customer: linkCustomer(c),
+		Amount:   toPaise(req.Amount),
+		Currency: strings.ToUpper(req.Currency),
+		Description: linkDescription(c.Name, lo.Map(req.LineItems, func(li interfaces.CheckoutLineItem, _ int) string {
+			return li.Description
+		})),
+		EmailNotify: req.NotifyCustomer,
+		SMSNotify:   req.NotifyCustomer,
 		Notes: map[string]interface{}{
 			"flexprice_customer_id": req.CustomerID,
 			"flexprice_payment_id":  req.PaymentID,
@@ -241,7 +245,7 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		SubscriptionRegistration: SubscriptionRegistration{Method: method, Frequency: "as_presented"},
 	}
 	if req.ExpiresAt != nil {
-		linkReq.ExpireBy = req.ExpiresAt.Unix()
+		linkReq.ExpireBy = clampExpireBy(*req.ExpiresAt).Unix()
 	}
 	if req.MaxAmount != nil {
 		linkReq.SubscriptionRegistration.MaxAmount = toPaise(*req.MaxAmount)

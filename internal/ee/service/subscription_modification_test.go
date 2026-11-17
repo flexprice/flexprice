@@ -2088,7 +2088,7 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 	s.Equal(types.InvoiceStatusFinalized, finalInv.InvoiceStatus)
 
 	paySvc := NewPaymentService(params)
-	finalPay, err := paySvc.GetPayment(ctx, payID)
+	finalPay, err := paySvc.GetPayment(ctx, dto.GetPaymentRequest{ID: payID})
 	s.Require().NoError(err)
 	s.Equal(types.PaymentStatusSucceeded, finalPay.PaymentStatus)
 

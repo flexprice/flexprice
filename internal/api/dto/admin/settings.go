@@ -95,6 +95,23 @@ func NewTenantConfigResponse(tenantID string, cfg types.TenantConfig) *TenantCon
 	}
 }
 
+// UpdateSettingRequest is a setting's whole value. EnvironmentID is required for settings kept per environment.
+// UpdatedAt is the updated_at last read, empty when nothing was stored.
+type UpdateSettingRequest struct {
+	EnvironmentID string                 `json:"environment_id"`
+	Value         map[string]interface{} `json:"value"`
+	UpdatedAt     string                 `json:"updated_at"`
+}
+
+func (r *UpdateSettingRequest) Validate() error {
+	if r == nil || len(r.Value) == 0 {
+		return ierr.NewError("value is required").
+			WithHint("Provide the setting's value").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // SettingResponse is one setting: its stored value merged over the default, and whether anything is stored.
 type SettingResponse struct {
 	Key       types.SettingKey       `json:"key"`
@@ -115,7 +132,7 @@ func NewSettingResponse(setting *dto.SettingResponse) *SettingResponse {
 	}
 	resp := &SettingResponse{Key: setting.Key, Value: setting.Value, IsDefault: setting.ID == ""}
 	if !resp.IsDefault {
-		resp.UpdatedAt = setting.UpdatedAt.UTC().Format(time.RFC3339)
+		resp.UpdatedAt = setting.UpdatedAt.UTC().Format(time.RFC3339Nano)
 	}
 	return resp
 }

@@ -31,7 +31,7 @@ func (s *integrationSyncService) SyncEntity(ctx context.Context, req dto.Integra
 
 	// One connection named: only its provider is synced, not every connected one.
 	var only *connection.Connection
-	var opts []integrationevents.DispatchOption
+	opts := []integrationevents.DispatchOption{integrationevents.Manual()}
 	if req.ConnectionID != "" {
 		conn, err := s.ConnectionRepo.Get(ctx, req.ConnectionID)
 		if err != nil {
@@ -132,9 +132,16 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 		UserID:        types.GetUserID(ctx),
 		Payload:       payload,
 	}
-	return integrationevents.DispatchInvoiceVendorSync(
+	err = integrationevents.DispatchInvoiceVendorSync(
 		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.Logger, event, "", resync, opts...,
 	)
+	// The dispatch joins provider errors, which drops their hints.
+	if ierr.IsAlreadyExists(err) {
+		return ierr.WithError(err).
+			WithHint("A sync of this invoice is already running. Try again once it finishes.").
+			Mark(ierr.ErrAlreadyExists)
+	}
+	return err
 }
 
 func (s *integrationSyncService) syncCustomer(ctx context.Context, customerID string, opts ...integrationevents.DispatchOption) error {

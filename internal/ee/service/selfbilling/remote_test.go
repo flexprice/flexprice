@@ -14,12 +14,14 @@ import (
 	"time"
 
 	cockroach "github.com/cockroachdb/errors"
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	sdktypes "github.com/flexprice/go-sdk/v2/models/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,6 +38,8 @@ const (
 	pathCustomerPortal       = "/customers/portal/"  // as CreateCustomerPortalSession builds it
 	pathCheckoutSessions     = "/checkout/sessions/" // as GetCheckoutSession builds it
 	pathEventsBulk           = "/events/bulk"        // as IngestEventsBulk builds it
+	pathFXRateQuery          = "/forex/query"        // as QueryFXRates builds it
+	pathPlanSearch           = "/plans/search"       // as QueryPlan builds it
 )
 
 // notFoundBody is the JSON error envelope the Flexprice API returns for a 404.
@@ -63,6 +67,7 @@ type fakeCloud struct {
 	checkouts  map[string]cannedResponse // checkout session id -> response
 	modify     *cannedResponse           // ExecuteSubscriptionModify response
 	failAll    *cannedResponse           // when set, every request gets this response
+	fxRates    []map[string]any          // QueryFXRates items
 
 	created       []string
 	rekeyedTo     []string
@@ -70,8 +75,11 @@ type fakeCloud struct {
 	subscriptions []map[string]any // CreateSubscription request bodies
 	modifications []map[string]any // ExecuteSubscriptionModify request bodies
 	cancelled     []string
+	subCancels    []map[string]any // CancelSubscription request bodies, with the subscription id under "id"
+	voided        []string         // VoidInvoice ids
 	portals       []string
 	bulkIngests   []map[string]any // IngestEventsBulk request bodies
+	fxQueries     []map[string]any // QueryFXRates request bodies
 }
 
 func newFakeCloud(existing map[string]string) *fakeCloud {
@@ -150,8 +158,27 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 				return left.After(right)
 			})
 
-			limit := int(body["limit"].(float64))
-			_ = json.NewEncoder(w).Encode(map[string]any{"items": matching[:min(limit, len(matching))]})
+			limit := len(matching)
+			if l, ok := body["limit"].(float64); ok {
+				limit = min(int(l), limit)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": matching[:limit]})
+
+		case r.Method == http.MethodPost && r.URL.Path == pathPlanSearch:
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("invalid plan search body: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			var items []map[string]any
+			for _, id := range body["plan_ids"].([]any) {
+				plan, ok := f.plans[id.(string)]
+				if ok {
+					items = append(items, plan)
+				}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
 
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/plans/"):
 			plan, ok := f.plans[strings.TrimPrefix(r.URL.Path, "/plans/")]
@@ -250,7 +277,16 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 				_, _ = w.Write([]byte(notFoundBody))
 				return
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"items": f.invoices})
+			items := f.invoices
+			if subID, ok := body["subscription_id"].(string); ok {
+				items = lo.Filter(items, func(inv map[string]any, _ int) bool { return inv["subscription_id"] == subID })
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
+
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/invoices/") && strings.HasSuffix(r.URL.Path, "/void"):
+			id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/invoices/"), "/void")
+			f.voided = append(f.voided, id)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "invoice_status": "VOIDED"})
 
 		case r.Method == http.MethodGet && r.URL.Path == pathCustomerUsage:
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -283,7 +319,23 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			f.subscriptions = append(f.subscriptions, body)
 			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "sub_new"})
+			created := map[string]any{"id": "sub_new", "plan_id": body["plan_id"], "subscription_status": "trialing"}
+			if body["checkout"] != nil {
+				created["subscription_status"] = "draft"
+				created["checkout_session"] = map[string]any{
+					"id": "cs_new", "checkout_status": "pending",
+					"payment_action": map[string]any{"url": "https://checkout.test/new"},
+					"metadata":       map[string]any{metaExternalID: body["external_customer_id"]},
+				}
+			}
+			_ = json.NewEncoder(w).Encode(created)
+
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, pathSubscriptions+"/") && strings.HasSuffix(r.URL.Path, "/cancel"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			body["id"] = strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, pathSubscriptions+"/"), "/cancel")
+			f.subCancels = append(f.subCancels, body)
+			_ = json.NewEncoder(w).Encode(map[string]any{"subscription_id": body["id"], "status": "cancelled"})
 
 		case r.Method == http.MethodPost && r.URL.Path == pathEventsBulk:
 			var body map[string]any
@@ -291,6 +343,12 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 			f.bulkIngests = append(f.bulkIngests, body)
 			w.WriteHeader(http.StatusAccepted)
 			_ = json.NewEncoder(w).Encode(map[string]any{"message": "accepted"})
+
+		case r.Method == http.MethodPost && r.URL.Path == pathFXRateQuery:
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			f.fxQueries = append(f.fxQueries, body)
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": f.fxRates})
 
 		default:
 			t.Errorf("unexpected call %s %s", r.Method, r.URL.String())
@@ -309,10 +367,11 @@ func newTestRemoteClientWith(t *testing.T, f *fakeCloud, extra config.BillingCon
 	srv := httptest.NewServer(f.handler(t))
 	t.Cleanup(srv.Close)
 	return newRemoteClient(config.BillingConfig{
-		Region:  "in",
-		APIHost: srv.URL,
-		APIKey:  "sk",
-		PlanID:  "plan_1",
+		Region:        "in",
+		APIHost:       srv.URL,
+		APIKey:        "sk",
+		DefaultPlanID: "plan_1",
+		PlanIDs:       lo.CoalesceSliceOrEmpty(extra.PlanIDs, []string{"plan_1"}),
 
 		PaymentProvider: extra.PaymentProvider,
 	})
@@ -385,6 +444,7 @@ func TestStartTrial(t *testing.T) {
 				"plan_id":              "plan_1",
 				"currency":             "usd",
 				"billing_period":       "MONTHLY",
+				"payment_behavior":     "allow_incomplete",
 			}},
 		},
 		{
@@ -456,7 +516,7 @@ func TestLatestSubscription(t *testing.T) {
 
 			require.Len(t, f.searches, wantSearches)
 			assert.Equal(t, "in:t1", f.searches[0]["external_customer_id"])
-			assert.ElementsMatch(t, []any{"active", "trialing", "incomplete", "paused", "draft"}, f.searches[0]["subscription_status"])
+			assert.ElementsMatch(t, []any{"active", "trialing", "incomplete", "paused"}, f.searches[0]["subscription_status"])
 			assert.EqualValues(t, 1, f.searches[0]["limit"])
 			if wantSearches == 2 {
 				assert.Equal(t, []any{"cancelled"}, f.searches[1]["subscription_status"])
@@ -936,6 +996,170 @@ func TestRemoteClient_IngestBulkMapsCloudErrors(t *testing.T) {
 	c := newTestRemoteClient(t, f)
 
 	err := c.IngestBulk(context.Background(), []usageEvent{{id: "evt:1", name: "events_ingested", extID: "in:t1"}})
+	require.Error(t, err)
+	assert.True(t, ierr.IsHTTPClient(err), "got %v", err)
+	assert.True(t, isRemoteFailure(err))
+}
+
+func TestStartPlanCheckout(t *testing.T) {
+	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+	c := newTestRemoteClient(t, f)
+
+	co, err := c.StartPlanCheckout(context.Background(), checkoutInput{
+		extID: "in:t1", subscriptionID: "sub_trial", planID: "plan_2",
+		successURL: "https://app.test/ok", failureURL: "https://app.test/fail",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "cs_new", co.id)
+	assert.Equal(t, "https://checkout.test/new", co.url)
+
+	// One subscription on the chosen plan, with no trial, behind a checkout keyed to the current subscription.
+	require.Len(t, f.subscriptions, 1)
+	body := f.subscriptions[0]
+	assert.Equal(t, "plan_2", body["plan_id"])
+	assert.Equal(t, "in:t1", body["external_customer_id"])
+	assert.EqualValues(t, 0, body["trial_period_days"])
+	assert.Nil(t, body["payment_behavior"])
+	checkout := body["checkout"].(map[string]any)
+	assert.Equal(t, "plan_checkout:sub_trial:plan_2", checkout["idempotency_key"])
+	assert.Equal(t, "https://app.test/ok", checkout["success_url"])
+	assert.Empty(t, f.subCancels, "the trial stays until the purchase is paid")
+}
+
+func TestStartPlanCheckout_OpenCheckoutConflicts(t *testing.T) {
+	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+	f.failPaths[pathSubscriptions] = cannedResponse{http.StatusConflict, `{"error":{"message":"exists"}}`}
+	c := newTestRemoteClient(t, f)
+
+	_, err := c.StartPlanCheckout(context.Background(), checkoutInput{extID: "in:t1", subscriptionID: "sub_trial", planID: "plan_1"})
+	require.Error(t, err)
+	assert.True(t, ierr.IsAlreadyExists(err), "got %v", err)
+}
+
+func TestEndTrials(t *testing.T) {
+	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+	f.subs["in:t1"] = []map[string]any{
+		{"id": "s_trial", "plan_id": "plan_1", "subscription_status": "trialing"},
+		{"id": "s_enterprise", "plan_id": "plan_enterprise", "subscription_status": "trialing"},
+		{"id": "s_paid", "plan_id": "plan_2", "subscription_status": "active"},
+	}
+	c := newTestRemoteClientWith(t, f, config.BillingConfig{PlanIDs: []string{"plan_1", "plan_2"}})
+
+	require.NoError(t, c.EndTrials(context.Background(), "in:t1"))
+
+	// Only the self-serve trial ends, at once and with no invoice.
+	require.Len(t, f.subCancels, 1)
+	assert.Equal(t, "s_trial", f.subCancels[0]["id"])
+	assert.Equal(t, "immediate", f.subCancels[0]["cancellation_type"])
+	assert.Equal(t, "skip", f.subCancels[0]["cancel_immediately_invoice_policy"])
+	assert.Empty(t, f.voided)
+}
+
+// A trial that ended while the plan checkout was open is incomplete; its unpaid trial-end invoice goes with it.
+func TestEndTrials_TrialThatEndedUnpaid(t *testing.T) {
+	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+	f.subs["in:t1"] = []map[string]any{
+		{"id": "s_trial", "plan_id": "plan_1", "subscription_status": "incomplete"},
+		{"id": "s_paid", "plan_id": "plan_2", "subscription_status": "active"},
+	}
+	f.invoices = []map[string]any{
+		{"id": "inv_trial_end", "subscription_id": "s_trial", "invoice_status": "FINALIZED", "payment_status": "PENDING", "total": "199"},
+		{"id": "inv_paid", "subscription_id": "s_paid", "invoice_status": "FINALIZED", "payment_status": "SUCCEEDED", "total": "499"},
+	}
+	c := newTestRemoteClientWith(t, f, config.BillingConfig{PlanIDs: []string{"plan_1", "plan_2"}})
+
+	require.NoError(t, c.EndTrials(context.Background(), "in:t1"))
+
+	assert.Equal(t, []string{"inv_trial_end"}, f.voided)
+	require.Len(t, f.subCancels, 1)
+	assert.Equal(t, "s_trial", f.subCancels[0]["id"])
+}
+
+func TestRemoteClient_SummaryOffersPlansWhileOneCanBeBought(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    string
+		planID    string
+		wantPlans []string
+	}{
+		{"trialing_sees_every_offered_plan", "trialing", "plan_1", []string{"plan_1", "plan_2"}},
+		{"ended_trial_sees_every_offered_plan", "cancelled", "plan_1", []string{"plan_1", "plan_2"}},
+		{"active_sees_none", "active", "plan_1", nil},
+		{"enterprise_trial_sees_none", "trialing", "plan_enterprise", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+			f.plans["plan_2"] = map[string]any{"id": "plan_2", "name": "Growth", "prices": []any{}}
+			f.subs["in:t1"] = []map[string]any{{"id": "s1", "plan_id": tt.planID, "subscription_status": tt.status}}
+			f.subDetails["s1"] = map[string]any{
+				"id": "s1", "subscription_status": tt.status,
+				"plan": map[string]any{"id": tt.planID, "name": "Plan"},
+			}
+			c := newTestRemoteClientWith(t, f, config.BillingConfig{PlanIDs: []string{"plan_2", "plan_1"}})
+
+			summary, err := c.Summary(context.Background(), "in:t1")
+			require.NoError(t, err)
+			got := lo.Map(summary.plans, func(p *dto.SelfBillingPlanResponse, _ int) string { return p.ID })
+			if tt.wantPlans == nil {
+				assert.Empty(t, got)
+				return
+			}
+			assert.Equal(t, tt.wantPlans, got)
+		})
+	}
+}
+
+func TestRemoteClient_SummaryLoadsTheDefaultPlanOnce(t *testing.T) {
+	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+	f.plans["plan_2"] = map[string]any{"id": "plan_2", "name": "Growth", "prices": []any{}}
+	c := newTestRemoteClientWith(t, f, config.BillingConfig{PlanIDs: []string{"plan_1", "plan_2"}})
+
+	_, err := c.Summary(context.Background(), "in:t1")
+	require.NoError(t, err)
+	assert.Equal(t, 1, lo.Count(f.requests, "GET /plans/plan_1"))
+}
+
+func TestRemoteClient_USDRates(t *testing.T) {
+	f := newFakeCloud(map[string]string{})
+	f.fxRates = []map[string]any{
+		{"from_currency": "inr", "to_currency": "usd", "rate": "0.012", "source": "fixed"},
+		{"from_currency": "EUR", "to_currency": "usd", "rate": "1.08", "source": "fixed"},
+		{"from_currency": "gbp", "to_currency": "usd", "rate": "0", "source": "market"},
+	}
+	c := newTestRemoteClient(t, f)
+
+	rates, err := c.USDRates(context.Background())
+	require.NoError(t, err)
+
+	assert.Len(t, rates, 2, "a market rate carries no usable value")
+	assert.True(t, decimal.RequireFromString("0.012").Equal(rates["inr"]))
+	assert.True(t, decimal.RequireFromString("1.08").Equal(rates["eur"]), "keys are lower-cased")
+
+	require.Len(t, f.fxQueries, 1)
+	assert.Equal(t, "tenant", f.fxQueries[0]["scope"])
+	assert.Equal(t, "usd", f.fxQueries[0]["to_currency"])
+	assert.Equal(t, "published", f.fxQueries[0]["status"])
+}
+
+func TestRemoteClient_USDRatesUnparseableRate(t *testing.T) {
+	f := newFakeCloud(map[string]string{})
+	f.fxRates = []map[string]any{
+		{"from_currency": "inr", "to_currency": "usd", "rate": "not-a-number", "source": "fixed"},
+	}
+	c := newTestRemoteClient(t, f)
+
+	_, err := c.USDRates(context.Background())
+	require.Error(t, err)
+	assert.True(t, ierr.IsInternal(err), "got %v", err)
+}
+
+func TestRemoteClient_USDRatesMapsCloudErrors(t *testing.T) {
+	f := newFakeCloud(map[string]string{})
+	f.failAll = &cannedResponse{http.StatusInternalServerError, `{"code":"internal_error","message":"boom","http_status_code":500}`}
+	c := newTestRemoteClient(t, f)
+
+	_, err := c.USDRates(context.Background())
 	require.Error(t, err)
 	assert.True(t, ierr.IsHTTPClient(err), "got %v", err)
 	assert.True(t, isRemoteFailure(err))

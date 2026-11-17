@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"time"
@@ -112,6 +113,45 @@ func (s *PortalWalletSuite) buildParams() ServiceParams {
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		WalletBalanceAlertPubSub:     types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 	}
+}
+
+func (s *PortalWalletSuite) setWalletAlertConfig(cfg types.AlertSettings) {
+	value, err := utils.ToMap(cfg)
+	s.NoError(err)
+	s.NoError(s.GetStores().SettingsRepo.Create(s.ctx, &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeyWalletBalanceAlertConfig,
+		Value:         value,
+		EnvironmentID: types.GetEnvironmentID(s.ctx),
+		BaseModel:     types.GetDefaultBaseModel(s.ctx),
+	}))
+}
+
+func (s *PortalWalletSuite) TestGetWallets_SetsBalanceAlertStatus() {
+	s.setWalletAlertConfig(types.AlertSettings{
+		AlertEnabled: lo.ToPtr(true),
+		Warning:      &types.AlertThreshold{Threshold: decimal.NewFromInt(100), Condition: types.AlertConditionBelow},
+		Critical:     &types.AlertThreshold{Threshold: decimal.Zero, Condition: types.AlertConditionBelow},
+	})
+
+	wallets, err := s.svc.GetWallets(s.ctx)
+	s.NoError(err)
+	s.Require().Len(wallets, 1)
+	s.Require().NotNil(wallets[0].BalanceAlertStatus)
+	s.Equal(types.AlertStateWarning, *wallets[0].BalanceAlertStatus)
+}
+
+func (s *PortalWalletSuite) TestGetWallets_OmitsStatusWhenNothingToEvaluate() {
+	s.setWalletAlertConfig(types.AlertSettings{
+		AlertEnabled:       lo.ToPtr(true),
+		AlertThresholdType: types.AlertThresholdTypePercentage,
+		Warning:            &types.AlertThreshold{Threshold: decimal.NewFromInt(25), Condition: types.AlertConditionBelow},
+	})
+
+	wallets, err := s.svc.GetWallets(s.ctx)
+	s.NoError(err)
+	s.Require().Len(wallets, 1)
+	s.Nil(wallets[0].BalanceAlertStatus)
 }
 
 func (s *PortalWalletSuite) connect(providers ...types.SecretProvider) {
@@ -440,10 +480,9 @@ func (s *PortalWalletSuite) enableAutoCompletePurchasedCredit() {
 }
 
 func (s *PortalWalletSuite) TestUpdateCustomerIgnoresSettings() {
-	resp, err := s.svc.UpdateCustomer(s.ctx, dto.UpdateCustomerRequest{
-		Name:     lo.ToPtr("Renamed"),
-		Settings: &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{GracePeriodDays: lo.ToPtr(90)}},
-	})
+	var req dto.PortalUpdateCustomerRequest
+	s.Require().NoError(json.Unmarshal([]byte(`{"name":"Renamed","settings":{"subscription_config":{"grace_period_days":90}}}`), &req))
+	resp, err := s.svc.UpdateCustomer(s.ctx, req)
 	s.Require().NoError(err)
 	s.Equal("Renamed", resp.Customer.Name)
 	s.Nil(resp.Customer.Settings)

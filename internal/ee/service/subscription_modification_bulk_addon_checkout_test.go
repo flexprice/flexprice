@@ -234,7 +234,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Cleanup_ArchivesAddsAndKee
 	pendingID := config.getAttaches()[0].getAssociation().ID
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil, false))
 
 	archived, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, pendingID)
 	if err == nil {
@@ -514,7 +514,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Coupon_TerminatedSessionAr
 	s.Require().NotEmpty(before, "computing the draft records its coupon application")
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil, false))
 
 	after, err := s.GetStores().CouponApplicationRepo.List(ctx, appFilter)
 	s.Require().NoError(err)
@@ -735,7 +735,7 @@ func (s *SubscriptionServiceSuite) TestGroupedModifyCheckout_GuardsAndCleanupSee
 	s.True(gated, "the parent's gated removal is found inside the batch")
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil, false))
 
 	archived, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, pendingID)
 	if err == nil {
@@ -907,7 +907,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Overrides_CleanupDeletesMi
 	s.Require().Equal(1, s.subscriptionScopedPrices(sub.ID))
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil, false))
 
 	s.Zero(s.subscriptionScopedPrices(sub.ID))
 }

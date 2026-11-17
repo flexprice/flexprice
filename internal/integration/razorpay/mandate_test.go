@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -583,4 +584,32 @@ func TestSelectSavedTokenHonoursChosenMandate(t *testing.T) {
 	_, picked, err = svc.SelectSavedToken(ctx, "cust_1", decimal.NewFromInt(10), types.PaymentMethodTypeENACH, "token_gone")
 	require.NoError(t, err)
 	assert.Nil(t, picked, "an unknown mandate is not swapped for another")
+}
+
+func TestClampExpireBy(t *testing.T) {
+	floor := clock.Now().Add(razorpayMinExpireByBuffer + razorpayExpireBySafetyMargin)
+	if got := clampExpireBy(clock.Now()); got.Before(floor) {
+		t.Fatalf("near expiry not lifted: got %v, want >= %v", got, floor)
+	}
+	later := clock.Now().Add(time.Hour)
+	if got := clampExpireBy(later); !got.Equal(later) {
+		t.Fatalf("far expiry changed: got %v, want %v", got, later)
+	}
+}
+func TestLinkDescription(t *testing.T) {
+	tests := []struct {
+		name  string
+		items []string
+		want  string
+	}{
+		{"no items", nil, "Acme | Payment"},
+		{"one item", []string{"Pro"}, "Acme | Pro"},
+		{"many items", []string{"Pro", "Seats", "Usage"}, "Acme | Pro +2 more"},
+		{"blank first item", []string{""}, "Acme | " + DefaultItemName},
+	}
+	for _, tt := range tests {
+		if got := linkDescription("Acme", tt.items); got != tt.want {
+			t.Errorf("%s: got %q, want %q", tt.name, got, tt.want)
+		}
+	}
 }

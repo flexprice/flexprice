@@ -52,6 +52,7 @@ type WebhookHandler struct {
 	db                              postgres.IClient
 	webhookService                  *flexwebhook.WebhookService
 	billingEntityService            service.BillingEntityService
+	emailNotificationService        service.EmailNotificationService
 }
 
 // NewWebhookHandler creates a new webhook handler
@@ -71,6 +72,7 @@ func NewWebhookHandler(
 	db postgres.IClient,
 	webhookService *flexwebhook.WebhookService,
 	billingEntityService service.BillingEntityService,
+	emailNotificationService service.EmailNotificationService,
 ) *WebhookHandler {
 	return &WebhookHandler{
 		config:                          cfg,
@@ -88,6 +90,7 @@ func NewWebhookHandler(
 		db:                              db,
 		webhookService:                  webhookService,
 		billingEntityService:            billingEntityService,
+		emailNotificationService:        emailNotificationService,
 	}
 }
 
@@ -496,8 +499,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 }
 
 func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
-	// Always return 200 OK to Razorpay to prevent retries
-	// We log errors internally but don't expose them to Razorpay
+	// 200 unless event processing fails; a retry cannot fix a bad URL, signature or payload.
 	defer func() {
 		if c.IsAborted() {
 			return
@@ -593,6 +595,8 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	err = razorpayIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, environmentID, serviceDeps)
 	if err != nil {
 		h.logger.Error(context.Background(), "failed to handle Razorpay webhook event", "error", err)
+		// Razorpay redelivers only on non-2xx.
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
@@ -1497,4 +1501,21 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 			"error", err,
 			"type", event.Type)
 	}
+}
+
+// HandleEmailWebhook receives delivery events from the email provider. One URL serves every
+// tenant: the tenant comes from the signed event, and request bodies are never stored.
+func (h *WebhookHandler) HandleEmailWebhook(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.Error(ierr.WithError(err).WithHint("Failed to read request body").Mark(ierr.ErrValidation))
+		return
+	}
+
+	provider := types.EmailProvider(c.Param("provider"))
+	if err := h.emailNotificationService.HandleDeliveryWebhook(c.Request.Context(), provider, body, c.Request.Header); err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Webhook processed successfully"})
 }

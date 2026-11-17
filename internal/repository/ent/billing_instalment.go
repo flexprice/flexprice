@@ -236,6 +236,13 @@ func applyInstalmentFilter(q *ent.BillingInstalmentQuery, f *billingterm.Instalm
 		preds = append(preds, entbillinginstalment.BillOnLTE(*f.BillOnOrBefore))
 	}
 
+	if f.BillOnIn != nil {
+		preds = append(preds,
+			entbillinginstalment.BillOnGTE(f.BillOnIn.Start),
+			entbillinginstalment.BillOnLT(f.BillOnIn.End),
+		)
+	}
+
 	if len(f.InvoiceIDs) > 0 {
 		preds = append(preds, entbillinginstalment.InvoiceIDIn(f.InvoiceIDs...))
 	}

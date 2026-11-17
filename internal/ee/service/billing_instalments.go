@@ -122,8 +122,13 @@ func (s *billingService) dueInstalmentLines(
 // instalmentLine is the fixed invoice line that bills instalment i of commitment c.
 func instalmentLine(c *commitment.Commitment, i *billingterm.Instalment) dto.CreateInvoiceLineItemRequest {
 	kind := types.CommitmentLineInstalment
-	if i.Kind == types.InstalmentKindSettlement {
+	name := c.InvoiceLabel + " - " + i.InvoiceLabel
+	switch i.Kind {
+	case types.InstalmentKindSettlement:
 		kind = types.CommitmentLineSettlement
+	case types.InstalmentKindCancellationFee:
+		kind = types.CommitmentLineCancellationFee
+		name = c.InvoiceLabel + " (cancellation fee)"
 	}
 
 	metadata := types.Metadata{
@@ -135,7 +140,7 @@ func instalmentLine(c *commitment.Commitment, i *billingterm.Instalment) dto.Cre
 	}
 
 	return dto.CreateInvoiceLineItemRequest{
-		DisplayName: lo.ToPtr(c.InvoiceLabel + " - " + i.InvoiceLabel),
+		DisplayName: lo.ToPtr(name),
 		Amount:      i.Amount,
 		Quantity:    decimal.NewFromInt(1),
 		PeriodStart: lo.ToPtr(i.ServicePeriodStart),

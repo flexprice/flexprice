@@ -125,6 +125,15 @@ func zohoEncryptedWebhookSecretFromPendingOAuthSession(enc security.EncryptionSe
 	return s, nil
 }
 
+// isReservedOAuthSessionKey reports server-owned session keys.
+func isReservedOAuthSessionKey(key string) bool {
+	switch key {
+	case "session_id", "csrf_state", "expires_at", "credentials", "sync_config", "oauth_provider", "billing_entity_id":
+		return true
+	}
+	return false
+}
+
 // NewOAuthService creates a new OAuth service
 func NewOAuthService(
 	connectionRepo connection.Repository,
@@ -244,6 +253,9 @@ func (s *oauthService) encryptSessionBlob(session *types.OAuthSession, encrypted
 	}
 	// Add non-sensitive metadata
 	for key, value := range session.Metadata {
+		if isReservedOAuthSessionKey(key) {
+			continue
+		}
 		oauthSessionData[key] = value
 	}
 	if session.BillingEntityID != nil {
@@ -430,8 +442,7 @@ func (s *oauthService) GetOAuthSession(ctx context.Context, sessionID string) (*
 	// Extract non-sensitive metadata
 	sessionMetadata := make(map[string]string)
 	for key, value := range oauthSessionData {
-		// Skip internal keys
-		if key == "session_id" || key == "csrf_state" || key == "expires_at" || key == "credentials" || key == "sync_config" || key == "oauth_provider" || key == "billing_entity_id" {
+		if isReservedOAuthSessionKey(key) {
 			continue
 		}
 		if strValue, ok := value.(string); ok {

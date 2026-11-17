@@ -76,6 +76,7 @@ type Configuration struct {
 	RawEventsReprocessing  RawEventsReprocessingConfig  `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption    RawEventConsumptionConfig    `mapstructure:"raw_event_consumption" validate:"required"`
 	IntegrationEvents      IntegrationEventsConfig      `mapstructure:"integration_events" validate:"omitempty"`
+	EmailEvents            EmailEventsConfig            `mapstructure:"email_events" validate:"omitempty"`
 	OnboardingEvents       OnboardingEventsConfig       `mapstructure:"onboarding_events" validate:"omitempty"`
 	WebhookRetryJob        WebhookRetryJobConfig        `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                 GeminiConfig                 `mapstructure:"gemini" validate:"omitempty"`
@@ -909,8 +910,11 @@ type BillingConfig struct {
 	Region        string `mapstructure:"region"`
 	APIHost       string `mapstructure:"api_host"`
 	APIKey        string `mapstructure:"api_key"`
-	PlanID        string `mapstructure:"plan_id"`
-	DashboardURL  string `mapstructure:"dashboard_url"`
+	// DefaultPlanID is the plan every new tenant's trial starts on; it must be one of PlanIDs.
+	DefaultPlanID string `mapstructure:"default_plan_id"`
+	// PlanIDs are every plan a tenant may buy at checkout, the default included.
+	PlanIDs      []string `mapstructure:"plan_ids"`
+	DashboardURL string   `mapstructure:"dashboard_url"`
 
 	// PaymentProvider is the provider of Flexprice Cloud's trial-end checkout; empty means stripe.
 	PaymentProvider types.CheckoutPaymentProvider `mapstructure:"payment_provider"`
@@ -937,7 +941,7 @@ func (c BillingConfig) IsSelfBillingEnabled() bool {
 	return c.Enabled &&
 		c.Region != "" &&
 		c.APIKey != "" &&
-		c.PlanID != "" &&
+		c.DefaultPlanID != "" &&
 		c.DashboardURL != "" &&
 		c.CheckoutProvider().Validate() == nil &&
 		c.hasSecureAPIHost()
@@ -1173,11 +1177,34 @@ type Email struct {
 
 type EmailConfig struct {
 	Enabled          bool   `mapstructure:"enabled" validate:"required"`
-	ResendAPIKey     string `mapstructure:"resend_api_key" validate:"omitempty"`
 	FromAddress      string `mapstructure:"from_address" validate:"omitempty"`
 	ReplyTo          string `mapstructure:"reply_to" validate:"omitempty"`
 	CalendarURL      string `mapstructure:"calendar_url" validate:"omitempty"`
 	ZapierWebhookURL string `mapstructure:"zapier_webhook_url" validate:"omitempty"`
+
+	// Customer invoice emails.
+	Provider        string            `mapstructure:"provider" validate:"omitempty,oneof=resend local"`
+	Resend          ResendEmailConfig `mapstructure:"resend"`
+	SenderDomain    string            `mapstructure:"sender_domain" validate:"omitempty"`
+	SenderLocalPart string            `mapstructure:"sender_local_part" validate:"omitempty"`
+	RegionTag       string            `mapstructure:"region_tag" validate:"omitempty"`
+}
+
+// EmailEventsConfig is the consumer group that auto-sends customer emails from webhook.topic events.
+type EmailEventsConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"email-events-consumer"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
+}
+
+type ResendEmailConfig struct {
+	APIKey        string `mapstructure:"api_key" validate:"omitempty"`
+	WebhookSecret string `mapstructure:"webhook_secret" validate:"omitempty"`
+}
+
+// IsProviderConfigured reports whether customer emails are on: email.enabled and a provider set.
+func (c EmailConfig) IsProviderConfigured() bool {
+	return c.Enabled && c.Provider != ""
 }
 
 type CheckoutConfig struct {
@@ -1278,6 +1305,12 @@ func NewConfig() (*Configuration, error) {
 	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
 	v.SetDefault("logging.provider_calls_enabled", true)
+	// Customer email sender defaults, for deploys whose config.yaml (a Helm ConfigMap) predates these keys.
+	v.SetDefault("email.sender_domain", "mail.flexprice.io")
+	v.SetDefault("email.sender_local_part", "invoices")
+	v.SetDefault("email_events.enabled", true)
+	v.SetDefault("email_events.consumer_group", "email-events-consumer")
+	v.SetDefault("email_events.rate_limit", 10)
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
@@ -1403,7 +1436,7 @@ const (
 // A non-local deployment booting with any of these for an ENABLED feature is running on a
 // public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
 var placeholderSecrets = map[string]bool{
-	"": true, // unset
+	"":             true, // unset
 	"super_secret": true,
 	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
 	"<supabase service key>":                                   true,
@@ -1463,7 +1496,44 @@ func NewValidatedConfig() (*Configuration, error) {
 	if err := cfg.validateSAMLDependencies(); err != nil {
 		return nil, err
 	}
+	if err := cfg.validateEmail(); err != nil {
+		return nil, err
+	}
 	return cfg, nil
+}
+
+// validateEmail rejects a customer-email provider that cannot work in this deployment. It applies
+// only when customer emails are on, so a deployment without them cannot be taken down by it.
+func (c Configuration) validateEmail() error {
+	if !c.Email.IsProviderConfigured() {
+		return nil
+	}
+	if strings.TrimSpace(c.Email.SenderDomain) == "" || strings.TrimSpace(c.Email.SenderLocalPart) == "" {
+		return fmt.Errorf("email.sender_domain and email.sender_local_part are required (mode %q)", c.Deployment.Mode)
+	}
+	switch types.EmailProvider(c.Email.Provider) {
+	case types.EmailProviderLocal:
+		if os.Getenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS") != "true" {
+			return fmt.Errorf("email.provider local writes emails to disk and is only for local runs (mode %q): set email.provider to resend", c.Deployment.Mode)
+		}
+	case types.EmailProviderResend:
+		var missing []string
+		for _, f := range []struct{ value, name string }{
+			{c.Email.Resend.APIKey, "email.resend.api_key (FLEXPRICE_EMAIL_RESEND_API_KEY)"},
+			{c.Email.Resend.WebhookSecret, "email.resend.webhook_secret (FLEXPRICE_EMAIL_RESEND_WEBHOOK_SECRET)"},
+			{c.Email.RegionTag, "email.region_tag (FLEXPRICE_EMAIL_REGION_TAG)"},
+		} {
+			if strings.TrimSpace(f.value) == "" {
+				missing = append(missing, f.name)
+			}
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("email.provider resend needs %s (mode %q)", strings.Join(missing, ", "), c.Deployment.Mode)
+		}
+	default:
+		return fmt.Errorf("unsupported email.provider %q (mode %q): use resend or local", c.Email.Provider, c.Deployment.Mode)
+	}
+	return nil
 }
 
 // validateCriticalSecrets rejects secrets that sign tokens or grant access.

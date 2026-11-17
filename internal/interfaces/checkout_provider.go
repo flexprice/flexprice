@@ -36,6 +36,24 @@ type CheckoutProvider interface {
 	// what kind of object each is, so interpreting them is the adapter's job.
 	// Providers without a read API return ierr.ErrNotImplemented.
 	FetchPaymentState(ctx context.Context, req PaymentStateRequest) (*PaymentState, error)
+
+	// ExpirePaymentLink stops a hosted link from accepting payment. A link that is
+	// already closed is not an error; one the customer already paid is reported in the
+	// response. Providers that cannot close links return ierr.ErrNotImplemented.
+	ExpirePaymentLink(ctx context.Context, req ExpirePaymentLinkRequest) (*ExpirePaymentLinkResponse, error)
+}
+
+// ExpirePaymentLinkResponse reports a link the customer paid before it could be closed.
+type ExpirePaymentLinkResponse struct {
+	AlreadyPaid bool
+}
+
+// ExpirePaymentLinkRequest identifies the hosted link to close.
+type ExpirePaymentLinkRequest struct {
+	// GatewayTrackingID is the handle the adapter returned as ProviderSessionID, stored
+	// on payment.gateway_tracking_id.
+	GatewayTrackingID string
+	InvoiceID         string
 }
 
 // PaymentStateRequest carries the provider handles recorded on the payment at
@@ -75,7 +93,8 @@ type CheckoutProviderRequest struct {
 	LineItems  []CheckoutLineItem
 	// ExpiresAt is when the hosted object should stop accepting payments. Providers
 	// that cannot express this ignore it.
-	ExpiresAt *time.Time
+	ExpiresAt      *time.Time
+	NotifyCustomer bool
 }
 
 // CheckoutLineItem itemises what is being charged. Providers that can only carry a
@@ -117,6 +136,7 @@ type AuthorizationLinkRequest struct {
 	CancelURL       string
 	Metadata        map[string]string
 	LineItems       []CheckoutLineItem
+	NotifyCustomer  bool
 }
 
 // HasAutoChargeableMethodRequest is the input for checking if a customer has

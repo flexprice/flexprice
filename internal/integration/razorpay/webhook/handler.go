@@ -3,6 +3,7 @@ package webhook
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -14,12 +15,12 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
 // Handler handles Razorpay webhook events
@@ -96,8 +97,12 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhook
 		return h.handlePaymentFailed(ctx, event, services)
 	case EventPaymentLinkPaid:
 		return h.handlePaymentLinkPaid(ctx, event, services)
-	case EventPaymentLinkCancelled, EventPaymentLinkExpired:
+	case EventPaymentLinkCancelled:
 		return h.handlePaymentLinkFailed(ctx, event, services)
+	case EventPaymentLinkExpired:
+		// The link closes before the session on purpose; the sweeper expires the session.
+		h.logger.Info(ctx, "ignoring payment_link.expired webhook", "payment_link_id", event.Payload.PaymentLink.Entity.ID)
+		return nil
 	case EventRefundProcessed:
 		return h.handleRefundProcessed(ctx, event, services)
 	case EventRefundFailed:
@@ -156,7 +161,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		"flexprice_payment_id", flexpricePaymentID)
 
 	// Get payment record
-	paymentRecord, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
+	paymentRecord, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		h.logger.Error(ctx, "failed to get payment record",
 			"error", err,
@@ -244,7 +249,10 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
-		return nil // Don't return error - webhook should always succeed
+		if ierr.IsValidation(err) {
+			return nil
+		}
+		return err
 	}
 
 	h.logger.Info(ctx, "updated payment to succeeded",
@@ -304,7 +312,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		"flexprice_payment_id", flexpricePaymentID)
 
 	// Get payment record
-	paymentRecord, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
+	paymentRecord, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		h.logger.Error(ctx, "failed to get payment record",
 			"error", err,
@@ -337,10 +345,6 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 			"razorpay_payment_id", payment.ID)
 		return nil
 	}
-
-	// A redelivered decline finds the payment already FAILED and was reported the first time.
-	reportAutoChargeDecline := paymentRecord.PaymentStatus != types.PaymentStatusFailed &&
-		paymentRecord.Metadata[types.MetadataKeyPaymentTrigger] == types.PaymentTriggerInvoiceAutoCharge
 
 	// Build error message
 	errorMsg := "Payment failed"
@@ -378,6 +382,18 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 					"error", err,
 					"flexprice_payment_id", flexpricePaymentID,
 					"razorpay_payment_id", payment.ID)
+			}
+
+			// An auto-charge has no link to retry on, so its decline ends the session.
+			if session.IsAutoCharge() {
+				if err := services.CheckoutSessionService.CleanupCheckoutSession(ctx, session.ID, errors.New(errorMsg)); err != nil {
+					h.logger.Error(ctx, "failed to fail checkout session after auto-charge decline",
+						"error", err,
+						"session_id", session.ID,
+						"flexprice_payment_id", flexpricePaymentID,
+						"razorpay_payment_id", payment.ID)
+					return err
+				}
 			}
 			return nil
 		}
@@ -424,17 +440,6 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		"error_code", payment.ErrorCode,
 		"error_description", payment.ErrorDescription)
 
-	if reportAutoChargeDecline {
-		services.InvoiceService.PublishInvoicePaymentFailed(ctx, webhookDto.InternalInvoicePaymentFailedEvent{
-			InvoiceID:           paymentRecord.DestinationID,
-			Provider:            types.SecretProviderRazorpay,
-			Reason:              types.InvoicePaymentFailureReasonDeclined,
-			PaymentID:           flexpricePaymentID,
-			Error:               errorMsg,
-			IsAutoChargeAttempt: true,
-		})
-	}
-
 	return nil
 }
 
@@ -476,8 +481,7 @@ func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebh
 	return err
 }
 
-// handlePaymentLinkFailed processes payment_link.cancelled and payment_link.expired webhook events.
-// A pending checkout session is expired on payment_link.expired and failed on payment_link.cancelled.
+// handlePaymentLinkFailed fails the pending checkout session of a cancelled payment link.
 func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWebhookEvent, services *ServiceDependencies) error {
 	paymentLinkID := event.Payload.PaymentLink.Entity.ID
 	if paymentLinkID == "" {
@@ -522,10 +526,7 @@ func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWe
 	}
 
 	sessionID := sessions.Items[0].ID
-	var reason error
-	if event.Event != string(EventPaymentLinkExpired) {
-		reason = fmt.Errorf("payment link %s by provider", event.Event)
-	}
+	reason := fmt.Errorf("payment link %s by provider", event.Event)
 	if err := services.CheckoutSessionService.CleanupCheckoutSession(ctx, sessionID, reason); err != nil {
 		h.logger.Error(ctx, "failed to cleanup checkout session on payment link failure",
 			"error", err,
@@ -560,18 +561,29 @@ func (h *Handler) handleCheckoutSessionForPayment(
 		return false, nil
 	}
 
-	switch session.CheckoutStatus {
-	case types.CheckoutStatusInitiated, types.CheckoutStatusPending:
-		if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+	if session.CheckoutStatus == types.CheckoutStatusInitiated || session.CheckoutStatus == types.CheckoutStatusPending {
+		err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: razorpayPaymentID,
-		}); err != nil {
-			h.logger.Error(ctx, "failed to complete checkout session",
-				"error", err,
-				"session_id", session.ID,
-				"flexprice_payment_id", flexpricePaymentID,
-				"razorpay_payment_id", razorpayPaymentID,
-			)
+		})
+		if err == nil {
+			return true, nil
 		}
+		h.logger.Error(ctx, "failed to complete checkout session",
+			"error", err,
+			"session_id", session.ID,
+			"flexprice_payment_id", flexpricePaymentID,
+			"razorpay_payment_id", razorpayPaymentID,
+		)
+		if !ierr.IsAlreadyExists(err) {
+			return false, err
+		}
+		// The session ended instead, e.g. it was past expiry: this capture is late and is refunded below.
+		if session, err = services.CheckoutSessionService.Get(types.WithForceWriter(ctx), session.ID); err != nil {
+			return false, err
+		}
+	}
+
+	switch session.CheckoutStatus {
 	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
 		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService); err != nil {
 			h.logger.Error(ctx, "failed to refund late-captured payment — manual reconciliation required",

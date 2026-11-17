@@ -486,6 +486,8 @@ var exclusiveWorkflowIDKeys = map[types.TemporalWorkflowType]string{
 
 	types.TemporalProcessSubscriptionBillingWorkflow: "process_subscription_billing",
 	types.TemporalProcessInvoiceWorkflow:             "process_invoice",
+
+	types.TemporalRazorpayInvoiceSyncWorkflow: "razorpay_invoice_sync",
 }
 
 func (s *temporalService) generateWorkflowID(workflowType types.TemporalWorkflowType, params interface{}) string {
@@ -781,6 +783,9 @@ func (s *temporalService) buildPriceSyncInput(_ context.Context, tenantID, envir
 		input.TenantID = tenantID
 		input.EnvironmentID = environmentID
 		input.UserID = userID
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
 		return input, nil
 	}
 
@@ -792,12 +797,16 @@ func (s *temporalService) buildPriceSyncInput(_ context.Context, tenantID, envir
 			Mark(errors.ErrValidation)
 	}
 
-	return models.PriceSyncWorkflowInput{
+	input := models.PriceSyncWorkflowInput{
 		PlanID:        planID,
 		TenantID:      tenantID,
 		EnvironmentID: environmentID,
 		UserID:        userID,
-	}, nil
+	}
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+	return input, nil
 }
 
 // buildAddonPriceSyncInput builds input for the addon usage-price sync workflow
@@ -806,6 +815,9 @@ func (s *temporalService) buildAddonPriceSyncInput(_ context.Context, tenantID, 
 		input.TenantID = tenantID
 		input.EnvironmentID = environmentID
 		input.UserID = userID
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
 		return input, nil
 	}
 
@@ -816,12 +828,16 @@ func (s *temporalService) buildAddonPriceSyncInput(_ context.Context, tenantID, 
 			Mark(errors.ErrValidation)
 	}
 
-	return models.AddonPriceSyncWorkflowInput{
+	input := models.AddonPriceSyncWorkflowInput{
 		AddonID:       addonID,
 		TenantID:      tenantID,
 		EnvironmentID: environmentID,
 		UserID:        userID,
-	}, nil
+	}
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+	return input, nil
 }
 
 // buildQuickBooksPriceSyncInput builds input for QuickBooks price sync workflow

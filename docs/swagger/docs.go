@@ -5212,6 +5212,59 @@ const docTemplate = `{
                 }
             }
         },
+        "/emails/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when reviewing emails sent to customers, for example every bounced email this month or every email to one customer. Filter by delivery status, trigger, customer, document and date. Newest first; paginated.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Search emails",
+                "operationId": "queryEmail",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.EmailLogFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListEmailLogsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/entitlements": {
             "post": {
                 "security": [
@@ -7347,6 +7400,117 @@ const docTemplate = `{
                         "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/invoices/{id}/email": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you want Flexprice to email a finalized invoice to the customer, with a link to the hosted invoice and the PDF attached. Sends to the customer's email unless ` + "`" + `to` + "`" + ` is given. Returns the queued email; delivery happens in the background.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Email invoice to customer",
+                "operationId": "sendInvoiceEmail",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Recipients overriding the customer's email",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/SendInvoiceEmailRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/EmailLogResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/invoices/{id}/emails": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when showing which emails were sent for an invoice and whether each was delivered. Newest first.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "List invoice emails",
+                "operationId": "listInvoiceEmails",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListEmailLogsResponse"
                         }
                     },
                     "404": {
@@ -14866,7 +15030,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Remove a human user (type=user) from the current tenant. Not supported for service accounts; use DELETE /users/{id} for those.",
+                "description": "Remove a human user (type=user) from the current tenant. Also revokes every API key the user owns, in all environments. Not supported for service accounts; use DELETE /users/{id} for those.",
                 "produces": [
                     "application/json"
                 ],
@@ -15657,7 +15821,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.cancelled",
                 "responses": {
@@ -15680,7 +15844,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.created",
                 "responses": {
@@ -15703,7 +15867,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.invoiced",
                 "responses": {
@@ -15726,7 +15890,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.updated",
                 "responses": {
@@ -15749,7 +15913,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_terms.created",
                 "responses": {
@@ -15772,7 +15936,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_terms.updated",
                 "responses": {
@@ -15780,6 +15944,29 @@ const docTemplate = `{
                         "description": "Webhook payload",
                         "schema": {
                             "$ref": "#/definitions/webhookDto.BillingTermsWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/checkout.session.cancelled": {
+            "post": {
+                "description": "Fired when a Checkout Session is cancelled through the API, alongside checkout.session.expired. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "checkout.session.cancelled",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.CheckoutSessionWebhookPayload"
                         }
                     }
                 }
@@ -15795,7 +15982,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.completed",
                 "responses": {
@@ -15818,7 +16005,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.expired",
                 "responses": {
@@ -15841,7 +16028,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.failed",
                 "responses": {
@@ -15864,7 +16051,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.initiated",
                 "responses": {
@@ -15887,7 +16074,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.created",
                 "responses": {
@@ -15910,7 +16097,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.terminated",
                 "responses": {
@@ -15933,7 +16120,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.updated",
                 "responses": {
@@ -15956,7 +16143,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Credit note"
                 ],
                 "summary": "credit_note.created",
                 "responses": {
@@ -15979,7 +16166,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Credit note"
                 ],
                 "summary": "credit_note.updated",
                 "responses": {
@@ -16002,7 +16189,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.created",
                 "responses": {
@@ -16025,7 +16212,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.deleted",
                 "responses": {
@@ -16048,7 +16235,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.updated",
                 "responses": {
@@ -16071,7 +16258,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.created",
                 "responses": {
@@ -16094,7 +16281,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.deleted",
                 "responses": {
@@ -16117,7 +16304,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.updated",
                 "responses": {
@@ -16140,7 +16327,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Usage ingestion"
                 ],
                 "summary": "event.rejected",
                 "responses": {
@@ -16163,7 +16350,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.created",
                 "responses": {
@@ -16186,7 +16373,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.deleted",
                 "responses": {
@@ -16209,7 +16396,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.updated",
                 "responses": {
@@ -16232,7 +16419,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.wallet_balance.alert",
                 "responses": {
@@ -16255,7 +16442,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.communication.triggered",
                 "responses": {
@@ -16278,7 +16465,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.create.drafted",
                 "responses": {
@@ -16301,7 +16488,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.payment.failed",
                 "responses": {
@@ -16324,7 +16511,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.payment.overdue",
                 "responses": {
@@ -16347,7 +16534,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.sync.failed",
                 "responses": {
@@ -16370,7 +16557,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.sync.success",
                 "responses": {
@@ -16393,7 +16580,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update",
                 "responses": {
@@ -16416,7 +16603,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.finalized",
                 "responses": {
@@ -16439,7 +16626,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.payment",
                 "responses": {
@@ -16462,7 +16649,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.voided",
                 "responses": {
@@ -16485,7 +16672,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.attempt.failed",
                 "responses": {
@@ -16508,7 +16695,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.created",
                 "responses": {
@@ -16531,7 +16718,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.failed",
                 "responses": {
@@ -16554,7 +16741,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.pending",
                 "responses": {
@@ -16577,7 +16764,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.success",
                 "responses": {
@@ -16600,7 +16787,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.updated",
                 "responses": {
@@ -16623,7 +16810,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.created",
                 "responses": {
@@ -16646,7 +16833,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.failed",
                 "responses": {
@@ -16669,7 +16856,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.succeeded",
                 "responses": {
@@ -16692,7 +16879,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.activated",
                 "responses": {
@@ -16715,7 +16902,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.cancelled",
                 "responses": {
@@ -16738,7 +16925,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.created",
                 "responses": {
@@ -16761,7 +16948,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.draft.created",
                 "responses": {
@@ -16784,7 +16971,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.group_spend.threshold_reached",
                 "responses": {
@@ -16807,7 +16994,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.group_spend.threshold_recovered",
                 "responses": {
@@ -16830,7 +17017,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.line_item_spend.threshold_reached",
                 "responses": {
@@ -16853,7 +17040,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.line_item_spend.threshold_recovered",
                 "responses": {
@@ -16876,7 +17063,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.paused",
                 "responses": {
@@ -16899,7 +17086,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.created",
                 "responses": {
@@ -16922,7 +17109,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.deleted",
                 "responses": {
@@ -16945,7 +17132,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.updated",
                 "responses": {
@@ -16968,7 +17155,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.plan_changed",
                 "responses": {
@@ -16991,7 +17178,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.renewal.due",
                 "responses": {
@@ -17014,7 +17201,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.resumed",
                 "responses": {
@@ -17037,7 +17224,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.spend.threshold_reached",
                 "responses": {
@@ -17060,7 +17247,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.spend.threshold_recovered",
                 "responses": {
@@ -17083,7 +17270,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.updated",
                 "responses": {
@@ -17106,7 +17293,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.created",
                 "responses": {
@@ -17129,7 +17316,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.credit_balance.dropped",
                 "responses": {
@@ -17152,7 +17339,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.credit_balance.recovered",
                 "responses": {
@@ -17175,7 +17362,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.dropped",
                 "responses": {
@@ -17198,7 +17385,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.recovered",
                 "responses": {
@@ -17221,7 +17408,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.updated",
                 "responses": {
@@ -17244,7 +17431,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.terminated",
                 "responses": {
@@ -17267,7 +17454,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.transaction.created",
                 "responses": {
@@ -17290,7 +17477,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.transaction.updated",
                 "responses": {
@@ -17313,7 +17500,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.updated",
                 "responses": {
@@ -24059,6 +24246,95 @@ const docTemplate = `{
                 }
             }
         },
+        "EmailLogResponse": {
+            "type": "object",
+            "properties": {
+                "cc_addresses": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "delivered_at": {
+                    "type": "string"
+                },
+                "delivery_status": {
+                    "$ref": "#/definitions/types.EmailDeliveryStatus"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.SystemEntityType"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "from_address": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.EmailProvider"
+                },
+                "provider_message_id": {
+                    "type": "string"
+                },
+                "reply_to": {
+                    "type": "string"
+                },
+                "sent_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "status_reason": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "template_key": {
+                    "$ref": "#/definitions/types.EmailTemplateKey"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "to_addresses": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "trigger": {
+                    "$ref": "#/definitions/types.EmailTrigger"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
         "EntitlementResponse": {
             "type": "object",
             "properties": {
@@ -25022,7 +25298,7 @@ const docTemplate = `{
                     }
                 },
                 "instalments": {
-                    "description": "Instalments lists, with expand \"instalments\", the instalments invoiced in the range for the v2 commitments covering\na queried meter; it is empty with property or source filters, or when no usage line runs in the range.",
+                    "description": "Instalments lists, with expand \"instalments\", the instalments of the v2 commitments covering a queried meter that\nwere invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source\nfilters, or when no usage line runs in the range.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/UsageAnalyticInstalment"
@@ -25042,7 +25318,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "total_cost_with_instalments": {
-                    "description": "TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes \"instalments\".",
+                    "description": "TotalCostWithInstalments is TotalCost plus the amounts of the invoiced Instalments, set when expand includes\n\"instalments\". Scheduled instalments are not billed yet, so they are left out.",
                     "type": "string"
                 },
                 "total_discount": {
@@ -26592,6 +26868,20 @@ const docTemplate = `{
                 }
             }
         },
+        "ListEmailLogsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/EmailLogResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "ListEntityIntegrationMappingsResponse": {
             "type": "object",
             "properties": {
@@ -27042,6 +27332,9 @@ const docTemplate = `{
         "PaymentGatewayOptions": {
             "type": "object",
             "properties": {
+                "razorpay": {
+                    "$ref": "#/definitions/RazorpayPaymentGatewayOptions"
+                },
                 "stripe": {
                     "$ref": "#/definitions/StripePaymentGatewayOptions"
                 }
@@ -27141,6 +27434,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "save_card_and_make_default": {
+                    "type": "boolean"
+                },
+                "submitted_for_processing": {
+                    "description": "SubmittedForProcessing is true while the gateway has the charge and its outcome is pending; it can't be processed again.",
                     "type": "boolean"
                 },
                 "succeeded_at": {
@@ -27817,6 +28114,15 @@ const docTemplate = `{
                 },
                 "provider": {
                     "$ref": "#/definitions/types.PaymentGatewayType"
+                }
+            }
+        },
+        "RazorpayPaymentGatewayOptions": {
+            "type": "object",
+            "properties": {
+                "notify_customer": {
+                    "description": "NotifyCustomer lets Razorpay SMS/email the payment link to the customer.",
+                    "type": "boolean"
                 }
             }
         },
@@ -28923,6 +29229,10 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "plan_id": {
+                    "description": "PlanID is the offered plan to buy; empty means the default plan, or a negotiated trial's own plan.",
+                    "type": "string"
+                },
                 "tax_id": {
                     "type": "string"
                 }
@@ -29028,8 +29338,12 @@ const docTemplate = `{
                         "$ref": "#/definitions/SelfBillingInvoice"
                     }
                 },
-                "plan": {
-                    "$ref": "#/definitions/SelfBillingPlanResponse"
+                "plans": {
+                    "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.\nThe first plan is the default.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SelfBillingPlanResponse"
+                    }
                 },
                 "status": {
                     "$ref": "#/definitions/types.TenantInternalStatus"
@@ -29042,6 +29356,30 @@ const docTemplate = `{
                 },
                 "usage": {
                     "$ref": "#/definitions/CustomerUsageSummaryResponse"
+                }
+            }
+        },
+        "SendInvoiceEmailRequest": {
+            "type": "object",
+            "properties": {
+                "cc": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "idempotency_key": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "minLength": 1
+                },
+                "to": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -32646,6 +32984,10 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
+                "bill_on": {
+                    "description": "when it becomes billable",
+                    "type": "string"
+                },
                 "commitment_id": {
                     "type": "string"
                 },
@@ -32654,6 +32996,14 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "string"
+                },
+                "instalment_status": {
+                    "description": "InstalmentStatus is invoiced, or scheduled for an instalment due in the range that no invoice has billed yet.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InstalmentStatus"
+                        }
+                    ]
                 },
                 "invoice_id": {
                     "type": "string"
@@ -32664,6 +33014,14 @@ const docTemplate = `{
                 "invoiced_at": {
                     "description": "when the invoice billing it was finalized",
                     "type": "string"
+                },
+                "kind": {
+                    "description": "Kind tells a regular instalment from a termination's settlement and its cancellation_fee.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InstalmentKind"
+                        }
+                    ]
                 },
                 "service_period_end": {
                     "type": "string"
@@ -33097,6 +33455,14 @@ const docTemplate = `{
                 },
                 "balance": {
                     "type": "string"
+                },
+                "balance_alert_status": {
+                    "description": "BalanceAlertStatus is ok, info, warning, or in_alarm. Absent when wallet alerts are off.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.AlertState"
+                        }
+                    ]
                 },
                 "balance_updated_at": {
                     "type": "string"
@@ -34682,6 +35048,10 @@ const docTemplate = `{
                 },
                 "max_mandate_limit": {
                     "type": "string"
+                },
+                "notify_customer": {
+                    "description": "NotifyCustomer lets the gateway email/SMS the payment link to the customer.",
+                    "type": "boolean"
                 },
                 "payment_method": {
                     "$ref": "#/definitions/types.PaymentMethodType"
@@ -38701,6 +39071,7 @@ const docTemplate = `{
                 "checkout.session.completed",
                 "checkout.session.failed",
                 "checkout.session.expired",
+                "checkout.session.cancelled",
                 "event.rejected"
             ],
             "x-enum-varnames": [
@@ -38776,6 +39147,7 @@ const docTemplate = `{
                 "WebhookEventCheckoutSessionCompleted",
                 "WebhookEventCheckoutSessionFailed",
                 "WebhookEventCheckoutSessionExpired",
+                "WebhookEventCheckoutSessionCancelled",
                 "WebhookEventEventRejected"
             ]
         },
@@ -40127,6 +40499,125 @@ const docTemplate = `{
                 "ContractStatusCancelled"
             ]
         },
+        "types.EmailDeliveryStatus": {
+            "type": "string",
+            "enum": [
+                "queued",
+                "sent",
+                "delivery_delayed",
+                "delivered",
+                "bounced",
+                "complained",
+                "failed",
+                "suppressed",
+                "skipped"
+            ],
+            "x-enum-varnames": [
+                "EmailDeliveryStatusQueued",
+                "EmailDeliveryStatusSent",
+                "EmailDeliveryStatusDeliveryDelayed",
+                "EmailDeliveryStatusDelivered",
+                "EmailDeliveryStatusBounced",
+                "EmailDeliveryStatusComplained",
+                "EmailDeliveryStatusFailed",
+                "EmailDeliveryStatusSuppressed",
+                "EmailDeliveryStatusSkipped"
+            ]
+        },
+        "types.EmailLogFilter": {
+            "type": "object",
+            "properties": {
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "delivery_statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.EmailDeliveryStatus"
+                    }
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "entity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.SystemEntityType"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "sort": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "triggers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.EmailTrigger"
+                    }
+                }
+            }
+        },
+        "types.EmailProvider": {
+            "type": "string",
+            "enum": [
+                "resend",
+                "local"
+            ],
+            "x-enum-varnames": [
+                "EmailProviderResend",
+                "EmailProviderLocal"
+            ]
+        },
+        "types.EmailTemplateKey": {
+            "type": "string",
+            "enum": [
+                "invoice_finalized"
+            ],
+            "x-enum-varnames": [
+                "EmailTemplateInvoiceFinalized"
+            ]
+        },
+        "types.EmailTrigger": {
+            "type": "string",
+            "enum": [
+                "auto",
+                "manual"
+            ],
+            "x-enum-varnames": [
+                "EmailTriggerAuto",
+                "EmailTriggerManual"
+            ]
+        },
         "types.EntitlementGrantScopeEntityType": {
             "type": "string",
             "enum": [
@@ -40177,11 +40668,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "instalment",
-                "settlement"
+                "settlement",
+                "cancellation_fee"
             ],
             "x-enum-varnames": [
                 "InstalmentKindInstalment",
-                "InstalmentKindSettlement"
+                "InstalmentKindSettlement",
+                "InstalmentKindCancellationFee"
             ]
         },
         "types.InstalmentStatus": {
@@ -40452,6 +40945,47 @@ const docTemplate = `{
                     "minimum": 0
                 }
             }
+        },
+        "types.SystemEntityType": {
+            "type": "string",
+            "enum": [
+                "feature",
+                "customer",
+                "plan",
+                "subscription",
+                "invoice",
+                "payment",
+                "credit_note",
+                "refund",
+                "wallet",
+                "entitlement",
+                "checkout_session",
+                "payment_method",
+                "price",
+                "event",
+                "commitment",
+                "billing_term",
+                "billing_instalment"
+            ],
+            "x-enum-varnames": [
+                "SystemEntityTypeFeature",
+                "SystemEntityTypeCustomer",
+                "SystemEntityTypePlan",
+                "SystemEntityTypeSubscription",
+                "SystemEntityTypeInvoice",
+                "SystemEntityTypePayment",
+                "SystemEntityTypeCreditNote",
+                "SystemEntityTypeRefund",
+                "SystemEntityTypeWallet",
+                "SystemEntityTypeEntitlement",
+                "SystemEntityTypeCheckoutSession",
+                "SystemEntityTypePaymentMethod",
+                "SystemEntityTypePrice",
+                "SystemEntityTypeEvent",
+                "SystemEntityTypeCommitment",
+                "SystemEntityTypeBillingTerm",
+                "SystemEntityTypeBillingInstalment"
+            ]
         },
         "types.TenantInternalStatus": {
             "type": "string",

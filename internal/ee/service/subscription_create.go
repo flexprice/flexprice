@@ -115,6 +115,10 @@ func (s *subscriptionService) archiveDraftCheckoutSubscription(ctx context.Conte
 	}
 
 	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if ierr.IsNotFound(err) {
+		// Checkout cleanup already archived it.
+		return nil
+	}
 	if err != nil {
 		return err
 	}

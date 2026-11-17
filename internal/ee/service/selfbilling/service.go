@@ -181,6 +181,7 @@ func (s *selfBillingService) provision(ctx context.Context, tenantID, name, emai
 			Event:      alertTrialStarted,
 			TenantID:   tenantID,
 			TenantName: name,
+			Email:      email,
 		})
 	}
 	return nil

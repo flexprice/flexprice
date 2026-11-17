@@ -66,7 +66,7 @@ func TestFixLineItemPriceEndDates(t *testing.T) {
 				require.NoError(t, priceStore.Create(ctx, p))
 			}
 
-			for _, sub := range []*subscription.Subscription{
+			for i, sub := range []*subscription.Subscription{
 				{ID: "sub_active", SubscriptionStatus: types.SubscriptionStatusActive},
 				{ID: "sub_trialing", SubscriptionStatus: types.SubscriptionStatusTrialing},
 				{ID: "sub_cancelled", SubscriptionStatus: types.SubscriptionStatusCancelled},
@@ -76,6 +76,8 @@ func TestFixLineItemPriceEndDates(t *testing.T) {
 				sub.CurrentPeriodStart = periodStart
 				sub.EnvironmentID = envID
 				sub.BaseModel = types.GetDefaultBaseModel(ctx)
+				// Distinct created times keep the in-memory store's page order stable
+				sub.CreatedAt = periodStart.Add(time.Duration(i) * time.Minute)
 				require.NoError(t, subStore.Create(ctx, sub))
 			}
 
@@ -102,6 +104,8 @@ func TestFixLineItemPriceEndDates(t *testing.T) {
 				priceRepo:        priceStore,
 				subscriptionRepo: subStore,
 				lineItemRepo:     lineItemStore,
+				// One subscription per page, so the run has to walk every page
+				subscriptionPageSize: 1,
 			}
 			var buf bytes.Buffer
 			writer := csv.NewWriter(&buf)

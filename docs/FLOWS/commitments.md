@@ -132,8 +132,11 @@ it is shorter than a window, the window holding its own middle, reusing a point 
 overlaps is not cut into periods; one a commitment overlaps can span at most 366 billing periods.
 
 With `expand: ["instalments"]`, the response lists the instalments invoiced in the range (`ListInvoiced`, by
-`invoiced_at`) for the commitments on the customer's subscriptions that covered a queried meter during their term
-(`CoveringMeters`), whether or not the range has usage. A range in which no usage line runs lists none.
+`invoiced_at`) and those still scheduled whose `bill_on` falls in it (`rangeInstalments`), for the commitments on the
+customer's subscriptions that covered a queried meter during their term (`CoveringMeters`), whether or not the range
+has usage. A range in which no usage line runs lists none. Each entry carries its `kind` (`instalment`, `settlement` or
+`cancellation_fee`), `instalment_status` and `bill_on`. `total_cost_with_instalments` adds the invoiced ones only: a
+scheduled instalment is not billed yet, and moves to the range holding its `invoiced_at` once it is.
 
 ### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:58](../../internal/ee/service/billing_commitments.go#L58))
 
@@ -348,9 +351,12 @@ under the commitment lock:
    termination still owes (`owedAtTermination`): due by `effective_at` and paying for time before it. An advance
    instalment due exactly at `effective_at` is not billed. Later ones are not billed and nothing is refunded; the fee
    covers anything more.
-3. `billTermination` issues one immediate one-off invoice, `billing_reason: COMMITMENT_TERMINATION`, carrying the
-   settlement and the cancellation fee (`cancellationFeeLine`).
-4. Set the status to terminated with `terminated_at`. Later invoices clip the floor at `terminated_at`.
+3. `chargeCancellationFee` stores the fee as an instalment of kind `cancellation_fee`, with or without billing terms.
+   It has no billing term and is no part of the commitment's total, so no plan counts it as collected.
+4. `billTermination` issues one immediate one-off invoice, `billing_reason: COMMITMENT_TERMINATION`, carrying the
+   settlement and the fee instalments; finalizing it claims both. Voiding it reschedules the settlement and cancels
+   the fee.
+5. Set the status to terminated with `terminated_at`. Later invoices clip the floor at `terminated_at`.
 
 `effective_at` is the only date a termination takes: coverage and instalments stop together. A termination cannot keep
 coverage until a later end date while stopping advance instalments sooner. The fee is billed on its own invoice when

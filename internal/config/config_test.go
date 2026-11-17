@@ -159,12 +159,12 @@ func TestReportsConfig_Enabled(t *testing.T) {
 
 func TestBillingConfig_IsSelfBillingEnabled(t *testing.T) {
 	full := BillingConfig{
-		Enabled:      true,
-		Region:       "us",
-		APIHost:      "https://api.flexprice.io/v1",
-		APIKey:       "sk",
-		PlanID:       "plan_1",
-		DashboardURL: "https://us.app.flexprice.io",
+		Enabled:       true,
+		Region:        "us",
+		APIHost:       "https://api.flexprice.io/v1",
+		APIKey:        "sk",
+		DefaultPlanID: "plan_1",
+		DashboardURL:  "https://us.app.flexprice.io",
 	}
 	with := func(mut func(*BillingConfig)) BillingConfig {
 		c := full
@@ -182,7 +182,7 @@ func TestBillingConfig_IsSelfBillingEnabled(t *testing.T) {
 		{"no host", with(func(c *BillingConfig) { c.APIHost = "" }), false},
 		{"no key", with(func(c *BillingConfig) { c.APIKey = "" }), false},
 		{"no region", with(func(c *BillingConfig) { c.Region = "" }), false},
-		{"no plan", with(func(c *BillingConfig) { c.PlanID = "" }), false},
+		{"no plan", with(func(c *BillingConfig) { c.DefaultPlanID = "" }), false},
 		{"no dashboard", with(func(c *BillingConfig) { c.DashboardURL = "" }), false},
 		{"plain http host", with(func(c *BillingConfig) { c.APIHost = "http://api.flexprice.io/v1" }), false},
 		{"relative host", with(func(c *BillingConfig) { c.APIHost = "api.flexprice.io/v1" }), false},
@@ -245,4 +245,59 @@ func TestBillingConfig_HasSecureZapierWebhookURL(t *testing.T) {
 			assert.Equal(t, tt.want, BillingConfig{ZapierWebhookURL: tt.url}.HasSecureZapierWebhookURL())
 		})
 	}
+}
+
+// TestBillingPlanIDs_FromEnv proves a comma-separated FLEXPRICE_BILLING_PLAN_IDS becomes the list of offered plans.
+func TestBillingPlanIDs_FromEnv(t *testing.T) {
+	t.Setenv("FLEXPRICE_BILLING_ENABLED", "true")
+	t.Setenv("FLEXPRICE_BILLING_DEFAULT_PLAN_ID", "plan_1")
+	t.Setenv("FLEXPRICE_BILLING_PLAN_IDS", "plan_1,plan_2")
+
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.Equal(t, []string{"plan_1", "plan_2"}, cfg.Billing.PlanIDs)
+	assert.Equal(t, "plan_1", cfg.Billing.DefaultPlanID)
+}
+
+func TestValidateEmail(t *testing.T) {
+	resend := Configuration{}
+	resend.Email.Enabled = true
+	resend.Email.Provider = "resend"
+	resend.Email.Resend.APIKey = "re_key"
+	resend.Email.Resend.WebhookSecret = "whsec_secret"
+	resend.Email.RegionTag = "us"
+	resend.Email.SenderDomain = "mail.flexprice.io"
+	resend.Email.SenderLocalPart = "invoices"
+	assert.NoError(t, resend.validateEmail())
+
+	for name, clear := range map[string]func(*Configuration){
+		"no api key":        func(c *Configuration) { c.Email.Resend.APIKey = "" },
+		"no webhook secret": func(c *Configuration) { c.Email.Resend.WebhookSecret = " " },
+		"no region tag":     func(c *Configuration) { c.Email.RegionTag = "" },
+		"no sender domain":  func(c *Configuration) { c.Email.SenderDomain = "" },
+		"unknown provider":  func(c *Configuration) { c.Email.Provider = "sendgrid" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := resend
+			clear(&cfg)
+			assert.Error(t, cfg.validateEmail())
+		})
+	}
+
+	local := Configuration{}
+	local.Email.Enabled = true
+	local.Email.Provider = "local"
+	local.Email.SenderDomain = "mail.flexprice.io"
+	local.Email.SenderLocalPart = "invoices"
+	t.Setenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS", "")
+	assert.Error(t, local.validateEmail(), "local provider must not start outside local runs")
+	t.Setenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS", "true")
+	assert.NoError(t, local.validateEmail())
+
+	// email.enabled without a provider leaves customer emails off and requires nothing.
+	off := Configuration{}
+	off.Email.Enabled = true
+	assert.NoError(t, off.validateEmail())
 }

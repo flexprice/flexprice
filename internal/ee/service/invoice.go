@@ -1984,6 +1984,19 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	}
 	recordInvoiceTransition(ctx, inv)
 
+	// Gateway links are expired only once the void is committed.
+	closeLinksCtx := types.WithoutDBTransaction(ctx)
+	closeLinks := func() {
+		if err := NewPaymentService(s.ServiceParams).(*paymentService).voidOpenPaymentLinks(closeLinksCtx, inv.ID); err != nil {
+			s.Logger.Error(closeLinksCtx, "failed to close payment links on void",
+				"error", err,
+				"invoice_id", inv.ID)
+		}
+	}
+	if !types.RegisterPostCommit(ctx, closeLinks) {
+		closeLinks()
+	}
+
 	// A voided invoice will never be paid, so a purchased-credit transaction still
 	// waiting on it must not stay pending: it blocks the wallet's auto-topup guard
 	// indefinitely and is unrecoverable without a manual DB edit.
@@ -2377,7 +2390,7 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		return false, err
 	}
 	// A reused payment that already moved on was charged or reported by an earlier run.
-	if pymnt.PaymentStatus != types.PaymentStatusInitiated && pymnt.PaymentStatus != types.PaymentStatusPending {
+	if pymnt.PaymentStatus != types.PaymentStatusInitiated {
 		return true, nil
 	}
 
@@ -2405,22 +2418,17 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 				"invoice_id", inv.ID,
 				"payment_id", pymnt.ID)
 		}
-
-		failedEvent.Reason = types.InvoicePaymentFailureReasonProviderError
-		failedEvent.PaymentID = pymnt.ID
-		failedEvent.Error = errMsg
-		s.PublishInvoicePaymentFailed(ctx, failedEvent)
 		return false, nil
 	}
 
-	processing := string(types.PaymentStatusProcessing)
+	pending := string(types.PaymentStatusPending)
 	if _, err := paymentSvc.UpdatePayment(ctx, pymnt.ID, dto.UpdatePaymentRequest{
-		PaymentStatus:    &processing,
+		PaymentStatus:    &pending,
 		GatewayPaymentID: lo.EmptyableToPtr(result.RazorpayPaymentID),
 		Amount:           &freshInv.AmountRemaining,
 	}); err != nil {
 		// The charge is submitted; the Razorpay webhook reconciles via flexprice_payment_id.
-		s.Logger.Error(ctx, "failed to mark auto-charge payment as processing",
+		s.Logger.Error(ctx, "failed to mark auto-charge payment as pending",
 			"error", err,
 			"invoice_id", inv.ID,
 			"payment_id", pymnt.ID)
@@ -3804,66 +3812,89 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 }
 
 func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePDFRequest) (string, error) {
-	id := req.InvoiceID
-
-	// get invoice
-	inv, err := s.InvoiceRepo.Get(ctx, id)
+	inv, err := s.InvoiceRepo.Get(ctx, req.InvoiceID)
 	if err != nil {
 		return "", err
 	}
 
-	if inv.InvoicePDFURL != nil {
-		return lo.FromPtr(inv.InvoicePDFURL), nil
+	src, err := s.pdfSource(ctx, inv, req.ForceGenerate)
+	if err != nil {
+		return "", err
+	}
+	if src.url != "" {
+		return src.url, nil
+	}
+	return src.store.PresignGet(ctx, src.key, src.presignExpiry)
+}
+
+// invoicePDFSource is where an invoice's PDF lives: a link from the invoice or its billing
+// provider, or Flexprice's stored copy at key (data is set when it was just rendered).
+type invoicePDFSource struct {
+	url           string
+	store         storage.Storage
+	key           string
+	presignExpiry time.Duration
+	data          []byte
+}
+
+// pdfSource resolves the invoice's PDF in order: its own link, its billing provider's, then
+// Flexprice's stored copy, rendered and uploaded only when missing or forced.
+func (s *invoiceService) pdfSource(ctx context.Context, inv *invoice.Invoice, forceGenerate bool) (*invoicePDFSource, error) {
+	if url := lo.FromPtr(inv.InvoicePDFURL); url != "" {
+		return &invoicePDFSource{url: url}, nil
 	}
 
-	if url, err := s.billingProviderPDFURL(ctx, id); err == nil && url != "" {
-		return url, nil
+	if url, err := s.billingProviderPDFURL(ctx, inv.ID); err == nil && url != "" {
+		return &invoicePDFSource{url: url}, nil
 	}
 
 	store, err := s.StorageResolver.ForPlatform(ctx, storage.PurposeInvoice)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	bc, err := s.StorageResolver.BucketConfigFor(storage.PurposeInvoice)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	key := storage.ObjectKey(bc.KeyPrefix, "", fmt.Sprintf("%s/%s", inv.TenantID, id), "pdf", false)
 
 	presignExpiry, parseErr := time.ParseDuration(bc.PresignExpiryDuration)
 	if parseErr != nil {
-		return "", ierr.WithError(parseErr).
+		return nil, ierr.WithError(parseErr).
 			WithHint("Invalid invoice PDF presign expiry duration").
 			Mark(ierr.ErrValidation)
 	}
 
-	if !req.ForceGenerate {
-		exists, err := store.Exists(ctx, key)
+	src := &invoicePDFSource{
+		store:         store,
+		key:           storage.ObjectKey(bc.KeyPrefix, "", fmt.Sprintf("%s/%s", inv.TenantID, inv.ID), "pdf", false),
+		presignExpiry: presignExpiry,
+	}
+
+	if !forceGenerate {
+		exists, err := store.Exists(ctx, src.key)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if exists {
-			return store.PresignGet(ctx, key, presignExpiry)
+			return src, nil
 		}
 	}
 
-	data, err := s.GetInvoicePDF(ctx, dto.InvoicePDFRequest{InvoiceID: id})
+	src.data, err = s.GetInvoicePDF(ctx, dto.InvoicePDFRequest{InvoiceID: inv.ID})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	_, err = store.Upload(ctx, &storage.UploadRequest{
-		Key:    key,
-		Data:   data,
+		Key:    src.key,
+		Data:   src.data,
 		Format: storage.UploadFormatPDF,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	return store.PresignGet(ctx, key, presignExpiry)
+	return src, nil
 }
 
 // billingProviderPDFURL returns the enabled billing provider's own rendering of

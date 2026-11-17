@@ -47,6 +47,7 @@ func (c *remoteClient) summaryPlan(ctx context.Context, extID string) (*remoteSu
 		plan, err := c.subscribedPlan(ctx, details, clock.Now())
 		return &remoteSubscription{
 			id:       sub.id,
+			planID:   sub.planID,
 			status:   types.SubscriptionStatus(lo.FromPtr(details.SubscriptionStatus)),
 			trialEnd: details.TrialEnd,
 		}, plan, err
@@ -56,8 +57,62 @@ func (c *remoteClient) summaryPlan(ctx context.Context, extID string) (*remoteSu
 		WithHint("The subscription changed; reload the billing summary").Mark(ierr.ErrInvalidOperation)
 }
 
+// offeredPlanIDs lists the default plan first, then the other offered plans in configured order.
+func (c *remoteClient) offeredPlanIDs() []string {
+	ids := make([]string, 0, len(c.planIDs))
+	if lo.Contains(c.planIDs, c.defaultPlanID) {
+		ids = append(ids, c.defaultPlanID)
+	}
+	for _, id := range c.planIDs {
+		if id != c.defaultPlanID {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// offeredPlan is the default plan's offer: what a tenant with no live subscription is shown.
 func (c *remoteClient) offeredPlan(ctx context.Context) (*dto.SelfBillingPlanResponse, error) {
-	resp, err := c.sdk.Plans.GetPlan(ctx, c.planID)
+	return c.offeredPlanByID(ctx, c.defaultPlanID)
+}
+
+// offeredPlans loads every plan a tenant may buy in one search. The default plan is first.
+func (c *remoteClient) offeredPlans(ctx context.Context) ([]*dto.SelfBillingPlanResponse, error) {
+	ids := c.offeredPlanIDs()
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	resp, err := c.sdk.Plans.QueryPlan(ctx, sdktypes.PlanFilter{
+		PlanIds: ids,
+		Expand:  lo.ToPtr(string(types.ExpandPrices)),
+		Limit:   lo.ToPtr(int64(len(ids))),
+	})
+	if err != nil {
+		return nil, cloudErr(err)
+	}
+	if resp.ListPlansResponse == nil {
+		return nil, unreadablePricing()
+	}
+
+	byID := lo.KeyBy(resp.ListPlansResponse.Items, func(plan sdktypes.PlanResponse) string { return lo.FromPtr(plan.ID) })
+	out := make([]*dto.SelfBillingPlanResponse, 0, len(ids))
+	for _, id := range ids {
+		plan, ok := byID[id]
+		if !ok {
+			return nil, unreadablePricing()
+		}
+		offer, err := c.planOffer(ctx, &plan)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, offer)
+	}
+	return out, nil
+}
+
+func (c *remoteClient) offeredPlanByID(ctx context.Context, planID string) (*dto.SelfBillingPlanResponse, error) {
+	resp, err := c.sdk.Plans.GetPlan(ctx, planID)
 	if err != nil {
 		return nil, cloudErr(err)
 	}
@@ -67,6 +122,11 @@ func (c *remoteClient) offeredPlan(ctx context.Context) (*dto.SelfBillingPlanRes
 		return nil, unreadablePricing()
 	}
 
+	return c.planOffer(ctx, plan)
+}
+
+func (c *remoteClient) planOffer(ctx context.Context, plan *sdktypes.PlanResponse) (*dto.SelfBillingPlanResponse, error) {
+	var err error
 	out := newSummaryPlan(plan)
 	now := clock.Now()
 	meters := make(map[string]*sdktypes.MeterResponse)

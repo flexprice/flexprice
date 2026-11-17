@@ -100,16 +100,16 @@ func (h *OAuthHandler) InitiateOAuth(c *gin.Context) {
 		ExpiresAt:       clock.Now().Add(service.OAuthSessionTTL),
 	}
 
-	// Store session in cache (credentials will be encrypted)
-	if err := h.oauthService.StoreOAuthSession(ctx, session); err != nil {
+	// Build URL first so failures store nothing
+	clientID := req.Credentials[types.OAuthCredentialClientID]
+	oauthURL, err := h.oauthService.BuildOAuthURL(provider, clientID, h.redirectURI, csrfState, req.Metadata)
+	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	// Build provider-specific OAuth URL
-	clientID := req.Credentials[types.OAuthCredentialClientID]
-	oauthURL, err := h.oauthService.BuildOAuthURL(provider, clientID, h.redirectURI, csrfState, req.Metadata)
-	if err != nil {
+	// Store session in cache (credentials will be encrypted)
+	if err := h.oauthService.StoreOAuthSession(ctx, session); err != nil {
 		c.Error(err)
 		return
 	}

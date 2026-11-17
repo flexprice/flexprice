@@ -386,6 +386,7 @@ func (f *Factory) GetChargebeeIntegration(ctx context.Context) (*ChargebeeIntegr
 		PriceRepo:                    f.priceRepo,
 		PlanSyncSvc:                  planSyncSvc,
 		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
+		PaymentService:               f.paymentService,
 		Logger:                       f.logger,
 	})
 
