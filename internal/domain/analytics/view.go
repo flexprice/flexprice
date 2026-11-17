@@ -207,6 +207,9 @@ func (v ViewDefinition) validateBilling() error {
 		if f == nil {
 			continue
 		}
+		if f.Field == FilterCustomerStatus && slices.Contains(bm.Dimensions, "customer_id") {
+			continue
+		}
 		if !slices.Contains(bm.Dimensions, f.Field) {
 			return ierr.NewErrorf("illegal filter field %q for metric %q", f.Field, bm.Metric).Mark(ierr.ErrValidation)
 		}
