@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"time"
@@ -479,10 +480,9 @@ func (s *PortalWalletSuite) enableAutoCompletePurchasedCredit() {
 }
 
 func (s *PortalWalletSuite) TestUpdateCustomerIgnoresSettings() {
-	resp, err := s.svc.UpdateCustomer(s.ctx, dto.UpdateCustomerRequest{
-		Name:     lo.ToPtr("Renamed"),
-		Settings: &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{GracePeriodDays: lo.ToPtr(90)}},
-	})
+	var req dto.PortalUpdateCustomerRequest
+	s.Require().NoError(json.Unmarshal([]byte(`{"name":"Renamed","settings":{"subscription_config":{"grace_period_days":90}}}`), &req))
+	resp, err := s.svc.UpdateCustomer(s.ctx, req)
 	s.Require().NoError(err)
 	s.Equal("Renamed", resp.Customer.Name)
 	s.Nil(resp.Customer.Settings)
