@@ -58,8 +58,20 @@ func sequentialWindows(grants ...*entitlementgrant.EntitlementGrant) []*entitlem
 	return grants
 }
 
-// wholeCycle is a line window wider than every test grant: a single line, so each grant bills its saved overage.
-var wholeCycle = TimeInterval{Start: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), End: time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)}
+// grantSpan is a single line window from the first grant's start to the last grant's end, so each grant
+// bills its saved overage and, when the grants tile it, nothing falls outside them.
+func grantSpan(grants []*entitlementgrant.EntitlementGrant) TimeInterval {
+	var span TimeInterval
+	for i, g := range grants {
+		if i == 0 || g.ValidFrom.Before(span.Start) {
+			span.Start = g.ValidFrom
+		}
+		if i == 0 || g.ValidTo.After(span.End) {
+			span.End = g.ValidTo
+		}
+	}
+	return span
+}
 
 func newTestPriceService() PriceService {
 	return &priceService{ServiceParams: ServiceParams{Logger: newTestLogger()}}
@@ -131,7 +143,7 @@ func TestAdjustMeterUsageGrants_NoGrants(t *testing.T) {
 	bs := newTestBillingService()
 	li := linItem(false, false)
 	c := charge(flatPrice(0.01))
-	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, nil, newTestPriceService(), nil, nil, nil, nil, wholeCycle)
+	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, nil, newTestPriceService(), nil, nil, nil, nil, TimeInterval{})
 	if applied {
 		t.Fatalf("empty grants should not be applied")
 	}
@@ -159,7 +171,7 @@ func TestAdjustMeterUsageGrants_QuantityLane_SumOfOverages(t *testing.T) {
 		makeGrant(50, 60, types.EntitlementGrantMeasureQuantity),   // overage 10
 	)
 
-	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, wholeCycle)
+	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, grantSpan(grants))
 	if !applied {
 		t.Fatalf("expected applied=true for qty grants")
 	}
@@ -187,7 +199,7 @@ func TestAdjustMeterUsageGrants_AmountLane_FlatPricingAccepted(t *testing.T) {
 	grants := []*entitlementgrant.EntitlementGrant{
 		makeGrant(100, 250, types.EntitlementGrantMeasureAmount), // overage 150
 	}
-	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, wholeCycle)
+	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, grantSpan(grants))
 	if !applied {
 		t.Fatalf("expected applied=true for flat-priced amount grants")
 	}
@@ -211,7 +223,7 @@ func TestAdjustMeterUsageGrants_AmountLane_TieredPriceGuardRejects(t *testing.T)
 	grants := []*entitlementgrant.EntitlementGrant{
 		makeGrant(100, 250, types.EntitlementGrantMeasureAmount),
 	}
-	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, wholeCycle)
+	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, grantSpan(grants))
 	if applied {
 		t.Fatalf("tiered price must reject amount-lane grants")
 	}
@@ -228,7 +240,7 @@ func TestAdjustMeterUsageGrants_AmountLane_LineItemCommitmentGuardRejects(t *tes
 	grants := []*entitlementgrant.EntitlementGrant{
 		makeGrant(100, 200, types.EntitlementGrantMeasureAmount),
 	}
-	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, wholeCycle)
+	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, grantSpan(grants))
 	if applied {
 		t.Fatalf("committed line item must reject amount-lane grants")
 	}
@@ -241,7 +253,7 @@ func TestAdjustMeterUsageGrants_AmountLane_TrueUpGuardRejects(t *testing.T) {
 	grants := []*entitlementgrant.EntitlementGrant{
 		makeGrant(100, 200, types.EntitlementGrantMeasureAmount),
 	}
-	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, wholeCycle)
+	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, grantSpan(grants))
 	if applied {
 		t.Fatalf("true-up enabled must reject amount-lane grants")
 	}
@@ -257,7 +269,7 @@ func TestAdjustMeterUsageGrants_QuantityLane_TieredPriceGuardRejects(t *testing.
 	grants := []*entitlementgrant.EntitlementGrant{
 		makeGrant(100, 250, types.EntitlementGrantMeasureQuantity),
 	}
-	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, wholeCycle)
+	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, grantSpan(grants))
 	if applied {
 		t.Fatalf("tiered price must reject quantity-lane grants too")
 	}
@@ -276,7 +288,7 @@ func TestAdjustMeterUsageGrants_NonAdditiveAggregationGuardRejects(t *testing.T)
 		makeGrant(100, 250, types.EntitlementGrantMeasureQuantity),
 	}
 	m := &meter.Meter{ID: "meter_max", Aggregation: meter.Aggregation{Type: types.AggregationMax}}
-	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), m, nil, nil, nil, wholeCycle)
+	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), m, nil, nil, nil, grantSpan(grants))
 	if applied {
 		t.Fatalf("MAX aggregation must reject grant folding")
 	}
@@ -295,7 +307,7 @@ func TestAdjustMeterUsageGrants_BucketedMeterGuardRejects(t *testing.T) {
 		makeGrant(100, 250, types.EntitlementGrantMeasureQuantity),
 	}
 	m := &meter.Meter{ID: "meter_bucketed", Aggregation: meter.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeHour}}
-	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), m, nil, nil, nil, wholeCycle)
+	_, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), m, nil, nil, nil, grantSpan(grants))
 	if applied {
 		t.Fatalf("bucketed meter must reject grant folding")
 	}
@@ -368,7 +380,7 @@ func TestAdjustMeterUsageGrants_MergedWindows_DisjointWindowsBothBill(t *testing
 	li := linItem(false, false)
 	c := charge(flatPrice(1))
 
-	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), m, nil, []string{"cust_ext"}, nil, wholeCycle)
+	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), m, nil, []string{"cust_ext"}, nil, grantSpan(grants))
 	if !applied {
 		t.Fatalf("expected applied=true")
 	}
@@ -398,7 +410,7 @@ func TestAdjustMeterUsageGrants_MergedWindows_OverlapBillsOnce(t *testing.T) {
 	li := linItem(false, false)
 	c := charge(flatPrice(1))
 
-	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), m, nil, []string{"cust_ext"}, nil, wholeCycle)
+	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), m, nil, []string{"cust_ext"}, nil, grantSpan(grants))
 	if !applied {
 		t.Fatalf("expected applied=true")
 	}
@@ -431,7 +443,7 @@ func TestAdjustMeterUsageGrants_MergedWindows_SignedUsage(t *testing.T) {
 				makeCrossedGrant("ec_b", 120, 150, unionT0, unionT0.Add(time.Hour), cross),
 			}
 			c := charge(flatPrice(2))
-			res, applied, err := bs.adjustMeterUsageGrants(context.Background(), linItem(false, false), c, grants, newTestPriceService(), m, nil, []string{"cust_ext"}, nil, wholeCycle)
+			res, applied, err := bs.adjustMeterUsageGrants(context.Background(), linItem(false, false), c, grants, newTestPriceService(), m, nil, []string{"cust_ext"}, nil, grantSpan(grants))
 			if err != nil || !applied {
 				t.Fatalf("applied = %v, err = %v; want true, nil", applied, err)
 			}
@@ -457,7 +469,7 @@ func TestAdjustMeterUsageGrants_MeasurementFailurePropagates(t *testing.T) {
 		makeCrossedGrant("ec_a", 10, 150, unionT0, unionT0.Add(time.Hour), cross),
 		makeCrossedGrant("ec_b", 100, 150, unionT0, unionT0.Add(24*time.Hour), cross),
 	}
-	_, applied, err := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, wholeCycle)
+	_, applied, err := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, grantSpan(grants))
 	if err == nil {
 		t.Fatalf("expected measurement error to propagate")
 	}
@@ -477,7 +489,7 @@ func TestAdjustMeterUsageGrants_MultiEC_NothingCrossed_QueryFree(t *testing.T) {
 		makeSlotGrant("ec_a", 100, 150, types.EntitlementGrantMeasureQuantity), // over quota, crossing not recorded yet
 		makeSlotGrant("ec_b", 200, 40, types.EntitlementGrantMeasureQuantity),
 	}
-	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, wholeCycle)
+	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, grantSpan(grants))
 	if !applied {
 		t.Fatalf("expected applied=true")
 	}
@@ -499,7 +511,7 @@ func TestAdjustMeterUsageGrants_AllUnderQuota_ZerosBillable(t *testing.T) {
 		makeGrant(100, 40, types.EntitlementGrantMeasureQuantity),
 		makeGrant(200, 100, types.EntitlementGrantMeasureQuantity),
 	}
-	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, wholeCycle)
+	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil, nil, grantSpan(grants))
 	if !applied {
 		t.Fatalf("expected applied=true (grants exist even if no overage)")
 	}
@@ -930,16 +942,17 @@ func windowedGrant(quota, usage int64, from, to time.Time, measure types.Entitle
 	return g
 }
 
-// billSplit runs the grant fold once per line and returns each line's overage.
+// billSplit runs the grant fold once per line and returns each line's billed amount (price is 1 per unit).
 func billSplit(t *testing.T, bs *billingService, m *meter.Meter, grants []*entitlementgrant.EntitlementGrant, lines []lineUsage) []decimal.Decimal {
 	t.Helper()
 	out := make([]decimal.Decimal, 0, len(lines))
 	for _, l := range lines {
-		res, applied, err := bs.adjustMeterUsageGrants(context.Background(), linItem(false, false), charge(flatPrice(1)), grants,
+		c := charge(flatPrice(1))
+		_, applied, err := bs.adjustMeterUsageGrants(context.Background(), linItem(false, false), c, grants,
 			newTestPriceService(), m, nil, []string{"cust_ext"}, lines, TimeInterval{Start: l.start, End: l.end})
 		require.NoError(t, err)
 		require.True(t, applied)
-		out = append(out, res.Overage)
+		out = append(out, c.AmountDecimal())
 	}
 	return out
 }
@@ -988,13 +1001,13 @@ func TestAdjustMeterUsageGrants_SplitLines_GrantStartingMidPeriodQueriesTheCut(t
 		at  time.Time
 		qty int64
 	}{
-		{splitT0.Add(24 * time.Hour), 400}, // before the grant, never counted
+		{splitT0.Add(24 * time.Hour), 400}, // before the grant: no grant covers it, billed in full on line A
 		{from.Add(24 * time.Hour), 700},
 		{splitChange.Add(24 * time.Hour), 500},
 	})
 	grant := windowedGrant(1000, 1200, from, splitT2, types.EntitlementGrantMeasureQuantity)
 	got := billSplit(t, bs, m, []*entitlementgrant.EntitlementGrant{grant}, splitLines(1100, 500))
-	require.True(t, got[0].IsZero(), "line A: %s, want 0", got[0])
+	require.True(t, got[0].Equal(decimal.NewFromInt(400)), "line A: %s, want 400 (usage before the grant)", got[0])
 	require.True(t, got[1].Equal(decimal.NewFromInt(200)), "line B: %s, want 200", got[1])
 }
 
@@ -1083,13 +1096,57 @@ func TestLineUsageByMeter(t *testing.T) {
 	}
 }
 
-func TestAdjustMeterUsageGrants_UnlimitedGrantNeverMeasured(t *testing.T) {
-	// A straddling unlimited grant would need a ClickHouse cut; nil meter proves none is read.
+func TestAdjustMeterUsageGrants_UnlimitedGrantCoversOnlyItsWindow(t *testing.T) {
+	// The unlimited Nov 15 grant makes its day free; usage on other days has no grant and bills in full.
 	day := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
+	bs, m := newMergedWindowBillingService(t, []struct {
+		at  time.Time
+		qty int64
+	}{
+		{splitT0.Add(24 * time.Hour), 100},
+		{day.Add(2 * time.Hour), 300},
+		{day.Add(16 * time.Hour), 200},
+		{splitT2.Add(-24 * time.Hour), 70},
+	})
 	g := windowedGrant(0, 500, day, day.Add(24*time.Hour), types.EntitlementGrantMeasureQuantity)
 	g.Unlimited = true
-	got := billSplit(t, newTestBillingService(), nil, []*entitlementgrant.EntitlementGrant{g}, splitLines(300, 200))
-	require.True(t, got[0].IsZero() && got[1].IsZero(), "overage %v, want zero on both lines", got)
+	got := billSplit(t, bs, m, []*entitlementgrant.EntitlementGrant{g}, splitLines(400, 270))
+	require.True(t, got[0].Equal(decimal.NewFromInt(100)), "line A: %s, want 100", got[0])
+	require.True(t, got[1].Equal(decimal.NewFromInt(70)), "line B: %s, want 70", got[1])
+}
+
+func TestAdjustMeterUsageGrants_UsageOutsideGrantWindowsBills(t *testing.T) {
+	// FLE-1830: two daily grants with a gap day between them and nothing after the second.
+	// Usage in no window has no grant to cover it, so it bills at the line price next to the overage.
+	d1 := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
+	d3 := d1.Add(48 * time.Hour)
+	bs, m := newMergedWindowBillingService(t, []struct {
+		at  time.Time
+		qty int64
+	}{
+		{d1.Add(time.Hour), 120},           // day 1: quota 100, overage 20
+		{d1.Add(30 * time.Hour), 45},       // gap day, no grant
+		{d3.Add(time.Hour), 90},            // day 3: under quota
+		{splitT2.Add(-24 * time.Hour), 15}, // after the last grant
+		{splitT0.Add(time.Hour), 10},       // before the first grant
+	})
+	grants := []*entitlementgrant.EntitlementGrant{
+		windowedGrant(100, 120, d1, d1.Add(24*time.Hour), types.EntitlementGrantMeasureQuantity),
+		windowedGrant(100, 90, d3, d3.Add(24*time.Hour), types.EntitlementGrantMeasureQuantity),
+	}
+	got := billSplit(t, bs, m, grants, []lineUsage{{start: splitT0, end: splitT2, usage: decimal.NewFromInt(280)}})
+	require.True(t, got[0].Equal(decimal.NewFromInt(90)), "billed %s, want 90 (20 overage + 10 + 45 + 15 outside)", got[0])
+}
+
+func TestAdjustMeterUsageGrants_GrantsCoveringTheLineNeverQueryOutside(t *testing.T) {
+	// Back-to-back grants tile the line: nothing is outside, so nil meter proves no ClickHouse read.
+	mid := splitT0.Add(10 * 24 * time.Hour)
+	grants := []*entitlementgrant.EntitlementGrant{
+		windowedGrant(100, 150, splitT0, mid, types.EntitlementGrantMeasureQuantity),
+		windowedGrant(100, 80, mid, splitT2, types.EntitlementGrantMeasureQuantity),
+	}
+	got := billSplit(t, newTestBillingService(), nil, grants, []lineUsage{{start: splitT0, end: splitT2, usage: decimal.NewFromInt(230)}})
+	require.True(t, got[0].Equal(decimal.NewFromInt(50)), "billed %s, want 50", got[0])
 }
 
 // Events that land after the last alert evaluation reach a feature grant's stored usage before billing.
