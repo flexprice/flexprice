@@ -44,6 +44,25 @@ type RedirectionParams struct {
 	CancelURL  *string `json:"cancel_url,omitempty"`
 }
 
+// Validate checks each set URL is https (http only for localhost).
+func (p RedirectionParams) Validate() error {
+	for name, raw := range map[string]*string{
+		"success_url": p.SuccessURL,
+		"failure_url": p.FailureURL,
+		"cancel_url":  p.CancelURL,
+	} {
+		if raw == nil || *raw == "" {
+			continue
+		}
+		if !isValidURL(*raw) {
+			return ierr.NewError("invalid " + name).
+				WithHint(name + " must be an absolute https URL").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
 // CheckoutParams is the reusable checkout opt-in payload shared by
 // create-session, payment-gated subscription modify, and wallet top-up.
 type CheckoutParams struct {
@@ -59,6 +78,9 @@ func (p *CheckoutParams) Validate() error {
 		return nil
 	}
 	if err := p.EntityCreationOptions.Validate(); err != nil {
+		return err
+	}
+	if err := p.RedirectionParams.Validate(); err != nil {
 		return err
 	}
 	return p.PaymentParams.Validate()
@@ -350,16 +372,22 @@ type CheckoutSessionResponse struct {
 // ListCheckoutSessionsResponse is the paginated list response.
 type ListCheckoutSessionsResponse = types.ListResponse[*CheckoutSessionResponse]
 
+// IsAutoCharge reports whether an open session was charged off-session: unlike links, an auto-charge has no payment URL.
+func (r *CheckoutSessionResponse) IsAutoCharge() bool {
+	return r != nil && !r.Terminal && r.PaymentAction == nil
+}
+
 // ToCheckoutSessionResponse maps a domain session to its API response.
 //
-// PaymentAction is derived from ProviderResult; the raw ProviderResult is never
+// PaymentAction is derived from ProviderResult and only shown while the session is open,
+// so a finished session never hands out a payable URL. The raw ProviderResult is never
 // exposed because it holds gateway session identifiers. Configuration, Result and
 // PaymentProviderConfig are likewise internal and have no field here.
 func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessionResponse {
 	if s == nil {
 		return nil
 	}
-	return &CheckoutSessionResponse{
+	resp := &CheckoutSessionResponse{
 		ID:                s.ID,
 		CustomerID:        s.CustomerID,
 		Action:            s.Action,
@@ -378,7 +406,10 @@ func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessi
 		Metadata:          s.Metadata,
 		CreatedAt:         s.CreatedAt,
 		UpdatedAt:         s.UpdatedAt,
-		PaymentAction:     s.ProviderResult.ToProviderResult().PaymentAction(),
 		Terminal:          s.CheckoutStatus.IsTerminal(),
 	}
+	if !resp.Terminal {
+		resp.PaymentAction = s.ProviderResult.ToProviderResult().PaymentAction()
+	}
+	return resp
 }

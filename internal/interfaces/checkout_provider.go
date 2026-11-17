@@ -93,7 +93,8 @@ type CheckoutProviderRequest struct {
 	LineItems  []CheckoutLineItem
 	// ExpiresAt is when the hosted object should stop accepting payments. Providers
 	// that cannot express this ignore it.
-	ExpiresAt *time.Time
+	ExpiresAt      *time.Time
+	NotifyCustomer bool
 }
 
 // CheckoutLineItem itemises what is being charged. Providers that can only carry a
@@ -109,11 +110,12 @@ type CheckoutLineItem struct {
 
 // CheckoutProviderResponse is the unified output from all checkout provider adapters.
 type CheckoutProviderResponse struct {
-	ProviderSessionID       string              // stored in EntityIntegrationMapping
-	NextAction              types.PaymentAction // type + URL for the customer
-	ProviderPaymentIntentID string              // charge/intent ID, stored after payment confirmation
-	ExpiresAt               *time.Time          // nil if provider doesn't return expiry
-	ProviderMetadata        map[string]string   // debug data only, not for business logic
+	ProviderSessionID       string                  // stored in EntityIntegrationMapping
+	NextAction              types.PaymentAction     // type + URL for the customer
+	ProviderPaymentIntentID string                  // charge/intent ID, stored after payment confirmation
+	ExpiresAt               *time.Time              // nil if provider doesn't return expiry
+	ProviderMetadata        map[string]string       // debug data only, not for business logic
+	PaymentMethod           types.PaymentMethodType // method a saved-method charge used
 }
 
 // AuthorizationLinkRequest is the unified input for mandate/authorization
@@ -134,6 +136,7 @@ type AuthorizationLinkRequest struct {
 	CancelURL       string
 	Metadata        map[string]string
 	LineItems       []CheckoutLineItem
+	NotifyCustomer  bool
 }
 
 // HasAutoChargeableMethodRequest is the input for checking if a customer has
@@ -154,6 +157,7 @@ type ProviderPaymentMethod struct {
 	// Card is set only for card methods; nil for UPI, ACH and the rest.
 	Card                *ProviderCardDetails
 	UPI                 *ProviderUPIDetails
+	BankAccount         *ProviderBankAccountDetails
 	Recurring           *ProviderRecurringPaymentDetails
 	InstantlyChargeable bool
 	// IsDefault is the gateway's own default/primary flag, which is what decides
@@ -183,8 +187,18 @@ type ProviderUPIDetails struct {
 	VPA string
 }
 
+// ProviderBankAccountDetails is the displayable part of a bank-account mandate.
+type ProviderBankAccountDetails struct {
+	Bank        string
+	IFSC        string
+	Last4       string
+	AccountType string
+	AuthType    string
+}
+
 type ProviderRecurringPaymentDetails struct {
 	Status             types.RecurringPaymentStatus
+	FailureReason      string
 	AutoChargeableTill *time.Time
 	MaxAmount          *decimal.Decimal
 }

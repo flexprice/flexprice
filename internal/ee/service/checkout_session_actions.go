@@ -116,21 +116,22 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		return nil, err
 	}
 
-	req := interfaces.CheckoutProviderRequest{
-		InvoiceID:  *session.CheckoutInvoiceID,
-		CustomerID: session.CustomerID,
-		Amount:     payResp.Amount,
-		Currency:   payResp.Currency,
-		PaymentID:  payResp.ID,
-		SuccessURL: lo.FromPtr(session.SuccessURL),
-		FailureURL: lo.FromPtr(session.FailureURL),
-		CancelURL:  lo.FromPtr(session.CancelURL),
-		Metadata:   session.Metadata,
-		ExpiresAt:  &linkExpiresAt,
-		LineItems:  checkoutLineItemsFor(inv),
-	}
-
 	cfg := lo.FromPtr(session.PaymentProviderConfig.ToCheckoutPaymentProviderConfig())
+
+	req := interfaces.CheckoutProviderRequest{
+		InvoiceID:      *session.CheckoutInvoiceID,
+		CustomerID:     session.CustomerID,
+		Amount:         payResp.Amount,
+		Currency:       payResp.Currency,
+		PaymentID:      payResp.ID,
+		SuccessURL:     lo.FromPtr(session.SuccessURL),
+		FailureURL:     lo.FromPtr(session.FailureURL),
+		CancelURL:      lo.FromPtr(session.CancelURL),
+		Metadata:       session.Metadata,
+		ExpiresAt:      &linkExpiresAt,
+		LineItems:      checkoutLineItemsFor(inv),
+		NotifyCustomer: cfg.NotifyCustomer,
+	}
 
 	var resp *interfaces.CheckoutProviderResponse
 
@@ -158,6 +159,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			CancelURL:       req.CancelURL,
 			Metadata:        req.Metadata,
 			LineItems:       req.LineItems,
+			NotifyCustomer:  req.NotifyCustomer,
 		}
 
 		// Prefer an existing confirmed token (off-session). If none / amount above
@@ -168,7 +170,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			resp = chargedResp
 			// The debit lands after the settlement window, so the session must outlive it
 			// or the late capture is refunded.
-			if settleBy := clock.Now().Add(session.PaymentProvider.SavedMethodSettlement()); settleBy.After(session.ExpiresAt) {
+			if settleBy := clock.Now().Add(session.PaymentProvider.SavedMethodSettlement(chargedResp.PaymentMethod)); settleBy.After(session.ExpiresAt) {
 				session.ExpiresAt = settleBy
 			}
 			break
@@ -180,6 +182,17 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		if cfg.CustomerNotPresent {
 			return nil, ierr.NewError("no saved payment method could be charged").
 				WithHint("The customer has no payment method that can be charged automatically").
+				WithReportableDetails(map[string]any{
+					"customer_id": req.CustomerID,
+					"invoice_id":  req.InvoiceID,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		// eNACH mandates are set up through setup intents, never at checkout.
+		if cfg.PaymentMethod == types.PaymentMethodTypeENACH {
+			return nil, ierr.NewError("no active eNACH mandate covers this amount").
+				WithHint("No active eNACH mandate covers this amount. Set one up first.").
 				WithReportableDetails(map[string]any{
 					"customer_id": req.CustomerID,
 					"invoice_id":  req.InvoiceID,

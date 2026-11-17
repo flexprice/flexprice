@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/samber/lo"
 
 	"github.com/lib/pq"
 
@@ -829,6 +830,9 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.DestinationID != nil {
 		query = query.Where(payment.DestinationID(*f.DestinationID))
 	}
+	if len(f.DestinationIDs) > 0 {
+		query = query.Where(payment.DestinationIDIn(f.DestinationIDs...))
+	}
 
 	// Apply payment method type filter if specified
 	if f.PaymentMethodType != nil {
@@ -838,6 +842,9 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	// Apply payment status filter if specified
 	if f.PaymentStatus != nil {
 		query = query.Where(payment.PaymentStatus(*f.PaymentStatus))
+	}
+	if len(f.PaymentStatuses) > 0 {
+		query = query.Where(payment.PaymentStatusIn(lo.Map(f.PaymentStatuses, func(s types.PaymentStatus, _ int) string { return string(s) })...))
 	}
 
 	// Apply payment gateway filter if specified

@@ -326,7 +326,7 @@ func (s *stripeSubscriptionService) createOrFindCustomer(ctx context.Context, st
 
 	createReq := dto.CreateCustomerRequest{
 		ExternalID: externalID,
-		Name:       stripeSub.Customer.Name,
+		Name:       lo.CoalesceOrEmpty(stripeSub.Customer.Name, stripeSub.Customer.Email),
 		Email:      stripeSub.Customer.Email,
 		Metadata: map[string]string{
 			"stripe_customer_id": stripeCustomerID,

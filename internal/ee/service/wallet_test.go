@@ -615,6 +615,13 @@ func (s *WalletServiceSuite) setupWallet() {
 }
 
 func (s *WalletServiceSuite) TestCreateWallet() {
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), &customer.Customer{
+		ID:         "customer-2",
+		ExternalID: "ext-customer-2",
+		Name:       "Customer Two",
+		Email:      "c2@test.com",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}))
 	// Test successful wallet creation with CustomerID
 	req := &dto.CreateWalletRequest{
 		CustomerID: "customer-2",
@@ -4598,8 +4605,16 @@ func (s *WalletServiceSuite) TestCreateWallet_CustomCurrencyEnforcement() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
+			custID := s.GetUUID()
+			s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), &customer.Customer{
+				ID:         custID,
+				ExternalID: "ext-" + custID,
+				Name:       "Currency Customer",
+				Email:      "currency@test.com",
+				BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+			}))
 			resp, err := s.service.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
-				CustomerID: s.GetUUID(),
+				CustomerID: custID,
 				Currency:   tt.currency,
 			})
 			if tt.wantErr {
@@ -4608,6 +4623,160 @@ func (s *WalletServiceSuite) TestCreateWallet_CustomCurrencyEnforcement() {
 			}
 			s.NoError(err)
 			s.Equal(tt.currency, resp.Currency)
+		})
+	}
+}
+
+// setTenantWalletAlertConfig stores the tenant's wallet_balance_alert_config.
+func (s *CheckWalletBalanceAlertSuite) setTenantWalletAlertConfig(cfg types.AlertSettings) {
+	value, err := utils.ToMap(cfg)
+	s.NoError(err)
+	s.NoError(s.GetStores().SettingsRepo.Create(s.GetContext(), &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeyWalletBalanceAlertConfig,
+		Value:         value,
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	}))
+}
+
+// tieredBelow is warning at 100 and critical at 0, both "below", switched on.
+func tieredBelow() types.AlertSettings {
+	return types.AlertSettings{
+		AlertEnabled: lo.ToPtr(true),
+		Warning:      &types.AlertThreshold{Threshold: decimal.NewFromInt(100), Condition: types.AlertConditionBelow},
+		Critical:     &types.AlertThreshold{Threshold: decimal.Zero, Condition: types.AlertConditionBelow},
+	}
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_TenantThresholds() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	w := s.makeWallet("wallet_status_tenant", decimal.NewFromInt(500), nil, nil)
+
+	tests := []struct {
+		name    string
+		balance decimal.Decimal
+		want    types.AlertState
+	}{
+		{name: "above the warning threshold is ok", balance: decimal.NewFromInt(101), want: types.AlertStateOk},
+		{name: "exactly the warning threshold is a warning", balance: decimal.NewFromInt(100), want: types.AlertStateWarning},
+		{name: "between the thresholds is a warning", balance: decimal.NewFromInt(40), want: types.AlertStateWarning},
+		{name: "zero is in alarm", balance: decimal.Zero, want: types.AlertStateInAlarm},
+		{name: "a negative balance is in alarm", balance: decimal.NewFromInt(-5), want: types.AlertStateInAlarm},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			got, err := s.service.BalanceAlertStatus(s.GetContext(), w, tt.balance, tt.balance)
+			s.NoError(err)
+			s.Require().NotNil(got)
+			s.Equal(tt.want, *got)
+		})
+	}
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_TenantAlertsOff_Nil() {
+	cfg := tieredBelow()
+	cfg.AlertEnabled = lo.ToPtr(false)
+	s.setTenantWalletAlertConfig(cfg)
+	// The wallet's own settings are on, but the tenant switch gates every wallet,
+	// as it does for the alert pipeline.
+	w := s.makeWallet("wallet_status_off", decimal.Zero, s.enabledAlertSettings(decimal.NewFromInt(10)), nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+	s.Nil(got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_NeverConfigured_Nil() {
+	// The default config is off, with a critical threshold of "below 0" sitting there.
+	w := s.makeWallet("wallet_status_default", decimal.Zero, nil, nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+	s.Nil(got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_WalletSettingsWin() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	// Critical at 50 on the wallet itself: 40 is in alarm here, a warning by the tenant's.
+	w := s.makeWallet("wallet_status_own", decimal.NewFromInt(40), s.enabledAlertSettings(decimal.NewFromInt(50)), nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(40), decimal.NewFromInt(40))
+	s.NoError(err)
+	s.Require().NotNil(got)
+	s.Equal(types.AlertStateInAlarm, *got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_WalletAlertsOff_Nil() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	own := s.enabledAlertSettings(decimal.NewFromInt(50))
+	own.AlertEnabled = lo.ToPtr(false)
+	w := s.makeWallet("wallet_status_own_off", decimal.Zero, own, nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+	s.Nil(got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_AbsoluteUsesCurrencyBalance() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	w := s.makeWallet("wallet_status_currency", decimal.NewFromInt(500), nil, nil)
+
+	// 1,000 credits worth 50 in currency: absolute thresholds are in currency.
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(1000), decimal.NewFromInt(50))
+	s.NoError(err)
+	s.Require().NotNil(got)
+	s.Equal(types.AlertStateWarning, *got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_PercentageOfPeriodCredits() {
+	cfg := *s.percentageAlertSettings()
+	s.setTenantWalletAlertConfig(cfg)
+	w := s.makeWallet("wallet_status_pct", decimal.NewFromInt(25), nil, nil)
+	s.makeCreditTransaction("wtxn_status_pct", w.ID, decimal.NewFromInt(100),
+		types.TransactionStatusCompleted, types.StatusPublished, time.Now().UTC().Add(-time.Hour))
+
+	// 25 credits against a 100 credit base is 25%, the warning threshold.
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(25), decimal.NewFromInt(25))
+	s.NoError(err)
+	s.Require().NotNil(got)
+	s.Equal(types.AlertStateWarning, *got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_AboveThresholds_Nil() {
+	s.setTenantWalletAlertConfig(types.AlertSettings{
+		AlertEnabled: lo.ToPtr(true),
+		Critical:     &types.AlertThreshold{Threshold: decimal.NewFromInt(1000), Condition: types.AlertConditionAbove},
+	})
+	// A high balance trips an "above" alarm; it is not a low balance to warn about.
+	w := s.makeWallet("wallet_status_above", decimal.NewFromInt(5000), nil, nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(5000), decimal.NewFromInt(5000))
+	s.NoError(err)
+	s.Nil(got)
+}
+
+func (s *WalletServiceSuite) TestCreateWallet_CustomerMustExist() {
+	tests := []struct {
+		name       string
+		customerID string
+		wantErr    bool
+	}{
+		{"unknown customer id", "cust_does_not_exist", true},
+		{"existing customer id", s.testData.customer.ID, false},
+	}
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			_, err := s.service.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
+				CustomerID: tc.customerID,
+				Currency:   "eur",
+			})
+			if tc.wantErr {
+				s.Error(err)
+				s.True(ierr.IsNotFound(err))
+				return
+			}
+			s.NoError(err)
 		})
 	}
 }

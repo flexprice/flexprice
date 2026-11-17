@@ -170,10 +170,12 @@ func (p CheckoutPaymentProvider) SessionGrace() time.Duration {
 }
 
 // SavedMethodSettlement is how long a charge on a saved method can take to settle.
-// Razorpay debits a mandate 24-36h after the pre-debit notice; zero means it settles at once.
-func (p CheckoutPaymentProvider) SavedMethodSettlement() time.Duration {
-	switch p {
-	case CheckoutPaymentProviderRazorpay:
+// Razorpay debits a mandate 24-36h after the pre-debit notice, and eNACH takes up to 2 working days more; zero means it settles at once.
+func (p CheckoutPaymentProvider) SavedMethodSettlement(method PaymentMethodType) time.Duration {
+	switch {
+	case p == CheckoutPaymentProviderRazorpay && method == PaymentMethodTypeENACH:
+		return 7 * 24 * time.Hour
+	case p == CheckoutPaymentProviderRazorpay:
 		return 72 * time.Hour
 	default:
 		return 0

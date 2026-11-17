@@ -11,6 +11,7 @@
  *    FeatureType instead of TypesFeatureType.
  * 4. In swagger-3-0.json only: patches string fields with timestamp-like names (created_at, updated_at,
  *    etc.) with format: date-time so the spec has ≥150 date-time fields for SDK generation.
+ * 5. In swagger-3-0.json only: orders paths by tag so the docs sidebar lists the API groups A to Z.
  *
  * Usage: node scripts/fix_swagger_internal_types.mjs [--spec path/to/swagger-3-0.json]
  */
@@ -171,6 +172,11 @@ function main() {
       }
     }
   }
+
+  // 5. Mintlify orders API groups by first appearance; the stable sort keeps each tag's own path order.
+  const HTTP_METHODS = new Set(['get', 'put', 'post', 'delete', 'patch', 'head', 'options', 'trace']);
+  const tagOf = (item) => Object.entries(item).find(([method]) => HTTP_METHODS.has(method))?.[1]?.tags?.[0] ?? '';
+  spec.paths = Object.fromEntries(Object.entries(spec.paths).sort(([, a], [, b]) => tagOf(a).localeCompare(tagOf(b))));
 
   writeFileSync(specPath, JSON.stringify(spec, null, 2) + '\n', 'utf8');
   console.log(`Added x-speakeasy-name-override to ${count} prefixed schemas in swagger-3-0.json.`);

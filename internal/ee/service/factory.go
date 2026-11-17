@@ -24,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -62,6 +63,7 @@ import (
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
+	"github.com/flexprice/flexprice/internal/email"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -86,6 +88,7 @@ type ServiceParams struct {
 	Config        *config.Configuration
 	DB            postgres.IClient
 	PDFGenerator  pdf.Generator
+	EmailProvider email.Provider
 	TracingSvc    *tracing.Service
 	InMemoryCache cache.InMemoryCache
 	RedisCache    cache.RedisCache
@@ -129,6 +132,7 @@ type ServiceParams struct {
 	TaxRateRepo                  taxrate.Repository
 	FXRateRepo                   fxrate.Repository
 	HostedInvoiceTokenRepo       hostedinvoicetoken.Repository
+	EmailLogRepo                 emaillog.Repository
 	TaxAssociationRepo           taxassociation.Repository
 	TaxAppliedRepo               taxapplied.Repository
 	CouponRepo                   coupon.Repository
@@ -190,6 +194,7 @@ type ServiceParams struct {
 	// PubSubs
 	WalletBalanceAlertPubSub types.WalletBalanceAlertPubSub
 	WebhookPubSub            pubsub.PubSub
+	EmailEventsPubSub        types.EmailEventsPubSub
 
 	// RevenueFacts is the revenue_facts service the invoice hooks call after
 	// finalize/void. Implemented by internal/ee/service/revenue and injected
@@ -207,6 +212,7 @@ func NewServiceParams(
 	config *config.Configuration,
 	db postgres.IClient,
 	pdfGenerator pdf.Generator,
+	emailProvider email.Provider,
 	tracingSvc *tracing.Service,
 	inMemoryCache cache.InMemoryCache,
 	redisCache cache.RedisCache,
@@ -250,6 +256,7 @@ func NewServiceParams(
 	taxRateRepo taxrate.Repository,
 	fxRateRepo fxrate.Repository,
 	hostedInvoiceTokenRepo hostedinvoicetoken.Repository,
+	emailLogRepo emaillog.Repository,
 	couponRepo coupon.Repository,
 	couponAssociationRepo coupon_association.Repository,
 	couponApplicationRepo coupon_application.Repository,
@@ -270,6 +277,7 @@ func NewServiceParams(
 	integrationFactory *integration.Factory,
 	walletBalanceAlertPubSub types.WalletBalanceAlertPubSub,
 	webhookPubSub pubsub.PubSub,
+	emailEventsPubSub types.EmailEventsPubSub,
 	planPriceSyncRepo planpricesync.Repository,
 	addonPriceSyncRepo addonpricesync.Repository,
 	workflowExecutionRepo workflowexecution.Repository,
@@ -299,6 +307,7 @@ func NewServiceParams(
 		Config:                       config,
 		DB:                           db,
 		PDFGenerator:                 pdfGenerator,
+		EmailProvider:                emailProvider,
 		TracingSvc:                   tracingSvc,
 		InMemoryCache:                inMemoryCache,
 		RedisCache:                   redisCache,
@@ -340,6 +349,7 @@ func NewServiceParams(
 		TaxRateRepo:                  taxRateRepo,
 		FXRateRepo:                   fxRateRepo,
 		HostedInvoiceTokenRepo:       hostedInvoiceTokenRepo,
+		EmailLogRepo:                 emailLogRepo,
 		TaxAssociationRepo:           taxConfigRepo,
 		TaxAppliedRepo:               taxAppliedRepo,
 		EventPublisher:               eventPublisher,
@@ -364,6 +374,7 @@ func NewServiceParams(
 		EncryptionService:            encryptionService,
 		WalletBalanceAlertPubSub:     walletBalanceAlertPubSub,
 		WebhookPubSub:                webhookPubSub,
+		EmailEventsPubSub:            emailEventsPubSub,
 		PlanPriceSyncRepo:            planPriceSyncRepo,
 		AddonPriceSyncRepo:           addonPriceSyncRepo,
 		WorkflowExecutionRepo:        workflowExecutionRepo,

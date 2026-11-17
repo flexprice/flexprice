@@ -3,6 +3,8 @@ package interfaces
 import (
 	"context"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // PaymentMethodProvider is implemented by each gateway that can vault a payment
@@ -23,8 +25,11 @@ type PaymentMethodProvider interface {
 
 // SetupLinkRequest asks a provider for a hosted add-a-payment-method page.
 type SetupLinkRequest struct {
-	CustomerID string // FlexPrice customer id; the adapter resolves the gateway one
-	ReturnURL  string
+	CustomerID     string // FlexPrice customer id; the adapter resolves the gateway one
+	ReturnURL      string
+	MaxAmount      *decimal.Decimal // per-debit ceiling; nil uses the provider default
+	SetDefault     bool             // make the saved method the default, where the provider supports it
+	NotifyCustomer bool             // the gateway emails and texts the link to the customer
 }
 
 // SetupLinkResponse is the hosted page the customer is sent to.
@@ -32,4 +37,6 @@ type SetupLinkResponse struct {
 	URL               string
 	ProviderSessionID string
 	ExpiresAt         *time.Time
+	Status            string // provider's link status, e.g. Razorpay's issued, paid, expired or cancelled
+	CreatedAt         time.Time
 }

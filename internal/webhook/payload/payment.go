@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -40,7 +41,7 @@ func (b *PaymentPayloadBuilder) BuildPayload(ctx context.Context, eventType type
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	payment, err := b.services.PaymentService.GetPayment(ctx, paymentID)
+	payment, err := b.services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: paymentID, SkipGatewaySync: true})
 	if err != nil {
 		return nil, err
 	}

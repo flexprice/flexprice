@@ -89,6 +89,8 @@ type Handlers struct {
 	CustomerPortal *v1.CustomerPortalHandler
 	SelfBilling    *v1.SelfBillingHandler
 	HostedInvoice  *v1.HostedInvoiceHandler
+
+	EmailNotification *v1.EmailNotificationHandler
 }
 
 func NewRouter(
@@ -104,7 +106,9 @@ func NewRouter(
 	userRepo domainUser.Repository,
 	hostedInvoiceService service.HostedInvoiceService,
 ) *gin.Engine {
-	// gin.SetMode(gin.ReleaseMode)
+	if cfg.Deployment.Mode != types.ModeLocal {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
 	// Process-global: also covers the admin engine and any future engine.
 	middleware.InstallMicrosecondBinding()
@@ -339,6 +343,7 @@ func NewRouter(
 			customer.GET("/:id/wallets", observe(types.EntityWallet), handlers.Wallet.GetWalletsByCustomerID)
 			customer.GET("/:id/invoices/summary", observe(types.EntityInvoice), handlers.Invoice.GetCustomerInvoiceSummary)
 			customer.GET("/:id/payment-methods", read(types.EntityCustomer, types.ActionRead), handlers.Customer.ListPaymentMethods)
+			customer.GET("/:id/payment-integrations", read(types.EntityCustomer, types.ActionRead), handlers.Customer.ListPaymentIntegrations)
 			customer.GET("/wallets", observe(types.EntityWallet), handlers.Wallet.GetCustomerWallets)
 
 			// Customer Dashboard - Session creation. Minting a session token is an
@@ -530,7 +535,14 @@ func NewRouter(
 			invoices.POST("/:id/recalculate", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.RecalculateInvoice)
 			invoices.POST("/:id/recalculate-v2", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.RecalculateInvoiceV2)
 			invoices.POST("/:id/comms/trigger", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.TriggerCommunication)
+			invoices.POST("/:id/email", write(types.EntityInvoice, types.ActionWrite), handlers.EmailNotification.SendInvoiceEmail)
+			invoices.GET("/:id/emails", observe(types.EntityInvoice), handlers.EmailNotification.ListInvoiceEmails)
 			invoices.POST("/:id/webhook/trigger", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.TriggerWebhook)
+		}
+
+		emails := v1Private.Group("/emails")
+		{
+			emails.POST("/search", observe(types.EntityInvoice), handlers.EmailNotification.QueryEmails)
 		}
 
 		feature := v1Private.Group("/features")
@@ -593,6 +605,8 @@ func NewRouter(
 			{
 				custPaymentsGroup.GET("/:id/methods", observe(types.EntityPayment), handlers.SetupIntent.ListCustomerPaymentMethods)
 				custPaymentsGroup.POST("/:id/setup/intent", write(types.EntityPayment, types.ActionWrite), handlers.SetupIntent.CreateSetupIntentSession)
+				custPaymentsGroup.GET("/:id/setup/intent", observe(types.EntityPayment), handlers.SetupIntent.GetSetupIntent)
+				custPaymentsGroup.POST("/:id/setup/intent/cancel", write(types.EntityPayment, types.ActionWrite), handlers.SetupIntent.CancelSetupIntent)
 			}
 		}
 
@@ -836,10 +850,11 @@ func NewRouter(
 	// this handler may write.
 	customerPortalAPI.Use(middleware.TenantStatusMiddleware(tenantService, logger))
 	customerPortalAPI.Use(middleware.ErrorHandler())
+	blockSuspended := middleware.BlockWhenSuspended(tenantService)
 	{
 		// Customer specific
 		customerPortalAPI.GET("/info", handlers.CustomerPortal.GetCustomer)
-		customerPortalAPI.PUT("/info", write(types.EntityCustomer, types.ActionWrite), handlers.CustomerPortal.UpdateCustomer)
+		customerPortalAPI.PUT("/info", blockSuspended, handlers.CustomerPortal.UpdateCustomer)
 		customerPortalAPI.GET("/usage", handlers.CustomerPortal.GetUsageSummary)
 
 		// Subscriptions
@@ -849,25 +864,25 @@ func NewRouter(
 		// Invoices
 		customerPortalAPI.POST("/invoices", handlers.CustomerPortal.GetInvoices)
 		customerPortalAPI.GET("/invoices/:id", handlers.CustomerPortal.GetInvoice)
-		customerPortalAPI.POST("/invoices/:id/pay", handlers.CustomerPortal.PayInvoice)
+		customerPortalAPI.POST("/invoices/:id/pay", blockSuspended, handlers.CustomerPortal.PayInvoice)
 		customerPortalAPI.GET("/invoices/:id/pdf", handlers.CustomerPortal.GetInvoicePDF)
 
 		// Wallets
 		customerPortalAPI.POST("/wallets", handlers.CustomerPortal.GetWallets)
 		customerPortalAPI.GET("/wallets/:id", handlers.CustomerPortal.GetWallet)
 		customerPortalAPI.GET("/wallets/:id/transactions", handlers.CustomerPortal.GetWalletTransactions)
-		customerPortalAPI.POST("/wallets/:id/top-up", handlers.CustomerPortal.TopUpWallet)
-		customerPortalAPI.PUT("/wallets/:id/auto-topup", handlers.CustomerPortal.UpdateAutoTopup)
+		customerPortalAPI.POST("/wallets/:id/top-up", blockSuspended, handlers.CustomerPortal.TopUpWallet)
+		customerPortalAPI.PUT("/wallets/:id/auto-topup", blockSuspended, handlers.CustomerPortal.UpdateAutoTopup)
 
 		// Checkout
 		customerPortalAPI.GET("/checkout-sessions/:id", handlers.CustomerPortal.GetCheckoutSession)
-		customerPortalAPI.POST("/checkout-sessions/:id/cancel", handlers.CustomerPortal.CancelCheckoutSession)
+		customerPortalAPI.POST("/checkout-sessions/:id/cancel", blockSuspended, handlers.CustomerPortal.CancelCheckoutSession)
 
 		// Payment methods
 		customerPortalAPI.GET("/payment-methods", handlers.CustomerPortal.ListPaymentMethods)
-		customerPortalAPI.POST("/payment-methods", handlers.CustomerPortal.AddPaymentMethod)
-		customerPortalAPI.POST("/payment-methods/delete", handlers.CustomerPortal.DeletePaymentMethod)
-		customerPortalAPI.POST("/payment-methods/default", handlers.CustomerPortal.SetDefaultPaymentMethod)
+		customerPortalAPI.POST("/payment-methods", blockSuspended, handlers.CustomerPortal.AddPaymentMethod)
+		customerPortalAPI.POST("/payment-methods/delete", blockSuspended, handlers.CustomerPortal.DeletePaymentMethod)
+		customerPortalAPI.POST("/payment-methods/default", blockSuspended, handlers.CustomerPortal.SetDefaultPaymentMethod)
 
 		// Portal config (theme, sections, tabs) — tenant-authored
 		customerPortalAPI.GET("/config", handlers.CustomerPortal.GetPortalConfig)
@@ -910,6 +925,13 @@ func NewRouter(
 		// Whop webhook endpoint: POST /v1/webhooks/whop/{tenant_id}/{environment_id}
 		webhooks.POST("/whop/:tenant_id/:environment_id", handlers.Webhook.HandleWhopWebhook)
 	}
+
+	// Email delivery events: POST /v1/webhooks/email/{provider}. One URL per deployment serves every
+	// tenant, so it has no tenant in the path and skips WebhookLoggingMiddleware (bodies hold customer emails).
+	v1Public.POST("/webhooks/email/:provider",
+		middleware.WebhookBodyLimitMiddleware(middleware.MaxWebhookBodyBytes),
+		middleware.WebhookActorMiddleware,
+		handlers.Webhook.HandleEmailWebhook)
 
 	// Settings routes.
 	//

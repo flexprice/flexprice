@@ -167,6 +167,14 @@ func buildBillingQueryWithUsage(rv *analytics.ResolvedView, db, usageDB, tenantI
 		if f == nil {
 			continue
 		}
+		if f.Field == analytics.FilterCustomerStatus && slices.Contains(bm.Dimensions, "customer_id") {
+			if len(f.Value) == 0 {
+				where = append(where, "1 = 0")
+				continue
+			}
+			where = append(where, customerStatusCond(db, "customer_id", i, f.Value, params))
+			continue
+		}
 		if !slices.Contains(bm.Dimensions, f.Field) {
 			return nil, ierr.NewErrorf("illegal filter field %q for metric %q", f.Field, bm.Metric).Mark(ierr.ErrValidation)
 		}
@@ -202,6 +210,21 @@ func buildBillingQueryWithUsage(rv *analytics.ResolvedView, db, usageDB, tenantI
 	b.WriteString(topNLimit(topN, rv.Limit, rv.Offset, maxRows))
 
 	return &reportQuery{SQL: b.String(), Params: params, Columns: cols, TopN: topN}, nil
+}
+
+// customerStatusCond keeps rows whose customer is in values.
+func customerStatusCond(db, col string, i int, values []string, params map[string]string) string {
+	placeholders := make([]string, len(values))
+	for j, v := range values {
+		name := fmt.Sprintf("f%d_%d", i, j)
+		params[name] = v
+		placeholders[j] = "{" + name + ":String}"
+	}
+	return fmt.Sprintf(
+		"%s IN (SELECT id FROM %s.customers WHERE tenant_id = {tenant_id:String} AND environment_id = {environment_id:String} "+
+			"GROUP BY id HAVING argMax(_peerdb_is_deleted, _peerdb_version) = 0 AND argMax(status, _peerdb_version) IN (%s))",
+		col, db, strings.Join(placeholders, ", "),
+	)
 }
 
 // billingTopN: SQL order equals view order.

@@ -283,7 +283,7 @@ func (h *UserHandler) CreatePasswordLink(c *gin.Context) {
 
 // @Summary Remove user from tenant
 // @ID removeUser
-// @Description Remove a human user (type=user) from the current tenant. Not supported for service accounts; use DELETE /users/{id} for those.
+// @Description Remove a human user (type=user) from the current tenant. Also revokes every API key the user owns, in all environments. Not supported for service accounts; use DELETE /users/{id} for those.
 // @Tags Users
 // @Produce json
 // @Security ApiKeyAuth

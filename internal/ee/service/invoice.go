@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"math"
 	"sort"
 	"strconv"
@@ -1042,7 +1043,31 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 
 	response.WithTaxes(appliedTaxes.Items)
 
+	if err := s.attachInFlightCharges(ctx, []*dto.InvoiceResponse{response}); err != nil {
+		return nil, err
+	}
+
 	return response, nil
+}
+
+// attachInFlightCharges marks each invoice with the saved-method debit still waiting on the gateway, if any.
+func (s *invoiceService) attachInFlightCharges(ctx context.Context, items []*dto.InvoiceResponse) error {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationIDs = lo.Map(items, func(r *dto.InvoiceResponse, _ int) string { return r.ID })
+	pymnts, err := s.PaymentRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	inFlight := lo.KeyBy(lo.Filter(pymnts, func(p *payment.Payment, _ int) bool { return p.IsChargeInFlight() }),
+		func(p *payment.Payment) string { return p.DestinationID })
+	for _, r := range items {
+		if p, ok := inFlight[r.ID]; ok {
+			r.WithInFlightCharge(p)
+		}
+	}
+	return nil
 }
 
 // getBulkUsageAnalyticsForInvoice fetches analytics for all line items in a single ClickHouse call
@@ -1358,6 +1383,10 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		for _, inv := range items {
 			inv.WithTaxes(taxesByInvoice[inv.ID])
 		}
+	}
+
+	if err := s.attachInFlightCharges(ctx, items); err != nil {
+		return nil, err
 	}
 
 	return &dto.ListInvoicesResponse{
@@ -1889,6 +1918,14 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 			return errInvoiceCheckoutGated(id, "void")
 		}
 
+		inFlight, err := payments.ChargeInFlight(tx, s.PaymentRepo, id, "")
+		if err != nil {
+			return err
+		}
+		if inFlight {
+			return payments.ErrChargeInFlight(id)
+		}
+
 		if err := validateInvoiceVoidable(inv); err != nil {
 			return err
 		}
@@ -2297,7 +2334,7 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		IsAutoChargeAttempt: true,
 	}
 
-	razorpayCustomerID, token, err := razorpaySvc.SelectSavedToken(ctx, inv.CustomerID, inv.AmountRemaining, "")
+	razorpayCustomerID, token, err := razorpaySvc.SelectSavedToken(ctx, inv.CustomerID, inv.AmountRemaining, "", "")
 	if err != nil {
 		s.Logger.Info(ctx, "list Razorpay tokens failed, sending the invoice instead",
 			"invoice_id", inv.ID, "customer_id", inv.CustomerID, "error", err)
@@ -2353,7 +2390,7 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		return false, err
 	}
 	// A reused payment that already moved on was charged or reported by an earlier run.
-	if pymnt.PaymentStatus != types.PaymentStatusInitiated && pymnt.PaymentStatus != types.PaymentStatusPending {
+	if pymnt.PaymentStatus != types.PaymentStatusInitiated {
 		return true, nil
 	}
 
@@ -2381,22 +2418,17 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 				"invoice_id", inv.ID,
 				"payment_id", pymnt.ID)
 		}
-
-		failedEvent.Reason = types.InvoicePaymentFailureReasonProviderError
-		failedEvent.PaymentID = pymnt.ID
-		failedEvent.Error = errMsg
-		s.PublishInvoicePaymentFailed(ctx, failedEvent)
 		return false, nil
 	}
 
-	processing := string(types.PaymentStatusProcessing)
+	pending := string(types.PaymentStatusPending)
 	if _, err := paymentSvc.UpdatePayment(ctx, pymnt.ID, dto.UpdatePaymentRequest{
-		PaymentStatus:    &processing,
+		PaymentStatus:    &pending,
 		GatewayPaymentID: lo.EmptyableToPtr(result.RazorpayPaymentID),
 		Amount:           &freshInv.AmountRemaining,
 	}); err != nil {
 		// The charge is submitted; the Razorpay webhook reconciles via flexprice_payment_id.
-		s.Logger.Error(ctx, "failed to mark auto-charge payment as processing",
+		s.Logger.Error(ctx, "failed to mark auto-charge payment as pending",
 			"error", err,
 			"invoice_id", inv.ID,
 			"payment_id", pymnt.ID)
@@ -3780,66 +3812,89 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 }
 
 func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePDFRequest) (string, error) {
-	id := req.InvoiceID
-
-	// get invoice
-	inv, err := s.InvoiceRepo.Get(ctx, id)
+	inv, err := s.InvoiceRepo.Get(ctx, req.InvoiceID)
 	if err != nil {
 		return "", err
 	}
 
-	if inv.InvoicePDFURL != nil {
-		return lo.FromPtr(inv.InvoicePDFURL), nil
+	src, err := s.pdfSource(ctx, inv, req.ForceGenerate)
+	if err != nil {
+		return "", err
+	}
+	if src.url != "" {
+		return src.url, nil
+	}
+	return src.store.PresignGet(ctx, src.key, src.presignExpiry)
+}
+
+// invoicePDFSource is where an invoice's PDF lives: a link from the invoice or its billing
+// provider, or Flexprice's stored copy at key (data is set when it was just rendered).
+type invoicePDFSource struct {
+	url           string
+	store         storage.Storage
+	key           string
+	presignExpiry time.Duration
+	data          []byte
+}
+
+// pdfSource resolves the invoice's PDF in order: its own link, its billing provider's, then
+// Flexprice's stored copy, rendered and uploaded only when missing or forced.
+func (s *invoiceService) pdfSource(ctx context.Context, inv *invoice.Invoice, forceGenerate bool) (*invoicePDFSource, error) {
+	if url := lo.FromPtr(inv.InvoicePDFURL); url != "" {
+		return &invoicePDFSource{url: url}, nil
 	}
 
-	if url, err := s.billingProviderPDFURL(ctx, id); err == nil && url != "" {
-		return url, nil
+	if url, err := s.billingProviderPDFURL(ctx, inv.ID); err == nil && url != "" {
+		return &invoicePDFSource{url: url}, nil
 	}
 
 	store, err := s.StorageResolver.ForPlatform(ctx, storage.PurposeInvoice)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	bc, err := s.StorageResolver.BucketConfigFor(storage.PurposeInvoice)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	key := storage.ObjectKey(bc.KeyPrefix, "", fmt.Sprintf("%s/%s", inv.TenantID, id), "pdf", false)
 
 	presignExpiry, parseErr := time.ParseDuration(bc.PresignExpiryDuration)
 	if parseErr != nil {
-		return "", ierr.WithError(parseErr).
+		return nil, ierr.WithError(parseErr).
 			WithHint("Invalid invoice PDF presign expiry duration").
 			Mark(ierr.ErrValidation)
 	}
 
-	if !req.ForceGenerate {
-		exists, err := store.Exists(ctx, key)
+	src := &invoicePDFSource{
+		store:         store,
+		key:           storage.ObjectKey(bc.KeyPrefix, "", fmt.Sprintf("%s/%s", inv.TenantID, inv.ID), "pdf", false),
+		presignExpiry: presignExpiry,
+	}
+
+	if !forceGenerate {
+		exists, err := store.Exists(ctx, src.key)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if exists {
-			return store.PresignGet(ctx, key, presignExpiry)
+			return src, nil
 		}
 	}
 
-	data, err := s.GetInvoicePDF(ctx, dto.InvoicePDFRequest{InvoiceID: id})
+	src.data, err = s.GetInvoicePDF(ctx, dto.InvoicePDFRequest{InvoiceID: inv.ID})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	_, err = store.Upload(ctx, &storage.UploadRequest{
-		Key:    key,
-		Data:   data,
+		Key:    src.key,
+		Data:   src.data,
 		Format: storage.UploadFormatPDF,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	return store.PresignGet(ctx, key, presignExpiry)
+	return src, nil
 }
 
 // billingProviderPDFURL returns the enabled billing provider's own rendering of

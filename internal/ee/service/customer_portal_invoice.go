@@ -18,6 +18,10 @@ func (s *customerPortalService) PayInvoice(ctx context.Context, invoiceID string
 		return nil, ierr.NewError("request is required").Mark(ierr.ErrValidation)
 	}
 
+	if err := req.RedirectionParams.Validate(); err != nil {
+		return nil, err
+	}
+
 	customerID, err := s.portalCustomerID(ctx)
 	if err != nil {
 		return nil, err

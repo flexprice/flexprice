@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"strings"
 	"time"
 
@@ -1278,6 +1279,18 @@ type InvoiceResponse struct {
 
 	// checkout_session is the payment session gating this invoice, when it was created with checkout
 	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
+
+	// in_flight_charge is a saved-method debit submitted for this invoice that the gateway has not settled yet
+	InFlightCharge *InFlightCharge `json:"in_flight_charge,omitempty"`
+}
+
+// InFlightCharge is a saved-method debit still waiting on the gateway.
+type InFlightCharge struct {
+	PaymentID         string                  `json:"payment_id"`
+	PaymentMethodType types.PaymentMethodType `json:"payment_method_type"`
+	PaymentGateway    string                  `json:"payment_gateway,omitempty"`
+	PaymentStatus     types.PaymentStatus     `json:"payment_status"`
+	Amount            decimal.Decimal         `json:"amount" swaggertype:"string"`
 }
 
 // SourceUsageItem represents the usage breakdown for a specific source within a line item
@@ -1386,6 +1399,17 @@ func (r *InvoiceResponse) WithHostedInvoiceURL(url string) *InvoiceResponse {
 }
 
 // WithCustomer adds customer information to the invoice response
+func (r *InvoiceResponse) WithInFlightCharge(p *payment.Payment) *InvoiceResponse {
+	r.InFlightCharge = &InFlightCharge{
+		PaymentID:         p.ID,
+		PaymentMethodType: p.PaymentMethodType,
+		PaymentGateway:    lo.FromPtr(p.PaymentGateway),
+		PaymentStatus:     p.PaymentStatus,
+		Amount:            p.Amount,
+	}
+	return r
+}
+
 func (r *InvoiceResponse) WithCustomer(customer *CustomerResponse) *InvoiceResponse {
 	r.Customer = customer
 	return r

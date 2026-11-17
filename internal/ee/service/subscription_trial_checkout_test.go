@@ -247,7 +247,7 @@ func (s *SubscriptionServiceSuite) TestTrialEndCheckout_CompletesAfterPaymentSta
 	p, err := params.PaymentRepo.Get(ctx, lo.FromPtr(session.CheckoutPaymentID))
 	s.Require().NoError(err)
 	paySvc := NewPaymentService(params).(*paymentService)
-	_, err = paySvc.applyGatewayPaymentStatus(ctx, p, types.PaymentStatusSucceeded, "pay_trial_synced")
+	_, err = paySvc.applyGatewayPaymentStatus(ctx, p, types.PaymentStatusSucceeded, "pay_trial_synced", "")
 	s.Require().NoError(err)
 	before, err := params.InvoiceRepo.Get(ctx, invoiceID)
 	s.Require().NoError(err)
@@ -363,7 +363,7 @@ func (s *SubscriptionServiceSuite) TestTrialEndCheckout_UnpaidCleanupLeavesTrial
 			session, err := s.GetStores().CheckoutSessionRepo.Get(ctx, sessionID)
 			s.Require().NoError(err)
 
-			s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, tt.reason))
+			s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, tt.reason, false))
 
 			got, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
 			s.Require().NoError(err)

@@ -80,11 +80,15 @@ func buildCreditConsumption(in buildInput) (*reportQuery, error) {
 		if f == nil {
 			continue
 		}
-		if f.Field != "customer_id" && f.Field != "currency" && f.Field != "credit_type" {
+		if f.Field != "customer_id" && f.Field != "currency" && f.Field != "credit_type" && f.Field != analytics.FilterCustomerStatus {
 			return nil, ierr.NewErrorf("illegal filter field %q for credit consumption", f.Field).Mark(ierr.ErrValidation)
 		}
 		if len(f.Value) == 0 {
 			filterConds = append(filterConds, "1 = 0")
+			continue
+		}
+		if f.Field == analytics.FilterCustomerStatus {
+			filterConds = append(filterConds, customerStatusCond(in.DB, "d.customer_id", i, f.Value, params))
 			continue
 		}
 		placeholders := make([]string, len(f.Value))

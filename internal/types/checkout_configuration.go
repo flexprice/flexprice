@@ -527,6 +527,9 @@ type CheckoutPaymentProviderConfig struct {
 	// the customer is present, so a missed auto-charge may fall back to a hosted
 	// authorization link. Set true only from merchant-initiated paths (auto top-up).
 	CustomerNotPresent bool `json:"customer_not_present,omitempty"`
+
+	// NotifyCustomer lets the gateway email/SMS the payment link to the customer.
+	NotifyCustomer bool `json:"notify_customer,omitempty"`
 }
 
 func (c *CheckoutPaymentProviderConfig) Validate() error {
