@@ -25,6 +25,8 @@ const (
 	alertTrialStarted    alertEvent = "trial_started"
 	alertTenantActivated alertEvent = "tenant_activated"
 	alertTenantSuspended alertEvent = "tenant_suspended"
+	// alertLeftoverTrial: a paid subscription is active and canceling the trial failed, so the trial is still on Cloud.
+	alertLeftoverTrial alertEvent = "leftover_trial"
 )
 
 // alert is the JSON body posted to the Zapier catch hook. Email identifies a new tenant, which keeps
