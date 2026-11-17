@@ -37900,7 +37900,8 @@
           "PaymentGatewayTypeWhop",
           "PaymentGatewayTypeChargebee"
         ],
-        "x-speakeasy-name-override": "PaymentGatewayType"
+        "x-speakeasy-name-override": "PaymentGatewayType",
+        "x-speakeasy-unknown-values": "allow"
       },
       "types.PaymentMethodStatus": {
         "type": "string",
@@ -40033,6 +40034,11 @@
           "checkout.session.failed",
           "checkout.session.expired",
           "checkout.session.cancelled",
+          "mandate.confirmed",
+          "mandate.rejected",
+          "mandate.cancelled",
+          "mandate.setup_attempt_failed",
+          "mandate.setup_expired",
           "event.rejected"
         ],
         "x-enum-varnames": [
@@ -40109,6 +40115,11 @@
           "WebhookEventCheckoutSessionFailed",
           "WebhookEventCheckoutSessionExpired",
           "WebhookEventCheckoutSessionCancelled",
+          "WebhookEventMandateConfirmed",
+          "WebhookEventMandateRejected",
+          "WebhookEventMandateCancelled",
+          "WebhookEventMandateSetupAttemptFailed",
+          "WebhookEventMandateSetupExpired",
           "WebhookEventEventRejected"
         ],
         "x-speakeasy-name-override": "WebhookEventName",
@@ -42778,6 +42789,111 @@
           },
           "invoice": {
             "$ref": "#/components/schemas/webhookDto.Invoice"
+          }
+        },
+        "x-speakeasy-include": true
+      },
+      "webhookDto.Mandate": {
+        "type": "object",
+        "properties": {
+          "bank_account": {
+            "$ref": "#/components/schemas/webhookDto.MandateBankAccount"
+          },
+          "card": {
+            "$ref": "#/components/schemas/webhookDto.MandateCard"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "external_customer_id": {
+            "type": "string"
+          },
+          "failure_reason": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "max_amount": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.PaymentGatewayType"
+          },
+          "setup_intent_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.PaymentMethodType"
+          },
+          "upi": {
+            "$ref": "#/components/schemas/webhookDto.MandateUPI"
+          }
+        }
+      },
+      "webhookDto.MandateBankAccount": {
+        "type": "object",
+        "properties": {
+          "account_type": {
+            "type": "string"
+          },
+          "auth_type": {
+            "type": "string"
+          },
+          "bank": {
+            "type": "string"
+          },
+          "ifsc": {
+            "type": "string"
+          },
+          "last4": {
+            "type": "string"
+          }
+        }
+      },
+      "webhookDto.MandateCard": {
+        "type": "object",
+        "properties": {
+          "brand": {
+            "type": "string"
+          },
+          "exp_month": {
+            "type": "integer"
+          },
+          "exp_year": {
+            "type": "integer"
+          },
+          "last4": {
+            "type": "string"
+          }
+        }
+      },
+      "webhookDto.MandateUPI": {
+        "type": "object",
+        "properties": {
+          "vpa": {
+            "type": "string"
+          }
+        }
+      },
+      "webhookDto.MandateWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "mandate": {
+            "$ref": "#/components/schemas/webhookDto.Mandate"
           }
         },
         "x-speakeasy-include": true
