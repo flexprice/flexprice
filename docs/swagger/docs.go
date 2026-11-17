@@ -5047,6 +5047,54 @@ const docTemplate = `{
                 }
             }
         },
+        "/customers/{id}/payment-integrations": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use to learn which connected gateways can serve this customer and what each can do: check out, auto-charge, list methods, add a method (with the method types it sets up, e.g. enach for Razorpay), set a default.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List customer payment integrations",
+                "operationId": "listCustomerPaymentIntegrations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/IntegrationsResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Customer not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/customers/{id}/payment-methods": {
             "get": {
                 "security": [
@@ -8117,6 +8165,15 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "destination_ids",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "name": "destination_type",
                         "in": "query"
@@ -8290,6 +8347,121 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/payments/customers/{id}/setup/intent": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the live state of the customer's latest setup link. Razorpay only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Get setup intent",
+                "operationId": "getSetupIntent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "razorpay"
+                        ],
+                        "type": "string",
+                        "description": "Payment provider",
+                        "name": "provider",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/SetupIntentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments/customers/{id}/setup/intent/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Cancels the customer's latest setup link if it hasn't been completed. Razorpay only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Cancel setup intent",
+                "operationId": "cancelSetupIntent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "razorpay"
+                        ],
+                        "type": "string",
+                        "description": "Payment provider",
+                        "name": "provider",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/SetupIntentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "delete"
             }
         },
         "/payments/{id}": {
@@ -25632,6 +25804,26 @@ const docTemplate = `{
                 }
             }
         },
+        "InFlightCharge": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "payment_gateway": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "payment_method_type": {
+                    "$ref": "#/definitions/types.PaymentMethodType"
+                },
+                "payment_status": {
+                    "$ref": "#/definitions/types.PaymentStatus"
+                }
+            }
+        },
         "IngestEventRequest": {
             "type": "object",
             "required": [
@@ -25702,6 +25894,17 @@ const docTemplate = `{
                 }
             }
         },
+        "IntegrationCapability": {
+            "type": "object",
+            "properties": {
+                "add_payment_method_options": {
+                    "$ref": "#/definitions/types.AddPaymentMethodOptions"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.IntegrationCapabilityType"
+                }
+            }
+        },
         "IntegrationConfigEntry": {
             "type": "object",
             "properties": {
@@ -25723,6 +25926,17 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/IntegrationConfigEntry"
+                    }
+                }
+            }
+        },
+        "IntegrationsResponse": {
+            "type": "object",
+            "properties": {
+                "payment_integrations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/PaymentIntegration"
                     }
                 }
             }
@@ -26169,6 +26383,14 @@ const docTemplate = `{
                 "idempotency_key": {
                     "description": "idempotency_key is a unique key used to prevent duplicate invoice creation when retrying API calls",
                     "type": "string"
+                },
+                "in_flight_charge": {
+                    "description": "in_flight_charge is a saved-method debit submitted for this invoice that the gateway has not settled yet",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/InFlightCharge"
+                        }
+                    ]
                 },
                 "invoice_number": {
                     "description": "invoice_number is the human-readable invoice number displayed to customers (e.g., INV-2024-001)",
@@ -27118,6 +27340,20 @@ const docTemplate = `{
                 }
             }
         },
+        "PaymentIntegration": {
+            "type": "object",
+            "properties": {
+                "capabilities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/IntegrationCapability"
+                    }
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.PaymentGatewayType"
+                }
+            }
+        },
         "PaymentResponse": {
             "type": "object",
             "properties": {
@@ -27198,6 +27434,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "save_card_and_make_default": {
+                    "type": "boolean"
+                },
+                "submitted_for_processing": {
+                    "description": "SubmittedForProcessing is true while the gateway has the charge and its outcome is pending; it can't be processed again.",
                     "type": "boolean"
                 },
                 "succeeded_at": {
@@ -28663,6 +28903,26 @@ const docTemplate = `{
                 }
             }
         },
+        "SavedBankAccountDetails": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "auth_type": {
+                    "type": "string"
+                },
+                "bank": {
+                    "type": "string"
+                },
+                "ifsc": {
+                    "type": "string"
+                },
+                "last4": {
+                    "type": "string"
+                }
+            }
+        },
         "SavedCardDetails": {
             "type": "object",
             "properties": {
@@ -28683,6 +28943,9 @@ const docTemplate = `{
         "SavedPaymentMethod": {
             "type": "object",
             "properties": {
+                "bank_account": {
+                    "$ref": "#/definitions/SavedBankAccountDetails"
+                },
                 "can_auto_charge": {
                     "description": "Capability, not permission: could this be charged with nobody present.\nTrue for any active Chargebee or Stripe card (both vault off-session by\nconstruction); false for a Razorpay token without a mandate.",
                     "type": "boolean"
@@ -29117,6 +29380,38 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "SetupIntentResponse": {
+            "type": "object",
+            "properties": {
+                "checkout_session_id": {
+                    "type": "string"
+                },
+                "checkout_url": {
+                    "type": "string"
+                },
+                "client_secret": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "integer"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "integer"
+                },
+                "setup_intent_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "usage": {
+                    "type": "string"
                 }
             }
         },
@@ -36124,7 +36419,8 @@ const docTemplate = `{
                 "item_price",
                 "price",
                 "invoice_line_item",
-                "subscription_line_item"
+                "subscription_line_item",
+                "payment_method_setup"
             ],
             "x-enum-varnames": [
                 "IntegrationEntityTypeCustomer",
@@ -36138,7 +36434,8 @@ const docTemplate = `{
                 "IntegrationEntityTypeItemPrice",
                 "IntegrationEntityTypePrice",
                 "IntegrationEntityTypeInvoiceLineItem",
-                "IntegrationEntityTypeSubscriptionLineItem"
+                "IntegrationEntityTypeSubscriptionLineItem",
+                "IntegrationEntityTypePaymentMethodSetup"
             ]
         },
         "types.InvoiceBillingReason": {
@@ -36731,7 +37028,8 @@ const docTemplate = `{
                 "OFFLINE",
                 "CREDITS",
                 "PAYMENT_LINK",
-                "UPI"
+                "UPI",
+                "ENACH"
             ],
             "x-enum-varnames": [
                 "PaymentMethodTypeCard",
@@ -36739,7 +37037,8 @@ const docTemplate = `{
                 "PaymentMethodTypeOffline",
                 "PaymentMethodTypeCredits",
                 "PaymentMethodTypePaymentLink",
-                "PaymentMethodTypeUPI"
+                "PaymentMethodTypeUPI",
+                "PaymentMethodTypeENACH"
             ]
         },
         "types.PaymentStatus": {
@@ -39969,6 +40268,22 @@ const docTemplate = `{
                 }
             }
         },
+        "types.AddPaymentMethodOptions": {
+            "type": "object",
+            "properties": {
+                "payment_method_types": {
+                    "description": "PaymentMethodTypes are the methods it sets up, e.g. [\"enach\"] for Razorpay.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sets_default": {
+                    "description": "SetsDefault reports whether it can make the saved method the default (Stripe only).",
+                    "type": "boolean"
+                }
+            }
+        },
         "types.AddonPriceOverrideRef": {
             "type": "object",
             "properties": {
@@ -40373,6 +40688,31 @@ const docTemplate = `{
                 "InstalmentStatusScheduled",
                 "InstalmentStatusInvoiced",
                 "InstalmentStatusCancelled"
+            ]
+        },
+        "types.IntegrationCapabilityType": {
+            "type": "string",
+            "enum": [
+                "checkout",
+                "auto_charge",
+                "set_default_method",
+                "payment_link",
+                "payment_method_management",
+                "invoice_sync",
+                "list_payment_methods",
+                "add_payment_method",
+                "delete_payment_method"
+            ],
+            "x-enum-varnames": [
+                "IntegrationCapabilityCheckout",
+                "IntegrationCapabilityAutoCharge",
+                "IntegrationCapabilitySetDefaultMethod",
+                "IntegrationCapabilityPaymentLink",
+                "IntegrationCapabilityPaymentMethodManagement",
+                "IntegrationCapabilityInvoiceSync",
+                "IntegrationCapabilityListPaymentMethods",
+                "IntegrationCapabilityAddPaymentMethod",
+                "IntegrationCapabilityDeletePaymentMethod"
             ]
         },
         "types.InvoiceBillingEntity": {

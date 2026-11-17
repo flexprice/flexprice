@@ -427,6 +427,9 @@ func paymentFilterFn(ctx context.Context, p *payment.Payment, filter interface{}
 	if f.DestinationID != nil && p.DestinationID != *f.DestinationID {
 		return false
 	}
+	if len(f.DestinationIDs) > 0 && !lo.Contains(f.DestinationIDs, p.DestinationID) {
+		return false
+	}
 
 	if f.DestinationType != nil && string(p.DestinationType) != *f.DestinationType {
 		return false

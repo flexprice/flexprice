@@ -619,16 +619,12 @@ func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo pay
 		return nil, err
 	}
 	if !lock.AcquiredSuccessfully() {
-		return nil, errChargeInFlight(invoiceID)
+		return nil, ErrChargeInFlight(invoiceID)
 	}
 
-	filter := types.NewNoLimitPaymentFilter()
-	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
-	filter.DestinationID = lo.ToPtr(invoiceID)
-	filter.PaymentStatuses = []types.PaymentStatus{types.PaymentStatusPending, types.PaymentStatusProcessing}
-	existing, err := paymentRepo.List(ctx, filter)
-	if err == nil && lo.ContainsBy(existing, func(p *payment.Payment) bool { return p.ID != paymentID && p.IsChargeInFlight() }) {
-		err = errChargeInFlight(invoiceID)
+	inFlight, err := ChargeInFlight(ctx, paymentRepo, invoiceID, paymentID)
+	if err == nil && inFlight {
+		err = ErrChargeInFlight(invoiceID)
 	}
 	if err != nil {
 		_ = lock.Release(ctx)
@@ -637,9 +633,26 @@ func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo pay
 	return lock, nil
 }
 
-func errChargeInFlight(invoiceID string) error {
+// ChargeInFlight reports whether a charge other than excludeID is in flight on the invoice.
+func ChargeInFlight(ctx context.Context, paymentRepo payment.Repository, invoiceID, excludeID string) (bool, error) {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentStatuses = []types.PaymentStatus{types.PaymentStatusPending, types.PaymentStatusProcessing}
+	pymnts, err := paymentRepo.List(ctx, filter)
+	if err != nil {
+		return false, err
+	}
+
+	return lo.ContainsBy(pymnts, func(p *payment.Payment) bool {
+		return p.ID != excludeID && p.IsChargeInFlight()
+	}), nil
+}
+
+// ErrChargeInFlight refuses an action on an invoice while a charge on it may still settle.
+func ErrChargeInFlight(invoiceID string) error {
 	return ierr.NewError("a charge is already in progress for this invoice").
-		WithHint("A charge for this invoice is already in progress; wait for it to settle").
+		WithHint("A charge for this invoice is in progress. Wait for it to settle (up to 2 working days) and try again.").
 		WithReportableDetails(map[string]interface{}{"invoice_id": invoiceID}).
 		Mark(ierr.ErrAlreadyExists)
 }

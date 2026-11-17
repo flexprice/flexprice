@@ -5531,7 +5531,8 @@
           "OFFLINE",
           "CREDITS",
           "PAYMENT_LINK",
-          "UPI"
+          "UPI",
+          "ENACH"
         ],
         "x-enum-varnames": [
           "PaymentMethodTypeCard",
@@ -5539,7 +5540,8 @@
           "PaymentMethodTypeOffline",
           "PaymentMethodTypeCredits",
           "PaymentMethodTypePaymentLink",
-          "PaymentMethodTypeUPI"
+          "PaymentMethodTypeUPI",
+          "PaymentMethodTypeENACH"
         ],
         "x-speakeasy-name-override": "PaymentMethodType"
       },

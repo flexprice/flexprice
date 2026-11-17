@@ -101,9 +101,9 @@ func (c *expireClient) CancelPaymentLink(_ context.Context, id string) (map[stri
 	return map[string]interface{}{"status": "cancelled"}, c.cancelErr
 }
 
-func (c *expireClient) CancelInvoice(_ context.Context, id string) (map[string]interface{}, error) {
+func (c *expireClient) CancelInvoice(_ context.Context, id string) (*AuthorizationLinkResponse, error) {
 	c.cancelInvoiceIDs = append(c.cancelInvoiceIDs, id)
-	return map[string]interface{}{"status": "cancelled"}, c.cancelErr
+	return &AuthorizationLinkResponse{Status: "cancelled"}, c.cancelErr
 }
 
 func (c *expireClient) FetchPaymentLink(context.Context, string) (map[string]interface{}, error) {

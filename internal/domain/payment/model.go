@@ -128,7 +128,7 @@ func (p *Payment) Validate() error {
 				WithHint("Payment method id is invalid for payment links").
 				Mark(ierr.ErrValidation)
 		}
-	} else if p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI {
+	} else if p.PaymentMethodType.IsSavedMethod() {
 		// For card payments, payment method ID is optional - it will be fetched automatically if empty
 		// No validation needed here as the payment processor will handle fetching the saved payment method
 	} else if p.PaymentMethodID == "" {
@@ -174,7 +174,7 @@ func (p *Payment) IsPaymentPaid() bool {
 // Like a link, it is INITIATED until the gateway has it and PENDING until the webhook settles it.
 func (p *Payment) SettlesByWebhook() bool {
 	return p != nil && p.PaymentGateway != nil && *p.PaymentGateway == string(types.PaymentGatewayTypeRazorpay) &&
-		(p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI)
+		p.PaymentMethodType.IsSavedMethod()
 }
 
 // IsChargeInFlight reports whether a charge was submitted to the gateway and awaits its outcome.

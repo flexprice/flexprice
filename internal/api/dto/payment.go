@@ -121,35 +121,37 @@ type PaymentResponse struct {
 	// connection_id is the connection that took this payment; null when no gateway connection was used
 	ConnectionID *string `json:"connection_id"`
 
-	IdempotencyKey         string                       `json:"idempotency_key"`
-	DestinationType        types.PaymentDestinationType `json:"destination_type"`
-	DestinationID          string                       `json:"destination_id"`
-	PaymentMethodType      types.PaymentMethodType      `json:"payment_method_type"`
-	PaymentMethodID        string                       `json:"payment_method_id"`
-	Amount                 decimal.Decimal              `json:"amount" swaggertype:"string"`
-	Currency               string                       `json:"currency"`
-	PaymentStatus          types.PaymentStatus          `json:"payment_status"`
-	TrackAttempts          bool                         `json:"track_attempts"`
-	PaymentGateway         *string                      `json:"payment_gateway,omitempty"`
-	GatewayPaymentID       *string                      `json:"gateway_payment_id,omitempty"`
-	GatewayTrackingID      *string                      `json:"gateway_tracking_id,omitempty"`
-	GatewayMetadata        types.Metadata               `json:"gateway_metadata,omitempty"`
-	PaymentURL             *string                      `json:"payment_url,omitempty"`
-	Metadata               types.Metadata               `json:"metadata,omitempty"`
-	SucceededAt            *time.Time                   `json:"succeeded_at,omitempty"`
-	FailedAt               *time.Time                   `json:"failed_at,omitempty"`
-	RefundedAt             *time.Time                   `json:"refunded_at,omitempty"`
-	VoidedAt               *time.Time                   `json:"voided_at,omitempty"`
-	ErrorMessage           *string                      `json:"error_message,omitempty"`
-	Attempts               []*PaymentAttemptResponse    `json:"attempts,omitempty"`
-	InvoiceNumber          *string                      `json:"invoice_number,omitempty"`
-	TenantID               string                       `json:"tenant_id"`
-	SaveCardAndMakeDefault bool                         `json:"save_card_and_make_default"`
-	CreatedAt              time.Time                    `json:"created_at"`
-	UpdatedAt              time.Time                    `json:"updated_at"`
-	CreatedBy              string                       `json:"created_by"`
-	UpdatedBy              string                       `json:"updated_by"`
-	EnvironmentID          string                       `json:"environment_id"`
+	IdempotencyKey    string                       `json:"idempotency_key"`
+	DestinationType   types.PaymentDestinationType `json:"destination_type"`
+	DestinationID     string                       `json:"destination_id"`
+	PaymentMethodType types.PaymentMethodType      `json:"payment_method_type"`
+	PaymentMethodID   string                       `json:"payment_method_id"`
+	Amount            decimal.Decimal              `json:"amount" swaggertype:"string"`
+	Currency          string                       `json:"currency"`
+	PaymentStatus     types.PaymentStatus          `json:"payment_status"`
+	// SubmittedForProcessing is true while the gateway has the charge and its outcome is pending; it can't be processed again.
+	SubmittedForProcessing bool                      `json:"submitted_for_processing"`
+	TrackAttempts          bool                      `json:"track_attempts"`
+	PaymentGateway         *string                   `json:"payment_gateway,omitempty"`
+	GatewayPaymentID       *string                   `json:"gateway_payment_id,omitempty"`
+	GatewayTrackingID      *string                   `json:"gateway_tracking_id,omitempty"`
+	GatewayMetadata        types.Metadata            `json:"gateway_metadata,omitempty"`
+	PaymentURL             *string                   `json:"payment_url,omitempty"`
+	Metadata               types.Metadata            `json:"metadata,omitempty"`
+	SucceededAt            *time.Time                `json:"succeeded_at,omitempty"`
+	FailedAt               *time.Time                `json:"failed_at,omitempty"`
+	RefundedAt             *time.Time                `json:"refunded_at,omitempty"`
+	VoidedAt               *time.Time                `json:"voided_at,omitempty"`
+	ErrorMessage           *string                   `json:"error_message,omitempty"`
+	Attempts               []*PaymentAttemptResponse `json:"attempts,omitempty"`
+	InvoiceNumber          *string                   `json:"invoice_number,omitempty"`
+	TenantID               string                    `json:"tenant_id"`
+	SaveCardAndMakeDefault bool                      `json:"save_card_and_make_default"`
+	CreatedAt              time.Time                 `json:"created_at"`
+	UpdatedAt              time.Time                 `json:"updated_at"`
+	CreatedBy              string                    `json:"created_by"`
+	UpdatedBy              string                    `json:"updated_by"`
+	EnvironmentID          string                    `json:"environment_id"`
 }
 
 func (p *PaymentResponse) ToPayment() *payment.Payment {
@@ -211,32 +213,33 @@ type ListPaymentsResponse struct {
 // NewPaymentResponse creates a new payment response from a payment
 func NewPaymentResponse(p *payment.Payment) *PaymentResponse {
 	resp := &PaymentResponse{
-		ID:                p.ID,
-		IdempotencyKey:    p.IdempotencyKey,
-		DestinationType:   p.DestinationType,
-		DestinationID:     p.DestinationID,
-		PaymentMethodType: p.PaymentMethodType,
-		PaymentMethodID:   p.PaymentMethodID,
-		Amount:            p.Amount,
-		Currency:          p.Currency,
-		PaymentStatus:     p.PaymentStatus,
-		TrackAttempts:     p.TrackAttempts,
-		PaymentGateway:    p.PaymentGateway,
-		GatewayPaymentID:  p.GatewayPaymentID,
-		GatewayTrackingID: p.GatewayTrackingID,
-		GatewayMetadata:   p.GatewayMetadata,
-		ConnectionID:      p.ConnectionID,
-		Metadata:          p.Metadata,
-		SucceededAt:       p.SucceededAt,
-		FailedAt:          p.FailedAt,
-		RefundedAt:        p.RefundedAt,
-		VoidedAt:          p.VoidedAt,
-		ErrorMessage:      p.ErrorMessage,
-		TenantID:          p.TenantID,
-		CreatedAt:         p.CreatedAt,
-		UpdatedAt:         p.UpdatedAt,
-		CreatedBy:         p.CreatedBy,
-		UpdatedBy:         p.UpdatedBy,
+		ID:                     p.ID,
+		IdempotencyKey:         p.IdempotencyKey,
+		DestinationType:        p.DestinationType,
+		DestinationID:          p.DestinationID,
+		PaymentMethodType:      p.PaymentMethodType,
+		PaymentMethodID:        p.PaymentMethodID,
+		Amount:                 p.Amount,
+		Currency:               p.Currency,
+		PaymentStatus:          p.PaymentStatus,
+		SubmittedForProcessing: p.IsChargeInFlight(),
+		TrackAttempts:          p.TrackAttempts,
+		PaymentGateway:         p.PaymentGateway,
+		GatewayPaymentID:       p.GatewayPaymentID,
+		GatewayTrackingID:      p.GatewayTrackingID,
+		GatewayMetadata:        p.GatewayMetadata,
+		ConnectionID:           p.ConnectionID,
+		Metadata:               p.Metadata,
+		SucceededAt:            p.SucceededAt,
+		FailedAt:               p.FailedAt,
+		RefundedAt:             p.RefundedAt,
+		VoidedAt:               p.VoidedAt,
+		ErrorMessage:           p.ErrorMessage,
+		TenantID:               p.TenantID,
+		CreatedAt:              p.CreatedAt,
+		UpdatedAt:              p.UpdatedAt,
+		CreatedBy:              p.CreatedBy,
+		UpdatedBy:              p.UpdatedBy,
 	}
 
 	// Extract payment URL from gateway metadata for payment links
@@ -378,7 +381,7 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 				}).
 				Mark(ierr.ErrValidation)
 		}
-	} else if r.PaymentMethodType == types.PaymentMethodTypeCard || r.PaymentMethodType == types.PaymentMethodTypeUPI {
+	} else if r.PaymentMethodType.IsSavedMethod() {
 		if r.ProcessPayment {
 			if err := r.validateSavedMethodCharge(); err != nil {
 				return nil, err
@@ -401,8 +404,19 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 	return p, nil
 }
 
-// validateSavedMethodCharge checks the gateway for a CARD or UPI charge. CARD
-// supports Stripe (default) and Razorpay; UPI supports Razorpay only.
+// AllowedMethodsPerGateway lists the saved methods each gateway can charge; an empty gateway means Stripe.
+func AllowedMethodsPerGateway(gateway types.PaymentGatewayType) []types.PaymentMethodType {
+	switch gateway {
+	case "", types.PaymentGatewayTypeStripe:
+		return []types.PaymentMethodType{types.PaymentMethodTypeCard}
+	case types.PaymentGatewayTypeRazorpay:
+		return []types.PaymentMethodType{types.PaymentMethodTypeCard, types.PaymentMethodTypeUPI, types.PaymentMethodTypeENACH}
+	default:
+		return nil
+	}
+}
+
+// validateSavedMethodCharge checks the gateway for a saved-method charge.
 func (r *CreatePaymentRequest) validateSavedMethodCharge() error {
 	gateway := lo.FromPtr(r.PaymentGateway)
 	details := map[string]interface{}{
@@ -411,19 +425,9 @@ func (r *CreatePaymentRequest) validateSavedMethodCharge() error {
 	}
 
 	switch {
-	case r.PaymentMethodType == types.PaymentMethodTypeUPI && gateway != types.PaymentGatewayTypeRazorpay:
-		return ierr.NewError("UPI payments require the razorpay gateway").
-			WithHint("Set payment_gateway to razorpay for UPI payments").
-			WithReportableDetails(details).
-			Mark(ierr.ErrValidation)
-	case gateway != "" && gateway != types.PaymentGatewayTypeStripe && gateway != types.PaymentGatewayTypeRazorpay:
-		return ierr.NewError("unsupported payment gateway for card payments").
-			WithHint("CARD payments support the stripe and razorpay gateways").
-			WithReportableDetails(details).
-			Mark(ierr.ErrValidation)
-	case gateway == types.PaymentGatewayTypeRazorpay && r.PaymentMethodID != "":
-		return ierr.NewError("payment_method_id is not supported for razorpay charges").
-			WithHint("Omit payment_method_id; the customer's active Razorpay mandate for this method is used").
+	case !lo.Contains(AllowedMethodsPerGateway(gateway), r.PaymentMethodType):
+		return ierr.NewErrorf("%s payments are not supported on this payment gateway", r.PaymentMethodType).
+			WithHint("CARD supports stripe (default) and razorpay. UPI and ENACH support razorpay only").
 			WithReportableDetails(details).
 			Mark(ierr.ErrValidation)
 	case gateway == types.PaymentGatewayTypeRazorpay && r.DestinationType != types.PaymentDestinationTypeInvoice:

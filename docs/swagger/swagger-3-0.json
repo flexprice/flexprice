@@ -6004,6 +6004,65 @@
         ]
       }
     },
+    "/customers/{id}/payment-integrations": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "List customer payment integrations",
+        "description": "Use to learn which connected gateways can serve this customer and what each can do: check out, auto-charge, list methods, add a method (with the method types it sets up, e.g. enach for Razorpay), set a default.",
+        "operationId": "listCustomerPaymentIntegrations",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Customer ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/customers/{id}/payment-methods": {
       "get": {
         "tags": [
@@ -6152,66 +6211,6 @@
             "ApiKeyAuth": []
           }
         ]
-      }
-    },
-    "/emails/search": {
-      "post": {
-        "tags": [
-          "Invoices"
-        ],
-        "summary": "Search emails",
-        "description": "Use when reviewing emails sent to customers, for example every bounced email this month or every email to one customer. Filter by delivery status, trigger, customer, document and date. Newest first; paginated.",
-        "operationId": "queryEmail",
-        "requestBody": {
-          "description": "Filter",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/types.EmailLogFilter"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListEmailLogsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "x-scope": "read",
-        "x-codegen-request-body-name": "filter"
       }
     },
     "/entitlements": {
@@ -8467,6 +8466,66 @@
         ]
       }
     },
+    "/emails/search": {
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Search emails",
+        "description": "Use when reviewing emails sent to customers, for example every bounced email this month or every email to one customer. Filter by delivery status, trigger, customer, document and date. Newest first; paginated.",
+        "operationId": "queryEmail",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/types.EmailLogFilter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEmailLogsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
     "/invoices": {
       "post": {
         "tags": [
@@ -9776,6 +9835,18 @@
             }
           },
           {
+            "name": "destination_ids",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
             "name": "destination_type",
             "in": "query",
             "schema": {
@@ -10011,6 +10082,147 @@
           }
         ],
         "x-codegen-request-body-name": "payment"
+      }
+    },
+    "/payments/customers/{id}/setup/intent": {
+      "get": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Get setup intent",
+        "description": "Returns the live state of the customer's latest setup link. Razorpay only.",
+        "operationId": "getSetupIntent",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Customer ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "Payment provider",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "razorpay"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupIntentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/payments/customers/{id}/setup/intent/cancel": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Cancel setup intent",
+        "description": "Cancels the customer's latest setup link if it hasn't been completed. Razorpay only.",
+        "operationId": "cancelSetupIntent",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Customer ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "Payment provider",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "razorpay"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupIntentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "delete"
       }
     },
     "/payments/{id}": {
@@ -26850,6 +27062,26 @@
           }
         }
       },
+      "InFlightCharge": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "payment_gateway": {
+            "type": "string"
+          },
+          "payment_id": {
+            "type": "string"
+          },
+          "payment_method_type": {
+            "$ref": "#/components/schemas/types.PaymentMethodType"
+          },
+          "payment_status": {
+            "$ref": "#/components/schemas/types.PaymentStatus"
+          }
+        }
+      },
       "IngestEventRequest": {
         "required": [
           "event_name",
@@ -26922,6 +27154,17 @@
           }
         }
       },
+      "IntegrationCapability": {
+        "type": "object",
+        "properties": {
+          "add_payment_method_options": {
+            "$ref": "#/components/schemas/types.AddPaymentMethodOptions"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.IntegrationCapabilityType"
+          }
+        }
+      },
       "IntegrationConfigEntry": {
         "type": "object",
         "properties": {
@@ -26943,6 +27186,17 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/IntegrationConfigEntry"
+            }
+          }
+        }
+      },
+      "IntegrationsResponse": {
+        "type": "object",
+        "properties": {
+          "payment_integrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentIntegration"
             }
           }
         }
@@ -27364,6 +27618,9 @@
           "idempotency_key": {
             "type": "string",
             "description": "idempotency_key is a unique key used to prevent duplicate invoice creation when retrying API calls"
+          },
+          "in_flight_charge": {
+            "$ref": "#/components/schemas/InFlightCharge"
           },
           "invoice_number": {
             "type": "string",
@@ -28272,6 +28529,20 @@
           }
         }
       },
+      "PaymentIntegration": {
+        "type": "object",
+        "properties": {
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntegrationCapability"
+            }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.PaymentGatewayType"
+          }
+        }
+      },
       "PaymentResponse": {
         "type": "object",
         "properties": {
@@ -28356,6 +28627,10 @@
           },
           "save_card_and_make_default": {
             "type": "boolean"
+          },
+          "submitted_for_processing": {
+            "type": "boolean",
+            "description": "SubmittedForProcessing is true while the gateway has the charge and its outcome is pending; it can't be processed again."
           },
           "succeeded_at": {
             "type": "string",
@@ -29743,6 +30018,26 @@
           }
         }
       },
+      "SavedBankAccountDetails": {
+        "type": "object",
+        "properties": {
+          "account_type": {
+            "type": "string"
+          },
+          "auth_type": {
+            "type": "string"
+          },
+          "bank": {
+            "type": "string"
+          },
+          "ifsc": {
+            "type": "string"
+          },
+          "last4": {
+            "type": "string"
+          }
+        }
+      },
       "SavedCardDetails": {
         "type": "object",
         "properties": {
@@ -29763,6 +30058,9 @@
       "SavedPaymentMethod": {
         "type": "object",
         "properties": {
+          "bank_account": {
+            "$ref": "#/components/schemas/SavedBankAccountDetails"
+          },
           "can_auto_charge": {
             "type": "boolean",
             "description": "Capability, not permission: could this be charged with nobody present.\nTrue for any active Chargebee or Stripe card (both vault off-session by\nconstruction); false for a Razorpay token without a mandate."
@@ -30192,6 +30490,38 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "SetupIntentResponse": {
+        "type": "object",
+        "properties": {
+          "checkout_session_id": {
+            "type": "string"
+          },
+          "checkout_url": {
+            "type": "string"
+          },
+          "client_secret": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "integer"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "integer"
+          },
+          "setup_intent_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "string"
           }
         }
       },
@@ -36970,7 +37300,8 @@
           "item_price",
           "price",
           "invoice_line_item",
-          "subscription_line_item"
+          "subscription_line_item",
+          "payment_method_setup"
         ],
         "x-enum-varnames": [
           "IntegrationEntityTypeCustomer",
@@ -36984,7 +37315,8 @@
           "IntegrationEntityTypeItemPrice",
           "IntegrationEntityTypePrice",
           "IntegrationEntityTypeInvoiceLineItem",
-          "IntegrationEntityTypeSubscriptionLineItem"
+          "IntegrationEntityTypeSubscriptionLineItem",
+          "IntegrationEntityTypePaymentMethodSetup"
         ],
         "x-speakeasy-name-override": "IntegrationEntityType"
       },
@@ -37592,7 +37924,8 @@
           "OFFLINE",
           "CREDITS",
           "PAYMENT_LINK",
-          "UPI"
+          "UPI",
+          "ENACH"
         ],
         "x-enum-varnames": [
           "PaymentMethodTypeCard",
@@ -37600,7 +37933,8 @@
           "PaymentMethodTypeOffline",
           "PaymentMethodTypeCredits",
           "PaymentMethodTypePaymentLink",
-          "PaymentMethodTypeUPI"
+          "PaymentMethodTypeUPI",
+          "PaymentMethodTypeENACH"
         ],
         "x-speakeasy-name-override": "PaymentMethodType",
         "x-speakeasy-unknown-values": "allow"
@@ -40878,6 +41212,23 @@
         },
         "x-speakeasy-name-override": "ActiveWindow"
       },
+      "types.AddPaymentMethodOptions": {
+        "type": "object",
+        "properties": {
+          "payment_method_types": {
+            "type": "array",
+            "description": "PaymentMethodTypes are the methods it sets up, e.g. [\"enach\"] for Razorpay.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sets_default": {
+            "type": "boolean",
+            "description": "SetsDefault reports whether it can make the saved method the default (Stripe only)."
+          }
+        },
+        "x-speakeasy-name-override": "AddPaymentMethodOptions"
+      },
       "types.AddonPriceOverrideRef": {
         "type": "object",
         "properties": {
@@ -41324,6 +41675,32 @@
         ],
         "x-speakeasy-name-override": "InstalmentStatus",
         "x-speakeasy-unknown-values": "allow"
+      },
+      "types.IntegrationCapabilityType": {
+        "type": "string",
+        "enum": [
+          "checkout",
+          "auto_charge",
+          "set_default_method",
+          "payment_link",
+          "payment_method_management",
+          "invoice_sync",
+          "list_payment_methods",
+          "add_payment_method",
+          "delete_payment_method"
+        ],
+        "x-enum-varnames": [
+          "IntegrationCapabilityCheckout",
+          "IntegrationCapabilityAutoCharge",
+          "IntegrationCapabilitySetDefaultMethod",
+          "IntegrationCapabilityPaymentLink",
+          "IntegrationCapabilityPaymentMethodManagement",
+          "IntegrationCapabilityInvoiceSync",
+          "IntegrationCapabilityListPaymentMethods",
+          "IntegrationCapabilityAddPaymentMethod",
+          "IntegrationCapabilityDeletePaymentMethod"
+        ],
+        "x-speakeasy-name-override": "IntegrationCapabilityType"
       },
       "types.InvoiceBillingEntity": {
         "type": "object",

@@ -14,7 +14,12 @@ func (s *customerPortalService) GetIntegrations(ctx context.Context) (*dto.Integ
 		return nil, err
 	}
 
-	providers, err := NewPaymentProviderResolver(s.ServiceParams).ListProviders(ctx, customerID)
+	return listPaymentIntegrations(ctx, s.ServiceParams, customerID)
+}
+
+// listPaymentIntegrations is the customer's usable gateways with what each can do.
+func listPaymentIntegrations(ctx context.Context, params ServiceParams, customerID string) (*dto.IntegrationsResponse, error) {
+	providers, err := NewPaymentProviderResolver(params).ListProviders(ctx, customerID)
 	if err != nil {
 		return nil, err
 	}
