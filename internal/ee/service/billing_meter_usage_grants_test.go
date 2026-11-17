@@ -1300,6 +1300,25 @@ func (s *EntitlementGrantSuite) TestCustomerEntitlementsRead_RefreshGrantsFollow
 	s.True(decimal.NewFromInt(60).Equal(*usage), "returned usage: got %s", usage)
 }
 
+// The usage summary forwards refresh_grants to the entitlements read it is built from.
+func (s *EntitlementGrantSuite) TestCustomerUsageSummary_RefreshGrantsReturnsFreshUsage() {
+	ctx := s.GetContext()
+	cust, sub, m := s.recoveryFixture(types.ResetUsageBillingPeriod)
+	s.seedMeterUsage(cust.ExternalID, m.ID, sub.CurrentPeriodStart, 60)
+	s.withRefreshOnRead(true)
+
+	resp, err := s.subGrantBilling().GetCustomerUsageSummary(ctx, cust.ID, &dto.GetCustomerUsageSummaryRequest{RefreshGrants: true})
+	s.Require().NoError(err)
+	var usage *decimal.Decimal
+	for _, f := range resp.Features {
+		if f.Feature != nil && f.Feature.ID == "feature-recovery" && f.GrantState != nil && len(f.GrantState.Allowances) > 0 {
+			usage = &f.GrantState.Allowances[0].Usage
+		}
+	}
+	s.Require().NotNil(usage, "the summary carries the grant state")
+	s.True(decimal.NewFromInt(60).Equal(*usage), "returned usage: got %s", usage)
+}
+
 // The subscription read refreshes only live subscriptions: window opening ignores status.
 func (s *EntitlementGrantSuite) TestSubscriptionEntitlementsRead_RefreshesOnlyLiveSubscriptions() {
 	ctx := s.GetContext()

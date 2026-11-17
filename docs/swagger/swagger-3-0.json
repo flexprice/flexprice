@@ -5413,6 +5413,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "refresh_grants",
+            "in": "query",
+            "description": "Evaluate entitlement grants before returning their usage (slower)",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -5718,6 +5726,14 @@
             }
           },
           {
+            "name": "refresh_grants",
+            "in": "query",
+            "description": "RefreshGrants evaluates entitlement grants before returning their usage, so the read is slower.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "subscription_ids",
             "in": "query",
             "style": "form",
@@ -5894,6 +5910,14 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "refresh_grants",
+            "in": "query",
+            "description": "Evaluate entitlement grants before returning their usage (slower)",
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -15544,6 +15568,14 @@
               "items": {
                 "type": "string"
               }
+            }
+          },
+          {
+            "name": "refresh_grants",
+            "in": "query",
+            "description": "Evaluate entitlement grants before returning their usage (slower)",
+            "schema": {
+              "type": "boolean"
             }
           }
         ],

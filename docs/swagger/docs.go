@@ -4442,6 +4442,12 @@ const docTemplate = `{
                         "name": "external_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Evaluate entitlement grants before returning their usage (slower)",
+                        "name": "refresh_grants",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -4688,6 +4694,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "boolean",
+                        "description": "RefreshGrants evaluates entitlement grants before returning their usage, so the read is slower.",
+                        "name": "refresh_grants",
+                        "in": "query"
+                    },
+                    {
                         "type": "array",
                         "items": {
                             "type": "string"
@@ -4920,6 +4932,12 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Evaluate entitlement grants before returning their usage (slower)",
+                        "name": "refresh_grants",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -12614,6 +12632,12 @@ const docTemplate = `{
                         "collectionFormat": "csv",
                         "description": "Feature IDs to filter by",
                         "name": "feature_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Evaluate entitlement grants before returning their usage (slower)",
+                        "name": "refresh_grants",
                         "in": "query"
                     }
                 ],
