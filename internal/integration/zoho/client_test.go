@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -62,15 +63,27 @@ func TestUpstreamBodyNotReturned(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			var hits []string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				hits = append(hits, r.URL.Path)
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = w.Write([]byte(secretBody))
 			}))
 			defer srv.Close()
 
+			// Real Zoho hosts pass endpoint validation; the transport sends them to srv.
+			origTransport := http.DefaultTransport
+			http.DefaultTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				r = r.Clone(r.Context())
+				r.URL.Scheme = "http"
+				r.URL.Host = strings.TrimPrefix(srv.URL, "http://")
+				return origTransport.RoundTrip(r)
+			})
+			t.Cleanup(func() { http.DefaultTransport = origTransport })
+
 			md := &types.ZohoBooksConnectionMetadata{
 				ClientID: "id", ClientSecret: "secret", RefreshToken: "rt",
-				AccountsURL: srv.URL, APIDomain: srv.URL, OrganizationID: "org",
+				AccountsURL: "https://accounts.zoho.in", APIDomain: "https://www.zohoapis.in", OrganizationID: "org",
 			}
 			if tc.path != "/oauth/v2/token" {
 				md.AccessToken = "tok"
@@ -79,6 +92,7 @@ func TestUpstreamBodyNotReturned(t *testing.T) {
 			c, _, ctx := newClient(t, md)
 			_, err := c.GetInvoice(ctx, "inv_1")
 			require.Error(t, err)
+			require.Equal(t, []string{tc.path}, hits, "request must reach the upstream")
 			assert.NotContains(t, detailsOf(err), secretBody)
 		})
 	}
