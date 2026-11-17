@@ -37,3 +37,36 @@ func TestSecretCache_SetUnderTenantCtxReadableByAuth(t *testing.T) {
 	repo.DeleteCache(context.Background(), sec.Value)
 	require.Nil(t, repo.GetCache(tenantCtx, sec.Value))
 }
+
+// Revoked keys must stay cached until commit, and stay cached on rollback.
+func TestSecretRepository_InvalidateCacheAfterCommit(t *testing.T) {
+	tests := []struct {
+		name            string
+		inTx            bool
+		finish          func(context.Context)
+		wantCachedAfter bool
+	}{
+		{name: "no transaction deletes immediately"},
+		{name: "commit deletes after commit", inTx: true, finish: types.RunPostCommitHooks},
+		{name: "rollback keeps the key cached", inTx: true, finish: types.DiscardPostCommitHooks, wantCachedAfter: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := entitlementCacheTestContext()
+			if tt.inTx {
+				ctx = types.WithPostCommitHooks(ctx)
+			}
+			repo := &secretRepository{cache: cache.NewInMemoryCache()}
+			key := &domainSecret.Secret{ID: "key-1", Value: "hashed-value"}
+			repo.SetCache(ctx, key)
+
+			repo.invalidateCache(ctx, []*domainSecret.Secret{key})
+
+			require.Equal(t, tt.inTx, repo.GetCache(ctx, key.Value) != nil, "before the transaction ends")
+			if tt.finish != nil {
+				tt.finish(ctx)
+			}
+			require.Equal(t, tt.wantCachedAfter, repo.GetCache(ctx, key.Value) != nil, "after the transaction ends")
+		})
+	}
+}
