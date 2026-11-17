@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -366,6 +367,16 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 	if err != nil {
 		return nil, err
 	}
+	// Reverting a removed version again would reopen a predecessor its replacement already follows.
+	if lineItem.Status != types.StatusPublished {
+		return nil, ierr.NewError("line item is not active").
+			WithHint("This line item was already removed or replaced").
+			WithReportableDetails(map[string]interface{}{
+				"line_item_id": lineItemID,
+				"status":       lineItem.Status,
+			}).
+			Mark(ierr.ErrValidation)
+	}
 
 	sub, err := s.SubRepo.Get(ctx, lineItem.SubscriptionID)
 	if err != nil {
@@ -699,6 +710,103 @@ func replaceMetadataPreservingLineage(item *subscription.SubscriptionLineItem, m
 	item.Metadata = updated
 }
 
+// isBackdatedVersion reports whether an explicit effective date precedes the line's start.
+func isBackdatedVersion(item *subscription.SubscriptionLineItem, effectiveFrom *time.Time, effective time.Time) bool {
+	return effectiveFrom != nil && item != nil && !item.StartDate.IsZero() && effective.Before(item.StartDate)
+}
+
+// retireLineItemVersionsFrom retires every version in tip's chain starting on or after from and
+// cuts the one active at from. It returns the cut version (nil if none) and the retired ones as they were.
+func (s *subscriptionService) retireLineItemVersionsFrom(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	tip *subscription.SubscriptionLineItem,
+	from time.Time,
+) (*subscription.SubscriptionLineItem, []*subscription.SubscriptionLineItem, error) {
+	if from.Before(sub.StartDate) {
+		return nil, nil, ierr.NewError("effective_from cannot be before subscription start date").
+			WithHint("The replacement version cannot start before the subscription does").
+			WithReportableDetails(map[string]interface{}{
+				"line_item_id":       tip.ID,
+				"effective_from":     from,
+				"subscription_start": sub.StartDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	retired := make([]*subscription.SubscriptionLineItem, 0, 1)
+	cur := tip
+	for {
+		retired = append(retired, subscription.NewSubscriptionLineItemBuilder(cur).Build())
+		ended := subscription.NewSubscriptionLineItemBuilder(cur).WithStatus(types.StatusDeleted).Build()
+		if err := s.SubscriptionLineItemRepo.Update(ctx, ended); err != nil {
+			return nil, nil, err
+		}
+
+		predID := predecessorLineItemID(cur)
+		if predID == "" {
+			return nil, retired, nil
+		}
+		pred, err := s.SubscriptionLineItemRepo.GetForUpdate(ctx, predID)
+		if err != nil {
+			if ierr.IsNotFound(err) {
+				return nil, retired, nil
+			}
+			return nil, nil, err
+		}
+		if pred.Status != types.StatusPublished {
+			return nil, retired, nil
+		}
+		if pred.StartDate.Before(from) {
+			cut := subscription.NewSubscriptionLineItemBuilder(pred).WithEndDate(from).WithSuccessorLineItemID(nil).Build()
+			clearLineItemMetadataIDs(cut, types.SubscriptionLineItemMetadataKeySuccessorID)
+			if err := s.SubscriptionLineItemRepo.Update(ctx, cut); err != nil {
+				return nil, nil, err
+			}
+			return cut, retired, nil
+		}
+		cur = pred
+	}
+}
+
+// linkReplacementVersion runs the detach guards for the retired and cut versions now that the
+// replacement exists, points the cut version at it and pulls an addon association's start back to it.
+func (s *subscriptionService) linkReplacementVersion(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	cut *subscription.SubscriptionLineItem,
+	retired []*subscription.SubscriptionLineItem,
+	replacement *subscription.SubscriptionLineItem,
+) error {
+	for _, li := range retired {
+		if err := checkLineDetach(ctx, s.ServiceParams, sub, li, li.StartDate); err != nil {
+			return err
+		}
+	}
+	if cut != nil {
+		if err := checkLineDetach(ctx, s.ServiceParams, sub, cut, replacement.StartDate); err != nil {
+			return err
+		}
+		linked := subscription.NewSubscriptionLineItemBuilder(cut).WithSuccessorLineItemID(lo.ToPtr(replacement.ID)).Build()
+		if err := s.SubscriptionLineItemRepo.Update(ctx, linked); err != nil {
+			return err
+		}
+	}
+
+	if replacement.AddonAssociationID == nil || *replacement.AddonAssociationID == "" {
+		return nil
+	}
+	assoc, err := s.AddonAssociationRepo.GetByID(ctx, *replacement.AddonAssociationID)
+	if err != nil {
+		return err
+	}
+	if assoc.StartDate == nil || !assoc.StartDate.After(replacement.StartDate) {
+		return nil
+	}
+	moved := addonassociation.NewAddonAssociationBuilder(assoc).WithStartDate(replacement.StartDate).Build()
+	return s.AddonAssociationRepo.Update(ctx, moved)
+}
+
 // UpdateSubscriptionLineItem updates a subscription line item by terminating the existing one and creating a new one
 // This method reuses existing service methods for creating and deleting line items
 func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.UpdateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
@@ -755,6 +863,15 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 		endDate = req.EffectiveFrom.UTC()
 	}
 
+	if isBackdatedVersion(existingLineItem, req.EffectiveFrom, endDate) {
+		return s.replaceLineItemVersionFrom(ctx, sub, lineItemID, req, endDate)
+	}
+	if req.EffectiveFrom != nil && !req.ShouldCreateNewLineItem() {
+		return nil, ierr.NewError("effective_from requires at least one critical field").
+			WithHint("When providing effective_from on or after the line item's start date, you must also provide one of: amount, billing_model, tier_mode, tiers, transform_quantity, price_unit_amount, price_unit_tiers, bucket_size, or commitment fields").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Check if we need to create a new line item (with price overrides)
 	if req.ShouldCreateNewLineItem() {
 		// Execute the complex update within a transaction
@@ -802,34 +919,10 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			oldEndDate := locked.EndDate
 			endedLineItem := *locked // price overrides repoint locked, so keep the line as it was
 
-			price, err := NewPriceService(s.ServiceParams).GetPrice(ctx, locked.PriceID)
+			newPriceID, err := s.overrideLineItemPrice(ctx, sub, locked, req)
 			if err != nil {
 				return err
 			}
-
-			// Convert request to OverrideLineItemRequest format to reuse existing logic
-			overrideReq := dto.OverrideLineItemRequest{
-				PriceID:           locked.PriceID,
-				Quantity:          &locked.Quantity,
-				BillingModel:      req.BillingModel,
-				Amount:            req.Amount,
-				TierMode:          req.TierMode,
-				Tiers:             req.Tiers,
-				TransformQuantity: req.TransformQuantity,
-				PriceUnitAmount:   req.PriceUnitAmount,
-				PriceUnitTiers:    req.PriceUnitTiers,
-				BucketSize:        req.BucketSize,
-			}
-			priceMap := map[string]*dto.PriceResponse{locked.PriceID: price}
-
-			// Process the price override using existing method
-			lineItems := []*subscription.SubscriptionLineItem{locked}
-			if err := s.ProcessSubscriptionPriceOverrides(ctx, sub, []dto.OverrideLineItemRequest{overrideReq}, lineItems, priceMap); err != nil {
-				return err
-			}
-
-			// The ProcessSubscriptionPriceOverrides method updates the line item's PriceID
-			newPriceID := locked.PriceID
 
 			// Terminate the existing line item using existing method
 			deleteReq := dto.DeleteSubscriptionLineItemRequest{
@@ -849,51 +942,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			newLineItem.SuccessorLineItemID = nil
 			clearLineItemMetadataIDs(newLineItem, lineageMetadataKeys...)
 
-			// Materialize bucket prices when the update request carries
-			// commitment_time_buckets: ToSubscriptionLineItem rebuilt
-			// newLineItem.CommitmentTimeBuckets from the request (fresh IDs, empty
-			// PriceIDs). createBucketPrices reuses an existing bucket's price +
-			// ID when that bucket is unchanged, and only creates new prices for
-			// changed/added buckets; old prices for removed/changed buckets are left
-			// intact (still referenced by historical invoices).
-			//
-			// Omitting commitment_time_buckets (nil pointer) inherits the existing
-			// line item's buckets (copied by ToSubscriptionLineItem); supplying an
-			// explicit empty slice clears them.
-			if req.CommitmentTimeBuckets != nil {
-				if err := s.createBucketPrices(ctx, newLineItem.ID, locked.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets, locked.CommitmentTimeBuckets); err != nil {
-					return err
-				}
-			}
-
-			// Buckets are validated against the window they will actually bill in,
-			// so re-check whenever EITHER input moved: the buckets themselves, or
-			// the bucket size they must align to. Validating only on resent buckets
-			// misses `{"bucket_size": "FIFTEEN_MIN"}` on a line item whose
-			// hour-aligned buckets are inherited by ToSubscriptionLineItem — the
-			// window narrows and the stale buckets carry over unchecked.
-			if (req.CommitmentTimeBuckets != nil || req.BucketSize != "") && len(newLineItem.CommitmentTimeBuckets) > 0 {
-				_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
-				if err := s.validateBucketArray(ctx, newLineItem.MeterID, newLineItem.PriceID, newLineItem.CommitmentWindowed, hasCumulative, newLineItem.CommitmentTimeBuckets); err != nil {
-					return err
-				}
-			}
-
-			// Validate line item commitment if configured
-			if err := s.validateLineItemCommitment(ctx, newLineItem); err != nil {
-				return err
-			}
-
-			// Validate subscription-level commitment doesn't conflict
-			if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
-				return err
-			}
-
-			if err := checkLineAttach(ctx, s.ServiceParams, sub, newLineItem); err != nil {
-				return err
-			}
-
-			if err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).validateWithSubscriptionScopedEntitlement(ctx, sub, subscriptionEntitlementGrantChange{items: []*subscription.SubscriptionLineItem{newLineItem}}); err != nil {
+			if err := s.validateLineItemVersion(ctx, sub, req, newLineItem, locked); err != nil {
 				return err
 			}
 
@@ -986,6 +1035,179 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: existingLineItem}, nil
 	}
+}
+
+// overrideLineItemPrice creates the subscription-scoped price the request's price fields describe
+// and returns its ID; locked is repointed to it.
+func (s *subscriptionService) overrideLineItemPrice(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	locked *subscription.SubscriptionLineItem,
+	req dto.UpdateSubscriptionLineItemRequest,
+) (string, error) {
+	price, err := NewPriceService(s.ServiceParams).GetPrice(ctx, locked.PriceID)
+	if err != nil {
+		return "", err
+	}
+
+	// Convert request to OverrideLineItemRequest format to reuse existing logic
+	overrideReq := dto.OverrideLineItemRequest{
+		PriceID:           locked.PriceID,
+		Quantity:          &locked.Quantity,
+		BillingModel:      req.BillingModel,
+		Amount:            req.Amount,
+		TierMode:          req.TierMode,
+		Tiers:             req.Tiers,
+		TransformQuantity: req.TransformQuantity,
+		PriceUnitAmount:   req.PriceUnitAmount,
+		PriceUnitTiers:    req.PriceUnitTiers,
+		BucketSize:        req.BucketSize,
+	}
+	priceMap := map[string]*dto.PriceResponse{locked.PriceID: price}
+
+	// Process the price override using existing method
+	lineItems := []*subscription.SubscriptionLineItem{locked}
+	if err := s.ProcessSubscriptionPriceOverrides(ctx, sub, []dto.OverrideLineItemRequest{overrideReq}, lineItems, priceMap); err != nil {
+		return "", err
+	}
+
+	// The ProcessSubscriptionPriceOverrides method updates the line item's PriceID
+	return locked.PriceID, nil
+}
+
+// validateLineItemVersion materializes bucket prices for newLineItem and runs the commitment,
+// attach and entitlement checks a new version must pass before it is created.
+func (s *subscriptionService) validateLineItemVersion(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	req dto.UpdateSubscriptionLineItemRequest,
+	newLineItem *subscription.SubscriptionLineItem,
+	locked *subscription.SubscriptionLineItem,
+) error {
+	// Materialize bucket prices when the update request carries
+	// commitment_time_buckets: ToSubscriptionLineItem rebuilt
+	// newLineItem.CommitmentTimeBuckets from the request (fresh IDs, empty
+	// PriceIDs). createBucketPrices reuses an existing bucket's price +
+	// ID when that bucket is unchanged, and only creates new prices for
+	// changed/added buckets; old prices for removed/changed buckets are left
+	// intact (still referenced by historical invoices).
+	//
+	// Omitting commitment_time_buckets (nil pointer) inherits the existing
+	// line item's buckets (copied by ToSubscriptionLineItem); supplying an
+	// explicit empty slice clears them.
+	if req.CommitmentTimeBuckets != nil {
+		if err := s.createBucketPrices(ctx, newLineItem.ID, locked.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets, locked.CommitmentTimeBuckets); err != nil {
+			return err
+		}
+	}
+
+	// Buckets are validated against the window they will actually bill in,
+	// so re-check whenever EITHER input moved: the buckets themselves, or
+	// the bucket size they must align to. Validating only on resent buckets
+	// misses `{"bucket_size": "FIFTEEN_MIN"}` on a line item whose
+	// hour-aligned buckets are inherited by ToSubscriptionLineItem — the
+	// window narrows and the stale buckets carry over unchecked.
+	if (req.CommitmentTimeBuckets != nil || req.BucketSize != "") && len(newLineItem.CommitmentTimeBuckets) > 0 {
+		_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
+		if err := s.validateBucketArray(ctx, newLineItem.MeterID, newLineItem.PriceID, newLineItem.CommitmentWindowed, hasCumulative, newLineItem.CommitmentTimeBuckets); err != nil {
+			return err
+		}
+	}
+
+	// Validate line item commitment if configured
+	if err := s.validateLineItemCommitment(ctx, newLineItem); err != nil {
+		return err
+	}
+
+	// Validate subscription-level commitment doesn't conflict
+	if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
+		return err
+	}
+
+	if err := checkLineAttach(ctx, s.ServiceParams, sub, newLineItem); err != nil {
+		return err
+	}
+
+	return (&entitlementGrantService{ServiceParams: s.ServiceParams}).validateWithSubscriptionScopedEntitlement(ctx, sub, subscriptionEntitlementGrantChange{items: []*subscription.SubscriptionLineItem{newLineItem}})
+}
+
+// replaceLineItemVersionFrom replaces a version with one starting at from, before its own start:
+// versions the replacement covers are retired and the one active at from is cut there.
+func (s *subscriptionService) replaceLineItemVersionFrom(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	lineItemID string,
+	req dto.UpdateSubscriptionLineItemRequest,
+	from time.Time,
+) (*dto.SubscriptionLineItemResponse, error) {
+	var replacement *subscription.SubscriptionLineItem
+	var retired []*subscription.SubscriptionLineItem
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		locked, err := s.SubscriptionLineItemRepo.GetForUpdate(ctx, lineItemID)
+		if err != nil {
+			return err
+		}
+		if locked.Status != types.StatusPublished {
+			return ierr.NewError("line item is not active").
+				WithHint("Cannot update an inactive line item").
+				WithReportableDetails(map[string]interface{}{
+					"line_item_id": lineItemID,
+					"status":       locked.Status,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if successor, err := s.findPublishedSuccessor(ctx, locked); err != nil {
+			return err
+		} else if successor != nil {
+			return alreadyScheduledVersionError(lineItemID, successor.ID)
+		}
+
+		// Retire before the override repoints locked's PriceID, so retired rows keep the price they billed with.
+		cut, retiredVersions, err := s.retireLineItemVersionsFrom(ctx, sub, locked, from)
+		if err != nil {
+			return err
+		}
+		retired = retiredVersions
+
+		priceID := locked.PriceID
+		if req.ShouldCreateNewLineItem() {
+			if priceID, err = s.overrideLineItemPrice(ctx, sub, locked, req); err != nil {
+				return err
+			}
+		}
+
+		replacement = req.ToSubscriptionLineItem(ctx, locked, priceID)
+		replacement.StartDate = from
+		replacement.EndDate = locked.EndDate
+		replacement.PredecessorLineItemID = nil
+		if cut != nil {
+			replacement.PredecessorLineItemID = lo.ToPtr(cut.ID)
+		}
+		replacement.SuccessorLineItemID = nil
+		clearLineItemMetadataIDs(replacement, lineageMetadataKeys...)
+
+		if err := s.validateLineItemVersion(ctx, sub, req, replacement, locked); err != nil {
+			return err
+		}
+		if err := s.SubscriptionLineItemRepo.Create(ctx, replacement); err != nil {
+			return err
+		}
+		return s.linkReplacementVersion(ctx, sub, cut, retired, replacement)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	s.Logger.Info(ctx, "replaced subscription line item version from an earlier date",
+		"subscription_id", sub.ID,
+		"new_line_item_id", replacement.ID,
+		"effective_from", from,
+		"retired_line_item_ids", lo.Map(retired, func(li *subscription.SubscriptionLineItem, _ int) string { return li.ID }),
+	)
+
+	NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
+	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: replacement}, nil
 }
 
 // validateLineItemCommitments validates commitment config across line items.

@@ -232,6 +232,9 @@ func (s *InMemorySubscriptionLineItemStore) BulkTerminate(ctx context.Context, s
 
 	affected := 0
 	for _, item := range items {
+		if item.Status != types.StatusPublished {
+			continue
+		}
 		if !item.StartDate.IsZero() && item.StartDate.After(effectiveDate) {
 			continue
 		}

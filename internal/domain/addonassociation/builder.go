@@ -46,6 +46,15 @@ func (b *addonAssociationBuilder) WithCancellation(effectiveAt time.Time, reason
 	return b
 }
 
+// WithStartDate moves the date the attachment takes effect.
+func (b *addonAssociationBuilder) WithStartDate(startDate time.Time) *addonAssociationBuilder {
+	if b == nil || b.association == nil {
+		return b
+	}
+	b.association.StartDate = lo.ToPtr(startDate)
+	return b
+}
+
 func (b *addonAssociationBuilder) Build() *AddonAssociation {
 	if b == nil {
 		return nil
