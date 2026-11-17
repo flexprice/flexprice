@@ -811,6 +811,13 @@ definitions:
         type: string
       email:
         type: string
+      email_types:
+        description: EmailTypes lists the emails this contact receives; "invoice"
+          makes them an invoice email recipient.
+        items:
+          $ref: '#/definitions/types.ContactEmailType'
+        maxItems: 10
+        type: array
       first_name:
         maxLength: 100
         type: string
@@ -10889,8 +10896,8 @@ definitions:
       settings:
         allOf:
         - $ref: '#/definitions/types.SettingsOverride'
-        description: Settings merges into the subscription's setting overrides when provided;
-          send {} to inherit.
+        description: Settings merges into the subscription's setting overrides when
+          provided; send {} to inherit.
       status:
         $ref: '#/definitions/types.SubscriptionStatus'
     type: object
@@ -16647,6 +16654,12 @@ definitions:
     - CommitmentStatusActive
     - CommitmentStatusEnded
     - CommitmentStatusTerminated
+  types.ContactEmailType:
+    enum:
+    - invoice
+    type: string
+    x-enum-varnames:
+    - ContactEmailTypeInvoice
   types.ContractStatus:
     enum:
     - draft

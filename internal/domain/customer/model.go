@@ -1,12 +1,14 @@
 package customer
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/schema"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // Customer represents a customer in the system
@@ -183,6 +185,7 @@ func contactPersonsFromEnt(persons []*schema.ContactPerson) []*ContactPerson {
 		out[i] = &ContactPerson{
 			ID: p.ID, IsPrimary: p.IsPrimary, Salutation: p.Salutation, FirstName: p.FirstName, LastName: p.LastName,
 			Email: p.Email, Mobile: p.Mobile, Designation: p.Designation, Department: p.Department,
+			EmailTypes: p.EmailTypes,
 		}
 	}
 	return out
@@ -198,6 +201,7 @@ func (c *Customer) ToEntContactPersons() []*schema.ContactPerson {
 		out[i] = &schema.ContactPerson{
 			ID: p.ID, IsPrimary: p.IsPrimary, Salutation: p.Salutation, FirstName: p.FirstName, LastName: p.LastName,
 			Email: p.Email, Mobile: p.Mobile, Designation: p.Designation, Department: p.Department,
+			EmailTypes: p.EmailTypes,
 		}
 	}
 	return out
@@ -214,6 +218,30 @@ type ContactPerson struct {
 	Mobile      string `json:"mobile,omitempty" validate:"omitempty,max=20"`
 	Designation string `json:"designation,omitempty" validate:"omitempty,max=100"`
 	Department  string `json:"department,omitempty" validate:"omitempty,max=100"`
+	// EmailTypes lists the emails this contact receives; "invoice" makes them an invoice email recipient.
+	EmailTypes []types.ContactEmailType `json:"email_types,omitempty" validate:"omitempty,max=10"`
+}
+
+// Receives reports whether the contact gets emails of type t.
+func (p *ContactPerson) Receives(t types.ContactEmailType) bool {
+	return p != nil && p.Email != "" && lo.Contains(p.EmailTypes, t)
+}
+
+// InvoiceEmailRecipients returns the emails of contacts who receive invoices, the primary contact
+// first; with no such contact it falls back to the customer's email.
+func (c *Customer) InvoiceEmailRecipients() []string {
+	contacts := lo.Filter(c.ContactPersons, func(p *ContactPerson, _ int) bool {
+		return p.Receives(types.ContactEmailTypeInvoice)
+	})
+	sort.SliceStable(contacts, func(i, j int) bool { return contacts[i].IsPrimary && !contacts[j].IsPrimary })
+	recipients := lo.Map(contacts, func(p *ContactPerson, _ int) string { return p.Email })
+	if len(recipients) > 0 {
+		return recipients
+	}
+	if c.Email == "" {
+		return nil
+	}
+	return []string{c.Email}
 }
 
 // ValidatePersons checks the list allows at most one primary and no repeated ids,
@@ -235,6 +263,9 @@ func ValidatePersons(persons []*ContactPerson) error {
 				Mark(ierr.ErrValidation)
 		}
 		people[person] = true
+		if err := validateEmailTypes(p); err != nil {
+			return err
+		}
 		if p.IsPrimary {
 			primaries++
 		}
@@ -252,6 +283,33 @@ func ValidatePersons(persons []*ContactPerson) error {
 		return ierr.NewError("more than one primary contact person").
 			WithHint("Mark at most one contact person as primary").
 			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func validateEmailTypes(p *ContactPerson) error {
+	if len(p.EmailTypes) == 0 {
+		return nil
+	}
+	if p.Email == "" {
+		return ierr.NewError("contact person has email types but no email").
+			WithHintf("Add an email to %s to send them emails", p.FirstName).
+			Mark(ierr.ErrValidation)
+	}
+	if len(lo.Uniq(p.EmailTypes)) != len(p.EmailTypes) {
+		return ierr.NewError("duplicate contact person email type").
+			WithHint("List each email type once").
+			Mark(ierr.ErrValidation)
+	}
+	for _, t := range p.EmailTypes {
+		if t == "" {
+			return ierr.NewError("empty contact person email type").
+				WithHintf("email_types must be one of %v", []types.ContactEmailType{types.ContactEmailTypeInvoice}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := t.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
