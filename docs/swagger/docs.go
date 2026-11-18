@@ -38619,7 +38619,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "overage_factor": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "price_id": {
                     "description": "PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.\nImmutable post-create; changing pricing requires a successor line item.",
