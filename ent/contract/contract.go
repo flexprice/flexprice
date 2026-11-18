@@ -39,6 +39,18 @@ const (
 	FieldEndedAt = "ended_at"
 	// FieldContractStatus holds the string denoting the contract_status field in the database.
 	FieldContractStatus = "contract_status"
+	// FieldDocument holds the string denoting the document field in the database.
+	FieldDocument = "document"
+	// FieldExtractionStatus holds the string denoting the extraction_status field in the database.
+	FieldExtractionStatus = "extraction_status"
+	// FieldExtraction holds the string denoting the extraction field in the database.
+	FieldExtraction = "extraction"
+	// FieldExtractionError holds the string denoting the extraction_error field in the database.
+	FieldExtractionError = "extraction_error"
+	// FieldReview holds the string denoting the review field in the database.
+	FieldReview = "review"
+	// FieldReviewVersion holds the string denoting the review_version field in the database.
+	FieldReviewVersion = "review_version"
 	// Table holds the table name of the contract in the database.
 	Table = "contracts"
 )
@@ -59,6 +71,12 @@ var Columns = []string{
 	FieldTermEnd,
 	FieldEndedAt,
 	FieldContractStatus,
+	FieldDocument,
+	FieldExtractionStatus,
+	FieldExtraction,
+	FieldExtractionError,
+	FieldReview,
+	FieldReviewVersion,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -84,12 +102,12 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultEnvironmentID holds the default value on creation for the "environment_id" field.
 	DefaultEnvironmentID string
-	// CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
-	CustomerIDValidator func(string) error
-	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
-	CurrencyValidator func(string) error
 	// ContractStatusValidator is a validator for the "contract_status" field. It is called by the builders before save.
 	ContractStatusValidator func(string) error
+	// DefaultReviewVersion holds the default value on creation for the "review_version" field.
+	DefaultReviewVersion int
+	// ReviewVersionValidator is a validator for the "review_version" field. It is called by the builders before save.
+	ReviewVersionValidator func(int) error
 )
 
 // OrderOption defines the ordering options for the Contract queries.
@@ -163,4 +181,19 @@ func ByEndedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByContractStatus orders the results by the contract_status field.
 func ByContractStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldContractStatus, opts...).ToFunc()
+}
+
+// ByExtractionStatus orders the results by the extraction_status field.
+func ByExtractionStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExtractionStatus, opts...).ToFunc()
+}
+
+// ByExtractionError orders the results by the extraction_error field.
+func ByExtractionError(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExtractionError, opts...).ToFunc()
+}
+
+// ByReviewVersion orders the results by the review_version field.
+func ByReviewVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewVersion, opts...).ToFunc()
 }
