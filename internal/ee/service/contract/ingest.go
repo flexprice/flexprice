@@ -59,6 +59,7 @@ type contractIngestService struct {
 	extractor       extraction.ExtractionServiceInterface
 	matcher         customermatch.CustomerMatchServiceInterface
 	directory       *customerDirectory
+	catalog         *productCatalog
 	config          *config.Configuration
 	logger          *logger.Logger
 	starter         WorkflowStarter
@@ -71,6 +72,7 @@ func NewContractIngestService(
 	extractor extraction.ExtractionServiceInterface,
 	matcher customermatch.CustomerMatchServiceInterface,
 	customers interfaces.CustomerService,
+	products interfaces.ProductService,
 	cfg *config.Configuration,
 	logger *logger.Logger,
 ) ContractIngestService {
@@ -80,6 +82,7 @@ func NewContractIngestService(
 		extractor:       extractor,
 		matcher:         matcher,
 		directory:       newCustomerDirectory(customers),
+		catalog:         newProductCatalog(products),
 		config:          cfg,
 		logger:          logger,
 		reviewThreshold: DefaultReviewThreshold,
