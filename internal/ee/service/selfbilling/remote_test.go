@@ -1110,14 +1110,15 @@ func TestRemoteClient_SummaryOffersPlansWhileOneCanBeBought(t *testing.T) {
 	}
 }
 
-func TestRemoteClient_SummaryLoadsTheDefaultPlanOnce(t *testing.T) {
+// A plan read embeds entitlements, which the SDK cannot decode, so the summary only searches for plans.
+func TestRemoteClient_SummaryNeverReadsAPlan(t *testing.T) {
 	f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
 	f.plans["plan_2"] = map[string]any{"id": "plan_2", "name": "Growth", "prices": []any{}}
 	c := newTestRemoteClientWith(t, f, config.BillingConfig{PlanIDs: []string{"plan_1", "plan_2"}})
 
 	_, err := c.Summary(context.Background(), "in:t1")
 	require.NoError(t, err)
-	assert.Equal(t, 1, lo.Count(f.requests, "GET /plans/plan_1"))
+	assert.Empty(t, lo.Filter(f.requests, func(r string, _ int) bool { return strings.HasPrefix(r, "GET /plans/") }))
 }
 
 func TestRemoteClient_USDRates(t *testing.T) {

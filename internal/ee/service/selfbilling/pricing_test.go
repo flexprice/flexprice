@@ -416,7 +416,7 @@ func TestRemoteSummary_OfferErrorsAreReturned(t *testing.T) {
 				p["amount"] = "invalid"
 				f.plans["plan_1"]["prices"] = []any{p}
 			} else {
-				f.failPaths["/plans/plan_1"] = cannedResponse{
+				f.failPaths[pathPlanSearch] = cannedResponse{
 					status: http.StatusServiceUnavailable,
 					body:   `{"message":"unavailable"}`,
 				}
