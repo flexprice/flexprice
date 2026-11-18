@@ -191,9 +191,9 @@ var FeatureExpandConfig = ExpandConfig{
 //
 // Example: base unit = "ms", unit_singular = "second", unit_plural = "seconds", conversion_rate = 0.001 → 5000 ms → 5 seconds.
 type ReportingUnit struct {
-	UnitSingular   string           `json:"unit_singular"`   // Display unit label, singular (e.g. "second")
-	UnitPlural     string           `json:"unit_plural"`     // Display unit label, plural (e.g. "seconds")
-	ConversionRate *decimal.Decimal `json:"conversion_rate"` // Multiplier: reporting_unit_value = unit_value * conversion_rate; must be > 0
+	UnitSingular   string           `json:"unit_singular"`                        // Display unit label, singular (e.g. "second")
+	UnitPlural     string           `json:"unit_plural"`                          // Display unit label, plural (e.g. "seconds")
+	ConversionRate *decimal.Decimal `json:"conversion_rate" swaggertype:"string"` // Multiplier: reporting_unit_value = unit_value * conversion_rate; must be > 0
 }
 
 // Validate checks that when reporting_unit is provided it has unit_singular, unit_plural, and conversion_rate (all required).

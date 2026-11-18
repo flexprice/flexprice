@@ -20,8 +20,8 @@ type UsageRecord struct {
 	CustomerExternalID string                                `db:"customer_external_id" json:"customer_external_id"`
 	SubscriptionID     string                                `db:"subscription_id" json:"subscription_id"`
 	PlanID             string                                `db:"plan_id" json:"plan_id"`
-	Quantity           decimal.Decimal                       `db:"quantity" json:"quantity"`
-	Amount             decimal.Decimal                       `db:"amount" json:"amount"`
+	Quantity           decimal.Decimal                       `db:"quantity" json:"quantity" swaggertype:"string"`
+	Amount             decimal.Decimal                       `db:"amount" json:"amount" swaggertype:"string"`
 	Currency           string                                `db:"currency" json:"currency"`
 	PeriodStart        time.Time                             `db:"period_start" json:"period_start"`
 	PeriodEnd          time.Time                             `db:"period_end" json:"period_end"`

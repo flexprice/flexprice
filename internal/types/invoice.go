@@ -546,11 +546,11 @@ type InvoiceFilter struct {
 
 	// amount_due_gt filters invoices with a total amount due greater than the specified value
 	// Useful for finding invoices above a certain threshold or identifying high-value invoices
-	AmountDueGt *decimal.Decimal `json:"amount_due_gt,omitempty" form:"amount_due_gt"`
+	AmountDueGt *decimal.Decimal `json:"amount_due_gt,omitempty" form:"amount_due_gt" swaggertype:"string"`
 
 	// amount_remaining_gt filters invoices with an outstanding balance greater than the specified value
 	// Useful for finding invoices that still have significant unpaid amounts
-	AmountRemainingGt *decimal.Decimal `json:"amount_remaining_gt,omitempty" form:"amount_remaining_gt"`
+	AmountRemainingGt *decimal.Decimal `json:"amount_remaining_gt,omitempty" form:"amount_remaining_gt" swaggertype:"string"`
 
 	// period_start_gte filters invoices with period_start >= value
 	PeriodStartGTE *time.Time `json:"period_start_gte,omitempty" form:"period_start_gte" validate:"omitempty,time_rfc3339"`
