@@ -89,7 +89,7 @@ type CreateSubscriptionLineItemRequest struct {
 	PriceID string `json:"price_id,omitempty"`
 	// Price defines a new price inline; server creates a subscription-scoped price and adds the line item. Exactly one of price_id or price must be set. Entity/currency are set from the subscription.
 	Price                *SubscriptionPriceCreateRequest `json:"price,omitempty"`
-	Quantity             decimal.Decimal                 `json:"quantity,omitempty"`
+	Quantity             decimal.Decimal                 `json:"quantity,omitempty" swaggertype:"string"`
 	StartDate            *time.Time                      `json:"start_date,omitempty"`
 	EndDate              *time.Time                      `json:"end_date,omitempty"`
 	Metadata             map[string]string               `json:"metadata,omitempty"`
@@ -101,13 +101,13 @@ type CreateSubscriptionLineItemRequest struct {
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
 	// Deprecated: use POST /commitments instead.
-	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
 	// Deprecated: use POST /commitments instead.
-	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty"`
+	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty" swaggertype:"string"`
 	// Deprecated: use POST /commitments instead.
 	CommitmentType types.CommitmentType `json:"commitment_type,omitempty"`
 	// Deprecated: use POST /commitments instead.
-	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty" swaggertype:"string"`
 	// Deprecated: use POST /commitments instead.
 	CommitmentTrueUpEnabled bool `json:"commitment_true_up_enabled,omitempty"`
 	// Deprecated: use POST /commitments instead.
@@ -159,13 +159,13 @@ type UpdateSubscriptionLineItemRequest struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// Deprecated: use POST /commitments instead.
-	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
 	// Deprecated: use POST /commitments instead.
-	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty"`
+	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty" swaggertype:"string"`
 	// Deprecated: use POST /commitments instead.
 	CommitmentType types.CommitmentType `json:"commitment_type,omitempty"`
 	// Deprecated: use POST /commitments instead.
-	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty" swaggertype:"string"`
 	// Deprecated: use POST /commitments instead.
 	CommitmentTrueUpEnabled *bool `json:"commitment_true_up_enabled,omitempty"`
 	// Deprecated: use POST /commitments instead.
