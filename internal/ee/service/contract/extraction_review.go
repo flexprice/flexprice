@@ -56,7 +56,7 @@ func (c *contractIngestService) countToCheck(r *extraction.Result, threshold int
 // stepFor maps a term's JSON path to the review step it is confirmed on.
 func (c *contractIngestService) stepFor(path string) string {
 	switch {
-	case strings.HasPrefix(path, "customer."):
+	case path == "contract_type", strings.HasPrefix(path, "customer."):
 		return stepCustomer
 	case strings.HasPrefix(path, "term."), strings.HasPrefix(path, "billing."),
 		strings.HasSuffix(path, ".billing_period"), strings.HasSuffix(path, ".billing_timing"):
