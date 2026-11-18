@@ -258,7 +258,7 @@ describe("with login configured", () => {
   });
 
   test("GET / answers 200 with an empty page, so health checks pass and browsers see nothing", async () => {
-    const res = await fetch(mcp.origin);
+    const res = await fetch(mcp.origin, { redirect: "manual" });
     assert.equal(res.status, 200);
     assert.equal(await res.text(), "");
   });
