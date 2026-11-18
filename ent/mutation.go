@@ -60558,6 +60558,7 @@ type MeterUsageCheckpointMutation struct {
 	aggregation_type *types.AggregationType
 	total            *decimal.Decimal
 	aggregated_until *time.Time
+	period_start     *time.Time
 	invoice_id       *string
 	clearedFields    map[string]struct{}
 	done             bool
@@ -61140,6 +61141,55 @@ func (m *MeterUsageCheckpointMutation) ResetAggregatedUntil() {
 	m.aggregated_until = nil
 }
 
+// SetPeriodStart sets the "period_start" field.
+func (m *MeterUsageCheckpointMutation) SetPeriodStart(t time.Time) {
+	m.period_start = &t
+}
+
+// PeriodStart returns the value of the "period_start" field in the mutation.
+func (m *MeterUsageCheckpointMutation) PeriodStart() (r time.Time, exists bool) {
+	v := m.period_start
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodStart returns the old "period_start" field's value of the MeterUsageCheckpoint entity.
+// If the MeterUsageCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsageCheckpointMutation) OldPeriodStart(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodStart is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodStart requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodStart: %w", err)
+	}
+	return oldValue.PeriodStart, nil
+}
+
+// ClearPeriodStart clears the value of the "period_start" field.
+func (m *MeterUsageCheckpointMutation) ClearPeriodStart() {
+	m.period_start = nil
+	m.clearedFields[meterusagecheckpoint.FieldPeriodStart] = struct{}{}
+}
+
+// PeriodStartCleared returns if the "period_start" field was cleared in this mutation.
+func (m *MeterUsageCheckpointMutation) PeriodStartCleared() bool {
+	_, ok := m.clearedFields[meterusagecheckpoint.FieldPeriodStart]
+	return ok
+}
+
+// ResetPeriodStart resets all changes to the "period_start" field.
+func (m *MeterUsageCheckpointMutation) ResetPeriodStart() {
+	m.period_start = nil
+	delete(m.clearedFields, meterusagecheckpoint.FieldPeriodStart)
+}
+
 // SetInvoiceID sets the "invoice_id" field.
 func (m *MeterUsageCheckpointMutation) SetInvoiceID(s string) {
 	m.invoice_id = &s
@@ -61223,7 +61273,7 @@ func (m *MeterUsageCheckpointMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeterUsageCheckpointMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 14)
 	if m.tenant_id != nil {
 		fields = append(fields, meterusagecheckpoint.FieldTenantID)
 	}
@@ -61260,6 +61310,9 @@ func (m *MeterUsageCheckpointMutation) Fields() []string {
 	if m.aggregated_until != nil {
 		fields = append(fields, meterusagecheckpoint.FieldAggregatedUntil)
 	}
+	if m.period_start != nil {
+		fields = append(fields, meterusagecheckpoint.FieldPeriodStart)
+	}
 	if m.invoice_id != nil {
 		fields = append(fields, meterusagecheckpoint.FieldInvoiceID)
 	}
@@ -61295,6 +61348,8 @@ func (m *MeterUsageCheckpointMutation) Field(name string) (ent.Value, bool) {
 		return m.Total()
 	case meterusagecheckpoint.FieldAggregatedUntil:
 		return m.AggregatedUntil()
+	case meterusagecheckpoint.FieldPeriodStart:
+		return m.PeriodStart()
 	case meterusagecheckpoint.FieldInvoiceID:
 		return m.InvoiceID()
 	}
@@ -61330,6 +61385,8 @@ func (m *MeterUsageCheckpointMutation) OldField(ctx context.Context, name string
 		return m.OldTotal(ctx)
 	case meterusagecheckpoint.FieldAggregatedUntil:
 		return m.OldAggregatedUntil(ctx)
+	case meterusagecheckpoint.FieldPeriodStart:
+		return m.OldPeriodStart(ctx)
 	case meterusagecheckpoint.FieldInvoiceID:
 		return m.OldInvoiceID(ctx)
 	}
@@ -61425,6 +61482,13 @@ func (m *MeterUsageCheckpointMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetAggregatedUntil(v)
 		return nil
+	case meterusagecheckpoint.FieldPeriodStart:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodStart(v)
+		return nil
 	case meterusagecheckpoint.FieldInvoiceID:
 		v, ok := value.(string)
 		if !ok {
@@ -61471,6 +61535,9 @@ func (m *MeterUsageCheckpointMutation) ClearedFields() []string {
 	if m.FieldCleared(meterusagecheckpoint.FieldEnvironmentID) {
 		fields = append(fields, meterusagecheckpoint.FieldEnvironmentID)
 	}
+	if m.FieldCleared(meterusagecheckpoint.FieldPeriodStart) {
+		fields = append(fields, meterusagecheckpoint.FieldPeriodStart)
+	}
 	if m.FieldCleared(meterusagecheckpoint.FieldInvoiceID) {
 		fields = append(fields, meterusagecheckpoint.FieldInvoiceID)
 	}
@@ -61496,6 +61563,9 @@ func (m *MeterUsageCheckpointMutation) ClearField(name string) error {
 		return nil
 	case meterusagecheckpoint.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case meterusagecheckpoint.FieldPeriodStart:
+		m.ClearPeriodStart()
 		return nil
 	case meterusagecheckpoint.FieldInvoiceID:
 		m.ClearInvoiceID()
@@ -61543,6 +61613,9 @@ func (m *MeterUsageCheckpointMutation) ResetField(name string) error {
 		return nil
 	case meterusagecheckpoint.FieldAggregatedUntil:
 		m.ResetAggregatedUntil()
+		return nil
+	case meterusagecheckpoint.FieldPeriodStart:
+		m.ResetPeriodStart()
 		return nil
 	case meterusagecheckpoint.FieldInvoiceID:
 		m.ResetInvoiceID()

@@ -8,8 +8,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// MeterUsageCheckpoint is a meter's running aggregate for one customer: every change
-// before AggregatedUntil, aggregated by AggregationType.
+// MeterUsageCheckpoint is a meter's aggregate for one customer: every change before
+// AggregatedUntil, aggregated by AggregationType. With PeriodStart set it counts only from the
+// billing period start and is advanced in place; without it, it is an all-time running total.
 type MeterUsageCheckpoint struct {
 	ID              string                `json:"id"`
 	CustomerID      string                `json:"customer_id"`
@@ -17,6 +18,7 @@ type MeterUsageCheckpoint struct {
 	AggregationType types.AggregationType `json:"aggregation_type"`
 	Total           decimal.Decimal       `json:"total"`
 	AggregatedUntil time.Time             `json:"aggregated_until"`
+	PeriodStart     *time.Time            `json:"period_start,omitempty"`
 	InvoiceID       *string               `json:"invoice_id,omitempty"`
 	EnvironmentID   string                `json:"environment_id"`
 	types.BaseModel
@@ -33,6 +35,7 @@ func FromEnt(e *ent.MeterUsageCheckpoint) *MeterUsageCheckpoint {
 		AggregationType: e.AggregationType,
 		Total:           e.Total,
 		AggregatedUntil: e.AggregatedUntil,
+		PeriodStart:     e.PeriodStart,
 		InvoiceID:       e.InvoiceID,
 		EnvironmentID:   e.EnvironmentID,
 		BaseModel: types.BaseModel{

@@ -3,6 +3,7 @@ package ent
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type meterUsageCheckpointRepository struct {
@@ -43,6 +45,7 @@ func (r *meterUsageCheckpointRepository) GetLatestBefore(
 			meterusagecheckpoint.MeterID(params.MeterID),
 			meterusagecheckpoint.AggregationType(params.AggregationType),
 			meterusagecheckpoint.AggregatedUntilLT(params.Before),
+			meterusagecheckpoint.PeriodStartIsNil(),
 			meterusagecheckpoint.Status(string(types.StatusPublished)),
 		).
 		Order(ent.Desc(meterusagecheckpoint.FieldAggregatedUntil)).
@@ -133,6 +136,7 @@ func (r *meterUsageCheckpointRepository) updateExisting(
 			meterusagecheckpoint.CustomerID(c.CustomerID),
 			meterusagecheckpoint.MeterID(c.MeterID),
 			meterusagecheckpoint.AggregatedUntil(c.AggregatedUntil),
+			meterusagecheckpoint.PeriodStartIsNil(),
 		).
 		Only(ctx)
 	if err != nil {
@@ -159,4 +163,115 @@ func (r *meterUsageCheckpointRepository) updateExisting(
 			Mark(ierr.ErrDatabase)
 	}
 	return domainCheckpoint.FromEnt(updated), nil
+}
+
+func (r *meterUsageCheckpointRepository) ListPeriodTotals(
+	ctx context.Context,
+	customerID string,
+	periodStart time.Time,
+) ([]*domainCheckpoint.MeterUsageCheckpoint, error) {
+	span := StartRepositorySpan(ctx, "meter_usage_checkpoint", "list_period_totals", map[string]interface{}{
+		"customer_id": customerID, "period_start": periodStart,
+	})
+	defer FinishSpan(span)
+
+	rows, err := r.client.Writer(ctx).MeterUsageCheckpoint.Query().
+		Where(
+			meterusagecheckpoint.TenantID(types.GetTenantID(ctx)),
+			meterusagecheckpoint.EnvironmentID(types.GetEnvironmentID(ctx)),
+			meterusagecheckpoint.CustomerID(customerID),
+			meterusagecheckpoint.PeriodStart(periodStart),
+			meterusagecheckpoint.Status(string(types.StatusPublished)),
+		).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to list per-period meter usage totals").Mark(ierr.ErrDatabase)
+	}
+	return lo.Map(rows, func(row *ent.MeterUsageCheckpoint, _ int) *domainCheckpoint.MeterUsageCheckpoint {
+		return domainCheckpoint.FromEnt(row)
+	}), nil
+}
+
+func (r *meterUsageCheckpointRepository) UpdatePeriodTotals(
+	ctx context.Context,
+	params domainCheckpoint.UpdatePeriodTotalsParams,
+) error {
+	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	if tenantID == "" || environmentID == "" || params.CustomerID == "" || params.PeriodStart.IsZero() {
+		return ierr.NewError("tenant, environment, customer and period start are required").Mark(ierr.ErrValidation)
+	}
+	span := StartRepositorySpan(ctx, "meter_usage_checkpoint", "update_period_totals", map[string]interface{}{
+		"customer_id": params.CustomerID, "period_start": params.PeriodStart, "rows": len(params.Rows),
+	})
+	defer FinishSpan(span)
+
+	err := r.client.WithTx(ctx, func(txCtx context.Context) error {
+		key := fmt.Sprintf("meter_usage_period_total:%s:%s:%s:%d", tenantID, environmentID, params.CustomerID, params.PeriodStart.Unix())
+		if err := r.client.LockWithWait(txCtx, postgres.LockRequest{Key: key}); err != nil {
+			return err
+		}
+		client := r.client.Writer(txCtx)
+		existing, err := client.MeterUsageCheckpoint.Query().
+			Where(
+				meterusagecheckpoint.TenantID(tenantID),
+				meterusagecheckpoint.EnvironmentID(environmentID),
+				meterusagecheckpoint.CustomerID(params.CustomerID),
+				meterusagecheckpoint.PeriodStart(params.PeriodStart),
+			).
+			All(txCtx)
+		if err != nil {
+			return err
+		}
+		existingIDs := make(map[string]string, len(existing))
+		for _, row := range existing {
+			if !row.AggregatedUntil.Equal(params.ExpectedAggregatedUntil) {
+				return ierr.NewError("per-period meter usage totals moved since they were read").
+					WithHint("Another checkpoint run updated this billing period; re-read it before retrying.").
+					Mark(ierr.ErrVersionConflict)
+			}
+			existingIDs[row.MeterID] = row.ID
+		}
+
+		for _, row := range params.Rows {
+			if id, ok := existingIDs[row.MeterID]; ok {
+				if _, err := client.MeterUsageCheckpoint.UpdateOneID(id).
+					SetTotal(row.Total).
+					SetAggregatedUntil(row.AggregatedUntil).
+					SetUpdatedAt(clock.Now()).
+					SetUpdatedBy(types.GetUserID(txCtx)).
+					Save(txCtx); err != nil {
+					return err
+				}
+				continue
+			}
+			if _, err := client.MeterUsageCheckpoint.Create().
+				SetID(row.ID).
+				SetCustomerID(params.CustomerID).
+				SetMeterID(row.MeterID).
+				SetAggregationType(row.AggregationType).
+				SetTotal(row.Total).
+				SetAggregatedUntil(row.AggregatedUntil).
+				SetPeriodStart(params.PeriodStart).
+				SetTenantID(tenantID).
+				SetEnvironmentID(environmentID).
+				SetStatus(string(types.StatusPublished)).
+				SetCreatedAt(row.CreatedAt).
+				SetUpdatedAt(row.UpdatedAt).
+				SetCreatedBy(row.CreatedBy).
+				SetUpdatedBy(row.UpdatedBy).
+				Save(txCtx); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		SetSpanError(span, err)
+		if ierr.IsVersionConflict(err) {
+			return err
+		}
+		return ierr.WithError(err).WithHint("Failed to save per-period meter usage totals").Mark(ierr.ErrDatabase)
+	}
+	return nil
 }

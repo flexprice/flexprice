@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -10,7 +11,8 @@ import (
 )
 
 // MeterUsageCheckpoint is a meter's running aggregate for one customer up to a point in
-// time. Reads combine the latest checkpoint with the changes since.
+// time. Reads combine the latest checkpoint with the changes since. A row with period_start
+// covers one billing period and is advanced in place; a row without one is a running total.
 type MeterUsageCheckpoint struct {
 	ent.Schema
 }
@@ -59,7 +61,12 @@ func (MeterUsageCheckpoint) Fields() []ent.Field {
 				"postgres": "numeric(34,15)",
 			}),
 
-		field.Time("aggregated_until").
+		field.Time("aggregated_until"),
+
+		// Set on per-period rows: the billing period start the total counts from.
+		field.Time("period_start").
+			Optional().
+			Nillable().
 			Immutable(),
 
 		// The invoice whose period end this checkpoint records, when it came from one.
@@ -74,10 +81,17 @@ func (MeterUsageCheckpoint) Fields() []ent.Field {
 
 func (MeterUsageCheckpoint) Indexes() []ent.Index {
 	return []ent.Index{
-		// One checkpoint per instant, and the latest-at-or-before lookup is a
+		// One running total per instant, and the latest-at-or-before lookup is a
 		// backward scan on aggregated_until with no sort.
 		index.Fields("tenant_id", "environment_id", "customer_id", "meter_id", "aggregated_until").
 			Unique().
-			StorageKey("meterusagecheckpoint_customer_meter_aggregated_until"),
+			Annotations(entsql.IndexWhere("(period_start IS NULL)")).
+			StorageKey("meterusagecheckpoint_running_total"),
+
+		// One per-period row per customer, meter and billing period.
+		index.Fields("tenant_id", "environment_id", "customer_id", "meter_id", "period_start").
+			Unique().
+			Annotations(entsql.IndexWhere("(period_start IS NOT NULL)")).
+			StorageKey("meterusagecheckpoint_period_total"),
 	}
 }

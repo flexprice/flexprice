@@ -33,7 +33,7 @@ func (s *InMemoryMeterUsageCheckpointStore) GetLatestBefore(
 
 	var latest *meterusagecheckpoint.MeterUsageCheckpoint
 	for _, c := range rows {
-		if c.AggregationType != params.AggregationType || !c.AggregatedUntil.Before(params.Before) {
+		if c.PeriodStart != nil || c.AggregationType != params.AggregationType || !c.AggregatedUntil.Before(params.Before) {
 			continue
 		}
 		if latest == nil || c.AggregatedUntil.After(latest.AggregatedUntil) {
@@ -66,7 +66,7 @@ func (s *InMemoryMeterUsageCheckpointStore) Upsert(
 		return nil, err
 	}
 	for _, existing := range rows {
-		if !existing.AggregatedUntil.Equal(c.AggregatedUntil) {
+		if existing.PeriodStart != nil || !existing.AggregatedUntil.Equal(c.AggregatedUntil) {
 			continue
 		}
 		updated := meterusagecheckpoint.NewMeterUsageCheckpointBuilder(existing).
@@ -97,4 +97,59 @@ func (s *InMemoryMeterUsageCheckpointStore) matching(
 			c.CustomerID == customerID &&
 			c.MeterID == meterID
 	}, nil)
+}
+
+func (s *InMemoryMeterUsageCheckpointStore) ListPeriodTotals(
+	ctx context.Context,
+	customerID string,
+	periodStart time.Time,
+) ([]*meterusagecheckpoint.MeterUsageCheckpoint, error) {
+	return s.List(ctx, nil, func(ctx context.Context, c *meterusagecheckpoint.MeterUsageCheckpoint, _ interface{}) bool {
+		return c.TenantID == types.GetTenantID(ctx) &&
+			c.EnvironmentID == types.GetEnvironmentID(ctx) && c.Status == types.StatusPublished &&
+			c.CustomerID == customerID &&
+			c.PeriodStart != nil && c.PeriodStart.Equal(periodStart)
+	}, nil)
+}
+
+func (s *InMemoryMeterUsageCheckpointStore) UpdatePeriodTotals(
+	ctx context.Context,
+	params meterusagecheckpoint.UpdatePeriodTotalsParams,
+) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	existing, err := s.ListPeriodTotals(ctx, params.CustomerID, params.PeriodStart)
+	if err != nil {
+		return err
+	}
+	byMeter := make(map[string]*meterusagecheckpoint.MeterUsageCheckpoint, len(existing))
+	for _, c := range existing {
+		byMeter[c.MeterID] = c
+	}
+	for _, current := range existing {
+		if !current.AggregatedUntil.Equal(params.ExpectedAggregatedUntil) {
+			return ierr.NewError("per-period meter usage totals moved").Mark(ierr.ErrVersionConflict)
+		}
+	}
+	for _, row := range params.Rows {
+		periodStart := params.PeriodStart
+		next := *row
+		next.CustomerID = params.CustomerID
+		next.PeriodStart = &periodStart
+		next.TenantID = types.GetTenantID(ctx)
+		next.EnvironmentID = types.GetEnvironmentID(ctx)
+		next.Status = types.StatusPublished
+		if current, ok := byMeter[row.MeterID]; ok {
+			next.ID = current.ID
+			if err := s.Update(ctx, current.ID, &next); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := s.Create(ctx, next.ID, &next); err != nil {
+			return err
+		}
+	}
+	return nil
 }

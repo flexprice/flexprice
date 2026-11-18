@@ -651,6 +651,47 @@ func (r *MeterUsageRepository) fetchBucketedComboPoints(
 	return pts, nil
 }
 
+func (r *MeterUsageRepository) GetMeterTotals(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterTotals, error) {
+	if params == nil || len(params.ExternalCustomerIDs) == 0 || params.StartTime.IsZero() || params.EndTime.IsZero() {
+		return nil, ierr.NewError("external customer ids and a start and end time are required").Mark(ierr.ErrValidation)
+	}
+
+	span := StartRepositorySpan(ctx, "meter_usage", "get_meter_totals", map[string]interface{}{
+		"external_customer_ids": len(params.ExternalCustomerIDs),
+	})
+	defer FinishSpan(span)
+
+	finalParams := *params
+	finalParams.UseFinal = true
+	where, args := r.qb.BuildWhereClause(&finalParams)
+	query := fmt.Sprintf(`
+		SELECT external_customer_id, meter_id, SUM(qty_total), COUNT(DISTINCT id), MAX(qty_total)
+		FROM meter_usage FINAL
+		WHERE %s
+		GROUP BY external_customer_id, meter_id
+		SETTINGS do_not_merge_across_partitions_select_final = 1, max_memory_usage = 96636764160
+	`, where)
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to query meter totals from meter_usage").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var totals []*events.MeterTotals
+	for rows.Next() {
+		t := &events.MeterTotals{}
+		if err := rows.Scan(&t.ExternalCustomerID, &t.MeterID, &t.Sum, &t.Count, &t.Max); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).WithHint("Failed to scan meter totals row").Mark(ierr.ErrDatabase)
+		}
+		totals = append(totals, t)
+	}
+	SetSpanSuccess(span)
+	return totals, nil
+}
+
 // GetDistinctMeterIDs returns the set of meter_ids that have data in meter_usage
 // for the given customer(s) and time range.
 func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *events.MeterUsageQueryParams) ([]string, error) {

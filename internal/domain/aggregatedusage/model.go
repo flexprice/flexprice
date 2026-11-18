@@ -51,8 +51,11 @@ type Bucket struct {
 	Quantity           decimal.Decimal
 }
 
-// Store writes hourly buckets for the tenant and environment in ctx.
+// Store keeps hourly buckets for the tenant and environment in ctx.
 type Store interface {
 	// Increment merges buckets into Redis: SUM and COUNT add, MAX keeps the higher value.
 	Increment(ctx context.Context, buckets []Bucket) error
+
+	// ActiveCustomers returns the external customer IDs with usage in the UTC hour starting at hour.
+	ActiveCustomers(ctx context.Context, hour time.Time) ([]string, error)
 }

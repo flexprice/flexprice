@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
@@ -95,4 +96,17 @@ func (s *aggregatedUsageStore) Increment(ctx context.Context, buckets []aggregat
 		return fmt.Errorf("aggregated usage increment: %w", err)
 	}
 	return nil
+}
+
+func (s *aggregatedUsageStore) ActiveCustomers(ctx context.Context, hour time.Time) ([]string, error) {
+	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	if tenantID == "" || environmentID == "" {
+		return nil, fmt.Errorf("aggregated usage active customers: tenant and environment are required")
+	}
+	key := newAggregatedUsageKeys(s.keyPrefix, tenantID, environmentID, aggregatedusage.Bucket{Hour: hour}).active
+	customers, err := s.client.SMembers(ctx, key).Result()
+	if err != nil {
+		return nil, fmt.Errorf("aggregated usage active customers: %w", err)
+	}
+	return customers, nil
 }

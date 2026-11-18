@@ -98,6 +98,20 @@ func (_u *MeterUsageCheckpointUpdate) SetNillableTotal(v *decimal.Decimal) *Mete
 	return _u
 }
 
+// SetAggregatedUntil sets the "aggregated_until" field.
+func (_u *MeterUsageCheckpointUpdate) SetAggregatedUntil(v time.Time) *MeterUsageCheckpointUpdate {
+	_u.mutation.SetAggregatedUntil(v)
+	return _u
+}
+
+// SetNillableAggregatedUntil sets the "aggregated_until" field if the given value is not nil.
+func (_u *MeterUsageCheckpointUpdate) SetNillableAggregatedUntil(v *time.Time) *MeterUsageCheckpointUpdate {
+	if v != nil {
+		_u.SetAggregatedUntil(*v)
+	}
+	return _u
+}
+
 // SetInvoiceID sets the "invoice_id" field.
 func (_u *MeterUsageCheckpointUpdate) SetInvoiceID(v string) *MeterUsageCheckpointUpdate {
 	_u.mutation.SetInvoiceID(v)
@@ -205,6 +219,12 @@ func (_u *MeterUsageCheckpointUpdate) sqlSave(ctx context.Context) (_node int, e
 	if value, ok := _u.mutation.Total(); ok {
 		_spec.SetField(meterusagecheckpoint.FieldTotal, field.TypeOther, value)
 	}
+	if value, ok := _u.mutation.AggregatedUntil(); ok {
+		_spec.SetField(meterusagecheckpoint.FieldAggregatedUntil, field.TypeTime, value)
+	}
+	if _u.mutation.PeriodStartCleared() {
+		_spec.ClearField(meterusagecheckpoint.FieldPeriodStart, field.TypeTime)
+	}
 	if value, ok := _u.mutation.InvoiceID(); ok {
 		_spec.SetField(meterusagecheckpoint.FieldInvoiceID, field.TypeString, value)
 	}
@@ -295,6 +315,20 @@ func (_u *MeterUsageCheckpointUpdateOne) SetTotal(v decimal.Decimal) *MeterUsage
 func (_u *MeterUsageCheckpointUpdateOne) SetNillableTotal(v *decimal.Decimal) *MeterUsageCheckpointUpdateOne {
 	if v != nil {
 		_u.SetTotal(*v)
+	}
+	return _u
+}
+
+// SetAggregatedUntil sets the "aggregated_until" field.
+func (_u *MeterUsageCheckpointUpdateOne) SetAggregatedUntil(v time.Time) *MeterUsageCheckpointUpdateOne {
+	_u.mutation.SetAggregatedUntil(v)
+	return _u
+}
+
+// SetNillableAggregatedUntil sets the "aggregated_until" field if the given value is not nil.
+func (_u *MeterUsageCheckpointUpdateOne) SetNillableAggregatedUntil(v *time.Time) *MeterUsageCheckpointUpdateOne {
+	if v != nil {
+		_u.SetAggregatedUntil(*v)
 	}
 	return _u
 }
@@ -435,6 +469,12 @@ func (_u *MeterUsageCheckpointUpdateOne) sqlSave(ctx context.Context) (_node *Me
 	}
 	if value, ok := _u.mutation.Total(); ok {
 		_spec.SetField(meterusagecheckpoint.FieldTotal, field.TypeOther, value)
+	}
+	if value, ok := _u.mutation.AggregatedUntil(); ok {
+		_spec.SetField(meterusagecheckpoint.FieldAggregatedUntil, field.TypeTime, value)
+	}
+	if _u.mutation.PeriodStartCleared() {
+		_spec.ClearField(meterusagecheckpoint.FieldPeriodStart, field.TypeTime)
 	}
 	if value, ok := _u.mutation.InvoiceID(); ok {
 		_spec.SetField(meterusagecheckpoint.FieldInvoiceID, field.TypeString, value)

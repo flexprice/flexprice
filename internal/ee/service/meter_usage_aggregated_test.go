@@ -21,6 +21,11 @@ type fakeAggregatedUsageStore struct {
 	calls   int
 	buckets []aggregatedusage.Bucket
 	err     error
+	active  map[time.Time][]string
+}
+
+func (f *fakeAggregatedUsageStore) ActiveCustomers(_ context.Context, hour time.Time) ([]string, error) {
+	return f.active[hour], f.err
 }
 
 func (f *fakeAggregatedUsageStore) Increment(_ context.Context, buckets []aggregatedusage.Bucket) error {

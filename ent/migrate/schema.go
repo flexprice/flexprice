@@ -2148,6 +2148,7 @@ var (
 		{Name: "aggregation_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "total", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(34,15)"}},
 		{Name: "aggregated_until", Type: field.TypeTime},
+		{Name: "period_start", Type: field.TypeTime, Nullable: true},
 		{Name: "invoice_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// MeterUsageCheckpointsTable holds the schema information for the "meter_usage_checkpoints" table.
@@ -2157,9 +2158,20 @@ var (
 		PrimaryKey: []*schema.Column{MeterUsageCheckpointsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "meterusagecheckpoint_customer_meter_aggregated_until",
+				Name:    "meterusagecheckpoint_running_total",
 				Unique:  true,
 				Columns: []*schema.Column{MeterUsageCheckpointsColumns[1], MeterUsageCheckpointsColumns[7], MeterUsageCheckpointsColumns[8], MeterUsageCheckpointsColumns[9], MeterUsageCheckpointsColumns[12]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(period_start IS NULL)",
+				},
+			},
+			{
+				Name:    "meterusagecheckpoint_period_total",
+				Unique:  true,
+				Columns: []*schema.Column{MeterUsageCheckpointsColumns[1], MeterUsageCheckpointsColumns[7], MeterUsageCheckpointsColumns[8], MeterUsageCheckpointsColumns[9], MeterUsageCheckpointsColumns[13]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(period_start IS NOT NULL)",
+				},
 			},
 		},
 	}

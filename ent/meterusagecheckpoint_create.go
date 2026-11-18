@@ -142,6 +142,20 @@ func (_c *MeterUsageCheckpointCreate) SetAggregatedUntil(v time.Time) *MeterUsag
 	return _c
 }
 
+// SetPeriodStart sets the "period_start" field.
+func (_c *MeterUsageCheckpointCreate) SetPeriodStart(v time.Time) *MeterUsageCheckpointCreate {
+	_c.mutation.SetPeriodStart(v)
+	return _c
+}
+
+// SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
+func (_c *MeterUsageCheckpointCreate) SetNillablePeriodStart(v *time.Time) *MeterUsageCheckpointCreate {
+	if v != nil {
+		_c.SetPeriodStart(*v)
+	}
+	return _c
+}
+
 // SetInvoiceID sets the "invoice_id" field.
 func (_c *MeterUsageCheckpointCreate) SetInvoiceID(v string) *MeterUsageCheckpointCreate {
 	_c.mutation.SetInvoiceID(v)
@@ -346,6 +360,10 @@ func (_c *MeterUsageCheckpointCreate) createSpec() (*MeterUsageCheckpoint, *sqlg
 	if value, ok := _c.mutation.AggregatedUntil(); ok {
 		_spec.SetField(meterusagecheckpoint.FieldAggregatedUntil, field.TypeTime, value)
 		_node.AggregatedUntil = value
+	}
+	if value, ok := _c.mutation.PeriodStart(); ok {
+		_spec.SetField(meterusagecheckpoint.FieldPeriodStart, field.TypeTime, value)
+		_node.PeriodStart = &value
 	}
 	if value, ok := _c.mutation.InvoiceID(); ok {
 		_spec.SetField(meterusagecheckpoint.FieldInvoiceID, field.TypeString, value)
