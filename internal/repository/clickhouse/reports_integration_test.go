@@ -223,6 +223,8 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 		tx("w6", "debit", "completed", "CREDIT_EXPIRED", 5),
 		tx("w7", "debit", "completed", "INVOICE_PAYMENT", 3),
 		`('w5','t1','e1','published','debit','completed','INVOICE_PAYMENT','c1','usd',12,12,1,'2026-09-10 00:00:00','[{"credit_transaction_id":"w1","credits":8},{"credit_transaction_id":"w2","credits":4}]',0,1)`,
+		// Prepaid credits applied to an invoice count as consumption.
+		`('w8','t1','e1','published','debit','completed','CREDIT_ADJUSTMENT','c1','usd',6,6,1,'2026-09-10 00:00:00','[{"credit_transaction_id":"w2","credits":6}]',0,1)`,
 	}, ",")))
 	mergeTables(t, admin, db, "invoices", "wallet_transactions")
 
@@ -262,7 +264,7 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 		{"PURCHASED_CREDIT_DIRECT", "usd", "50"},
 	}, run(types.MetricCreditTopups, types.ShapeBreakdown, "transaction_reason"))
 
-	assert.ElementsMatch(t, [][]string{{"free", "usd", "4"}, {"paid", "usd", "11"}}, run(types.MetricCreditConsumption, types.ShapeScalar))
+	assert.ElementsMatch(t, [][]string{{"free", "usd", "10"}, {"paid", "usd", "11"}}, run(types.MetricCreditConsumption, types.ShapeScalar))
 
 	assert.Equal(t, [][]string{{"usd", "90"}}, run(types.MetricARPUPaid, types.ShapeScalar))
 
