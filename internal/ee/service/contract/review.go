@@ -20,12 +20,11 @@ const (
 	reviewChoiceNew      = "new"
 )
 
-// reviewDoc is the stored review: the reviewer's copy of the extracted terms, the term paths they
-// confirmed and their customer and product decisions. Matches, derived values and counts are not
-// stored; they are worked out each time the review is read.
+// reviewDoc is the stored review: only the reviewer's changes to the extraction. Values holds the
+// edited term values by path; the reviewed terms are the extraction with Values applied.
 type reviewDoc struct {
-	Result    *extraction.Result                   `json:"result"`
-	Confirmed []string                             `json:"confirmed"`
+	Values    map[string]string                    `json:"values,omitempty"`
+	Confirmed []string                             `json:"confirmed,omitempty"`
 	Customer  *dto.ContractReviewCustomer          `json:"customer,omitempty"`
 	Products  map[string]dto.ContractReviewProduct `json:"products,omitempty"`
 }
@@ -36,7 +35,7 @@ func (c *contractIngestService) GetReview(ctx context.Context, contractID string
 	if err != nil {
 		return nil, err
 	}
-	return c.reviewView(ctx, contract, out, doc), nil
+	return c.reviewView(ctx, contract, out, doc)
 }
 
 // SaveReviewStep applies one step's edits, confirmations and customer decision to the review.
@@ -53,16 +52,22 @@ func (c *contractIngestService) SaveReviewStep(ctx context.Context, contractID, 
 		return nil, err
 	}
 
-	terms := c.termsByPath(doc.Result)
+	terms := c.termsByPath(out.Result)
 	for path, value := range req.Values {
 		t, err := c.stepTerm(terms, step, path)
 		if err != nil {
 			return nil, err
 		}
-		if value != "" && value != t.Value && !c.validValue(path, value) {
+		current, edited := doc.Values[path]
+		unchanged := value == t.Value || (edited && value == current)
+		if value != "" && !unchanged && !c.validValue(path, value) {
 			return nil, c.invalidValue(path, value)
 		}
-		t.Value = value
+		if value == t.Value {
+			delete(doc.Values, path)
+			continue
+		}
+		doc.Values[path] = value
 	}
 	if req.Confirmed != nil {
 		for _, path := range req.Confirmed {
@@ -80,7 +85,7 @@ func (c *contractIngestService) SaveReviewStep(ctx context.Context, contractID, 
 		}
 	}
 	if req.Products != nil {
-		if err := c.applyProductChoices(ctx, step, doc, req.Products); err != nil {
+		if err := c.applyProductChoices(ctx, step, doc, len(out.Result.Charges), req.Products); err != nil {
 			return nil, err
 		}
 	}
@@ -96,11 +101,10 @@ func (c *contractIngestService) SaveReviewStep(ctx context.Context, contractID, 
 		return nil, err
 	}
 	saved := domainContract.NewBuilder(contract).WithReview(raw).WithReviewVersion(version).Build()
-	return c.reviewView(ctx, saved, out, doc), nil
+	return c.reviewView(ctx, saved, out, doc)
 }
 
-// loadReview reads the contract, its extraction and its review, starting the review from the
-// extraction when none is saved yet.
+// loadReview reads the contract, its extraction and the reviewer's saved changes.
 func (c *contractIngestService) loadReview(ctx context.Context, contractID string) (*domainContract.Contract, *extraction.Extraction, *reviewDoc, error) {
 	contract, out, err := c.loadExtraction(ctx, contractID)
 	if err != nil {
@@ -112,19 +116,17 @@ func (c *contractIngestService) loadReview(ctx context.Context, contractID strin
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	raw := contract.Review()
-	if len(raw) == 0 {
-		if raw, err = json.Marshal(reviewDoc{Result: out.Result, Confirmed: []string{}}); err != nil {
-			return nil, nil, nil, ierr.WithError(err).Mark(ierr.ErrInternal)
+	var doc reviewDoc
+	if raw := contract.Review(); len(raw) > 0 {
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			return nil, nil, nil, ierr.WithError(err).
+				WithHint("The saved contract review could not be read").
+				Mark(ierr.ErrInternal)
 		}
 	}
-	var doc reviewDoc
-	if err := json.Unmarshal(raw, &doc); err != nil || doc.Result == nil {
-		return nil, nil, nil, ierr.NewError("stored review could not be read").
-			WithHint("The saved contract review could not be read").
-			Mark(ierr.ErrInternal)
+	if doc.Values == nil {
+		doc.Values = map[string]string{}
 	}
-	doc.Result.CustomerMatch, doc.Result.Derived, doc.Result.ToCheck = nil, nil, nil
 	if doc.Confirmed == nil {
 		doc.Confirmed = []string{}
 	}
@@ -134,16 +136,41 @@ func (c *contractIngestService) loadReview(ctx context.Context, contractID strin
 	return contract, out, &doc, nil
 }
 
+// reviewed returns a copy of the extracted terms with the reviewer's values applied. A saved value
+// for a term the extraction no longer has is ignored.
+func (c *contractIngestService) reviewed(extracted *extraction.Result, values map[string]string) (*extraction.Result, error) {
+	raw, err := json.Marshal(extracted)
+	if err != nil {
+		return nil, ierr.WithError(err).Mark(ierr.ErrInternal)
+	}
+	var r extraction.Result
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return nil, ierr.WithError(err).Mark(ierr.ErrInternal)
+	}
+	r.CustomerMatch, r.Derived, r.ToCheck = nil, nil, nil
+	terms := c.termsByPath(&r)
+	for path, value := range values {
+		if t, ok := terms[path]; ok {
+			t.Value = value
+		}
+	}
+	return &r, nil
+}
+
 // reviewView adds the current customer and product matches, the derived values and the counts left
 // to check. A term the reviewer changed or confirmed is no longer left to check.
-func (c *contractIngestService) reviewView(ctx context.Context, contract *domainContract.Contract, out *extraction.Extraction, doc *reviewDoc) *dto.ContractReviewResponse {
-	edited := c.editedPaths(out.Result, doc.Result)
+func (c *contractIngestService) reviewView(ctx context.Context, contract *domainContract.Contract, out *extraction.Extraction, doc *reviewDoc) (*dto.ContractReviewResponse, error) {
+	reviewed, err := c.reviewed(out.Result, doc.Values)
+	if err != nil {
+		return nil, err
+	}
+	edited := c.editedPaths(out.Result, reviewed)
 	settled := lo.SliceToMap(append(append([]string{}, doc.Confirmed...), edited...), func(path string) (string, bool) { return path, true })
 	if doc.Customer != nil {
 		settled[customerMatchPath] = true
 	}
 
-	result := *doc.Result
+	result := *reviewed
 	result.CustomerMatch = out.Result.CustomerMatch
 	result.Derived = c.derive(&result)
 	result.ToCheck = c.countToCheck(&result, c.reviewThreshold, func(path string) bool { return settled[path] })
@@ -159,7 +186,7 @@ func (c *contractIngestService) reviewView(ctx context.Context, contract *domain
 		Customer:       doc.Customer,
 		Products:       doc.Products,
 		ProductMatches: matches,
-	}
+	}, nil
 }
 
 func (c *contractIngestService) productMatches(ctx context.Context, contractID string, charges []extraction.Charge) map[string]*dto.ContractProductMatch {
@@ -183,7 +210,7 @@ func (c *contractIngestService) countProductsToCheck(tc *extraction.ToCheck, mat
 }
 
 // applyProductChoices replaces the product decisions; every key must be a charge of this contract.
-func (c *contractIngestService) applyProductChoices(ctx context.Context, step string, doc *reviewDoc, choices map[string]dto.ContractReviewProduct) error {
+func (c *contractIngestService) applyProductChoices(ctx context.Context, step string, doc *reviewDoc, charges int, choices map[string]dto.ContractReviewProduct) error {
 	if step != stepCharges {
 		return ierr.NewError("products saved on the wrong step").
 			WithHint("Save product decisions on the charges step").
@@ -192,7 +219,7 @@ func (c *contractIngestService) applyProductChoices(ctx context.Context, step st
 	paths := lo.Keys(choices)
 	sort.Strings(paths)
 	for _, path := range paths {
-		if !c.isChargePath(path, len(doc.Result.Charges)) {
+		if !c.isChargePath(path, charges) {
 			return ierr.NewError("unknown charge for a product decision").
 				WithHintf("%s is not a charge of this contract", path).
 				WithReportableDetails(map[string]any{"path": path}).

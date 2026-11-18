@@ -64,6 +64,15 @@ func TestSaveReviewStep_EditsAndConfirmations(t *testing.T) {
 	var out extraction.Extraction
 	require.NoError(t, json.Unmarshal(stored.Extraction(), &out))
 	require.Equal(t, "184000", out.Result.Charges[0].Amount.Value, "the extraction is never changed")
+	require.JSONEq(t, `{"values":{"charges[0].amount":"200000"},"confirmed":["charges[1].tier_mode"]}`, string(stored.Review()),
+		"only the changes are stored")
+
+	got, err = f.svc.SaveReviewStep(ctx, id, stepCharges, &dto.SaveContractReviewRequest{Version: 1, Values: map[string]string{"charges[0].amount": "184000"}})
+	require.NoError(t, err)
+	require.Empty(t, got.Edited, "setting the extracted value back undoes the edit")
+	stored, err = f.contracts.GetByID(ctx, id)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"confirmed":["charges[1].tier_mode"]}`, string(stored.Review()))
 }
 
 func TestSaveReviewStep_UnchangedValueIsNotRevalidated(t *testing.T) {
