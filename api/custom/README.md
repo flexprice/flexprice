@@ -7,7 +7,7 @@ Files under `api/custom/<lang>/` are **merged** into the generated output after 
 | `go/` | README.md, async.go, helpers.go, examples/ |
 | `typescript/` | README.md, src/sdk/customer-portal.ts |
 | `python/` | README.md, examples/, MANIFEST.in |
-| `mcp/` | README.md (auth, client configs, dynamic mode, scopes, troubleshooting), src/mcp-server/browser-login.ts (browser login for `serve`), tests/ |
+| `mcp/` | README.md (connecting to the hosted server, running it locally; the rest is in the docs), src/mcp-server/browser-login.ts (browser login for `serve`), src/landing-page.ts (blank 200 page at `/` for health checks), tests/ |
 
 **Apply custom:** Run `make merge-custom` (or `make sdk-all`). Do not edit generated files under `api/<lang>/` for custom logic—edit here so changes survive regeneration.
 
