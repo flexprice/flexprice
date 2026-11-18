@@ -281,7 +281,7 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 		cust.ContactPersons = req.ContactPersons
 	}
 	if req.Settings != nil {
-		cust.Settings = dto.NormalizeSettingsOverride(req.Settings)
+		cust.Settings = dto.MergeSettingsOverride(cust.Settings, req.Settings)
 	}
 
 	// Update address fields

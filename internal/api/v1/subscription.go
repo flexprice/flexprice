@@ -511,6 +511,7 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
 // @Param feature_ids query []string false "Feature IDs to filter by"
+// @Param refresh_grants query bool false "Evaluate entitlement grants before returning their usage (slower)"
 // @Success 200 {object} dto.SubscriptionEntitlementsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"

@@ -27,6 +27,8 @@ import (
 type GetCustomerEntitlementsRequest struct {
 	FeatureIDs      []string `json:"feature_ids,omitempty" form:"feature_ids"`
 	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
+	// RefreshGrants evaluates entitlement grants before returning their usage, so the read is slower.
+	RefreshGrants bool `json:"refresh_grants,omitempty" form:"refresh_grants"`
 }
 
 func (r *GetCustomerEntitlementsRequest) Validate() error {
@@ -152,6 +154,8 @@ type GetCustomerUsageSummaryRequest struct {
 	FeatureIDs        []string `json:"feature_ids,omitempty" form:"feature_ids"`
 	FeatureLookupKeys []string `json:"feature_lookup_keys,omitempty" form:"feature_lookup_keys"`
 	SubscriptionIDs   []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
+	// RefreshGrants evaluates entitlement grants before returning their usage, so the read is slower.
+	RefreshGrants bool `json:"refresh_grants,omitempty" form:"refresh_grants"`
 }
 
 func (r *GetCustomerUsageSummaryRequest) Validate() error {

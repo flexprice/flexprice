@@ -283,6 +283,7 @@ func (h *CustomerHandler) attachCustomerIntegrations(c *gin.Context, resp *dto.C
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Customer ID"
+// @Param refresh_grants query bool false "Evaluate entitlement grants before returning their usage (slower)"
 // @Success 200 {object} dto.CustomerEntitlementsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
@@ -316,6 +317,7 @@ func (h *CustomerHandler) GetCustomerEntitlements(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param external_id path string true "Customer External ID"
+// @Param refresh_grants query bool false "Evaluate entitlement grants before returning their usage (slower)"
 // @Success 200 {object} dto.CustomerEntitlementsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"

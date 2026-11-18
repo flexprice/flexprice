@@ -10508,7 +10508,7 @@ definitions:
       settings:
         allOf:
         - $ref: '#/definitions/types.SettingsOverride'
-        description: settings replaces the customer's setting overrides when provided;
+        description: settings merges into the customer's setting overrides when provided;
           send {} to inherit the environment settings
       tax_treatment:
         allOf:
@@ -10889,8 +10889,8 @@ definitions:
       settings:
         allOf:
         - $ref: '#/definitions/types.SettingsOverride'
-        description: Settings replaces the subscription's setting overrides when provided;
-          send {} to inherit.
+        description: Settings merges into the subscription's setting overrides when
+          provided; send {} to inherit.
       status:
         $ref: '#/definitions/types.SubscriptionStatus'
     type: object
@@ -21119,6 +21119,10 @@ paths:
         name: id
         required: true
         type: string
+      - description: Evaluate entitlement grants before returning their usage (slower)
+        in: query
+        name: refresh_grants
+        type: boolean
       produces:
       - application/json
       responses:
@@ -21365,6 +21369,10 @@ paths:
         name: external_id
         required: true
         type: string
+      - description: Evaluate entitlement grants before returning their usage (slower)
+        in: query
+        name: refresh_grants
+        type: boolean
       produces:
       - application/json
       responses:
@@ -21528,6 +21536,11 @@ paths:
           type: string
         name: feature_lookup_keys
         type: array
+      - description: RefreshGrants evaluates entitlement grants before returning their
+          usage, so the read is slower.
+        in: query
+        name: refresh_grants
+        type: boolean
       - collectionFormat: csv
         in: query
         items:
@@ -26167,6 +26180,10 @@ paths:
           type: string
         name: feature_ids
         type: array
+      - description: Evaluate entitlement grants before returning their usage (slower)
+        in: query
+        name: refresh_grants
+        type: boolean
       produces:
       - application/json
       responses:

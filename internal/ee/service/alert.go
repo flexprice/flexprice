@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -42,11 +44,9 @@ type AlertService interface {
 	// different query path and their own throttle.
 	EvaluateSpendAndEntitlementAlertsForCustomer(ctx context.Context, cust *customer.Customer, withSpendAlerts bool, withEntitlementAlerts bool) error
 
-	// RefreshEntitlementGrantsForCustomer runs one grants-only pass (ensure +
-	// usage refresh + billable-overage ledger accrual) so the materialized
-	// numbers billing reads are exact. Watermark-idempotent; used by invoice
-	// creation to close the debounce gap at the money moment.
-	RefreshEntitlementGrantsForCustomer(ctx context.Context, customerID string) error
+	// EvaluateAndAlertEntitlementGrants opens, measures, alerts on and snapshots the subscriptions' grant
+	// windows in each subscription's current period.
+	EvaluateAndAlertEntitlementGrants(ctx context.Context, cust *customer.Customer, subs []*subscription.Subscription, at time.Time) error
 
 	// EvaluateWalletAlertsForCustomer resolves the tenant's wallet alert config,
 	// fetches every wallet for the customer, computes real-time balance for each,
