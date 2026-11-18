@@ -1381,3 +1381,48 @@ func (s *EntitlementGrantSuite) TestSubscriptionEntitlementsRead_RefreshesOnlyLi
 	s.Require().NotNil(usage, "the response carries the grant state")
 	s.True(decimal.NewFromInt(60).Equal(*usage), "returned usage: got %s", usage)
 }
+
+// gapEvents is 4 units before the Nov 10 daily amount grant and 4 after it, none inside.
+func gapEvents(t *testing.T) (*billingService, *meter.Meter, []*entitlementgrant.EntitlementGrant) {
+	t.Helper()
+	day := time.Date(2026, 11, 10, 0, 0, 0, 0, time.UTC)
+	bs, m := newMergedWindowBillingService(t, []struct {
+		at  time.Time
+		qty int64
+	}{
+		{splitT0.Add(24 * time.Hour), 4},
+		{splitT2.Add(-24 * time.Hour), 4},
+	})
+	grants := []*entitlementgrant.EntitlementGrant{windowedGrant(100, 0, day, day.Add(24*time.Hour), types.EntitlementGrantMeasureAmount)}
+	return bs, m, grants
+}
+
+func billLine(t *testing.T, bs *billingService, m *meter.Meter, grants []*entitlementgrant.EntitlementGrant, p *priceDomain.Price) decimal.Decimal {
+	t.Helper()
+	c := charge(p)
+	_, applied, err := bs.adjustMeterUsageGrants(context.Background(), linItem(false, false), c, grants, newTestPriceService(), m, nil,
+		[]string{"cust_ext"}, []lineUsage{{start: splitT0, end: splitT2}}, TimeInterval{Start: splitT0, End: splitT2})
+	require.NoError(t, err)
+	require.True(t, applied)
+	return c.AmountDecimal()
+}
+
+func TestAdjustMeterUsageGrants_AmountGapsBillAtEachLinesOwnPrice(t *testing.T) {
+	// Two lines on the same meter at $1 and $2: each bills the 8 gap units at its own price, not the meter's combined cost.
+	bs, m, grants := gapEvents(t)
+	p2 := flatPrice(2)
+	p2.ID = "price_flat_2"
+	got1, got2 := billLine(t, bs, m, grants, flatPrice(1)), billLine(t, bs, m, grants, p2)
+	require.True(t, got1.Equal(decimal.NewFromInt(8)), "$1 line billed %s, want 8", got1)
+	require.True(t, got2.Equal(decimal.NewFromInt(16)), "$2 line billed %s, want 16", got2)
+}
+
+func TestAdjustMeterUsageGrants_AmountGapsPricedOnceAcrossGaps(t *testing.T) {
+	// $10 per package of 10, rounded up: 8 gap units are one package, not one per gap.
+	bs, m, grants := gapEvents(t)
+	pkg := flatPrice(10)
+	pkg.BillingModel = types.BILLING_MODEL_PACKAGE
+	pkg.TransformQuantity = priceDomain.JSONBTransformQuantity{DivideBy: 10, Round: types.ROUND_UP}
+	got := billLine(t, bs, m, grants, pkg)
+	require.True(t, got.Equal(decimal.NewFromInt(10)), "billed %s, want 10", got)
+}
