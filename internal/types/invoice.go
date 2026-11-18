@@ -38,6 +38,7 @@ const (
 	// collector clubs the invoice lines into a single amount due item.
 	InvoiceMetadataKeyCollapsedInvoiceDisplayName InvoiceMetadataKey = "collapsed_invoice_display_name"
 	InvoiceMetadataKeyStripeHostedInvoiceURL      InvoiceMetadataKey = "stripe_hosted_invoice_url"
+	InvoiceMetadataKeyStripeInvoiceID             InvoiceMetadataKey = "stripe_invoice_id"
 )
 
 func CollapsedInvoiceDisplayName(md Metadata) string {
