@@ -180,7 +180,7 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 	require.NoError(t, admin.GetConn().Exec(ctx, `CREATE TABLE `+db+`.wallet_transactions (
 		id String, tenant_id String, environment_id String, status String,
 		type String, transaction_status String, transaction_reason String,
-		customer_id String, currency String, amount Decimal(20, 9), credit_amount Decimal(20, 9), conversion_rate Nullable(Decimal(10, 5)), created_at DateTime64(6), consumption_breakdown Nullable(String),
+		customer_id String, currency String, amount Decimal(20, 9), credit_amount Decimal(20, 9), conversion_rate Nullable(Decimal(10, 5)), created_at DateTime64(6), consumption_breakdown Nullable(String), reference_type String,
 		_peerdb_is_deleted UInt8, _peerdb_version Int64
 	) ENGINE = ReplacingMergeTree(_peerdb_version) ORDER BY id`))
 
@@ -213,7 +213,7 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 	}, ",")))
 
 	tx := func(id, typ, st, reason string, amount int) string {
-		return fmt.Sprintf("('%s','t1','e1','published','%s','%s','%s','c1','usd',%d,%d,1,'2026-09-10 00:00:00','[]',0,1)", id, typ, st, reason, amount, amount)
+		return fmt.Sprintf("('%s','t1','e1','published','%s','%s','%s','c1','usd',%d,%d,1,'2026-09-10 00:00:00','[]','',0,1)", id, typ, st, reason, amount, amount)
 	}
 	require.NoError(t, admin.GetConn().Exec(ctx, `INSERT INTO `+db+`.wallet_transactions VALUES `+strings.Join([]string{
 		tx("w1", "credit", "completed", "PURCHASED_CREDIT_DIRECT", 50),
@@ -222,7 +222,10 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 		tx("w4", "credit", "completed", "CREDIT_NOTE", 7),
 		tx("w6", "debit", "completed", "CREDIT_EXPIRED", 5),
 		tx("w7", "debit", "completed", "INVOICE_PAYMENT", 3),
-		`('w5','t1','e1','published','debit','completed','INVOICE_PAYMENT','c1','usd',12,12,1,'2026-09-10 00:00:00','[{"credit_transaction_id":"w1","credits":8},{"credit_transaction_id":"w2","credits":4}]',0,1)`,
+		`('w5','t1','e1','published','debit','completed','INVOICE_PAYMENT','c1','usd',12,12,1,'2026-09-10 00:00:00','[{"credit_transaction_id":"w1","credits":8},{"credit_transaction_id":"w2","credits":4}]','PAYMENT',0,1)`,
+		// Prepaid credits applied to an invoice count as consumption; a manual adjustment does not.
+		`('w8','t1','e1','published','debit','completed','CREDIT_ADJUSTMENT','c1','usd',6,6,1,'2026-09-10 00:00:00','[{"credit_transaction_id":"w2","credits":6}]','INVOICE',0,1)`,
+		`('w9','t1','e1','published','debit','completed','CREDIT_ADJUSTMENT','c1','usd',100,100,1,'2026-09-10 00:00:00','[]','',0,1)`,
 	}, ",")))
 	mergeTables(t, admin, db, "invoices", "wallet_transactions")
 
@@ -262,7 +265,7 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 		{"PURCHASED_CREDIT_DIRECT", "usd", "50"},
 	}, run(types.MetricCreditTopups, types.ShapeBreakdown, "transaction_reason"))
 
-	assert.ElementsMatch(t, [][]string{{"free", "usd", "4"}, {"paid", "usd", "11"}}, run(types.MetricCreditConsumption, types.ShapeScalar))
+	assert.ElementsMatch(t, [][]string{{"free", "usd", "10"}, {"paid", "usd", "11"}}, run(types.MetricCreditConsumption, types.ShapeScalar))
 
 	assert.Equal(t, [][]string{{"usd", "90"}}, run(types.MetricARPUPaid, types.ShapeScalar))
 

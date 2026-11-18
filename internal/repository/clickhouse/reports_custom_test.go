@@ -47,6 +47,7 @@ func TestBuildCreditConsumptionIsSelectQuery(t *testing.T) {
 	assert.True(t, strings.HasPrefix(q.SQL, "SELECT "))
 	assert.Contains(t, q.SQL, "FROM (SELECT d.*, JSONExtractArrayRaw")
 	assert.Contains(t, q.SQL, "GROUP BY bucket, d_credit_type, d_currency")
+	assert.Contains(t, q.SQL, "(d.transaction_reason = 'INVOICE_PAYMENT' OR (d.transaction_reason = 'CREDIT_ADJUSTMENT' AND d.reference_type = 'INVOICE'))")
 }
 
 func TestBuildNetBillingIssued(t *testing.T) {
