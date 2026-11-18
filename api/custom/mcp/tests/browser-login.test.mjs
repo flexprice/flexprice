@@ -257,6 +257,12 @@ describe("with login configured", () => {
     }
   });
 
+  test("GET / answers 200 with an empty page, so health checks pass and browsers see nothing", async () => {
+    const res = await fetch(mcp.origin);
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), "");
+  });
+
   test("a request without credentials is told where to log in", async () => {
     const res = await initialize(mcp.origin);
     assert.equal(res.status, 401);
