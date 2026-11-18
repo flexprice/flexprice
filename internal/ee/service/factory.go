@@ -57,6 +57,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/usageanalytics"
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
+	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
@@ -93,6 +94,8 @@ type ServiceParams struct {
 	InMemoryCache cache.InMemoryCache
 	RedisCache    cache.RedisCache
 	Locker        cache.Locker
+	// UsageRollupStore holds hourly per-customer meter quantities in Redis; nil without Redis.
+	UsageRollupStore usagerollup.Store
 
 	// Repositories
 	AuthRepo                     auth.Repository
@@ -217,6 +220,7 @@ func NewServiceParams(
 	inMemoryCache cache.InMemoryCache,
 	redisCache cache.RedisCache,
 	locker cache.Locker,
+	usageRollupStore usagerollup.Store,
 	authRepo auth.Repository,
 	userRepo user.Repository,
 	eventRepo events.Repository,
@@ -312,6 +316,7 @@ func NewServiceParams(
 		InMemoryCache:                inMemoryCache,
 		RedisCache:                   redisCache,
 		Locker:                       locker,
+		UsageRollupStore:             usageRollupStore,
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,
