@@ -28,6 +28,6 @@ func (c *contractIngestService) enrich(result *extraction.Result) error {
 		return ierr.NewError("result is required").Mark(ierr.ErrValidation)
 	}
 	result.Derived = c.derive(result)
-	result.ToCheck = c.countToCheck(result, c.reviewThreshold)
+	result.ToCheck = c.countToCheck(result, c.reviewThreshold, nil)
 	return nil
 }
