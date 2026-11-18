@@ -13,10 +13,9 @@ import (
 const bucketFormat = "'%Y-%m-%dT%H:%i:%SZ'"
 
 // invoiceDebitCond matches wallet debits that settle an invoice: payments after finalization,
-// and prepaid credits applied to usage lines while the invoice is computed.
-const invoiceDebitCond = "(d.transaction_reason = '" + string(types.TransactionReasonInvoicePayment) + "'" +
-	" OR (d.transaction_reason = '" + string(types.TransactionReasonCreditAdjustment) + "'" +
-	" AND d.reference_type = '" + string(types.WalletTxReferenceTypeInvoice) + "'))"
+// and prepaid credits applied while the invoice is computed.
+const invoiceDebitCond = "d.transaction_reason IN ('" + string(types.TransactionReasonInvoicePayment) + "', '" +
+	string(types.TransactionReasonCreditAdjustment) + "')"
 
 func buildCreditConsumption(in buildInput) (*reportQuery, error) {
 	rv := in.RV
