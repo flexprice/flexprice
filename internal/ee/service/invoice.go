@@ -2209,11 +2209,30 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 	// Determine collection method from subscription
 	stripeCollectionMethod := types.CollectionMethod(sub.CollectionMethod)
 
+	syncSettings := conn.GetSyncConfig().InvoiceSyncSettings
+	autoAdvance := syncSettings.StripeAutoAdvance()
+	if autoAdvance == nil {
+		autoAdvance = lo.ToPtr(true)
+		if stripeCollectionMethod == types.CollectionMethodChargeAutomatically {
+			hasPaymentMethod, err := stripeIntegration.CustomerSvc.HasDefaultPaymentMethod(ctx, inv.CustomerID, customerService)
+			if err != nil {
+				s.Logger.Info(ctx, "could not read Stripe default payment method, keeping auto advance on",
+					"invoice_id", inv.ID,
+					"customer_id", inv.CustomerID,
+					"error", err)
+			} else {
+				autoAdvance = lo.ToPtr(hasPaymentMethod)
+			}
+		}
+	}
+
 	// Create sync request using the integration package's DTO
 	syncRequest := stripe.StripeInvoiceSyncRequest{
 		InvoiceID:         inv.ID,
 		CollectionMethod:  string(stripeCollectionMethod),
 		LinkStripeProduct: conn.IsPriceOutboundEnabled(),
+		AutoAdvance:       *autoAdvance,
+		SendInvoiceEmail:  syncSettings.IsStripeSendInvoiceEmailEnabled(),
 	}
 
 	// Perform the sync

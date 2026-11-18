@@ -82,7 +82,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 	} else {
 		// Step 4: Create draft invoice in Stripe
 		collectionMethod := types.CollectionMethod(req.CollectionMethod)
-		stripeInvoiceID, err = s.createDraftInvoiceInStripe(ctx, flexInvoice, collectionMethod, customerService)
+		stripeInvoiceID, err = s.createDraftInvoiceInStripe(ctx, flexInvoice, collectionMethod, req.AutoAdvance, customerService)
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +101,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 
 	// Step 7: Finalize invoice in Stripe
 	collectionMethod := types.CollectionMethod(req.CollectionMethod)
-	finalizedInvoice, err := s.finalizeStripeInvoice(ctx, stripeInvoiceID, collectionMethod)
+	finalizedInvoice, err := s.finalizeStripeInvoice(ctx, stripeInvoiceID, collectionMethod, req.AutoAdvance, req.SendInvoiceEmail)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 }
 
 // createDraftInvoiceInStripe creates a draft invoice in Stripe
-func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, flexInvoice *invoice.Invoice, collectionMethod types.CollectionMethod, customerService interfaces.CustomerService) (string, error) {
+func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, flexInvoice *invoice.Invoice, collectionMethod types.CollectionMethod, autoAdvance bool, customerService interfaces.CustomerService) (string, error) {
 	// Get Stripe client
 	stripeClient, _, err := s.client.GetStripeClient(ctx)
 	if err != nil {
@@ -162,7 +162,7 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 	params := &stripe.InvoiceCreateParams{
 		Customer:    stripe.String(stripeCustomerID),
 		Currency:    stripe.String(strings.ToLower(flexInvoice.Currency)),
-		AutoAdvance: stripe.Bool(true),
+		AutoAdvance: stripe.Bool(autoAdvance),
 		Description: stripe.String(flexInvoice.Description),
 		Metadata:    metadata,
 	}
@@ -323,7 +323,7 @@ func (s *InvoiceSyncService) addLineItemToStripeInvoice(ctx context.Context, str
 }
 
 // finalizeStripeInvoice finalizes the invoice in Stripe
-func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeInvoiceID string, collectionMethod types.CollectionMethod) (*stripe.Invoice, error) {
+func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeInvoiceID string, collectionMethod types.CollectionMethod, autoAdvance bool, sendInvoiceEmail bool) (*stripe.Invoice, error) {
 	stripeClient, _, err := s.client.GetStripeClient(ctx)
 	if err != nil {
 		return nil, err
@@ -335,7 +335,7 @@ func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeIn
 
 	// Finalize the invoice
 	params := &stripe.InvoiceFinalizeInvoiceParams{
-		AutoAdvance: stripe.Bool(true), // Let Stripe handle payment intent creation and sending
+		AutoAdvance: stripe.Bool(autoAdvance),
 	}
 
 	finalizedInvoice, err := stripeClient.V1Invoices.FinalizeInvoice(ctx, stripeInvoiceID, params)
@@ -357,7 +357,7 @@ func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeIn
 		"status", finalizedInvoice.Status,
 		"total", finalizedInvoice.Total)
 
-	if collectionMethod == types.CollectionMethodSendInvoice {
+	if collectionMethod == types.CollectionMethodSendInvoice && sendInvoiceEmail {
 		s.logger.Info(ctx, "sending invoice to customer via Stripe",
 			"stripe_invoice_id", stripeInvoiceID,
 			"collection_method", collectionMethod)
