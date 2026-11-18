@@ -880,9 +880,12 @@ func (s *subscriptionChangeService) createNewSubscription(
 		Workflow:           lo.ToPtr(types.TemporalSubscriptionCreationWorkflow),
 		Inheritance:        inheritance,
 		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
-			CommitmentAmount: currentSub.CommitmentAmount,
-			OverageFactor:    currentSub.OverageFactor,
-			TrialPeriodDays:  lo.ToPtr(0), // THIS IS IMPORTANT: we don't want to inherit the trial period days from the old subscription
+			CommitmentAmount:      currentSub.CommitmentAmount,
+			CommitmentDuration:    currentSub.CommitmentDuration,
+			OverageFactor:         currentSub.OverageFactor,
+			EnableTrueUp:          currentSub.EnableTrueUp,
+			CarryLegacyCommitment: true,
+			TrialPeriodDays:       lo.ToPtr(0), // THIS IS IMPORTANT: we don't want to inherit the trial period days from the old subscription
 		},
 	}
 

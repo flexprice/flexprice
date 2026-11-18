@@ -354,7 +354,8 @@ func (s *CommitmentServiceSuite) TestPlanSync_SkipsPriceBreakingCommitment() {
 	s.NotContains(priceIDs, s.fx.priceOtherMeterInGroup.ID)
 }
 
-func (s *CommitmentServiceSuite) TestLineItemUpdate_RejectsLegacyCommitmentInScope() {
+// Legacy fields cannot add a commitment to a line that has none, even one a commitment covers.
+func (s *CommitmentServiceSuite) TestLineItemUpdate_RejectsNewLegacyCommitment() {
 	req := validReq(s.fx.sub.ID, "")
 	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterAPI.ID}
 	_, err := s.svc.Create(s.GetContext(), req)
@@ -367,11 +368,18 @@ func (s *CommitmentServiceSuite) TestLineItemUpdate_RejectsLegacyCommitmentInSco
 			CommitmentOverageFactor: lo.ToPtr(dec("1.5")),
 			EffectiveFrom:           lo.ToPtr(s.fx.sub.StartDate.AddDate(0, 1, 0)),
 		})
-	s.requireValidation(err, "legacy line-item commitment")
+	s.requireValidation(err, "commitment_amount is deprecated")
 
 	stored, err := s.GetStores().SubscriptionLineItemRepo.Get(s.GetContext(), s.fx.lineAPI.ID)
 	s.Require().NoError(err)
 	s.False(stored.HasAnyCommitment())
+}
+
+// An incomplete legacy commitment on a line without one gets the deprecation error, not a legacy field rule.
+func (s *CommitmentServiceSuite) TestLineItemUpdate_RejectsIncompleteNewLegacyCommitmentAsDeprecated() {
+	_, err := NewSubscriptionService(fullServiceParams(&s.BaseServiceTestSuite)).UpdateSubscriptionLineItem(s.GetContext(), s.fx.lineAPI.ID,
+		dto.UpdateSubscriptionLineItemRequest{CommitmentAmount: lo.ToPtr(dec("100"))})
+	s.requireValidation(err, "commitment_amount is deprecated")
 }
 
 // plainUpdateOfLegacyLine edits the metadata of an API line that carries legacy commitment fields, with a
@@ -409,7 +417,7 @@ func (s *CommitmentServiceSuite) TestLineItemUpdate_PlainUpdateRejectsCoveringCo
 	s.requireValidation(err, "legacy line-item commitment")
 }
 
-func (s *CommitmentServiceSuite) TestLineItemAdd_RejectsLegacyCommitmentInScope() {
+func (s *CommitmentServiceSuite) TestLineItemAdd_RejectsLegacyCommitment() {
 	req := validReq(s.fx.sub.ID, "")
 	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeSubscription, EntityID: s.fx.sub.ID}
 	req.Type, req.CommittedPrice, req.Value = types.COMMITMENT_TYPE_AMOUNT, nil, dec("100")
@@ -422,24 +430,7 @@ func (s *CommitmentServiceSuite) TestLineItemAdd_RejectsLegacyCommitmentInScope(
 			CommitmentAmount: lo.ToPtr(dec("50")),
 			CommitmentType:   types.COMMITMENT_TYPE_AMOUNT,
 		})
-	s.requireValidation(err, "legacy line-item commitment")
-}
-
-// Legacy fields stay accepted on a line that no commitment covers, so both kinds coexist on one subscription.
-func (s *CommitmentServiceSuite) TestLineItemAdd_AllowsLegacyCommitmentOutOfScope() {
-	req := validReq(s.fx.sub.ID, "")
-	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterAPI.ID}
-	_, err := s.svc.Create(s.GetContext(), req)
-	s.Require().NoError(err)
-
-	added, err := NewSubscriptionService(fullServiceParams(&s.BaseServiceTestSuite)).AddSubscriptionLineItem(s.GetContext(), s.fx.sub.ID,
-		dto.CreateSubscriptionLineItemRequest{
-			PriceID:          s.fx.priceOtherMeterInGroup.ID,
-			CommitmentAmount: lo.ToPtr(dec("50")),
-			CommitmentType:   types.COMMITMENT_TYPE_AMOUNT,
-		})
-	s.Require().NoError(err)
-	s.True(lo.FromPtr(added.CommitmentAmount).Equal(dec("50")), "got %v", added.CommitmentAmount)
+	s.requireValidation(err, "commitment_amount is deprecated")
 }
 
 // A line's existing legacy commitment can still be edited and removed while a commitment covers another line.

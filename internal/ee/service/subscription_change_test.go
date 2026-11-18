@@ -631,6 +631,32 @@ func (s *SubscriptionChangeServiceTestSuite) TestExecuteSubscriptionChangeWithou
 	assert.Nil(s.T(), response.Invoice)
 }
 
+// A plan change keeps the whole legacy subscription commitment, though new subscriptions can no longer set one.
+func (s *SubscriptionChangeServiceTestSuite) TestExecuteSubscriptionChangeCarriesLegacyCommitment() {
+	ctx := s.GetContext()
+
+	customer := s.createTestCustomer()
+	basicPlan := s.createTestPlan("Basic", decimal.NewFromFloat(10.00))
+	premiumPlan := s.createTestPlan("Premium", decimal.NewFromFloat(20.00))
+	testSub := s.createTestSubscription(basicPlan.ID, customer.ID)
+	testSub.CommitmentAmount = lo.ToPtr(decimal.NewFromInt(100))
+	testSub.CommitmentDuration = lo.ToPtr(types.BILLING_PERIOD_ANNUAL)
+	testSub.OverageFactor = lo.ToPtr(decimal.NewFromFloat(1.5))
+	testSub.EnableTrueUp = true
+	require.NoError(s.T(), s.GetStores().SubscriptionRepo.Update(ctx, testSub))
+
+	req := s.createSubscriptionChangeRequest(premiumPlan.ID, types.ProrationBehaviorNone)
+	response, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, testSub.ID, req)
+	require.NoError(s.T(), err)
+
+	newSub, err := s.GetStores().SubscriptionRepo.Get(ctx, response.NewSubscription.ID)
+	require.NoError(s.T(), err)
+	assert.True(s.T(), lo.FromPtr(newSub.CommitmentAmount).Equal(decimal.NewFromInt(100)), "got %v", newSub.CommitmentAmount)
+	assert.Equal(s.T(), types.BILLING_PERIOD_ANNUAL, lo.FromPtr(newSub.CommitmentDuration))
+	assert.True(s.T(), lo.FromPtr(newSub.OverageFactor).Equal(decimal.NewFromFloat(1.5)), "got %v", newSub.OverageFactor)
+	assert.True(s.T(), newSub.EnableTrueUp)
+}
+
 func (s *SubscriptionChangeServiceTestSuite) TestPreviewSubscriptionChangeValidation() {
 	ctx := s.GetContext()
 
