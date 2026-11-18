@@ -121,7 +121,7 @@ func main() {
 			cache.InitializeInMemoryCache,
 			cache.NewRedisCache,
 			cache.NewRedisLocker,
-			cache.NewUsageRollupStore,
+			cache.NewAggregatedUsageStore,
 
 			// Postgres
 			postgres.NewEntClients,

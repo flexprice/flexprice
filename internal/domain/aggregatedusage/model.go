@@ -1,6 +1,6 @@
-// Package usagerollup holds the hourly per-customer meter quantities kept in Redis
+// Package aggregatedusage holds the hourly per-customer meter quantities kept in Redis
 // for real-time usage reads, and the rules for which usage lands there.
-package usagerollup
+package aggregatedusage
 
 import (
 	"context"
@@ -33,11 +33,7 @@ func Cutoff(now time.Time) time.Time {
 }
 
 // Supports reports whether a meter's usage can be kept as an hourly bucket.
-// Windowed meters are excluded: their total is not derivable from hourly values.
-func Supports(aggregation types.AggregationType, bucketSize types.WindowSize) bool {
-	if bucketSize != "" {
-		return false
-	}
+func Supports(aggregation types.AggregationType) bool {
 	switch aggregation {
 	case types.AggregationSum, types.AggregationCount, types.AggregationMax:
 		return true

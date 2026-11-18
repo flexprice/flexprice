@@ -1,4 +1,4 @@
-package usagerollup
+package aggregatedusage
 
 import (
 	"time"
@@ -38,10 +38,9 @@ func (a *Aggregator) Add(
 	timestamp time.Time,
 	meterID string,
 	aggregation types.AggregationType,
-	bucketSize types.WindowSize,
 	qty decimal.Decimal,
 ) {
-	if a == nil || externalCustomerID == "" || !Supports(aggregation, bucketSize) {
+	if a == nil || externalCustomerID == "" || !Supports(aggregation) {
 		return
 	}
 	if timestamp.Before(a.cutoff) {

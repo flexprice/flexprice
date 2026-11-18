@@ -562,7 +562,7 @@ meter_usage_tracking_lazy:
   topic_dlq: "meter_usage_tracking_service_lazy_dlq"
 
 # Hourly per-customer meter quantities in Redis for real-time usage reads.
-usage_rollup:
+aggregated_usage:
   enabled: false # true = every tenant
   enabled_tenants: [] # tenant IDs enabled while enabled is false
 

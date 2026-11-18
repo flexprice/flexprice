@@ -1,4 +1,4 @@
-package usagerollup
+package aggregatedusage
 
 import (
 	"sort"
@@ -30,21 +30,19 @@ func TestCutoff(t *testing.T) {
 func TestSupports(t *testing.T) {
 	tests := []struct {
 		aggregation types.AggregationType
-		bucketSize  types.WindowSize
 		want        bool
 	}{
-		{types.AggregationSum, "", true},
-		{types.AggregationCount, "", true},
-		{types.AggregationMax, "", true},
-		{types.AggregationMax, types.WindowSizeHour, false},
-		{types.AggregationCountUnique, "", false},
-		{types.AggregationLatest, "", false},
-		{types.AggregationAvg, "", false},
-		{types.AggregationSumWithMultiplier, "", false},
+		{types.AggregationSum, true},
+		{types.AggregationCount, true},
+		{types.AggregationMax, true},
+		{types.AggregationCountUnique, false},
+		{types.AggregationLatest, false},
+		{types.AggregationAvg, false},
+		{types.AggregationSumWithMultiplier, false},
 	}
 	for _, tt := range tests {
-		t.Run(string(tt.aggregation)+"/"+string(tt.bucketSize), func(t *testing.T) {
-			require.Equal(t, tt.want, Supports(tt.aggregation, tt.bucketSize))
+		t.Run(string(tt.aggregation), func(t *testing.T) {
+			require.Equal(t, tt.want, Supports(tt.aggregation))
 		})
 	}
 }
@@ -59,7 +57,6 @@ func TestAggregator(t *testing.T) {
 		ts          time.Time
 		meter       string
 		aggregation types.AggregationType
-		bucketSize  types.WindowSize
 		qty         string
 	}
 	tests := []struct {
@@ -72,9 +69,9 @@ func TestAggregator(t *testing.T) {
 		{
 			name: "sum adds within an hour and splits at the hour boundary",
 			rows: []row{
-				{"c1", at(12, 0), "m1", types.AggregationSum, "", "2.5"},
-				{"c1", at(12, 59), "m1", types.AggregationSum, "", "-0.5"},
-				{"c1", at(13, 0), "m1", types.AggregationSum, "", "4"},
+				{"c1", at(12, 0), "m1", types.AggregationSum, "2.5"},
+				{"c1", at(12, 59), "m1", types.AggregationSum, "-0.5"},
+				{"c1", at(13, 0), "m1", types.AggregationSum, "4"},
 			},
 			want: []Bucket{
 				{"c1", at(12, 0), "m1", types.AggregationSum, d("2")},
@@ -85,8 +82,8 @@ func TestAggregator(t *testing.T) {
 		{
 			name: "count adds one per row regardless of quantity",
 			rows: []row{
-				{"c1", at(12, 5), "m2", types.AggregationCount, "", "7"},
-				{"c1", at(12, 6), "m2", types.AggregationCount, "", "0"},
+				{"c1", at(12, 5), "m2", types.AggregationCount, "7"},
+				{"c1", at(12, 6), "m2", types.AggregationCount, "0"},
 			},
 			want:        []Bucket{{"c1", at(12, 0), "m2", types.AggregationCount, d("2")}},
 			wantCounted: 2,
@@ -94,9 +91,9 @@ func TestAggregator(t *testing.T) {
 		{
 			name: "max keeps the highest value, including when all are negative",
 			rows: []row{
-				{"c1", at(12, 1), "m3", types.AggregationMax, "", "-5"},
-				{"c1", at(12, 2), "m3", types.AggregationMax, "", "-2"},
-				{"c1", at(12, 3), "m3", types.AggregationMax, "", "-9"},
+				{"c1", at(12, 1), "m3", types.AggregationMax, "-5"},
+				{"c1", at(12, 2), "m3", types.AggregationMax, "-2"},
+				{"c1", at(12, 3), "m3", types.AggregationMax, "-9"},
 			},
 			want:        []Bucket{{"c1", at(12, 0), "m3", types.AggregationMax, d("-2")}},
 			wantCounted: 3,
@@ -104,9 +101,9 @@ func TestAggregator(t *testing.T) {
 		{
 			name: "customers and meters stay separate",
 			rows: []row{
-				{"c1", at(12, 0), "m1", types.AggregationSum, "", "1"},
-				{"c2", at(12, 0), "m1", types.AggregationSum, "", "1"},
-				{"c1", at(12, 0), "m4", types.AggregationSum, "", "1"},
+				{"c1", at(12, 0), "m1", types.AggregationSum, "1"},
+				{"c2", at(12, 0), "m1", types.AggregationSum, "1"},
+				{"c1", at(12, 0), "m4", types.AggregationSum, "1"},
 			},
 			want: []Bucket{
 				{"c1", at(12, 0), "m1", types.AggregationSum, d("1")},
@@ -118,8 +115,8 @@ func TestAggregator(t *testing.T) {
 		{
 			name: "rows before the cutoff are dropped and counted; the cutoff hour itself is kept",
 			rows: []row{
-				{"c1", at(9, 59), "m1", types.AggregationSum, "", "1"},
-				{"c1", at(10, 0), "m1", types.AggregationSum, "", "1"},
+				{"c1", at(9, 59), "m1", types.AggregationSum, "1"},
+				{"c1", at(10, 0), "m1", types.AggregationSum, "1"},
 			},
 			want:        []Bucket{{"c1", at(10, 0), "m1", types.AggregationSum, d("1")}},
 			wantCounted: 1,
@@ -128,9 +125,8 @@ func TestAggregator(t *testing.T) {
 		{
 			name: "unsupported meters and rows without a customer are ignored, not counted as too old",
 			rows: []row{
-				{"c1", at(9, 0), "m5", types.AggregationCountUnique, "", "1"},
-				{"c1", at(12, 0), "m6", types.AggregationMax, types.WindowSizeHour, "1"},
-				{"", at(12, 0), "m1", types.AggregationSum, "", "1"},
+				{"c1", at(9, 0), "m5", types.AggregationCountUnique, "1"},
+				{"", at(12, 0), "m1", types.AggregationSum, "1"},
 			},
 			want: []Bucket{},
 		},
@@ -139,7 +135,7 @@ func TestAggregator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			a := NewAggregator(cutoff)
 			for _, r := range tt.rows {
-				a.Add(r.customer, r.ts, r.meter, r.aggregation, r.bucketSize, d(r.qty))
+				a.Add(r.customer, r.ts, r.meter, r.aggregation, d(r.qty))
 			}
 			got := a.Buckets()
 			sort.Slice(got, func(i, j int) bool { return bucketOrder(got[i]) < bucketOrder(got[j]) })
@@ -160,7 +156,7 @@ func TestAggregator(t *testing.T) {
 
 func TestAggregatorNilSafe(t *testing.T) {
 	var a *Aggregator
-	a.Add("c1", time.Now(), "m1", types.AggregationSum, "", decimal.NewFromInt(1))
+	a.Add("c1", time.Now(), "m1", types.AggregationSum, decimal.NewFromInt(1))
 	require.Empty(t, a.Buckets())
 	require.Zero(t, a.RowCount())
 	require.Zero(t, a.TooOld())

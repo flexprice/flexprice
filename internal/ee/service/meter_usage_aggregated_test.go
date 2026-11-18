@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -17,20 +17,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeUsageRollupStore struct {
+type fakeAggregatedUsageStore struct {
 	calls   int
-	buckets []usagerollup.Bucket
+	buckets []aggregatedusage.Bucket
 	err     error
 }
 
-func (f *fakeUsageRollupStore) Increment(_ context.Context, buckets []usagerollup.Bucket) error {
+func (f *fakeAggregatedUsageStore) Increment(_ context.Context, buckets []aggregatedusage.Bucket) error {
 	f.calls++
 	f.buckets = append(f.buckets, buckets...)
 	return f.err
 }
 
 // total is the summed quantity across buckets for one meter.
-func (f *fakeUsageRollupStore) total(meterID string) decimal.Decimal {
+func (f *fakeAggregatedUsageStore) total(meterID string) decimal.Decimal {
 	total := decimal.Zero
 	for _, b := range f.buckets {
 		if b.MeterID == meterID {
@@ -40,11 +40,11 @@ func (f *fakeUsageRollupStore) total(meterID string) decimal.Decimal {
 	return total
 }
 
-func rollupCtx() context.Context {
+func aggregatedUsageCtx() context.Context {
 	return types.SetEnvironmentID(context.WithValue(context.Background(), types.CtxTenantID, "tenant_on"), "env_1")
 }
 
-func TestRecordUsageRollup(t *testing.T) {
+func TestRecordAggregatedUsage(t *testing.T) {
 	now := time.Now().UTC()
 	sumMeter := &meter.Meter{ID: "mtr_sum", Aggregation: meter.Aggregation{Type: types.AggregationSum}}
 	uniqueMeter := &meter.Meter{ID: "mtr_unique", Aggregation: meter.Aggregation{Type: types.AggregationCountUnique}}
@@ -59,53 +59,53 @@ func TestRecordUsageRollup(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		rollup    config.UsageRollupConfig
-		records   []*events.MeterUsage
-		storeErr  error
-		wantCalls int
-		wantSum   string
+		name            string
+		aggregatedUsage config.AggregatedUsageConfig
+		records         []*events.MeterUsage
+		storeErr        error
+		wantCalls       int
+		wantSum         string
 	}{
 		{
-			name:      "enabled tenant writes supported meters only",
-			rollup:    config.UsageRollupConfig{EnabledTenants: []string{"tenant_on"}},
-			records:   []*events.MeterUsage{usage("mtr_sum", now, 2), usage("mtr_sum", now, 3), usage("mtr_unique", now, 1)},
-			wantCalls: 1,
-			wantSum:   "5",
+			name:            "enabled tenant writes supported meters only",
+			aggregatedUsage: config.AggregatedUsageConfig{EnabledTenants: []string{"tenant_on"}},
+			records:         []*events.MeterUsage{usage("mtr_sum", now, 2), usage("mtr_sum", now, 3), usage("mtr_unique", now, 1)},
+			wantCalls:       1,
+			wantSum:         "5",
 		},
 		{
-			name:    "tenant not enabled writes nothing",
-			rollup:  config.UsageRollupConfig{EnabledTenants: []string{"tenant_other"}},
-			records: []*events.MeterUsage{usage("mtr_sum", now, 2)},
-			wantSum: "0",
+			name:            "tenant not enabled writes nothing",
+			aggregatedUsage: config.AggregatedUsageConfig{EnabledTenants: []string{"tenant_other"}},
+			records:         []*events.MeterUsage{usage("mtr_sum", now, 2)},
+			wantSum:         "0",
 		},
 		{
-			name:    "usage older than the cutoff skips Redis",
-			rollup:  config.UsageRollupConfig{Enabled: true},
-			records: []*events.MeterUsage{usage("mtr_sum", now.Add(-5*time.Hour), 2)},
-			wantSum: "0",
+			name:            "usage older than the cutoff skips Redis",
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true},
+			records:         []*events.MeterUsage{usage("mtr_sum", now.Add(-5*time.Hour), 2)},
+			wantSum:         "0",
 		},
 		{
-			name:      "store error is swallowed",
-			rollup:    config.UsageRollupConfig{Enabled: true},
-			records:   []*events.MeterUsage{usage("mtr_sum", now, 2)},
-			storeErr:  errors.New("redis down"),
-			wantCalls: 1,
-			wantSum:   "2",
+			name:            "store error is swallowed",
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true},
+			records:         []*events.MeterUsage{usage("mtr_sum", now, 2)},
+			storeErr:        errors.New("redis down"),
+			wantCalls:       1,
+			wantSum:         "2",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := &fakeUsageRollupStore{err: tt.storeErr}
+			store := &fakeAggregatedUsageStore{err: tt.storeErr}
 			svc := &meterUsageTrackingService{
 				ServiceParams: ServiceParams{
-					Logger:           logger.NewNoopLogger(),
-					Config:           &config.Configuration{UsageRollup: tt.rollup},
-					UsageRollupStore: store,
+					Logger:               logger.NewNoopLogger(),
+					Config:               &config.Configuration{AggregatedUsage: tt.aggregatedUsage},
+					AggregatedUsageStore: store,
 				},
 			}
 
-			svc.recordUsageRollup(rollupCtx(), tt.records, 0, metersByID)
+			svc.recordAggregatedUsage(aggregatedUsageCtx(), tt.records, metersByID)
 
 			require.Equal(t, tt.wantCalls, store.calls)
 			require.True(t, decimal.RequireFromString(tt.wantSum).Equal(store.total("mtr_sum")), "got %s", store.total("mtr_sum"))
@@ -113,28 +113,28 @@ func TestRecordUsageRollup(t *testing.T) {
 	}
 }
 
-func TestRecordUsageRollupWithoutStore(t *testing.T) {
+func TestRecordAggregatedUsageWithoutStore(t *testing.T) {
 	svc := &meterUsageTrackingService{ServiceParams: ServiceParams{
 		Logger: logger.NewNoopLogger(),
-		Config: &config.Configuration{UsageRollup: config.UsageRollupConfig{Enabled: true}},
+		Config: &config.Configuration{AggregatedUsage: config.AggregatedUsageConfig{Enabled: true}},
 	}}
 	require.NotPanics(t, func() {
-		svc.recordUsageRollup(rollupCtx(), []*events.MeterUsage{{MeterID: "mtr_sum"}}, 0, nil)
+		svc.recordAggregatedUsage(aggregatedUsageCtx(), []*events.MeterUsage{{MeterID: "mtr_sum"}}, nil)
 	})
 }
 
-// newRollupConsumer wires a meter usage consumer with one SUM meter on "api_call",
-// in-memory stores and locker, and a fake rollup store.
-func newRollupConsumer(t *testing.T, dedupEnabled bool) (*meterUsageTrackingService, *fakeUsageRollupStore) {
+// newAggregatedUsageConsumer wires a meter usage consumer with one SUM meter on "api_call",
+// in-memory stores and locker, and a fake aggregated usage store.
+func newAggregatedUsageConsumer(t *testing.T, dedupEnabled bool) (*meterUsageTrackingService, *fakeAggregatedUsageStore) {
 	t.Helper()
 	meters := testutil.NewInMemoryMeterStore()
-	require.NoError(t, meters.CreateMeter(rollupCtx(), &meter.Meter{
+	require.NoError(t, meters.CreateMeter(aggregatedUsageCtx(), &meter.Meter{
 		ID:          "mtr_sum",
 		EventName:   "api_call",
 		Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "tokens"},
 		BaseModel:   types.BaseModel{TenantID: "tenant_on", Status: types.StatusPublished},
 	}))
-	store := &fakeUsageRollupStore{}
+	store := &fakeAggregatedUsageStore{}
 	svc := &meterUsageTrackingService{
 		ServiceParams: ServiceParams{
 			Logger:       logger.NewNoopLogger(),
@@ -143,18 +143,18 @@ func newRollupConsumer(t *testing.T, dedupEnabled bool) (*meterUsageTrackingServ
 			SettingsRepo: testutil.NewInMemorySettingsStore(),
 			Locker:       testutil.NewInMemoryRedisLocker(testutil.NewInMemoryRedis().(*testutil.InMemoryRedis)),
 			Config: &config.Configuration{
-				UsageRollup:            config.UsageRollupConfig{Enabled: true},
+				AggregatedUsage:        config.AggregatedUsageConfig{Enabled: true},
 				MeterUsageTracking:     config.MeterUsageTrackingConfig{RedisDeduplicationEnabled: dedupEnabled},
 				BulkMeterUsageTracking: config.BulkMeterUsageTrackingConfig{RedisDeduplicationEnabled: dedupEnabled},
 			},
-			UsageRollupStore: store,
+			AggregatedUsageStore: store,
 		},
 		meterUsageRepo: testutil.NewInMemoryMeterUsageStore(),
 	}
 	return svc, store
 }
 
-func rollupEvent(id string, tokens float64, forceReprocess bool) *events.Event {
+func aggregatedUsageEvent(id string, tokens float64, forceReprocess bool) *events.Event {
 	return &events.Event{
 		ID:                 id,
 		TenantID:           "tenant_on",
@@ -167,7 +167,7 @@ func rollupEvent(id string, tokens float64, forceReprocess bool) *events.Event {
 	}
 }
 
-func TestBulkConsumerUsageRollup(t *testing.T) {
+func TestBulkConsumerAggregatedUsage(t *testing.T) {
 	tests := []struct {
 		name         string
 		dedupEnabled bool
@@ -178,37 +178,37 @@ func TestBulkConsumerUsageRollup(t *testing.T) {
 			name:         "locked events are rolled up once and a redelivery is skipped",
 			dedupEnabled: true,
 			batches: [][]*events.Event{
-				{rollupEvent("e1", 2, false), rollupEvent("e2", 3, false)},
-				{rollupEvent("e1", 2, false), rollupEvent("e2", 3, false)},
+				{aggregatedUsageEvent("e1", 2, false), aggregatedUsageEvent("e2", 3, false)},
+				{aggregatedUsageEvent("e1", 2, false), aggregatedUsageEvent("e2", 3, false)},
 			},
 			wantTotal: "5",
 		},
 		{
 			name:         "the same ID twice in one batch is counted once",
 			dedupEnabled: true,
-			batches:      [][]*events.Event{{rollupEvent("e1", 7, false), rollupEvent("e1", 7, false)}},
+			batches:      [][]*events.Event{{aggregatedUsageEvent("e1", 7, false), aggregatedUsageEvent("e1", 7, false)}},
 			wantTotal:    "7",
 		},
 		{
 			name:         "dedup off rolls up nothing",
 			dedupEnabled: false,
-			batches:      [][]*events.Event{{rollupEvent("e1", 2, false)}},
+			batches:      [][]*events.Event{{aggregatedUsageEvent("e1", 2, false)}},
 			wantTotal:    "0",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, store := newRollupConsumer(t, tt.dedupEnabled)
+			svc, store := newAggregatedUsageConsumer(t, tt.dedupEnabled)
 			for _, batch := range tt.batches {
 				msg := scopedMsg(t, events.EventBatch{TenantID: "tenant_on", EnvironmentID: "env_1", Events: batch})
-				require.NoError(t, svc.processBulkMessage(rollupCtx(), msg))
+				require.NoError(t, svc.processBulkMessage(aggregatedUsageCtx(), msg))
 			}
 			require.True(t, decimal.RequireFromString(tt.wantTotal).Equal(store.total("mtr_sum")), "got %s", store.total("mtr_sum"))
 		})
 	}
 }
 
-func TestSingleConsumerUsageRollup(t *testing.T) {
+func TestSingleConsumerAggregatedUsage(t *testing.T) {
 	tests := []struct {
 		name         string
 		dedupEnabled bool
@@ -218,27 +218,27 @@ func TestSingleConsumerUsageRollup(t *testing.T) {
 		{
 			name:         "locked event is rolled up once and a redelivery is skipped",
 			dedupEnabled: true,
-			events:       []*events.Event{rollupEvent("e1", 2, false), rollupEvent("e1", 2, false)},
+			events:       []*events.Event{aggregatedUsageEvent("e1", 2, false), aggregatedUsageEvent("e1", 2, false)},
 			wantTotal:    "2",
 		},
 		{
 			name:         "force reprocess takes no lock and is not rolled up",
 			dedupEnabled: true,
-			events:       []*events.Event{rollupEvent("e1", 2, true)},
+			events:       []*events.Event{aggregatedUsageEvent("e1", 2, true)},
 			wantTotal:    "0",
 		},
 		{
 			name:         "dedup off rolls up nothing",
 			dedupEnabled: false,
-			events:       []*events.Event{rollupEvent("e1", 2, false)},
+			events:       []*events.Event{aggregatedUsageEvent("e1", 2, false)},
 			wantTotal:    "0",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, store := newRollupConsumer(t, tt.dedupEnabled)
+			svc, store := newAggregatedUsageConsumer(t, tt.dedupEnabled)
 			for _, evt := range tt.events {
-				require.NoError(t, svc.processEvent(rollupCtx(), evt))
+				require.NoError(t, svc.processEvent(aggregatedUsageCtx(), evt))
 			}
 			require.True(t, decimal.RequireFromString(tt.wantTotal).Equal(store.total("mtr_sum")), "got %s", store.total("mtr_sum"))
 		})

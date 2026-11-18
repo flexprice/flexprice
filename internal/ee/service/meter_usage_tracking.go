@@ -19,9 +19,9 @@ import (
 
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	"github.com/flexprice/flexprice/internal/ee/analytics"
 	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/metrics"
@@ -302,7 +302,6 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 	eventsToInsert := make([]*events.Event, 0, len(batch.Events))
 	// Only usage whose dedup lock this delivery took is rolled up, so a redelivery can't count twice.
 	lockedRecords := make([]*events.MeterUsage, 0, len(batch.Events))
-	unlockedRecordCount := 0
 	metersByID := make(map[string]*meter.Meter)
 	for _, evt := range batch.Events {
 		if evt == nil {
@@ -391,8 +390,6 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 			metersByID[m.ID] = m
 			if eventLocked {
 				lockedRecords = append(lockedRecords, record)
-			} else {
-				unlockedRecordCount++
 			}
 			eventProducedRecord = true
 		}
@@ -423,7 +420,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		s.analyticsPublisher.PublishMeterUsage(ctx, records)
 	}
 
-	s.recordUsageRollup(ctx, lockedRecords, unlockedRecordCount, metersByID)
+	s.recordAggregatedUsage(ctx, lockedRecords, metersByID)
 
 	s.Logger.Debug(ctx, "bulk meter usage batch inserted",
 		"record_count", len(records),
@@ -615,11 +612,8 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		s.analyticsPublisher.PublishMeterUsage(ctx, records)
 	}
 
-	metersByID := lo.KeyBy(meters, func(m *meter.Meter) string { return m.ID })
 	if lockAcquired {
-		s.recordUsageRollup(ctx, records, 0, metersByID)
-	} else {
-		s.recordUsageRollup(ctx, nil, len(records), metersByID)
+		s.recordAggregatedUsage(ctx, records, lo.KeyBy(meters, func(m *meter.Meter) string { return m.ID }))
 	}
 
 	s.Logger.Debug(ctx, "meter usage records inserted",
@@ -637,41 +631,36 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	return nil
 }
 
-// recordUsageRollup adds inserted usage whose dedup lock this delivery took to the Redis hourly
+// recordAggregatedUsage adds inserted usage whose dedup lock this delivery took to the Redis hourly
 // buckets for enabled tenants. Failures are logged and counted and never fail the message.
-func (s *meterUsageTrackingService) recordUsageRollup(
+func (s *meterUsageTrackingService) recordAggregatedUsage(
 	ctx context.Context,
 	lockedRecords []*events.MeterUsage,
-	unlockedRecordCount int,
 	metersByID map[string]*meter.Meter,
 ) {
-	if s.UsageRollupStore == nil || !s.Config.UsageRollup.IsEnabledForTenant(types.GetTenantID(ctx)) {
+	if s.AggregatedUsageStore == nil || !s.Config.AggregatedUsage.IsEnabledForTenant(types.GetTenantID(ctx)) {
 		return
 	}
-	if unlockedRecordCount > 0 {
-		metrics.RecordCounter(ctx, metrics.UsageRollupRows, int64(unlockedRecordCount), metrics.L(metrics.KeyOutcome, "unlocked"))
-	}
-
-	aggregator := usagerollup.NewAggregator(usagerollup.Cutoff(clock.Now()))
+	aggregator := aggregatedusage.NewAggregator(aggregatedusage.Cutoff(clock.Now()))
 	for _, r := range lockedRecords {
 		if m, ok := metersByID[r.MeterID]; ok {
-			aggregator.Add(r.ExternalCustomerID, r.Timestamp, r.MeterID, m.Aggregation.Type, m.Aggregation.BucketSize, r.QtyTotal)
+			aggregator.Add(r.ExternalCustomerID, r.Timestamp, r.MeterID, m.Aggregation.Type, r.QtyTotal)
 		}
 	}
 
 	if tooOld := aggregator.TooOld(); tooOld > 0 {
-		metrics.RecordCounter(ctx, metrics.UsageRollupRows, int64(tooOld), metrics.L(metrics.KeyOutcome, "too_old"))
+		metrics.RecordCounter(ctx, metrics.AggregatedUsageRows, int64(tooOld), metrics.L(metrics.KeyOutcome, "too_old"))
 	}
 	rowCount := aggregator.RowCount()
 	if rowCount == 0 {
 		return
 	}
-	if err := s.UsageRollupStore.Increment(ctx, aggregator.Buckets()); err != nil {
-		s.Logger.Error(ctx, "failed to write usage rollup", "error", err, "row_count", rowCount)
-		metrics.RecordCounter(ctx, metrics.UsageRollupRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "error"))
+	if err := s.AggregatedUsageStore.Increment(ctx, aggregator.Buckets()); err != nil {
+		s.Logger.Error(ctx, "failed to write aggregated usage", "error", err, "row_count", rowCount)
+		metrics.RecordCounter(ctx, metrics.AggregatedUsageRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "error"))
 		return
 	}
-	metrics.RecordCounter(ctx, metrics.UsageRollupRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "written"))
+	metrics.RecordCounter(ctx, metrics.AggregatedUsageRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "written"))
 }
 
 // publishRejectedEventWebhook fires the event.rejected webhook when an event
