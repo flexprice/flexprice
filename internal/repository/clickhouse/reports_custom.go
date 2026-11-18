@@ -12,11 +12,6 @@ import (
 
 const bucketFormat = "'%Y-%m-%dT%H:%i:%SZ'"
 
-// invoiceDebitCond matches wallet debits that settle an invoice: payments after finalization,
-// and prepaid credits applied while the invoice is computed.
-const invoiceDebitCond = "d.transaction_reason IN ('" + string(types.TransactionReasonInvoicePayment) + "', '" +
-	string(types.TransactionReasonCreditAdjustment) + "')"
-
 func buildCreditConsumption(in buildInput) (*reportQuery, error) {
 	rv := in.RV
 	if rv.Compare != "" {
@@ -77,7 +72,7 @@ func buildCreditConsumption(in buildInput) (*reportQuery, error) {
 	b.WriteString("SELECT ")
 	b.WriteString(strings.Join(selects, ", "))
 	b.WriteString(" FROM (SELECT d.*, JSONExtractArrayRaw(ifNull(d.consumption_breakdown, '[]')) AS parts FROM " + in.DB + ".wallet_transactions AS d WHERE " + in.Scope("d"))
-	b.WriteString(" AND d.type = 'debit' AND d.transaction_status = 'completed' AND " + invoiceDebitCond)
+	b.WriteString(" AND d.type = 'debit' AND d.transaction_status = 'completed' AND d.transaction_reason IN ('INVOICE_PAYMENT', 'CREDIT_ADJUSTMENT')")
 	b.WriteString(" AND " + in.TimeCond("d.created_at"))
 	b.WriteString(") AS d ARRAY JOIN if(empty(d.parts), [''], d.parts) AS item LEFT JOIN " + in.DB + ".wallet_transactions AS g ON g.id = JSONExtractString(item, 'credit_transaction_id') AND " + in.Scope("g"))
 	var filterConds []string
