@@ -86,7 +86,7 @@ func (Contract) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
-		// review is the reviewer's working copy of the extracted terms, saved step by step.
+		// review holds the reviewer's changes to the extracted terms, saved step by step.
 		field.JSON("review", &types.ContractJSON{}).
 			Optional().
 			SchemaType(map[string]string{
