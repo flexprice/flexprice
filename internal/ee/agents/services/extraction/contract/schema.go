@@ -46,13 +46,13 @@ func (s *ContractExtractionService) buildSchema() map[string]any {
 		"charges": s.array(s.object(map[string]any{
 			"kind":              s.enumString("Kind of charge", chargeKinds...),
 			"name":              s.str("Name of the charge as written"),
-			"amount":            s.str("Amount as a plain decimal, 0 if waived"),
-			"amount_period":     s.enumString("Period the amount is quoted for", billingPeriods...),
+			"amount":            s.str("Fee as a plain decimal, 0 if waived; for usage with one price, the price per unit"),
+			"amount_period":     s.enumString("Period a fee is quoted for; empty for a per-unit usage price", billingPeriods...),
 			"billing_period":    s.enumString("How often it is invoiced", billingPeriods...),
 			"billing_timing":    s.enumString("Invoiced in advance or in arrears", billingTimings...),
-			"included_quantity": s.str("Usage included before overage, as a number"),
+			"included_quantity": s.str("Usage included before overage, as a number; set on the usage charge"),
 			"unit":              s.str("Unit the usage is measured in"),
-			"tier_mode":         s.enumString("How tiers price usage", tierModes...),
+			"tier_mode":         s.enumString("How tiers price usage; only with two or more tiers", tierModes...),
 			"tiers": s.array(s.object(map[string]any{
 				"up_to":       s.str("Upper bound of the tier; empty for the last tier"),
 				"unit_amount": s.str("Price per unit in this tier"),
