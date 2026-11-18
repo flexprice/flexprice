@@ -131,12 +131,17 @@ timezone land on the period they mostly cover. A period without a point of its o
 it is shorter than a window, the window holding its own middle, reusing a point already there. A range no commitment
 overlaps is not cut into periods; one a commitment overlaps can span at most 366 billing periods.
 
-With `expand: ["instalments"]`, the response lists the instalments invoiced in the range (`ListInvoiced`, by
-`invoiced_at`) and those still scheduled whose `bill_on` falls in it (`rangeInstalments`), for the commitments on the
-customer's subscriptions that covered a queried meter during their term (`CoveringMeters`), whether or not the range
-has usage. A range in which no usage line runs lists none. Each entry carries its `kind` (`instalment`, `settlement` or
-`cancellation_fee`), `instalment_status` and `bill_on`. `total_cost_with_instalments` adds the invoiced ones only: a
-scheduled instalment is not billed yet, and moves to the range holding its `invoiced_at` once it is.
+With `expand: ["instalments"]`, the response lists the scheduled and invoiced instalments that belong to the range
+(`rangeInstalments`), for the commitments on the customer's subscriptions that covered a queried meter during their
+term (`CoveringMeters`), whether or not the range has usage. A range in which no usage line runs lists none. An
+instalment belongs to the range holding its `bill_on`; an instalment of a recurring `ARREAR` term is billed at the end
+of the period it pays for, so it belongs to the range its `bill_on` closes (`start < bill_on <= end`). A January query
+therefore lists January's arrear billed on 1 Feb. Finalizing or voiding the invoice never moves an instalment;
+`invoiced_at` only records when it was finalized. The exception is a cancellation fee: voiding its invoice cancels it,
+so it drops out of the list and the total. Each entry carries its `kind` (`instalment`, `settlement` or
+`cancellation_fee`), `instalment_status`, `bill_on` and `invoice_cadence` (`ADVANCE` or `ARREAR` from its recurring
+term, empty otherwise). `total_cost_with_instalments` adds the invoiced ones only: a scheduled instalment is not
+billed yet.
 
 ### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:58](../../internal/ee/service/billing_commitments.go#L58))
 

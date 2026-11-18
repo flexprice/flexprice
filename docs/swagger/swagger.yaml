@@ -5497,9 +5497,8 @@ definitions:
         type: array
       instalments:
         description: |-
-          Instalments lists, with expand "instalments", the instalments of the v2 commitments covering a queried meter that
-          were invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source
-          filters, or when no usage line runs in the range.
+          Instalments lists the commitment instalments in the range with expand "instalments": start <= bill_on < end,
+          or start < bill_on <= end for an ARREAR one.
         items:
           $ref: '#/definitions/UsageAnalyticInstalment'
         type: array
@@ -11048,10 +11047,12 @@ definitions:
       id:
         type: string
       instalment_status:
+        $ref: '#/definitions/types.InstalmentStatus'
+      invoice_cadence:
         allOf:
-        - $ref: '#/definitions/types.InstalmentStatus'
-        description: InstalmentStatus is invoiced, or scheduled for an instalment
-          due in the range that no invoice has billed yet.
+        - $ref: '#/definitions/types.InvoiceCadence'
+        description: InvoiceCadence is the recurring term's cadence; empty for once
+          terms, settlements and fees.
       invoice_id:
         type: string
       invoice_label:
