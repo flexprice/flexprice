@@ -62,8 +62,10 @@ func partialUpdateCases() []partialUpdateCase {
 			requests: []map[string]interface{}{
 				{"prefix": "BILL", "suffix_length": 7},
 				{"include_zero_value_line_items": true},
+				{"auto_finalize": false},
 			},
 			want: map[string]string{
+				"auto_finalize":                 "false",
 				"prefix":                        "BILL",
 				"suffix_length":                 "7",
 				"include_zero_value_line_items": "true",
@@ -194,6 +196,20 @@ func partialUpdateCases() []partialUpdateCase {
 			},
 			want: map[string]string{"enabled": "true", "provider": string(types.TaxProviderStripe)},
 		},
+		{
+			key:      types.SettingKeyRevenueRecognitionConfig,
+			requests: []map[string]interface{}{{"enabled": true}},
+			want:     map[string]string{"enabled": "true"},
+		},
+		{
+			key:      types.SettingKeyEmailNotificationConfig,
+			requests: []map[string]interface{}{{"attach_invoice_pdf": false}},
+			want: map[string]string{
+				"attach_invoice_pdf": "false",
+				"enabled":            "false",
+				"auto_send":          "map[enabled:false entities:[invoice]]",
+			},
+		},
 	}
 }
 
@@ -220,7 +236,10 @@ func (s *SettingsServiceSuite) TestUpdateSettingByKey_PartialUpdate() {
 
 // Every key the settings API serves must have a partial update case above.
 func (s *SettingsServiceSuite) TestUpdateSettingByKey_PartialUpdateCoversEveryKey() {
-	covered := map[types.SettingKey]bool{types.SettingKeySAMLConfig: true} // TestUpdateSettingByKey_SAMLPartialUpdate
+	covered := map[types.SettingKey]bool{
+		types.SettingKeySAMLConfig:          true, // TestUpdateSettingByKey_SAMLPartialUpdate
+		types.SettingKeyBillingEntityConfig: true, // TestUpdateSettingByKey_BillingEntityConfigRejected
+	}
 	for _, tc := range partialUpdateCases() {
 		covered[tc.key] = true
 	}
@@ -266,6 +285,13 @@ func (s *SettingsServiceSuite) TestUpdateSettingByKey_SAMLPartialUpdate() {
 	s.Equal(true, resp.Value["enabled"])
 	s.Equal("https://idp.example.com/sso", resp.Value["idp_sso_url"])
 	s.Equal(false, resp.Value["active"])
+}
+
+// billing_entity_config is read-only through the settings API, partial or not.
+func (s *SettingsServiceSuite) TestUpdateSettingByKey_BillingEntityConfigRejected() {
+	_, err := s.update(s.service, s.GetContext(), types.SettingKeyBillingEntityConfig, map[string]interface{}{"mode": "single"})
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "expected a validation error, got %v", err)
 }
 
 // Validation still applies to the merged value: an invalid field sent on its
