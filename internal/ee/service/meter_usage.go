@@ -1,7 +1,6 @@
 package service
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"maps"
@@ -1460,14 +1459,14 @@ func emptyAnalyticsResponse(params *events.MeterUsageDetailedAnalyticsParams) *d
 	return response
 }
 
-// rangeInstalments returns, in date order, the scheduled and invoiced instalments of the commitments covering a queried
-// meter that are charged in the request's range; none with property or source filters.
+// rangeInstalments returns, ordered by bill_on, the scheduled and invoiced instalments of the commitments covering a
+// queried meter that belong to the request's range; none with property or source filters.
 func (s *meterUsageService) rangeInstalments(
 	ctx context.Context,
 	cust *customer.Customer,
 	subscriptions []*subscription.Subscription,
 	params *events.MeterUsageDetailedAnalyticsParams,
-) ([]chargedInstalment, error) {
+) ([]rangedInstalment, error) {
 	if len(params.PropertyFilters) > 0 || len(params.Sources) > 0 {
 		return nil, nil
 	}
@@ -1492,50 +1491,59 @@ func (s *meterUsageService) rangeInstalments(
 		return nil, nil
 	}
 
-	// An arrear charged at the range end's last moment is billed at the range end.
 	listed, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
-		OwnerType: types.BillingTermOwnerCommitment,
-		OwnerIDs:  ownerIDs,
-		Statuses:  []types.InstalmentStatus{types.InstalmentStatusScheduled, types.InstalmentStatusInvoiced},
-		BillOnIn:  &types.Period{Start: params.StartTime, End: params.EndTime.Add(time.Microsecond)},
+		OwnerType:      types.BillingTermOwnerCommitment,
+		OwnerIDs:       ownerIDs,
+		Statuses:       []types.InstalmentStatus{types.InstalmentStatusScheduled, types.InstalmentStatusInvoiced},
+		BillOnFrom:     &params.StartTime,
+		BillOnOrBefore: &params.EndTime,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	arrears, err := s.arrearTermIDs(ctx, listed)
+	cadences, err := s.termCadences(ctx, listed)
 	if err != nil {
 		return nil, err
 	}
 
-	instalments := make([]chargedInstalment, 0, len(listed))
+	instalments := make([]rangedInstalment, 0, len(listed))
 	for _, inst := range listed {
-		charged := chargedInstalment{instalment: inst, chargedAt: inst.BillOn}
-		if inst.BillingTermID != nil && arrears[*inst.BillingTermID] {
-			charged.chargedAt = inst.BillOn.Add(-time.Microsecond)
+		ranged := rangedInstalment{instalment: inst}
+		if inst.BillingTermID != nil {
+			ranged.cadence = cadences[*inst.BillingTermID]
 		}
 
-		if !charged.chargedAt.Before(params.StartTime) && charged.chargedAt.Before(params.EndTime) {
-			instalments = append(instalments, charged)
+		if ranged.inRange(params.StartTime, params.EndTime) {
+			instalments = append(instalments, ranged)
 		}
 	}
-
-	slices.SortStableFunc(instalments, func(a, b chargedInstalment) int {
-		return cmp.Or(a.chargedAt.Compare(b.chargedAt), cmp.Compare(a.instalment.ID, b.instalment.ID))
-	})
 
 	return instalments, nil
 }
 
-// chargedInstalment is an instalment with the moment analytics places it: its bill_on, or just before it for an
-// arrear, which is billed at the end of the period it pays for and shows in that period.
-type chargedInstalment struct {
+// rangedInstalment is an instalment with the invoice cadence of the recurring term it comes from, if any.
+type rangedInstalment struct {
 	instalment *billingterm.Instalment
-	chargedAt  time.Time
+	cadence    *types.InvoiceCadence
 }
 
-// arrearTermIDs returns the ids of the recurring ARREAR terms the instalments come from, archived ones included.
-func (s *meterUsageService) arrearTermIDs(ctx context.Context, instalments []*billingterm.Instalment) (map[string]bool, error) {
+// inRange reports whether the instalment belongs to [start, end). An arrear is billed at the end of the period it pays
+// for, so it belongs to the range its bill_on closes: (start, end].
+func (r rangedInstalment) inRange(start, end time.Time) bool {
+	billOn := r.instalment.BillOn
+	if lo.FromPtr(r.cadence) == types.InvoiceCadenceArrear {
+		return billOn.After(start) && !billOn.After(end)
+	}
+
+	return !billOn.Before(start) && billOn.Before(end)
+}
+
+// termCadences returns the invoice cadence of each recurring term the instalments come from, archived ones included.
+func (s *meterUsageService) termCadences(
+	ctx context.Context,
+	instalments []*billingterm.Instalment,
+) (map[string]*types.InvoiceCadence, error) {
 	ids := lo.Uniq(lo.FilterMap(instalments, func(inst *billingterm.Instalment, _ int) (string, bool) {
 		return lo.FromPtr(inst.BillingTermID), inst.BillingTermID != nil
 	}))
@@ -1548,22 +1556,22 @@ func (s *meterUsageService) arrearTermIDs(ctx context.Context, instalments []*bi
 		return nil, err
 	}
 
-	arrears := make(map[string]bool, len(terms))
+	cadences := make(map[string]*types.InvoiceCadence, len(terms))
 	for _, t := range terms {
-		if t.Kind == types.BillingTermKindRecurring && lo.FromPtr(t.InvoiceCadence) == types.InvoiceCadenceArrear {
-			arrears[t.ID] = true
+		if t.Kind == types.BillingTermKindRecurring {
+			cadences[t.ID] = t.InvoiceCadence
 		}
 	}
 
-	return arrears, nil
+	return cadences, nil
 }
 
 // setInstalments lists the instalments on the response and sets its total with the invoiced ones.
-func setInstalments(response *dto.GetUsageAnalyticsResponse, instalments []chargedInstalment) {
+func setInstalments(response *dto.GetUsageAnalyticsResponse, instalments []rangedInstalment) {
 	total := response.TotalCost
 	response.Instalments = make([]dto.UsageAnalyticInstalment, 0, len(instalments))
-	for _, charged := range instalments {
-		inst := charged.instalment
+	for _, ranged := range instalments {
+		inst := ranged.instalment
 		if inst.InstalmentStatus == types.InstalmentStatusInvoiced {
 			total = total.Add(inst.Amount)
 		}
@@ -1579,7 +1587,7 @@ func setInstalments(response *dto.GetUsageAnalyticsResponse, instalments []charg
 			Amount:             inst.Amount,
 			Currency:           inst.Currency,
 			BillOn:             inst.BillOn,
-			ChargedAt:          charged.chargedAt,
+			InvoiceCadence:     ranged.cadence,
 			InvoicedAt:         inst.InvoicedAt,
 			ServicePeriodStart: inst.ServicePeriodStart,
 			ServicePeriodEnd:   inst.ServicePeriodEnd,

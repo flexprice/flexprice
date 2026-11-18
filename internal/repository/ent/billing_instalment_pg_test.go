@@ -321,6 +321,16 @@ func TestInstalmentList_FiltersAndOrder(t *testing.T) {
 			want: []string{first.ID, second.ID, third.ID},
 		},
 		{
+			name: "bill_on bounds on both sides are inclusive",
+			filter: billingterm.InstalmentFilter{
+				OwnerType:      types.BillingTermOwnerCommitment,
+				OwnerIDs:       []string{owner},
+				BillOnFrom:     &nextDay,
+				BillOnOrBefore: &dayAfter,
+			},
+			want: []string{second.ID, third.ID, fourth.ID},
+		},
+		{
 			name: "status and bill_on bound",
 			filter: billingterm.InstalmentFilter{
 				OwnerIDs:       []string{owner},

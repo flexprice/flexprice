@@ -7656,8 +7656,8 @@ func (s *MeterUsageServiceSuite) storeTerm(id string, kind types.BillingTermKind
 	s.Require().NoError(err)
 }
 
-// An instalment shows in the range holding its bill_on, except an arrear, which shows in the period it closes; a
-// broken-period arrear and the first quarterly advance billed on one boundary invoice therefore show a period apart.
+// An instalment belongs to the range holding its bill_on, except an arrear, which belongs to the range its bill_on
+// closes; a broken-period arrear and the first quarterly advance billed on one boundary invoice show a period apart.
 // A once term billed at the end of what it pays for still shows at its bill_on, and finalizing the invoice moves
 // nothing: it only adds the instalments to the total.
 func (s *MeterUsageServiceSuite) TestCommitments_PlacesInstalmentsWhenCharged() {
@@ -7688,10 +7688,11 @@ func (s *MeterUsageServiceSuite) TestCommitments_PlacesInstalmentsWhenCharged() 
 	}
 	first, second := analytics(before), analytics(after)
 	s.Equal([]string{"binst_arrear"}, ids(first))
-	s.True(first.Instalments[0].ChargedAt.Equal(boundary.Add(-time.Microsecond)), "charged at %s", first.Instalments[0].ChargedAt)
+	s.True(first.Instalments[0].BillOn.Equal(boundary), "bill on %s", first.Instalments[0].BillOn)
+	s.Equal(lo.ToPtr(types.InvoiceCadenceArrear), first.Instalments[0].InvoiceCadence)
 	s.Equal([]string{"binst_advance", "binst_at_end"}, ids(second))
-	s.True(second.Instalments[0].ChargedAt.Equal(boundary), "charged at %s", second.Instalments[0].ChargedAt)
-	s.True(second.Instalments[1].ChargedAt.Equal(boundary), "charged at %s", second.Instalments[1].ChargedAt)
+	s.Equal(lo.ToPtr(types.InvoiceCadenceAdvance), second.Instalments[0].InvoiceCadence)
+	s.Nil(second.Instalments[1].InvoiceCadence, "a once term has no cadence")
 	s.True(first.TotalCostWithInstalments.Equal(first.TotalCost), "scheduled instalments are not billed yet")
 	s.True(second.TotalCostWithInstalments.Equal(second.TotalCost), "scheduled instalments are not billed yet")
 

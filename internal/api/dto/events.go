@@ -392,8 +392,8 @@ type GetUsageAnalyticsResponse struct {
 	Items           []UsageAnalyticItem  `json:"items"`
 	CustomAnalytics []CustomAnalyticItem `json:"custom_analytics,omitempty"`
 	// Instalments lists, with expand "instalments", the scheduled and invoiced instalments of the v2 commitments covering
-	// a queried meter whose charged_at falls in the range; it is empty with property or source filters, or when no usage
-	// line runs in the range.
+	// a queried meter whose bill_on falls in the range, or closes it for an ARREAR instalment; it is empty with property
+	// or source filters, or when no usage line runs in the range.
 	Instalments []UsageAnalyticInstalment `json:"instalments,omitempty"`
 	// TotalCostWithInstalments is TotalCost plus the amounts of the invoiced Instalments, set when expand includes
 	// "instalments". Scheduled instalments are not billed yet, so they are left out.
@@ -408,18 +408,19 @@ type UsageAnalyticInstalment struct {
 	InvoiceID      string `json:"invoice_id,omitempty"`
 	// Kind tells a regular instalment from a termination's settlement and its cancellation_fee.
 	Kind types.InstalmentKind `json:"kind"`
-	// InstalmentStatus is invoiced, or scheduled for an instalment charged in the range that no invoice has billed yet.
+	// InstalmentStatus is invoiced, or scheduled for an instalment no invoice has billed yet.
 	InstalmentStatus types.InstalmentStatus `json:"instalment_status"`
 	InvoiceLabel     string                 `json:"invoice_label"`
 	Amount           decimal.Decimal        `json:"amount" swaggertype:"string"`
 	Currency         string                 `json:"currency"`
 	BillOn           time.Time              `json:"bill_on"` // when it becomes billable
-	// ChargedAt places it in time: bill_on, or just before it for an arrear, so an arrear falls in the period it
-	// closes. The range filters on it.
-	ChargedAt          time.Time  `json:"charged_at"`
-	InvoicedAt         *time.Time `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
-	ServicePeriodStart time.Time  `json:"service_period_start"`
-	ServicePeriodEnd   time.Time  `json:"service_period_end"`
+	// InvoiceCadence is the cadence of the recurring term it comes from: ADVANCE bills at the start of its period,
+	// ARREAR at the end. An ARREAR instalment belongs to the period that ends at its bill_on. Empty for a once term,
+	// a settlement or a cancellation fee.
+	InvoiceCadence     *types.InvoiceCadence `json:"invoice_cadence,omitempty"`
+	InvoicedAt         *time.Time            `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
+	ServicePeriodStart time.Time             `json:"service_period_start"`
+	ServicePeriodEnd   time.Time             `json:"service_period_end"`
 }
 
 // UsageAnalyticItem represents a single analytic item in the response

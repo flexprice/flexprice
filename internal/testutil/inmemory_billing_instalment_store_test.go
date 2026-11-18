@@ -257,6 +257,11 @@ func TestInMemoryBillingInstalmentStore_ListFiltersAndOrder(t *testing.T) {
 			want:   []string{"binst_a", "binst_b", "binst_c"},
 		},
 		{
+			name:   "bill_on bounds on both sides are inclusive",
+			filter: &billingterm.InstalmentFilter{OwnerIDs: []string{"cmt_1"}, BillOnFrom: &nextDay, BillOnOrBefore: &dayAfter},
+			want:   []string{"binst_b", "binst_c", "binst_d"},
+		},
+		{
 			name:   "statuses",
 			filter: &billingterm.InstalmentFilter{OwnerIDs: []string{"cmt_1"}, Statuses: []types.InstalmentStatus{types.InstalmentStatusInvoiced}},
 			want:   []string{"binst_b"},

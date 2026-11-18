@@ -63,11 +63,11 @@ type InstalmentFilter struct {
 	Statuses        []types.InstalmentStatus
 	Deliveries      []types.InstalmentDelivery
 
+	// BillOnFrom selects instalments whose bill_on is at or after it.
+	BillOnFrom *time.Time
+
 	// BillOnOrBefore selects instalments whose bill_on is at or before it.
 	BillOnOrBefore *time.Time
-
-	// BillOnIn selects instalments whose bill_on falls in [Start, End).
-	BillOnIn *types.Period
 
 	InvoiceIDs []string
 	IDs        []string

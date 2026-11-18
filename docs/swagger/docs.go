@@ -25437,7 +25437,7 @@ const docTemplate = `{
                     }
                 },
                 "instalments": {
-                    "description": "Instalments lists, with expand \"instalments\", the scheduled and invoiced instalments of the v2 commitments covering\na queried meter whose charged_at falls in the range; it is empty with property or source filters, or when no usage\nline runs in the range.",
+                    "description": "Instalments lists, with expand \"instalments\", the scheduled and invoiced instalments of the v2 commitments covering\na queried meter whose bill_on falls in the range, or closes it for an ARREAR instalment; it is empty with property\nor source filters, or when no usage line runs in the range.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/UsageAnalyticInstalment"
@@ -33127,10 +33127,6 @@ const docTemplate = `{
                     "description": "when it becomes billable",
                     "type": "string"
                 },
-                "charged_at": {
-                    "description": "ChargedAt places it in time: bill_on, or just before it for an arrear, so an arrear falls in the period it\ncloses. The range filters on it.",
-                    "type": "string"
-                },
                 "commitment_id": {
                     "type": "string"
                 },
@@ -33141,10 +33137,18 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "instalment_status": {
-                    "description": "InstalmentStatus is invoiced, or scheduled for an instalment charged in the range that no invoice has billed yet.",
+                    "description": "InstalmentStatus is invoiced, or scheduled for an instalment no invoice has billed yet.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.InstalmentStatus"
+                        }
+                    ]
+                },
+                "invoice_cadence": {
+                    "description": "InvoiceCadence is the cadence of the recurring term it comes from: ADVANCE bills at the start of its period,\nARREAR at the end. An ARREAR instalment belongs to the period that ends at its bill_on. Empty for a once term,\na settlement or a cancellation fee.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InvoiceCadence"
                         }
                     ]
                 },

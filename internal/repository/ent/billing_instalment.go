@@ -191,15 +191,12 @@ func applyInstalmentFilter(q *ent.BillingInstalmentQuery, f *billingterm.Instalm
 		preds = append(preds, entbillinginstalment.DeliveryIn(f.Deliveries...))
 	}
 
-	if f.BillOnOrBefore != nil {
-		preds = append(preds, entbillinginstalment.BillOnLTE(*f.BillOnOrBefore))
+	if f.BillOnFrom != nil {
+		preds = append(preds, entbillinginstalment.BillOnGTE(*f.BillOnFrom))
 	}
 
-	if f.BillOnIn != nil {
-		preds = append(preds,
-			entbillinginstalment.BillOnGTE(f.BillOnIn.Start),
-			entbillinginstalment.BillOnLT(f.BillOnIn.End),
-		)
+	if f.BillOnOrBefore != nil {
+		preds = append(preds, entbillinginstalment.BillOnLTE(*f.BillOnOrBefore))
 	}
 
 	if len(f.InvoiceIDs) > 0 {
