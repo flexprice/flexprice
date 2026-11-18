@@ -622,6 +622,8 @@ var (
 		{Name: "extraction_status", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "extraction", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "extraction_error", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "review", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "review_version", Type: field.TypeInt, Default: 0},
 	}
 	// ContractsTable holds the schema information for the "contracts" table.
 	ContractsTable = &schema.Table{

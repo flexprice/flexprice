@@ -47,6 +47,10 @@ const (
 	FieldExtraction = "extraction"
 	// FieldExtractionError holds the string denoting the extraction_error field in the database.
 	FieldExtractionError = "extraction_error"
+	// FieldReview holds the string denoting the review field in the database.
+	FieldReview = "review"
+	// FieldReviewVersion holds the string denoting the review_version field in the database.
+	FieldReviewVersion = "review_version"
 	// Table holds the table name of the contract in the database.
 	Table = "contracts"
 )
@@ -71,6 +75,8 @@ var Columns = []string{
 	FieldExtractionStatus,
 	FieldExtraction,
 	FieldExtractionError,
+	FieldReview,
+	FieldReviewVersion,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -98,6 +104,10 @@ var (
 	DefaultEnvironmentID string
 	// ContractStatusValidator is a validator for the "contract_status" field. It is called by the builders before save.
 	ContractStatusValidator func(string) error
+	// DefaultReviewVersion holds the default value on creation for the "review_version" field.
+	DefaultReviewVersion int
+	// ReviewVersionValidator is a validator for the "review_version" field. It is called by the builders before save.
+	ReviewVersionValidator func(int) error
 )
 
 // OrderOption defines the ordering options for the Contract queries.
@@ -181,4 +191,9 @@ func ByExtractionStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByExtractionError orders the results by the extraction_error field.
 func ByExtractionError(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldExtractionError, opts...).ToFunc()
+}
+
+// ByReviewVersion orders the results by the review_version field.
+func ByReviewVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewVersion, opts...).ToFunc()
 }

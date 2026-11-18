@@ -50,10 +50,14 @@ type Contract struct {
 	// ExtractionStatus holds the value of the "extraction_status" field.
 	ExtractionStatus *string `json:"extraction_status,omitempty"`
 	// Extraction holds the value of the "extraction" field.
-	Extraction *types.ContractExtraction `json:"extraction,omitempty"`
+	Extraction *types.ContractJSON `json:"extraction,omitempty"`
 	// ExtractionError holds the value of the "extraction_error" field.
 	ExtractionError *string `json:"extraction_error,omitempty"`
-	selectValues    sql.SelectValues
+	// Review holds the value of the "review" field.
+	Review *types.ContractJSON `json:"review,omitempty"`
+	// ReviewVersion holds the value of the "review_version" field.
+	ReviewVersion int `json:"review_version,omitempty"`
+	selectValues  sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -61,8 +65,10 @@ func (*Contract) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case contract.FieldDocument, contract.FieldExtraction:
+		case contract.FieldDocument, contract.FieldExtraction, contract.FieldReview:
 			values[i] = new([]byte)
+		case contract.FieldReviewVersion:
+			values[i] = new(sql.NullInt64)
 		case contract.FieldID, contract.FieldTenantID, contract.FieldStatus, contract.FieldCreatedBy, contract.FieldUpdatedBy, contract.FieldEnvironmentID, contract.FieldCustomerID, contract.FieldCurrency, contract.FieldContractStatus, contract.FieldExtractionStatus, contract.FieldExtractionError:
 			values[i] = new(sql.NullString)
 		case contract.FieldCreatedAt, contract.FieldUpdatedAt, contract.FieldTermStart, contract.FieldTermEnd, contract.FieldEndedAt:
@@ -199,6 +205,20 @@ func (_m *Contract) assignValues(columns []string, values []any) error {
 				_m.ExtractionError = new(string)
 				*_m.ExtractionError = value.String
 			}
+		case contract.FieldReview:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field review", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Review); err != nil {
+					return fmt.Errorf("unmarshal field review: %w", err)
+				}
+			}
+		case contract.FieldReviewVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field review_version", values[i])
+			} else if value.Valid {
+				_m.ReviewVersion = int(value.Int64)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -295,6 +315,12 @@ func (_m *Contract) String() string {
 		builder.WriteString("extraction_error=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("review=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Review))
+	builder.WriteString(", ")
+	builder.WriteString("review_version=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ReviewVersion))
 	builder.WriteByte(')')
 	return builder.String()
 }
