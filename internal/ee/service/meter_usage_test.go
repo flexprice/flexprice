@@ -7146,14 +7146,162 @@ func (s *MeterUsageServiceSuite) TestCommitments_WindowCommitmentBillsWhatTheInv
 	}
 	s.True(pointsCost.Equal(invoiced), "points add up to %s", pointsCost)
 
-	// Within the period the charges follow usage: 5 Jan used 14 of the 18 units, 6 Jan the other 4.
-	s.Require().Len(item.Points, 2)
+	// Each day carries what it billed: 5 Jan used its 10 units and ran 4 over at $2, 6 Jan used 4 and left 6 unused, and
+	// every other day, idle, left its 10 unused.
+	s.Require().Len(item.Points, 31)
 	for _, p := range item.Points {
-		wantOverage := byKind[types.CommitmentLineOverage].Mul(p.Usage).Div(dec("18"))
-		s.True(p.ComputedOverageAmount.Sub(wantOverage).Abs().LessThan(dec("0.01")),
-			"overage on %s is %s, want %s", p.Timestamp, p.ComputedOverageAmount, wantOverage)
+		utilized, overage, overageQty, trueUp := "0", "0", "0", "10"
+		switch p.Timestamp.Day() {
+		case 5:
+			utilized, overage, overageQty, trueUp = "10", "8", "4", "0"
+		case 6:
+			utilized, trueUp = "4", "6"
+		}
+
+		day := p.Timestamp.Format(time.DateOnly)
+		s.True(p.ComputedCommitmentUtilizedAmount.Equal(dec(utilized)), "%s utilized %s", day, p.ComputedCommitmentUtilizedAmount)
+		s.True(p.ComputedCommitmentUtilizedQuantity.Equal(dec(utilized)), "%s utilized units %s", day, p.ComputedCommitmentUtilizedQuantity)
+		s.True(p.ComputedOverageAmount.Equal(dec(overage)), "%s overage %s", day, p.ComputedOverageAmount)
+		s.True(p.ComputedOverageQuantity.Equal(dec(overageQty)), "%s overage units %s", day, p.ComputedOverageQuantity)
+		s.True(p.ComputedTrueUpAmount.Equal(dec(trueUp)), "%s true-up %s", day, p.ComputedTrueUpAmount)
+		s.True(p.ComputedTrueUpQuantity.Equal(dec(trueUp)), "%s unused units %s", day, p.ComputedTrueUpQuantity)
 		s.True(p.Cost.Equal(p.ComputedCommitmentUtilizedAmount.Add(p.ComputedOverageAmount).Add(p.ComputedTrueUpAmount)),
-			"point on %s costs %s", p.Timestamp, p.Cost)
+			"%s costs %s", day, p.Cost)
+	}
+}
+
+// hourlyReservations reserves 2 units an hour at $1 (A, billed each period) and 1 more prepaid through billing terms
+// (B), on an hourly SUM meter priced at $2. On 5 Jan hours 0-1 use 2 units each, inside A, and hours 2-3 use 4, which
+// fills A and B and runs 1 over.
+func (s *MeterUsageServiceSuite) hourlyReservations() {
+	ctx := s.GetContext()
+	m := &meter.Meter{
+		ID:          "meter_hourly_gpus",
+		Name:        "meter_hourly_gpus",
+		EventName:   "api_call",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeHour},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	p := s.createPriceForMeter(ctx, "price_hourly_gpus", m.ID, dec("2"))
+	s.createLineItemForMeter(ctx, "li_hourly_gpus", m.ID, p.ID)
+	committed := s.createPriceForMeter(ctx, "price_hourly_gpus_committed", m.ID, dec("1"))
+
+	for _, r := range []struct {
+		id       string
+		value    string
+		priority int
+		method   types.CommitmentCollectionMethod
+	}{
+		{"cmt_hourly_a", "2", 0, types.CommitmentCollectionPerPeriod},
+		{"cmt_hourly_b", "1", 1, types.CommitmentCollectionBillingTerms},
+	} {
+		c := s.newCommitment(r.id, types.CommitmentScopePrice, p.ID, r.value)
+		c.Type, c.Measurement = types.COMMITMENT_TYPE_QUANTITY, types.CommitmentMeasurementWindow
+		c.CommittedPriceID = lo.ToPtr(committed.ID)
+		c.Priority, c.CollectionMethod = r.priority, lo.ToPtr(r.method)
+		s.storeCommitment(c)
+	}
+
+	day := time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC)
+	for hour, units := range []float64{2, 2, 4, 4} {
+		s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "api", day.Add(time.Duration(hour)*time.Hour+time.Minute), units, nil)
+	}
+}
+
+// Window commitments place each charge in the hour it fell in: overage only where usage ran past both reservations,
+// usage the prepaid reservation covers at $0, and A's unused capacity on every idle hour, as the old line-item
+// reservations did. A daily view of the same day adds the hours up.
+func (s *MeterUsageServiceSuite) TestCommitments_WindowChargesStayInTheirWindows() {
+	s.hourlyReservations()
+	day := time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC)
+
+	hourly := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+		StartTime:  day,
+		EndTime:    day.AddDate(0, 0, 1),
+		WindowSize: types.WindowSizeHour,
+	})
+	s.Require().Len(hourly.Items, 1)
+	item := hourly.Items[0]
+	s.True(item.TotalCost.Equal(dec("52")), "the day bills $8 used, $4 over and $40 unused, not %s", item.TotalCost)
+	s.Require().Len(item.Points, 24)
+	for _, p := range item.Points {
+		// Hours 4-23 are idle: A leaves its 2 units unused, and B, prepaid, takes no true-up.
+		utilized, utilizedQty, overage, overageQty, trueUp, trueUpQty := "0", "0", "0", "0", "2", "2"
+		switch p.Timestamp.Hour() {
+		case 0, 1:
+			utilized, utilizedQty, trueUp, trueUpQty = "2", "2", "0", "0"
+		case 2, 3:
+			utilized, utilizedQty, overage, overageQty, trueUp, trueUpQty = "2", "3", "2", "1", "0", "0"
+		}
+
+		hour := p.Timestamp.Format(time.TimeOnly)
+		s.True(p.ComputedCommitmentUtilizedAmount.Equal(dec(utilized)), "%s utilized %s", hour, p.ComputedCommitmentUtilizedAmount)
+		s.True(p.ComputedCommitmentUtilizedQuantity.Equal(dec(utilizedQty)), "%s utilized units %s", hour, p.ComputedCommitmentUtilizedQuantity)
+		s.True(p.ComputedOverageAmount.Equal(dec(overage)), "%s overage %s", hour, p.ComputedOverageAmount)
+		s.True(p.ComputedOverageQuantity.Equal(dec(overageQty)), "%s overage units %s", hour, p.ComputedOverageQuantity)
+		s.True(p.ComputedTrueUpAmount.Equal(dec(trueUp)), "%s true-up %s", hour, p.ComputedTrueUpAmount)
+		s.True(p.ComputedTrueUpQuantity.Equal(dec(trueUpQty)), "%s unused units %s", hour, p.ComputedTrueUpQuantity)
+	}
+
+	daily := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+		StartTime:  day,
+		EndTime:    day.AddDate(0, 0, 1),
+		WindowSize: types.WindowSizeDay,
+	})
+	s.Require().Len(daily.Items, 1)
+	s.Require().Len(daily.Items[0].Points, 1)
+	p := daily.Items[0].Points[0]
+	s.True(p.ComputedCommitmentUtilizedAmount.Equal(dec("8")), "utilized %s", p.ComputedCommitmentUtilizedAmount)
+	s.True(p.ComputedOverageAmount.Equal(dec("4")), "overage %s", p.ComputedOverageAmount)
+	s.True(p.ComputedTrueUpAmount.Equal(dec("40")), "true-up %s", p.ComputedTrueUpAmount)
+}
+
+// Grouped, each group keeps the share of the period it has always had, and lays it where its own usage fell: batch,
+// which used only on 5 Jan, bills its usage there, and every idle day carries both groups' parts of its unused
+// capacity.
+func (s *MeterUsageServiceSuite) TestCommitments_GroupsPlaceTheirShareWhereTheirUsageFell() {
+	s.reserveTenADay()
+	invoiced, _ := invoicedTotal(s.periodInvoice(s.periodStart, s.periodEnd))
+
+	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+		StartTime:  s.periodStart,
+		EndTime:    s.periodEnd,
+		GroupBy:    []string{"source"},
+		WindowSize: types.WindowSizeDay,
+	})
+	s.Require().Len(resp.Items, 2)
+	s.True(resp.TotalCost.Equal(invoiced), "groups cost %s, invoice %s", resp.TotalCost, invoiced)
+
+	trueUpByDay := map[int]decimal.Decimal{}
+	for _, item := range resp.Items {
+		pointsCost := decimal.Zero
+		for _, p := range item.Points {
+			pointsCost = pointsCost.Add(p.Cost)
+			trueUpByDay[p.Timestamp.Day()] = trueUpByDay[p.Timestamp.Day()].Add(p.ComputedTrueUpAmount)
+			used := p.ComputedCommitmentUtilizedAmount.Add(p.ComputedOverageAmount)
+			if p.Timestamp.Day() != 5 && p.Timestamp.Day() != 6 {
+				s.True(used.IsZero(), "%s used %s on idle %s", item.Source, used, p.Timestamp.Format(time.DateOnly))
+			}
+			if item.Source == "batch" && p.Timestamp.Day() == 6 {
+				s.True(used.IsZero(), "batch used nothing on 6 Jan, billed %s", used)
+			}
+		}
+
+		s.True(pointsCost.Equal(item.TotalCost), "%s points add up to %s, total %s", item.Source, pointsCost, item.TotalCost)
+	}
+
+	s.Len(trueUpByDay, 31)
+	for day, trueUp := range trueUpByDay {
+		if day == 5 {
+			continue
+		}
+
+		want := dec("10")
+		if day == 6 {
+			want = dec("6")
+		}
+		s.True(trueUp.Sub(want).Abs().LessThanOrEqual(dec("0.02")), "Jan %d true-up %s, want %s", day, trueUp, want)
 	}
 }
 

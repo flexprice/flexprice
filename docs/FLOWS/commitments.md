@@ -43,6 +43,7 @@ usage within it is shown at $0 and no true-up is billed.
 | `commitment_periods.go` | Period math: commitment periods, proration, window bucket counting, term value |
 | `billing_commitments.go` | The billing loader: picks the commitments for one invoice calculation, lays usage and capacity onto windows, and returns invoice lines |
 | `commitment_engine.go` | Pure allocation and rendering: the waterfall and the utilized / true-up / overage lines |
+| `meter_usage_commitment_placement.go` | Usage analytics: lays a window commitment's charges on the display windows they fell in (`windowPlacer`, `placeGroupShares`) |
 | `commitment_billing_terms.go` | Planning instalments, get / preview / replace terms, settlement on termination, the due-instalments run for separate invoices |
 | `commitment_instalments.go` | Triggering a manual (milestone) instalment |
 | `billing_instalments.go` | Due instalments as fixed lines on a subscription invoice |
@@ -123,9 +124,16 @@ lines' quantities go to `computed_*_quantity` the same way: usage a billing-term
 $0, and only a quantity commitment's true-up counts its unused units. A running SUM meter is read at its total at the
 period's end, as invoices bill it. A covered line's periods without a commitment bill at its own price.
 
-Each period's charges stay on that period's groups and points, shared by the usage billing priced: a bucketed price's
-summed buckets, not a window's peak. Amounts are rounded to the currency on their running total (`roundShares`), so
-shares sum to what was billed; quantities share by the same weights unrounded. A point belongs to the period holding
+Each period's charges stay on that period's groups, shared by the usage billing priced: a bucketed price's summed
+buckets, not a window's peak. A window commitment's lines then lay each charge on the display window it fell in, as the
+waterfall drew it (`windowPlacer`): utilized where a commitment took the line's usage, overage and plain usage where
+usage was left, and the true-up where a bucket's capacity went unused, so an idle window carries its own unused
+capacity. Buckets past the range, the rest of a projected open period, are left out of the windows and the line's
+total: the range does not owe them yet. A group keeps
+its share of the period, so its total does not depend on the display window; it lays its utilized and overage where its
+own usage fell and its true-up by the line's unused capacity (`placeGroupShares`). A line a charge cannot be placed for,
+or a period commitment's line, whose pool spans the period, has its charges shared over its points by usage.
+Amounts are rounded to the currency on their running total (`roundShares`), so shares sum to what was billed; quantities share by the same weights unrounded. A point belongs to the period holding
 the middle of its window (`pointWindows`, with each window's real length, in UTC as the usage queries cut them), so windows cut on other edges or in another
 timezone land on the period they mostly cover. A period without a point of its own takes the first window whose middle it holds or, when
 it is shorter than a window, the window holding its own middle, reusing a point already there. A range no commitment
@@ -190,7 +198,8 @@ the active windows.
 For each window, in time order, each commitment in priority order drains its pool across its lines in fill order
 (`sortLinesForFill`). The first commitment fills completely before the next receives anything. Usage left after the
 last commitment is overage. The result is, per commitment, used / unused / capacity, and per line and window, overage.
-This file has no I/O.
+Each commitment also keeps what it took in each window (`Takes`) and what each pool kept (`PoolsLeft`), which usage
+analytics reads to place charges in time; invoices use only the totals. This file has no I/O.
 
 ### 6.5 Rendering — `commitmentInvoiceLines` ([commitment_engine.go:241](../../internal/ee/service/commitment_engine.go#L241))
 
