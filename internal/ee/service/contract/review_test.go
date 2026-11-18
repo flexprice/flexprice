@@ -132,6 +132,8 @@ func TestSaveReviewStep_Rejects(t *testing.T) {
 		{"bad date", stepBilling, &dto.SaveContractReviewRequest{Values: map[string]string{"term.effective_date": "Nov 1"}}},
 		{"bad currency", stepBilling, &dto.SaveContractReviewRequest{Values: map[string]string{"billing.currency": "usd"}}},
 		{"bad tier mode", stepCharges, &dto.SaveContractReviewRequest{Values: map[string]string{"charges[1].tier_mode": "unknown"}}},
+		{"contract type on the charges step", stepCharges, &dto.SaveContractReviewRequest{Values: map[string]string{"contract_type": "renewal"}}},
+		{"unknown contract type", stepCustomer, &dto.SaveContractReviewRequest{Values: map[string]string{"contract_type": "addendum"}}},
 		{"customer on the charges step", stepCharges, &dto.SaveContractReviewRequest{Customer: &dto.ContractReviewCustomer{Choice: reviewChoiceNew}}},
 		{"existing customer without id", stepCustomer, &dto.SaveContractReviewRequest{Customer: &dto.ContractReviewCustomer{Choice: reviewChoiceExisting}}},
 		{"existing customer not found", stepCustomer, &dto.SaveContractReviewRequest{Customer: &dto.ContractReviewCustomer{Choice: reviewChoiceExisting, CustomerID: "cust_missing"}}},
@@ -231,4 +233,19 @@ func TestGetReview_BeforeExtraction(t *testing.T) {
 
 func productReq(path, choice, productID string) *dto.SaveContractReviewRequest {
 	return &dto.SaveContractReviewRequest{Products: map[string]dto.ContractReviewProduct{path: {Choice: choice, ProductID: productID}}}
+}
+
+func TestSaveReviewStep_ContractType(t *testing.T) {
+	ctx := testutil.SetupContext()
+	f := newIngestFixture()
+	id := extractedContract(t, ctx, f)
+
+	got, err := f.svc.SaveReviewStep(ctx, id, stepCustomer, &dto.SaveContractReviewRequest{Values: map[string]string{"contract_type": "renewal"}})
+	require.NoError(t, err)
+	require.Equal(t, "renewal", got.Result.ContractType.Value)
+	require.Equal(t, []string{"contract_type"}, got.Edited)
+
+	got, err = f.svc.SaveReviewStep(ctx, id, stepCustomer, &dto.SaveContractReviewRequest{Version: 1, Confirmed: []string{"contract_type"}})
+	require.NoError(t, err)
+	require.Equal(t, []string{"contract_type"}, got.Confirmed)
 }

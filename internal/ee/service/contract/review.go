@@ -366,6 +366,8 @@ func (c *contractIngestService) validValue(path, value string) bool {
 		return c.validPeriod(value)
 	case "billing_timing":
 		return c.validTiming(value)
+	case "contract_type":
+		return value == contractagent.ContractTypeNew || value == contractagent.ContractTypeAmendment || value == contractagent.ContractTypeRenewal
 	case "tier_mode":
 		return value == contractagent.TierModeGraduated || value == contractagent.TierModeVolume
 	case "currency":
