@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/postgres"
+	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/flexprice/flexprice/internal/webhook/publisher"
@@ -43,6 +44,15 @@ type CustomerService interface {
 
 	// Credit grant applications
 	GetUpcomingCreditGrantApplications(ctx context.Context, customerID string) (*dto.ListCreditGrantApplicationsResponse, error)
+}
+
+// ProductService owns product validation and the delete guard.
+type ProductService interface {
+	CreateProduct(ctx context.Context, req dto.CreateProductRequest) (*dto.ProductResponse, error)
+	GetProduct(ctx context.Context, id string) (*dto.ProductResponse, error)
+	GetProducts(ctx context.Context, filter *productRepo.Filter) (*dto.ListProductsResponse, error)
+	UpdateProduct(ctx context.Context, id string, req dto.UpdateProductRequest) (*dto.ProductResponse, error)
+	DeleteProduct(ctx context.Context, id string) error
 }
 
 // PaymentService defines the interface for payment operations

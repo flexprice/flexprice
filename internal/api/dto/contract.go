@@ -117,11 +117,36 @@ type SaveContractReviewRequest struct {
 	Confirmed []string `json:"confirmed,omitempty"`
 	// Customer is the customer decision, saved on the customer step only.
 	Customer *ContractReviewCustomer `json:"customer,omitempty"`
+	// Products replaces the product decisions by charge path, e.g. "charges[0]"; charges step only.
+	// Omit it to keep them.
+	Products map[string]ContractReviewProduct `json:"products,omitempty" validate:"omitempty,dive"`
 }
 
 type ContractReviewCustomer struct {
 	Choice     string `json:"choice" validate:"required,oneof=existing new"`
 	CustomerID string `json:"customer_id,omitempty"`
+}
+
+type ContractReviewProduct struct {
+	Choice    string `json:"choice" validate:"required,oneof=existing new"`
+	ProductID string `json:"product_id,omitempty"`
+}
+
+// ContractProductMatch suggests existing products for one charge, best first.
+type ContractProductMatch struct {
+	// Status is matched, possible, new or unavailable.
+	Status     string                     `json:"status"`
+	ProductID  string                     `json:"product_id,omitempty"`
+	Candidates []ContractProductCandidate `json:"candidates"`
+}
+
+type ContractProductCandidate struct {
+	ProductID   string `json:"product_id"`
+	Name        string `json:"name"`
+	LookupKey   string `json:"lookup_key"`
+	Description string `json:"description,omitempty"`
+	// Reason is exact_name, lookup_key or similar_name.
+	Reason string `json:"reason"`
 }
 
 // ContractReviewResponse is the reviewer's working copy of the contract terms. Before the first save it
@@ -133,6 +158,10 @@ type ContractReviewResponse struct {
 	Confirmed  []string                `json:"confirmed"`
 	Edited     []string                `json:"edited"`
 	Customer   *ContractReviewCustomer `json:"customer,omitempty"`
+	// Products holds the saved product decisions by charge path.
+	Products map[string]ContractReviewProduct `json:"products"`
+	// ProductMatches suggests existing products for every charge, by charge path.
+	ProductMatches map[string]*ContractProductMatch `json:"product_matches"`
 }
 
 func (r *SaveContractReviewRequest) Validate() error {
