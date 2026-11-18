@@ -176,7 +176,7 @@ func (_u *ContractUpdate) ClearExtractionStatus() *ContractUpdate {
 }
 
 // SetExtraction sets the "extraction" field.
-func (_u *ContractUpdate) SetExtraction(v *types.ContractExtraction) *ContractUpdate {
+func (_u *ContractUpdate) SetExtraction(v *types.ContractJSON) *ContractUpdate {
 	_u.mutation.SetExtraction(v)
 	return _u
 }
@@ -204,6 +204,39 @@ func (_u *ContractUpdate) SetNillableExtractionError(v *string) *ContractUpdate 
 // ClearExtractionError clears the value of the "extraction_error" field.
 func (_u *ContractUpdate) ClearExtractionError() *ContractUpdate {
 	_u.mutation.ClearExtractionError()
+	return _u
+}
+
+// SetReview sets the "review" field.
+func (_u *ContractUpdate) SetReview(v *types.ContractJSON) *ContractUpdate {
+	_u.mutation.SetReview(v)
+	return _u
+}
+
+// ClearReview clears the value of the "review" field.
+func (_u *ContractUpdate) ClearReview() *ContractUpdate {
+	_u.mutation.ClearReview()
+	return _u
+}
+
+// SetReviewVersion sets the "review_version" field.
+func (_u *ContractUpdate) SetReviewVersion(v int) *ContractUpdate {
+	_u.mutation.ResetReviewVersion()
+	_u.mutation.SetReviewVersion(v)
+	return _u
+}
+
+// SetNillableReviewVersion sets the "review_version" field if the given value is not nil.
+func (_u *ContractUpdate) SetNillableReviewVersion(v *int) *ContractUpdate {
+	if v != nil {
+		_u.SetReviewVersion(*v)
+	}
+	return _u
+}
+
+// AddReviewVersion adds value to the "review_version" field.
+func (_u *ContractUpdate) AddReviewVersion(v int) *ContractUpdate {
+	_u.mutation.AddReviewVersion(v)
 	return _u
 }
 
@@ -253,6 +286,11 @@ func (_u *ContractUpdate) check() error {
 	if v, ok := _u.mutation.ContractStatus(); ok {
 		if err := contract.ContractStatusValidator(v); err != nil {
 			return &ValidationError{Name: "contract_status", err: fmt.Errorf(`ent: validator failed for field "Contract.contract_status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ReviewVersion(); ok {
+		if err := contract.ReviewVersionValidator(v); err != nil {
+			return &ValidationError{Name: "review_version", err: fmt.Errorf(`ent: validator failed for field "Contract.review_version": %w`, err)}
 		}
 	}
 	return nil
@@ -338,6 +376,18 @@ func (_u *ContractUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ExtractionErrorCleared() {
 		_spec.ClearField(contract.FieldExtractionError, field.TypeString)
+	}
+	if value, ok := _u.mutation.Review(); ok {
+		_spec.SetField(contract.FieldReview, field.TypeJSON, value)
+	}
+	if _u.mutation.ReviewCleared() {
+		_spec.ClearField(contract.FieldReview, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ReviewVersion(); ok {
+		_spec.SetField(contract.FieldReviewVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedReviewVersion(); ok {
+		_spec.AddField(contract.FieldReviewVersion, field.TypeInt, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -506,7 +556,7 @@ func (_u *ContractUpdateOne) ClearExtractionStatus() *ContractUpdateOne {
 }
 
 // SetExtraction sets the "extraction" field.
-func (_u *ContractUpdateOne) SetExtraction(v *types.ContractExtraction) *ContractUpdateOne {
+func (_u *ContractUpdateOne) SetExtraction(v *types.ContractJSON) *ContractUpdateOne {
 	_u.mutation.SetExtraction(v)
 	return _u
 }
@@ -534,6 +584,39 @@ func (_u *ContractUpdateOne) SetNillableExtractionError(v *string) *ContractUpda
 // ClearExtractionError clears the value of the "extraction_error" field.
 func (_u *ContractUpdateOne) ClearExtractionError() *ContractUpdateOne {
 	_u.mutation.ClearExtractionError()
+	return _u
+}
+
+// SetReview sets the "review" field.
+func (_u *ContractUpdateOne) SetReview(v *types.ContractJSON) *ContractUpdateOne {
+	_u.mutation.SetReview(v)
+	return _u
+}
+
+// ClearReview clears the value of the "review" field.
+func (_u *ContractUpdateOne) ClearReview() *ContractUpdateOne {
+	_u.mutation.ClearReview()
+	return _u
+}
+
+// SetReviewVersion sets the "review_version" field.
+func (_u *ContractUpdateOne) SetReviewVersion(v int) *ContractUpdateOne {
+	_u.mutation.ResetReviewVersion()
+	_u.mutation.SetReviewVersion(v)
+	return _u
+}
+
+// SetNillableReviewVersion sets the "review_version" field if the given value is not nil.
+func (_u *ContractUpdateOne) SetNillableReviewVersion(v *int) *ContractUpdateOne {
+	if v != nil {
+		_u.SetReviewVersion(*v)
+	}
+	return _u
+}
+
+// AddReviewVersion adds value to the "review_version" field.
+func (_u *ContractUpdateOne) AddReviewVersion(v int) *ContractUpdateOne {
+	_u.mutation.AddReviewVersion(v)
 	return _u
 }
 
@@ -596,6 +679,11 @@ func (_u *ContractUpdateOne) check() error {
 	if v, ok := _u.mutation.ContractStatus(); ok {
 		if err := contract.ContractStatusValidator(v); err != nil {
 			return &ValidationError{Name: "contract_status", err: fmt.Errorf(`ent: validator failed for field "Contract.contract_status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ReviewVersion(); ok {
+		if err := contract.ReviewVersionValidator(v); err != nil {
+			return &ValidationError{Name: "review_version", err: fmt.Errorf(`ent: validator failed for field "Contract.review_version": %w`, err)}
 		}
 	}
 	return nil
@@ -698,6 +786,18 @@ func (_u *ContractUpdateOne) sqlSave(ctx context.Context) (_node *Contract, err 
 	}
 	if _u.mutation.ExtractionErrorCleared() {
 		_spec.ClearField(contract.FieldExtractionError, field.TypeString)
+	}
+	if value, ok := _u.mutation.Review(); ok {
+		_spec.SetField(contract.FieldReview, field.TypeJSON, value)
+	}
+	if _u.mutation.ReviewCleared() {
+		_spec.ClearField(contract.FieldReview, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ReviewVersion(); ok {
+		_spec.SetField(contract.FieldReviewVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedReviewVersion(); ok {
+		_spec.AddField(contract.FieldReviewVersion, field.TypeInt, value)
 	}
 	_node = &Contract{config: _u.config}
 	_spec.Assign = _node.assignValues

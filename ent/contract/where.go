@@ -139,6 +139,11 @@ func ExtractionError(v string) predicate.Contract {
 	return predicate.Contract(sql.FieldEQ(FieldExtractionError, v))
 }
 
+// ReviewVersion applies equality check predicate on the "review_version" field. It's identical to ReviewVersionEQ.
+func ReviewVersion(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldReviewVersion, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Contract {
 	return predicate.Contract(sql.FieldEQ(FieldTenantID, v))
@@ -1107,6 +1112,56 @@ func ExtractionErrorEqualFold(v string) predicate.Contract {
 // ExtractionErrorContainsFold applies the ContainsFold predicate on the "extraction_error" field.
 func ExtractionErrorContainsFold(v string) predicate.Contract {
 	return predicate.Contract(sql.FieldContainsFold(FieldExtractionError, v))
+}
+
+// ReviewIsNil applies the IsNil predicate on the "review" field.
+func ReviewIsNil() predicate.Contract {
+	return predicate.Contract(sql.FieldIsNull(FieldReview))
+}
+
+// ReviewNotNil applies the NotNil predicate on the "review" field.
+func ReviewNotNil() predicate.Contract {
+	return predicate.Contract(sql.FieldNotNull(FieldReview))
+}
+
+// ReviewVersionEQ applies the EQ predicate on the "review_version" field.
+func ReviewVersionEQ(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldReviewVersion, v))
+}
+
+// ReviewVersionNEQ applies the NEQ predicate on the "review_version" field.
+func ReviewVersionNEQ(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldNEQ(FieldReviewVersion, v))
+}
+
+// ReviewVersionIn applies the In predicate on the "review_version" field.
+func ReviewVersionIn(vs ...int) predicate.Contract {
+	return predicate.Contract(sql.FieldIn(FieldReviewVersion, vs...))
+}
+
+// ReviewVersionNotIn applies the NotIn predicate on the "review_version" field.
+func ReviewVersionNotIn(vs ...int) predicate.Contract {
+	return predicate.Contract(sql.FieldNotIn(FieldReviewVersion, vs...))
+}
+
+// ReviewVersionGT applies the GT predicate on the "review_version" field.
+func ReviewVersionGT(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldGT(FieldReviewVersion, v))
+}
+
+// ReviewVersionGTE applies the GTE predicate on the "review_version" field.
+func ReviewVersionGTE(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldGTE(FieldReviewVersion, v))
+}
+
+// ReviewVersionLT applies the LT predicate on the "review_version" field.
+func ReviewVersionLT(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldLT(FieldReviewVersion, v))
+}
+
+// ReviewVersionLTE applies the LTE predicate on the "review_version" field.
+func ReviewVersionLTE(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldLTE(FieldReviewVersion, v))
 }
 
 // And groups predicates with the AND operator between them.

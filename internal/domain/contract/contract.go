@@ -25,6 +25,8 @@ type Contract struct {
 	extractionStatus types.ContractExtractionStatus
 	extraction       json.RawMessage
 	extractionError  string
+	review           json.RawMessage
+	reviewVersion    int
 }
 
 func (c *Contract) ID() string {
@@ -139,6 +141,20 @@ func (c *Contract) ExtractionError() string {
 	return c.extractionError
 }
 
+func (c *Contract) Review() json.RawMessage {
+	if c == nil {
+		return nil
+	}
+	return c.review
+}
+
+func (c *Contract) ReviewVersion() int {
+	if c == nil {
+		return 0
+	}
+	return c.reviewVersion
+}
+
 // Builder copies an existing contract and applies field updates to the copy.
 type Builder struct {
 	contract Contract
@@ -230,6 +246,16 @@ func (b *Builder) WithExtraction(extraction json.RawMessage) *Builder {
 
 func (b *Builder) WithExtractionError(extractionError string) *Builder {
 	b.contract.extractionError = extractionError
+	return b
+}
+
+func (b *Builder) WithReview(review json.RawMessage) *Builder {
+	b.contract.review = review
+	return b
+}
+
+func (b *Builder) WithReviewVersion(version int) *Builder {
+	b.contract.reviewVersion = version
 	return b
 }
 

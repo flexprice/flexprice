@@ -18190,8 +18190,11 @@ type ContractMutation struct {
 	contract_status   *string
 	document          **types.ContractDocument
 	extraction_status *string
-	extraction        **types.ContractExtraction
+	extraction        **types.ContractJSON
 	extraction_error  *string
+	review            **types.ContractJSON
+	review_version    *int
+	addreview_version *int
 	clearedFields     map[string]struct{}
 	done              bool
 	oldValue          func(context.Context) (*Contract, error)
@@ -18973,12 +18976,12 @@ func (m *ContractMutation) ResetExtractionStatus() {
 }
 
 // SetExtraction sets the "extraction" field.
-func (m *ContractMutation) SetExtraction(te *types.ContractExtraction) {
-	m.extraction = &te
+func (m *ContractMutation) SetExtraction(tj *types.ContractJSON) {
+	m.extraction = &tj
 }
 
 // Extraction returns the value of the "extraction" field in the mutation.
-func (m *ContractMutation) Extraction() (r *types.ContractExtraction, exists bool) {
+func (m *ContractMutation) Extraction() (r *types.ContractJSON, exists bool) {
 	v := m.extraction
 	if v == nil {
 		return
@@ -18989,7 +18992,7 @@ func (m *ContractMutation) Extraction() (r *types.ContractExtraction, exists boo
 // OldExtraction returns the old "extraction" field's value of the Contract entity.
 // If the Contract object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ContractMutation) OldExtraction(ctx context.Context) (v *types.ContractExtraction, err error) {
+func (m *ContractMutation) OldExtraction(ctx context.Context) (v *types.ContractJSON, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldExtraction is only allowed on UpdateOne operations")
 	}
@@ -19070,6 +19073,111 @@ func (m *ContractMutation) ResetExtractionError() {
 	delete(m.clearedFields, contract.FieldExtractionError)
 }
 
+// SetReview sets the "review" field.
+func (m *ContractMutation) SetReview(tj *types.ContractJSON) {
+	m.review = &tj
+}
+
+// Review returns the value of the "review" field in the mutation.
+func (m *ContractMutation) Review() (r *types.ContractJSON, exists bool) {
+	v := m.review
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReview returns the old "review" field's value of the Contract entity.
+// If the Contract object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContractMutation) OldReview(ctx context.Context) (v *types.ContractJSON, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReview is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReview requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReview: %w", err)
+	}
+	return oldValue.Review, nil
+}
+
+// ClearReview clears the value of the "review" field.
+func (m *ContractMutation) ClearReview() {
+	m.review = nil
+	m.clearedFields[contract.FieldReview] = struct{}{}
+}
+
+// ReviewCleared returns if the "review" field was cleared in this mutation.
+func (m *ContractMutation) ReviewCleared() bool {
+	_, ok := m.clearedFields[contract.FieldReview]
+	return ok
+}
+
+// ResetReview resets all changes to the "review" field.
+func (m *ContractMutation) ResetReview() {
+	m.review = nil
+	delete(m.clearedFields, contract.FieldReview)
+}
+
+// SetReviewVersion sets the "review_version" field.
+func (m *ContractMutation) SetReviewVersion(i int) {
+	m.review_version = &i
+	m.addreview_version = nil
+}
+
+// ReviewVersion returns the value of the "review_version" field in the mutation.
+func (m *ContractMutation) ReviewVersion() (r int, exists bool) {
+	v := m.review_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReviewVersion returns the old "review_version" field's value of the Contract entity.
+// If the Contract object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContractMutation) OldReviewVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReviewVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReviewVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReviewVersion: %w", err)
+	}
+	return oldValue.ReviewVersion, nil
+}
+
+// AddReviewVersion adds i to the "review_version" field.
+func (m *ContractMutation) AddReviewVersion(i int) {
+	if m.addreview_version != nil {
+		*m.addreview_version += i
+	} else {
+		m.addreview_version = &i
+	}
+}
+
+// AddedReviewVersion returns the value that was added to the "review_version" field in this mutation.
+func (m *ContractMutation) AddedReviewVersion() (r int, exists bool) {
+	v := m.addreview_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetReviewVersion resets all changes to the "review_version" field.
+func (m *ContractMutation) ResetReviewVersion() {
+	m.review_version = nil
+	m.addreview_version = nil
+}
+
 // Where appends a list predicates to the ContractMutation builder.
 func (m *ContractMutation) Where(ps ...predicate.Contract) {
 	m.predicates = append(m.predicates, ps...)
@@ -19104,7 +19212,7 @@ func (m *ContractMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ContractMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 19)
 	if m.tenant_id != nil {
 		fields = append(fields, contract.FieldTenantID)
 	}
@@ -19156,6 +19264,12 @@ func (m *ContractMutation) Fields() []string {
 	if m.extraction_error != nil {
 		fields = append(fields, contract.FieldExtractionError)
 	}
+	if m.review != nil {
+		fields = append(fields, contract.FieldReview)
+	}
+	if m.review_version != nil {
+		fields = append(fields, contract.FieldReviewVersion)
+	}
 	return fields
 }
 
@@ -19198,6 +19312,10 @@ func (m *ContractMutation) Field(name string) (ent.Value, bool) {
 		return m.Extraction()
 	case contract.FieldExtractionError:
 		return m.ExtractionError()
+	case contract.FieldReview:
+		return m.Review()
+	case contract.FieldReviewVersion:
+		return m.ReviewVersion()
 	}
 	return nil, false
 }
@@ -19241,6 +19359,10 @@ func (m *ContractMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldExtraction(ctx)
 	case contract.FieldExtractionError:
 		return m.OldExtractionError(ctx)
+	case contract.FieldReview:
+		return m.OldReview(ctx)
+	case contract.FieldReviewVersion:
+		return m.OldReviewVersion(ctx)
 	}
 	return nil, fmt.Errorf("unknown Contract field %s", name)
 }
@@ -19356,7 +19478,7 @@ func (m *ContractMutation) SetField(name string, value ent.Value) error {
 		m.SetExtractionStatus(v)
 		return nil
 	case contract.FieldExtraction:
-		v, ok := value.(*types.ContractExtraction)
+		v, ok := value.(*types.ContractJSON)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -19369,6 +19491,20 @@ func (m *ContractMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetExtractionError(v)
 		return nil
+	case contract.FieldReview:
+		v, ok := value.(*types.ContractJSON)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReview(v)
+		return nil
+	case contract.FieldReviewVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReviewVersion(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Contract field %s", name)
 }
@@ -19376,13 +19512,21 @@ func (m *ContractMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *ContractMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addreview_version != nil {
+		fields = append(fields, contract.FieldReviewVersion)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *ContractMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case contract.FieldReviewVersion:
+		return m.AddedReviewVersion()
+	}
 	return nil, false
 }
 
@@ -19391,6 +19535,13 @@ func (m *ContractMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ContractMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case contract.FieldReviewVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReviewVersion(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Contract numeric field %s", name)
 }
@@ -19434,6 +19585,9 @@ func (m *ContractMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(contract.FieldExtractionError) {
 		fields = append(fields, contract.FieldExtractionError)
+	}
+	if m.FieldCleared(contract.FieldReview) {
+		fields = append(fields, contract.FieldReview)
 	}
 	return fields
 }
@@ -19484,6 +19638,9 @@ func (m *ContractMutation) ClearField(name string) error {
 		return nil
 	case contract.FieldExtractionError:
 		m.ClearExtractionError()
+		return nil
+	case contract.FieldReview:
+		m.ClearReview()
 		return nil
 	}
 	return fmt.Errorf("unknown Contract nullable field %s", name)
@@ -19543,6 +19700,12 @@ func (m *ContractMutation) ResetField(name string) error {
 		return nil
 	case contract.FieldExtractionError:
 		m.ResetExtractionError()
+		return nil
+	case contract.FieldReview:
+		m.ResetReview()
+		return nil
+	case contract.FieldReviewVersion:
+		m.ResetReviewVersion()
 		return nil
 	}
 	return fmt.Errorf("unknown Contract field %s", name)

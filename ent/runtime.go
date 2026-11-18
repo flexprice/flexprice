@@ -754,6 +754,12 @@ func init() {
 	contractDescContractStatus := contractFields[6].Descriptor()
 	// contract.ContractStatusValidator is a validator for the "contract_status" field. It is called by the builders before save.
 	contract.ContractStatusValidator = contractDescContractStatus.Validators[0].(func(string) error)
+	// contractDescReviewVersion is the schema descriptor for review_version field.
+	contractDescReviewVersion := contractFields[12].Descriptor()
+	// contract.DefaultReviewVersion holds the default value on creation for the review_version field.
+	contract.DefaultReviewVersion = contractDescReviewVersion.Default.(int)
+	// contract.ReviewVersionValidator is a validator for the "review_version" field. It is called by the builders before save.
+	contract.ReviewVersionValidator = contractDescReviewVersion.Validators[0].(func(int) error)
 	contractassociationMixin := schema.ContractAssociation{}.Mixin()
 	contractassociationMixinFields0 := contractassociationMixin[0].Fields()
 	_ = contractassociationMixinFields0

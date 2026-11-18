@@ -208,7 +208,7 @@ func (_c *ContractCreate) SetNillableExtractionStatus(v *string) *ContractCreate
 }
 
 // SetExtraction sets the "extraction" field.
-func (_c *ContractCreate) SetExtraction(v *types.ContractExtraction) *ContractCreate {
+func (_c *ContractCreate) SetExtraction(v *types.ContractJSON) *ContractCreate {
 	_c.mutation.SetExtraction(v)
 	return _c
 }
@@ -223,6 +223,26 @@ func (_c *ContractCreate) SetExtractionError(v string) *ContractCreate {
 func (_c *ContractCreate) SetNillableExtractionError(v *string) *ContractCreate {
 	if v != nil {
 		_c.SetExtractionError(*v)
+	}
+	return _c
+}
+
+// SetReview sets the "review" field.
+func (_c *ContractCreate) SetReview(v *types.ContractJSON) *ContractCreate {
+	_c.mutation.SetReview(v)
+	return _c
+}
+
+// SetReviewVersion sets the "review_version" field.
+func (_c *ContractCreate) SetReviewVersion(v int) *ContractCreate {
+	_c.mutation.SetReviewVersion(v)
+	return _c
+}
+
+// SetNillableReviewVersion sets the "review_version" field if the given value is not nil.
+func (_c *ContractCreate) SetNillableReviewVersion(v *int) *ContractCreate {
+	if v != nil {
+		_c.SetReviewVersion(*v)
 	}
 	return _c
 }
@@ -284,6 +304,10 @@ func (_c *ContractCreate) defaults() {
 		v := contract.DefaultEnvironmentID
 		_c.mutation.SetEnvironmentID(v)
 	}
+	if _, ok := _c.mutation.ReviewVersion(); !ok {
+		v := contract.DefaultReviewVersion
+		_c.mutation.SetReviewVersion(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -311,6 +335,14 @@ func (_c *ContractCreate) check() error {
 	if v, ok := _c.mutation.ContractStatus(); ok {
 		if err := contract.ContractStatusValidator(v); err != nil {
 			return &ValidationError{Name: "contract_status", err: fmt.Errorf(`ent: validator failed for field "Contract.contract_status": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ReviewVersion(); !ok {
+		return &ValidationError{Name: "review_version", err: errors.New(`ent: missing required field "Contract.review_version"`)}
+	}
+	if v, ok := _c.mutation.ReviewVersion(); ok {
+		if err := contract.ReviewVersionValidator(v); err != nil {
+			return &ValidationError{Name: "review_version", err: fmt.Errorf(`ent: validator failed for field "Contract.review_version": %w`, err)}
 		}
 	}
 	return nil
@@ -415,6 +447,14 @@ func (_c *ContractCreate) createSpec() (*Contract, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ExtractionError(); ok {
 		_spec.SetField(contract.FieldExtractionError, field.TypeString, value)
 		_node.ExtractionError = &value
+	}
+	if value, ok := _c.mutation.Review(); ok {
+		_spec.SetField(contract.FieldReview, field.TypeJSON, value)
+		_node.Review = value
+	}
+	if value, ok := _c.mutation.ReviewVersion(); ok {
+		_spec.SetField(contract.FieldReviewVersion, field.TypeInt, value)
+		_node.ReviewVersion = value
 	}
 	return _node, _spec
 }
