@@ -45,6 +45,16 @@ func TestCycleInvoiceProbe_QueriesInvoicesByCustomerID(t *testing.T) {
 	if fc.invoices.lastFilter.SubscriptionID != nil {
 		t.Errorf("expected invoice query NOT to use SubscriptionID filter (unreliable), but SubscriptionID was set")
 	}
+	f := fc.invoices.lastFilter
+	if f.InvoiceType == nil || *f.InvoiceType != sdktypes.InvoiceTypeSubscription {
+		t.Errorf("expected subscription invoice type filter, got %v", f.InvoiceType)
+	}
+	if f.Limit == nil || *f.Limit != cycleInvoiceScanLimit {
+		t.Errorf("expected limit %d, got %v", cycleInvoiceScanLimit, f.Limit)
+	}
+	if f.Order == nil || *f.Order != sdktypes.InvoiceFilterOrderDesc {
+		t.Errorf("expected desc order, got %v", f.Order)
+	}
 }
 
 // TestCycleInvoiceProbe_ChecksFreshness verifies the full happy path: sub with a
