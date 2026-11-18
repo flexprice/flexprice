@@ -293,16 +293,26 @@ func (c *remoteClient) hydratePricingMeter(ctx context.Context, p *sdktypes.Pric
 		return nil
 	}
 
-	resp, err := c.sdk.Prices.GetPrice(ctx, lo.FromPtr(p.ID))
+	// A price search, unlike a price read, leaves out the feature, whose reporting unit the SDK cannot decode.
+	resp, err := c.sdk.Prices.QueryPrice(ctx, sdktypes.PriceFilter{
+		PriceIds: []string{lo.FromPtr(p.ID)},
+		Expand:   lo.ToPtr(string(types.ExpandMeters)),
+		Limit:    lo.ToPtr(int64(1)),
+	})
 	if err != nil {
 		return cloudErr(err)
 	}
 
-	if resp.PriceResponse == nil || resp.PriceResponse.Meter == nil || lo.FromPtr(resp.PriceResponse.Meter.ID) != meterID {
+	if resp.ListPricesResponse == nil || len(resp.ListPricesResponse.Items) != 1 {
 		return unreadablePricing()
 	}
 
-	p.Meter = resp.PriceResponse.Meter
+	found := resp.ListPricesResponse.Items[0]
+	if found.Meter == nil || lo.FromPtr(found.Meter.ID) != meterID {
+		return unreadablePricing()
+	}
+
+	p.Meter = found.Meter
 	meters[meterID] = p.Meter
 	return nil
 }
