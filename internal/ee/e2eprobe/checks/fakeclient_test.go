@@ -783,7 +783,7 @@ func (f *fakeEntitlements) Create(_ context.Context, req types.CreateEntitlement
 	f.created = append(f.created, req)
 	id := fmt.Sprintf("ent_%d", len(f.created))
 	return &dtos.CreateEntitlementResponse{
-		EntitlementResponse: &types.EntitlementResponse{ID: &id, FeatureID: &req.FeatureID},
+		EntitlementResponse: &types.EntitlementResponse{ID: &id, FeatureID: req.FeatureID},
 	}, nil
 }
 func (f *fakeEntitlements) Query(_ context.Context, _ types.EntitlementFilter) (*dtos.QueryEntitlementResponse, error) {

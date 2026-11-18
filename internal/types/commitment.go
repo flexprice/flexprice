@@ -81,7 +81,7 @@ type TimeOfDayBucket struct {
 
 	CommitmentType  CommitmentType   `json:"commitment_type,omitempty"`
 	CommitmentValue decimal.Decimal  `json:"commitment_value" swaggertype:"string"`
-	OverageFactor   *decimal.Decimal `json:"overage_factor,omitempty"`
+	OverageFactor   *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
 	TrueUpEnabled   bool             `json:"true_up_enabled,omitempty"`
 }
 
