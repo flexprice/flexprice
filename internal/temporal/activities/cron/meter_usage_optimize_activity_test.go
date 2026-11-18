@@ -3,34 +3,19 @@ package cron
 import (
 	"context"
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/stretchr/testify/require"
 	"go.temporal.io/sdk/testsuite"
 )
 
 type fakeOptimizeConn struct {
-	partitions []meterUsagePartition
-	free       uint64
-	execErr    map[string]error
-	selects    int
-	queries    []string
-	execs      []string
-}
-
-func (f *fakeOptimizeConn) Select(_ context.Context, dest any, query string, _ ...any) error {
-	f.selects++
-	f.queries = append(f.queries, query)
-	v := reflect.ValueOf(dest).Elem()
-	if strings.Contains(query, "system.disks") {
-		v.Set(reflect.ValueOf([]meterUsageDisk{{FreeSpace: f.free}}))
-		return nil
-	}
-	v.Set(reflect.ValueOf(f.partitions))
-	return nil
+	execErr map[string]error
+	execs   []string
 }
 
 func (f *fakeOptimizeConn) Exec(_ context.Context, query string, _ ...any) error {
@@ -43,76 +28,58 @@ func (f *fakeOptimizeConn) Exec(_ context.Context, query string, _ ...any) error
 	return nil
 }
 
-func runOptimize(t *testing.T, conn *fakeOptimizeConn, enabled bool) (resultErr error, optimized, skipped, failed int) {
+func runOptimize(t *testing.T, conn *fakeOptimizeConn, enabled bool, lookback int) (resultErr error, optimized, failed int) {
 	t.Helper()
 	cfg := &config.Configuration{}
 	cfg.ClickHouse.MeterUsageOptimize.Enabled = enabled
+	cfg.ClickHouse.MeterUsageOptimize.LookbackDays = lookback
 	acts := NewMeterUsageOptimizeActivities(conn, cfg)
 	env := (&testsuite.WorkflowTestSuite{}).NewTestActivityEnvironment()
 	env.RegisterActivity(acts.OptimizeMeterUsageActivity)
 	val, err := env.ExecuteActivity(acts.OptimizeMeterUsageActivity)
 	if err != nil {
-		return err, 0, 0, 0
+		return err, 0, 0
 	}
-	var res struct{ Optimized, Skipped, Failed int }
+	var res struct{ Optimized, Failed int }
 	require.NoError(t, val.Get(&res))
-	return nil, res.Optimized, res.Skipped, res.Failed
+	return nil, res.Optimized, res.Failed
 }
+
+func day(t time.Time, ago int) string { return t.AddDate(0, 0, -ago).Format("20060102") }
 
 func TestOptimizeMeterUsage_DisabledMakesNoCalls(t *testing.T) {
 	conn := &fakeOptimizeConn{}
-	err, o, s, f := runOptimize(t, conn, false)
+	err, o, f := runOptimize(t, conn, false, 7)
 	require.NoError(t, err)
-	require.Zero(t, o+s+f)
-	require.Zero(t, conn.selects)
+	require.Zero(t, o+f)
 	require.Empty(t, conn.execs)
 }
 
-func TestOptimizeMeterUsage_InvalidPartitionIDNeverExecuted(t *testing.T) {
-	conn := &fakeOptimizeConn{
-		free:       1 << 40,
-		partitions: []meterUsagePartition{{PartitionID: "2026'; DROP", Parts: 3, Bytes: 10}, {PartitionID: "20261116", Parts: 3, Bytes: 10}},
-	}
-	err, _, _, _ := runOptimize(t, conn, true)
-	require.Error(t, err)
-	require.Len(t, conn.execs, 1)
-	require.Contains(t, conn.execs[0], "PARTITION ID '20261116' FINAL SETTINGS optimize_throw_if_noop = 1")
-}
-
-func TestOptimizeMeterUsage_EveryQueryHasMemoryCap(t *testing.T) {
-	conn := &fakeOptimizeConn{
-		free:       1 << 40,
-		partitions: []meterUsagePartition{{PartitionID: "20261116", Parts: 3, Bytes: 10}},
-	}
-	err, o, _, _ := runOptimize(t, conn, true)
+func TestOptimizeMeterUsage_ClosedPartitionsOnly(t *testing.T) {
+	conn := &fakeOptimizeConn{}
+	err, o, f := runOptimize(t, conn, true, 3)
 	require.NoError(t, err)
-	require.Equal(t, 1, o)
-	for _, q := range append(conn.queries, conn.execs...) {
+	require.Equal(t, []int{3, 0}, []int{o, f})
+	require.Len(t, conn.execs, 3)
+	today := clock.Now().UTC()
+	for i, q := range conn.execs {
+		require.Contains(t, q, "PARTITION ID '"+day(today, i+1)+"' FINAL")
+		require.NotContains(t, q, day(today, 0))
+		require.Contains(t, q, "optimize_skip_merged_partitions = 1")
 		require.Contains(t, q, "max_memory_usage = 96636764160")
 	}
 }
 
-func TestOptimizeMeterUsage_LowDiskSkips(t *testing.T) {
-	conn := &fakeOptimizeConn{free: 29, partitions: []meterUsagePartition{{PartitionID: "20261116", Parts: 3, Bytes: 10}}}
-	err, _, _, _ := runOptimize(t, conn, true)
-	require.Error(t, err)
-	require.Empty(t, conn.execs)
+func TestOptimizeMeterUsage_DefaultLookback(t *testing.T) {
+	conn := &fakeOptimizeConn{}
+	err, o, _ := runOptimize(t, conn, true, 0)
+	require.NoError(t, err)
+	require.Equal(t, defaultOptimizeLookback, o)
 }
 
 func TestOptimizeMeterUsage_ContinuesAfterFailure(t *testing.T) {
-	conn := &fakeOptimizeConn{
-		free:       1 << 40,
-		execErr:    map[string]error{"20261115": errors.New("boom")},
-		partitions: []meterUsagePartition{{PartitionID: "20261115", Parts: 2, Bytes: 1}, {PartitionID: "20261116", Parts: 2, Bytes: 1}},
-	}
-	err, _, _, _ := runOptimize(t, conn, true)
+	conn := &fakeOptimizeConn{execErr: map[string]error{day(clock.Now().UTC(), 2): errors.New("boom")}}
+	err, _, _ := runOptimize(t, conn, true, 3)
 	require.Error(t, err)
-	require.Len(t, conn.execs, 2)
-}
-
-func TestOptimizeMeterUsage_Success(t *testing.T) {
-	conn := &fakeOptimizeConn{free: 1 << 40, partitions: []meterUsagePartition{{PartitionID: "20261116", Parts: 2, Bytes: 1}}}
-	err, o, s, f := runOptimize(t, conn, true)
-	require.NoError(t, err)
-	require.Equal(t, []int{1, 0, 0}, []int{o, s, f})
+	require.Len(t, conn.execs, 3)
 }

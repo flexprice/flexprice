@@ -27,6 +27,6 @@ func MeterUsageOptimizeWorkflow(ctx workflow.Context, _ cronModels.MeterUsageOpt
 		return err
 	}
 	workflow.GetLogger(ctx).Info("MeterUsageOptimizeWorkflow completed",
-		"optimized", result.Optimized, "skipped", result.Skipped, "failed", result.Failed)
+		"optimized", result.Optimized, "failed", result.Failed)
 	return nil
 }

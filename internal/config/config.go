@@ -623,7 +623,7 @@ type ClickHouseConfig struct {
 // meter_usage day-partitions. Off by default.
 type MeterUsageOptimizeConfig struct {
 	Enabled      bool `mapstructure:"enabled" default:"false"`
-	LookbackDays int  `mapstructure:"lookback_days" default:"7"`
+	LookbackDays int  `mapstructure:"lookback_days" default:"7" validate:"min=0,max=7"`
 }
 
 // ReportsConfig is the reports ClickHouse login.
