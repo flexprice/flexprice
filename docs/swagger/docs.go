@@ -25437,7 +25437,7 @@ const docTemplate = `{
                     }
                 },
                 "instalments": {
-                    "description": "Instalments lists, with expand \"instalments\", the instalments of the v2 commitments covering a queried meter that\nwere invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source\nfilters, or when no usage line runs in the range.",
+                    "description": "Instalments lists, with expand \"instalments\", the scheduled and invoiced instalments of the v2 commitments covering\na queried meter whose charged_at falls in the range; it is empty with property or source filters, or when no usage\nline runs in the range.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/UsageAnalyticInstalment"
@@ -33128,7 +33128,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "charged_at": {
-                    "description": "ChargedAt places it in time: bill_on, or just before it for an instalment billed at the end of what it pays\nfor, so an arrear falls in the period it closes. The range filters on it.",
+                    "description": "ChargedAt places it in time: bill_on, or just before it for an arrear, so an arrear falls in the period it\ncloses. The range filters on it.",
                     "type": "string"
                 },
                 "commitment_id": {

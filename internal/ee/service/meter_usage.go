@@ -1467,7 +1467,7 @@ func (s *meterUsageService) rangeInstalments(
 	cust *customer.Customer,
 	subscriptions []*subscription.Subscription,
 	params *events.MeterUsageDetailedAnalyticsParams,
-) ([]*billingterm.Instalment, error) {
+) ([]chargedInstalment, error) {
 	if len(params.PropertyFilters) > 0 || len(params.Sources) > 0 {
 		return nil, nil
 	}
@@ -1492,7 +1492,7 @@ func (s *meterUsageService) rangeInstalments(
 		return nil, nil
 	}
 
-	// An instalment charged at the range start may be billed a moment after it, at the end of what it pays for.
+	// An arrear charged at the range end's last moment is billed at the range end.
 	listed, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
 		OwnerType: types.BillingTermOwnerCommitment,
 		OwnerIDs:  ownerIDs,
@@ -1503,32 +1503,67 @@ func (s *meterUsageService) rangeInstalments(
 		return nil, err
 	}
 
-	instalments := lo.Filter(listed, func(inst *billingterm.Instalment, _ int) bool {
-		at := chargedAt(inst)
-		return !at.Before(params.StartTime) && at.Before(params.EndTime)
-	})
-	slices.SortStableFunc(instalments, func(a, b *billingterm.Instalment) int {
-		return cmp.Or(chargedAt(a).Compare(chargedAt(b)), cmp.Compare(a.ID, b.ID))
+	arrears, err := s.arrearTermIDs(ctx, listed)
+	if err != nil {
+		return nil, err
+	}
+
+	instalments := make([]chargedInstalment, 0, len(listed))
+	for _, inst := range listed {
+		charged := chargedInstalment{instalment: inst, chargedAt: inst.BillOn}
+		if inst.BillingTermID != nil && arrears[*inst.BillingTermID] {
+			charged.chargedAt = inst.BillOn.Add(-time.Microsecond)
+		}
+
+		if !charged.chargedAt.Before(params.StartTime) && charged.chargedAt.Before(params.EndTime) {
+			instalments = append(instalments, charged)
+		}
+	}
+
+	slices.SortStableFunc(instalments, func(a, b chargedInstalment) int {
+		return cmp.Or(a.chargedAt.Compare(b.chargedAt), cmp.Compare(a.instalment.ID, b.instalment.ID))
 	})
 
 	return instalments, nil
 }
 
-// chargedAt is when analytics places an instalment: its bill_on, or just before it when it is billed at the end of
-// what it pays for, so an arrear shows in the period it closes.
-func chargedAt(inst *billingterm.Instalment) time.Time {
-	if inst.BillOn.Equal(inst.ServicePeriodEnd) {
-		return inst.BillOn.Add(-time.Microsecond)
+// chargedInstalment is an instalment with the moment analytics places it: its bill_on, or just before it for an
+// arrear, which is billed at the end of the period it pays for and shows in that period.
+type chargedInstalment struct {
+	instalment *billingterm.Instalment
+	chargedAt  time.Time
+}
+
+// arrearTermIDs returns the ids of the recurring ARREAR terms the instalments come from, archived ones included.
+func (s *meterUsageService) arrearTermIDs(ctx context.Context, instalments []*billingterm.Instalment) (map[string]bool, error) {
+	ids := lo.Uniq(lo.FilterMap(instalments, func(inst *billingterm.Instalment, _ int) (string, bool) {
+		return lo.FromPtr(inst.BillingTermID), inst.BillingTermID != nil
+	}))
+	if len(ids) == 0 {
+		return nil, nil
 	}
 
-	return inst.BillOn
+	terms, err := s.BillingTermRepo.ListByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	arrears := make(map[string]bool, len(terms))
+	for _, t := range terms {
+		if t.Kind == types.BillingTermKindRecurring && lo.FromPtr(t.InvoiceCadence) == types.InvoiceCadenceArrear {
+			arrears[t.ID] = true
+		}
+	}
+
+	return arrears, nil
 }
 
 // setInstalments lists the instalments on the response and sets its total with the invoiced ones.
-func setInstalments(response *dto.GetUsageAnalyticsResponse, instalments []*billingterm.Instalment) {
+func setInstalments(response *dto.GetUsageAnalyticsResponse, instalments []chargedInstalment) {
 	total := response.TotalCost
 	response.Instalments = make([]dto.UsageAnalyticInstalment, 0, len(instalments))
-	for _, inst := range instalments {
+	for _, charged := range instalments {
+		inst := charged.instalment
 		if inst.InstalmentStatus == types.InstalmentStatusInvoiced {
 			total = total.Add(inst.Amount)
 		}
@@ -1544,7 +1579,7 @@ func setInstalments(response *dto.GetUsageAnalyticsResponse, instalments []*bill
 			Amount:             inst.Amount,
 			Currency:           inst.Currency,
 			BillOn:             inst.BillOn,
-			ChargedAt:          chargedAt(inst),
+			ChargedAt:          charged.chargedAt,
 			InvoicedAt:         inst.InvoicedAt,
 			ServicePeriodStart: inst.ServicePeriodStart,
 			ServicePeriodEnd:   inst.ServicePeriodEnd,

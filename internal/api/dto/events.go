@@ -391,9 +391,9 @@ type GetUsageAnalyticsResponse struct {
 	Currency        string               `json:"currency"`
 	Items           []UsageAnalyticItem  `json:"items"`
 	CustomAnalytics []CustomAnalyticItem `json:"custom_analytics,omitempty"`
-	// Instalments lists, with expand "instalments", the instalments of the v2 commitments covering a queried meter that
-	// were invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source
-	// filters, or when no usage line runs in the range.
+	// Instalments lists, with expand "instalments", the scheduled and invoiced instalments of the v2 commitments covering
+	// a queried meter whose charged_at falls in the range; it is empty with property or source filters, or when no usage
+	// line runs in the range.
 	Instalments []UsageAnalyticInstalment `json:"instalments,omitempty"`
 	// TotalCostWithInstalments is TotalCost plus the amounts of the invoiced Instalments, set when expand includes
 	// "instalments". Scheduled instalments are not billed yet, so they are left out.
@@ -414,8 +414,8 @@ type UsageAnalyticInstalment struct {
 	Amount           decimal.Decimal        `json:"amount" swaggertype:"string"`
 	Currency         string                 `json:"currency"`
 	BillOn           time.Time              `json:"bill_on"` // when it becomes billable
-	// ChargedAt places it in time: bill_on, or just before it for an instalment billed at the end of what it pays
-	// for, so an arrear falls in the period it closes. The range filters on it.
+	// ChargedAt places it in time: bill_on, or just before it for an arrear, so an arrear falls in the period it
+	// closes. The range filters on it.
 	ChargedAt          time.Time  `json:"charged_at"`
 	InvoicedAt         *time.Time `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
 	ServicePeriodStart time.Time  `json:"service_period_start"`

@@ -131,12 +131,14 @@ timezone land on the period they mostly cover. A period without a point of its o
 it is shorter than a window, the window holding its own middle, reusing a point already there. A range no commitment
 overlaps is not cut into periods; one a commitment overlaps can span at most 366 billing periods.
 
-With `expand: ["instalments"]`, the response lists the instalments invoiced in the range (`ListInvoiced`, by
-`invoiced_at`) and those still scheduled whose `bill_on` falls in it (`rangeInstalments`), for the commitments on the
-customer's subscriptions that covered a queried meter during their term (`CoveringMeters`), whether or not the range
-has usage. A range in which no usage line runs lists none. Each entry carries its `kind` (`instalment`, `settlement` or
-`cancellation_fee`), `instalment_status` and `bill_on`. `total_cost_with_instalments` adds the invoiced ones only: a
-scheduled instalment is not billed yet, and moves to the range holding its `invoiced_at` once it is.
+With `expand: ["instalments"]`, the response lists the scheduled and invoiced instalments whose `charged_at` falls in
+the range (`rangeInstalments`), for the commitments on the customer's subscriptions that covered a queried meter during
+their term (`CoveringMeters`), whether or not the range has usage. A range in which no usage line runs lists none.
+`charged_at` is the instalment's `bill_on`, or just before it for an instalment of a recurring `ARREAR` term, so an
+arrear shows in the period it closes rather than the one its invoice opens. Finalizing or voiding the invoice never
+moves an instalment; `invoiced_at` only records when it was finalized. Each entry carries its `kind` (`instalment`,
+`settlement` or `cancellation_fee`), `instalment_status`, `bill_on` and `charged_at`. `total_cost_with_instalments`
+adds the invoiced ones only: a scheduled instalment is not billed yet.
 
 ### 6.2 Building the loader — `newCommitmentLoader` ([billing_commitments.go:58](../../internal/ee/service/billing_commitments.go#L58))
 

@@ -7463,18 +7463,18 @@ func (s *MeterUsageServiceSuite) billInstalment(invoicedAt time.Time) {
 
 // scheduleInstalment stores a scheduled instalment of cmt_prepaid due at billOn for the suite's billing period.
 func (s *MeterUsageServiceSuite) scheduleInstalment(id string, kind types.InstalmentKind, amount string, billOn time.Time) {
-	s.storeInstalment(id, kind, amount, billOn, types.Period{Start: s.periodStart, End: s.periodEnd}, nil)
+	s.storeInstalment(id, "", kind, amount, billOn, types.Period{Start: s.periodStart, End: s.periodEnd})
 }
 
-// storeInstalment stores an instalment of cmt_prepaid due at billOn for service; a non-nil invoicedAt bills it on an
-// invoice finalized then.
+// storeInstalment stores a scheduled instalment of cmt_prepaid due at billOn for service, from the term termID when it
+// is set.
 func (s *MeterUsageServiceSuite) storeInstalment(
 	id string,
+	termID string,
 	kind types.InstalmentKind,
 	amount string,
 	billOn time.Time,
 	service types.Period,
-	invoicedAt *time.Time,
 ) {
 	ctx := s.GetContext()
 	inst := &billingterm.Instalment{
@@ -7495,10 +7495,8 @@ func (s *MeterUsageServiceSuite) storeInstalment(
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
-	if invoicedAt != nil {
-		inst.InstalmentStatus = types.InstalmentStatusInvoiced
-		inst.InvoiceID = lo.ToPtr("inv_" + id)
-		inst.InvoicedAt = invoicedAt
+	if termID != "" {
+		inst.BillingTermID = &termID
 	}
 
 	_, err := s.GetStores().BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{inst})
@@ -7518,8 +7516,8 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsScheduledInstalmentsOutsid
 	s.Require().NoError(err)
 	s.scheduleInstalment("binst_due", types.InstalmentKindInstalment, "700", januaryNoon(20))
 	s.scheduleInstalment("binst_fee", types.InstalmentKindCancellationFee, "90", januaryNoon(25))
-	s.storeInstalment("binst_later", types.InstalmentKindInstalment, "700", s.periodEnd,
-		types.Period{Start: s.periodEnd, End: s.periodEnd.AddDate(0, 1, 0)}, nil)
+	s.storeInstalment("binst_later", "", types.InstalmentKindInstalment, "700", s.periodEnd,
+		types.Period{Start: s.periodEnd, End: s.periodEnd.AddDate(0, 1, 0)})
 
 	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
 		StartTime: s.periodStart,
@@ -7638,42 +7636,77 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInsta
 	})
 }
 
-// An instalment shows in the range holding its bill_on, whenever its invoice is finalized, except one billed at the end
-// of what it pays for: an arrear shows in the period it closes. A broken-period arrear and the first quarterly advance
-// billed on the same boundary invoice therefore show a month apart.
+// storeTerm stores a published term of cmt_prepaid; a recurring one takes cadence.
+func (s *MeterUsageServiceSuite) storeTerm(id string, kind types.BillingTermKind, cadence types.InvoiceCadence) {
+	ctx := s.GetContext()
+	term := &billingterm.Term{
+		ID:            id,
+		OwnerType:     types.BillingTermOwnerCommitment,
+		OwnerID:       "cmt_prepaid",
+		Kind:          kind,
+		ValueType:     types.BillingTermValueRemainder,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	if kind == types.BillingTermKindRecurring {
+		term.InvoiceCadence = &cadence
+	}
+
+	_, err := s.GetStores().BillingTermRepo.CreateMany(ctx, []*billingterm.Term{term})
+	s.Require().NoError(err)
+}
+
+// An instalment shows in the range holding its bill_on, except an arrear, which shows in the period it closes; a
+// broken-period arrear and the first quarterly advance billed on one boundary invoice therefore show a period apart.
+// A once term billed at the end of what it pays for still shows at its bill_on, and finalizing the invoice moves
+// nothing: it only adds the instalments to the total.
 func (s *MeterUsageServiceSuite) TestCommitments_PlacesInstalmentsWhenCharged() {
+	ctx := s.GetContext()
 	s.prepayFloor()
 	// The suite's line items run through January, so a mid-January boundary stands in for the first of a month.
 	boundary := time.Date(2026, 1, 16, 0, 0, 0, 0, time.UTC)
 	before := types.Period{Start: s.periodStart, End: boundary}
 	after := types.Period{Start: boundary, End: s.periodEnd}
-	finalized := lo.ToPtr(boundary.AddDate(0, 0, 2))
-	s.storeInstalment("binst_arrear", types.InstalmentKindInstalment, "480", boundary,
-		types.Period{Start: s.periodStart.AddDate(0, 0, 4), End: boundary}, finalized)
-	s.storeInstalment("binst_advance", types.InstalmentKindInstalment, "3000", boundary,
-		types.Period{Start: boundary, End: boundary.AddDate(0, 3, 0)}, finalized)
-	s.storeInstalment("binst_next_arrear", types.InstalmentKindInstalment, "1000", s.periodEnd, after, nil)
+	s.storeTerm("bterm_arrear", types.BillingTermKindRecurring, types.InvoiceCadenceArrear)
+	s.storeTerm("bterm_advance", types.BillingTermKindRecurring, types.InvoiceCadenceAdvance)
+	s.storeTerm("bterm_at_end", types.BillingTermKindOnce, "")
+	s.storeInstalment("binst_arrear", "bterm_arrear", types.InstalmentKindInstalment, "480", boundary,
+		types.Period{Start: s.periodStart.AddDate(0, 0, 4), End: boundary})
+	s.storeInstalment("binst_advance", "bterm_advance", types.InstalmentKindInstalment, "3000", boundary,
+		types.Period{Start: boundary, End: boundary.AddDate(0, 3, 0)})
+	s.storeInstalment("binst_at_end", "bterm_at_end", types.InstalmentKindInstalment, "200", boundary, before)
 
-	listed := func(period types.Period) []dto.UsageAnalyticInstalment {
+	analytics := func(period types.Period) *dto.GetUsageAnalyticsResponse {
 		return s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
 			StartTime: period.Start,
 			EndTime:   period.End,
 			Expand:    []string{string(types.ExpandInstalments)},
-		}).Instalments
+		})
 	}
+	ids := func(resp *dto.GetUsageAnalyticsResponse) []string {
+		return lo.Map(resp.Instalments, func(i dto.UsageAnalyticInstalment, _ int) string { return i.ID })
+	}
+	first, second := analytics(before), analytics(after)
+	s.Equal([]string{"binst_arrear"}, ids(first))
+	s.True(first.Instalments[0].ChargedAt.Equal(boundary.Add(-time.Microsecond)), "charged at %s", first.Instalments[0].ChargedAt)
+	s.Equal([]string{"binst_advance", "binst_at_end"}, ids(second))
+	s.True(second.Instalments[0].ChargedAt.Equal(boundary), "charged at %s", second.Instalments[0].ChargedAt)
+	s.True(second.Instalments[1].ChargedAt.Equal(boundary), "charged at %s", second.Instalments[1].ChargedAt)
+	s.True(first.TotalCostWithInstalments.Equal(first.TotalCost), "scheduled instalments are not billed yet")
+	s.True(second.TotalCostWithInstalments.Equal(second.TotalCost), "scheduled instalments are not billed yet")
 
-	first := listed(before)
-	s.Require().Len(first, 1)
-	s.Equal("binst_arrear", first[0].ID)
-	s.True(first[0].BillOn.Equal(boundary), "bill on %s", first[0].BillOn)
-	s.True(first[0].ChargedAt.Equal(boundary.Add(-time.Microsecond)), "charged at %s", first[0].ChargedAt)
+	_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_boundary", boundary.AddDate(0, 0, 2),
+		[]string{"binst_arrear", "binst_advance"})
+	s.Require().NoError(err)
 
-	second := listed(after)
-	s.Require().Len(second, 2)
-	s.Equal("binst_advance", second[0].ID)
-	s.True(second[0].ChargedAt.Equal(boundary), "charged at %s", second[0].ChargedAt)
-	s.Equal("binst_next_arrear", second[1].ID)
-	s.Equal(types.InstalmentStatusScheduled, second[1].InstalmentStatus)
+	first, second = analytics(before), analytics(after)
+	s.Equal([]string{"binst_arrear"}, ids(first))
+	s.Equal([]string{"binst_advance", "binst_at_end"}, ids(second))
+	s.Equal(types.InstalmentStatusInvoiced, first.Instalments[0].InstalmentStatus)
+	s.Equal(types.InstalmentStatusInvoiced, second.Instalments[0].InstalmentStatus)
+	s.Equal(types.InstalmentStatusScheduled, second.Instalments[1].InstalmentStatus)
+	s.True(first.TotalCostWithInstalments.Equal(first.TotalCost.Add(dec("480"))), "with instalments %s", first.TotalCostWithInstalments)
+	s.True(second.TotalCostWithInstalments.Equal(second.TotalCost.Add(dec("3000"))), "with instalments %s", second.TotalCostWithInstalments)
 }
 
 // A range whose first period no commitment covers bills that period at the line's own price: January's 100 units cost
