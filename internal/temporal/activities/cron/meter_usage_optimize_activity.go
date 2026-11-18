@@ -14,6 +14,7 @@ import (
 const (
 	optimizePartitionTimeout = 30 * time.Minute
 	defaultOptimizeLookback  = 7
+	maxOptimizeLookback      = 7
 )
 
 // meterUsageOptimizeConn is the ClickHouse surface the activity needs.
@@ -25,13 +26,14 @@ type meterUsageOptimizeConn interface {
 type MeterUsageOptimizeActivities struct {
 	conn meterUsageOptimizeConn
 	cfg  *config.Configuration
+	now  func() time.Time
 }
 
 func NewMeterUsageOptimizeActivities(
 	conn meterUsageOptimizeConn,
 	cfg *config.Configuration,
 ) *MeterUsageOptimizeActivities {
-	return &MeterUsageOptimizeActivities{conn: conn, cfg: cfg}
+	return &MeterUsageOptimizeActivities{conn: conn, cfg: cfg, now: clock.Now}
 }
 
 // OptimizeMeterUsageActivity runs OPTIMIZE FINAL on each closed day-partition.
@@ -49,9 +51,15 @@ func (a *MeterUsageOptimizeActivities) OptimizeMeterUsageActivity(ctx context.Co
 	if lookback <= 0 {
 		lookback = defaultOptimizeLookback
 	}
+	// Keeps 7 x 30m inside the 4h budget.
+	lookback = min(lookback, maxOptimizeLookback)
 
-	today := clock.Now().UTC()
+	today := a.now().UTC()
 	for i := 1; i <= lookback; i++ {
+		activity.RecordHeartbeat(ctx, i)
+		if ctx.Err() != nil {
+			return result, ctx.Err()
+		}
 		partitionID := today.AddDate(0, 0, -i).Format("20060102")
 		if err := a.optimizePartition(ctx, partitionID); err != nil {
 			result.Failed++
