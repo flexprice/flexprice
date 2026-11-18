@@ -9,6 +9,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/config"
 	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
@@ -38,6 +39,9 @@ type ContractIngestService interface {
 	MarkFailed(ctx context.Context, contractID, reason string) error
 	MatchCustomer(ctx context.Context, contractID string) error
 	MarkCustomerMatchUnavailable(ctx context.Context, contractID, reason string) error
+	DeriveTerms(ctx context.Context, contractID string, req *dto.DeriveContractTermsRequest) (*extraction.Derived, error)
+	GetReview(ctx context.Context, contractID string) (*dto.ContractReviewResponse, error)
+	SaveReviewStep(ctx context.Context, contractID, step string, req *dto.SaveContractReviewRequest) (*dto.ContractReviewResponse, error)
 }
 
 type UploadRequest struct {

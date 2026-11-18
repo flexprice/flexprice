@@ -203,7 +203,7 @@ func (c *contractIngestService) loadExtraction(ctx context.Context, contractID s
 
 func (c *contractIngestService) saveMatch(ctx context.Context, contract *domainContract.Contract, out *extraction.Extraction, match *extraction.CustomerMatch) error {
 	out.Result.CustomerMatch = match
-	out.Result.ToCheck = c.countToCheck(out.Result, c.reviewThreshold)
+	out.Result.ToCheck = c.countToCheck(out.Result, c.reviewThreshold, nil)
 	raw, err := json.Marshal(out)
 	if err != nil {
 		return ierr.WithError(err).
