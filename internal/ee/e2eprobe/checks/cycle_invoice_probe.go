@@ -44,6 +44,9 @@ func (p *CycleInvoiceProbe) Run(ctx context.Context) error {
 		}
 		return e2eprobe.Errorf(map[string]string{"subscription_id": subID}, "get sub %s: %w", subID, err)
 	}
+	if !subIsBillable(subResp) {
+		return nil
+	}
 	cycleLength := extractBillingCycleLength(subResp)
 	if cycleLength <= 0 {
 		return nil
@@ -59,8 +62,14 @@ func (p *CycleInvoiceProbe) Run(ctx context.Context) error {
 		return nil
 	}
 
+	invType := sdktypes.InvoiceTypeSubscription
+	order := sdktypes.InvoiceFilterOrderDesc
+	limit := cycleInvoiceScanLimit
 	invResp, err := p.client.Invoices().Query(ctx, sdktypes.InvoiceFilter{
-		CustomerID: &custID,
+		CustomerID:  &custID,
+		InvoiceType: &invType,
+		Limit:       &limit,
+		Order:       &order,
 	})
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"subscription_id": subID, "customer_id": custID}, "query invoices for customer %s (sub %s): %w", custID, subID, err)
@@ -84,6 +93,21 @@ func (p *CycleInvoiceProbe) Run(ctx context.Context) error {
 			subID, latest.PeriodEnd.Format(time.RFC3339), lag, cycleLength)
 	}
 	return nil
+}
+
+const cycleInvoiceScanLimit = int64(100)
+
+// subIsBillable reports whether the sub should be invoicing; unknown status counts as billable.
+func subIsBillable(resp interface{}) bool {
+	r, ok := resp.(*sdkdtos.GetSubscriptionResponse)
+	if !ok || r == nil {
+		return true
+	}
+	inner := r.GetSubscriptionResponse()
+	if inner == nil || inner.SubscriptionStatus == nil {
+		return true
+	}
+	return *inner.SubscriptionStatus == sdktypes.SubscriptionStatusActive
 }
 
 type latestInvoice struct {

@@ -194,3 +194,21 @@ func TestCycleInvoiceProbe_NoCustomerIDSkips(t *testing.T) {
 		t.Errorf("expected 0 invoice queries when customer_id absent, got %d", fc.invoices.queries)
 	}
 }
+
+func TestCycleInvoiceProbe_NonActiveSubSkips(t *testing.T) {
+	fc := newFakeClient()
+	subID, cust := "sub_cancelled", "cust_1"
+	status := sdktypes.SubscriptionStatusCancelled
+	created := time.Now().Add(-90 * 24 * time.Hour)
+	fc.subs.subs = map[string]sdktypes.SubscriptionResponse{
+		subID: {ID: &subID, CustomerID: &cust, SubscriptionStatus: &status, CreatedAt: &created},
+	}
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(e2eprobe.Seeds{PersistentSubIDs: []string{subID}})
+	if err := NewCycleInvoiceProbe(fc, reg, "run-1").Run(context.Background()); err != nil {
+		t.Fatalf("expected skip for cancelled sub, got: %v", err)
+	}
+	if fc.invoices.queries != 0 {
+		t.Errorf("expected 0 invoice queries, got %d", fc.invoices.queries)
+	}
+}
