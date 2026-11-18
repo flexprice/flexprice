@@ -534,17 +534,18 @@ func TestRemoteSummary_EffectiveBucketSize(t *testing.T) {
 					assert.Equal(t, types.WindowSize(wantBucket), charge.BucketSize)
 				}
 
-				priceReads := 0
+				priceSearches := 0
 				for _, request := range f.requests {
-					if strings.HasPrefix(request, "GET /prices/") {
-						priceReads++
+					assert.False(t, strings.HasPrefix(request, "GET /prices/"), "a price read embeds the feature, which the SDK cannot decode")
+					if request == "POST "+pathPriceSearch {
+						priceSearches++
 					}
 				}
 
 				if !offered && priceBucket == "" {
-					assert.Equal(t, 1, priceReads)
+					assert.Equal(t, 1, priceSearches)
 				} else {
-					assert.Zero(t, priceReads)
+					assert.Zero(t, priceSearches)
 				}
 			})
 		}

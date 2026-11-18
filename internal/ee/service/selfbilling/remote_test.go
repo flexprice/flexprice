@@ -40,6 +40,7 @@ const (
 	pathEventsBulk           = "/events/bulk"        // as IngestEventsBulk builds it
 	pathFXRateQuery          = "/forex/query"        // as QueryFXRates builds it
 	pathPlanSearch           = "/plans/search"       // as QueryPlan builds it
+	pathPriceSearch          = "/prices/search"      // as QueryPrice builds it
 )
 
 // notFoundBody is the JSON error envelope the Flexprice API returns for a 404.
@@ -189,15 +190,24 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 			}
 			_ = json.NewEncoder(w).Encode(plan)
 
-		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/prices/"):
-			p, ok := f.prices[strings.TrimPrefix(r.URL.Path, "/prices/")]
-			if !ok {
-				t.Errorf("unexpected price lookup %s", r.URL.Path)
-				w.WriteHeader(http.StatusNotImplemented)
+		case r.Method == http.MethodPost && r.URL.Path == pathPriceSearch:
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("invalid price search body: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-
-			_ = json.NewEncoder(w).Encode(p)
+			var items []map[string]any
+			for _, id := range body["price_ids"].([]any) {
+				p, ok := f.prices[id.(string)]
+				if !ok {
+					t.Errorf("unexpected price search for %v", id)
+					w.WriteHeader(http.StatusNotImplemented)
+					return
+				}
+				items = append(items, p)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
 
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/subscriptions/") && strings.HasSuffix(r.URL.Path, "/v2"):
 			assert.Equal(t, "plan,subscription_line_items.prices", r.URL.Query().Get("expand"))
