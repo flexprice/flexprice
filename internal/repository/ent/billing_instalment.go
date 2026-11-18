@@ -169,47 +169,6 @@ func (r *billingInstalmentRepository) ListEnvironments(ctx context.Context, filt
 	return envs, nil
 }
 
-func (r *billingInstalmentRepository) ListInvoiced(
-	ctx context.Context,
-	ownerType types.BillingTermOwnerType,
-	ownerIDs []string,
-	period types.Period,
-) ([]*billingterm.Instalment, error) {
-	if len(ownerIDs) == 0 {
-		return []*billingterm.Instalment{}, nil
-	}
-
-	span := StartRepositorySpan(ctx, "billing_instalment", "list_invoiced", map[string]interface{}{
-		"owner_type": ownerType,
-		"owners":     len(ownerIDs),
-	})
-	defer FinishSpan(span)
-
-	rows, err := r.client.Reader(ctx).BillingInstalment.Query().
-		Where(r.scope(ctx)...).
-		Where(
-			entbillinginstalment.OwnerTypeEQ(ownerType),
-			entbillinginstalment.OwnerIDIn(ownerIDs...),
-			entbillinginstalment.InstalmentStatusEQ(types.InstalmentStatusInvoiced),
-			entbillinginstalment.InvoicedAtGTE(period.Start),
-			entbillinginstalment.InvoicedAtLT(period.End),
-		).
-		Order(
-			ent.Asc(entbillinginstalment.FieldInvoicedAt),
-			ent.Asc(entbillinginstalment.FieldID),
-		).
-		All(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list invoiced billing instalments").
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return billingterm.InstalmentsFromEnt(rows), nil
-}
-
 func applyInstalmentFilter(q *ent.BillingInstalmentQuery, f *billingterm.InstalmentFilter) *ent.BillingInstalmentQuery {
 	var preds []predicate.BillingInstalment
 	if f.OwnerType != "" {

@@ -408,15 +408,18 @@ type UsageAnalyticInstalment struct {
 	InvoiceID      string `json:"invoice_id,omitempty"`
 	// Kind tells a regular instalment from a termination's settlement and its cancellation_fee.
 	Kind types.InstalmentKind `json:"kind"`
-	// InstalmentStatus is invoiced, or scheduled for an instalment due in the range that no invoice has billed yet.
-	InstalmentStatus   types.InstalmentStatus `json:"instalment_status"`
-	InvoiceLabel       string                 `json:"invoice_label"`
-	Amount             decimal.Decimal        `json:"amount" swaggertype:"string"`
-	Currency           string                 `json:"currency"`
-	BillOn             time.Time              `json:"bill_on"`               // when it becomes billable
-	InvoicedAt         *time.Time             `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
-	ServicePeriodStart time.Time              `json:"service_period_start"`
-	ServicePeriodEnd   time.Time              `json:"service_period_end"`
+	// InstalmentStatus is invoiced, or scheduled for an instalment charged in the range that no invoice has billed yet.
+	InstalmentStatus types.InstalmentStatus `json:"instalment_status"`
+	InvoiceLabel     string                 `json:"invoice_label"`
+	Amount           decimal.Decimal        `json:"amount" swaggertype:"string"`
+	Currency         string                 `json:"currency"`
+	BillOn           time.Time              `json:"bill_on"` // when it becomes billable
+	// ChargedAt places it in time: bill_on, or just before it for an instalment billed at the end of what it pays
+	// for, so an arrear falls in the period it closes. The range filters on it.
+	ChargedAt          time.Time  `json:"charged_at"`
+	InvoicedAt         *time.Time `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
+	ServicePeriodStart time.Time  `json:"service_period_start"`
+	ServicePeriodEnd   time.Time  `json:"service_period_end"`
 }
 
 // UsageAnalyticItem represents a single analytic item in the response

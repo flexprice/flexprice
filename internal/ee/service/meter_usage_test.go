@@ -7461,10 +7461,23 @@ func (s *MeterUsageServiceSuite) billInstalment(invoicedAt time.Time) {
 	s.Require().NoError(err)
 }
 
-// scheduleInstalment stores a scheduled instalment of cmt_prepaid due at billOn.
+// scheduleInstalment stores a scheduled instalment of cmt_prepaid due at billOn for the suite's billing period.
 func (s *MeterUsageServiceSuite) scheduleInstalment(id string, kind types.InstalmentKind, amount string, billOn time.Time) {
+	s.storeInstalment(id, kind, amount, billOn, types.Period{Start: s.periodStart, End: s.periodEnd}, nil)
+}
+
+// storeInstalment stores an instalment of cmt_prepaid due at billOn for service; a non-nil invoicedAt bills it on an
+// invoice finalized then.
+func (s *MeterUsageServiceSuite) storeInstalment(
+	id string,
+	kind types.InstalmentKind,
+	amount string,
+	billOn time.Time,
+	service types.Period,
+	invoicedAt *time.Time,
+) {
 	ctx := s.GetContext()
-	_, err := s.GetStores().BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{{
+	inst := &billingterm.Instalment{
 		ID:                 id,
 		OwnerType:          types.BillingTermOwnerCommitment,
 		OwnerID:            "cmt_prepaid",
@@ -7476,17 +7489,25 @@ func (s *MeterUsageServiceSuite) scheduleInstalment(id string, kind types.Instal
 		BillOn:             billOn,
 		Amount:             dec(amount),
 		InvoiceLabel:       id,
-		ServicePeriodStart: s.periodStart,
-		ServicePeriodEnd:   s.periodEnd,
+		ServicePeriodStart: service.Start,
+		ServicePeriodEnd:   service.End,
 		InstalmentStatus:   types.InstalmentStatusScheduled,
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
-	}})
+	}
+	if invoicedAt != nil {
+		inst.InstalmentStatus = types.InstalmentStatusInvoiced
+		inst.InvoiceID = lo.ToPtr("inv_" + id)
+		inst.InvoicedAt = invoicedAt
+	}
+
+	_, err := s.GetStores().BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{inst})
 	s.Require().NoError(err)
 }
 
 // A scheduled instalment shows in the range holding its bill_on, told apart by status and kind, and stays out of the
-// total with instalments until an invoice bills it. Cancelled instalments and those due outside the range do not show.
+// total with instalments until an invoice bills it. Cancelled instalments and those charged outside the range do not
+// show.
 func (s *MeterUsageServiceSuite) TestCommitments_ListsScheduledInstalmentsOutsideTheTotal() {
 	ctx := s.GetContext()
 	s.prepayFloor()
@@ -7497,7 +7518,8 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsScheduledInstalmentsOutsid
 	s.Require().NoError(err)
 	s.scheduleInstalment("binst_due", types.InstalmentKindInstalment, "700", januaryNoon(20))
 	s.scheduleInstalment("binst_fee", types.InstalmentKindCancellationFee, "90", januaryNoon(25))
-	s.scheduleInstalment("binst_later", types.InstalmentKindInstalment, "700", s.periodEnd)
+	s.storeInstalment("binst_later", types.InstalmentKindInstalment, "700", s.periodEnd,
+		types.Period{Start: s.periodEnd, End: s.periodEnd.AddDate(0, 1, 0)}, nil)
 
 	resp := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
 		StartTime: s.periodStart,
@@ -7536,8 +7558,8 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsScheduledInstalmentsOutsid
 	s.Equal("binst_prepaid", early.Instalments[0].ID)
 }
 
-// The instalments of the commitments covering a queried meter show in the range they were invoiced in, and the total
-// with instalments adds them. A range or filter that leaves the commitment out lists none, and neither does a request
+// The instalments of the commitments covering a queried meter show in the range they are charged in, and the total
+// with instalments adds the invoiced ones. A range or filter that leaves the commitment out lists none, and neither does a request
 // that does not expand instalments.
 func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInstalments() {
 	ctx := s.GetContext()
@@ -7547,27 +7569,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInsta
 	s.createLineItemForMeter(ctx, "li_unprepaid", other.ID, otherPrice.ID)
 	s.insertMeterUsageWithProps(ctx, other.ID, s.customer.ExternalID, "api", januaryNoon(6), 10, nil)
 	s.billInstalment(januaryNoon(1))
-	// An instalment invoiced before invoiced_at existed has none, so it is left out rather than listed at a zero time.
-	_, err := s.GetStores().BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{{
-		ID:                 "binst_untimed",
-		OwnerType:          types.BillingTermOwnerCommitment,
-		OwnerID:            "cmt_prepaid",
-		CustomerID:         s.customer.ID,
-		SubscriptionID:     lo.ToPtr(s.sub.ID),
-		Currency:           "usd",
-		Kind:               types.InstalmentKindInstalment,
-		BillOn:             januaryNoon(1),
-		Amount:             dec("500"),
-		InvoiceLabel:       "Prepaid - Instalment without invoiced_at",
-		ServicePeriodStart: s.periodStart,
-		ServicePeriodEnd:   s.periodEnd,
-		InstalmentStatus:   types.InstalmentStatusInvoiced,
-		InvoiceID:          lo.ToPtr("inv_untimed"),
-		EnvironmentID:      types.GetEnvironmentID(ctx),
-		BaseModel:          types.GetDefaultBaseModel(ctx),
-	}})
-	s.Require().NoError(err)
-
 	january := s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
 		StartTime: s.periodStart,
 		EndTime:   s.periodEnd,
@@ -7598,7 +7599,7 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInsta
 		name   string
 		params events.MeterUsageDetailedAnalyticsParams
 	}{
-		{name: "a range after the invoice", params: events.MeterUsageDetailedAnalyticsParams{
+		{name: "a range after the instalment", params: events.MeterUsageDetailedAnalyticsParams{
 			StartTime: januaryNoon(2),
 			EndTime:   s.periodEnd,
 			Expand:    []string{string(types.ExpandInstalments)},
@@ -7635,6 +7636,44 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInsta
 		})
 		s.Len(resp.Instalments, 1)
 	})
+}
+
+// An instalment shows in the range holding its bill_on, whenever its invoice is finalized, except one billed at the end
+// of what it pays for: an arrear shows in the period it closes. A broken-period arrear and the first quarterly advance
+// billed on the same boundary invoice therefore show a month apart.
+func (s *MeterUsageServiceSuite) TestCommitments_PlacesInstalmentsWhenCharged() {
+	s.prepayFloor()
+	// The suite's line items run through January, so a mid-January boundary stands in for the first of a month.
+	boundary := time.Date(2026, 1, 16, 0, 0, 0, 0, time.UTC)
+	before := types.Period{Start: s.periodStart, End: boundary}
+	after := types.Period{Start: boundary, End: s.periodEnd}
+	finalized := lo.ToPtr(boundary.AddDate(0, 0, 2))
+	s.storeInstalment("binst_arrear", types.InstalmentKindInstalment, "480", boundary,
+		types.Period{Start: s.periodStart.AddDate(0, 0, 4), End: boundary}, finalized)
+	s.storeInstalment("binst_advance", types.InstalmentKindInstalment, "3000", boundary,
+		types.Period{Start: boundary, End: boundary.AddDate(0, 3, 0)}, finalized)
+	s.storeInstalment("binst_next_arrear", types.InstalmentKindInstalment, "1000", s.periodEnd, after, nil)
+
+	listed := func(period types.Period) []dto.UsageAnalyticInstalment {
+		return s.customerAnalytics(events.MeterUsageDetailedAnalyticsParams{
+			StartTime: period.Start,
+			EndTime:   period.End,
+			Expand:    []string{string(types.ExpandInstalments)},
+		}).Instalments
+	}
+
+	first := listed(before)
+	s.Require().Len(first, 1)
+	s.Equal("binst_arrear", first[0].ID)
+	s.True(first[0].BillOn.Equal(boundary), "bill on %s", first[0].BillOn)
+	s.True(first[0].ChargedAt.Equal(boundary.Add(-time.Microsecond)), "charged at %s", first[0].ChargedAt)
+
+	second := listed(after)
+	s.Require().Len(second, 2)
+	s.Equal("binst_advance", second[0].ID)
+	s.True(second[0].ChargedAt.Equal(boundary), "charged at %s", second[0].ChargedAt)
+	s.Equal("binst_next_arrear", second[1].ID)
+	s.Equal(types.InstalmentStatusScheduled, second[1].InstalmentStatus)
 }
 
 // A range whose first period no commitment covers bills that period at the line's own price: January's 100 units cost

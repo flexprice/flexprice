@@ -33127,6 +33127,10 @@ const docTemplate = `{
                     "description": "when it becomes billable",
                     "type": "string"
                 },
+                "charged_at": {
+                    "description": "ChargedAt places it in time: bill_on, or just before it for an instalment billed at the end of what it pays\nfor, so an arrear falls in the period it closes. The range filters on it.",
+                    "type": "string"
+                },
                 "commitment_id": {
                     "type": "string"
                 },
@@ -33137,7 +33141,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "instalment_status": {
-                    "description": "InstalmentStatus is invoiced, or scheduled for an instalment due in the range that no invoice has billed yet.",
+                    "description": "InstalmentStatus is invoiced, or scheduled for an instalment charged in the range that no invoice has billed yet.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.InstalmentStatus"

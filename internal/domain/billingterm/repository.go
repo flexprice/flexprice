@@ -35,9 +35,6 @@ type InstalmentRepository interface {
 	// ListEnvironments returns, across all tenants, every environment holding a published instalment the filter matches.
 	ListEnvironments(ctx context.Context, filter *InstalmentFilter) ([]types.TenantEnvironment, error)
 
-	// ListInvoiced returns the owners' instalments invoiced in [period.Start, period.End), ordered by invoiced_at, then id.
-	ListInvoiced(ctx context.Context, ownerType types.BillingTermOwnerType, ownerIDs []string, period types.Period) ([]*Instalment, error)
-
 	// Update writes bill_on and triggered_at of a scheduled instalment. It fails with ErrInvalidOperation when the
 	// instalment is no longer scheduled, e.g. claimed by a finalizing invoice.
 	Update(ctx context.Context, instalment *Instalment) (*Instalment, error)

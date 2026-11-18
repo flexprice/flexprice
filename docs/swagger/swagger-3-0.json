@@ -33851,6 +33851,10 @@
             "type": "string",
             "description": "when it becomes billable"
           },
+          "charged_at": {
+            "type": "string",
+            "description": "ChargedAt places it in time: bill_on, or just before it for an instalment billed at the end of what it pays\nfor, so an arrear falls in the period it closes. The range filters on it."
+          },
           "commitment_id": {
             "type": "string"
           },

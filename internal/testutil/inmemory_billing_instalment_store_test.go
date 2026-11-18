@@ -348,32 +348,6 @@ func TestInMemoryBillingInstalmentStore_UpdateOnlyScheduled(t *testing.T) {
 	}
 }
 
-func TestInMemoryBillingInstalmentStore_ListInvoiced(t *testing.T) {
-	f := newInstalmentFixture(t)
-	jan, feb := f.start, f.start.AddDate(0, 1, 0)
-	invoiced := func(id, ownerID string, at time.Time) *billingterm.Instalment {
-		in := f.instalment(id, ownerID, types.InstalmentStatusInvoiced, jan)
-		in.InvoiceID, in.InvoicedAt = lo.ToPtr("inv_"+id), lo.ToPtr(at)
-		return in
-	}
-
-	late := invoiced("binst_late", "cmt_1", jan.AddDate(0, 0, 20))
-	early := invoiced("binst_early", "cmt_1", jan)
-	atEnd := invoiced("binst_at_end", "cmt_1", feb)
-	otherOwner := invoiced("binst_other", "cmt_2", jan.Add(time.Hour))
-	scheduled := f.instalment("binst_scheduled", "cmt_1", types.InstalmentStatusScheduled, jan)
-	f.seed(t, late, early, atEnd, otherOwner, scheduled)
-
-	january := types.Period{Start: jan, End: feb}
-	got, err := f.store.ListInvoiced(f.ctx, types.BillingTermOwnerCommitment, []string{"cmt_1"}, january)
-	require.NoError(t, err)
-	require.Equal(t, []string{early.ID, late.ID}, instalmentIDs(got))
-
-	got, err = f.store.ListInvoiced(f.ctx, types.BillingTermOwnerCommitment, []string{"cmt_1", "cmt_2"}, january)
-	require.NoError(t, err)
-	require.Equal(t, []string{early.ID, otherOwner.ID, late.ID}, instalmentIDs(got))
-}
-
 func TestInMemoryBillingInstalmentStore_ListEnvironments(t *testing.T) {
 	f := newInstalmentFixture(t)
 	due := f.instalment("binst_due", "cmt_1", types.InstalmentStatusScheduled, f.start)

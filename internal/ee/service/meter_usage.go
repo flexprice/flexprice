@@ -1460,8 +1460,8 @@ func emptyAnalyticsResponse(params *events.MeterUsageDetailedAnalyticsParams) *d
 	return response
 }
 
-// rangeInstalments returns, in date order, the instalments of the commitments covering a queried meter that were
-// invoiced in the request's range or are still scheduled with a bill_on in it; none with property or source filters.
+// rangeInstalments returns, in date order, the scheduled and invoiced instalments of the commitments covering a queried
+// meter that are charged in the request's range; none with property or source filters.
 func (s *meterUsageService) rangeInstalments(
 	ctx context.Context,
 	cust *customer.Customer,
@@ -1492,34 +1492,33 @@ func (s *meterUsageService) rangeInstalments(
 		return nil, nil
 	}
 
-	inRange := types.Period{Start: params.StartTime, End: params.EndTime}
-	invoiced, err := s.BillingInstalmentRepo.ListInvoiced(ctx, types.BillingTermOwnerCommitment, ownerIDs, inRange)
-	if err != nil {
-		return nil, err
-	}
-
-	scheduled, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
+	// An instalment charged at the range start may be billed a moment after it, at the end of what it pays for.
+	listed, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
 		OwnerType: types.BillingTermOwnerCommitment,
 		OwnerIDs:  ownerIDs,
-		Statuses:  []types.InstalmentStatus{types.InstalmentStatusScheduled},
-		BillOnIn:  &inRange,
+		Statuses:  []types.InstalmentStatus{types.InstalmentStatusScheduled, types.InstalmentStatusInvoiced},
+		BillOnIn:  &types.Period{Start: params.StartTime, End: params.EndTime.Add(time.Microsecond)},
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	instalments := append(invoiced, scheduled...)
+	instalments := lo.Filter(listed, func(inst *billingterm.Instalment, _ int) bool {
+		at := chargedAt(inst)
+		return !at.Before(params.StartTime) && at.Before(params.EndTime)
+	})
 	slices.SortStableFunc(instalments, func(a, b *billingterm.Instalment) int {
-		return cmp.Or(instalmentDate(a).Compare(instalmentDate(b)), cmp.Compare(a.ID, b.ID))
+		return cmp.Or(chargedAt(a).Compare(chargedAt(b)), cmp.Compare(a.ID, b.ID))
 	})
 
 	return instalments, nil
 }
 
-// instalmentDate is when the instalment was invoiced or, while it is scheduled, when it falls due.
-func instalmentDate(inst *billingterm.Instalment) time.Time {
-	if inst.InstalmentStatus == types.InstalmentStatusInvoiced && inst.InvoicedAt != nil {
-		return *inst.InvoicedAt
+// chargedAt is when analytics places an instalment: its bill_on, or just before it when it is billed at the end of
+// what it pays for, so an arrear shows in the period it closes.
+func chargedAt(inst *billingterm.Instalment) time.Time {
+	if inst.BillOn.Equal(inst.ServicePeriodEnd) {
+		return inst.BillOn.Add(-time.Microsecond)
 	}
 
 	return inst.BillOn
@@ -1545,6 +1544,7 @@ func setInstalments(response *dto.GetUsageAnalyticsResponse, instalments []*bill
 			Amount:             inst.Amount,
 			Currency:           inst.Currency,
 			BillOn:             inst.BillOn,
+			ChargedAt:          chargedAt(inst),
 			InvoicedAt:         inst.InvoicedAt,
 			ServicePeriodStart: inst.ServicePeriodStart,
 			ServicePeriodEnd:   inst.ServicePeriodEnd,

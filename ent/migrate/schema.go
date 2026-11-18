@@ -360,11 +360,6 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{BillingInstalmentsColumns[1], BillingInstalmentsColumns[7], BillingInstalmentsColumns[24]},
 			},
-			{
-				Name:    "idx_billing_instalments_tenant_env_owner_invoiced_at",
-				Unique:  false,
-				Columns: []*schema.Column{BillingInstalmentsColumns[1], BillingInstalmentsColumns[7], BillingInstalmentsColumns[9], BillingInstalmentsColumns[25]},
-			},
 		},
 	}
 	// BillingSequencesColumns holds the columns for the "billing_sequences" table.
