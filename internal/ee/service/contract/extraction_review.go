@@ -13,6 +13,9 @@ const (
 	stepBilling  = "billing"
 )
 
+// customerMatchPath stands for the customer decision when counting what is left to check.
+const customerMatchPath = "customer_match"
+
 func (c *contractIngestService) needsCheck(t extraction.Term, threshold int) bool {
 	if t.Derived || t.Page == 0 {
 		return false
@@ -20,10 +23,15 @@ func (c *contractIngestService) needsCheck(t extraction.Term, threshold int) boo
 	return len(t.Options) > 0 || (t.IsSet() && t.Confidence < threshold)
 }
 
-func (c *contractIngestService) countToCheck(r *extraction.Result, threshold int) *extraction.ToCheck {
+// countToCheck counts the terms still to check per step. settled reports a path the reviewer has
+// already settled; it may be nil.
+func (c *contractIngestService) countToCheck(r *extraction.Result, threshold int, settled func(path string) bool) *extraction.ToCheck {
+	if settled == nil {
+		settled = func(string) bool { return false }
+	}
 	tc := &extraction.ToCheck{}
 	c.eachTerm(r, func(path string, t *extraction.Term) {
-		if !c.needsCheck(*t, threshold) {
+		if settled(path) || !c.needsCheck(*t, threshold) {
 			return
 		}
 		switch c.stepFor(path) {
@@ -38,7 +46,7 @@ func (c *contractIngestService) countToCheck(r *extraction.Result, threshold int
 		}
 		tc.Total++
 	})
-	if r.CustomerMatch != nil && r.CustomerMatch.Status == CustomerMatchPossible {
+	if r.CustomerMatch != nil && r.CustomerMatch.Status == CustomerMatchPossible && !settled(customerMatchPath) {
 		tc.Customer++
 		tc.Total++
 	}

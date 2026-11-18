@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/contract"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
 )
 
@@ -81,3 +83,58 @@ func (r *ContractResponse) WithoutExtraction() *ContractResponse {
 
 // ListContractsResponse represents the response for listing contracts
 type ListContractsResponse = types.ListResponse[*ContractResponse] // @name ListContractsResponse
+
+// DeriveContractTermsRequest holds a reviewer's edits to the inputs of the derived contract values.
+// An omitted field keeps the extracted value; charges line up with extraction.result.charges by position.
+type DeriveContractTermsRequest struct {
+	Term    *DeriveTermInputs    `json:"term,omitempty"`
+	Charges []DeriveChargeInputs `json:"charges,omitempty"`
+}
+
+type DeriveTermInputs struct {
+	EffectiveDate *string `json:"effective_date,omitempty"`
+	TermMonths    *string `json:"term_months,omitempty"`
+	NoticeDays    *string `json:"notice_days,omitempty"`
+}
+
+type DeriveChargeInputs struct {
+	Amount        *string `json:"amount,omitempty"`
+	AmountPeriod  *string `json:"amount_period,omitempty"`
+	BillingPeriod *string `json:"billing_period,omitempty"`
+	BillingTiming *string `json:"billing_timing,omitempty"`
+}
+
+type DeriveContractTermsResponse struct {
+	Derived *extraction.Derived `json:"derived"`
+}
+
+// SaveContractReviewRequest saves one review step. Version is the review_version the edits were made on.
+type SaveContractReviewRequest struct {
+	Version int `json:"version" validate:"min=0"`
+	// Values sets terms of this step by path, e.g. "charges[0].amount": "184000". "" clears a term.
+	Values map[string]string `json:"values,omitempty"`
+	// Confirmed replaces the step's confirmed term paths; omit it to keep them.
+	Confirmed []string `json:"confirmed,omitempty"`
+	// Customer is the customer decision, saved on the customer step only.
+	Customer *ContractReviewCustomer `json:"customer,omitempty"`
+}
+
+type ContractReviewCustomer struct {
+	Choice     string `json:"choice" validate:"required,oneof=existing new"`
+	CustomerID string `json:"customer_id,omitempty"`
+}
+
+// ContractReviewResponse is the reviewer's working copy of the contract terms. Before the first save it
+// is the extraction itself, at version 0.
+type ContractReviewResponse struct {
+	ContractID string                  `json:"contract_id"`
+	Version    int                     `json:"version"`
+	Result     *extraction.Result      `json:"result"`
+	Confirmed  []string                `json:"confirmed"`
+	Edited     []string                `json:"edited"`
+	Customer   *ContractReviewCustomer `json:"customer,omitempty"`
+}
+
+func (r *SaveContractReviewRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
