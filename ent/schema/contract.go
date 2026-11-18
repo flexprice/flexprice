@@ -76,7 +76,7 @@ func (Contract) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
-		field.JSON("extraction", &types.ContractExtraction{}).
+		field.JSON("extraction", &types.ContractJSON{}).
 			Optional().
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
@@ -85,6 +85,17 @@ func (Contract) Fields() []ent.Field {
 		field.Text("extraction_error").
 			Optional().
 			Nillable(),
+
+		// review is the reviewer's working copy of the extracted terms, saved step by step.
+		field.JSON("review", &types.ContractJSON{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
+
+		field.Int("review_version").
+			Default(0).
+			NonNegative(),
 	}
 }
 
