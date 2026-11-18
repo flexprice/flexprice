@@ -139,6 +139,7 @@ type ingestFixture struct {
 	extractor *fakeExtractor
 	matcher   *fakeMatcher
 	customers *testutil.InMemoryCustomerStore
+	products  *storeProductService
 }
 
 func newIngestFixture() *ingestFixture {
@@ -148,6 +149,7 @@ func newIngestFixture() *ingestFixture {
 		starter:   &fakeStarter{},
 		matcher:   &fakeMatcher{configured: true},
 		customers: testutil.NewInMemoryCustomerStore(),
+		products:  &storeProductService{store: testutil.NewInMemoryProductStore()},
 		extractor: &fakeExtractor{out: &extraction.Extraction{
 			Result: northwind(), Model: "test/model",
 			Usage: &extraction.Usage{Pages: 4, Fields: 61, DurationSeconds: 8},
@@ -157,7 +159,7 @@ func newIngestFixture() *ingestFixture {
 		FlexpriceS3Imports: config.FlexpriceS3ImportsConfig{KeyPrefix: "/imports/"},
 		CustomerMatch:      config.CustomerMatchConfig{Enabled: true},
 	}
-	svc := NewContractIngestService(f.contracts, &memResolver{store: f.store}, f.extractor, f.matcher, &storeCustomerService{store: f.customers}, cfg, logger.NewNoopLogger()).(*contractIngestService)
+	svc := NewContractIngestService(f.contracts, &memResolver{store: f.store}, f.extractor, f.matcher, &storeCustomerService{store: f.customers}, f.products, cfg, logger.NewNoopLogger()).(*contractIngestService)
 	svc.starter = f.starter
 	f.svc = svc
 	return f

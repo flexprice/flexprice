@@ -28,7 +28,10 @@ func TestGetReview_StartsFromTheExtraction(t *testing.T) {
 	require.Equal(t, "2027-10-31", got.Result.Derived.EndDate.Value)
 
 	_, wantToCheck := storedMatch(t, ctx, f, id)
-	require.Equal(t, wantToCheck, got.Result.ToCheck)
+	wantToCheck.Charges += 3
+	wantToCheck.Total += 3
+	require.Equal(t, wantToCheck, got.Result.ToCheck, "with no products every charge needs a product decision")
+	require.Empty(t, got.Products)
 }
 
 func TestSaveReviewStep_EditsAndConfirmations(t *testing.T) {
@@ -125,12 +128,22 @@ func TestSaveReviewStep_Rejects(t *testing.T) {
 		{"existing customer not found", stepCustomer, &dto.SaveContractReviewRequest{Customer: &dto.ContractReviewCustomer{Choice: reviewChoiceExisting, CustomerID: "cust_missing"}}},
 		{"new customer with id", stepCustomer, &dto.SaveContractReviewRequest{Customer: &dto.ContractReviewCustomer{Choice: reviewChoiceNew, CustomerID: "cust_nw"}}},
 		{"unknown choice", stepCustomer, &dto.SaveContractReviewRequest{Customer: &dto.ContractReviewCustomer{Choice: "maybe"}}},
+		{"products on the billing step", stepBilling, productReq("charges[0]", reviewChoiceNew, "")},
+		{"product for a charge past the last", stepCharges, productReq("charges[3]", reviewChoiceNew, "")},
+		{"product for a term path", stepCharges, productReq("charges[0].name", reviewChoiceNew, "")},
+		{"product for a padded index", stepCharges, productReq("charges[01]", reviewChoiceNew, "")},
+		{"existing product without id", stepCharges, productReq("charges[0]", reviewChoiceExisting, "")},
+		{"existing product not found", stepCharges, productReq("charges[0]", reviewChoiceExisting, "prod_missing")},
+		{"archived product", stepCharges, productReq("charges[2]", reviewChoiceExisting, "prod_impl_old")},
+		{"new product with id", stepCharges, productReq("charges[0]", reviewChoiceNew, "prod_platform")},
+		{"unknown product choice", stepCharges, productReq("charges[0]", "maybe", "")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := testutil.SetupContext()
 			f := newIngestFixture()
 			seedCustomers(t, ctx, f.customers)
+			seedProducts(t, ctx, f.products)
 			id := extractedContract(t, ctx, f)
 
 			_, err := f.svc.SaveReviewStep(ctx, id, tt.step, tt.req)
@@ -205,4 +218,8 @@ func TestGetReview_BeforeExtraction(t *testing.T) {
 
 	_, err = f.svc.GetReview(ctx, c.ID())
 	require.True(t, ierr.IsInvalidOperation(err), "got %v", err)
+}
+
+func productReq(path, choice, productID string) *dto.SaveContractReviewRequest {
+	return &dto.SaveContractReviewRequest{Products: map[string]dto.ContractReviewProduct{path: {Choice: choice, ProductID: productID}}}
 }

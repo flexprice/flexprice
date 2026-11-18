@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -20,12 +21,13 @@ const (
 )
 
 // reviewDoc is the stored review: the reviewer's copy of the extracted terms, the term paths they
-// confirmed and their customer decision. The match, derived values and counts are not
+// confirmed and their customer and product decisions. Matches, derived values and counts are not
 // stored; they are worked out each time the review is read.
 type reviewDoc struct {
-	Result    *extraction.Result          `json:"result"`
-	Confirmed []string                    `json:"confirmed"`
-	Customer  *dto.ContractReviewCustomer `json:"customer,omitempty"`
+	Result    *extraction.Result                   `json:"result"`
+	Confirmed []string                             `json:"confirmed"`
+	Customer  *dto.ContractReviewCustomer          `json:"customer,omitempty"`
+	Products  map[string]dto.ContractReviewProduct `json:"products,omitempty"`
 }
 
 // GetReview returns the working copy of the contract terms; before the first save it is the extraction.
@@ -34,7 +36,7 @@ func (c *contractIngestService) GetReview(ctx context.Context, contractID string
 	if err != nil {
 		return nil, err
 	}
-	return c.reviewView(contract, out, doc), nil
+	return c.reviewView(ctx, contract, out, doc), nil
 }
 
 // SaveReviewStep applies one step's edits, confirmations and customer decision to the review.
@@ -77,6 +79,11 @@ func (c *contractIngestService) SaveReviewStep(ctx context.Context, contractID, 
 			return nil, err
 		}
 	}
+	if req.Products != nil {
+		if err := c.applyProductChoices(ctx, step, doc, req.Products); err != nil {
+			return nil, err
+		}
+	}
 
 	raw, err := json.Marshal(doc)
 	if err != nil {
@@ -89,7 +96,7 @@ func (c *contractIngestService) SaveReviewStep(ctx context.Context, contractID, 
 		return nil, err
 	}
 	saved := domainContract.NewBuilder(contract).WithReview(raw).WithReviewVersion(version).Build()
-	return c.reviewView(saved, out, doc), nil
+	return c.reviewView(ctx, saved, out, doc), nil
 }
 
 // loadReview reads the contract, its extraction and its review, starting the review from the
@@ -121,12 +128,15 @@ func (c *contractIngestService) loadReview(ctx context.Context, contractID strin
 	if doc.Confirmed == nil {
 		doc.Confirmed = []string{}
 	}
+	if doc.Products == nil {
+		doc.Products = map[string]dto.ContractReviewProduct{}
+	}
 	return contract, out, &doc, nil
 }
 
-// reviewView adds the current customer match, the derived values and the counts left
+// reviewView adds the current customer and product matches, the derived values and the counts left
 // to check. A term the reviewer changed or confirmed is no longer left to check.
-func (c *contractIngestService) reviewView(contract *domainContract.Contract, out *extraction.Extraction, doc *reviewDoc) *dto.ContractReviewResponse {
+func (c *contractIngestService) reviewView(ctx context.Context, contract *domainContract.Contract, out *extraction.Extraction, doc *reviewDoc) *dto.ContractReviewResponse {
 	edited := c.editedPaths(out.Result, doc.Result)
 	settled := lo.SliceToMap(append(append([]string{}, doc.Confirmed...), edited...), func(path string) (string, bool) { return path, true })
 	if doc.Customer != nil {
@@ -137,15 +147,106 @@ func (c *contractIngestService) reviewView(contract *domainContract.Contract, ou
 	result.CustomerMatch = out.Result.CustomerMatch
 	result.Derived = c.derive(&result)
 	result.ToCheck = c.countToCheck(&result, c.reviewThreshold, func(path string) bool { return settled[path] })
+	matches := c.productMatches(ctx, contract.ID(), result.Charges)
+	c.countProductsToCheck(result.ToCheck, matches, doc.Products)
 
 	return &dto.ContractReviewResponse{
-		ContractID: contract.ID(),
-		Version:    contract.ReviewVersion(),
-		Result:     &result,
-		Confirmed:  doc.Confirmed,
-		Edited:     edited,
-		Customer:   doc.Customer,
+		ContractID:     contract.ID(),
+		Version:        contract.ReviewVersion(),
+		Result:         &result,
+		Confirmed:      doc.Confirmed,
+		Edited:         edited,
+		Customer:       doc.Customer,
+		Products:       doc.Products,
+		ProductMatches: matches,
 	}
+}
+
+func (c *contractIngestService) productMatches(ctx context.Context, contractID string, charges []extraction.Charge) map[string]*dto.ContractProductMatch {
+	matches, err := c.catalog.Match(ctx, charges)
+	if err != nil {
+		c.logger.Error(ctx, "contract product match failed", "error", err, "contract_id", contractID)
+		return c.catalog.Unavailable(charges)
+	}
+	return matches
+}
+
+// countProductsToCheck adds each charge with no saved product decision and no single exact match.
+func (c *contractIngestService) countProductsToCheck(tc *extraction.ToCheck, matches map[string]*dto.ContractProductMatch, decisions map[string]dto.ContractReviewProduct) {
+	for path, m := range matches {
+		if _, decided := decisions[path]; decided || m.Status == ProductMatchMatched {
+			continue
+		}
+		tc.Charges++
+		tc.Total++
+	}
+}
+
+// applyProductChoices replaces the product decisions; every key must be a charge of this contract.
+func (c *contractIngestService) applyProductChoices(ctx context.Context, step string, doc *reviewDoc, choices map[string]dto.ContractReviewProduct) error {
+	if step != stepCharges {
+		return ierr.NewError("products saved on the wrong step").
+			WithHint("Save product decisions on the charges step").
+			Mark(ierr.ErrValidation)
+	}
+	paths := lo.Keys(choices)
+	sort.Strings(paths)
+	for _, path := range paths {
+		if !c.isChargePath(path, len(doc.Result.Charges)) {
+			return ierr.NewError("unknown charge for a product decision").
+				WithHintf("%s is not a charge of this contract", path).
+				WithReportableDetails(map[string]any{"path": path}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := c.validProductChoice(ctx, path, choices[path]); err != nil {
+			return err
+		}
+	}
+	doc.Products = lo.Assign(choices)
+	return nil
+}
+
+func (c *contractIngestService) validProductChoice(ctx context.Context, path string, choice dto.ContractReviewProduct) error {
+	switch choice.Choice {
+	case reviewChoiceNew:
+		if choice.ProductID != "" {
+			return ierr.NewError("product_id set for a new product").
+				WithHintf("Leave product_id empty for %s when creating a new product", path).
+				WithReportableDetails(map[string]any{"path": path}).
+				Mark(ierr.ErrValidation)
+		}
+	case reviewChoiceExisting:
+		if choice.ProductID == "" {
+			return ierr.NewError("product_id is required").
+				WithHintf("Choose the existing product for %s", path).
+				WithReportableDetails(map[string]any{"path": path}).
+				Mark(ierr.ErrValidation)
+		}
+		_, err := c.catalog.Get(ctx, choice.ProductID)
+		if ierr.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHint("The chosen product was not found").
+				WithReportableDetails(map[string]any{"path": path, "product_id": choice.ProductID}).
+				Mark(ierr.ErrValidation)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *contractIngestService) isChargePath(path string, charges int) bool {
+	index, ok := strings.CutPrefix(path, "charges[")
+	if !ok {
+		return false
+	}
+	index, ok = strings.CutSuffix(index, "]")
+	if !ok {
+		return false
+	}
+	i, err := strconv.Atoi(index)
+	return err == nil && i >= 0 && i < charges && strconv.Itoa(i) == index
 }
 
 func (c *contractIngestService) applyCustomerChoice(ctx context.Context, step string, doc *reviewDoc, choice *dto.ContractReviewCustomer) error {
