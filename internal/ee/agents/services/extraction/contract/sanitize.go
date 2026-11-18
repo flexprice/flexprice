@@ -89,6 +89,9 @@ func (s *ContractExtractionService) sanitize(r *extraction.Result) {
 			ch.Tiers = []extraction.Tier{}
 		}
 	}
+	s.moveUsageBanks(r)
+	r.Charges = s.normalizeCharges(r.Charges)
+	s.markWaived(r)
 
 	if r.Documents == nil {
 		r.Documents = []extraction.Document{}
