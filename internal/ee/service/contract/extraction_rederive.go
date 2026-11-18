@@ -15,14 +15,18 @@ import (
 // DeriveTerms recomputes the derived values from the saved review with unsaved edits applied.
 // Nothing is saved.
 func (c *contractIngestService) DeriveTerms(ctx context.Context, contractID string, req *dto.DeriveContractTermsRequest) (*extraction.Derived, error) {
-	_, _, doc, err := c.loadReview(ctx, contractID)
+	_, out, doc, err := c.loadReview(ctx, contractID)
 	if err != nil {
 		return nil, err
 	}
-	if err := c.applyEdits(doc.Result, req); err != nil {
+	r, err := c.reviewed(out.Result, doc.Values)
+	if err != nil {
 		return nil, err
 	}
-	return c.derive(doc.Result), nil
+	if err := c.applyEdits(r, req); err != nil {
+		return nil, err
+	}
+	return c.derive(r), nil
 }
 
 func (c *contractIngestService) applyEdits(r *extraction.Result, req *dto.DeriveContractTermsRequest) error {
