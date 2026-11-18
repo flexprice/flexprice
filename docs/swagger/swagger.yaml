@@ -15113,7 +15113,7 @@ definitions:
           invoice breakdown and analytics responses reference this ID.
         type: string
       overage_factor:
-        type: number
+        type: string
       price_id:
         description: |-
           PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.
