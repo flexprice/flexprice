@@ -7461,13 +7461,10 @@ func (s *MeterUsageServiceSuite) billInstalment(invoicedAt time.Time) {
 	s.Require().NoError(err)
 }
 
-// scheduleInstalment stores a scheduled instalment of cmt_prepaid due at billOn for the suite's billing period.
 func (s *MeterUsageServiceSuite) scheduleInstalment(id string, kind types.InstalmentKind, amount string, billOn time.Time) {
 	s.storeInstalment(id, "", kind, amount, billOn, types.Period{Start: s.periodStart, End: s.periodEnd})
 }
 
-// storeInstalment stores a scheduled instalment of cmt_prepaid due at billOn for service, from the term termID when it
-// is set.
 func (s *MeterUsageServiceSuite) storeInstalment(
 	id string,
 	termID string,
@@ -7503,9 +7500,7 @@ func (s *MeterUsageServiceSuite) storeInstalment(
 	s.Require().NoError(err)
 }
 
-// A scheduled instalment shows in the range holding its bill_on, told apart by status and kind, and stays out of the
-// total with instalments until an invoice bills it. Cancelled instalments and those charged outside the range do not
-// show.
+// A scheduled instalment is listed but stays out of the total until invoiced; cancelled and out-of-range ones are not listed.
 func (s *MeterUsageServiceSuite) TestCommitments_ListsScheduledInstalmentsOutsideTheTotal() {
 	ctx := s.GetContext()
 	s.prepayFloor()
@@ -7556,9 +7551,7 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsScheduledInstalmentsOutsid
 	s.Equal("binst_prepaid", early.Instalments[0].ID)
 }
 
-// The instalments of the commitments covering a queried meter show in the range they are charged in, and the total
-// with instalments adds the invoiced ones. A range or filter that leaves the commitment out lists none, and neither does a request
-// that does not expand instalments.
+// Instalments are listed in their range and invoiced ones add to the total; no expand or no covered meter lists none.
 func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInstalments() {
 	ctx := s.GetContext()
 	m := s.prepayFloor()
@@ -7636,7 +7629,6 @@ func (s *MeterUsageServiceSuite) TestCommitments_ListsTheAppliedCommitmentsInsta
 	})
 }
 
-// storeTerm stores a published term of cmt_prepaid; a recurring one takes cadence.
 func (s *MeterUsageServiceSuite) storeTerm(id string, kind types.BillingTermKind, cadence types.InvoiceCadence) {
 	ctx := s.GetContext()
 	term := &billingterm.Term{
@@ -7656,14 +7648,11 @@ func (s *MeterUsageServiceSuite) storeTerm(id string, kind types.BillingTermKind
 	s.Require().NoError(err)
 }
 
-// An instalment belongs to the range holding its bill_on, except an arrear, which belongs to the range its bill_on
-// closes; a broken-period arrear and the first quarterly advance billed on one boundary invoice show a period apart.
-// A once term billed at the end of what it pays for still shows at its bill_on, and finalizing the invoice moves
-// nothing: it only adds the instalments to the total.
+// An arrear and an advance billed on one boundary land a period apart; a once term stays at its bill_on.
 func (s *MeterUsageServiceSuite) TestCommitments_PlacesInstalmentsWhenCharged() {
 	ctx := s.GetContext()
 	s.prepayFloor()
-	// The suite's line items run through January, so a mid-January boundary stands in for the first of a month.
+	// The suite's line items run through January, so a mid-January boundary stands in for a month start.
 	boundary := time.Date(2026, 1, 16, 0, 0, 0, 0, time.UTC)
 	before := types.Period{Start: s.periodStart, End: boundary}
 	after := types.Period{Start: boundary, End: s.periodEnd}

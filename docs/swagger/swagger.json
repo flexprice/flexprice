@@ -25041,7 +25041,7 @@
                     }
                 },
                 "instalments": {
-                    "description": "Instalments lists, with expand \"instalments\", the scheduled and invoiced instalments of the v2 commitments covering\na queried meter whose bill_on falls in the range, or closes it for an ARREAR instalment; it is empty with property\nor source filters, or when no usage line runs in the range.",
+                    "description": "Instalments lists the commitment instalments in the range with expand \"instalments\": start \u003c= bill_on \u003c end,\nor start \u003c bill_on \u003c= end for an ARREAR one.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/UsageAnalyticInstalment"
@@ -32261,11 +32261,10 @@
                     "type": "string"
                 },
                 "instalment_status": {
-                    "description": "InstalmentStatus is invoiced, or scheduled for an instalment no invoice has billed yet.",
                     "$ref": "#/definitions/types.InstalmentStatus"
                 },
                 "invoice_cadence": {
-                    "description": "InvoiceCadence is the cadence of the recurring term it comes from: ADVANCE bills at the start of its period,\nARREAR at the end. An ARREAR instalment belongs to the period that ends at its bill_on. Empty for a once term,\na settlement or a cancellation fee.",
+                    "description": "InvoiceCadence is the recurring term's cadence; empty for once terms, settlements and fees.",
                     "$ref": "#/definitions/types.InvoiceCadence"
                 },
                 "invoice_id": {

@@ -137,7 +137,8 @@ term (`CoveringMeters`), whether or not the range has usage. A range in which no
 instalment belongs to the range holding its `bill_on`; an instalment of a recurring `ARREAR` term is billed at the end
 of the period it pays for, so it belongs to the range its `bill_on` closes (`start < bill_on <= end`). A January query
 therefore lists January's arrear billed on 1 Feb. Finalizing or voiding the invoice never moves an instalment;
-`invoiced_at` only records when it was finalized. Each entry carries its `kind` (`instalment`, `settlement` or
+`invoiced_at` only records when it was finalized. The exception is a cancellation fee: voiding its invoice cancels it,
+so it drops out of the list and the total. Each entry carries its `kind` (`instalment`, `settlement` or
 `cancellation_fee`), `instalment_status`, `bill_on` and `invoice_cadence` (`ADVANCE` or `ARREAR` from its recurring
 term, empty otherwise). `total_cost_with_instalments` adds the invoiced ones only: a scheduled instalment is not
 billed yet.

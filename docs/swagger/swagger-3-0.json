@@ -26597,7 +26597,7 @@
           },
           "instalments": {
             "type": "array",
-            "description": "Instalments lists, with expand \"instalments\", the scheduled and invoiced instalments of the v2 commitments covering\na queried meter whose bill_on falls in the range, or closes it for an ARREAR instalment; it is empty with property\nor source filters, or when no usage line runs in the range.",
+            "description": "Instalments lists the commitment instalments in the range with expand \"instalments\": start <= bill_on < end,\nor start < bill_on <= end for an ARREAR one.",
             "items": {
               "$ref": "#/components/schemas/UsageAnalyticInstalment"
             }

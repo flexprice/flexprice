@@ -1459,8 +1459,7 @@ func emptyAnalyticsResponse(params *events.MeterUsageDetailedAnalyticsParams) *d
 	return response
 }
 
-// rangeInstalments returns, ordered by bill_on, the scheduled and invoiced instalments of the commitments covering a
-// queried meter that belong to the request's range; none with property or source filters.
+// rangeInstalments returns the commitment instalments in the request's range, ordered by bill_on.
 func (s *meterUsageService) rangeInstalments(
 	ctx context.Context,
 	cust *customer.Customer,
@@ -1522,14 +1521,12 @@ func (s *meterUsageService) rangeInstalments(
 	return instalments, nil
 }
 
-// rangedInstalment is an instalment with the invoice cadence of the recurring term it comes from, if any.
 type rangedInstalment struct {
 	instalment *billingterm.Instalment
 	cadence    *types.InvoiceCadence
 }
 
-// inRange reports whether the instalment belongs to [start, end). An arrear is billed at the end of the period it pays
-// for, so it belongs to the range its bill_on closes: (start, end].
+// inRange matches bill_on in [start, end), or (start, end] for an arrear.
 func (r rangedInstalment) inRange(start, end time.Time) bool {
 	billOn := r.instalment.BillOn
 	if lo.FromPtr(r.cadence) == types.InvoiceCadenceArrear {
@@ -1539,7 +1536,7 @@ func (r rangedInstalment) inRange(start, end time.Time) bool {
 	return !billOn.Before(start) && billOn.Before(end)
 }
 
-// termCadences returns the invoice cadence of each recurring term the instalments come from, archived ones included.
+// termCadences maps each recurring term ID to its invoice cadence, archived terms included.
 func (s *meterUsageService) termCadences(
 	ctx context.Context,
 	instalments []*billingterm.Instalment,
