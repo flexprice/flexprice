@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"slices"
 	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -76,22 +78,16 @@ type windowPlacer struct {
 	placed   map[string][]types.CommitmentInfo    // by line item ID, per display window
 	unplaced map[string]bool                      // lines with a charge that no window drew
 
-	// What unused, covered and plain bill where that is not their units, under the same keys.
+	// What unused, covered and plain bill per display window: amounts follow these, quantities the units.
 	unusedValue  map[string][]decimal.Decimal
 	coveredValue map[string][]decimal.Decimal
 	plainValue   map[string][]decimal.Decimal
 }
 
-// rowWeights spreads a row over the display windows: its quantity by units, its amount by value, what the units bill,
-// or by units where value holds nothing.
-type rowWeights struct {
-	units []decimal.Decimal
-	value []decimal.Decimal
-}
-
 // newWindowPlacer cuts the buckets of b's window stacks into display windows of window, coarsened to the bucket as
 // analytics points are. Buckets from period's end on, the rest of a projected open period, are set apart as beyond.
 func newWindowPlacer(
+	ctx context.Context,
 	l *commitmentLoader,
 	b *commitmentBilling,
 	window types.WindowSize,
@@ -148,7 +144,9 @@ func newWindowPlacer(
 		}
 	}
 
-	r := lineRenderer{cost: b.cost}
+	r := lineRenderer{cost: func(pr *price.Price, qty decimal.Decimal) decimal.Decimal {
+		return l.priceSvc.CalculateCost(ctx, pr, qty)
+	}}
 	for si, stack := range b.stacks {
 		if keyOf[si] == nil {
 			continue
@@ -170,9 +168,7 @@ func newWindowPlacer(
 				}
 			}
 
-			if value := p.trueUpValue(l, sc, keyOf[si], trueUps[sc.ID]); value != nil {
-				p.unusedValue[sc.ID] = value
-			}
+			p.unusedValue[sc.ID] = p.trueUpValue(l, sc, keyOf[si], trueUps[sc.ID])
 		}
 
 		for li, line := range stack.Lines {
@@ -187,10 +183,10 @@ func newWindowPlacer(
 					units, value = p.covered, p.coveredValue
 				}
 
-				// As overageLines bills it: a quantity line priced per window bills each window's margin, while units priced
-				// once for the period, at an overage price or across the line, are shared by quantity.
+				// As overageLines bills it: each window of a quantity line priced per window at its own margin, an overage
+				// price once for all.
 				billed := left
-				if stack.Type == types.COMMITMENT_TYPE_QUANTITY && line.PerWindow && (!covered || line.OveragePrice == nil) {
+				if stack.Type == types.COMMITMENT_TYPE_QUANTITY && line.PerWindow && !(covered && line.OveragePrice != nil) {
 					billed = r.marginalCost(line.Price, line.Usage[w], left)
 				}
 
@@ -203,9 +199,10 @@ func newWindowPlacer(
 	return p
 }
 
-// trueUpValue weighs a commitment's true-up when buckets past the range hold capacity: they owe that capacity's value
-// priced on from the range's, and the range owes the rest by its unused capacity. Nil weighs the true-up by units.
+// trueUpValue weighs a commitment's true-up by its unused capacity, except that buckets past the range owe what their
+// capacity adds to the range's on the committed price, so tiers price the range's capacity first.
 func (p *windowPlacer) trueUpValue(l *commitmentLoader, sc *stackedCommitment, keys []time.Time, trueUp decimal.Decimal) []decimal.Decimal {
+	unused := p.unused[sc.ID]
 	inRange, past := decimal.Zero, decimal.Zero
 	for w, pool := range sc.PoolOf {
 		switch {
@@ -217,31 +214,12 @@ func (p *windowPlacer) trueUpValue(l *commitmentLoader, sc *stackedCommitment, k
 		}
 	}
 
-	if !past.IsPositive() || !trueUp.IsPositive() {
-		return nil
+	if !past.IsPositive() {
+		return unused
 	}
 
-	// Valued on cumulative capacity, as a clipped period is, so tiers price the range's capacity first.
-	scope := l.scopeByCommitment[sc.ID]
-	through := l.capacityBefore(sc, scope.bucket).Add(inRange)
-	worth := accruedAmount(scope.amountOf, through, through.Add(past), sc.Currency)
-	beyond := decimal.Min(trueUp, decimal.Max(worth, decimal.Zero))
-
-	unused := p.unused[sc.ID]
-	last := len(unused) - 1
-	rangeUnused := decimal.Sum(decimal.Zero, unused[:last]...)
-	value := make([]decimal.Decimal, len(unused))
-	if !rangeUnused.IsPositive() {
-		value[last] = decimal.NewFromInt(1)
-		return value
-	}
-
-	// Each side is scaled by the other's total, so the range and the buckets past it split the true-up as valued.
-	for i := range unused[:last] {
-		value[i] = unused[i].Mul(trueUp.Sub(beyond))
-	}
-	value[last] = beyond.Mul(rangeUnused)
-	return value
+	beyond := accruedAmount(l.scopeByCommitment[sc.ID].amountOf, inRange, inRange.Add(past), sc.Currency)
+	return append(allocateCostByWeight(trueUp.Sub(beyond), unused[:len(unused)-1]), beyond)
 }
 
 // addWeight adds v to key's weight in display window at.
@@ -257,40 +235,36 @@ func addWeight[K comparable](weights map[K][]decimal.Decimal, key K, size, at in
 
 // utilized places a commitment's utilized row on a line by the usage it took from the line in each window.
 func (p *windowPlacer) utilized(commitmentID, lineID string, amount, quantity decimal.Decimal) {
-	used := p.used[commitmentLine{commitmentID: commitmentID, lineID: lineID}]
-	p.place(lineID, rowWeights{units: used}, utilizedCharge, amount, quantity)
+	p.place(lineID, p.used[commitmentLine{commitmentID: commitmentID, lineID: lineID}], utilizedCharge, amount, quantity)
 }
 
 // overage places an overage or plain usage row on its line by the usage the waterfall left in each window it covers, or
-// in each window it does not.
+// in each window it does not, its amount by what that usage bills there.
 func (p *windowPlacer) overage(lineID string, kind types.CommitmentLineKind, amount, quantity decimal.Decimal) {
-	by := rowWeights{units: p.covered[lineID], value: p.coveredValue[lineID]}
+	units, value := p.covered[lineID], p.coveredValue[lineID]
 	if kind == types.CommitmentLinePlain {
-		by = rowWeights{units: p.plain[lineID], value: p.plainValue[lineID]}
+		units, value = p.plain[lineID], p.plainValue[lineID]
 	}
 
-	p.place(lineID, by, overageCharge, amount, quantity)
+	p.place(lineID, value, overageCharge, amount, decimal.Zero)
+	p.place(lineID, units, overageCharge, decimal.Zero, quantity)
 }
 
 // trueUp places a line's share of a commitment's true-up by the capacity the commitment left unused in each window.
 func (p *windowPlacer) trueUp(commitmentID, lineID string, amount, quantity decimal.Decimal) {
-	p.place(lineID, rowWeights{units: p.unused[commitmentID], value: p.unusedValue[commitmentID]}, trueUpCharge, amount, quantity)
+	p.place(lineID, p.unusedValue[commitmentID], trueUpCharge, amount, decimal.Zero)
+	p.place(lineID, p.unused[commitmentID], trueUpCharge, decimal.Zero, quantity)
 }
 
-// place shares one row of a line over the display windows: amounts rounded to the currency, quantities not.
-func (p *windowPlacer) place(lineID string, by rowWeights, charge int, amount, quantity decimal.Decimal) {
+// place shares one row of a line over the display windows by weights: amounts rounded to the currency, quantities not.
+func (p *windowPlacer) place(lineID string, weights []decimal.Decimal, charge int, amount, quantity decimal.Decimal) {
 	if !p.lines[lineID] || (amount.IsZero() && quantity.IsZero()) {
 		return
 	}
 
-	if !lo.SomeBy(by.units, decimal.Decimal.IsPositive) {
+	if !lo.SomeBy(weights, decimal.Decimal.IsPositive) {
 		p.unplaced[lineID] = true
 		return
-	}
-
-	value := by.value
-	if !lo.SomeBy(value, decimal.Decimal.IsPositive) {
-		value = by.units
 	}
 
 	placed := p.placed[lineID]
@@ -300,8 +274,8 @@ func (p *windowPlacer) place(lineID string, by rowWeights, charge int, amount, q
 	}
 
 	c := billedCharges[charge]
-	amounts := roundShares(allocateCostByWeight(amount, value), p.currency)
-	quantities := allocateCostByWeight(quantity, by.units)
+	amounts := roundShares(allocateCostByWeight(amount, weights), p.currency)
+	quantities := allocateCostByWeight(quantity, weights)
 	for i := range placed {
 		*c.amount(&placed[i]) = c.amount(&placed[i]).Add(amounts[i])
 		*c.quantity(&placed[i]) = c.quantity(&placed[i]).Add(quantities[i])
