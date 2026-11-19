@@ -18,12 +18,8 @@ const (
 	// land and replicate in ClickHouse before the checkpoint job reads that hour.
 	CutoffGrace = 10 * time.Minute
 
-	// BucketTTL is how long an hourly bucket lives; an hour is read for at most ~4h.
-	BucketTTL = 6 * time.Hour
-
-	// ActiveSetTTL outlives the last checkpoint run that reads an hour's active set: that run's cutoff
-	// is the hour plus LateWindow, and it fires LateWindow + CutoffGrace later. One hour of slack.
-	ActiveSetTTL = 2*LateWindow + CutoffGrace + time.Hour
+	// HourlyUsageTTL is how long an hour's usage lives in Redis; an hour is read for at most ~4h.
+	HourlyUsageTTL = 6 * time.Hour
 )
 
 // Cutoff is the start of the oldest hour still kept in Redis. Usage stamped before it
@@ -32,8 +28,8 @@ func Cutoff(now time.Time) time.Time {
 	return now.UTC().Add(-LateWindow - CutoffGrace).Truncate(time.Hour)
 }
 
-// Supports reports whether a meter's usage can be kept as an hourly bucket.
-func Supports(aggregation types.AggregationType) bool {
+// SupportsAggregation reports whether usage with this aggregation can be kept as hourly usage in Redis.
+func SupportsAggregation(aggregation types.AggregationType) bool {
 	switch aggregation {
 	case types.AggregationSum, types.AggregationCount, types.AggregationMax:
 		return true
@@ -42,8 +38,9 @@ func Supports(aggregation types.AggregationType) bool {
 	}
 }
 
-// Bucket is one customer's quantity for one meter in one UTC hour.
-type Bucket struct {
+// HourlyUsage is one customer's quantity for one meter in one UTC hour. For COUNT the quantity
+// is the number of events.
+type HourlyUsage struct {
 	ExternalCustomerID string
 	Hour               time.Time
 	MeterID            string
@@ -51,8 +48,9 @@ type Bucket struct {
 	Quantity           decimal.Decimal
 }
 
-// Store writes hourly buckets for the tenant and environment in ctx.
-type Store interface {
-	// Increment merges buckets into Redis: SUM and COUNT add, MAX keeps the higher value.
-	Increment(ctx context.Context, buckets []Bucket) error
+// Repository keeps hourly usage in Redis for the tenant and environment in ctx.
+type Repository interface {
+	// Increment merges usage into Redis: SUM and COUNT add, MAX keeps the higher value. Entries for
+	// the same customer, meter and hour may repeat.
+	Increment(ctx context.Context, usage []HourlyUsage) error
 }

@@ -17,22 +17,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeAggregatedUsageStore struct {
-	calls   int
-	buckets []aggregatedusage.Bucket
-	err     error
+type fakeHourlyUsageRepository struct {
+	calls int
+	usage []aggregatedusage.HourlyUsage
+	err   error
 }
 
-func (f *fakeAggregatedUsageStore) Increment(_ context.Context, buckets []aggregatedusage.Bucket) error {
+func (f *fakeHourlyUsageRepository) Increment(_ context.Context, usage []aggregatedusage.HourlyUsage) error {
 	f.calls++
-	f.buckets = append(f.buckets, buckets...)
+	f.usage = append(f.usage, usage...)
 	return f.err
 }
 
-// total is the summed quantity across buckets for one meter.
-func (f *fakeAggregatedUsageStore) total(meterID string) decimal.Decimal {
+// total is the summed quantity across usage for one meter.
+func (f *fakeHourlyUsageRepository) total(meterID string) decimal.Decimal {
 	total := decimal.Zero
-	for _, b := range f.buckets {
+	for _, b := range f.usage {
 		if b.MeterID == meterID {
 			total = total.Add(b.Quantity)
 		}
@@ -46,9 +46,11 @@ func aggregatedUsageCtx() context.Context {
 
 func TestRecordAggregatedUsage(t *testing.T) {
 	now := time.Now().UTC()
+	cutoff := aggregatedusage.Cutoff(now)
 	sumMeter := &meter.Meter{ID: "mtr_sum", Aggregation: meter.Aggregation{Type: types.AggregationSum}}
+	countMeter := &meter.Meter{ID: "mtr_count", Aggregation: meter.Aggregation{Type: types.AggregationCount}}
 	uniqueMeter := &meter.Meter{ID: "mtr_unique", Aggregation: meter.Aggregation{Type: types.AggregationCountUnique}}
-	metersByID := map[string]*meter.Meter{sumMeter.ID: sumMeter, uniqueMeter.ID: uniqueMeter}
+	metersByID := map[string]*meter.Meter{sumMeter.ID: sumMeter, countMeter.ID: countMeter, uniqueMeter.ID: uniqueMeter}
 
 	usage := func(meterID string, ts time.Time, qty int64) *events.MeterUsage {
 		return &events.MeterUsage{
@@ -65,6 +67,7 @@ func TestRecordAggregatedUsage(t *testing.T) {
 		storeErr        error
 		wantCalls       int
 		wantSum         string
+		wantCount       string
 	}{
 		{
 			name:            "enabled tenant writes supported meters only",
@@ -86,6 +89,29 @@ func TestRecordAggregatedUsage(t *testing.T) {
 			wantSum:         "0",
 		},
 		{
+			name:            "count is one per event, whatever the quantity",
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true},
+			records:         []*events.MeterUsage{usage("mtr_count", now, 7), usage("mtr_count", now, 0)},
+			wantCalls:       1,
+			wantSum:         "0",
+			wantCount:       "2",
+		},
+		{
+			name:            "the cutoff hour is kept, usage just before it is dropped",
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true},
+			records:         []*events.MeterUsage{usage("mtr_sum", cutoff, 2), usage("mtr_sum", cutoff.Add(-time.Second), 3)},
+			wantCalls:       1,
+			wantSum:         "2",
+		},
+		{
+			name:            "rows without a customer are skipped",
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true},
+			records: []*events.MeterUsage{{
+				Event: events.Event{Timestamp: now}, MeterID: "mtr_sum", QtyTotal: decimal.NewFromInt(2),
+			}},
+			wantSum: "0",
+		},
+		{
 			name:            "store error is swallowed",
 			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true},
 			records:         []*events.MeterUsage{usage("mtr_sum", now, 2)},
@@ -96,12 +122,12 @@ func TestRecordAggregatedUsage(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := &fakeAggregatedUsageStore{err: tt.storeErr}
+			store := &fakeHourlyUsageRepository{err: tt.storeErr}
 			svc := &meterUsageTrackingService{
 				ServiceParams: ServiceParams{
-					Logger:               logger.NewNoopLogger(),
-					Config:               &config.Configuration{AggregatedUsage: tt.aggregatedUsage},
-					AggregatedUsageStore: store,
+					Logger:          logger.NewNoopLogger(),
+					Config:          &config.Configuration{AggregatedUsage: tt.aggregatedUsage},
+					HourlyUsageRepo: store,
 				},
 			}
 
@@ -109,6 +135,11 @@ func TestRecordAggregatedUsage(t *testing.T) {
 
 			require.Equal(t, tt.wantCalls, store.calls)
 			require.True(t, decimal.RequireFromString(tt.wantSum).Equal(store.total("mtr_sum")), "got %s", store.total("mtr_sum"))
+			wantCount := tt.wantCount
+			if wantCount == "" {
+				wantCount = "0"
+			}
+			require.True(t, decimal.RequireFromString(wantCount).Equal(store.total("mtr_count")), "got %s", store.total("mtr_count"))
 		})
 	}
 }
@@ -125,7 +156,7 @@ func TestRecordAggregatedUsageWithoutStore(t *testing.T) {
 
 // newAggregatedUsageConsumer wires a meter usage consumer with one SUM meter on "api_call",
 // in-memory stores and locker, and a fake aggregated usage store.
-func newAggregatedUsageConsumer(t *testing.T, dedupEnabled bool) (*meterUsageTrackingService, *fakeAggregatedUsageStore) {
+func newAggregatedUsageConsumer(t *testing.T, dedupEnabled bool) (*meterUsageTrackingService, *fakeHourlyUsageRepository) {
 	t.Helper()
 	meters := testutil.NewInMemoryMeterStore()
 	require.NoError(t, meters.CreateMeter(aggregatedUsageCtx(), &meter.Meter{
@@ -134,7 +165,7 @@ func newAggregatedUsageConsumer(t *testing.T, dedupEnabled bool) (*meterUsageTra
 		Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "tokens"},
 		BaseModel:   types.BaseModel{TenantID: "tenant_on", Status: types.StatusPublished},
 	}))
-	store := &fakeAggregatedUsageStore{}
+	store := &fakeHourlyUsageRepository{}
 	svc := &meterUsageTrackingService{
 		ServiceParams: ServiceParams{
 			Logger:       logger.NewNoopLogger(),
@@ -147,7 +178,7 @@ func newAggregatedUsageConsumer(t *testing.T, dedupEnabled bool) (*meterUsageTra
 				MeterUsageTracking:     config.MeterUsageTrackingConfig{RedisDeduplicationEnabled: dedupEnabled},
 				BulkMeterUsageTracking: config.BulkMeterUsageTrackingConfig{RedisDeduplicationEnabled: dedupEnabled},
 			},
-			AggregatedUsageStore: store,
+			HourlyUsageRepo: store,
 		},
 		meterUsageRepo: testutil.NewInMemoryMeterUsageStore(),
 	}

@@ -632,30 +632,49 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 }
 
 // recordAggregatedUsage adds inserted usage whose dedup lock this delivery took to the Redis hourly
-// buckets for enabled tenants. Failures are logged and counted and never fail the message.
+// usage for enabled tenants. Failures are logged and counted and never fail the message.
 func (s *meterUsageTrackingService) recordAggregatedUsage(
 	ctx context.Context,
 	lockedRecords []*events.MeterUsage,
 	metersByID map[string]*meter.Meter,
 ) {
-	if s.AggregatedUsageStore == nil || !s.Config.AggregatedUsage.IsEnabledForTenant(types.GetTenantID(ctx)) {
+	if s.HourlyUsageRepo == nil || !s.Config.AggregatedUsage.IsEnabledForTenant(types.GetTenantID(ctx)) {
 		return
 	}
-	aggregator := aggregatedusage.NewAggregator(aggregatedusage.Cutoff(clock.Now()))
+	cutoff := aggregatedusage.Cutoff(clock.Now())
+	usage := make([]aggregatedusage.HourlyUsage, 0, len(lockedRecords))
+	tooOld := 0
 	for _, r := range lockedRecords {
-		if m, ok := metersByID[r.MeterID]; ok {
-			aggregator.Add(r.ExternalCustomerID, r.Timestamp, r.MeterID, m.Aggregation.Type, r.QtyTotal)
+		m, ok := metersByID[r.MeterID]
+		if !ok || r.ExternalCustomerID == "" || !aggregatedusage.SupportsAggregation(m.Aggregation.Type) {
+			continue
 		}
+		if r.Timestamp.Before(cutoff) {
+			tooOld++
+			continue
+		}
+		quantity := r.QtyTotal
+		if m.Aggregation.Type == types.AggregationCount {
+			// One per event, matching ClickHouse's COUNT(DISTINCT id).
+			quantity = decimal.NewFromInt(1)
+		}
+		usage = append(usage, aggregatedusage.HourlyUsage{
+			ExternalCustomerID: r.ExternalCustomerID,
+			Hour:               r.Timestamp.UTC().Truncate(time.Hour),
+			MeterID:            r.MeterID,
+			Aggregation:        m.Aggregation.Type,
+			Quantity:           quantity,
+		})
 	}
 
-	if tooOld := aggregator.TooOld(); tooOld > 0 {
+	if tooOld > 0 {
 		metrics.RecordCounter(ctx, metrics.AggregatedUsageRows, int64(tooOld), metrics.L(metrics.KeyOutcome, "too_old"))
 	}
-	rowCount := aggregator.RowCount()
+	rowCount := len(usage)
 	if rowCount == 0 {
 		return
 	}
-	if err := s.AggregatedUsageStore.Increment(ctx, aggregator.Buckets()); err != nil {
+	if err := s.HourlyUsageRepo.Increment(ctx, usage); err != nil {
 		s.Logger.Error(ctx, "failed to write aggregated usage", "error", err, "row_count", rowCount)
 		metrics.RecordCounter(ctx, metrics.AggregatedUsageRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "error"))
 		return
