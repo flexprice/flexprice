@@ -1,4 +1,4 @@
-package integration_test
+package webhook_test
 
 import (
 	"context"
