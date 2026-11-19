@@ -370,3 +370,33 @@ func TestCheckoutConfiguration_ValidateAddAddonBatch(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckoutPaymentProvider_LinkExpiry(t *testing.T) {
+	cases := []struct {
+		name        string
+		provider    CheckoutPaymentProvider
+		linkExpiry  *Duration
+		wantErr     bool
+		wantSession time.Duration
+	}{
+		{"stripe default", CheckoutPaymentProviderStripe, nil, false, 40 * time.Minute},
+		{"stripe 2 hours", CheckoutPaymentProviderStripe, &Duration{Value: 2, Unit: DurationUnitHour}, false, 2*time.Hour + 5*time.Minute},
+		{"stripe 24 hours", CheckoutPaymentProviderStripe, &Duration{Value: 24, Unit: DurationUnitHour}, false, 24*time.Hour + 5*time.Minute},
+		{"stripe under floor", CheckoutPaymentProviderStripe, &Duration{Value: 30, Unit: DurationUnitMinute}, true, 0},
+		{"chargebee 1 hour", CheckoutPaymentProviderChargebee, &Duration{Value: 1, Unit: DurationUnitHour}, false, time.Hour + 5*time.Minute},
+		{"chargebee under floor", CheckoutPaymentProviderChargebee, &Duration{Value: 10, Unit: DurationUnitMinute}, true, 0},
+		{"chargebee default", CheckoutPaymentProviderChargebee, nil, false, 30 * time.Minute},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &CheckoutPaymentProviderConfig{LinkExpiry: tc.linkExpiry}
+			err := tc.provider.ValidateLinkExpiry(cfg)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.wantSession, tc.provider.ResolveSessionExpiry(cfg))
+		})
+	}
+}

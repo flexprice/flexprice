@@ -61,6 +61,8 @@ func (o *PaymentGatewayOptions) Validate(paymentMethodType types.PaymentMethodTy
 type StripePaymentGatewayOptions struct {
 	// TaxIDCollectionEnabled only applies to PAYMENT_LINK Checkout Sessions.
 	TaxIDCollectionEnabled *bool `json:"tax_id_collection_enabled,omitempty"`
+	// AllowPromotionCodes lets the customer enter a promotion code; nil keeps it on.
+	AllowPromotionCodes *bool `json:"allow_promotion_codes,omitempty"`
 }
 
 // RazorpayPaymentGatewayOptions carries Razorpay-specific payment options.
@@ -309,6 +311,9 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 	}
 	if r.GatewayOptions != nil && r.GatewayOptions.Stripe != nil && lo.FromPtr(r.GatewayOptions.Stripe.TaxIDCollectionEnabled) {
 		gatewayMetadata["tax_id_collection_enabled"] = "true"
+	}
+	if r.GatewayOptions != nil && r.GatewayOptions.Stripe != nil && r.GatewayOptions.Stripe.AllowPromotionCodes != nil && !*r.GatewayOptions.Stripe.AllowPromotionCodes {
+		gatewayMetadata["allow_promotion_codes"] = "false"
 	}
 	if r.GatewayOptions != nil && r.GatewayOptions.Razorpay != nil && r.GatewayOptions.Razorpay.NotifyCustomer {
 		gatewayMetadata["notify_customer"] = "true"
