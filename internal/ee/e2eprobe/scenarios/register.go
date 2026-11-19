@@ -31,4 +31,5 @@ func Register(cat *scenario.Catalog) {
 	for _, r := range all {
 		cat.Register(r.info, r.build)
 	}
+	registerUsage(cat)
 }
