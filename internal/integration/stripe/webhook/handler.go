@@ -439,7 +439,7 @@ func (h *Handler) handleInvoicePaymentPaid(ctx context.Context, event *stripeapi
 			"error", err,
 			"environment_id", environmentID,
 			"event_id", event.ID)
-		return nil
+		return err
 	}
 
 	if !conn.IsInvoiceOutboundEnabled() {
@@ -518,7 +518,7 @@ func (h *Handler) handleInvoicePaymentPaid(ctx context.Context, event *stripeapi
 			"error", err,
 			"payment_intent_id", paymentIntentID,
 			"event_id", event.ID)
-		return nil
+		return err
 	}
 
 	// Process external Stripe payment
@@ -532,7 +532,10 @@ func (h *Handler) handleInvoicePaymentPaid(ctx context.Context, event *stripeapi
 			"payment_intent_id", paymentIntentID,
 			"stripe_invoice_id", stripeInvoiceID,
 			"event_id", event.ID)
-		return nil
+		if ierr.IsInvalidOperation(err) || ierr.IsNotFound(err) {
+			return nil
+		}
+		return err
 	}
 
 	h.logger.Info(ctx, "successfully processed invoice.paid webhook",
