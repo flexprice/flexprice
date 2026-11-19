@@ -21,6 +21,8 @@ type InitiatePaymentParams struct {
 	Amount  decimal.Decimal
 	// Currency is the ISO 4217 code (USD, SAR, INR, ...).
 	Currency string
+	// IdempotencyKey is optional; empty falls back to the payment service's derived key.
+	IdempotencyKey string
 }
 
 // RecordPaymentSuccessParams holds inputs for marking a payment SUCCEEDED.

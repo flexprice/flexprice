@@ -150,6 +150,22 @@ func (s *PaymentLifecycleSuite) TestInitiatePayment_Idempotent() {
 	s.NotEmpty(id2)
 }
 
+func (s *PaymentLifecycleSuite) TestInitiatePayment_CallerIdempotencyKeyCreatesSeparatePayment() {
+	ctx := s.GetContext()
+	derived, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
+	s.NoError(err)
+
+	params := s.authParams()
+	params.IdempotencyKey = "setup_key_1"
+	keyed, err := s.lifecycle.InitiatePayment(ctx, params)
+	s.NoError(err)
+	s.NotEqual(derived, keyed)
+
+	again, err := s.lifecycle.InitiatePayment(ctx, params)
+	s.NoError(err)
+	s.Equal(keyed, again)
+}
+
 func (s *PaymentLifecycleSuite) TestInitiatePayment_ValidationErrors() {
 	ctx := s.GetContext()
 

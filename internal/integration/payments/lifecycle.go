@@ -63,6 +63,7 @@ func (l *PaymentLifecycle) InitiatePayment(ctx context.Context, params InitiateP
 
 	gatewayType := types.PaymentGatewayType(params.Gateway)
 	req := &apidto.CreatePaymentRequest{
+		IdempotencyKey:    params.IdempotencyKey,
 		DestinationType:   params.DestinationType,
 		DestinationID:     params.DestinationID,
 		PaymentMethodType: params.PaymentMethodType,
