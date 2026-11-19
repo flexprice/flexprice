@@ -164,7 +164,14 @@ func (w *World) ensureSubscription(ctx context.Context, fx *Fixtures, p *Persona
 		w.activateDraft(ctx, subID, existing.SubscriptionStatus)
 		p.update(func(p *Persona) { p.subscriptionID = subID })
 		if p.Has(e2eprobe.TraitCommitment) {
-			p.setGap(e2eprobe.TraitCommitment, gapIf(existing.CommitmentAmount == nil || *existing.CommitmentAmount == "", "subscription predates the commitment declaration; it can only be set at create"))
+			switch {
+			case existing.CommitmentAmount == nil || *existing.CommitmentAmount == "":
+				p.setGap(e2eprobe.TraitCommitment, "subscription predates the commitment declaration; it can only be set at create")
+			case existing.EnableTrueUp == nil || !*existing.EnableTrueUp:
+				p.setGap(e2eprobe.TraitCommitment, "subscription predates the commitment declaration: true-up is off and can only be set at create")
+			default:
+				p.setGap(e2eprobe.TraitCommitment, "")
+			}
 		}
 		if p.Has(e2eprobe.TraitCoupon) {
 			attached, err := w.couponAttached(ctx, fx, subID)
@@ -193,6 +200,7 @@ func (w *World) ensureSubscription(ctx context.Context, fx *Fixtures, p *Persona
 		req.CommitmentAmount = ptr(spec.Commitment.Amount)
 		req.CommitmentDuration = &duration
 		req.OverageFactor = ptr(spec.Commitment.OverageFactor)
+		req.EnableTrueUp = ptr(true)
 	}
 	if p.Has(e2eprobe.TraitCoupon) {
 		if fx.CouponCode() == "" {

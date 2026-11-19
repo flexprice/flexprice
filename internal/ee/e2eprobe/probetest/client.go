@@ -471,6 +471,7 @@ func (f *Subscriptions) Create(_ context.Context, req types.CreateSubscriptionRe
 		Metadata:           req.Metadata,
 		CommitmentAmount:   req.CommitmentAmount,
 		OverageFactor:      req.OverageFactor,
+		EnableTrueUp:       req.EnableTrueUp,
 		StartDate:          ptrTime(now),
 		CreatedAt:          ptrTime(now),
 		Currency:           Ptr(req.Currency),

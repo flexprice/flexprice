@@ -71,6 +71,7 @@ func (w *World) Clone(ctx context.Context, p *Persona, scenario string) (*Epheme
 		req.CommitmentAmount = ptr(spec.Commitment.Amount)
 		req.CommitmentDuration = &duration
 		req.OverageFactor = ptr(spec.Commitment.OverageFactor)
+		req.EnableTrueUp = ptr(true)
 	}
 	if p.Has(e2eprobe.TraitCoupon) && fx.CouponCode() != "" {
 		req.SubscriptionCoupons = []types.SubscriptionCouponInput{{CouponCode: fx.CouponCode()}}

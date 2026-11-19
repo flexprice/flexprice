@@ -37,6 +37,9 @@ func TestProvision_CreatesCustomerSubscriptionWalletByTraits(t *testing.T) {
 	if csub.CommitmentAmount == nil || *csub.CommitmentAmount != "5.00" || csub.OverageFactor == nil || *csub.OverageFactor != "1.5" {
 		t.Errorf("committed subscription must carry the declared commitment: %+v", csub)
 	}
+	if csub.EnableTrueUp == nil || !*csub.EnableTrueUp {
+		t.Error("committed subscription must enable true-up, or the server never emits a true-up line")
+	}
 	if committed.Gap(e2eprobe.TraitCommitment) != "" {
 		t.Errorf("fresh commitment must have no gap, got %q", committed.Gap(e2eprobe.TraitCommitment))
 	}
@@ -70,6 +73,18 @@ func TestProvision_AlertsSetThresholdsOnNewWallet(t *testing.T) {
 	}
 	if *wallet.Balance != "30.00" {
 		t.Errorf("canary balance = %s, want 30.00", *wallet.Balance)
+	}
+}
+
+func TestProvision_AdoptedSubscriptionWithoutTrueUpRecordsGap(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	adoptLegacy(t, fc, "e2eprobe-committed", types.SubscriptionResponse{CommitmentAmount: probetest.Ptr("5.00"), OverageFactor: probetest.Ptr("1.5")})
+	if err := w.Provision(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	committed, _ := w.Persona("committed")
+	if !strings.Contains(committed.Gap(e2eprobe.TraitCommitment), "true-up") {
+		t.Errorf("a commitment without true-up must be a gap, got %q", committed.Gap(e2eprobe.TraitCommitment))
 	}
 }
 

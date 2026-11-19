@@ -48,8 +48,8 @@ func TestClone_StampsTraitsAndRegisters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if csub := fc.Subscription.Items[ceph.SubscriptionID()]; csub.CommitmentAmount == nil || *csub.CommitmentAmount != "5.00" {
-		t.Errorf("committed clone must carry the commitment: %+v", csub)
+	if csub := fc.Subscription.Items[ceph.SubscriptionID()]; csub.CommitmentAmount == nil || *csub.CommitmentAmount != "5.00" || csub.EnableTrueUp == nil || !*csub.EnableTrueUp {
+		t.Errorf("committed clone must carry the commitment with true-up enabled: %+v", csub)
 	}
 	couponed, _ := w.Persona("couponed")
 	peph, err := w.Clone(ctx, couponed, "coupon-preview")
