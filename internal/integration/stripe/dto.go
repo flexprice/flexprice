@@ -100,6 +100,8 @@ type StripeInvoiceSyncRequest struct {
 	CollectionMethod string `json:"collection_method" validate:"required,oneof=charge_automatically send_invoice"`
 	// LinkStripeProduct links invoice items to a synced Stripe Product instead of a bare amount.
 	LinkStripeProduct bool `json:"link_stripe_product,omitempty"`
+	AutoAdvance       bool `json:"auto_advance,omitempty"`
+	SendInvoiceEmail  bool `json:"send_invoice_email,omitempty"`
 }
 
 // StripeInvoiceSyncResponse represents the response from syncing an invoice to Stripe
