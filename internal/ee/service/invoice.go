@@ -1894,6 +1894,32 @@ func validateInvoiceVoidable(inv *invoice.Invoice) error {
 	return nil
 }
 
+// voidInvoiceInStripe voids the Stripe invoice synced from a voided invoice. Failures are logged: the void already stands.
+func (s *invoiceService) voidInvoiceInStripe(ctx context.Context, invoiceID string) {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, invoiceID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to scope invoice for Stripe void", "error", err, "invoice_id", invoiceID)
+		return
+	}
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if err != nil || conn == nil {
+		return
+	}
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to get Stripe integration to void invoice", "error", err, "invoice_id", invoiceID)
+		return
+	}
+	voided, err := stripeIntegration.InvoiceSyncSvc.VoidInvoiceInStripe(ctx, invoiceID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to void invoice in Stripe", "error", err, "invoice_id", invoiceID)
+		return
+	}
+	if !voided {
+		s.Logger.Info(ctx, "Stripe invoice is already paid, left unvoided", "invoice_id", invoiceID)
+	}
+}
+
 func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) (*invoice.Invoice, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -1995,6 +2021,10 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	}
 	if !types.RegisterPostCommit(ctx, closeLinks) {
 		closeLinks()
+	}
+	voidInStripe := func() { s.voidInvoiceInStripe(closeLinksCtx, inv.ID) }
+	if !types.RegisterPostCommit(ctx, voidInStripe) {
+		voidInStripe()
 	}
 
 	// A voided invoice will never be paid, so a purchased-credit transaction still
