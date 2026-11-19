@@ -505,7 +505,7 @@ func (s *journalService) Backfill(ctx context.Context, req BackfillRequest) erro
 
 	syncErr := postChanged(func(page *types.QueryFilter) ([]*subscription.Subscription, error) {
 		f := types.NewNoLimitSubscriptionFilter()
-		f.QueryFilter = page
+		f.QueryFilter, f.SubscriptionStatus = page, types.AllSubscriptionStatuses()
 		return s.subRepo.List(ctx, f)
 	}, func(listed *subscription.Subscription) error {
 		defer req.OnProgress(unchanged)
