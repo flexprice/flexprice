@@ -186,7 +186,7 @@ func (s *journalService) PostInvoice(ctx context.Context, inv *invoice.Invoice) 
 		{Account: types.LedgerAccountCustomerCredit, Amount: inv.TotalPrepaidCreditsApplied.Neg()},
 	}, revenuePostings...)
 
-	finalizeID, err := s.post(ctx, entry(types.JournalEventInvoiceFinalized, *inv.FinalizedAt, finalizePostings, ""))
+	finalizeID, err := s.post(ctx, entry(types.JournalEventInvoiceFinalized, lo.FromPtrOr(inv.IssueDate, *inv.FinalizedAt), finalizePostings, ""))
 	if err != nil {
 		return err
 	}

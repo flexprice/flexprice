@@ -312,7 +312,7 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 	return s.InMemoryStore.Update(ctx, inv.ID, updated)
 }
 
-func (s *InMemoryInvoiceStore) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd time.Time, billingReason string, idempotencyKey string) error {
+func (s *InMemoryInvoiceStore) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd, issueDate time.Time, billingReason string, idempotencyKey string) error {
 	inv, err := s.InMemoryStore.Get(ctx, id)
 	if err != nil {
 		return err
@@ -322,6 +322,7 @@ func (s *InMemoryInvoiceStore) UpdateDraftInvoicePeriod(ctx context.Context, id 
 	}
 	updated := copyInvoice(inv)
 	updated.PeriodEnd = &periodEnd
+	updated.IssueDate = &issueDate
 	updated.BillingReason = billingReason
 	updated.IdempotencyKey = &idempotencyKey
 	return s.InMemoryStore.Update(ctx, id, updated)
