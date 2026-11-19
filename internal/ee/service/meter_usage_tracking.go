@@ -19,10 +19,12 @@ import (
 
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/ee/analytics"
 	"github.com/flexprice/flexprice/internal/expression"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -298,6 +300,9 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 
 	records := make([]*events.MeterUsage, 0, len(batch.Events))
 	eventsToInsert := make([]*events.Event, 0, len(batch.Events))
+	// Only usage whose dedup lock this delivery took is rolled up, so a redelivery can't count twice.
+	lockedRecords := make([]*events.MeterUsage, 0, len(batch.Events))
+	metersByID := make(map[string]*meter.Meter)
 	for _, evt := range batch.Events {
 		if evt == nil {
 			continue
@@ -331,6 +336,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 			return types.ErrEventDeletionInProgress
 		}
 
+		eventLocked := false
 		if dedupEnabled && evt.ID != "" && !evt.ForceReprocess {
 			cacheKey := cache.GenerateKey(ctx, cache.PrefixEvent, evt.ID)
 			lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
@@ -343,6 +349,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 				continue
 			} else {
 				dedupLocks = append(dedupLocks, lock)
+				eventLocked = true
 			}
 		}
 
@@ -373,12 +380,17 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 			if qty.IsNegative() && m.Aggregation.Type != types.AggregationSum {
 				qty = decimal.Zero
 			}
-			records = append(records, &events.MeterUsage{
+			record := &events.MeterUsage{
 				Event:      *evt,
 				MeterID:    m.ID,
 				QtyTotal:   qty,
 				UniqueHash: s.generateUniqueHash(evt, m),
-			})
+			}
+			records = append(records, record)
+			metersByID[m.ID] = m
+			if eventLocked {
+				lockedRecords = append(lockedRecords, record)
+			}
 			eventProducedRecord = true
 		}
 		if eventProducedRecord {
@@ -407,6 +419,8 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 	if s.analyticsPublisher != nil {
 		s.analyticsPublisher.PublishMeterUsage(ctx, records)
 	}
+
+	s.recordAggregatedUsage(ctx, lockedRecords, metersByID)
 
 	s.Logger.Debug(ctx, "bulk meter usage batch inserted",
 		"record_count", len(records),
@@ -495,6 +509,9 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		return types.ErrEventDeletionInProgress
 	}
 
+	// Only usage whose dedup lock this delivery took is rolled up, so a redelivery can't count twice.
+	lockAcquired := false
+
 	// Step 0: Check if the event is already processed
 	if event.ID != "" &&
 		!event.ForceReprocess &&
@@ -510,6 +527,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 				s.Logger.Info(ctx, "event already processed, skipping", "event_id", eventId)
 				return nil
 			}
+			lockAcquired = true
 
 			// Release the dedup lock on any processing failure below so retries
 			// aren't dedup-skipped until TTL. `err` here is the named return —
@@ -594,6 +612,10 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		s.analyticsPublisher.PublishMeterUsage(ctx, records)
 	}
 
+	if lockAcquired {
+		s.recordAggregatedUsage(ctx, records, lo.KeyBy(meters, func(m *meter.Meter) string { return m.ID }))
+	}
+
 	s.Logger.Debug(ctx, "meter usage records inserted",
 		"event_id", event.ID,
 		"count", len(records),
@@ -607,6 +629,57 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	s.runMeterUsagePostInsertSideEffects(ctx, event, records)
 
 	return nil
+}
+
+// recordAggregatedUsage adds inserted usage whose dedup lock this delivery took to the Redis hourly
+// usage for enabled tenants. Failures are logged and counted and never fail the message.
+func (s *meterUsageTrackingService) recordAggregatedUsage(
+	ctx context.Context,
+	lockedRecords []*events.MeterUsage,
+	metersByID map[string]*meter.Meter,
+) {
+	if s.HourlyUsageRepo == nil || !s.Config.AggregatedUsage.IsEnabledForTenant(types.GetTenantID(ctx)) {
+		return
+	}
+	cutoff := aggregatedusage.Cutoff(clock.Now())
+	usage := make([]aggregatedusage.HourlyUsage, 0, len(lockedRecords))
+	tooOld := 0
+	for _, r := range lockedRecords {
+		m, ok := metersByID[r.MeterID]
+		if !ok || r.ExternalCustomerID == "" || !aggregatedusage.SupportsAggregation(m.Aggregation.Type) {
+			continue
+		}
+		if r.Timestamp.Before(cutoff) {
+			tooOld++
+			continue
+		}
+		quantity := r.QtyTotal
+		if m.Aggregation.Type == types.AggregationCount {
+			// One per event, matching ClickHouse's COUNT(DISTINCT id).
+			quantity = decimal.NewFromInt(1)
+		}
+		usage = append(usage, aggregatedusage.HourlyUsage{
+			ExternalCustomerID: r.ExternalCustomerID,
+			Hour:               r.Timestamp.UTC().Truncate(time.Hour),
+			MeterID:            r.MeterID,
+			Aggregation:        m.Aggregation.Type,
+			Quantity:           quantity,
+		})
+	}
+
+	if tooOld > 0 {
+		metrics.RecordCounter(ctx, metrics.AggregatedUsageRows, int64(tooOld), metrics.L(metrics.KeyOutcome, "too_old"))
+	}
+	rowCount := len(usage)
+	if rowCount == 0 {
+		return
+	}
+	if err := s.HourlyUsageRepo.Increment(ctx, usage); err != nil {
+		s.Logger.Error(ctx, "failed to write aggregated usage", "error", err, "row_count", rowCount)
+		metrics.RecordCounter(ctx, metrics.AggregatedUsageRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "error"))
+		return
+	}
+	metrics.RecordCounter(ctx, metrics.AggregatedUsageRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "written"))
 }
 
 // publishRejectedEventWebhook fires the event.rejected webhook when an event
