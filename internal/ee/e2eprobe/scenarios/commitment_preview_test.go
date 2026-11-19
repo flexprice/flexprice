@@ -24,16 +24,6 @@ func usageLine(amount string) types.InvoiceLineItemResponse {
 	return types.InvoiceLineItemResponse{PriceType: probetest.Ptr(string(types.PriceTypeUsage)), Amount: probetest.Ptr(amount), DisplayName: probetest.Ptr("E2EProbe Sum (commitment) Usage")}
 }
 
-// trueUpLine mirrors the server's true-up line: typed FIXED and marked in metadata.
-func trueUpLine(amount string) types.InvoiceLineItemResponse {
-	return types.InvoiceLineItemResponse{
-		PriceType:   probetest.Ptr(string(types.PriceTypeFixed)),
-		Amount:      probetest.Ptr(amount),
-		DisplayName: probetest.Ptr("E2EProbe Plan True Up"),
-		Metadata:    map[string]string{"is_commitment_trueup": "true"},
-	}
-}
-
 // usageFromIngested answers subscription usage from the events the fake has
 // taken for that subscription's customer, at the plan's $0.01 per unit.
 func usageFromIngested(d *testDeps) func(types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {

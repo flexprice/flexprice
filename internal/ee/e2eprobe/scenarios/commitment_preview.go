@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -132,17 +131,4 @@ func assertCommitment(sc *scenario.Context, inv *types.InvoiceResponse, commitme
 	if raw.LessThan(commitment) {
 		sc.Truth("preview carries a commitment true-up line", trueUp)
 	}
-}
-
-// isTrueUpLine recognises the server's metadata marker (types.MetadataKeyIsCommitmentTrueup)
-// or its "True Up" display name; the meter's own usage line also says "commitment".
-func isTrueUpLine(li types.InvoiceLineItemResponse) bool {
-	if li.Metadata["is_commitment_trueup"] == "true" {
-		return true
-	}
-	if li.DisplayName == nil {
-		return false
-	}
-	name := strings.ToLower(*li.DisplayName)
-	return strings.Contains(name, "true up") || strings.Contains(name, "true-up") || strings.Contains(name, "trueup")
 }

@@ -56,9 +56,9 @@ func (p pollWindow) until(ctx context.Context, attempt func() error) error {
 	}
 }
 
-// awaitUsage polls the clone's usage read until it answers: a fresh
+// awaitSubscriptionUsage polls the clone's usage read until it answers: a fresh
 // subscription is readable only once the usage pipeline knows it.
-func awaitUsage(ctx context.Context, sc *scenario.Context, p pollWindow, subID string) error {
+func awaitSubscriptionUsage(ctx context.Context, sc *scenario.Context, p pollWindow, subID string) error {
 	return p.until(ctx, func() error {
 		_, err := sc.Client().Subscriptions().GetUsage(ctx, types.GetUsageBySubscriptionRequest{SubscriptionID: subID})
 		return err
@@ -156,7 +156,7 @@ func (s *lifecycle) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Resu
 	if err := sc.Client().Events().IngestBulk(ctx, types.BulkIngestEventRequest{Events: batch}); err != nil {
 		return sc.Fail("ingest_bulk", err)
 	}
-	if err := awaitUsage(ctx, sc, s.poll, eph.SubscriptionID()); err != nil {
+	if err := awaitSubscriptionUsage(ctx, sc, s.poll, eph.SubscriptionID()); err != nil {
 		return sc.Fail("poll_usage", err)
 	}
 	// Delivery is webhook-wiring's verdict; here the webhook is only recorded.

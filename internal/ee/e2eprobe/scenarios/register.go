@@ -35,5 +35,6 @@ func Register(cat *scenario.Catalog) {
 	registerWallet(cat)
 	registerInvoices(cat)
 	registerEntitlements(cat)
+	registerFlows(cat)
 	registerBillingMatrix(cat)
 }

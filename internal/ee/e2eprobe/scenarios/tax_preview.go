@@ -9,11 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/scenario"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/world"
 	"github.com/flexprice/go-sdk/v2/models/types"
-	"github.com/shopspring/decimal"
 )
-
-// sharedTaxRate is the percentage the fixture tax rate carries.
-var sharedTaxRate = decimal.RequireFromString("0.10")
 
 // taxPreview puts usage on a clone carrying the shared tax association and
 // checks the preview taxes it at the shared rate.
@@ -49,7 +45,7 @@ func (s *taxPreview) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Res
 	if err := sc.Client().Events().IngestBulk(ctx, types.BulkIngestEventRequest{Events: batch}); err != nil {
 		return sc.Fail("ingest_bulk", err)
 	}
-	if err := awaitUsage(ctx, sc, s.poll, eph.SubscriptionID()); err != nil {
+	if err := awaitSubscriptionUsage(ctx, sc, s.poll, eph.SubscriptionID()); err != nil {
 		return sc.Fail("poll_usage", err)
 	}
 	inv, err := previewOf(ctx, sc, eph.SubscriptionID())
