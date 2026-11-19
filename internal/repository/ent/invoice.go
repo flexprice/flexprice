@@ -690,7 +690,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	return nil
 }
 
-func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd time.Time, billingReason string, idempotencyKey string) error {
+func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd, issueDate time.Time, billingReason string, idempotencyKey string) error {
 	span := StartRepositorySpan(ctx, "invoice", "update_draft_invoice_period", map[string]interface{}{
 		"invoice_id": id,
 	})
@@ -705,6 +705,7 @@ func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id str
 			invoice.InvoiceStatus(types.InvoiceStatusDraft),
 		).
 		SetPeriodEnd(periodEnd).
+		SetIssueDate(issueDate).
 		SetBillingReason(billingReason).
 		SetIdempotencyKey(idempotencyKey).
 		SetUpdatedAt(clock.Now()).

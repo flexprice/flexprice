@@ -2,6 +2,7 @@ package invoice
 
 import (
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/types"
@@ -81,6 +82,36 @@ func TestInvoice_LineNets(t *testing.T) {
 			for id, want := range tt.want {
 				require.True(t, d(want).Equal(got[id]), "line %s: want %s, got %s", id, want, got[id])
 			}
+		})
+	}
+}
+
+func TestIssueDateFor(t *testing.T) {
+	start := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		reason types.InvoiceBillingReason
+		want   *time.Time
+	}{
+		{types.InvoiceBillingReasonSubscriptionCycle, &end},
+		{types.InvoiceBillingReasonProration, &end},
+		{types.InvoiceBillingReasonAutoInvoiceThreshold, &end},
+		{types.InvoiceBillingReasonSubscriptionPaused, &end},
+		{types.InvoiceBillingReasonSubscriptionCreate, &start},
+		{types.InvoiceBillingReasonSubscriptionTrialStart, &start},
+		{types.InvoiceBillingReasonSubscriptionTrialEnd, &start},
+		{types.InvoiceBillingReasonSubscriptionResume, &start},
+		{types.InvoiceBillingReasonSubscriptionUpdate, &start},
+		{types.InvoiceBillingReasonManual, nil},
+		{types.InvoiceBillingReasonWalletAutoTopup, nil},
+		{types.InvoiceBillingReasonBillingTerms, nil},
+		{types.InvoiceBillingReasonCommitmentTermination, nil},
+		{"", nil},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.reason), func(t *testing.T) {
+			require.Equal(t, tt.want, IssueDateFor(tt.reason, &start, &end))
 		})
 	}
 }

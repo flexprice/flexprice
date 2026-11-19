@@ -1237,6 +1237,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			Total:          amount,
 			Currency:       w.Currency,
 			InvoiceType:    types.InvoiceTypeOneOff,
+			IssueDate:      req.EffectiveDate,
 			DueDate:        lo.ToPtr(clock.Now()),
 			IdempotencyKey: idempotencyKey,
 			LineItems: []dto.CreateInvoiceLineItemRequest{

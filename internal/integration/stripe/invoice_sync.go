@@ -166,6 +166,9 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 		Description: stripe.String(flexInvoice.Description),
 		Metadata:    metadata,
 	}
+	if flexInvoice.IssueDate != nil {
+		params.EffectiveAt = stripe.Int64(flexInvoice.IssueDate.Unix())
+	}
 
 	// Set collection method
 	switch collectionMethod {

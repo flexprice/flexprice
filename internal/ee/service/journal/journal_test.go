@@ -130,6 +130,7 @@ func TestPostInvoice(t *testing.T) {
 		invoice   func() *invoice.Invoice
 		taxes     []*taxapplied.TaxApplied
 		wantLines map[types.JournalEventType][]string
+		wantDate  string
 		wantErr   bool
 	}{
 		{
@@ -186,6 +187,18 @@ func TestPostInvoice(t *testing.T) {
 			wantLines: map[types.JournalEventType][]string{},
 		},
 		{
+			name: "backdated invoice is dated on its issue date",
+			invoice: func() *invoice.Invoice {
+				inv := newInvoice("inv_7", nil, newLine("l_7", nil, 50))
+				inv.IssueDate = lo.ToPtr(time.Date(2026, 1, 14, 20, 0, 0, 0, time.UTC))
+				return inv
+			},
+			wantLines: map[types.JournalEventType][]string{
+				types.JournalEventInvoiceFinalized: {"debit accounts_receivable 50", "credit revenue 50"},
+			},
+			wantDate: "2026-01-15",
+		},
+		{
 			name: "line item without a POB fails",
 			invoice: func() *invoice.Invoice {
 				return newInvoice("inv_6", sub, newLine("l_6", lo.ToPtr("sli_unsynced"), 100))
@@ -213,7 +226,7 @@ func TestPostInvoice(t *testing.T) {
 			for _, e := range saved {
 				require.ElementsMatch(t, tt.wantLines[e.EventType()], lineSummary(e))
 				require.Equal(t, lo.Ternary(inv.SubscriptionID == nil, "", "contract_1"), e.ContractID())
-				wantDate := lo.Ternary(e.EventType() == types.JournalEventInvoiceVoided, "2026-11-05", "2026-11-01")
+				wantDate := lo.Ternary(e.EventType() == types.JournalEventInvoiceVoided, "2026-11-05", lo.CoalesceOrEmpty(tt.wantDate, "2026-11-01"))
 				require.Equal(t, wantDate, e.BusinessDate().Format(time.DateOnly), "local date in the subscription or customer timezone")
 			}
 			requireReversal(t, saved, types.JournalEventInvoiceVoided, types.JournalEventInvoiceFinalized)
