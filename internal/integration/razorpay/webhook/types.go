@@ -33,6 +33,26 @@ const (
 	EventInvoiceExpired RazorpayEventType = "invoice.expired"
 )
 
+var handledEvents = map[RazorpayEventType]bool{
+	EventPaymentCaptured:      true,
+	EventPaymentFailed:        true,
+	EventPaymentLinkPaid:      true,
+	EventPaymentLinkCancelled: true,
+	EventPaymentLinkExpired:   true,
+	EventRefundCreated:        true,
+	EventRefundProcessed:      true,
+	EventRefundFailed:         true,
+	EventTokenConfirmed:       true,
+	EventTokenRejected:        true,
+	EventTokenCancelled:       true,
+	EventInvoiceExpired:       true,
+}
+
+// IsHandledEvent reports whether HandleWebhookEvent acts on the event type.
+func IsHandledEvent(eventType string) bool {
+	return handledEvents[RazorpayEventType(eventType)]
+}
+
 // RazorpayPaymentMethod represents the payment method used in Razorpay
 type RazorpayPaymentMethod string
 
