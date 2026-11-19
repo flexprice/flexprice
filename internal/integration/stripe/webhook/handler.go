@@ -297,14 +297,19 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 		return nil
 	}
 
-	// Update payment status to failed
-	paymentStatus := string(types.PaymentStatusFailed)
-	now := clock.Now()
 	errorMsg := "Payment failed"
 	if paymentIntent.LastPaymentError != nil && paymentIntent.LastPaymentError.Msg != "" {
 		errorMsg = paymentIntent.LastPaymentError.Msg
 	}
 
+	// Checkout lets the customer retry on the same PaymentIntent, so a decline is one attempt, not the payment's end.
+	if payment.PaymentMethodType == types.PaymentMethodTypePaymentLink {
+		h.recordDeclinedAttempt(ctx, event, &paymentIntent, payment, errorMsg, services)
+		return nil
+	}
+
+	paymentStatus := string(types.PaymentStatusFailed)
+	now := clock.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus: &paymentStatus,
 		FailedAt:      &now,
@@ -328,6 +333,53 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 		"error_message", errorMsg)
 
 	return nil
+}
+
+// recordDeclinedAttempt records a declined charge as a failed attempt, leaving the payment open.
+func (h *Handler) recordDeclinedAttempt(
+	ctx context.Context,
+	event *stripeapi.Event,
+	paymentIntent *stripeapi.PaymentIntent,
+	payment *dto.PaymentResponse,
+	errorMsg string,
+	services *ServiceDependencies,
+) {
+	// Each retry is a new charge on the PaymentIntent; the event id stands in when no charge was made.
+	attemptID := event.ID
+	if paymentIntent.LatestCharge != nil && paymentIntent.LatestCharge.ID != "" {
+		attemptID = paymentIntent.LatestCharge.ID
+	}
+
+	if lo.ContainsBy(payment.Attempts, func(a *dto.PaymentAttemptResponse) bool {
+		return lo.FromPtr(a.GatewayAttemptID) == attemptID
+	}) {
+		h.logger.Info(ctx, "ignoring redelivered payment_intent.payment_failed webhook",
+			"flexprice_payment_id", payment.ID,
+			"gateway_attempt_id", attemptID)
+		return
+	}
+
+	var metadata types.Metadata
+	if lastErr := paymentIntent.LastPaymentError; lastErr != nil {
+		metadata = lo.OmitByValues(types.Metadata{
+			"error_code":   string(lastErr.Code),
+			"decline_code": string(lastErr.DeclineCode),
+			"error_type":   string(lastErr.Type),
+		}, []string{""})
+	}
+
+	if err := services.PaymentService.RecordAttempt(ctx, payment.ID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusFailed,
+		ErrorMessage:     errorMsg,
+		GatewayAttemptID: attemptID,
+		Metadata:         metadata,
+	}); err != nil {
+		h.logger.Error(ctx, "failed to record declined payment attempt",
+			"error", err,
+			"flexprice_payment_id", payment.ID,
+			"payment_intent_id", paymentIntent.ID,
+			"gateway_attempt_id", attemptID)
+	}
 }
 
 // handleSetupIntentSucceeded handles setup_intent.succeeded webhook
