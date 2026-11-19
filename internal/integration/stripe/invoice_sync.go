@@ -728,33 +728,35 @@ func (s *InvoiceSyncService) updateFlexPriceInvoiceFromStripe(ctx context.Contex
 		}
 	}
 
-	if !adoptStripeInvoiceNumber(flexInvoice, stripeInvoice) {
-		return nil
-	}
-	if err := s.invoiceRepo.Update(ctx, flexInvoice); err != nil {
-		s.logger.Error(ctx, "failed to adopt Stripe invoice number",
-			"error", err,
-			"invoice_id", flexInvoice.ID,
-			"stripe_invoice_id", stripeInvoice.ID)
+	if shouldAdoptStripeInvoiceNumber(flexInvoice, stripeInvoice) {
+		if flexInvoice.Metadata == nil {
+			flexInvoice.Metadata = types.Metadata{}
+		}
+		if current := lo.FromPtr(flexInvoice.InvoiceNumber); current != "" && current != stripeInvoice.Number {
+			if _, kept := flexInvoice.Metadata["flexprice_invoice_number"]; !kept {
+				flexInvoice.Metadata["flexprice_invoice_number"] = current
+			}
+		}
+		flexInvoice.InvoiceNumber = lo.ToPtr(stripeInvoice.Number)
+		flexInvoice.Metadata[types.InvoiceMetadataKeyStripeInvoiceID] = stripeInvoice.ID
+		if err := s.invoiceRepo.Update(ctx, flexInvoice); err != nil {
+			s.logger.Error(ctx, "failed to adopt Stripe invoice number",
+				"error", err,
+				"invoice_id", flexInvoice.ID,
+				"stripe_invoice_id", stripeInvoice.ID)
+		}
 	}
 	return nil
 }
 
-func adoptStripeInvoiceNumber(flexInvoice *invoice.Invoice, stripeInvoice *stripe.Invoice) bool {
-	if stripeInvoice.Number == "" ||
-		(lo.FromPtr(flexInvoice.InvoiceNumber) == stripeInvoice.Number && flexInvoice.Metadata[types.InvoiceMetadataKeyStripeInvoiceID] == stripeInvoice.ID) {
+func shouldAdoptStripeInvoiceNumber(flexInvoice *invoice.Invoice, stripeInvoice *stripe.Invoice) bool {
+	if stripeInvoice.Number == "" {
 		return false
 	}
-	if flexInvoice.Metadata == nil {
-		flexInvoice.Metadata = types.Metadata{}
+	if lo.FromPtr(flexInvoice.InvoiceNumber) == stripeInvoice.Number &&
+		flexInvoice.Metadata[types.InvoiceMetadataKeyStripeInvoiceID] == stripeInvoice.ID {
+		return false
 	}
-	if current := lo.FromPtr(flexInvoice.InvoiceNumber); current != "" && current != stripeInvoice.Number {
-		if _, kept := flexInvoice.Metadata["flexprice_invoice_number"]; !kept {
-			flexInvoice.Metadata["flexprice_invoice_number"] = current
-		}
-	}
-	flexInvoice.InvoiceNumber = lo.ToPtr(stripeInvoice.Number)
-	flexInvoice.Metadata[types.InvoiceMetadataKeyStripeInvoiceID] = stripeInvoice.ID
 	return true
 }
 

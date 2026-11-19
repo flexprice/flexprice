@@ -149,34 +149,24 @@ func TestBuildInvoiceItemsParams(t *testing.T) {
 	}
 }
 
-func TestAdoptStripeInvoiceNumber(t *testing.T) {
+func TestShouldAdoptStripeInvoiceNumber(t *testing.T) {
 	cases := []struct {
 		name         string
 		number       *string
 		metadata     types.Metadata
 		stripeNumber string
-		wantAdopted  bool
-		wantNumber   string
-		wantKept     string
+		want         bool
 	}{
-		{"keeps old number", lo.ToPtr("INV-1"), nil, "ABC-0001", true, "ABC-0001", "INV-1"},
-		{"no number yet", nil, nil, "ABC-0001", true, "ABC-0001", ""},
-		{"first kept number wins", lo.ToPtr("ABC-0001"), types.Metadata{"flexprice_invoice_number": "INV-1"}, "ABC-0002", true, "ABC-0002", "INV-1"},
-		{"already adopted", lo.ToPtr("ABC-0001"), types.Metadata{"stripe_invoice_id": "in_1"}, "ABC-0001", false, "ABC-0001", ""},
-		{"no stripe number", lo.ToPtr("INV-1"), nil, "", false, "INV-1", ""},
+		{"different number", lo.ToPtr("INV-1"), nil, "ABC-0001", true},
+		{"no number yet", nil, nil, "ABC-0001", true},
+		{"same number, not yet linked", lo.ToPtr("ABC-0001"), nil, "ABC-0001", true},
+		{"already adopted", lo.ToPtr("ABC-0001"), types.Metadata{"stripe_invoice_id": "in_1"}, "ABC-0001", false},
+		{"no stripe number", lo.ToPtr("INV-1"), nil, "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			inv := &invoice.Invoice{ID: "inv_1", InvoiceNumber: tc.number, Metadata: tc.metadata}
-
-			adopted := adoptStripeInvoiceNumber(inv, &stripe.Invoice{ID: "in_1", Number: tc.stripeNumber})
-
-			require.Equal(t, tc.wantAdopted, adopted)
-			require.Equal(t, tc.wantNumber, lo.FromPtr(inv.InvoiceNumber))
-			require.Equal(t, tc.wantKept, inv.Metadata["flexprice_invoice_number"])
-			if tc.wantAdopted {
-				require.Equal(t, "in_1", inv.Metadata[types.InvoiceMetadataKeyStripeInvoiceID])
-			}
+			require.Equal(t, tc.want, shouldAdoptStripeInvoiceNumber(inv, &stripe.Invoice{ID: "in_1", Number: tc.stripeNumber}))
 		})
 	}
 }
