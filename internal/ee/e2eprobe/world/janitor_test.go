@@ -74,6 +74,7 @@ func TestSweep_ListsLegacyPersistentCustomers(t *testing.T) {
 	fc.Customer.Add("e2eprobe-cust-persistent-7", "cust_p7", map[string]string{"e2eprobe_cohort": PersistentCohort}, testStart.Add(-time.Hour))
 	fc.Customer.Add("e2eprobe-cust-persistent-0", "cust_p0", map[string]string{"e2eprobe_cohort": PersistentCohort}, testStart.Add(-time.Hour))
 	fc.Customer.Add("e2eprobe-cust-pay-stripe-cards", "cust_cards", map[string]string{"e2eprobe_cohort": PersistentCohort}, testStart.Add(-time.Hour))
+	fc.Customer.Add("e2eprobe-cust-pay-stripe-expiry", "cust_expiry", map[string]string{"e2eprobe_cohort": PersistentCohort}, testStart.Add(-time.Hour))
 	report := w.Sweep(context.Background(), testStart)
 	if len(report.Legacy) != 1 || report.Legacy[0] != "e2eprobe-cust-persistent-7" {
 		t.Errorf("legacy = %v, want only persistent-7", report.Legacy)

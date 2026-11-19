@@ -126,8 +126,12 @@ func (w *World) knownExternalIDs() map[string]bool {
 	known := map[string]bool{}
 	for _, spec := range w.suite.Personas {
 		known[spec.ExternalIDOrDefault()] = true
-		if spec.Payment != nil && spec.Payment.FixedCustomer != "" {
-			known[spec.Payment.FixedCustomer] = true
+		if spec.Payment != nil {
+			if spec.Payment.FixedCustomer != "" {
+				known[spec.Payment.FixedCustomer] = true
+			}
+			// The checkout-link scenario keeps one persistent customer per gateway for its expiry watch.
+			known["e2eprobe-cust-pay-"+spec.Payment.Provider+"-expiry"] = true
 		}
 	}
 	return known
