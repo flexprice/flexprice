@@ -708,6 +708,9 @@ func (f *Wallets) GetBalance(_ context.Context, id string) (*dtos.GetWalletBalan
 }
 
 func (f *Wallets) TopUp(_ context.Context, id string, req types.TopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
+	if req.Checkout != nil {
+		return f.checkoutTopUp(id, req)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.TopUpErr != nil {
@@ -735,6 +738,26 @@ func (f *Wallets) Debit(id, amount string) {
 	w := f.Items[id]
 	w.RealTimeBalance = Ptr(addDecimal(*w.RealTimeBalance, "-"+amount))
 	f.Items[id] = w
+}
+
+// checkoutTopUp opens a checkout session for a pay-first top-up, as the server
+// does; credits land only when a test hook settles the payment.
+func (f *Wallets) checkoutTopUp(id string, req types.TopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
+	f.mu.Lock()
+	err := f.TopUpErr
+	_, ok := f.Items[id]
+	f.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, NotFound()
+	}
+	s, err := f.client.Payment.startSession("topup", req.Checkout)
+	if err != nil {
+		return nil, err
+	}
+	return &dtos.TopUpWalletResponse{TopUpWalletResponse: &types.TopUpWalletResponse{CheckoutSession: s}}, nil
 }
 
 // ── Events ────────────────────────────────────────────────────────────
