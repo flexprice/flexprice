@@ -1031,3 +1031,51 @@ func TestBackfill(t *testing.T) {
 	backfill()
 	require.Len(t, saved(), count, "a rerun posts nothing")
 }
+
+// activeByDefault narrows a list without statuses to active subscriptions, as the Postgres repository does.
+type activeByDefault struct{ subscription.Repository }
+
+func (r activeByDefault) List(ctx context.Context, f *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
+	if len(f.SubscriptionStatus) == 0 {
+		f.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+	}
+	return r.Repository.List(ctx, f)
+}
+
+func TestBackfillCoversEverySubscriptionStatus(t *testing.T) {
+	ctx := testutil.SetupContext()
+	svc, _ := newTestService(t, ctx, testSources{})
+	s := svc.(*journalService)
+	s.subRepo = activeByDefault{s.subRepo}
+
+	tests := []struct {
+		status types.SubscriptionStatus
+		amount int64
+	}{
+		{types.SubscriptionStatusCancelled, 100},
+		{types.SubscriptionStatusTrialing, 0},
+	}
+	invoices := map[types.SubscriptionStatus]*invoice.Invoice{}
+	for _, tt := range tests {
+		subID, lineID := "subs_"+string(tt.status), "sli_"+string(tt.status)
+		require.NoError(t, s.subRepo.CreateWithLineItems(ctx, &subscription.Subscription{ID: subID, CustomerID: "cust_1", Currency: "usd",
+			Timezone: "Asia/Kolkata", SubscriptionStatus: tt.status, StartDate: inIST(time.January, 1), BaseModel: types.GetDefaultBaseModel(ctx)},
+			[]*subscription.SubscriptionLineItem{{ID: lineID, SubscriptionID: subID, PriceID: "price_" + string(tt.status), PriceType: types.PRICE_TYPE_FIXED,
+				BillingPeriod: types.BILLING_PERIOD_MONTHLY, StartDate: inIST(time.January, 1), BaseModel: types.GetDefaultBaseModel(ctx)}}))
+		inv := subscriptionInvoice(ctx, "inv_"+string(tt.status), types.InvoiceTypeSubscription, tt.amount, inIST(time.January, 1), inIST(time.January, 1), inIST(time.February, 1))
+		inv.SubscriptionID = lo.ToPtr(subID)
+		inv.LineItems[0].SubscriptionLineItemID = lo.ToPtr(lineID)
+		require.NoError(t, s.invoiceRepo.CreateWithLineItems(ctx, inv))
+		invoices[tt.status] = inv
+	}
+
+	require.NoError(t, s.Backfill(ctx, BackfillRequest{AsOf: inIST(time.March, 1), OnProgress: func(RecognitionCursor) {}}))
+	for _, tt := range tests {
+		t.Run(string(tt.status), func(t *testing.T) {
+			_, err := s.contractRepo.GetBySubscriptionID(ctx, "subs_"+string(tt.status))
+			require.NoError(t, err, "the contract was created")
+			_, err = s.pobService.POBIDForInvoiceLine(ctx, invoices[tt.status].LineItems[0])
+			require.NoError(t, err, "the POB was created")
+		})
+	}
+}
