@@ -1,0 +1,155 @@
+package incident
+
+import (
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
+)
+
+type IncidentKind string
+
+const (
+	KindFailure  IncidentKind = "failure"
+	KindCoverage IncidentKind = "coverage"
+	KindInfra    IncidentKind = "infra"
+)
+
+type Incident struct {
+	ID           string       `json:"id"`
+	Key          Key          `json:"key"`
+	Kind         IncidentKind `json:"kind"`
+	OpenedAt     time.Time    `json:"opened_at"`
+	LastNotified time.Time    `json:"last_notified"`
+	Summary      string       `json:"summary"`
+	Runs         int          `json:"runs"`
+}
+
+// BindingState is everything the tracker remembers about one binding.
+type BindingState struct {
+	Key           Key             `json:"key"`
+	Consecutive   int             `json:"consecutive"`
+	FailingSince  time.Time       `json:"failing_since,omitzero"`
+	SkippingSince time.Time       `json:"skipping_since,omitzero"`
+	LastRun       time.Time       `json:"last_run,omitzero"`
+	Last          e2eprobe.Result `json:"last"`
+	Runs          int             `json:"runs"`
+	Passes        int             `json:"passes"`
+	Incident      *Incident       `json:"incident,omitempty"`
+}
+
+// State is the snapshot persisted across restarts.
+type State struct {
+	Bindings map[string]*BindingState `json:"bindings"`
+	Infra    *Incident                `json:"infra,omitempty"`
+	SavedAt  time.Time                `json:"saved_at"`
+}
+
+func newState() *State {
+	return &State{Bindings: map[string]*BindingState{}}
+}
+
+func (s *State) clone() State {
+	out := State{Bindings: make(map[string]*BindingState, len(s.Bindings)), SavedAt: s.SavedAt}
+	for k, st := range s.Bindings {
+		cp := *st
+		cp.Last.Mismatches = append([]string(nil), st.Last.Mismatches...)
+		if st.Last.Attrs != nil {
+			cp.Last.Attrs = make(map[string]string, len(st.Last.Attrs))
+			for ak, av := range st.Last.Attrs {
+				cp.Last.Attrs[ak] = av
+			}
+		}
+		if st.Incident != nil {
+			inc := *st.Incident
+			cp.Incident = &inc
+		}
+		out.Bindings[k] = &cp
+	}
+	if s.Infra != nil {
+		inc := *s.Infra
+		out.Infra = &inc
+	}
+	return out
+}
+
+// Store persists tracker state so a restart keeps open incidents.
+type Store interface {
+	Load() (*State, error)
+	Save(*State) error
+}
+
+// FileStore writes state as JSON at path; an empty path keeps it in memory.
+func FileStore(path string) Store {
+	if path == "" {
+		return &memoryStore{}
+	}
+	return &fileStore{path: path}
+}
+
+type memoryStore struct {
+	mu    sync.Mutex
+	state *State
+}
+
+func (m *memoryStore) Load() (*State, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.state == nil {
+		return newState(), nil
+	}
+	cp := m.state.clone()
+	return &cp, nil
+}
+
+func (m *memoryStore) Save(s *State) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := s.clone()
+	cp.SavedAt = time.Now()
+	m.state = &cp
+	return nil
+}
+
+type fileStore struct {
+	path string
+}
+
+func (f *fileStore) Load() (*State, error) {
+	data, err := os.ReadFile(f.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return newState(), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	s := newState()
+	if err := json.Unmarshal(data, s); err != nil {
+		return nil, err
+	}
+	if s.Bindings == nil {
+		s.Bindings = map[string]*BindingState{}
+	}
+	return s, nil
+}
+
+// Save writes through a temp file and rename so a crash never leaves a torn file.
+func (f *fileStore) Save(s *State) error {
+	s.SavedAt = time.Now()
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(f.path), 0o750); err != nil {
+		return err
+	}
+	tmp := f.path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, f.path)
+}
