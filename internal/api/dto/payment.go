@@ -14,20 +14,21 @@ import (
 
 // CreatePaymentRequest represents a request to create a payment
 type CreatePaymentRequest struct {
-	IdempotencyKey         string                       `json:"idempotency_key,omitempty"`
-	DestinationType        types.PaymentDestinationType `json:"destination_type" binding:"required"`
-	DestinationID          string                       `json:"destination_id" binding:"required"`
-	PaymentMethodType      types.PaymentMethodType      `json:"payment_method_type" binding:"required"`
-	PaymentMethodID        string                       `json:"payment_method_id"`
-	PaymentGateway         *types.PaymentGatewayType    `json:"payment_gateway,omitempty"`
-	Amount                 decimal.Decimal              `json:"amount" binding:"required" swaggertype:"string"`
-	Currency               string                       `json:"currency" binding:"required"`
-	SuccessURL             string                       `json:"success_url,omitempty"`
-	CancelURL              string                       `json:"cancel_url,omitempty"`
-	Metadata               types.Metadata               `json:"metadata,omitempty"`
-	ProcessPayment         bool                         `json:"process_payment" default:"true"`
-	SaveCardAndMakeDefault bool                         `json:"save_card_and_make_default" default:"false"`
-	GatewayOptions         *PaymentGatewayOptions       `json:"gateway_options,omitempty"`
+	IdempotencyKey    string                       `json:"idempotency_key,omitempty"`
+	DestinationType   types.PaymentDestinationType `json:"destination_type" binding:"required"`
+	DestinationID     string                       `json:"destination_id" binding:"required"`
+	PaymentMethodType types.PaymentMethodType      `json:"payment_method_type" binding:"required"`
+	PaymentMethodID   string                       `json:"payment_method_id"`
+	PaymentGateway    *types.PaymentGatewayType    `json:"payment_gateway,omitempty"`
+	// Amount defaults to the invoice's amount remaining for invoice payments when zero or omitted.
+	Amount                 decimal.Decimal        `json:"amount" swaggertype:"string"`
+	Currency               string                 `json:"currency" binding:"required"`
+	SuccessURL             string                 `json:"success_url,omitempty"`
+	CancelURL              string                 `json:"cancel_url,omitempty"`
+	Metadata               types.Metadata         `json:"metadata,omitempty"`
+	ProcessPayment         bool                   `json:"process_payment" default:"true"`
+	SaveCardAndMakeDefault bool                   `json:"save_card_and_make_default" default:"false"`
+	GatewayOptions         *PaymentGatewayOptions `json:"gateway_options,omitempty"`
 	// PaymentTrigger marks a payment Flexprice created itself; only internal callers can set it.
 	PaymentTrigger string `json:"-"`
 }
