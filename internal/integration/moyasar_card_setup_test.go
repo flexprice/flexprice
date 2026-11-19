@@ -211,6 +211,16 @@ func (s *MoyasarCardSetupSuite) TestApprovalAfterDecline_SavesCardAndVoidsCharge
 	s.Equal([]string{"mp_approved"}, s.client.voided)
 }
 
+func (s *MoyasarCardSetupSuite) TestApprovalOnDeclinedGatewayPayment_SavesCardAndVoidsCharge() {
+	id := s.initiateSetup()
+	s.decline(id, "mp_resubmitted")
+	s.approve(id, "mp_resubmitted")
+
+	s.Equal(types.PaymentStatusVoided, s.paymentStatus(id))
+	s.Len(s.pmRepo.methods, 1)
+	s.Equal([]string{"mp_resubmitted"}, s.client.voided)
+}
+
 func (s *MoyasarCardSetupSuite) TestSetupIntentAfterDecline_ReturnsNewPayment() {
 	id := s.initiateSetup()
 	s.decline(id, "mp_declined")
