@@ -1046,6 +1046,9 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 	if err := s.attachInFlightCharges(ctx, []*dto.InvoiceResponse{response}); err != nil {
 		return nil, err
 	}
+	if err := s.attachLinkedWalletTransactions(ctx, []*dto.InvoiceResponse{response}); err != nil {
+		return nil, err
+	}
 
 	return response, nil
 }
@@ -1066,6 +1069,31 @@ func (s *invoiceService) attachInFlightCharges(ctx context.Context, items []*dto
 		if p, ok := inFlight[r.ID]; ok {
 			r.WithInFlightCharge(p)
 		}
+	}
+	return nil
+}
+
+// attachLinkedWalletTransactions adds the wallet credit transaction a top-up invoice pays for.
+func (s *invoiceService) attachLinkedWalletTransactions(ctx context.Context, items []*dto.InvoiceResponse) error {
+	for _, r := range items {
+		txID := r.Metadata["wallet_transaction_id"]
+		if txID == "" {
+			continue
+		}
+		tx, err := s.WalletRepo.GetTransactionByID(ctx, txID)
+		if ierr.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		r.LinkedWalletTransactions = []*dto.LinkedWalletTransaction{{
+			ID:                tx.ID,
+			WalletID:          tx.WalletID,
+			CreditAmount:      tx.CreditAmount,
+			TransactionStatus: tx.TxStatus,
+			TransactionReason: tx.TransactionReason,
+		}}
 	}
 	return nil
 }
@@ -1386,6 +1414,9 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 	}
 
 	if err := s.attachInFlightCharges(ctx, items); err != nil {
+		return nil, err
+	}
+	if err := s.attachLinkedWalletTransactions(ctx, items); err != nil {
 		return nil, err
 	}
 
@@ -1896,6 +1927,9 @@ func validateInvoiceVoidable(inv *invoice.Invoice) error {
 
 // voidInvoiceInStripe voids the Stripe invoice synced from a voided invoice. Failures are logged: the void already stands.
 func (s *invoiceService) voidInvoiceInStripe(ctx context.Context, invoiceID string) {
+	if s.ConnectionRepo == nil {
+		return
+	}
 	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, invoiceID)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to scope invoice for Stripe void", "error", err, "invoice_id", invoiceID)
