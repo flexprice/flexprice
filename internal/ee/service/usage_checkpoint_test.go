@@ -26,10 +26,14 @@ func checkpointHour(h int) time.Time { return checkpointPeriodStart.Add(time.Dur
 type countingMeterUsageStore struct {
 	*testutil.InMemoryMeterUsageStore
 	totalsCalls int
+	finalCalls  int
 }
 
 func (s *countingMeterUsageStore) GetMeterTotals(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterTotals, error) {
 	s.totalsCalls++
+	if params.UseFinal {
+		s.finalCalls++
+	}
 	return s.InMemoryMeterUsageStore.GetMeterTotals(ctx, params)
 }
 
@@ -37,7 +41,7 @@ type checkpointHarness struct {
 	svc             *usageCheckpointService
 	usage           *countingMeterUsageStore
 	checkpoints     *testutil.InMemoryMeterUsageCheckpointStore
-	aggregatedUsage *fakeAggregatedUsageStore
+	aggregatedUsage *fakeHourlyUsageRepository
 }
 
 // newCheckpointHarness seeds customers cust_1 and cust_2 (internal cus_1 and cus_2), each with one
@@ -74,7 +78,7 @@ func newCheckpointHarness(t *testing.T, periodEnd time.Time) *checkpointHarness 
 	h := &checkpointHarness{
 		usage:           &countingMeterUsageStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()},
 		checkpoints:     testutil.NewInMemoryMeterUsageCheckpointStore(),
-		aggregatedUsage: &fakeAggregatedUsageStore{active: map[time.Time][]string{}},
+		aggregatedUsage: &fakeHourlyUsageRepository{active: map[time.Time][]string{}},
 	}
 	h.svc = &usageCheckpointService{ServiceParams: ServiceParams{
 		Logger:                   logger.NewNoopLogger(),
@@ -84,7 +88,7 @@ func newCheckpointHarness(t *testing.T, periodEnd time.Time) *checkpointHarness 
 		MeterRepo:                meters,
 		MeterUsageRepo:           h.usage,
 		MeterUsageCheckpointRepo: h.checkpoints,
-		AggregatedUsageStore:     h.aggregatedUsage,
+		HourlyUsageRepo:          h.aggregatedUsage,
 	}}
 	return h
 }
@@ -153,6 +157,7 @@ func TestUsageCheckpointReadsSharedWindowOnce(t *testing.T) {
 	_, err := h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(7))
 	require.NoError(t, err)
 	require.Equal(t, 1, h.usage.totalsCalls, "both customers start from the period start, so one query covers them")
+	require.Equal(t, 1, h.usage.finalCalls, "stored totals read with FINAL")
 	require.Equal(t, map[string]string{"m_sum": "4", "m_count": "1", "m_max": "4"}, h.totals(t, "cus_1", checkpointHour(7)))
 	require.Equal(t, map[string]string{"m_sum": "7", "m_count": "1", "m_max": "7"}, h.totals(t, "cus_2", checkpointHour(7)))
 }

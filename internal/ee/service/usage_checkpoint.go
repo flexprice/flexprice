@@ -83,7 +83,7 @@ type periodUpdate struct {
 type windowTotals map[usageWindow]map[string][]*events.MeterTotals
 
 func (s *usageCheckpointService) CheckpointEnvironment(ctx context.Context, cutoff time.Time) (*UsageCheckpointResult, error) {
-	if s.AggregatedUsageStore == nil {
+	if s.HourlyUsageRepo == nil {
 		return nil, ierr.NewError("aggregated usage store is not configured").
 			WithHint("Usage checkpoints need Redis; fix the redis config or disable aggregated_usage.").
 			Mark(ierr.ErrSystem)
@@ -117,7 +117,7 @@ func (s *usageCheckpointService) CheckpointEnvironment(ctx context.Context, cuto
 func (s *usageCheckpointService) recentlyActiveCustomers(ctx context.Context, cutoff time.Time) ([]string, error) {
 	var customers []string
 	for hour := cutoff.Add(-aggregatedusage.LateWindow); hour.Before(cutoff); hour = hour.Add(time.Hour) {
-		active, err := s.AggregatedUsageStore.ActiveCustomers(ctx, hour)
+		active, err := s.HourlyUsageRepo.ListActiveCustomers(ctx, hour)
 		if err != nil {
 			return nil, ierr.WithError(err).WithHint("Failed to read active customers from the aggregated usage").Mark(ierr.ErrSystem)
 		}
@@ -234,6 +234,8 @@ func (s *usageCheckpointService) readWindowTotals(ctx context.Context, updates [
 				ExternalCustomerIDs: batch,
 				StartTime:           window.start,
 				EndTime:             window.end,
+				// Stored totals, so FINAL merges duplicate rows.
+				UseFinal: true,
 			})
 			if err != nil {
 				return nil, err
@@ -266,7 +268,7 @@ func (s *usageCheckpointService) supportedMeters(ctx context.Context, totals win
 	}
 	supported := make(map[string]*meter.Meter, len(meters))
 	for _, m := range meters {
-		if aggregatedusage.Supports(m.Aggregation.Type) {
+		if aggregatedusage.SupportsAggregation(m.Aggregation.Type) {
 			supported[m.ID] = m
 		}
 	}

@@ -94,8 +94,8 @@ type ServiceParams struct {
 	InMemoryCache cache.InMemoryCache
 	RedisCache    cache.RedisCache
 	Locker        cache.Locker
-	// AggregatedUsageStore holds hourly per-customer meter quantities in Redis; nil without Redis.
-	AggregatedUsageStore aggregatedusage.Store
+	// HourlyUsageRepo holds hourly per-customer meter quantities in Redis; nil without Redis.
+	HourlyUsageRepo aggregatedusage.Repository
 
 	// Repositories
 	AuthRepo                     auth.Repository
@@ -220,7 +220,7 @@ func NewServiceParams(
 	inMemoryCache cache.InMemoryCache,
 	redisCache cache.RedisCache,
 	locker cache.Locker,
-	aggregatedUsageStore aggregatedusage.Store,
+	hourlyUsageRepository aggregatedusage.Repository,
 	authRepo auth.Repository,
 	userRepo user.Repository,
 	eventRepo events.Repository,
@@ -316,7 +316,7 @@ func NewServiceParams(
 		InMemoryCache:                inMemoryCache,
 		RedisCache:                   redisCache,
 		Locker:                       locker,
-		AggregatedUsageStore:         aggregatedUsageStore,
+		HourlyUsageRepo:              hourlyUsageRepository,
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,

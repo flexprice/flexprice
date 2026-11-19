@@ -661,16 +661,19 @@ func (r *MeterUsageRepository) GetMeterTotals(ctx context.Context, params *event
 	})
 	defer FinishSpan(span)
 
-	finalParams := *params
-	finalParams.UseFinal = true
-	where, args := r.qb.BuildWhereClause(&finalParams)
+	where, args := r.qb.BuildWhereClause(params)
+	finalClause, finalSettings := r.qb.BuildFinalClause(params.UseFinal)
+	settings := "SETTINGS max_memory_usage = 96636764160"
+	if finalSettings != "" {
+		settings = finalSettings + ", max_memory_usage = 96636764160"
+	}
 	query := fmt.Sprintf(`
 		SELECT external_customer_id, meter_id, SUM(qty_total), COUNT(DISTINCT id), MAX(qty_total)
-		FROM meter_usage FINAL
+		FROM meter_usage %s
 		WHERE %s
 		GROUP BY external_customer_id, meter_id
-		SETTINGS do_not_merge_across_partitions_select_final = 1, max_memory_usage = 96636764160
-	`, where)
+		%s
+	`, finalClause, where, settings)
 
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {
