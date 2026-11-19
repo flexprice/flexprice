@@ -85,6 +85,17 @@ jobs:
             --set secrets.existingSecret=flexprice-secrets \
             | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
 
+      - name: helm template + kubeconform (e2eprobe enabled with a suite)
+        run: |
+          helm template flexprice internal/ee/infrastructure/helm/flexprice \
+            --set secrets.existingSecret=test \
+            --set e2eprobe.enabled=true \
+            --set e2eprobe.suite.version=1 \
+            | tee /tmp/e2eprobe-render.yaml \
+            | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
+          grep -q 'E2EPROBE_SUITE_FILE' /tmp/e2eprobe-render.yaml
+          grep -q 'e2eprobe-suite' /tmp/e2eprobe-render.yaml
+
       - name: helm lint (values-gce.example)
         run: helm lint internal/ee/infrastructure/helm/flexprice -f internal/ee/infrastructure/helm/values-gce.example.yaml
 
