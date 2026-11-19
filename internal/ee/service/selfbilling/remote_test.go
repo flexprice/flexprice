@@ -301,7 +301,14 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 		case r.Method == http.MethodGet && r.URL.Path == pathCustomerUsage:
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"customer_id": "cust_1",
-				"features":    []map[string]any{{"current_usage": "12.5", "is_enabled": true}},
+				"features": []map[string]any{{
+					"current_usage": "12.5",
+					"is_enabled":    true,
+					"feature": map[string]any{
+						"id":             "feat_1",
+						"reporting_unit": map[string]any{"unit_singular": "second", "unit_plural": "seconds", "conversion_rate": "0.001"},
+					},
+				}},
 			})
 
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, pathCustomerPortal):
@@ -967,6 +974,72 @@ func TestRemoteClient_SummaryInvoices(t *testing.T) {
 			require.Len(t, got.usage.Features, 1)
 			assert.Equal(t, "12.5", got.usage.Features[0].CurrentUsage.String())
 			assert.True(t, got.usage.Features[0].IsEnabled)
+			require.NotNil(t, got.usage.Features[0].Feature)
+			require.NotNil(t, got.usage.Features[0].Feature.ReportingUnit)
+			assert.Equal(t, "0.001", got.usage.Features[0].Feature.ReportingUnit.ConversionRate.String())
+		})
+	}
+}
+
+func TestRemoteClient_UsageSummary(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		body     string
+		wantKind func(error) bool
+		wantHint string
+	}{
+		{
+			name:   "decodes_decimal_strings",
+			status: http.StatusOK,
+			body:   `{"customer_id":"cust_1","features":[{"current_usage":"12.5","feature":{"id":"feat_1","reporting_unit":{"unit_singular":"second","unit_plural":"seconds","conversion_rate":"0.001"}}}]}`,
+		},
+		{
+			name:     "json_400_is_validation",
+			status:   http.StatusBadRequest,
+			body:     `{"code":"validation_error","message":"lookup key is malformed","http_status_code":400}`,
+			wantKind: ierr.IsValidation,
+			wantHint: "lookup key is malformed",
+		},
+		{
+			name:     "json_500_is_http_client",
+			status:   http.StatusInternalServerError,
+			body:     `{"code":"internal_error","message":"boom","http_status_code":500}`,
+			wantKind: ierr.IsHTTPClient,
+			wantHint: "Flexprice Cloud is unavailable",
+		},
+		{
+			name:     "unreadable_body_is_internal",
+			status:   http.StatusOK,
+			body:     `{"features":"nope"}`,
+			wantKind: ierr.IsInternal,
+			wantHint: "unreadable usage summary",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, pathCustomerUsage, r.URL.Path)
+				assert.Equal(t, "in:t1", r.URL.Query().Get("customer_lookup_key"))
+				assert.Equal(t, "sk", r.Header.Get("x-api-key"))
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			t.Cleanup(srv.Close)
+			c := newRemoteClient(config.BillingConfig{APIHost: srv.URL, APIKey: "sk"})
+
+			got, err := c.usageSummary(context.Background(), "in:t1")
+			if tt.wantKind != nil {
+				require.Error(t, err)
+				assert.True(t, tt.wantKind(err), "got %v", err)
+				assert.Contains(t, cockroach.FlattenHints(err), tt.wantHint)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Len(t, got.Features, 1)
+			assert.Equal(t, "12.5", got.Features[0].CurrentUsage.String())
+			assert.Equal(t, "0.001", got.Features[0].Feature.ReportingUnit.ConversionRate.String())
 		})
 	}
 }

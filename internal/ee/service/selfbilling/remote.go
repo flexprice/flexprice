@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -14,7 +16,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	flexprice "github.com/flexprice/go-sdk/v2"
-	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	sdktypes "github.com/flexprice/go-sdk/v2/models/types"
 	"github.com/samber/lo"
@@ -45,6 +46,10 @@ const (
 
 type remoteClient struct {
 	sdk *flexprice.Flexprice
+	// http, apiHost and apiKey serve the calls whose response the SDK cannot decode.
+	http    *http.Client
+	apiHost string
+	apiKey  string
 	// defaultPlanID is the plan every trial starts on; planIDs is every plan a tenant may buy, the default included.
 	defaultPlanID string
 	planIDs       []string
@@ -60,6 +65,9 @@ func newRemoteClient(cfg config.BillingConfig) *remoteClient {
 
 	return &remoteClient{
 		sdk:           sdk,
+		http:          &http.Client{Timeout: remoteTimeout},
+		apiHost:       cfg.APIHost,
+		apiKey:        cfg.APIKey,
 		defaultPlanID: cfg.DefaultPlanID,
 		planIDs:       cfg.PlanIDs,
 		provider:      sdktypes.CheckoutPaymentProvider(cfg.CheckoutProvider()),
@@ -383,17 +391,10 @@ func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummar
 		return nil, cloudErr(err)
 	}
 
-	usage, err := c.sdk.Customers.GetCustomerUsageSummary(ctx, sdkdtos.GetCustomerUsageSummaryRequest{CustomerLookupKey: lo.ToPtr(extID)})
-	if err != nil {
-		return nil, cloudErr(err)
-	}
-
-	usageSummary, err := toUsageSummary(usage.CustomerUsageSummaryResponse)
+	out.usage, err = c.usageSummary(ctx, extID)
 	if err != nil {
 		return nil, err
 	}
-
-	out.usage = usageSummary
 
 	for _, inv := range invoices.ListInvoicesResponse.Items {
 		mapped, err := toRemoteInvoice(inv)
@@ -570,19 +571,40 @@ func remoteMessage(err error) string {
 	return strings.TrimSpace(parsed.Message)
 }
 
-// toUsageSummary reads the SDK's usage summary back into the API's own DTO, since Flexprice Cloud serves that same shape.
-func toUsageSummary(in *sdktypes.CustomerUsageSummaryResponse) (*dto.CustomerUsageSummaryResponse, error) {
-	if in == nil {
-		return nil, nil
+// usageSummary reads the usage summary straight into the API's own DTO, which Flexprice Cloud serves. The SDK cannot
+// decode it: it types a feature's reporting_unit.conversion_rate as float64, and the API sends a decimal string.
+func (c *remoteClient) usageSummary(ctx context.Context, extID string) (*dto.CustomerUsageSummaryResponse, error) {
+	endpoint, err := url.JoinPath(c.apiHost, "/customers/usage")
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("Flexprice Cloud is misconfigured").Mark(ierr.ErrInternal)
 	}
 
-	raw, err := json.Marshal(in)
+	query := url.Values{"customer_lookup_key": {extID}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+query.Encode(), nil)
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Flexprice Cloud returned an unreadable usage summary").Mark(ierr.ErrInternal)
+		return nil, ierr.WithError(err).WithHint("Flexprice Cloud is misconfigured").Mark(ierr.ErrInternal)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("x-api-key", c.apiKey)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return nil, cloudErr(err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, cloudErr(err)
+	}
+
+	// An SDK error type keeps the status and message classification cloudErr gives every other call.
+	if res.StatusCode != http.StatusOK {
+		return nil, cloudErr(sdkerrors.NewAPIError("API error occurred", res.StatusCode, string(body), res))
 	}
 
 	var out dto.CustomerUsageSummaryResponse
-	if err := json.Unmarshal(raw, &out); err != nil {
+	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, ierr.WithError(err).WithHint("Flexprice Cloud returned an unreadable usage summary").Mark(ierr.ErrInternal)
 	}
 	return &out, nil
