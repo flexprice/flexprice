@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +15,13 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/bootstrap"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/inbox"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/incident"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/ledger"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/scenario"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/scenarios"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/suite"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/world"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -125,21 +134,102 @@ func bootstrapIfNeeded(ctx context.Context, cfg *e2eprobe.Config, lg *logger.Log
 	return nil
 }
 
+// newCatalog is every scenario this binary ships.
+func newCatalog() *scenario.Catalog {
+	cat := scenario.NewCatalog()
+	scenarios.Register(cat)
+	return cat
+}
+
+// loadSuite reads and validates the suite the probe will run.
+func loadSuite(path string, cat *scenario.Catalog) (*suite.Suite, error) {
+	s, err := suite.Load(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := suite.Validate(s, cat); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func validateSuite(path string, cat *scenario.Catalog, out io.Writer) error {
+	s, err := loadSuite(path, cat)
+	if err != nil {
+		return err
+	}
+	bindings, err := s.Bindings(cat)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "suite ok: %d personas, %d bindings, %d events/day\n", len(s.Personas), len(bindings), s.EventsPerDay(cat))
+	return nil
+}
+
+func describeSuite(path string, cat *scenario.Catalog, out io.Writer) error {
+	s, err := loadSuite(path, cat)
+	if err != nil {
+		return err
+	}
+	return suite.Describe(out, s, cat)
+}
+
 func main() {
+	command, args := "run", os.Args[1:]
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		command, args = args[0], args[1:]
+	}
+	fs := flag.NewFlagSet(command, flag.ExitOnError)
+	suitePath := fs.String("suite", os.Getenv("E2EPROBE_SUITE_FILE"), "suite file; empty uses the embedded default")
+	_ = fs.Parse(args)
+
+	cat := newCatalog()
+	switch command {
+	case "validate":
+		if err := validateSuite(*suitePath, cat, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+	case "describe":
+		if err := describeSuite(*suitePath, cat, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+	case "run":
+		if err := run(cat, *suitePath); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command %q (run | validate | describe)\n", command)
+		os.Exit(2)
+	}
+}
+
+func run(cat *scenario.Catalog, suitePath string) error {
 	cfg, err := e2eprobe.LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("config: %w", err)
 	}
 	if !cfg.Enabled {
 		fmt.Println("E2EPROBE_ENABLED=false; nothing to do")
-		return
+		return nil
+	}
+	if suitePath == "" {
+		suitePath = cfg.SuiteFile
+	}
+	s, err := loadSuite(suitePath, cat)
+	if err != nil {
+		return err
+	}
+	bindings, err := s.Bindings(cat)
+	if err != nil {
+		return err
 	}
 
 	lg, err := logger.NewLogger(&config.Configuration{Logging: buildLoggingConfig(cfg)})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "logger: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("logger: %w", err)
 	}
 	for _, w := range cfg.Warnings {
 		lg.Warn(context.Background(), "e2eprobe config warning", "warning", w)
@@ -147,11 +237,106 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
-
 	runID := fmt.Sprintf("e2eprobe-%d", time.Now().Unix())
 	if err := bootstrapIfNeeded(ctx, cfg, lg, runID); err != nil {
-		lg.Error(ctx, "bootstrap", "error", err)
-		os.Exit(1)
+		return err
 	}
-	lg.Info(ctx, "e2eprobe: run not wired yet", "run_id", runID, "host", cfg.APIHost)
+
+	tp, shutdownTracer, err := e2eprobe.NewTracerProvider(ctx, cfg.OTEL, "e2eprobe")
+	if err != nil {
+		lg.Error(ctx, "tracer init failed; continuing without OTEL", "error", err)
+	}
+	defer func() {
+		if shutdownTracer != nil {
+			shutCtx, cancelShut := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancelShut()
+			_ = shutdownTracer(shutCtx)
+		}
+	}()
+
+	var client e2eprobe.Client = e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
+	if cfg.DryRun {
+		client = e2eprobe.NewDryRunClient(client, lg)
+		lg.Info(ctx, "dry-run mode: mutating calls are logged, not sent")
+	}
+
+	notifiers := []incident.Notifier{incident.LogNotifier(lg)}
+	if cfg.Slack.BotToken != "" || cfg.Slack.WebhookURL != "" {
+		notifiers = append(notifiers, incident.SlackNotifier(cfg.Slack.WebhookURL, cfg.Slack.BotToken, cfg.Slack.Channel, nil, lg))
+	}
+	if tp != nil && cfg.OTEL.Enabled {
+		notifiers = append(notifiers, incident.OTELNotifier(tp.Tracer("e2eprobe")))
+	}
+	notifier := incident.Multi(notifiers...)
+	tracker, err := incident.NewTracker(func(k incident.Key) incident.Policy {
+		a := s.AlertPolicy(suiteEntryFor(s, k.Scenario))
+		return incident.Policy{AfterFailures: a.AfterFailures, AfterDuration: a.AfterDuration.Duration, RenotifyEvery: a.RenotifyEvery.Duration, SkipAfter: a.SkipAfter.Duration}
+	}, incident.DefaultRollup(), notifier, incident.FileStore(cfg.StateFile), time.Now)
+	if err != nil {
+		return err
+	}
+
+	box := inbox.New(inbox.Options{Token: cfg.WebhookToken})
+	wld := world.New(client, s, runID, lg)
+	deps := scenario.Deps{
+		Client:    client,
+		World:     wld,
+		Ledger:    ledger.NewLedger(48 * time.Hour),
+		Inbox:     box,
+		Suite:     s,
+		Logger:    lg,
+		RunID:     runID,
+		Tick:      s.Defaults.Tick.Duration,
+		Now:       time.Now,
+		StartedAt: time.Now(),
+	}
+	if tp != nil {
+		deps.Tracer = tp.Tracer("e2eprobe")
+	}
+	runner, err := scenario.NewRunner(cat, deps, bindings, tracker, notifier, scenario.Options{
+		Concurrency: s.Defaults.Concurrency,
+		Jitter:      time.Minute,
+		Heartbeat:   time.Hour,
+		DigestEvery: s.Defaults.Digest.Every.Duration,
+	})
+	if err != nil {
+		return err
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/webhook", box.Handler())
+	mux.Handle("/healthz", box.Handler())
+	mux.Handle("/inbox/", box.Handler())
+	mux.Handle("/status", runner.Handler())
+	port, err := inbox.NewServer(cfg.ListenerPort, mux).Start(ctx)
+	if err != nil {
+		return fmt.Errorf("listener: %w", err)
+	}
+
+	if err := wld.Provision(ctx); err != nil {
+		// Scenarios skip while their persona is missing; the provision scenario retries.
+		lg.Error(ctx, "initial provisioning incomplete", "error", err)
+	}
+	lg.Info(ctx, "e2eprobe starting",
+		"run_id", runID, "host", cfg.APIHost, "suite", suitePath, "bindings", len(bindings),
+		"events_per_day", s.EventsPerDay(cat), "tick", s.Defaults.Tick.String(), "listener_port", port)
+	runner.Start(ctx)
+	lg.Info(ctx, "e2eprobe shutdown", "run_id", runID)
+	return nil
+}
+
+// suiteEntryFor maps a catalog name back to the suite entry that enabled it,
+// so family scenarios share their entry's alert override.
+func suiteEntryFor(s *suite.Suite, scenarioName string) string {
+	for _, sc := range s.Scenarios {
+		if sc.Name == scenarioName {
+			return sc.Name
+		}
+		for _, f := range sc.Families {
+			if sc.Name+"-"+f == scenarioName {
+				return sc.Name
+			}
+		}
+	}
+	return scenarioName
 }
