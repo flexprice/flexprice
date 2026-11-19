@@ -1984,18 +1984,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	}
 	recordInvoiceTransition(ctx, inv)
 
-	// Gateway links are expired only once the void is committed.
-	closeLinksCtx := types.WithoutDBTransaction(ctx)
-	closeLinks := func() {
-		if err := NewPaymentService(s.ServiceParams).(*paymentService).voidOpenPaymentLinks(closeLinksCtx, inv.ID); err != nil {
-			s.Logger.Error(closeLinksCtx, "failed to close payment links on void",
-				"error", err,
-				"invoice_id", inv.ID)
-		}
-	}
-	if !types.RegisterPostCommit(ctx, closeLinks) {
-		closeLinks()
-	}
+	NewPaymentService(s.ServiceParams).VoidOpenPaymentLinks(ctx, inv.ID, linkVoidReasonInvoiceVoided)
 
 	// A voided invoice will never be paid, so a purchased-credit transaction still
 	// waiting on it must not stay pending: it blocks the wallet's auto-topup guard
@@ -2822,6 +2811,7 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 	if status == types.PaymentStatusSucceeded {
 		paymentProcessorService := NewPaymentProcessorService(s.ServiceParams)
 		paymentProcessorService.DispatchMarkPaid(ctx, inv.ID)
+		NewPaymentService(s.ServiceParams).VoidOpenPaymentLinks(ctx, inv.ID, linkVoidReasonInvoicePaid)
 	}
 
 	// Publish webhook events
@@ -2956,6 +2946,9 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 	if status == types.PaymentStatusSucceeded || status == types.PaymentStatusOverpaid {
 		paymentProcessorService := NewPaymentProcessorService(s.ServiceParams)
 		paymentProcessorService.DispatchMarkPaid(ctx, inv.ID)
+	}
+	if inv.AmountRemaining.IsZero() {
+		NewPaymentService(s.ServiceParams).VoidOpenPaymentLinks(ctx, inv.ID, linkVoidReasonInvoicePaid)
 	}
 
 	// Publish webhook events
