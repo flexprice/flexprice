@@ -2,6 +2,7 @@ package stripe
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -107,7 +108,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 	}
 
 	// Step 8: Update FlexPrice invoice with Stripe data
-	if err := s.updateFlexPriceInvoiceFromStripe(ctx, flexInvoice, finalizedInvoice); err != nil {
+	if err := s.updateFlexPriceInvoiceFromStripe(ctx, req.InvoiceID, finalizedInvoice); err != nil {
 		s.logger.Error(ctx, "failed to update FlexPrice invoice from Stripe", "error", err)
 		// Don't fail the entire sync for this
 	}
@@ -181,12 +182,17 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 	// Use the invoice due date if it's at least 15 minutes from now; otherwise default.
 	if collectionMethod == types.CollectionMethodSendInvoice {
 		minDueDate := clock.Now().Add(15 * time.Minute)
-		dueDate := clock.Now().Add(time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour)
+		defaultDueDays := time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour
+		dueDate := lo.FromPtrOr(flexInvoice.FinalizedAt, flexInvoice.CreatedAt).Add(defaultDueDays)
+		if !dueDate.After(minDueDate) {
+			dueDate = clock.Now().Add(defaultDueDays)
+		}
 		if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(minDueDate) {
 			dueDate = *flexInvoice.DueDate
 		}
 		params.DueDate = stripe.Int64(dueDate.Unix())
 	}
+	params.SetIdempotencyKey(fmt.Sprintf("stripe:invoice:create:%s", flexInvoice.ID))
 
 	// Create the invoice
 	stripeInvoice, err := stripeClient.V1Invoices.Create(ctx, params)
@@ -239,15 +245,33 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 		}
 	}
 
+	customerID, err := s.getStripeCustomerID(ctx, flexInvoice.CustomerID, customerService)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get Stripe customer ID", "error", err, "customer_id", flexInvoice.CustomerID, "invoice_id", flexInvoice.ID)
+		return ierr.NewError("failed to get Stripe customer ID").
+			WithHint("Unable to find Stripe customer mapping").
+			WithReportableDetails(map[string]interface{}{"customer_id": flexInvoice.CustomerID, "invoice_id": flexInvoice.ID, "error": err.Error()}).
+			Mark(ierr.ErrSystem)
+	}
+
+	itemParams := buildInvoiceItemsParams(flexInvoice, customerID, stripeInvoiceID, productIDByPriceID)
+
 	s.logger.Info(ctx, "syncing line items to Stripe",
 		"invoice_id", flexInvoice.ID,
 		"stripe_invoice_id", stripeInvoiceID,
-		"line_items_count", len(flexInvoice.LineItems))
+		"line_items_count", len(flexInvoice.LineItems),
+		"stripe_items_count", len(itemParams))
 
-	for _, lineItem := range flexInvoice.LineItems {
-		if err := s.addLineItemToStripeInvoice(ctx, stripeClient, stripeInvoiceID, lineItem, flexInvoice, customerService, productIDByPriceID); err != nil {
-			return err
+	for _, params := range itemParams {
+		invoiceItem, err := stripeClient.V1InvoiceItems.Create(ctx, params)
+		if err != nil {
+			s.logger.Error(ctx, "failed to add line item to Stripe invoice", "error", err, "line_item_id", params.Metadata["flexprice_line_item_id"], "stripe_invoice_id", stripeInvoiceID)
+			return ierr.NewError("failed to add line item to Stripe").
+				WithHint("Unable to add line item to Stripe invoice").
+				WithReportableDetails(map[string]interface{}{"line_item_id": params.Metadata["flexprice_line_item_id"], "stripe_invoice_id": stripeInvoiceID, "error": err.Error()}).
+				Mark(ierr.ErrSystem)
 		}
+		s.logger.Debug(ctx, "added line item to Stripe invoice", "line_item_id", params.Metadata["flexprice_line_item_id"], "stripe_invoice_id", stripeInvoiceID, "stripe_item_id", invoiceItem.ID)
 	}
 
 	s.logger.Info(ctx, "successfully synced all line items to Stripe",
@@ -255,6 +279,46 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 		"stripe_invoice_id", stripeInvoiceID)
 
 	return nil
+}
+
+func buildInvoiceItemsParams(
+	flexInvoice *invoice.Invoice,
+	customerID string,
+	stripeInvoiceID string,
+	productIDByPriceID map[string]string,
+) []*stripe.InvoiceItemCreateParams {
+	currency := strings.ToLower(flexInvoice.Currency)
+	items := lo.Map(flexInvoice.LineItems, func(lineItem *invoice.InvoiceLineItem, _ int) *stripe.InvoiceItemCreateParams {
+		return buildInvoiceItemParams(lineItem, customerID, stripeInvoiceID, productIDByPriceID)
+	})
+
+	adjustments := []struct {
+		description string
+		amount      int64
+	}{
+		{"Discount", -types.ToSmallestUnit(flexInvoice.TotalDiscount, currency)},
+		{"Prepaid credits applied", -types.ToSmallestUnit(flexInvoice.TotalPrepaidCreditsApplied, currency)},
+		{"Tax", types.ToSmallestUnit(flexInvoice.TotalTax, currency)},
+	}
+	for _, adjustment := range adjustments {
+		if adjustment.amount == 0 {
+			continue
+		}
+		params := &stripe.InvoiceItemCreateParams{
+			Customer:    stripe.String(customerID),
+			Invoice:     stripe.String(stripeInvoiceID),
+			Currency:    stripe.String(currency),
+			Amount:      stripe.Int64(adjustment.amount),
+			Description: stripe.String(adjustment.description),
+			Metadata: map[string]string{
+				"flexprice_invoice_id": flexInvoice.ID,
+				"sync_source":          "flexprice",
+			},
+		}
+		params.SetIdempotencyKey(fmt.Sprintf("stripe:invoice_item:create:%s:%s", stripeInvoiceID, adjustment.description))
+		items = append(items, params)
+	}
+	return items
 }
 
 // buildInvoiceItemParams is pure (no Stripe calls), so it's unit-testable directly.
@@ -287,39 +351,15 @@ func buildInvoiceItemParams(
 				UnitAmount: stripe.Int64(amountCents),
 			}
 			params.Metadata["flexprice_stripe_product_id"] = productID
+			params.SetIdempotencyKey(fmt.Sprintf("stripe:invoice_item:create:%s:%s", stripeInvoiceID, lineItem.ID))
 			return params
 		}
 	}
 
 	params.Currency = stripe.String(currency)
 	params.Amount = stripe.Int64(amountCents)
+	params.SetIdempotencyKey(fmt.Sprintf("stripe:invoice_item:create:%s:%s", stripeInvoiceID, lineItem.ID))
 	return params
-}
-
-// addLineItemToStripeInvoice adds a single line item to Stripe invoice
-func (s *InvoiceSyncService) addLineItemToStripeInvoice(ctx context.Context, stripeClient *stripe.Client, stripeInvoiceID string, lineItem *invoice.InvoiceLineItem, flexInvoice *invoice.Invoice, customerService interfaces.CustomerService, productIDByPriceID map[string]string) error {
-	customerID, err := s.getStripeCustomerID(ctx, flexInvoice.CustomerID, customerService)
-	if err != nil {
-		s.logger.Error(ctx, "failed to get Stripe customer ID", "error", err, "customer_id", flexInvoice.CustomerID, "line_item_id", lineItem.ID)
-		return ierr.NewError("failed to get Stripe customer ID").
-			WithHint("Unable to find Stripe customer mapping").
-			WithReportableDetails(map[string]interface{}{"customer_id": flexInvoice.CustomerID, "line_item_id": lineItem.ID, "error": err.Error()}).
-			Mark(ierr.ErrSystem)
-	}
-
-	params := buildInvoiceItemParams(lineItem, customerID, stripeInvoiceID, productIDByPriceID)
-
-	invoiceItem, err := stripeClient.V1InvoiceItems.Create(ctx, params)
-	if err != nil {
-		s.logger.Error(ctx, "failed to add line item to Stripe invoice", "error", err, "line_item_id", lineItem.ID, "stripe_invoice_id", stripeInvoiceID)
-		return ierr.NewError("failed to add line item to Stripe").
-			WithHint("Unable to add line item to Stripe invoice").
-			WithReportableDetails(map[string]interface{}{"line_item_id": lineItem.ID, "stripe_invoice_id": stripeInvoiceID, "error": err.Error()}).
-			Mark(ierr.ErrSystem)
-	}
-
-	s.logger.Debug(ctx, "added line item to Stripe invoice", "line_item_id", lineItem.ID, "stripe_invoice_id", stripeInvoiceID, "stripe_item_id", invoiceItem.ID)
-	return nil
 }
 
 // finalizeStripeInvoice finalizes the invoice in Stripe
@@ -609,7 +649,12 @@ func (s *InvoiceSyncService) createInvoiceMapping(ctx context.Context, invoiceID
 }
 
 // updateFlexPriceInvoiceFromStripe updates FlexPrice invoice with data from Stripe
-func (s *InvoiceSyncService) updateFlexPriceInvoiceFromStripe(ctx context.Context, flexInvoice *invoice.Invoice, stripeInvoice *stripe.Invoice) error {
+func (s *InvoiceSyncService) updateFlexPriceInvoiceFromStripe(ctx context.Context, invoiceID string, stripeInvoice *stripe.Invoice) error {
+	flexInvoice, err := s.invoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
 	// Update invoice with Stripe data if needed
 	updated := false
 
@@ -629,10 +674,39 @@ func (s *InvoiceSyncService) updateFlexPriceInvoiceFromStripe(ctx context.Contex
 	}
 
 	if updated {
-		return s.invoiceRepo.Update(ctx, flexInvoice)
+		if err := s.invoiceRepo.Update(ctx, flexInvoice); err != nil {
+			return err
+		}
 	}
 
+	if !adoptStripeInvoiceNumber(flexInvoice, stripeInvoice) {
+		return nil
+	}
+	if err := s.invoiceRepo.Update(ctx, flexInvoice); err != nil {
+		s.logger.Error(ctx, "failed to adopt Stripe invoice number",
+			"error", err,
+			"invoice_id", flexInvoice.ID,
+			"stripe_invoice_id", stripeInvoice.ID)
+	}
 	return nil
+}
+
+func adoptStripeInvoiceNumber(flexInvoice *invoice.Invoice, stripeInvoice *stripe.Invoice) bool {
+	if stripeInvoice.Number == "" ||
+		(lo.FromPtr(flexInvoice.InvoiceNumber) == stripeInvoice.Number && flexInvoice.Metadata[types.InvoiceMetadataKeyStripeInvoiceID] == stripeInvoice.ID) {
+		return false
+	}
+	if flexInvoice.Metadata == nil {
+		flexInvoice.Metadata = types.Metadata{}
+	}
+	if current := lo.FromPtr(flexInvoice.InvoiceNumber); current != "" && current != stripeInvoice.Number {
+		if _, kept := flexInvoice.Metadata["flexprice_invoice_number"]; !kept {
+			flexInvoice.Metadata["flexprice_invoice_number"] = current
+		}
+	}
+	flexInvoice.InvoiceNumber = lo.ToPtr(stripeInvoice.Number)
+	flexInvoice.Metadata[types.InvoiceMetadataKeyStripeInvoiceID] = stripeInvoice.ID
+	return true
 }
 
 // updateStripeInvoiceMetadata updates the Stripe invoice metadata to track FlexPrice credit payments
