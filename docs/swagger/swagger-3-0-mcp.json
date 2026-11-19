@@ -19552,7 +19552,7 @@
             "description": "ID is server-assigned. Stable for the lifetime of the line item;\ninvoice breakdown and analytics responses reference this ID."
           },
           "overage_factor": {
-            "type": "number"
+            "type": "string"
           },
           "price_id": {
             "type": "string",

@@ -38463,7 +38463,7 @@
         "type": "object",
         "properties": {
           "conversion_rate": {
-            "type": "string",
+            "type": "number",
             "description": "Multiplier: reporting_unit_value = unit_value * conversion_rate; must be > 0"
           },
           "unit_plural": {
