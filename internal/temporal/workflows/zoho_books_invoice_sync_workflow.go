@@ -14,6 +14,8 @@ const (
 	ActivitySyncInvoiceToZoho        = "SyncInvoiceToZoho"
 	WorkflowZohoBooksInvoiceMarkPaid = "ZohoBooksInvoiceMarkPaidWorkflow"
 	ActivityMarkZohoBooksInvoicePaid = "MarkZohoBooksInvoicePaid"
+	WorkflowZohoBooksCreditNoteSync  = "ZohoBooksCreditNoteSyncWorkflow"
+	ActivitySyncCreditNoteToZoho     = "SyncCreditNoteToZoho"
 )
 
 // ZohoBooksInvoiceSyncWorkflow syncs finalized invoices to Zoho Books.
@@ -70,5 +72,29 @@ func ZohoBooksInvoiceMarkPaidWorkflow(ctx workflow.Context, input models.ZohoBoo
 	}
 
 	logger.Info("Successfully marked Zoho Books invoice as paid", "invoice_id", input.InvoiceID())
+	return nil
+}
+
+// ZohoBooksCreditNoteSyncWorkflow syncs a finalized credit note, and its refunds or invoice
+// application, to Zoho Books.
+func ZohoBooksCreditNoteSyncWorkflow(ctx workflow.Context, input models.ZohoBooksCreditNoteSyncWorkflowInput) error {
+	logger := workflow.GetLogger(ctx)
+	if err := input.Validate(); err != nil {
+		logger.Error("Invalid workflow input", "error", err)
+		return err
+	}
+
+	opts := workflow.ActivityOptions{
+		StartToCloseTimeout: 5 * time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			MaximumAttempts: 3,
+		},
+	}
+	ctx = workflow.WithActivityOptions(ctx, opts)
+
+	if err := workflow.ExecuteActivity(ctx, ActivitySyncCreditNoteToZoho, input).Get(ctx, nil); err != nil {
+		logger.Error("Failed to sync credit note to Zoho Books", "error", err, "credit_note_id", input.CreditNoteID)
+		return err
+	}
 	return nil
 }

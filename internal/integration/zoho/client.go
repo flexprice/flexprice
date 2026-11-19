@@ -50,6 +50,12 @@ type ZohoClient interface {
 	ListTaxExemptions(ctx context.Context) ([]TaxExemption, error)
 	// GetZohoBooksSyncConfig loads the published connection and returns the
 	GetZohoBooksSyncConfig(ctx context.Context) (*types.SyncConfig, error)
+	// CreateCreditNote creates a credit note against the given Zoho invoice.
+	CreateCreditNote(ctx context.Context, zohoInvoiceID string, req *CreditNoteCreateRequest) (*CreditNoteResponse, error)
+	// RefundCreditNote records a refund paid out of the credit note.
+	RefundCreditNote(ctx context.Context, zohoCreditNoteID string, req *CreditNoteRefundRequest) (*CreditNoteRefundResponse, error)
+	// ApplyCreditNoteToInvoices applies the credit note's credit to the given invoices.
+	ApplyCreditNoteToInvoices(ctx context.Context, zohoCreditNoteID string, req *CreditNoteApplyRequest) error
 }
 
 type Client struct {
@@ -554,4 +560,31 @@ func (c *Client) GetZohoBooksSyncConfig(ctx context.Context) (*types.SyncConfig,
 			Mark(ierr.ErrNotFound)
 	}
 	return conn.GetSyncConfig(), nil
+}
+
+func (c *Client) CreateCreditNote(ctx context.Context, zohoInvoiceID string, req *CreditNoteCreateRequest) (*CreditNoteResponse, error) {
+	var resp struct {
+		CreditNote CreditNoteResponse `json:"creditnote"`
+	}
+	query := map[string]string{"invoice_id": zohoInvoiceID}
+	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/creditnotes", query, req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.CreditNote, nil
+}
+
+func (c *Client) RefundCreditNote(ctx context.Context, zohoCreditNoteID string, req *CreditNoteRefundRequest) (*CreditNoteRefundResponse, error) {
+	var resp struct {
+		CreditNoteRefund CreditNoteRefundResponse `json:"creditnote_refund"`
+	}
+	path := fmt.Sprintf("/books/v3/creditnotes/%s/refunds", url.PathEscape(zohoCreditNoteID))
+	if err := c.doBooksRequest(ctx, http.MethodPost, path, nil, req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.CreditNoteRefund, nil
+}
+
+func (c *Client) ApplyCreditNoteToInvoices(ctx context.Context, zohoCreditNoteID string, req *CreditNoteApplyRequest) error {
+	path := fmt.Sprintf("/books/v3/creditnotes/%s/invoices", url.PathEscape(zohoCreditNoteID))
+	return c.doBooksRequest(ctx, http.MethodPost, path, nil, req, nil)
 }

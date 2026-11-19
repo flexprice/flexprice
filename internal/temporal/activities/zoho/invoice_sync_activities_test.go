@@ -2,14 +2,18 @@ package zoho_test
 
 import (
 	"context"
-	ierr "github.com/flexprice/flexprice/internal/errors"
+	"errors"
 	"testing"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
+
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/integration"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	zohoactivities "github.com/flexprice/flexprice/internal/temporal/activities/zoho"
@@ -87,4 +91,88 @@ func TestMarkZohoBooksInvoicePaid_NoZohoConnection(t *testing.T) {
 	require.ErrorAs(t, err, &appErr)
 	assert.True(t, appErr.NonRetryable(), "error must be non-retryable")
 	assert.Equal(t, ierr.ErrConnectionNotFound, appErr.Type())
+}
+
+type cnActivityEntityScope struct {
+	interfaces.BillingEntityScope
+	err        error
+	invoiceIDs []string
+}
+
+func (f *cnActivityEntityScope) ScopeToInvoice(ctx context.Context, invoiceID string) (context.Context, error) {
+	f.invoiceIDs = append(f.invoiceIDs, invoiceID)
+	if f.err != nil {
+		return nil, f.err
+	}
+	return types.SetBillingEntityID(ctx, "be_"+invoiceID), nil
+}
+
+func newCreditNoteSyncActivities(t *testing.T, ctx context.Context, scope interfaces.BillingEntityScope, seed *creditnote.CreditNote) *zohoactivities.CreditNoteSyncActivities {
+	t.Helper()
+	creditNoteStore := testutil.NewInMemoryCreditNoteStore()
+	if seed != nil {
+		require.NoError(t, creditNoteStore.Create(ctx, seed))
+	}
+	factory := buildZohoActivityFactory(
+		testutil.NewInMemoryConnectionStore(),
+		testutil.NewInMemoryEntityIntegrationMappingStore(),
+		testutil.NewInMemoryInvoiceStore(),
+		testutil.NewInMemorySubscriptionStore(),
+	)
+	return zohoactivities.NewCreditNoteSyncActivities(factory, scope, creditNoteStore, testutil.NewInMemoryRefundStore(), logger.NewNoopLogger())
+}
+
+func seedCreditNote(ctx context.Context) *creditnote.CreditNote {
+	return &creditnote.CreditNote{
+		ID:               "cn_1",
+		InvoiceID:        "inv_1",
+		CreditNoteType:   types.CreditNoteTypeRefund,
+		CreditNoteStatus: types.CreditNoteStatusFinalized,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+}
+
+func TestSyncCreditNoteToZoho_CreditNoteNotFound(t *testing.T) {
+	ctx := buildZohoActivityTestContext()
+	act := newCreditNoteSyncActivities(t, ctx, nil, nil)
+
+	err := act.SyncCreditNoteToZoho(ctx, models.ZohoBooksCreditNoteSyncWorkflowInput{
+		CreditNoteID: "cn_missing", TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+	})
+
+	var appErr *temporal.ApplicationError
+	require.ErrorAs(t, err, &appErr)
+	assert.True(t, appErr.NonRetryable(), "a missing credit note must not be retried")
+	assert.Equal(t, "CreditNoteNotFound", appErr.Type())
+}
+
+func TestSyncCreditNoteToZoho_NoZohoConnection(t *testing.T) {
+	ctx := buildZohoActivityTestContext()
+	scope := &cnActivityEntityScope{}
+	act := newCreditNoteSyncActivities(t, ctx, scope, seedCreditNote(ctx))
+
+	err := act.SyncCreditNoteToZoho(ctx, models.ZohoBooksCreditNoteSyncWorkflowInput{
+		CreditNoteID: "cn_1", TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+	})
+
+	var appErr *temporal.ApplicationError
+	require.ErrorAs(t, err, &appErr)
+	assert.True(t, appErr.NonRetryable(), "a missing connection must not be retried")
+	assert.Equal(t, ierr.ErrConnectionNotFound, appErr.Type())
+	assert.Equal(t, []string{"inv_1"}, scope.invoiceIDs, "the connection is looked up in the credit note invoice's billing entity")
+}
+
+func TestSyncCreditNoteToZoho_BillingEntityScopeErrorIsRetried(t *testing.T) {
+	ctx := buildZohoActivityTestContext()
+	scopeErr := errors.New("billing entity lookup failed")
+	act := newCreditNoteSyncActivities(t, ctx, &cnActivityEntityScope{err: scopeErr}, seedCreditNote(ctx))
+
+	err := act.SyncCreditNoteToZoho(ctx, models.ZohoBooksCreditNoteSyncWorkflowInput{
+		CreditNoteID: "cn_1", TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+	})
+
+	require.ErrorIs(t, err, scopeErr)
+	var appErr *temporal.ApplicationError
+	assert.False(t, errors.As(err, &appErr), "a scope failure stays retryable")
 }

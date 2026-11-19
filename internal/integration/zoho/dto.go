@@ -496,3 +496,52 @@ type CreateTaxExemptionRequest struct {
 	Description      string `json:"description,omitempty"`
 	Type             string `json:"type"`
 }
+
+// CreditNoteCreateRequest is the body for POST /books/v3/creditnotes.
+type CreditNoteCreateRequest struct {
+	CustomerID      string               `json:"customer_id"`
+	Date            string               `json:"date"`
+	IsDraft         bool                 `json:"is_draft"`
+	ReferenceNumber string               `json:"reference_number,omitempty"`
+	LineItems       []CreditNoteLineItem `json:"line_items"`
+}
+
+// CreditNoteLineItem credits the Zoho item of one invoice line.
+type CreditNoteLineItem struct {
+	ItemID    string          `json:"item_id"`
+	InvoiceID string          `json:"invoice_id"`
+	Name      string          `json:"name,omitempty"`
+	Rate      decimal.Decimal `json:"rate"`
+	Quantity  decimal.Decimal `json:"quantity"`
+}
+
+type CreditNoteResponse struct {
+	CreditNoteID     string          `json:"creditnote_id"`
+	CreditNoteNumber string          `json:"creditnote_number,omitempty"`
+	Status           string          `json:"status,omitempty"`
+	Total            decimal.Decimal `json:"total,omitempty"`
+	Balance          decimal.Decimal `json:"balance,omitempty"`
+}
+
+// CreditNoteRefundRequest is the body for POST /books/v3/creditnotes/{id}/refunds.
+type CreditNoteRefundRequest struct {
+	Date            string          `json:"date"`
+	RefundMode      string          `json:"refund_mode,omitempty"`
+	Amount          decimal.Decimal `json:"amount"`
+	FromAccountID   string          `json:"from_account_id,omitempty"`
+	ReferenceNumber string          `json:"reference_number,omitempty"`
+}
+
+type CreditNoteRefundResponse struct {
+	CreditNoteRefundID string `json:"creditnote_refund_id"`
+}
+
+// CreditNoteApplyRequest is the body for POST /books/v3/creditnotes/{id}/invoices.
+type CreditNoteApplyRequest struct {
+	Invoices []CreditNoteInvoiceApply `json:"invoices"`
+}
+
+type CreditNoteInvoiceApply struct {
+	InvoiceID     string          `json:"invoice_id"`
+	AmountApplied decimal.Decimal `json:"amount_applied"`
+}

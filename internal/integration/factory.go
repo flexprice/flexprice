@@ -714,12 +714,20 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 		f.logger,
 	)
 
+	creditNoteSvc := zoho.NewCreditNoteService(
+		zohoClient,
+		f.invoiceRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
 	return &ZohoBooksIntegration{
-		Client:      zohoClient,
-		CustomerSvc: customerSvc,
-		InvoiceSvc:  invoiceSvc,
-		ItemSyncSvc: itemSyncSvc,
-		TaxSvc:      taxSvc,
+		Client:        zohoClient,
+		CustomerSvc:   customerSvc,
+		InvoiceSvc:    invoiceSvc,
+		CreditNoteSvc: creditNoteSvc,
+		ItemSyncSvc:   itemSyncSvc,
+		TaxSvc:        taxSvc,
 	}, nil
 }
 
@@ -1103,11 +1111,12 @@ func (w *WhopIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID st
 
 // ZohoBooksIntegration contains all Zoho Books integration services
 type ZohoBooksIntegration struct {
-	Client      zoho.ZohoClient
-	CustomerSvc zoho.ZohoCustomerService
-	InvoiceSvc  zoho.ZohoInvoiceService
-	ItemSyncSvc zoho.ZohoItemSyncService
-	TaxSvc      zoho.ZohoTaxService
+	Client        zoho.ZohoClient
+	CustomerSvc   zoho.ZohoCustomerService
+	InvoiceSvc    zoho.ZohoInvoiceService
+	CreditNoteSvc zoho.ZohoCreditNoteService
+	ItemSyncSvc   zoho.ZohoItemSyncService
+	TaxSvc        zoho.ZohoTaxService
 }
 
 func (z *ZohoBooksIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
