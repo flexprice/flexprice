@@ -1,0 +1,97 @@
+# Default e2eprobe suite. Every region runs this unless E2EPROBE_SUITE_FILE
+# points at an override. Personas are long-lived customers; a scenario runs on
+# every persona carrying its required traits unless it lists personas itself.
+version: 1
+
+defaults:
+  tick: 10m                  # one bulk event batch per persona with a profile
+  concurrency: 4             # scenarios running at once
+  alert:
+    after_failures: 3        # consecutive failures before an incident opens
+    after_duration: 20m      # and failing for at least this long
+    renotify_every: 6h       # reminders while an incident stays open
+    skip_after: 24h          # a scenario skipping this long is a coverage incident
+  load:
+    max_events_per_day: 50000
+  janitor:
+    max_age: 1h              # ephemeral customers older than this are removed
+  digest:
+    every: 24h
+
+tenant:
+  connections: [stripe]      # preflight verifies these providers are connected
+  webhooks:
+    silence_after: 6h        # no webhook of any kind for this long is one incident
+
+personas:
+  # external_id adopts a customer the previous probe generation created so the
+  # cycle-invoice history it accumulated keeps feeding the invariants.
+  - name: baseline-a
+    external_id: e2eprobe-cust-persistent-3
+    traits: [subscription]
+    events: standard
+  - name: baseline-b
+    external_id: e2eprobe-cust-persistent-4
+    traits: [subscription]
+    events: standard
+  # taxed also owns the legacy quarterly subscription, hence multi_cadence.
+  - name: taxed
+    external_id: e2eprobe-cust-persistent-0
+    traits: [subscription, tax, multi_cadence]
+    events: standard
+  - name: couponed
+    external_id: e2eprobe-cust-persistent-1
+    traits: [subscription, coupon]
+    events: standard
+  - name: committed
+    traits: [subscription, commitment]
+    commitment: { amount: "5.00", overage_factor: "1.5" }
+    events: standard
+  # Wallet personas get no scheduled events: wallet-debit drives its own usage
+  # so the expected balance delta is exact.
+  - name: wallet-a
+    external_id: e2eprobe-cust-persistent-2
+    traits: [subscription, wallet]
+    wallet: { balance: "100.00" }
+  - name: alert-canary
+    external_id: e2eprobe-cust-alert-canary
+    traits: [subscription, wallet, alerts]
+    wallet: { balance: "30.00", thresholds: { info: "25", warning: "10", critical: "0" } }
+  - name: entitled
+    traits: [subscription, soft_limit]
+    events: standard
+  - name: granted
+    traits: [subscription, additive_grant]
+    events: standard
+  - name: bucketed
+    traits: [subscription, bucketed]
+    events: bucketed
+  - name: payer-stripe
+    traits: [payment]
+    payment: { provider: stripe, currency: USD, fixed_customer: e2eprobe-cust-pay-stripe-cards, decline_last4: "0341" }
+
+scenarios:
+  - { name: provision, every: 6h }
+  - { name: preflight, every: 6h }
+  - { name: janitor, every: 1h }
+  - { name: webhook-wiring, every: 15m }
+  - { name: ingest }                                   # runs every tick
+  - { name: usage, every: 15m }
+  - { name: wallet-debit, every: 30m, personas: [wallet-a] }
+  - { name: invoice-freshness, every: 1h }
+  - { name: invoice, every: 1h, families: [tax, coupon, commitment, multi-cadence] }
+  - { name: entitlement-usage, every: 30m }
+  - { name: low-balance-alert, every: 10m }
+  - { name: lifecycle, every: 30m, personas: [baseline-a] }
+  - { name: cancel, every: 1h, personas: [baseline-a] }
+  - { name: line-item-change, every: 1h, personas: [baseline-a] }
+  - { name: tax-preview, every: 1h, personas: [taxed] }
+  - { name: coupon-preview, every: 1h, personas: [couponed] }
+  - { name: commitment-preview, every: 1h, personas: [committed] }
+  - { name: entitlement-enforcement, every: 1h, personas: [entitled] }
+  - { name: grant-inheritance, every: 1h, personas: [granted] }
+  - { name: checkout-link, every: 30m }
+  - { name: payment-methods, every: 1h }
+  - { name: auto-charge, every: 6h }
+  # Off by default: every tick creates plans, subscriptions and invoices.
+  - { name: billing-matrix, every: 15m, enabled: false, families: [opening, change, grants, renewal, validation], per_run: 3 }
