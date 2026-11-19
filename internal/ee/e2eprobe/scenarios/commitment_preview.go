@@ -42,9 +42,6 @@ func (*commitmentPreview) Requires() []e2eprobe.Trait {
 
 func (s *commitmentPreview) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Result {
 	p := sc.Persona()
-	if gap := p.Gap(e2eprobe.TraitCommitment); gap != "" {
-		return sc.Skip("gap", gap)
-	}
 	spec := p.Spec().Commitment
 	if spec == nil {
 		return sc.Skip("spec", "persona declares no commitment")

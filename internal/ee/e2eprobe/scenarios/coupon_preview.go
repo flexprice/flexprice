@@ -19,9 +19,6 @@ func (*couponPreview) Kind() e2eprobe.Kind        { return e2eprobe.KindFlow }
 func (*couponPreview) Requires() []e2eprobe.Trait { return []e2eprobe.Trait{e2eprobe.TraitCoupon} }
 
 func (*couponPreview) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Result {
-	if gap := sc.Persona().Gap(e2eprobe.TraitCoupon); gap != "" {
-		return sc.Skip("gap", gap)
-	}
 	couponID := sc.World().Fixtures().CouponID()
 	if couponID == "" {
 		return sc.Skip("fixtures", "shared coupon not provisioned")

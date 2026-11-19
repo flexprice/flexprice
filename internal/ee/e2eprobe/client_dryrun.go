@@ -302,9 +302,6 @@ func (d *dryRunEvents) IngestBulk(ctx context.Context, req types.BulkIngestEvent
 	dryLog(ctx, d.lg, "Events.IngestBulk", "events", len(req.Events))
 	return nil
 }
-func (d *dryRunEvents) GetUsageByMeter(ctx context.Context, req types.GetUsageByMeterRequest) (*types.GetUsageResponse, error) {
-	return d.inner.GetUsageByMeter(ctx, req)
-}
 
 // ── Entitlements ──────────────────────────────────────────────────────
 

@@ -61,3 +61,16 @@ func TestLedger_RetentionEvicts(t *testing.T) {
 		t.Errorf("stats = %+v", st.Personas["taxed"])
 	}
 }
+
+func TestLedger_Last(t *testing.T) {
+	l := NewLedger(48 * time.Hour)
+	if _, ok := l.Last("taxed"); ok {
+		t.Fatal("an unknown persona has no last tick")
+	}
+	w := hourOf(t)
+	l.Record("taxed", w.Start.Add(2*tick))
+	l.Record("taxed", w.Start.Add(tick))
+	if last, ok := l.Last("taxed"); !ok || !last.Equal(w.Start.Add(2*tick)) {
+		t.Errorf("Last = %s %v", last, ok)
+	}
+}

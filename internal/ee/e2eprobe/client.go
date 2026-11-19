@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	flexprice "github.com/flexprice/go-sdk/v2"
 	"github.com/flexprice/go-sdk/v2/models/dtos"
@@ -133,13 +134,13 @@ type WalletOps interface {
 	TopUp(ctx context.Context, id string, body types.TopUpWalletRequest) (*dtos.TopUpWalletResponse, error)
 }
 
-// EventOps covers ingest and the keyed usage reads. Raw event listing and the
-// raw-table usage endpoint are deliberately absent: they scan the events table.
+// EventOps covers ingest and analytics, the one usage read served from the
+// meter_usage table. Raw event listing, event lookup and the raw-table usage
+// endpoints are deliberately absent: they scan the events table.
 type EventOps interface {
 	Ingest(ctx context.Context, req types.IngestEventRequest) (*dtos.IngestEventResponse, error)
 	IngestBulk(ctx context.Context, req types.BulkIngestEventRequest) error
 	GetUsageAnalytics(ctx context.Context, req types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error)
-	GetUsageByMeter(ctx context.Context, req types.GetUsageByMeterRequest) (*types.GetUsageResponse, error)
 }
 
 // AlertOps reads alert logs, which say whether the server raised an alert
@@ -266,16 +267,22 @@ type PaymentOps interface {
 	ListRefunds(ctx context.Context, req dtos.ListRefundsRequest) (*dtos.ListRefundsResponse, error)
 }
 
+// httpTimeout bounds every call so a stalled connection cannot hang a run.
+const httpTimeout = 60 * time.Second
+
 func NewSDKClient(apiHost, apiKey string) Client {
+	httpClient := &http.Client{Timeout: httpTimeout}
 	sdk := flexprice.New(
 		flexprice.WithServerURL(apiHost),
 		flexprice.WithSecurity(apiKey),
+		flexprice.WithClient(httpClient),
 	)
-	return &sdkClient{sdk: sdk, apiHost: apiHost, apiKey: apiKey}
+	return &sdkClient{sdk: sdk, apiHost: apiHost, apiKey: apiKey, http: httpClient}
 }
 
 type sdkClient struct {
-	sdk *flexprice.Flexprice
+	sdk  *flexprice.Flexprice
+	http *http.Client
 	// apiHost + apiKey are captured here so raw-HTTP methods
 	// (EntitlementOps.CreateWithGrant + GetRaw, PriceOps.CreateBucketed)
 	// can bypass the SDK's
@@ -461,7 +468,7 @@ func (o priceOps) CreateBucketed(ctx context.Context, req types.CreatePriceReque
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := o.parent.http.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("do request: %w", err)
 	}
@@ -561,16 +568,6 @@ func (o eventOps) IngestBulk(ctx context.Context, req types.BulkIngestEventReque
 	_, err := o.s.IngestEventsBulk(ctx, req)
 	return err
 }
-func (o eventOps) GetUsageByMeter(ctx context.Context, req types.GetUsageByMeterRequest) (*types.GetUsageResponse, error) {
-	resp, err := o.s.GetUsageByMeter(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if resp == nil {
-		return nil, nil
-	}
-	return resp.GetUsageResponse, nil
-}
 
 type invoiceOps struct{ s *flexprice.Invoices }
 
@@ -633,7 +630,7 @@ func (o entitlementOps) CreateWithGrant(ctx context.Context, req GrantEntitlemen
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := o.parent.http.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("do request: %w", err)
 	}
@@ -662,7 +659,7 @@ func (o entitlementOps) GetRaw(ctx context.Context, id string) (*GrantEntitlemen
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := o.parent.http.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
@@ -905,7 +902,7 @@ func (c *sdkClient) doRaw(ctx context.Context, method, path, sessionToken string
 		httpReq.Header.Set("x-api-key", c.apiKey)
 	}
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := c.http.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("do request: %w", err)
 	}

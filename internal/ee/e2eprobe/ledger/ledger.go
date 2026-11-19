@@ -55,6 +55,19 @@ func (l *Ledger) Recorded(persona string, tickEnd time.Time) bool {
 	return l.sent[persona][tickEnd.UTC()]
 }
 
+// Last is the newest tick recorded for the persona.
+func (l *Ledger) Last(persona string) (time.Time, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var last time.Time
+	for t := range l.sent[persona] {
+		if t.After(last) {
+			last = t
+		}
+	}
+	return last, !last.IsZero()
+}
+
 // Ticks lists the recorded tick ends in (w.Start, w.End], ascending.
 func (l *Ledger) Ticks(persona string, w Window) []time.Time {
 	l.mu.Lock()

@@ -3,6 +3,7 @@ package scenarios
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
@@ -141,8 +142,8 @@ func (*lifecycle) Kind() e2eprobe.Kind        { return e2eprobe.KindFlow }
 func (*lifecycle) Requires() []e2eprobe.Trait { return []e2eprobe.Trait{e2eprobe.TraitSubscription} }
 
 func (s *lifecycle) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Result {
-	if n := sc.World().Ephemerals().Count("customer"); n >= s.maxBacklog {
-		return sc.Skip("backlog", fmt.Sprintf("%d ephemeral customers still pending cleanup", n))
+	if n := ownClones(sc); n >= s.maxBacklog {
+		return sc.Skip("backlog", fmt.Sprintf("%d lifecycle clones still pending cleanup", n))
 	}
 	eph, err := sc.Clone(ctx)
 	if err != nil {
@@ -166,4 +167,17 @@ func (s *lifecycle) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Resu
 	}
 	sc.Attr("customer_created_webhook", webhook)
 	return sc.Result("lifecycle")
+}
+
+// ownClones counts the live clones this scenario created; other flows' clones
+// are the janitor's business, not a reason to stop.
+func ownClones(sc *scenario.Context) int {
+	prefix := world.EphemeralPrefix + sc.Scenario() + "-"
+	n := 0
+	for _, e := range sc.World().Ephemerals().List("customer") {
+		if strings.HasPrefix(e.ID, prefix) {
+			n++
+		}
+	}
+	return n
 }

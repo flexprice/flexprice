@@ -67,3 +67,26 @@ func TestIngest_SkipsPersonaWithoutProfile(t *testing.T) {
 		t.Fatalf("result = %+v", r)
 	}
 }
+
+func TestIngest_BackfillsMissedTicks(t *testing.T) {
+	d := newTestDeps(t)
+	d.now = testNow.Add(3 * time.Minute)
+	run(t, d, newIngest(d.Deps), "taxed")
+	d.now = testNow.Add(33 * time.Minute)
+	if r := run(t, d, newIngest(d.Deps), "taxed"); r.Status != e2eprobe.StatusPass {
+		t.Fatalf("result = %+v", r)
+	}
+	if len(d.fc.Event.Batches) != 4 {
+		t.Fatalf("missed ticks must be backfilled: %d batches, want 4", len(d.fc.Event.Batches))
+	}
+	for _, offset := range []time.Duration{10 * time.Minute, 20 * time.Minute, 30 * time.Minute} {
+		if !d.Ledger.Recorded("taxed", testNow.Add(offset)) {
+			t.Errorf("tick %s not recorded", testNow.Add(offset))
+		}
+	}
+	d.now = testNow.Add(5 * time.Hour)
+	run(t, d, newIngest(d.Deps), "taxed")
+	if len(d.fc.Event.Batches) != 10 {
+		t.Fatalf("backfill is bounded to six ticks: %d batches, want 10", len(d.fc.Event.Batches))
+	}
+}

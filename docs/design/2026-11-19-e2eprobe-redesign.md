@@ -64,12 +64,13 @@ correctness, not just liveness. Today it cannot carry that weight:
 
 - **Read performance.** `events` is sorted by `(tenant, environment, timestamp, id)` with a coarse
   bloom filter on `external_customer_id`; `meter_usage` is keyed by
-  `(tenant, environment, external_customer_id, meter_id, timestamp)`. Allowed reads are therefore
-  `POST /events/analytics`, `POST /events/usage/meter`, `POST /subscriptions/usage`,
-  `GET /customers/usage`, `GET /wallets/{id}/balance/real-time`, entitlement, invoice, preview and
-  other Postgres-backed endpoints. Banned: `POST /events/query`, `GET /events`,
-  `GET /events/lookup`, `POST /events/usage` (raw aggregation). The probe's `Client` interface
-  simply does not expose the banned calls.
+  `(tenant, environment, external_customer_id, meter_id, timestamp)`. The only ClickHouse read the
+  probe makes is `POST /events/analytics`, which the server answers from `meter_usage` (bucketed
+  meters as the sum of each bucket's aggregate). `POST /subscriptions/usage`, `GET /customers/usage`,
+  `GET /wallets/{id}/balance/real-time`, entitlement, invoice, preview and the other Postgres-backed
+  endpoints are allowed. Banned: `POST /events/query`, `GET /events`, `GET /events/lookup`,
+  `POST /events/usage` and `POST /events/usage/meter`, which all aggregate the raw `events` table.
+  The probe's `Client` interface simply does not expose the banned calls.
 - **Every ClickHouse read is bounded** to one customer, named meters or features, and an explicit
   time window no wider than one day.
 - **Ingest load** is declared and budgeted. Default cadence is one bulk batch per persona every
@@ -120,7 +121,7 @@ Three independent axes were decided. Each row lists the consequence of choosing 
 internal/ee/e2eprobe/
   e2eprobe.go       Kind, Status, Result, Attrs: the shared vocabulary
   error.go          CheckError and SDK error enrichment (kept)
-  client*.go        SDK adapters (kept; EventOps drops ListRaw, gains IngestBulk and GetUsageByMeter)
+  client*.go        SDK adapters (kept; EventOps drops ListRaw and gains IngestBulk)
   otel.go           tracer provider (kept)
   bootstrap/        airgapped signup bootstrap (kept)
   suite/            suite file types, loader with embedded default, validation, Describe
@@ -360,10 +361,9 @@ misconfigured gateway shows as one preflight incident plus explicit coverage gap
 
 - `suite.Validate` computes events per day from personas, profiles and `tick`; `run` refuses to
   start above `max_events_per_day` and `describe` prints the figure.
-- The `usage` scenario reads one `POST /events/analytics` per persona per run (grouped by feature,
-  bounded to the last closed hour) and compares every feature against the oracle; `usage/meter` is
-  used for targeted re-checks and bucketed windows. Roughly a dozen ClickHouse queries per tick for
-  the default suite.
+- The `usage` scenario reads one `POST /events/analytics` per persona per run (every meter of the
+  profile, bounded to the last closed hour) and compares each against the oracle. Eight ClickHouse
+  reads per 15 minutes for the default suite.
 - No scenario polls immediately after ingest except the alert and preview flows, which are bounded
   and infrequent.
 
@@ -385,7 +385,7 @@ misconfigured gateway shows as one preflight incident plus explicit coverage gap
 | provision | maintenance | tenant | seed-ensure | plans, features, subscriptions, wallets |
 | preflight | preflight | tenant | (new) | connections, settings, plans |
 | ingest | probe (every tick) | trait events | event-ingest-driver | ingest |
-| usage | probe | trait events | analytics-probe, meter-aggregation-probe, bucketed-meter-probe | analytics (unbucketed meters), usage/meter (bucketed meters) |
+| usage | probe | trait events | analytics-probe, meter-aggregation-probe, bucketed-meter-probe | analytics |
 | wallet-debit | probe | wallet + events | wallet-balance-probe, wallet-debit-verification | wallet balance, analytics |
 | invoice-freshness | probe | subscription | cycle-invoice-probe | invoices |
 | invoice-tax, invoice-coupon, invoice-commitment, invoice-multi-cadence (the `invoice` suite entry with `families`) | probe | tax, coupon, commitment, multi_cadence | persistent-billing-invariants-probe, multi-cadence-invoice-probe | invoices |

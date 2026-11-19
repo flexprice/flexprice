@@ -15,8 +15,9 @@ import (
 // taken as landed.
 const aggregationGrace = 3 * time.Minute
 
-// usage compares the persona's last closed hour with the oracle: one analytics
-// read covers the plain meters, one usage/meter read per bucketed meter.
+// usage compares the persona's last closed hour with the oracle through one
+// analytics read; the server serves bucketed meters from meter_usage as the sum
+// of each bucket's aggregate, which is what the oracle predicts.
 type usage struct{}
 
 func newUsage(scenario.Deps) *usage { return &usage{} }
@@ -41,8 +42,8 @@ func (*usage) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Result {
 	if !sc.Ledger().Complete(p.Name(), w, sc.Tick()) {
 		return sc.Skip("window", "partial hour: probe did not send every tick")
 	}
-	plain, bucketed := splitMeters(profile)
-	if len(plain)+len(bucketed) == 0 {
+	meters := profileMeters(profile)
+	if len(meters) == 0 {
 		return sc.Skip("profile", "events profile has no meters")
 	}
 	ticks := sc.Ledger().Ticks(p.Name(), w)
@@ -50,56 +51,35 @@ func (*usage) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Result {
 	fx := sc.World().Fixtures()
 	ext := p.ExternalID()
 
-	if len(plain) > 0 {
-		featureIDs := make([]string, 0, len(plain))
-		for _, m := range plain {
-			featureIDs = append(featureIDs, fx.FeatureID(m.Key))
-		}
-		resp, err := sc.Client().Events().GetUsageAnalytics(ctx, types.GetUsageAnalyticsRequest{
-			ExternalCustomerID: &ext,
-			FeatureIds:         featureIDs,
-			StartTime:          &w.Start,
-			EndTime:            &w.End,
-		})
-		if err != nil {
-			return sc.Fail("analytics", err)
-		}
-		got := usageByFeature(resp.GetGetUsageAnalyticsResponse().GetItems(), p.SubscriptionID())
-		for _, m := range plain {
-			sc.Quantity(m.Key+" usage", o.Expect(m, ticks), got[fx.FeatureID(m.Key)])
-		}
+	featureIDs := make([]string, 0, len(meters))
+	for _, m := range meters {
+		featureIDs = append(featureIDs, fx.FeatureID(m.Key))
 	}
-	for _, m := range bucketed {
-		bucket := m.Bucket()
-		resp, err := sc.Client().Events().GetUsageByMeter(ctx, types.GetUsageByMeterRequest{
-			MeterID:            fx.MeterID(m.Key),
-			ExternalCustomerID: &ext,
-			StartTime:          &w.Start,
-			EndTime:            &w.End,
-			WindowSize:         &bucket,
-		})
-		if err != nil {
-			return sc.Fail("usage_by_meter", err)
-		}
-		sc.Quantity(m.Key+" usage", o.Expect(m, ticks), windowTotal(resp))
+	resp, err := sc.Client().Events().GetUsageAnalytics(ctx, types.GetUsageAnalyticsRequest{
+		ExternalCustomerID: &ext,
+		FeatureIds:         featureIDs,
+		StartTime:          &w.Start,
+		EndTime:            &w.End,
+	})
+	if err != nil {
+		return sc.Fail("analytics", err)
+	}
+	got := usageByFeature(resp.GetGetUsageAnalyticsResponse().GetItems(), p.SubscriptionID())
+	for _, m := range meters {
+		sc.Quantity(m.Key+" usage", o.Expect(m, ticks), got[fx.FeatureID(m.Key)])
 	}
 	return sc.Result("assert_usage")
 }
 
-// splitMeters sorts the profile's meters into the analytics-readable ones and
-// the bucketed ones, keeping catalog order.
-func splitMeters(p ledger.Profile) (plain, bucketed []e2eprobe.Meter) {
+// profileMeters resolves the profile's meter keys against the catalog, keeping its order.
+func profileMeters(p ledger.Profile) []e2eprobe.Meter {
+	var out []e2eprobe.Meter
 	for _, key := range p.Meters() {
-		m, ok := e2eprobe.MeterByKey(key)
-		switch {
-		case !ok:
-		case m.Bucketed():
-			bucketed = append(bucketed, m)
-		default:
-			plain = append(plain, m)
+		if m, ok := e2eprobe.MeterByKey(key); ok {
+			out = append(out, m)
 		}
 	}
-	return plain, bucketed
+	return out
 }
 
 // usageByFeature sums total_usage per feature over the items of the persona's
@@ -124,25 +104,4 @@ func number(s *string) decimal.Decimal {
 		return decimal.Zero
 	}
 	return v
-}
-
-// windowTotal sums the per-window results, falling back to the flat value
-// when the server returned none.
-func windowTotal(resp *types.GetUsageResponse) decimal.Decimal {
-	if resp == nil {
-		return decimal.Zero
-	}
-	if len(resp.Results) == 0 {
-		if resp.Value == nil {
-			return decimal.Zero
-		}
-		return decimal.NewFromFloat(*resp.Value)
-	}
-	total := decimal.Zero
-	for _, r := range resp.Results {
-		if r.Value != nil {
-			total = total.Add(decimal.NewFromFloat(*r.Value))
-		}
-	}
-	return total
 }

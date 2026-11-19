@@ -69,12 +69,10 @@ func (t *Tracker) Observe(ctx context.Context, k Key, r e2eprobe.Result) {
 			st.SkippingSince = now
 		}
 
-	case r.Infra:
-		// Infrastructure errors feed the region rollup only.
-		t.infraSeen[k.String()] = now
-		st.SkippingSince = time.Time{}
-
 	default:
+		if r.Infra {
+			t.infraSeen[k.String()] = now
+		}
 		if st.Incident != nil && st.Incident.Kind == KindCoverage {
 			t.resolve(ctx, st, now)
 		}
@@ -84,10 +82,13 @@ func (t *Tracker) Observe(ctx context.Context, k Key, r e2eprobe.Result) {
 			st.FailingSince = now
 		}
 		policy := t.policy(k)
-		if st.Incident != nil {
+		switch {
+		case st.Incident != nil:
 			st.Incident.Runs = st.Consecutive
 			st.Incident.Summary = r.Summary()
-		} else if st.Consecutive >= policy.AfterFailures && now.Sub(st.FailingSince) >= policy.AfterDuration {
+		case r.Infra && t.state.Infra != nil:
+			// A region-wide outage is one incident; its bindings do not page on their own.
+		case st.Consecutive >= policy.AfterFailures && now.Sub(st.FailingSince) >= policy.AfterDuration:
 			t.open(ctx, st, KindFailure, r.Summary(), now)
 		}
 	}

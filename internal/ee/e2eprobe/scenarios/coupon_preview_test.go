@@ -61,7 +61,7 @@ func TestCouponPreview_MismatchWhenDiscountNotPositive(t *testing.T) {
 	}
 }
 
-func TestCouponPreview_SkipsOnGap(t *testing.T) {
+func TestCouponPreview_RunsDespitePersonaGap(t *testing.T) {
 	d := newTestDeps(t)
 	d.fc.CouponAssoc.Items = nil
 	if err := d.World.Provision(context.Background()); err != nil {
@@ -69,11 +69,12 @@ func TestCouponPreview_SkipsOnGap(t *testing.T) {
 	}
 	created := len(d.fc.Customer.Created)
 	r := run(t, d, newCouponPreview(d.Deps), "couponed")
-	if r.Status != e2eprobe.StatusSkip || r.Step != "gap" || !strings.Contains(r.Reason, "predates") {
-		t.Fatalf("result = %+v", r)
+	// The clone is stamped fresh with the coupon, so the persona's adopted subscription does not matter.
+	if r.Status == e2eprobe.StatusSkip {
+		t.Fatalf("a clone flow must not skip on the persona's gap: %+v", r)
 	}
-	if len(d.fc.Customer.Created) != created || len(d.fc.Invoice.PreviewCalls) != 0 {
-		t.Error("a skipped run must not clone or preview")
+	if len(d.fc.Customer.Created) != created+1 || len(d.fc.Invoice.PreviewCalls) != 1 {
+		t.Error("the flow must clone and preview")
 	}
 }
 

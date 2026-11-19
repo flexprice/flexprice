@@ -113,23 +113,6 @@ func TestLifecycle_RecordsWebhookAttr(t *testing.T) {
 	}
 }
 
-func TestLifecycle_SkipsWhenBacklog(t *testing.T) {
-	d := newTestDeps(t)
-	for i := 0; i < 5; i++ {
-		d.World.Ephemerals().Register("customer", fmt.Sprintf("e2eprobe-eph-stuck-%d", i), d.now)
-	}
-	created := len(d.fc.Customer.Created)
-	s := newLifecycle(d.Deps)
-	s.poll = fastPoll
-	r := run(t, d, s, "baseline-a")
-	if r.Status != e2eprobe.StatusSkip || r.Step != "backlog" || !strings.Contains(r.Reason, "5 ephemeral customers") {
-		t.Fatalf("result = %+v", r)
-	}
-	if len(d.fc.Customer.Created) != created || len(d.fc.Event.Batches) != 0 {
-		t.Error("a skipped run must not clone or ingest")
-	}
-}
-
 func TestLifecycle_UsageNeverAnswersIsInfra(t *testing.T) {
 	d := newTestDeps(t)
 	d.fc.Subscription.Usage = func(types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
@@ -179,5 +162,28 @@ func TestPollWindow_Until(t *testing.T) {
 	stop()
 	if err := fastPoll.until(ctx, func() error { return errors.New("x") }); !errors.Is(err, context.Canceled) {
 		t.Fatalf("a cancelled parent must surface as such: %v", err)
+	}
+}
+
+func TestLifecycle_BacklogCountsOnlyItsOwnClones(t *testing.T) {
+	d := newTestDeps(t)
+	for i := 0; i < 5; i++ {
+		d.World.Ephemerals().Register("customer", fmt.Sprintf("%stax-preview-%d", world.EphemeralPrefix, i), d.now)
+	}
+	s := newLifecycle(d.Deps)
+	s.poll = fastPoll
+	if r := run(t, d, s, "baseline-a"); r.Status == e2eprobe.StatusSkip {
+		t.Fatalf("other scenarios' clones must not block lifecycle: %+v", r)
+	}
+	for i := 0; i < 5; i++ {
+		d.World.Ephemerals().Register("customer", fmt.Sprintf("%slifecycle-%d", world.EphemeralPrefix, i), d.now)
+	}
+	created, batches := len(d.fc.Customer.Created), len(d.fc.Event.Batches)
+	r := run(t, d, s, "baseline-a")
+	if r.Status != e2eprobe.StatusSkip || r.Step != "backlog" || !strings.Contains(r.Reason, "6 lifecycle clones") {
+		t.Fatalf("six live lifecycle clones must skip: %+v", r)
+	}
+	if len(d.fc.Customer.Created) != created || len(d.fc.Event.Batches) != batches {
+		t.Error("a skipped run must not clone or ingest")
 	}
 }

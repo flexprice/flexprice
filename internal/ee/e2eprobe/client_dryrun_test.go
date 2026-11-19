@@ -123,7 +123,7 @@ func (f *fakeWalletOps) TopUp(_ context.Context, _ string, _ types.TopUpWalletRe
 	return &dtos.TopUpWalletResponse{}, nil
 }
 
-type fakeEventOps struct{ ingestCalled, readCalled int32 }
+type fakeEventOps struct{ ingestCalled int32 }
 
 func (f *fakeEventOps) Ingest(_ context.Context, _ types.IngestEventRequest) (*dtos.IngestEventResponse, error) {
 	atomic.AddInt32(&f.ingestCalled, 1)
@@ -135,10 +135,6 @@ func (f *fakeEventOps) GetUsageAnalytics(_ context.Context, _ types.GetUsageAnal
 func (f *fakeEventOps) IngestBulk(_ context.Context, req types.BulkIngestEventRequest) error {
 	atomic.AddInt32(&f.ingestCalled, int32(len(req.Events)))
 	return nil
-}
-func (f *fakeEventOps) GetUsageByMeter(_ context.Context, _ types.GetUsageByMeterRequest) (*types.GetUsageResponse, error) {
-	atomic.AddInt32(&f.readCalled, 1)
-	return &types.GetUsageResponse{}, nil
 }
 
 type fakeAlertOps struct{ calls int32 }
@@ -562,9 +558,6 @@ func TestDryRunClient_ReadsPassThrough(t *testing.T) {
 	if inner.invoices.queryCalled == 0 {
 		t.Error("inner.invoices.Query was never called; reads should pass through")
 	}
-	if _, err := dry.Events().GetUsageByMeter(ctx, types.GetUsageByMeterRequest{MeterID: "m"}); err != nil {
-		t.Fatalf("Events.GetUsageByMeter: %v", err)
-	}
 	if _, err := dry.Alerts().QueryLogs(ctx, types.AlertLogFilter{}); err != nil {
 		t.Fatalf("Alerts.QueryLogs: %v", err)
 	}
@@ -575,8 +568,8 @@ func TestDryRunClient_ReadsPassThrough(t *testing.T) {
 	if _, err := dry.Tenant().GetSetting(ctx, "invoice_config"); err != nil {
 		t.Fatalf("Tenant.GetSetting: %v", err)
 	}
-	if inner.events.readCalled != 1 || inner.alerts.calls != 1 || inner.tenant.calls != 2 {
-		t.Errorf("keyed reads must reach inner: events=%d alerts=%d tenant=%d", inner.events.readCalled, inner.alerts.calls, inner.tenant.calls)
+	if inner.alerts.calls != 1 || inner.tenant.calls != 2 {
+		t.Errorf("keyed reads must reach inner: alerts=%d tenant=%d", inner.alerts.calls, inner.tenant.calls)
 	}
 }
 

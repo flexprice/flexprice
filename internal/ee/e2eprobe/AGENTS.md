@@ -59,12 +59,12 @@ Inside `Run`:
 ## 3. Reads the client allows
 
 Only endpoints backed by `meter_usage` or Postgres: `events/analytics`
-(`GetUsageAnalytics`), `events/usage/meter` (`GetUsageByMeter`), subscription
-usage, customer usage summary, wallet balance, invoices, previews, entitlements,
-alert logs, connections, settings. Raw event listing, event lookup and the
-raw-table usage endpoint are not on the `Client` on purpose: the `events` table
-is sorted by time only. Bound every ClickHouse read to one customer and one window
-of at most a day.
+(`GetUsageAnalytics`, the one ClickHouse read), subscription usage, customer
+usage summary, wallet balance, invoices, previews, entitlements, alert logs,
+connections, settings. Raw event listing, event lookup, `events/usage` and
+`events/usage/meter` are not on the `Client` on purpose: they aggregate the
+`events` table, which is sorted by time only. Bound every ClickHouse read to one
+customer and one window of at most a day.
 
 ## 4. Adding a trait, a profile or a meter
 
@@ -94,8 +94,8 @@ Formatting lives in `incident/slack.go` and `incident/digest.go`.
 - `probetest.New()` is a stateful fake: created customers resolve by external id,
   subscriptions snapshot plan prices into line items, wallets add top-ups,
   coupons attach at subscription create, tax associations resolve codes.
-  Steer behaviour through its exported fields (`Analytics`, `UsageByMeter`,
-  `Preview`, `Balance`, `*Err`) rather than adding branches to production code.
+  Steer behaviour through its exported fields (`Analytics`, `Preview`,
+  `Balance`, `*Err`) rather than adding branches to production code.
 - `newTestDeps(t)` in `scenarios/testdeps_test.go` provisions the default suite
   against the fake and shares one clock between the fake and the probe
   (`d.now`, `d.advance`).
@@ -111,6 +111,6 @@ Formatting lives in `incident/slack.go` and `incident/digest.go`.
 | "I'll give the wallet persona an events profile" | Scheduled batches would land inside the debit poll and the expected delta stops being exact. Wallet scenarios drive their own ingest. |
 | "I'll assert the current hour" | Rows land with a lag; assert the last full hour after a grace, and skip when the ledger says a batch is missing. |
 | "A skip is harmless" | A skip that never clears is silent coverage loss; the tracker pages after `skip_after`. Say what unblocks it. |
-| "I'll read raw events to see if ingest landed" | Scans the events table. Read `events/usage/meter` for the customer, meter and window instead. |
+| "I'll read raw events to see if ingest landed" | Scans the events table. Read `events/analytics` for the customer and window instead. |
 | "This persona has two subscriptions" | Analytics items repeat per subscription; filter on `SubscriptionID == persona.SubscriptionID()`. |
 | "Time to add an env var" | Optional configuration goes in the suite file; env is for secrets, endpoints and process knobs. |

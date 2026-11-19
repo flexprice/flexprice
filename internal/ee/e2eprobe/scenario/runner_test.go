@@ -157,3 +157,28 @@ func TestStart_UsesTickWhenEveryZero(t *testing.T) {
 		t.Errorf("a zero interval must fall back to the tick; got %d runs", got)
 	}
 }
+
+func TestRunOnce_RunTimeoutBoundsAScenario(t *testing.T) {
+	deps, _ := newDeps(t, true)
+	cat := NewCatalog()
+	registerStub(cat, "usage", []e2eprobe.Trait{e2eprobe.TraitEvents}, time.Hour, func(ctx context.Context, sc *Context) e2eprobe.Result {
+		<-ctx.Done()
+		return sc.Fail("hang", ctx.Err())
+	})
+	tracker, _ := newTracker(t, deps)
+	b := suite.Binding{Scenario: "usage", Persona: "taxed", Every: time.Hour}
+	r, _ := NewRunner(cat, deps, []suite.Binding{b}, tracker, nil, Options{RunTimeout: 50 * time.Millisecond})
+	done := make(chan e2eprobe.Result, 1)
+	go func() { done <- r.RunOnce(context.Background(), b) }()
+	select {
+	case res := <-done:
+		if res.Status != e2eprobe.StatusFail || !res.Infra {
+			t.Fatalf("a timed-out run is an infrastructure failure, got %+v", res)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("run was not bounded by RunTimeout")
+	}
+	if st := tracker.Snapshot().Bindings["usage · taxed"]; st == nil || st.Runs != 1 {
+		t.Error("a timed-out run must still be recorded")
+	}
+}

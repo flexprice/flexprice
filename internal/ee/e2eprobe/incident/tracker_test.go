@@ -138,20 +138,36 @@ func TestTracker_ResolvesOnPass(t *testing.T) {
 	}
 }
 
-func TestTracker_InfraFailsNeverOpenBindingIncident(t *testing.T) {
+func TestTracker_InfraFailsPageAfterThresholds(t *testing.T) {
 	tr, rec, clock := newTestTracker(t, FileStore(""))
 	ctx := context.Background()
 	infra := e2eprobe.Fail("get", sdkerrors.NewAPIError("down", 503, "", nil), nil)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		tr.Observe(ctx, usageTaxed, infra)
 		clock.Advance(10 * time.Minute)
 	}
-	tr.Tick(ctx)
-	if len(rec.events) != 0 {
-		t.Fatalf("infra failures on one binding must stay quiet, got %v", rec.events)
+	if len(rec.events) != 1 || rec.events[0] != "opened:usage · taxed:failure" {
+		t.Fatalf("a single endpoint failing for 20 minutes must page, got %v", rec.events)
 	}
-	if st := tr.Snapshot().Bindings[usageTaxed.String()]; st.Runs != 5 || st.Last.Infra != true {
-		t.Errorf("infra runs must still be recorded: %+v", st)
+	if st := tr.Snapshot().Bindings[usageTaxed.String()]; st.Consecutive != 3 || st.Last.Infra != true {
+		t.Errorf("infra runs must count: %+v", st)
+	}
+}
+
+func TestTracker_InfraFailsDoNotOpenWhileRollupOpen(t *testing.T) {
+	tr, rec, clock := newTestTracker(t, FileStore(""))
+	ctx := context.Background()
+	infra := e2eprobe.Fail("get", sdkerrors.NewAPIError("down", 503, "", nil), nil)
+	keys := []Key{{Scenario: "usage", Persona: "a"}, {Scenario: "usage", Persona: "b"}, {Scenario: "wallet-debit", Persona: "wallet-a"}}
+	for i := 0; i < 3; i++ {
+		for _, k := range keys {
+			tr.Observe(ctx, k, infra)
+		}
+		tr.Tick(ctx)
+		clock.Advance(10 * time.Minute)
+	}
+	if len(rec.events) != 1 || rec.events[0] != "opened:api:infra" {
+		t.Fatalf("a region-wide outage pages once, as the rollup: %v", rec.events)
 	}
 }
 

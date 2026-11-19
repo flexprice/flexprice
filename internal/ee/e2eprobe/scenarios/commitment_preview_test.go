@@ -151,7 +151,7 @@ func TestCommitmentPreview_UsageErrorIsInfra(t *testing.T) {
 	}
 }
 
-func TestCommitmentPreview_SkipsOnGap(t *testing.T) {
+func TestCommitmentPreview_RunsDespitePersonaGap(t *testing.T) {
 	d := newTestDeps(t)
 	committed, _ := d.World.Persona("committed")
 	sub := d.fc.Subscription.Items[committed.SubscriptionID()]
@@ -164,10 +164,11 @@ func TestCommitmentPreview_SkipsOnGap(t *testing.T) {
 	s := newCommitmentPreview(d.Deps)
 	s.poll = fastPoll
 	r := run(t, d, s, "committed")
-	if r.Status != e2eprobe.StatusSkip || r.Step != "gap" || !strings.Contains(r.Reason, "predates") {
-		t.Fatalf("result = %+v", r)
+	// The clone carries its own commitment; the persona's adopted subscription is irrelevant here.
+	if r.Status == e2eprobe.StatusSkip {
+		t.Fatalf("a clone flow must not skip on the persona's gap: %+v", r)
 	}
-	if len(d.fc.Customer.Created) != created || len(d.fc.Event.Batches) != 0 {
-		t.Error("a skipped run must not clone or ingest")
+	if len(d.fc.Customer.Created) != created+1 || len(d.fc.Event.Batches) == 0 {
+		t.Error("the flow must clone and ingest")
 	}
 }

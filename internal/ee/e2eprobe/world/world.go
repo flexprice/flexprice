@@ -54,10 +54,12 @@ func (w *World) Provision(ctx context.Context) error {
 	for _, spec := range w.suite.Personas {
 		p := w.personas[spec.Name]
 		err := w.provisionPersona(ctx, p)
-		p.update(func(p *Persona) { p.ready = err == nil })
 		if err != nil {
+			// The last good state stands; a transient error must not silence every scenario on the persona.
 			errs = append(errs, fmt.Errorf("persona %s: %w", spec.Name, err))
+			continue
 		}
+		p.update(func(p *Persona) { p.ready = true })
 	}
 	return errors.Join(errs...)
 }

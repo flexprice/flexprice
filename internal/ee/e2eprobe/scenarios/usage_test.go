@@ -59,28 +59,16 @@ func (f *usageFixture) expect(key string) decimal.Decimal {
 }
 
 func (f *usageFixture) featureID(key string) string { return f.d.World.Fixtures().FeatureID(key) }
-func (f *usageFixture) meterID(key string) string   { return f.d.World.Fixtures().MeterID(key) }
-
-func (f *usageFixture) meterKey(meterID string) string {
-	for _, m := range e2eprobe.Meters() {
-		if f.meterID(m.Key) == meterID {
-			return m.Key
-		}
-	}
-	return ""
-}
 
 func (f *usageFixture) item(key string, usage decimal.Decimal, subscriptionID *string) types.UsageAnalyticItem {
 	return types.UsageAnalyticItem{FeatureID: probetest.Ptr(f.featureID(key)), TotalUsage: probetest.Ptr(usage.String()), SubscriptionID: subscriptionID}
 }
 
-// oracleItems is one analytics item per unbucketed meter, at the oracle's value.
+// oracleItems is one analytics item per profile meter, bucketed ones included,
+// at the oracle's value.
 func (f *usageFixture) oracleItems(subscriptionID *string) []types.UsageAnalyticItem {
 	var out []types.UsageAnalyticItem
 	for _, key := range f.profile.Meters() {
-		if m, _ := e2eprobe.MeterByKey(key); m.Bucketed() {
-			continue
-		}
 		out = append(out, f.item(key, f.expect(key), subscriptionID))
 	}
 	return out
@@ -89,19 +77,6 @@ func (f *usageFixture) oracleItems(subscriptionID *string) []types.UsageAnalytic
 func analyticsOf(items []types.UsageAnalyticItem) func(types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	return func(types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 		return &dtos.GetUsageAnalyticsResponse{GetUsageAnalyticsResponse: &types.GetUsageAnalyticsResponse{Items: items}}, nil
-	}
-}
-
-// oracleByMeter answers usage/meter with the oracle's value split over two windows.
-func (f *usageFixture) oracleByMeter() func(types.GetUsageByMeterRequest) (*types.GetUsageResponse, error) {
-	return func(req types.GetUsageByMeterRequest) (*types.GetUsageResponse, error) {
-		key := f.meterKey(req.MeterID)
-		if key == "" {
-			return nil, probetest.NotFound()
-		}
-		want, _ := f.expect(key).Float64()
-		half := want / 2
-		return &types.GetUsageResponse{Results: []types.UsageResult{{Value: &half}, {Value: &half}}}, nil
 	}
 }
 
@@ -124,7 +99,7 @@ func TestUsage_SkipsPartialWindow(t *testing.T) {
 	if want := f.window.Start.Format(time.RFC3339) + ".." + f.window.End.Format(time.RFC3339); r.Attrs["window"] != want {
 		t.Errorf("attrs = %v, want window %s", r.Attrs, want)
 	}
-	if len(f.d.fc.Event.AnalyticsRequests)+len(f.d.fc.Event.UsageByMeterRequests) != 0 {
+	if len(f.d.fc.Event.AnalyticsRequests) != 0 {
 		t.Error("a partial window must not be read")
 	}
 }
@@ -140,25 +115,30 @@ func TestUsage_PassesWhenAnalyticsMatchesOracle(t *testing.T) {
 	f := newUsageFixture(t, "taxed")
 	f.send(f.hourTicks())
 	f.d.fc.Event.Analytics = analyticsOf(f.oracleItems(nil))
-	f.d.fc.Event.UsageByMeter = f.oracleByMeter()
 	r := run(t, f.d, newUsage(f.d.Deps), "taxed")
 	if r.Status != e2eprobe.StatusPass {
 		t.Fatalf("result = %+v", r)
 	}
-	if len(f.d.fc.Event.AnalyticsRequests) != 1 || len(f.d.fc.Event.UsageByMeterRequests) != 3 {
-		t.Errorf("reads = %d analytics, %d usage/meter; want 1 and 3 (max, max_price_hour, sum_price_hour)", len(f.d.fc.Event.AnalyticsRequests), len(f.d.fc.Event.UsageByMeterRequests))
+	if len(f.d.fc.Event.AnalyticsRequests) != 1 {
+		t.Errorf("reads = %d analytics; want exactly one", len(f.d.fc.Event.AnalyticsRequests))
 	}
 }
 
 func TestUsage_MismatchListsEveryFeature(t *testing.T) {
 	f := newUsageFixture(t, "taxed")
 	f.send(f.hourTicks())
-	items := []types.UsageAnalyticItem{f.item("count", decimal.NewFromInt(31), nil)}
-	for _, key := range []string{"avg", "count_unique", "latest", "sum_multiplier", "sum_filtered"} {
-		items = append(items, f.item(key, f.expect(key), nil))
+	var items []types.UsageAnalyticItem
+	for _, key := range f.profile.Meters() {
+		switch key {
+		case "count":
+			items = append(items, f.item(key, decimal.NewFromInt(31), nil))
+		case "sum":
+			// no item: the server reports nothing for this feature
+		default:
+			items = append(items, f.item(key, f.expect(key), nil))
+		}
 	}
 	f.d.fc.Event.Analytics = analyticsOf(items)
-	f.d.fc.Event.UsageByMeter = f.oracleByMeter()
 	r := run(t, f.d, newUsage(f.d.Deps), "taxed")
 	if r.Status != e2eprobe.StatusFail || r.Step != "assert_usage" || r.Infra {
 		t.Fatalf("result = %+v", r)
@@ -184,16 +164,11 @@ func TestUsage_RequestIsBoundedToPersonaAndWindow(t *testing.T) {
 		t.Errorf("window = %v..%v, want %v..%v", req.StartTime, req.EndTime, f.window.Start, f.window.End)
 	}
 	var want []string
-	for _, key := range []string{"count", "sum", "avg", "count_unique", "latest", "sum_multiplier", "sum_filtered"} {
+	for _, key := range []string{"count", "sum", "avg", "count_unique", "latest", "max", "sum_multiplier", "sum_filtered", "max_price_hour", "sum_price_hour"} {
 		want = append(want, f.featureID(key))
 	}
 	if !reflect.DeepEqual(req.FeatureIds, want) {
-		t.Errorf("feature_ids = %v, want the unbucketed meters %v", req.FeatureIds, want)
-	}
-	for _, mr := range f.d.fc.Event.UsageByMeterRequests {
-		if mr.ExternalCustomerID == nil || *mr.ExternalCustomerID != "e2eprobe-cust-persistent-0" || mr.StartTime == nil || !mr.StartTime.Equal(f.window.Start) || mr.EndTime == nil || !mr.EndTime.Equal(f.window.End) {
-			t.Errorf("usage/meter request not bounded: %+v", mr)
-		}
+		t.Errorf("feature_ids = %v, want every profile meter %v", req.FeatureIds, want)
 	}
 }
 
@@ -203,69 +178,48 @@ func TestUsage_IgnoresOtherSubscriptionItems(t *testing.T) {
 	items := f.oracleItems(probetest.Ptr(f.persona.SubscriptionID()))
 	items = append(items, f.oracleItems(probetest.Ptr("sub-quarterly"))...)
 	f.d.fc.Event.Analytics = analyticsOf(items)
-	f.d.fc.Event.UsageByMeter = f.oracleByMeter()
 	if r := run(t, f.d, newUsage(f.d.Deps), "taxed"); r.Status != e2eprobe.StatusPass {
 		t.Fatalf("another subscription's items must not be summed: %+v", r)
 	}
 }
 
-func TestUsage_InfraErrorIsFail(t *testing.T) {
-	cases := []struct {
-		step  string
-		setup func(f *usageFixture)
-	}{
-		{"analytics", func(f *usageFixture) {
-			f.d.fc.Event.Analytics = func(types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
-				return nil, probetest.ServerError(503)
-			}
-		}},
-		{"usage_by_meter", func(f *usageFixture) {
-			f.d.fc.Event.Analytics = analyticsOf(f.oracleItems(nil))
-			f.d.fc.Event.UsageByMeter = func(types.GetUsageByMeterRequest) (*types.GetUsageResponse, error) {
-				return nil, probetest.ServerError(502)
-			}
-		}},
+func TestUsage_AnalyticsErrorIsInfra(t *testing.T) {
+	f := newUsageFixture(t, "taxed")
+	f.send(f.hourTicks())
+	f.d.fc.Event.Analytics = func(types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
+		return nil, probetest.ServerError(503)
 	}
-	for _, tc := range cases {
-		t.Run(tc.step, func(t *testing.T) {
-			f := newUsageFixture(t, "taxed")
-			f.send(f.hourTicks())
-			tc.setup(f)
-			r := run(t, f.d, newUsage(f.d.Deps), "taxed")
-			if r.Status != e2eprobe.StatusFail || r.Step != tc.step || !r.Infra {
-				t.Fatalf("result = %+v", r)
-			}
-		})
+	r := run(t, f.d, newUsage(f.d.Deps), "taxed")
+	if r.Status != e2eprobe.StatusFail || r.Step != "analytics" || !r.Infra {
+		t.Fatalf("result = %+v", r)
 	}
 }
 
-func TestUsage_BucketedUsesBucketWindowSize(t *testing.T) {
+// Bucketed meters are served by analytics as the sum of each bucket's
+// aggregate, which the oracle predicts; no per-meter read is made.
+func TestUsage_BucketedMetersReadThroughAnalytics(t *testing.T) {
 	f := newUsageFixture(t, "bucketed")
 	f.send(f.hourTicks())
-	seven := 7.0
-	f.d.fc.Event.UsageByMeter = func(req types.GetUsageByMeterRequest) (*types.GetUsageResponse, error) {
-		// The quarter-hour meter answers per window; the others only carry the flat value.
-		if f.meterKey(req.MeterID) == "max_15min" {
-			return &types.GetUsageResponse{Results: []types.UsageResult{{Value: &seven}, {Value: &seven}, {Value: &seven}, {Value: &seven}}}, nil
-		}
-		value, _ := f.expect(f.meterKey(req.MeterID)).Float64()
-		return &types.GetUsageResponse{Value: &value}, nil
-	}
+	f.d.fc.Event.Analytics = analyticsOf(f.oracleItems(nil))
 	r := run(t, f.d, newUsage(f.d.Deps), "bucketed")
 	if r.Status != e2eprobe.StatusPass {
 		t.Fatalf("result = %+v", r)
 	}
-	if len(f.d.fc.Event.AnalyticsRequests) != 0 {
-		t.Errorf("a profile of bucketed meters needs no analytics read, got %d", len(f.d.fc.Event.AnalyticsRequests))
+	if len(f.d.fc.Event.AnalyticsRequests) != 1 {
+		t.Fatalf("analytics requests = %d, want 1", len(f.d.fc.Event.AnalyticsRequests))
 	}
-	got := map[string]types.WindowSize{}
-	for _, req := range f.d.fc.Event.UsageByMeterRequests {
-		if req.WindowSize != nil {
-			got[f.meterKey(req.MeterID)] = *req.WindowSize
-		}
+	var want []string
+	for _, key := range []string{"max_15min", "sum_hour", "max_day"} {
+		want = append(want, f.featureID(key))
 	}
-	want := map[string]types.WindowSize{"max_15min": types.WindowSizeFifteenMin, "sum_hour": types.WindowSizeHour, "max_day": types.WindowSizeDay}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("window sizes = %v, want %v", got, want)
+	if got := f.d.fc.Event.AnalyticsRequests[0].FeatureIds; !reflect.DeepEqual(got, want) {
+		t.Errorf("feature_ids = %v, want the bucketed meters %v", got, want)
+	}
+	// A whole-window max instead of the per-bucket sum is a mismatch the probe must see.
+	items := f.oracleItems(nil)
+	items[0] = f.item("max_15min", decimal.NewFromInt(7), nil)
+	f.d.fc.Event.Analytics = analyticsOf(items)
+	if r := run(t, f.d, newUsage(f.d.Deps), "bucketed"); r.Status != e2eprobe.StatusFail || len(r.Mismatches) != 1 || r.Mismatches[0] != "max_15min usage: want "+f.expect("max_15min").String()+", got 7" {
+		t.Errorf("result = %+v", r)
 	}
 }

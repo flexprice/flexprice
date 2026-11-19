@@ -92,3 +92,19 @@ func TestWorld_ProvisionPartialFailureKeepsOthers(t *testing.T) {
 		t.Error("taxed must be ready despite another persona failing")
 	}
 }
+
+func TestWorld_ReprovisionErrorKeepsReadyPersonas(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	if err := w.Provision(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	fc.Customer.GetErr = probetest.ServerError(503)
+	if err := w.Provision(context.Background()); err == nil {
+		t.Fatal("a failing pass must be reported")
+	}
+	for _, p := range w.Personas() {
+		if !p.Ready() {
+			t.Errorf("persona %s lost readiness on a transient error", p.Name())
+		}
+	}
+}

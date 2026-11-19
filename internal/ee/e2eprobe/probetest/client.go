@@ -765,14 +765,12 @@ func (f *Wallets) checkoutTopUp(id string, req types.TopUpWalletRequest) (*dtos.
 type Events struct {
 	mu sync.Mutex
 
-	Ingested             []types.IngestEventRequest
-	Batches              [][]types.IngestEventRequest
-	AnalyticsRequests    []types.GetUsageAnalyticsRequest
-	UsageByMeterRequests []types.GetUsageByMeterRequest
+	Ingested          []types.IngestEventRequest
+	Batches           [][]types.IngestEventRequest
+	AnalyticsRequests []types.GetUsageAnalyticsRequest
 
-	IngestErr    error
-	Analytics    func(req types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error)
-	UsageByMeter func(req types.GetUsageByMeterRequest) (*types.GetUsageResponse, error)
+	IngestErr error
+	Analytics func(req types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error)
 }
 
 func (f *Events) Ingest(_ context.Context, req types.IngestEventRequest) (*dtos.IngestEventResponse, error) {
@@ -805,17 +803,6 @@ func (f *Events) GetUsageAnalytics(_ context.Context, req types.GetUsageAnalytic
 		return fn(req)
 	}
 	return &dtos.GetUsageAnalyticsResponse{GetUsageAnalyticsResponse: &types.GetUsageAnalyticsResponse{}}, nil
-}
-
-func (f *Events) GetUsageByMeter(_ context.Context, req types.GetUsageByMeterRequest) (*types.GetUsageResponse, error) {
-	f.mu.Lock()
-	f.UsageByMeterRequests = append(f.UsageByMeterRequests, req)
-	fn := f.UsageByMeter
-	f.mu.Unlock()
-	if fn != nil {
-		return fn(req)
-	}
-	return &types.GetUsageResponse{}, nil
 }
 
 // ── Invoices ──────────────────────────────────────────────────────────

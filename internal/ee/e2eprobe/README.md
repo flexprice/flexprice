@@ -116,7 +116,7 @@ aggregate each meter must show for any window. A window with a missing batch
 | provision | maintenance | tenant | world provisioning | Postgres |
 | preflight | preflight | tenant | expected connections, settings, fixtures; persona gaps as attributes | connections, settings |
 | ingest | probe (every tick) | events | one bulk batch per tick | ingest |
-| usage | probe | events | exact totals for every meter over the last full hour | `events/analytics`, `events/usage/meter` |
+| usage | probe | events | exact totals for every meter over the last full hour | `events/analytics` |
 | wallet-debit | probe | wallet-a | top-up read-after-write; a 500-unit `sum_commit` ingest debits exactly $5.00 | wallet balance |
 | low-balance-alert | probe | alerts | drives the canary below critical, awaits `wallet.ongoing_balance.dropped`; a miss is attributed to the alert pipeline or to delivery via alert logs | wallet balance, inbox, `alerts/search` |
 | invoice-freshness | probe | subscription | latest cycle invoice within 2 cycles | invoices |
@@ -131,8 +131,9 @@ aggregate each meter must show for any window. A window with a missing batch
 | janitor | maintenance | tenant | removes ephemerals older than `janitor.max_age`; lists legacy fixtures | customers |
 
 Read discipline: nothing reads the raw `events` table (`/events/query`,
-`/events/lookup`, `/events/usage` are not even on the client). ClickHouse reads
-go through `meter_usage`-backed endpoints, bounded to one customer and one window.
+`/events/lookup`, `/events/usage` and `/events/usage/meter` are not even on the
+client). The one ClickHouse read is `/events/analytics`, served from
+`meter_usage`, bounded to one customer and one hour.
 
 ## Incidents
 

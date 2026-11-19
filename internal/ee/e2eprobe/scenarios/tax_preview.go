@@ -30,9 +30,6 @@ func (*taxPreview) Kind() e2eprobe.Kind        { return e2eprobe.KindFlow }
 func (*taxPreview) Requires() []e2eprobe.Trait { return []e2eprobe.Trait{e2eprobe.TraitTax} }
 
 func (s *taxPreview) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Result {
-	if gap := sc.Persona().Gap(e2eprobe.TraitTax); gap != "" {
-		return sc.Skip("gap", gap)
-	}
 	eph, err := sc.Clone(ctx)
 	if err != nil {
 		return sc.Fail("clone", err)

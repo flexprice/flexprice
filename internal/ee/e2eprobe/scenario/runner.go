@@ -25,6 +25,8 @@ type Options struct {
 	Heartbeat   time.Duration
 	DigestEvery time.Duration
 	TrackerTick time.Duration
+	// RunTimeout bounds one run so a hung call cannot pin a slot and silence a binding.
+	RunTimeout time.Duration
 }
 
 func (o Options) withDefaults() Options {
@@ -33,6 +35,9 @@ func (o Options) withDefaults() Options {
 	}
 	if o.TrackerTick <= 0 {
 		o.TrackerTick = time.Minute
+	}
+	if o.RunTimeout <= 0 {
+		o.RunTimeout = 30 * time.Minute
 	}
 	return o
 }
@@ -186,6 +191,9 @@ func (r *Runner) execute(ctx context.Context, it *item) e2eprobe.Result {
 	defer func() { <-r.sem }()
 
 	b := it.binding
+	parent := ctx
+	ctx, cancel := context.WithTimeout(ctx, r.opts.RunTimeout)
+	defer cancel()
 	ctx, span := r.tracer.Start(ctx, "e2eprobe.scenario", trace.WithAttributes(
 		attribute.String("e2eprobe.scenario", b.Scenario),
 		attribute.String("e2eprobe.persona", b.Persona),
@@ -194,7 +202,7 @@ func (r *Runner) execute(ctx context.Context, it *item) e2eprobe.Result {
 	defer span.End()
 
 	res := r.run(ctx, it)
-	if ctx.Err() != nil && res.Status != e2eprobe.StatusPass {
+	if parent.Err() != nil && res.Status != e2eprobe.StatusPass {
 		// A run cut short by shutdown is not evidence either way.
 		return res
 	}
