@@ -297,7 +297,10 @@ func TestInvoiceCommitment_SkipsOnGap(t *testing.T) {
 func TestInvoiceCommitment_SkipsWithoutTrueUp(t *testing.T) {
 	d := newTestDeps(t)
 	p := personaOf(t, d, "committed")
-	// The subscription, like the live persona's, was created without enable_true_up.
+	// An adopted subscription may predate enable_true_up; the probe cannot retrofit it.
+	sub := d.fc.Subscription.Items[p.SubscriptionID()]
+	sub.EnableTrueUp = nil
+	d.fc.Subscription.Items[p.SubscriptionID()] = sub
 	inv := subInvoice(p, p.SubscriptionID(), "inv_commit", types.InvoiceStatusFinalized, d.now)
 	inv.LineItems = []types.InvoiceLineItemResponse{invoiceLine(types.PriceTypeUsage, "E2EProbe Sum Commit Usage", "1.00")}
 	inv.Total = probetest.Ptr("20.99")
