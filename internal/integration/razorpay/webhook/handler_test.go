@@ -895,3 +895,20 @@ func TestHandleSetupEvents(t *testing.T) {
 		})
 	}
 }
+
+func TestIsHandledEvent(t *testing.T) {
+	tests := []struct {
+		eventType string
+		want      bool
+	}{
+		{string(EventPaymentCaptured), true},
+		{string(EventRefundProcessed), true},
+		{string(EventInvoiceExpired), true},
+		{"payment.downtime.started", false},
+		{"payment.downtime.resolved", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, IsHandledEvent(tt.eventType), tt.eventType)
+	}
+}
