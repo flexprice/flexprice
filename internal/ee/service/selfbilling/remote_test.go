@@ -205,6 +205,12 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 					w.WriteHeader(http.StatusNotImplemented)
 					return
 				}
+				if endDate, ok := p["end_date"].(string); ok && body["allow_expired_prices"] != true {
+					end, err := time.Parse(time.RFC3339, endDate)
+					if err == nil && !end.After(time.Now()) {
+						continue
+					}
+				}
 				items = append(items, p)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
