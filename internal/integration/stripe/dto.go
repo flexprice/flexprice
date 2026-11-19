@@ -16,7 +16,7 @@ type CreateStripePaymentLinkRequest struct {
 	SuccessURL             string          `json:"success_url,omitempty"`
 	CancelURL              string          `json:"cancel_url,omitempty"`
 	Metadata               types.Metadata  `json:"metadata,omitempty"`
-	SaveCardAndMakeDefault bool            `json:"save_card_and_make_default,omitempty"`
+	SaveCard               bool            `json:"save_card,omitempty"`
 	PaymentID              string          `json:"payment_id" validate:"required"`
 	TaxIDCollectionEnabled bool            `json:"tax_id_collection_enabled,omitempty"`
 	ExpiresAt              *time.Time      `json:"expires_at,omitempty"`

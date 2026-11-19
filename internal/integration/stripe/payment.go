@@ -414,13 +414,12 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreateStrip
 		},
 	}
 
-	// Only save payment method for future use if SaveCardAndMakeDefault is true
-	if req.SaveCardAndMakeDefault {
+	if req.SaveCard {
 		params.PaymentIntentData = &stripe.CheckoutSessionCreatePaymentIntentDataParams{
 			SetupFutureUsage: stripe.String("off_session"),
 			Metadata:         metadata,
 		}
-		s.logger.Info(ctx, "payment link configured to save card and make default",
+		s.logger.Info(ctx, "payment link configured to save card",
 			"invoice_id", req.InvoiceID,
 			"customer_id", req.CustomerID,
 		)

@@ -376,7 +376,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 		Currency:   paymentObj.Currency,
 		SuccessURL: successURL,
 		CancelURL:  cancelURL,
-		SaveCardAndMakeDefault: func() bool {
+		SaveCard: func() bool {
 			if paymentObj.GatewayMetadata != nil {
 				if saveCardStr, exists := paymentObj.GatewayMetadata["save_card_and_make_default"]; exists {
 					return saveCardStr == "true"
