@@ -8,6 +8,11 @@ import (
 	"text/tabwriter"
 )
 
+// line writes one formatted line; the logger is not the destination here.
+func line(w io.Writer, format string, args ...any) {
+	_, _ = io.WriteString(w, fmt.Sprintf(format, args...))
+}
+
 // Describe prints the coverage matrix: personas, bindings, tenant expectations
 // and the event budget.
 func Describe(w io.Writer, s *Suite, cat Catalog) error {
@@ -16,10 +21,10 @@ func Describe(w io.Writer, s *Suite, cat Catalog) error {
 		return err
 	}
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintf(tw, "e2eprobe suite v%d\n\n", s.Version)
+	line(tw, "e2eprobe suite v%d\n\n", s.Version)
 
-	fmt.Fprintf(tw, "Personas (%d)\n", len(s.Personas))
-	fmt.Fprintln(tw, "NAME\tEXTERNAL ID\tTRAITS\tEVENTS")
+	line(tw, "Personas (%d)\n", len(s.Personas))
+	line(tw, "NAME\tEXTERNAL ID\tTRAITS\tEVENTS"+"\n")
 	for _, p := range s.Personas {
 		traits := make([]string, 0, len(p.Traits))
 		for _, t := range p.Traits {
@@ -30,11 +35,11 @@ func Describe(w io.Writer, s *Suite, cat Catalog) error {
 			size, _ := cat.Profile(p.Events)
 			events = fmt.Sprintf("%s (%d/tick)", p.Events, size)
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", p.Name, p.ExternalIDOrDefault(), strings.Join(traits, ", "), events)
+		line(tw, "%s\t%s\t%s\t%s\n", p.Name, p.ExternalIDOrDefault(), strings.Join(traits, ", "), events)
 	}
 
-	fmt.Fprintf(tw, "\nScenarios (%d bindings)\n", len(bindings))
-	fmt.Fprintln(tw, "SCENARIO\tKIND\tPERSONA\tEVERY")
+	line(tw, "\nScenarios (%d bindings)\n", len(bindings))
+	line(tw, "SCENARIO\tKIND\tPERSONA\tEVERY"+"\n")
 	for _, b := range bindings {
 		persona := b.Persona
 		if persona == "" {
@@ -44,22 +49,22 @@ func Describe(w io.Writer, s *Suite, cat Catalog) error {
 		if b.Every == 0 {
 			every = "tick (" + s.Defaults.Tick.String() + ")"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", b.Scenario, b.Kind, persona, every)
+		line(tw, "%s\t%s\t%s\t%s\n", b.Scenario, b.Kind, persona, every)
 	}
 
-	fmt.Fprintln(tw, "\nTenant")
-	fmt.Fprintf(tw, "connections: %s\n", orNone(strings.Join(s.Tenant.Connections, ", ")))
+	line(tw, "\nTenant"+"\n")
+	line(tw, "connections: %s\n", orNone(strings.Join(s.Tenant.Connections, ", ")))
 	keys := make([]string, 0, len(s.Tenant.Settings))
 	for k := range s.Tenant.Settings {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	fmt.Fprintf(tw, "settings: %s\n", orNone(strings.Join(keys, ", ")))
-	fmt.Fprintf(tw, "webhook silence: %s\n", s.Tenant.Webhooks.SilenceAfter)
+	line(tw, "settings: %s\n", orNone(strings.Join(keys, ", ")))
+	line(tw, "webhook silence: %s\n", s.Tenant.Webhooks.SilenceAfter)
 
-	fmt.Fprintln(tw, "\nLoad")
-	fmt.Fprintf(tw, "tick: %s\n", s.Defaults.Tick)
-	fmt.Fprintf(tw, "events/day: %d of max %d\n", s.EventsPerDay(cat), s.Defaults.Load.MaxEventsPerDay)
+	line(tw, "\nLoad"+"\n")
+	line(tw, "tick: %s\n", s.Defaults.Tick)
+	line(tw, "events/day: %d of max %d\n", s.EventsPerDay(cat), s.Defaults.Load.MaxEventsPerDay)
 	return tw.Flush()
 }
 

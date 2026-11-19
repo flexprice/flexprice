@@ -114,15 +114,15 @@ func FormatOpened(inc Incident, st BindingState) string {
 	var b strings.Builder
 	switch inc.Kind {
 	case KindCoverage:
-		fmt.Fprintf(&b, ":warning: *%s* skipping for %s · %s", inc.Key, humanDuration(inc.OpenedAt.Sub(st.SkippingSince)), st.Last.Reason)
+		b.WriteString(fmt.Sprintf(":warning: *%s* skipping for %s · %s", inc.Key, humanDuration(inc.OpenedAt.Sub(st.SkippingSince)), st.Last.Reason))
 		return b.String()
 	case KindInfra:
-		fmt.Fprintf(&b, ":rotating_light: *API infrastructure* · %s", inc.Summary)
+		b.WriteString(fmt.Sprintf(":rotating_light: *API infrastructure* · %s", inc.Summary))
 		return b.String()
 	}
-	fmt.Fprintf(&b, ":rotating_light: *%s* failing for %s (%d runs)", inc.Key, humanDuration(inc.OpenedAt.Sub(st.FailingSince)), inc.Runs)
+	b.WriteString(fmt.Sprintf(":rotating_light: *%s* failing for %s (%d runs)", inc.Key, humanDuration(inc.OpenedAt.Sub(st.FailingSince)), inc.Runs))
 	if st.Last.Step != "" {
-		fmt.Fprintf(&b, " · step `%s`", st.Last.Step)
+		b.WriteString(fmt.Sprintf(" · step `%s`", st.Last.Step))
 	}
 	lines := st.Last.Mismatches
 	if len(lines) == 0 && st.Last.Reason != "" {
@@ -130,7 +130,7 @@ func FormatOpened(inc Incident, st BindingState) string {
 	}
 	for i, line := range lines {
 		if i == maxMismatchLines {
-			fmt.Fprintf(&b, "\n• +%d more", len(lines)-maxMismatchLines)
+			b.WriteString(fmt.Sprintf("\n• +%d more", len(lines)-maxMismatchLines))
 			break
 		}
 		b.WriteString("\n• " + line)
