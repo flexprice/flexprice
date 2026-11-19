@@ -307,7 +307,14 @@ func (f *fakeCloud) handler(t *testing.T) http.Handler {
 		case r.Method == http.MethodGet && r.URL.Path == pathCustomerUsage:
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"customer_id": "cust_1",
-				"features":    []map[string]any{{"current_usage": "12.5", "is_enabled": true}},
+				"features": []map[string]any{{
+					"current_usage": "12.5",
+					"is_enabled":    true,
+					"feature": map[string]any{
+						"id":             "feat_1",
+						"reporting_unit": map[string]any{"unit_singular": "second", "unit_plural": "seconds", "conversion_rate": "0.001"},
+					},
+				}},
 			})
 
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, pathCustomerPortal):
@@ -973,6 +980,9 @@ func TestRemoteClient_SummaryInvoices(t *testing.T) {
 			require.Len(t, got.usage.Features, 1)
 			assert.Equal(t, "12.5", got.usage.Features[0].CurrentUsage.String())
 			assert.True(t, got.usage.Features[0].IsEnabled)
+			require.NotNil(t, got.usage.Features[0].Feature)
+			require.NotNil(t, got.usage.Features[0].Feature.ReportingUnit)
+			assert.Equal(t, "0.001", lo.FromPtr(got.usage.Features[0].Feature.ReportingUnit.ConversionRate).String())
 		})
 	}
 }
