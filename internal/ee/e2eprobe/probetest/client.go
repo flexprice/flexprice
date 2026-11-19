@@ -425,6 +425,11 @@ type Subscriptions struct {
 	CancelErr    error
 	Entitlements func(subID string) (*dtos.GetSubscriptionEntitlementsResponse, error)
 	Usage        func(req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error)
+
+	// CancelStatus is the status Cancel leaves a subscription in; empty means cancelled.
+	CancelStatus types.SubscriptionStatus
+	// CreateLineItemFn replaces CreateLineItem when set; the stored subscription is left untouched.
+	CreateLineItemFn func(id string, req types.CreateSubscriptionLineItemRequest) error
 }
 
 // Add seeds a subscription for ext as if it existed before the probe ran.
@@ -523,7 +528,10 @@ func (f *Subscriptions) Cancel(_ context.Context, id string, _ types.CancelSubsc
 	if !ok {
 		return nil, NotFound()
 	}
-	status := types.SubscriptionStatusCancelled
+	status := f.CancelStatus
+	if status == "" {
+		status = types.SubscriptionStatusCancelled
+	}
 	sub.SubscriptionStatus = &status
 	f.Items[id] = sub
 	f.Cancelled = append(f.Cancelled, id)
@@ -586,6 +594,15 @@ func (f *Subscriptions) GetUsage(_ context.Context, req types.GetUsageBySubscrip
 }
 
 func (f *Subscriptions) CreateLineItem(_ context.Context, id string, req types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
+	f.mu.Lock()
+	fn := f.CreateLineItemFn
+	f.mu.Unlock()
+	if fn != nil {
+		if err := fn(id, req); err != nil {
+			return nil, err
+		}
+		return &dtos.CreateSubscriptionLineItemResponse{}, nil
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	sub, ok := f.Items[id]
