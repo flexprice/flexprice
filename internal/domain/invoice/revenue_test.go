@@ -84,3 +84,18 @@ func TestInvoice_LineNets(t *testing.T) {
 		})
 	}
 }
+
+func TestInvoice_AppliedTax(t *testing.T) {
+	d := decimal.RequireFromString
+	taxes := []*taxapplied.TaxApplied{
+		{EntityType: types.TaxRateEntityTypeInvoice, EntityID: "inv_1", TaxAmount: d("12"), TaxBehavior: types.TaxBehaviorInclusive},
+		{EntityType: types.TaxRateEntityTypeInvoice, EntityID: "inv_1", TaxAmount: d("18"), TaxBehavior: types.TaxBehaviorExclusive},
+		{EntityType: types.TaxRateEntityTypeInvoice, EntityID: "inv_1", TaxAmount: d("2"), TaxBehavior: types.TaxBehaviorExclusive},
+		{EntityType: types.TaxRateEntityTypeInvoice, EntityID: "inv_other", TaxAmount: d("50"), TaxBehavior: types.TaxBehaviorExclusive},
+	}
+	inv := &Invoice{ID: "inv_1"}
+
+	require.True(t, d("20").Equal(inv.AppliedTax(taxes, types.TaxBehaviorExclusive)))
+	require.True(t, d("12").Equal(inv.AppliedTax(taxes, types.TaxBehaviorInclusive)))
+	require.True(t, decimal.Zero.Equal(inv.AppliedTax(nil, types.TaxBehaviorExclusive)))
+}

@@ -2,6 +2,7 @@ package stripe
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -26,6 +29,8 @@ type InvoiceSyncService struct {
 	invoiceRepo                  invoice.Repository
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
 	priceSyncSvc                 *stripePriceSyncService
+	taxAppliedRepo               taxapplied.Repository
+	paymentRepo                  payment.Repository
 	logger                       *logger.Logger
 }
 
@@ -36,6 +41,8 @@ func NewInvoiceSyncService(
 	invoiceRepo invoice.Repository,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	priceSyncSvc *stripePriceSyncService,
+	taxAppliedRepo taxapplied.Repository,
+	paymentRepo payment.Repository,
 	logger *logger.Logger,
 ) *InvoiceSyncService {
 	return &InvoiceSyncService{
@@ -44,6 +51,8 @@ func NewInvoiceSyncService(
 		invoiceRepo:                  invoiceRepo,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		priceSyncSvc:                 priceSyncSvc,
+		taxAppliedRepo:               taxAppliedRepo,
+		paymentRepo:                  paymentRepo,
 		logger:                       logger,
 	}
 }
@@ -67,6 +76,18 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 		return nil, ierr.WithError(err).WithHint("Failed to get FlexPrice invoice").Mark(ierr.ErrDatabase)
 	}
 
+	// A paid invoice is synced as paid: Stripe must neither collect nor email it.
+	alreadyPaid := flexInvoice.PaymentStatus == types.PaymentStatusSucceeded || flexInvoice.PaymentStatus == types.PaymentStatusOverpaid
+	autoAdvance, sendInvoiceEmail := req.AutoAdvance, req.SendInvoiceEmail
+	var paymentIntentID string
+	if alreadyPaid {
+		paymentIntentID, err = s.stripePaymentIntentFor(ctx, flexInvoice.ID)
+		if err != nil {
+			return nil, err
+		}
+		autoAdvance, sendInvoiceEmail = false, false
+	}
+
 	// Step 3: Check if invoice is already synced
 	existingMapping, err := s.getExistingStripeMapping(ctx, req.InvoiceID)
 	if err != nil && !ierr.IsNotFound(err) {
@@ -82,7 +103,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 	} else {
 		// Step 4: Create draft invoice in Stripe
 		collectionMethod := types.CollectionMethod(req.CollectionMethod)
-		stripeInvoiceID, err = s.createDraftInvoiceInStripe(ctx, flexInvoice, collectionMethod, customerService)
+		stripeInvoiceID, err = s.createDraftInvoiceInStripe(ctx, flexInvoice, collectionMethod, autoAdvance, customerService)
 		if err != nil {
 			return nil, err
 		}
@@ -101,13 +122,19 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 
 	// Step 7: Finalize invoice in Stripe
 	collectionMethod := types.CollectionMethod(req.CollectionMethod)
-	finalizedInvoice, err := s.finalizeStripeInvoice(ctx, stripeInvoiceID, collectionMethod)
+	finalizedInvoice, err := s.finalizeStripeInvoice(ctx, stripeInvoiceID, collectionMethod, autoAdvance, sendInvoiceEmail)
 	if err != nil {
 		return nil, err
 	}
+	if alreadyPaid && finalizedInvoice.Status != stripe.InvoiceStatusPaid {
+		finalizedInvoice, err = s.markStripeInvoicePaid(ctx, stripeInvoiceID, paymentIntentID)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// Step 8: Update FlexPrice invoice with Stripe data
-	if err := s.updateFlexPriceInvoiceFromStripe(ctx, flexInvoice, finalizedInvoice); err != nil {
+	if err := s.updateFlexPriceInvoiceFromStripe(ctx, req.InvoiceID, finalizedInvoice); err != nil {
 		s.logger.Error(ctx, "failed to update FlexPrice invoice from Stripe", "error", err)
 		// Don't fail the entire sync for this
 	}
@@ -133,7 +160,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 }
 
 // createDraftInvoiceInStripe creates a draft invoice in Stripe
-func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, flexInvoice *invoice.Invoice, collectionMethod types.CollectionMethod, customerService interfaces.CustomerService) (string, error) {
+func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, flexInvoice *invoice.Invoice, collectionMethod types.CollectionMethod, autoAdvance bool, customerService interfaces.CustomerService) (string, error) {
 	// Get Stripe client
 	stripeClient, _, err := s.client.GetStripeClient(ctx)
 	if err != nil {
@@ -162,7 +189,7 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 	params := &stripe.InvoiceCreateParams{
 		Customer:    stripe.String(stripeCustomerID),
 		Currency:    stripe.String(strings.ToLower(flexInvoice.Currency)),
-		AutoAdvance: stripe.Bool(true),
+		AutoAdvance: stripe.Bool(autoAdvance),
 		Description: stripe.String(flexInvoice.Description),
 		Metadata:    metadata,
 	}
@@ -181,12 +208,17 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 	// Use the invoice due date if it's at least 15 minutes from now; otherwise default.
 	if collectionMethod == types.CollectionMethodSendInvoice {
 		minDueDate := clock.Now().Add(15 * time.Minute)
-		dueDate := clock.Now().Add(time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour)
+		defaultDueDays := time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour
+		dueDate := lo.FromPtrOr(flexInvoice.FinalizedAt, flexInvoice.CreatedAt).Add(defaultDueDays)
+		if !dueDate.After(minDueDate) {
+			dueDate = clock.Now().Add(defaultDueDays)
+		}
 		if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(minDueDate) {
 			dueDate = *flexInvoice.DueDate
 		}
 		params.DueDate = stripe.Int64(dueDate.Unix())
 	}
+	params.SetIdempotencyKey(fmt.Sprintf("stripe:invoice:create:%s", flexInvoice.ID))
 
 	// Create the invoice
 	stripeInvoice, err := stripeClient.V1Invoices.Create(ctx, params)
@@ -239,15 +271,43 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 		}
 	}
 
+	customerID, err := s.getStripeCustomerID(ctx, flexInvoice.CustomerID, customerService)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get Stripe customer ID", "error", err, "customer_id", flexInvoice.CustomerID, "invoice_id", flexInvoice.ID)
+		return ierr.NewError("failed to get Stripe customer ID").
+			WithHint("Unable to find Stripe customer mapping").
+			WithReportableDetails(map[string]interface{}{"customer_id": flexInvoice.CustomerID, "invoice_id": flexInvoice.ID, "error": err.Error()}).
+			Mark(ierr.ErrSystem)
+	}
+
+	taxes, err := s.taxAppliedRepo.List(ctx, &types.TaxAppliedFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		EntityType:  types.TaxRateEntityTypeInvoice,
+		EntityID:    flexInvoice.ID,
+	})
+	if err != nil {
+		return err
+	}
+	exclusiveTax := flexInvoice.AppliedTax(taxes, types.TaxBehaviorExclusive)
+
+	itemParams := buildInvoiceItemsParams(flexInvoice, exclusiveTax, customerID, stripeInvoiceID, productIDByPriceID)
+
 	s.logger.Info(ctx, "syncing line items to Stripe",
 		"invoice_id", flexInvoice.ID,
 		"stripe_invoice_id", stripeInvoiceID,
-		"line_items_count", len(flexInvoice.LineItems))
+		"line_items_count", len(flexInvoice.LineItems),
+		"stripe_items_count", len(itemParams))
 
-	for _, lineItem := range flexInvoice.LineItems {
-		if err := s.addLineItemToStripeInvoice(ctx, stripeClient, stripeInvoiceID, lineItem, flexInvoice, customerService, productIDByPriceID); err != nil {
-			return err
+	for _, params := range itemParams {
+		invoiceItem, err := stripeClient.V1InvoiceItems.Create(ctx, params)
+		if err != nil {
+			s.logger.Error(ctx, "failed to add line item to Stripe invoice", "error", err, "line_item_id", params.Metadata["flexprice_line_item_id"], "stripe_invoice_id", stripeInvoiceID)
+			return ierr.NewError("failed to add line item to Stripe").
+				WithHint("Unable to add line item to Stripe invoice").
+				WithReportableDetails(map[string]interface{}{"line_item_id": params.Metadata["flexprice_line_item_id"], "stripe_invoice_id": stripeInvoiceID, "error": err.Error()}).
+				Mark(ierr.ErrSystem)
 		}
+		s.logger.Debug(ctx, "added line item to Stripe invoice", "line_item_id", params.Metadata["flexprice_line_item_id"], "stripe_invoice_id", stripeInvoiceID, "stripe_item_id", invoiceItem.ID)
 	}
 
 	s.logger.Info(ctx, "successfully synced all line items to Stripe",
@@ -255,6 +315,47 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 		"stripe_invoice_id", stripeInvoiceID)
 
 	return nil
+}
+
+func buildInvoiceItemsParams(
+	flexInvoice *invoice.Invoice,
+	exclusiveTax decimal.Decimal,
+	customerID string,
+	stripeInvoiceID string,
+	productIDByPriceID map[string]string,
+) []*stripe.InvoiceItemCreateParams {
+	currency := strings.ToLower(flexInvoice.Currency)
+	items := lo.Map(flexInvoice.LineItems, func(lineItem *invoice.InvoiceLineItem, _ int) *stripe.InvoiceItemCreateParams {
+		return buildInvoiceItemParams(lineItem, customerID, stripeInvoiceID, productIDByPriceID)
+	})
+
+	adjustments := []struct {
+		description string
+		amount      int64
+	}{
+		{"Discount", -types.ToSmallestUnit(flexInvoice.TotalDiscount, currency)},
+		{"Prepaid credits applied", -types.ToSmallestUnit(flexInvoice.TotalPrepaidCreditsApplied, currency)},
+		{"Tax", types.ToSmallestUnit(exclusiveTax, currency)},
+	}
+	for _, adjustment := range adjustments {
+		if adjustment.amount == 0 {
+			continue
+		}
+		params := &stripe.InvoiceItemCreateParams{
+			Customer:    stripe.String(customerID),
+			Invoice:     stripe.String(stripeInvoiceID),
+			Currency:    stripe.String(currency),
+			Amount:      stripe.Int64(adjustment.amount),
+			Description: stripe.String(adjustment.description),
+			Metadata: map[string]string{
+				"flexprice_invoice_id": flexInvoice.ID,
+				"sync_source":          "flexprice",
+			},
+		}
+		params.SetIdempotencyKey(fmt.Sprintf("stripe:invoice_item:create:%s:%s", stripeInvoiceID, adjustment.description))
+		items = append(items, params)
+	}
+	return items
 }
 
 // buildInvoiceItemParams is pure (no Stripe calls), so it's unit-testable directly.
@@ -287,43 +388,74 @@ func buildInvoiceItemParams(
 				UnitAmount: stripe.Int64(amountCents),
 			}
 			params.Metadata["flexprice_stripe_product_id"] = productID
+			params.SetIdempotencyKey(fmt.Sprintf("stripe:invoice_item:create:%s:%s", stripeInvoiceID, lineItem.ID))
 			return params
 		}
 	}
 
 	params.Currency = stripe.String(currency)
 	params.Amount = stripe.Int64(amountCents)
+	params.SetIdempotencyKey(fmt.Sprintf("stripe:invoice_item:create:%s:%s", stripeInvoiceID, lineItem.ID))
 	return params
 }
 
-// addLineItemToStripeInvoice adds a single line item to Stripe invoice
-func (s *InvoiceSyncService) addLineItemToStripeInvoice(ctx context.Context, stripeClient *stripe.Client, stripeInvoiceID string, lineItem *invoice.InvoiceLineItem, flexInvoice *invoice.Invoice, customerService interfaces.CustomerService, productIDByPriceID map[string]string) error {
-	customerID, err := s.getStripeCustomerID(ctx, flexInvoice.CustomerID, customerService)
+// finalizeStripeInvoice finalizes the invoice in Stripe
+// stripePaymentIntentFor returns the Stripe payment that settled the invoice, or "" when Stripe did not collect it.
+func (s *InvoiceSyncService) stripePaymentIntentFor(ctx context.Context, invoiceID string) (string, error) {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentGateway = lo.ToPtr(string(types.PaymentGatewayTypeStripe))
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusSucceeded))
+	payments, err := s.paymentRepo.List(ctx, filter)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get Stripe customer ID", "error", err, "customer_id", flexInvoice.CustomerID, "line_item_id", lineItem.ID)
-		return ierr.NewError("failed to get Stripe customer ID").
-			WithHint("Unable to find Stripe customer mapping").
-			WithReportableDetails(map[string]interface{}{"customer_id": flexInvoice.CustomerID, "line_item_id": lineItem.ID, "error": err.Error()}).
-			Mark(ierr.ErrSystem)
+		return "", err
 	}
-
-	params := buildInvoiceItemParams(lineItem, customerID, stripeInvoiceID, productIDByPriceID)
-
-	invoiceItem, err := stripeClient.V1InvoiceItems.Create(ctx, params)
-	if err != nil {
-		s.logger.Error(ctx, "failed to add line item to Stripe invoice", "error", err, "line_item_id", lineItem.ID, "stripe_invoice_id", stripeInvoiceID)
-		return ierr.NewError("failed to add line item to Stripe").
-			WithHint("Unable to add line item to Stripe invoice").
-			WithReportableDetails(map[string]interface{}{"line_item_id": lineItem.ID, "stripe_invoice_id": stripeInvoiceID, "error": err.Error()}).
-			Mark(ierr.ErrSystem)
-	}
-
-	s.logger.Debug(ctx, "added line item to Stripe invoice", "line_item_id", lineItem.ID, "stripe_invoice_id", stripeInvoiceID, "stripe_item_id", invoiceItem.ID)
-	return nil
+	return settlingPaymentIntent(payments), nil
 }
 
-// finalizeStripeInvoice finalizes the invoice in Stripe
-func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeInvoiceID string, collectionMethod types.CollectionMethod) (*stripe.Invoice, error) {
+// settlingPaymentIntent picks the Stripe payment intent of a succeeded Stripe payment, or "".
+func settlingPaymentIntent(payments []*payment.Payment) string {
+	paid, found := lo.Find(payments, func(p *payment.Payment) bool {
+		return lo.FromPtr(p.PaymentGateway) == string(types.PaymentGatewayTypeStripe) &&
+			p.PaymentStatus == types.PaymentStatusSucceeded &&
+			lo.FromPtr(p.GatewayPaymentID) != ""
+	})
+	if !found {
+		return ""
+	}
+	return lo.FromPtr(paid.GatewayPaymentID)
+}
+
+// markStripeInvoicePaid attaches the Stripe payment that settled the invoice, or marks it paid out of band.
+func (s *InvoiceSyncService) markStripeInvoicePaid(ctx context.Context, stripeInvoiceID string, paymentIntentID string) (*stripe.Invoice, error) {
+	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if paymentIntentID != "" {
+		paid, err := stripeClient.V1Invoices.AttachPayment(ctx, stripeInvoiceID, &stripe.InvoiceAttachPaymentParams{
+			PaymentIntent: stripe.String(paymentIntentID),
+		})
+		if err == nil {
+			return paid, nil
+		}
+		s.logger.Info(ctx, "could not attach payment to Stripe invoice, marking it paid out of band",
+			"stripe_invoice_id", stripeInvoiceID, "payment_intent_id", paymentIntentID, "reason", err.Error())
+	}
+
+	paid, err := stripeClient.V1Invoices.Pay(ctx, stripeInvoiceID, &stripe.InvoicePayParams{PaidOutOfBand: stripe.Bool(true)})
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Unable to mark the Stripe invoice paid").
+			WithReportableDetails(map[string]interface{}{"stripe_invoice_id": stripeInvoiceID}).
+			Mark(ierr.ErrSystem)
+	}
+	return paid, nil
+}
+
+func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeInvoiceID string, collectionMethod types.CollectionMethod, autoAdvance bool, sendInvoiceEmail bool) (*stripe.Invoice, error) {
 	stripeClient, _, err := s.client.GetStripeClient(ctx)
 	if err != nil {
 		return nil, err
@@ -335,7 +467,7 @@ func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeIn
 
 	// Finalize the invoice
 	params := &stripe.InvoiceFinalizeInvoiceParams{
-		AutoAdvance: stripe.Bool(true), // Let Stripe handle payment intent creation and sending
+		AutoAdvance: stripe.Bool(autoAdvance),
 	}
 
 	finalizedInvoice, err := stripeClient.V1Invoices.FinalizeInvoice(ctx, stripeInvoiceID, params)
@@ -357,7 +489,7 @@ func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeIn
 		"status", finalizedInvoice.Status,
 		"total", finalizedInvoice.Total)
 
-	if collectionMethod == types.CollectionMethodSendInvoice {
+	if collectionMethod == types.CollectionMethodSendInvoice && sendInvoiceEmail {
 		s.logger.Info(ctx, "sending invoice to customer via Stripe",
 			"stripe_invoice_id", stripeInvoiceID,
 			"collection_method", collectionMethod)
@@ -609,7 +741,12 @@ func (s *InvoiceSyncService) createInvoiceMapping(ctx context.Context, invoiceID
 }
 
 // updateFlexPriceInvoiceFromStripe updates FlexPrice invoice with data from Stripe
-func (s *InvoiceSyncService) updateFlexPriceInvoiceFromStripe(ctx context.Context, flexInvoice *invoice.Invoice, stripeInvoice *stripe.Invoice) error {
+func (s *InvoiceSyncService) updateFlexPriceInvoiceFromStripe(ctx context.Context, invoiceID string, stripeInvoice *stripe.Invoice) error {
+	flexInvoice, err := s.invoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
 	// Update invoice with Stripe data if needed
 	updated := false
 
@@ -629,10 +766,41 @@ func (s *InvoiceSyncService) updateFlexPriceInvoiceFromStripe(ctx context.Contex
 	}
 
 	if updated {
-		return s.invoiceRepo.Update(ctx, flexInvoice)
+		if err := s.invoiceRepo.Update(ctx, flexInvoice); err != nil {
+			return err
+		}
 	}
 
+	if shouldAdoptStripeInvoiceNumber(flexInvoice, stripeInvoice) {
+		if flexInvoice.Metadata == nil {
+			flexInvoice.Metadata = types.Metadata{}
+		}
+		if current := lo.FromPtr(flexInvoice.InvoiceNumber); current != "" && current != stripeInvoice.Number {
+			if _, kept := flexInvoice.Metadata["flexprice_invoice_number"]; !kept {
+				flexInvoice.Metadata["flexprice_invoice_number"] = current
+			}
+		}
+		flexInvoice.InvoiceNumber = lo.ToPtr(stripeInvoice.Number)
+		flexInvoice.Metadata[types.InvoiceMetadataKeyStripeInvoiceID] = stripeInvoice.ID
+		if err := s.invoiceRepo.Update(ctx, flexInvoice); err != nil {
+			s.logger.Error(ctx, "failed to adopt Stripe invoice number",
+				"error", err,
+				"invoice_id", flexInvoice.ID,
+				"stripe_invoice_id", stripeInvoice.ID)
+		}
+	}
 	return nil
+}
+
+func shouldAdoptStripeInvoiceNumber(flexInvoice *invoice.Invoice, stripeInvoice *stripe.Invoice) bool {
+	if stripeInvoice.Number == "" {
+		return false
+	}
+	if lo.FromPtr(flexInvoice.InvoiceNumber) == stripeInvoice.Number &&
+		flexInvoice.Metadata[types.InvoiceMetadataKeyStripeInvoiceID] == stripeInvoice.ID {
+		return false
+	}
+	return true
 }
 
 // updateStripeInvoiceMetadata updates the Stripe invoice metadata to track FlexPrice credit payments
@@ -683,6 +851,34 @@ func (s *InvoiceSyncService) updateStripeInvoiceMetadata(ctx context.Context, st
 	return nil
 }
 
+// GetInvoicePDFURL returns the PDF link of the Stripe invoice mapped to a Flexprice invoice.
+func (s *InvoiceSyncService) GetInvoicePDFURL(ctx context.Context, flexpriceInvoiceID string) (string, error) {
+	mapping, err := s.getExistingStripeMapping(ctx, flexpriceInvoiceID)
+	if err != nil {
+		return "", err
+	}
+
+	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	stripeInvoice, err := stripeClient.V1Invoices.Retrieve(ctx, mapping.ProviderEntityID, nil)
+	if err != nil {
+		return "", ierr.WithError(err).
+			WithHint("Unable to get invoice from Stripe").
+			Mark(ierr.ErrSystem)
+	}
+	if stripeInvoice.InvoicePDF == "" {
+		return "", ierr.NewError("stripe invoice has no pdf").
+			WithHint("Stripe has no PDF for a draft invoice").
+			WithReportableDetails(map[string]any{"invoice_id": flexpriceInvoiceID, "stripe_invoice_id": stripeInvoice.ID}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	return stripeInvoice.InvoicePDF, nil
+}
+
 // IsStripeInvoiceSettled reports whether the Stripe invoice synced for a FlexPrice invoice is already paid or voided.
 func (s *InvoiceSyncService) IsStripeInvoiceSettled(ctx context.Context, flexpriceInvoiceID string) (bool, error) {
 	mapping, err := s.getExistingStripeMapping(ctx, flexpriceInvoiceID)
@@ -708,8 +904,7 @@ func (s *InvoiceSyncService) IsStripeInvoiceSettled(ctx context.Context, flexpri
 	return stripeInvoice.Status == stripe.InvoiceStatusPaid || stripeInvoice.Status == stripe.InvoiceStatusVoid, nil
 }
 
-// VoidInvoiceInStripe voids the synced Stripe invoice; false means Stripe already has it paid.
-func (s *InvoiceSyncService) VoidInvoiceInStripe(ctx context.Context, flexpriceInvoiceID string) (bool, error) {
+func (s *InvoiceSyncService) VoidInvoice(ctx context.Context, flexpriceInvoiceID string) (bool, error) {
 	mapping, err := s.getExistingStripeMapping(ctx, flexpriceInvoiceID)
 	if ierr.IsNotFound(err) {
 		return true, nil

@@ -1282,6 +1282,18 @@ type InvoiceResponse struct {
 
 	// in_flight_charge is a saved-method debit submitted for this invoice that the gateway has not settled yet
 	InFlightCharge *InFlightCharge `json:"in_flight_charge,omitempty"`
+
+	// linked_wallet_transactions are the wallet credits this invoice pays for; pending ones are released when it is paid
+	LinkedWalletTransactions []*LinkedWalletTransaction `json:"linked_wallet_transactions,omitempty"`
+}
+
+// LinkedWalletTransaction is a wallet credit transaction paid for by an invoice.
+type LinkedWalletTransaction struct {
+	ID                string                  `json:"id"`
+	WalletID          string                  `json:"wallet_id"`
+	CreditAmount      decimal.Decimal         `json:"credit_amount" swaggertype:"string"`
+	TransactionStatus types.TransactionStatus `json:"transaction_status"`
+	TransactionReason types.TransactionReason `json:"transaction_reason"`
 }
 
 // InFlightCharge is a saved-method debit still waiting on the gateway.

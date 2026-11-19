@@ -194,6 +194,35 @@ func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
 	return p.LinkExpiry() + p.SessionGrace()
 }
 
+// ValidateLinkExpiry rejects a link expiry shorter than the provider default.
+func (p CheckoutPaymentProvider) ValidateLinkExpiry(cfg *CheckoutPaymentProviderConfig) error {
+	if cfg == nil || !cfg.LinkExpiry.IsSet() {
+		return nil
+	}
+	expiry, err := cfg.LinkExpiry.ToDuration()
+	if err != nil {
+		return err
+	}
+	if expiry < p.LinkExpiry() {
+		return ierr.NewError("link_expiry is too short").
+			WithHintf("link_expiry must be at least %s for %s", p.LinkExpiry(), p).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// ResolveSessionExpiry is SessionExpiry with the checkout's link expiry override applied.
+func (p CheckoutPaymentProvider) ResolveSessionExpiry(cfg *CheckoutPaymentProviderConfig) time.Duration {
+	if cfg == nil || !cfg.LinkExpiry.IsSet() {
+		return p.SessionExpiry()
+	}
+	expiry, err := cfg.LinkExpiry.ToDuration()
+	if err != nil {
+		return p.SessionExpiry()
+	}
+	return expiry + p.SessionGrace()
+}
+
 type PaymentActionType string
 
 const (
