@@ -790,6 +790,10 @@ type Invoices struct {
 	QueryErr error
 	GetErr   error
 	Preview  func(req types.GetPreviewInvoiceRequest) (*dtos.GetInvoicePreviewResponse, error)
+
+	// SubscriptionFilterEmpty makes a query by subscription id return no items,
+	// as the server has for subscriptions that do have invoices.
+	SubscriptionFilterEmpty bool
 }
 
 func (f *Invoices) Query(_ context.Context, filter types.InvoiceFilter) (*dtos.QueryInvoiceResponse, error) {
@@ -798,6 +802,9 @@ func (f *Invoices) Query(_ context.Context, filter types.InvoiceFilter) (*dtos.Q
 	f.Queries = append(f.Queries, filter)
 	if f.QueryErr != nil {
 		return nil, f.QueryErr
+	}
+	if f.SubscriptionFilterEmpty && filter.SubscriptionID != nil {
+		return &dtos.QueryInvoiceResponse{ListInvoicesResponse: &types.ListInvoicesResponse{}}, nil
 	}
 	var items []types.InvoiceResponse
 	for _, inv := range f.Items {
