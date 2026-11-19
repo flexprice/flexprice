@@ -69,7 +69,7 @@ func run(t *testing.T, d *testDeps, s scenario.Scenario, persona string) e2eprob
 func TestRegister_CoversDefaultSuite(t *testing.T) {
 	cat := scenario.NewCatalog()
 	Register(cat)
-	for _, name := range []string{"provision", "preflight", "janitor", "webhook-wiring", "ingest", "usage", "billing-matrix-opening", "billing-matrix-validation"} {
+	for _, name := range []string{"provision", "preflight", "janitor", "webhook-wiring", "ingest", "usage", "wallet-debit", "low-balance-alert", "billing-matrix-opening", "billing-matrix-validation"} {
 		if _, ok := cat.Scenario(name); !ok {
 			t.Errorf("%s not registered", name)
 		}
