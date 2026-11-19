@@ -14,6 +14,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -29,6 +30,7 @@ type InvoiceSyncService struct {
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
 	priceSyncSvc                 *stripePriceSyncService
 	taxAppliedRepo               taxapplied.Repository
+	paymentRepo                  payment.Repository
 	logger                       *logger.Logger
 }
 
@@ -40,6 +42,7 @@ func NewInvoiceSyncService(
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	priceSyncSvc *stripePriceSyncService,
 	taxAppliedRepo taxapplied.Repository,
+	paymentRepo payment.Repository,
 	logger *logger.Logger,
 ) *InvoiceSyncService {
 	return &InvoiceSyncService{
@@ -49,6 +52,7 @@ func NewInvoiceSyncService(
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		priceSyncSvc:                 priceSyncSvc,
 		taxAppliedRepo:               taxAppliedRepo,
+		paymentRepo:                  paymentRepo,
 		logger:                       logger,
 	}
 }
@@ -72,6 +76,18 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 		return nil, ierr.WithError(err).WithHint("Failed to get FlexPrice invoice").Mark(ierr.ErrDatabase)
 	}
 
+	// A paid invoice is synced as paid: Stripe must neither collect nor email it.
+	alreadyPaid := flexInvoice.PaymentStatus == types.PaymentStatusSucceeded || flexInvoice.PaymentStatus == types.PaymentStatusOverpaid
+	autoAdvance, sendInvoiceEmail := req.AutoAdvance, req.SendInvoiceEmail
+	var paymentIntentID string
+	if alreadyPaid {
+		paymentIntentID, err = s.stripePaymentIntentFor(ctx, flexInvoice.ID)
+		if err != nil {
+			return nil, err
+		}
+		autoAdvance, sendInvoiceEmail = false, false
+	}
+
 	// Step 3: Check if invoice is already synced
 	existingMapping, err := s.getExistingStripeMapping(ctx, req.InvoiceID)
 	if err != nil && !ierr.IsNotFound(err) {
@@ -87,7 +103,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 	} else {
 		// Step 4: Create draft invoice in Stripe
 		collectionMethod := types.CollectionMethod(req.CollectionMethod)
-		stripeInvoiceID, err = s.createDraftInvoiceInStripe(ctx, flexInvoice, collectionMethod, req.AutoAdvance, customerService)
+		stripeInvoiceID, err = s.createDraftInvoiceInStripe(ctx, flexInvoice, collectionMethod, autoAdvance, customerService)
 		if err != nil {
 			return nil, err
 		}
@@ -106,12 +122,12 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 
 	// Step 7: Finalize invoice in Stripe
 	collectionMethod := types.CollectionMethod(req.CollectionMethod)
-	finalizedInvoice, err := s.finalizeStripeInvoice(ctx, stripeInvoiceID, collectionMethod, req.AutoAdvance, req.SendInvoiceEmail)
+	finalizedInvoice, err := s.finalizeStripeInvoice(ctx, stripeInvoiceID, collectionMethod, autoAdvance, sendInvoiceEmail)
 	if err != nil {
 		return nil, err
 	}
-	if req.AlreadyPaid && finalizedInvoice.Status != stripe.InvoiceStatusPaid {
-		finalizedInvoice, err = s.markStripeInvoicePaid(ctx, stripeInvoiceID, req.PaymentIntentID)
+	if alreadyPaid && finalizedInvoice.Status != stripe.InvoiceStatusPaid {
+		finalizedInvoice, err = s.markStripeInvoicePaid(ctx, stripeInvoiceID, paymentIntentID)
 		if err != nil {
 			return nil, err
 		}
@@ -384,6 +400,33 @@ func buildInvoiceItemParams(
 }
 
 // finalizeStripeInvoice finalizes the invoice in Stripe
+// stripePaymentIntentFor returns the Stripe payment that settled the invoice, or "" when Stripe did not collect it.
+func (s *InvoiceSyncService) stripePaymentIntentFor(ctx context.Context, invoiceID string) (string, error) {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentGateway = lo.ToPtr(string(types.PaymentGatewayTypeStripe))
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusSucceeded))
+	payments, err := s.paymentRepo.List(ctx, filter)
+	if err != nil {
+		return "", err
+	}
+	return settlingPaymentIntent(payments), nil
+}
+
+// settlingPaymentIntent picks the Stripe payment intent of a succeeded Stripe payment, or "".
+func settlingPaymentIntent(payments []*payment.Payment) string {
+	paid, found := lo.Find(payments, func(p *payment.Payment) bool {
+		return lo.FromPtr(p.PaymentGateway) == string(types.PaymentGatewayTypeStripe) &&
+			p.PaymentStatus == types.PaymentStatusSucceeded &&
+			lo.FromPtr(p.GatewayPaymentID) != ""
+	})
+	if !found {
+		return ""
+	}
+	return lo.FromPtr(paid.GatewayPaymentID)
+}
+
 // markStripeInvoicePaid attaches the Stripe payment that settled the invoice, or marks it paid out of band.
 func (s *InvoiceSyncService) markStripeInvoicePaid(ctx context.Context, stripeInvoiceID string, paymentIntentID string) (*stripe.Invoice, error) {
 	stripeClient, _, err := s.client.GetStripeClient(ctx)
@@ -861,8 +904,7 @@ func (s *InvoiceSyncService) IsStripeInvoiceSettled(ctx context.Context, flexpri
 	return stripeInvoice.Status == stripe.InvoiceStatusPaid || stripeInvoice.Status == stripe.InvoiceStatusVoid, nil
 }
 
-// VoidInvoiceInStripe voids the synced Stripe invoice; false means Stripe already has it paid.
-func (s *InvoiceSyncService) VoidInvoiceInStripe(ctx context.Context, flexpriceInvoiceID string) (bool, error) {
+func (s *InvoiceSyncService) VoidInvoice(ctx context.Context, flexpriceInvoiceID string) (bool, error) {
 	mapping, err := s.getExistingStripeMapping(ctx, flexpriceInvoiceID)
 	if ierr.IsNotFound(err) {
 		return true, nil

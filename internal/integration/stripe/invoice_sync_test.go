@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -167,6 +168,29 @@ func TestShouldAdoptStripeInvoiceNumber(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			inv := &invoice.Invoice{ID: "inv_1", InvoiceNumber: tc.number, Metadata: tc.metadata}
 			require.Equal(t, tc.want, shouldAdoptStripeInvoiceNumber(inv, &stripe.Invoice{ID: "in_1", Number: tc.stripeNumber}))
+		})
+	}
+}
+
+func TestSettlingPaymentIntent(t *testing.T) {
+	stripeGateway := lo.ToPtr(string(types.PaymentGatewayTypeStripe))
+	cases := []struct {
+		name     string
+		payments []*payment.Payment
+		want     string
+	}{
+		{"succeeded stripe payment", []*payment.Payment{
+			{PaymentGateway: stripeGateway, PaymentStatus: types.PaymentStatusFailed, GatewayPaymentID: lo.ToPtr("pi_failed")},
+			{PaymentGateway: stripeGateway, PaymentStatus: types.PaymentStatusSucceeded, GatewayPaymentID: lo.ToPtr("pi_paid")},
+		}, "pi_paid"},
+		{"paid on another gateway", []*payment.Payment{
+			{PaymentGateway: lo.ToPtr(string(types.PaymentGatewayTypeRazorpay)), PaymentStatus: types.PaymentStatusSucceeded, GatewayPaymentID: lo.ToPtr("pay_rzp")},
+		}, ""},
+		{"no payments", nil, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, settlingPaymentIntent(tc.payments))
 		})
 	}
 }

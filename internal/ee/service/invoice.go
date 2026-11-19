@@ -1925,35 +1925,6 @@ func validateInvoiceVoidable(inv *invoice.Invoice) error {
 	return nil
 }
 
-// voidInvoiceInStripe voids the Stripe invoice synced from a voided invoice. Failures are logged: the void already stands.
-func (s *invoiceService) voidInvoiceInStripe(ctx context.Context, invoiceID string) {
-	if s.ConnectionRepo == nil {
-		return
-	}
-	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, invoiceID)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to scope invoice for Stripe void", "error", err, "invoice_id", invoiceID)
-		return
-	}
-	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
-	if err != nil || conn == nil {
-		return
-	}
-	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to get Stripe integration to void invoice", "error", err, "invoice_id", invoiceID)
-		return
-	}
-	voided, err := stripeIntegration.InvoiceSyncSvc.VoidInvoiceInStripe(ctx, invoiceID)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to void invoice in Stripe", "error", err, "invoice_id", invoiceID)
-		return
-	}
-	if !voided {
-		s.Logger.Info(ctx, "Stripe invoice is already paid, left unvoided", "invoice_id", invoiceID)
-	}
-}
-
 func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) (*invoice.Invoice, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -2056,9 +2027,9 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	if !types.RegisterPostCommit(ctx, closeLinks) {
 		closeLinks()
 	}
-	voidInStripe := func() { s.voidInvoiceInStripe(closeLinksCtx, inv.ID) }
-	if !types.RegisterPostCommit(ctx, voidInStripe) {
-		voidInStripe()
+	voidOnProviders := func() { s.voidInvoiceOnProviders(closeLinksCtx, inv.ID) }
+	if !types.RegisterPostCommit(ctx, voidOnProviders) {
+		voidOnProviders()
 	}
 
 	// A voided invoice will never be paid, so a purchased-credit transaction still
@@ -2171,26 +2142,6 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 }
 
 // SyncInvoiceToStripeIfEnabled syncs the invoice to Stripe if Stripe connection is enabled.
-// stripePaymentIntentFor returns the Stripe payment that settled the invoice, or "" when Stripe did not collect it.
-func (s *invoiceService) stripePaymentIntentFor(ctx context.Context, invoiceID string) (string, error) {
-	filter := types.NewNoLimitPaymentFilter()
-	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
-	filter.DestinationID = lo.ToPtr(invoiceID)
-	filter.PaymentGateway = lo.ToPtr(string(types.PaymentGatewayTypeStripe))
-	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusSucceeded))
-	payments, err := s.PaymentRepo.List(ctx, filter)
-	if err != nil {
-		return "", err
-	}
-	paid, found := lo.Find(payments, func(p *payment.Payment) bool {
-		return lo.FromPtr(p.PaymentGateway) == string(types.PaymentGatewayTypeStripe) && lo.FromPtr(p.GatewayPaymentID) != ""
-	})
-	if !found {
-		return "", nil
-	}
-	return lo.FromPtr(paid.GatewayPaymentID), nil
-}
-
 func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoiceID string, collectionMethod string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
@@ -2201,8 +2152,6 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 	if err != nil {
 		return err
 	}
-
-	alreadyPaid := inv.PaymentStatus == types.PaymentStatusSucceeded || inv.PaymentStatus == types.PaymentStatusOverpaid
 
 	// The marketplace collects for its subscriptions, so pushing to Stripe would charge the buyer twice.
 	if inv.SubscriptionID != nil {
@@ -2310,16 +2259,6 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 		LinkStripeProduct: conn.IsPriceOutboundEnabled(),
 		AutoAdvance:       *autoAdvance,
 		SendInvoiceEmail:  syncSettings.IsStripeSendInvoiceEmailEnabled(),
-	}
-	if alreadyPaid {
-		paymentIntentID, err := s.stripePaymentIntentFor(ctx, inv.ID)
-		if err != nil {
-			return err
-		}
-		syncRequest.AlreadyPaid = true
-		syncRequest.PaymentIntentID = paymentIntentID
-		syncRequest.AutoAdvance = false
-		syncRequest.SendInvoiceEmail = false
 	}
 
 	// Perform the sync
@@ -4014,6 +3953,55 @@ func (s *invoiceService) billingProviderPDFURL(ctx context.Context, invoiceID st
 		return "", nil
 	}
 	return url, nil
+}
+
+// voidInvoiceOnProviders voids the invoice's synced copy at each billing provider in scope. Failures are logged: the void already stands.
+func (s *invoiceService) voidInvoiceOnProviders(ctx context.Context, invoiceID string) {
+	if s.ConnectionRepo == nil {
+		return
+	}
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, invoiceID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to scope invoice for provider void", "error", err, "invoice_id", invoiceID)
+		return
+	}
+	providers, err := NewBillingProviderResolver(s.ServiceParams).ListProviders(ctx)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to list billing providers for void", "error", err, "invoice_id", invoiceID)
+		return
+	}
+
+	for _, p := range providers {
+		voided, err := s.providerVoidInvoice(ctx, p.Provider, invoiceID)
+		if ierr.IsNotImplemented(err) {
+			continue
+		}
+		if err != nil {
+			s.Logger.Error(ctx, "failed to void invoice on provider", "error", err, "invoice_id", invoiceID, "provider", p.Provider)
+			continue
+		}
+		if !voided {
+			s.Logger.Info(ctx, "provider invoice is already paid, left unvoided", "invoice_id", invoiceID, "provider", p.Provider)
+		}
+	}
+}
+
+// providerVoidInvoice voids the provider's copy of the invoice; false means the provider already has it paid.
+func (s *invoiceService) providerVoidInvoice(ctx context.Context, provider types.SecretProvider, invoiceID string) (bool, error) {
+	switch provider {
+	case types.SecretProviderStripe:
+		integration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+		if err != nil {
+			return false, err
+		}
+
+		return integration.InvoiceSyncSvc.VoidInvoice(ctx, invoiceID)
+	default:
+		return false, ierr.NewErrorf("provider %s cannot void invoices", provider).
+			WithHint("This provider has no invoice void").
+			WithReportableDetails(map[string]any{"provider": provider, "invoice_id": invoiceID}).
+			Mark(ierr.ErrNotImplemented)
+	}
 }
 
 func (s *invoiceService) providerInvoicePDFURL(ctx context.Context, provider types.SecretProvider, invoiceID string) (string, error) {

@@ -175,6 +175,7 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		f.entityIntegrationMappingRepo,
 		priceSyncSvc,
 		f.taxAppliedRepo,
+		f.paymentRepo,
 		f.logger,
 	)
 
