@@ -88,6 +88,7 @@ spec:
               secret-backed credential with a plaintext literal — the probe
               would keep running, authenticating with the wrong key.
               Reserved: E2EPROBE_API_KEY, E2EPROBE_SLACK_WEBHOOK_URL,
+              E2EPROBE_WEBHOOK_TOKEN, E2EPROBE_SUITE_FILE,
               E2EPROBE_LISTENER_PORT, TMPDIR, E2EPROBE_EMAIL,
               E2EPROBE_PASSWORD.
 
@@ -96,7 +97,7 @@ spec:
               manifest, so a password set there would be readable by anyone who
               can view the release.
             */}}
-            {{- $reserved := list "E2EPROBE_API_KEY" "E2EPROBE_SLACK_WEBHOOK_URL" "E2EPROBE_LISTENER_PORT" "TMPDIR" "E2EPROBE_EMAIL" "E2EPROBE_PASSWORD" }}
+            {{- $reserved := list "E2EPROBE_API_KEY" "E2EPROBE_SLACK_WEBHOOK_URL" "E2EPROBE_WEBHOOK_TOKEN" "E2EPROBE_SUITE_FILE" "E2EPROBE_LISTENER_PORT" "TMPDIR" "E2EPROBE_EMAIL" "E2EPROBE_PASSWORD" }}
             {{- range $k, $v := .Values.e2eprobe.env }}
             {{- if has $k $reserved }}
             {{- fail (printf "e2eprobe.env may not set %s — it is managed by the chart (reserved: %s)" $k (join ", " $reserved)) }}
@@ -153,6 +154,22 @@ spec:
                     cost a debugging cycle on a real cluster.
                   */}}
                   optional: true
+            {{- /*
+              Optional shared secret the inbox requires on every webhook post.
+              Set the same value as a header on the tenant's webhook endpoint
+              (webhook.tenants.<id>.headers.X-E2EProbe-Token) so foreign posts
+              are rejected with 401.
+            */}}
+            - name: E2EPROBE_WEBHOOK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.e2eprobe.existingSecret }}
+                  key: {{ .Values.e2eprobe.secretKeys.webhookToken }}
+                  optional: true
+            {{- if .Values.e2eprobe.suite }}
+            - name: E2EPROBE_SUITE_FILE
+              value: "/etc/e2eprobe/suite.yaml"
+            {{- end }}
             - name: E2EPROBE_LISTENER_PORT
               value: {{ .Values.e2eprobe.service.port | quote }}
             - name: TMPDIR
@@ -165,9 +182,19 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.e2eprobe.suite }}
+            - name: suite
+              mountPath: /etc/e2eprobe
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if .Values.e2eprobe.suite }}
+        - name: suite
+          configMap:
+            name: {{ include "flexprice.fullname" . }}-e2eprobe-suite
+        {{- end }}
       {{- with (default .Values.nodeSelector .Values.e2eprobe.nodeSelector) }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

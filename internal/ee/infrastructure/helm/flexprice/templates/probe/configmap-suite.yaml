@@ -1,0 +1,15 @@
+{{- if and .Values.e2eprobe.enabled .Values.e2eprobe.suite }}
+# e2eprobe suite file — personas, scenarios, tenant expectations and alert
+# thresholds for this region. Rendered from e2eprobe.suite and mounted at
+# /etc/e2eprobe/suite.yaml; the probe validates it at startup and refuses to
+# run on a suite that names unknown scenarios or exceeds its event budget.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "flexprice.fullname" . }}-e2eprobe-suite
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "e2eprobe") | nindent 4 }}
+data:
+  suite.yaml: |
+    {{- toYaml .Values.e2eprobe.suite | nindent 4 }}
+{{- end }}
