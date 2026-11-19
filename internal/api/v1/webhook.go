@@ -547,6 +547,20 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	// As per Razorpay docs: "The value for this header is unique per event"
 	eventID := c.GetHeader("x-razorpay-event-id")
 
+	var event razorpaywebhook.RazorpayWebhookEvent
+	if err := json.Unmarshal(body, &event); err != nil {
+		h.logger.Error(context.Background(), "failed to parse Razorpay webhook payload", "error", err)
+		return
+	}
+
+	if !razorpaywebhook.IsHandledEvent(event.Event) {
+		h.logger.Info(context.Background(), "skipping unhandled Razorpay webhook event",
+			"tenant_id", tenantID,
+			"environment_id", environmentID,
+			"event_type", event.Event)
+		return
+	}
+
 	ctx, err := h.webhookContext(c, types.SecretProviderRazorpay)
 	if err != nil {
 		h.rejectWebhookContext(c, err)
@@ -573,14 +587,6 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 		"tenant_id", tenantID,
 		"event_id", eventID,
 		"payload_length", len(body))
-
-	// Parse webhook payload
-	var event razorpaywebhook.RazorpayWebhookEvent
-	err = json.Unmarshal(body, &event)
-	if err != nil {
-		h.logger.Error(context.Background(), "failed to parse Razorpay webhook payload", "error", err)
-		return
-	}
 
 	// Create service dependencies for webhook handler
 	serviceDeps := &razorpaywebhook.ServiceDependencies{

@@ -11,6 +11,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -81,6 +82,10 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		if p.Amount.IsZero() {
+			p.Amount = invoice.AmountRemaining
+			req.Amount = invoice.AmountRemaining
+		}
 
 		// validate the invoice payment eligibility
 		if err := s.validateInvoicePaymentEligibility(ctx, invoice, req); err != nil {
@@ -141,6 +146,12 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 				"gateway":    types.PaymentGatewayTypeMoyasar,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	if invoice != nil && p.PaymentMethodType == types.PaymentMethodTypePaymentLink && lo.CoalesceOrEmpty(lo.FromPtr(req.PaymentGateway), types.PaymentGatewayTypeStripe) == types.PaymentGatewayTypeStripe && !isExternalPayment {
+		if err := s.requireStripeHostedInvoicePage(ctx, invoice, p); err != nil {
+			return nil, err
+		}
 	}
 
 	// select the wallet for the payment in case of credits payment where wallet id is not provided
@@ -1444,6 +1455,50 @@ func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID, re
 	if !types.RegisterPostCommit(ctx, run) {
 		run()
 	}
+}
+
+// stripeInvoiceSyncEnabled reports whether the Stripe connection in scope pushes invoices to Stripe.
+func stripeInvoiceSyncEnabled(ctx context.Context, connectionRepo connection.Repository) (bool, error) {
+	conn, err := connectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if ierr.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return conn != nil && conn.IsInvoiceOutboundEnabled(), nil
+}
+
+// requireStripeHostedInvoicePage makes a Stripe payment link on an invoice synced to Stripe use its
+// hosted invoice page; without invoice sync the link stays a Checkout Session.
+func (s *paymentService) requireStripeHostedInvoicePage(ctx context.Context, inv *invoice.Invoice, p *payment.Payment) error {
+	if inv.InvoiceStatus != types.InvoiceStatusFinalized {
+		return nil
+	}
+	scopedCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+	syncOn, err := stripeInvoiceSyncEnabled(scopedCtx, s.ConnectionRepo)
+	if err != nil || !syncOn {
+		return err
+	}
+
+	if inv.Metadata[types.InvoiceMetadataKeyStripeHostedInvoiceURL] == "" {
+		return ierr.NewError("invoice is still syncing to Stripe").
+			WithHint("This invoice is being synced to Stripe. Please try again in some time.").
+			WithReportableDetails(map[string]any{"invoice_id": inv.ID}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if !shouldUseStripeHostedInvoicePage(p, inv) {
+		return ierr.NewError("invoice must be paid in full on Stripe").
+			WithHint("This invoice can only be paid in full.").
+			WithReportableDetails(map[string]any{"invoice_id": inv.ID, "amount": p.Amount.String(), "amount_remaining": inv.AmountRemaining.String()}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 // closeProviderLink closes the gateway-hosted link and reports whether it is closed and unpaid, so
