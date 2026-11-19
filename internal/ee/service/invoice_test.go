@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -4380,4 +4381,54 @@ func (s *VoidPaymentLinksSuite) TestGetOrCreatePaymentLink_RejectsVoidedInvoice(
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err))
 	s.Empty(s.provider.linkRequests)
+}
+
+func (s *InvoiceServiceSuite) TestGetInvoice_LinkedWalletTransactions() {
+	ctx := s.GetContext()
+	tx := &wallet.Transaction{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+		WalletID:          "wallet_linked",
+		Type:              types.TransactionTypeCredit,
+		Amount:            decimal.NewFromInt(50),
+		CreditAmount:      decimal.NewFromInt(50),
+		TxStatus:          types.TransactionStatusPending,
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		ReferenceType:     types.WalletTxReferenceTypeExternal,
+		ReferenceID:       "linked-ref",
+		IdempotencyKey:    "linked-ref",
+		EnvironmentID:     types.GetEnvironmentID(ctx),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(ctx, tx))
+
+	newInvoice := func(metadata types.Metadata) *invoice.Invoice {
+		inv := &invoice.Invoice{
+			ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+			CustomerID:      s.testData.customer.ID,
+			InvoiceType:     types.InvoiceTypeOneOff,
+			InvoiceStatus:   types.InvoiceStatusFinalized,
+			PaymentStatus:   types.PaymentStatusPending,
+			Currency:        "usd",
+			AmountDue:       decimal.NewFromInt(50),
+			AmountRemaining: decimal.NewFromInt(50),
+			Metadata:        metadata,
+			BaseModel:       types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
+		return inv
+	}
+	topUp := newInvoice(types.Metadata{"wallet_transaction_id": tx.ID})
+	plain := newInvoice(nil)
+
+	got, err := s.service.GetInvoice(ctx, topUp.ID)
+	s.NoError(err)
+	s.Require().Len(got.LinkedWalletTransactions, 1)
+	s.Equal(tx.ID, got.LinkedWalletTransactions[0].ID)
+	s.Equal("wallet_linked", got.LinkedWalletTransactions[0].WalletID)
+	s.True(decimal.NewFromInt(50).Equal(got.LinkedWalletTransactions[0].CreditAmount))
+	s.Equal(types.TransactionStatusPending, got.LinkedWalletTransactions[0].TransactionStatus)
+
+	got, err = s.service.GetInvoice(ctx, plain.ID)
+	s.NoError(err)
+	s.Empty(got.LinkedWalletTransactions)
 }

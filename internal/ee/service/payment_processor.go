@@ -342,6 +342,14 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 }
 
 func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
+	syncOn, err := stripeInvoiceSyncEnabled(ctx, p.ConnectionRepo)
+	if err != nil {
+		return err
+	}
+	if syncOn && shouldUseStripeHostedInvoicePage(paymentObj, invoice) {
+		return p.startPaymentUsingHostedPage(ctx, paymentObj, invoice)
+	}
+
 	// Extract success URL and cancel URL from gateway metadata
 	successURL := ""
 	cancelURL := ""
@@ -376,7 +384,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 		Currency:   paymentObj.Currency,
 		SuccessURL: successURL,
 		CancelURL:  cancelURL,
-		SaveCardAndMakeDefault: func() bool {
+		SaveCard: func() bool {
 			if paymentObj.GatewayMetadata != nil {
 				if saveCardStr, exists := paymentObj.GatewayMetadata["save_card_and_make_default"]; exists {
 					return saveCardStr == "true"
@@ -387,6 +395,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 		Metadata:               linkMetadata,
 		PaymentID:              paymentObj.ID,
 		TaxIDCollectionEnabled: paymentObj.GatewayMetadata["tax_id_collection_enabled"] == "true",
+		AllowPromotionCodes:    paymentObj.GatewayMetadata["allow_promotion_codes"] != "false",
 	}
 
 	// Get Stripe integration for creating payment link
@@ -441,6 +450,42 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 		"session_id", paymentLinkResp.ID,
 		"payment_url", paymentLinkResp.PaymentURL)
 
+	return nil
+}
+
+// shouldUseStripeHostedInvoicePage reports whether the Stripe hosted invoice page, which charges the whole invoice, fits this payment.
+func shouldUseStripeHostedInvoicePage(paymentObj *payment.Payment, inv *invoice.Invoice) bool {
+	if inv.Metadata[types.InvoiceMetadataKeyStripeHostedInvoiceURL] == "" {
+		return false
+	}
+	if !inv.AmountPaid.IsZero() {
+		return false
+	}
+	if !paymentObj.Amount.Equal(inv.AmountRemaining) {
+		return false
+	}
+
+	return true
+}
+
+// startPaymentUsingHostedPage points the payment at the hosted invoice page; ProcessPayment saves it.
+func (p *paymentProcessor) startPaymentUsingHostedPage(ctx context.Context, paymentObj *payment.Payment, inv *invoice.Invoice) error {
+	stripeIntegration, err := p.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		return err
+	}
+	stripeInvoiceID, err := stripeIntegration.InvoiceSyncSvc.GetStripeInvoiceID(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
+	paymentObj.GatewayMetadata = lo.Assign(paymentObj.GatewayMetadata, types.Metadata{
+		"payment_url":                           inv.Metadata[types.InvoiceMetadataKeyStripeHostedInvoiceURL],
+		"gateway":                               string(types.PaymentGatewayTypeStripe),
+		types.GatewayMetadataKeyStripeInvoiceID: stripeInvoiceID,
+	})
+	p.Logger.Info(ctx, "using Stripe hosted invoice page as payment link",
+		"payment_id", paymentObj.ID, "invoice_id", inv.ID, "stripe_invoice_id", stripeInvoiceID)
 	return nil
 }
 

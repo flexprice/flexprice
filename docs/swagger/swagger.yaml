@@ -3482,6 +3482,8 @@ definitions:
   CreatePaymentRequest:
     properties:
       amount:
+        description: Amount defaults to the invoice's amount remaining for invoice
+          payments when zero or omitted.
         type: string
       cancel_url:
         type: string
@@ -3512,7 +3514,6 @@ definitions:
       success_url:
         type: string
     required:
-    - amount
     - currency
     - destination_id
     - destination_type
@@ -6363,6 +6364,12 @@ definitions:
         items:
           $ref: '#/definitions/InvoiceLineItemResponse'
         type: array
+      linked_wallet_transactions:
+        description: linked_wallet_transactions are the wallet credits this invoice
+          pays for; pending ones are released when it is paid
+        items:
+          $ref: '#/definitions/LinkedWalletTransaction'
+        type: array
       metadata:
         allOf:
         - $ref: '#/definitions/types.Metadata'
@@ -6596,6 +6603,19 @@ definitions:
     properties:
       mapping:
         $ref: '#/definitions/EntityIntegrationMappingResponse'
+    type: object
+  LinkedWalletTransaction:
+    properties:
+      credit_amount:
+        type: string
+      id:
+        type: string
+      transaction_reason:
+        $ref: '#/definitions/types.TransactionReason'
+      transaction_status:
+        $ref: '#/definitions/types.TransactionStatus'
+      wallet_id:
+        type: string
     type: object
   ListActivityRequest:
     properties:
@@ -8478,6 +8498,10 @@ definitions:
     type: object
   StripePaymentGatewayOptions:
     properties:
+      allow_promotion_codes:
+        description: AllowPromotionCodes lets the customer enter a promotion code;
+          nil keeps it on.
+        type: boolean
       tax_id_collection_enabled:
         description: TaxIDCollectionEnabled only applies to PAYMENT_LINK Checkout
           Sessions.
@@ -12036,6 +12060,23 @@ definitions:
       region:
         type: string
     type: object
+  types.AccountingPeriodStatus:
+    enum:
+    - open
+    - closed
+    type: string
+    x-enum-comments:
+      AccountingPeriodStatusClosed: reserved; close is deferred
+    x-enum-varnames:
+    - AccountingPeriodStatusOpen
+    - AccountingPeriodStatusClosed
+  types.ActiveWindow:
+    properties:
+      end:
+        $ref: '#/definitions/types.Bucket'
+      start:
+        $ref: '#/definitions/types.Bucket'
+    type: object
   types.AddAddonParams:
     properties:
       addons:
@@ -12073,6 +12114,19 @@ definitions:
         description: Needed to prorate the addon's first credit grant.
       start_date:
         type: string
+    type: object
+  types.AddPaymentMethodOptions:
+    properties:
+      payment_method_types:
+        description: PaymentMethodTypes are the methods it sets up, e.g. ["enach"]
+          for Razorpay.
+        items:
+          type: string
+        type: array
+      sets_default:
+        description: SetsDefault reports whether it can make the saved method the
+          default (Stripe only).
+        type: boolean
     type: object
   types.AddonAssociationEntityType:
     enum:
@@ -12131,6 +12185,15 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/types.Status'
+    type: object
+  types.AddonPriceOverrideRef:
+    properties:
+      override_price_id:
+        type: string
+      price_id:
+        type: string
+      quantity:
+        type: string
     type: object
   types.AddonStatus:
     enum:
@@ -12349,6 +12412,16 @@ definitions:
     - AlertTypeSubscriptionGroupSpend
     - AlertTypeEntitlementGrantThreshold
     - AlertTypeEntitlementGrantExhausted
+  types.AmortizationMethod:
+    enum:
+    - daily
+    - period_even
+    - period_even_prorated
+    type: string
+    x-enum-varnames:
+    - AmortizationDaily
+    - AmortizationPeriodEven
+    - AmortizationPeriodEvenProrated
   types.ApplicationStatus:
     enum:
     - applied
@@ -12379,6 +12452,21 @@ definitions:
       threshold:
         type: string
     type: object
+  types.BillingAddress:
+    properties:
+      address_city:
+        type: string
+      address_country:
+        type: string
+      address_line1:
+        type: string
+      address_line2:
+        type: string
+      address_postal_code:
+        type: string
+      address_state:
+        type: string
+    type: object
   types.BillingCadence:
     enum:
     - RECURRING
@@ -12393,6 +12481,27 @@ definitions:
     x-enum-varnames:
     - BillingCycleAnniversary
     - BillingCycleCalendar
+  types.BillingDetails:
+    properties:
+      address:
+        $ref: '#/definitions/types.BillingAddress'
+      email:
+        type: string
+      help_email:
+        type: string
+      phone:
+        type: string
+    type: object
+  types.BillingEntityMode:
+    enum:
+    - "off"
+    - enabling
+    - enabled
+    type: string
+    x-enum-varnames:
+    - BillingEntityModeOff
+    - BillingEntityModeEnabling
+    - BillingEntityModeEnabled
   types.BillingModel:
     enum:
     - FLAT_FEE
@@ -12431,6 +12540,40 @@ definitions:
     - BillingPeriodBehaviourUnchanged
     - BillingPeriodBehaviourAnchorAtEffect
     - BillingPeriodBehaviourAnchorAtConfig
+  types.BillingTermKind:
+    enum:
+    - once
+    - recurring
+    type: string
+    x-enum-varnames:
+    - BillingTermKindOnce
+    - BillingTermKindRecurring
+  types.BillingTermOwnerType:
+    enum:
+    - commitment
+    type: string
+    x-enum-varnames:
+    - BillingTermOwnerCommitment
+  types.BillingTermSplit:
+    enum:
+    - even
+    - proportional
+    type: string
+    x-enum-varnames:
+    - BillingTermSplitEven
+    - BillingTermSplitProportional
+  types.BillingTermValueType:
+    description: fixed or remainder; percentage is reserved and rejected as not supported
+      yet
+    enum:
+    - fixed
+    - percentage
+    - remainder
+    type: string
+    x-enum-varnames:
+    - BillingTermValueFixed
+    - BillingTermValuePercentage
+    - BillingTermValueRemainder
   types.BillingTier:
     enum:
     - VOLUME
@@ -12458,6 +12601,15 @@ definitions:
     x-enum-varnames:
     - CancelImmediatelyInvoicePolicyGenerateInvoice
     - CancelImmediatelyInvoicePolicySkip
+  types.CancellationFeeType:
+    description: fixed; percentage is reserved and rejected as not supported yet
+    enum:
+    - fixed
+    - percentage
+    type: string
+    x-enum-varnames:
+    - CancellationFeeFixed
+    - CancellationFeePercentage
   types.CancellationType:
     enum:
     - immediate
@@ -12519,6 +12671,11 @@ definitions:
           the customer is present, so a missed auto-charge may fall back to a hosted
           authorization link. Set true only from merchant-initiated paths (auto top-up).
         type: boolean
+      link_expiry:
+        allOf:
+        - $ref: '#/definitions/types.Duration'
+        description: LinkExpiry overrides how long the hosted payment page stays payable;
+          nil keeps the provider default.
       max_mandate_limit:
         type: string
       notify_customer:
@@ -12568,6 +12725,24 @@ definitions:
     - ColumnTypeString
     - ColumnTypeDecimal
     - ColumnTypeDatetime
+  types.CommitmentCollectionMethod:
+    enum:
+    - per_period
+    - billing_terms
+    type: string
+    x-enum-varnames:
+    - CommitmentCollectionPerPeriod
+    - CommitmentCollectionBillingTerms
+  types.CommitmentEarlyTermination:
+    enum:
+    - forfeit
+    - credit_note
+    - bill_remaining
+    type: string
+    x-enum-varnames:
+    - CommitmentTerminationForfeit
+    - CommitmentTerminationCreditNote
+    - CommitmentTerminationBillRemaining
   types.CommitmentInfo:
     properties:
       amount:
@@ -12605,6 +12780,36 @@ definitions:
       type:
         $ref: '#/definitions/types.CommitmentType'
     type: object
+  types.CommitmentMeasurement:
+    enum:
+    - billing_period
+    - window
+    type: string
+    x-enum-varnames:
+    - CommitmentMeasurementBillingPeriod
+    - CommitmentMeasurementWindow
+  types.CommitmentScopeType:
+    enum:
+    - subscription
+    - group
+    - meter
+    - price
+    type: string
+    x-enum-varnames:
+    - CommitmentScopeSubscription
+    - CommitmentScopeGroup
+    - CommitmentScopeMeter
+    - CommitmentScopePrice
+  types.CommitmentStatus:
+    enum:
+    - active
+    - ended
+    - terminated
+    type: string
+    x-enum-varnames:
+    - CommitmentStatusActive
+    - CommitmentStatusEnded
+    - CommitmentStatusTerminated
   types.CommitmentType:
     enum:
     - amount
@@ -12613,6 +12818,18 @@ definitions:
     x-enum-varnames:
     - COMMITMENT_TYPE_AMOUNT
     - COMMITMENT_TYPE_QUANTITY
+  types.ContractStatus:
+    enum:
+    - draft
+    - active
+    - ended
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - ContractStatusDraft
+    - ContractStatusActive
+    - ContractStatusEnded
+    - ContractStatusCancelled
   types.CouponCadence:
     enum:
     - once
@@ -12945,6 +13162,93 @@ definitions:
     - DurationUnitMinute
     - DurationUnitHour
     - DurationUnitDay
+  types.EmailDeliveryStatus:
+    enum:
+    - queued
+    - sent
+    - delivery_delayed
+    - delivered
+    - bounced
+    - complained
+    - failed
+    - suppressed
+    - skipped
+    type: string
+    x-enum-varnames:
+    - EmailDeliveryStatusQueued
+    - EmailDeliveryStatusSent
+    - EmailDeliveryStatusDeliveryDelayed
+    - EmailDeliveryStatusDelivered
+    - EmailDeliveryStatusBounced
+    - EmailDeliveryStatusComplained
+    - EmailDeliveryStatusFailed
+    - EmailDeliveryStatusSuppressed
+    - EmailDeliveryStatusSkipped
+  types.EmailLogFilter:
+    properties:
+      customer_ids:
+        items:
+          type: string
+        type: array
+      delivery_statuses:
+        items:
+          $ref: '#/definitions/types.EmailDeliveryStatus'
+        type: array
+      end_time:
+        type: string
+      entity_ids:
+        items:
+          type: string
+        type: array
+      entity_type:
+        $ref: '#/definitions/types.SystemEntityType'
+      expand:
+        type: string
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        type: string
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      triggers:
+        items:
+          $ref: '#/definitions/types.EmailTrigger'
+        type: array
+    type: object
+  types.EmailProvider:
+    enum:
+    - resend
+    - local
+    type: string
+    x-enum-varnames:
+    - EmailProviderResend
+    - EmailProviderLocal
+  types.EmailTemplateKey:
+    enum:
+    - invoice_finalized
+    type: string
+    x-enum-varnames:
+    - EmailTemplateInvoiceFinalized
+  types.EmailTrigger:
+    enum:
+    - auto
+    - manual
+    type: string
+    x-enum-varnames:
+    - EmailTriggerAuto
+    - EmailTriggerManual
   types.EntitlementAggregationMode:
     enum:
     - additive
@@ -13052,6 +13356,16 @@ definitions:
     x-enum-varnames:
     - EntitlementGrantMeasureQuantity
     - EntitlementGrantMeasureAmount
+  types.EntitlementGrantScopeEntityType:
+    enum:
+    - feature
+    - subscription
+    - group
+    type: string
+    x-enum-varnames:
+    - EntitlementGrantScopeFeature
+    - EntitlementGrantScopeSubscription
+    - EntitlementGrantScopeGroup
   types.EntitlementGrantStatus:
     enum:
     - active
@@ -13525,6 +13839,72 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.ImprovementDirection:
+    enum:
+    - higher
+    - lower
+    type: string
+    x-enum-varnames:
+    - ImprovementHigher
+    - ImprovementLower
+  types.InstalmentBillTrigger:
+    enum:
+    - date
+    - manual
+    type: string
+    x-enum-varnames:
+    - InstalmentBillTriggerDate
+    - InstalmentBillTriggerManual
+  types.InstalmentDelivery:
+    enum:
+    - subscription_invoice
+    - separate_invoice
+    type: string
+    x-enum-varnames:
+    - InstalmentDeliverySubscriptionInvoice
+    - InstalmentDeliverySeparateInvoice
+  types.InstalmentKind:
+    enum:
+    - instalment
+    - settlement
+    - cancellation_fee
+    type: string
+    x-enum-varnames:
+    - InstalmentKindInstalment
+    - InstalmentKindSettlement
+    - InstalmentKindCancellationFee
+  types.InstalmentStatus:
+    enum:
+    - scheduled
+    - invoiced
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - InstalmentStatusScheduled
+    - InstalmentStatusInvoiced
+    - InstalmentStatusCancelled
+  types.IntegrationCapabilityType:
+    enum:
+    - checkout
+    - auto_charge
+    - set_default_method
+    - payment_link
+    - payment_method_management
+    - invoice_sync
+    - list_payment_methods
+    - add_payment_method
+    - delete_payment_method
+    type: string
+    x-enum-varnames:
+    - IntegrationCapabilityCheckout
+    - IntegrationCapabilityAutoCharge
+    - IntegrationCapabilitySetDefaultMethod
+    - IntegrationCapabilityPaymentLink
+    - IntegrationCapabilityPaymentMethodManagement
+    - IntegrationCapabilityInvoiceSync
+    - IntegrationCapabilityListPaymentMethods
+    - IntegrationCapabilityAddPaymentMethod
+    - IntegrationCapabilityDeletePaymentMethod
   types.IntegrationEntityType:
     enum:
     - customer
@@ -13555,6 +13935,15 @@ definitions:
     - IntegrationEntityTypeInvoiceLineItem
     - IntegrationEntityTypeSubscriptionLineItem
     - IntegrationEntityTypePaymentMethodSetup
+  types.InvoiceBillingEntity:
+    properties:
+      billing_details:
+        $ref: '#/definitions/types.BillingDetails'
+      billing_entity_id:
+        type: string
+      name:
+        type: string
+    type: object
   types.InvoiceBillingReason:
     enum:
     - SUBSCRIPTION_CREATE
@@ -13726,6 +14115,16 @@ definitions:
         description: voided_at_gte filters invoices voided at or after the given instant
         type: string
     type: object
+  types.InvoicePaymentFailureReason:
+    enum:
+    - payment_method_unavailable
+    - provider_error
+    - declined
+    type: string
+    x-enum-varnames:
+    - InvoicePaymentFailureReasonPaymentMethodUnavailable
+    - InvoicePaymentFailureReasonProviderError
+    - InvoicePaymentFailureReasonDeclined
   types.InvoiceSourceType:
     enum:
     - checkout
@@ -13746,6 +14145,10 @@ definitions:
     - InvoiceStatusSkipped
   types.InvoiceSyncSettings:
     properties:
+      auto_advance:
+        description: Nil lets the sync decide from the collection method and saved
+          payment method.
+        type: boolean
       deposit_to_account_id:
         description: |-
           Zoho chart-of-accounts id ("Deposit To"). Empty omits account_id, leaving Zoho's
@@ -13781,6 +14184,9 @@ definitions:
           Zoho payment modes are merchant-editable free strings with no id, so this is passed
           through verbatim. Empty means DefaultZohoPaymentMode.
         type: string
+      send_invoice_email:
+        description: Nil sends Stripe's invoice email for send_invoice invoices.
+        type: boolean
       service_period_custom_fields:
         allOf:
         - $ref: '#/definitions/types.ServicePeriodCustomFields'
@@ -13802,6 +14208,56 @@ definitions:
     - InvoiceTypeSubscription
     - InvoiceTypeOneOff
     - InvoiceTypeCredit
+  types.JournalDirection:
+    enum:
+    - debit
+    - credit
+    type: string
+    x-enum-varnames:
+    - JournalDirectionDebit
+    - JournalDirectionCredit
+  types.JournalEventType:
+    enum:
+    - invoice_finalized
+    - invoice_voided
+    - credit_note_finalized
+    - credit_note_voided
+    - payment_succeeded
+    - payment_reversed
+    - refund_succeeded
+    - revenue_earned
+    - revenue_offset
+    type: string
+    x-enum-varnames:
+    - JournalEventInvoiceFinalized
+    - JournalEventInvoiceVoided
+    - JournalEventCreditNoteFinalized
+    - JournalEventCreditNoteVoided
+    - JournalEventPaymentSucceeded
+    - JournalEventPaymentReversed
+    - JournalEventRefundSucceeded
+    - JournalEventRevenueEarned
+    - JournalEventRevenueOffset
+  types.LedgerAccountKey:
+    enum:
+    - cash
+    - accounts_receivable
+    - unbilled_receivable
+    - deferred_revenue
+    - customer_credit
+    - tax_payable
+    - revenue
+    - contra_revenue
+    type: string
+    x-enum-varnames:
+    - LedgerAccountCash
+    - LedgerAccountReceivable
+    - LedgerAccountUnbilledReceivable
+    - LedgerAccountDeferredRevenue
+    - LedgerAccountCustomerCredit
+    - LedgerAccountTaxPayable
+    - LedgerAccountRevenue
+    - LedgerAccountContraRevenue
   types.LineItemGrouping:
     enum:
     - per_charge_period
@@ -14080,6 +14536,18 @@ definitions:
     - PaymentTerms90Net
     - PaymentTermsEndOfMonth
     - PaymentTermsEndOfNextMonth
+  types.PerformanceObligationStatus:
+    enum:
+    - draft
+    - active
+    - satisfied
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - PerformanceObligationStatusDraft
+    - PerformanceObligationStatusActive
+    - PerformanceObligationStatusSatisfied
+    - PerformanceObligationStatusCancelled
   types.PlanFilter:
     properties:
       end_time:
@@ -14292,6 +14760,16 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.RecognitionMethod:
+    enum:
+    - point_in_time
+    - straight_line
+    - as_consumed
+    type: string
+    x-enum-varnames:
+    - RecognitionMethodPointInTime
+    - RecognitionMethodStraightLine
+    - RecognitionMethodAsConsumed
   types.RecurringPaymentStatus:
     enum:
     - PENDING
@@ -14377,6 +14855,40 @@ definitions:
       reason:
         type: string
     type: object
+  types.ReportCategory:
+    enum:
+    - billing
+    - receivables
+    - customers
+    - credits
+    - usage
+    type: string
+    x-enum-varnames:
+    - ReportCategoryBilling
+    - ReportCategoryReceivables
+    - ReportCategoryCustomers
+    - ReportCategoryCredits
+    - ReportCategoryUsage
+  types.ReportKind:
+    enum:
+    - flow
+    - ratio
+    - snapshot
+    type: string
+    x-enum-varnames:
+    - ReportKindFlow
+    - ReportKindRatio
+    - ReportKindSnapshot
+  types.ReportValueType:
+    enum:
+    - money
+    - count
+    - days
+    type: string
+    x-enum-varnames:
+    - ReportValueTypeMoney
+    - ReportValueTypeCount
+    - ReportValueTypeDays
   types.ReportingUnit:
     properties:
       conversion_rate:
@@ -14408,6 +14920,24 @@ definitions:
     - ResumeModeImmediate
     - ResumeModeScheduled
     - ResumeModeAuto
+  types.RevRecEntityType:
+    enum:
+    - subscription
+    - subscription_line_item
+    - invoice
+    - credit_note
+    - payment
+    - refund
+    - pob
+    type: string
+    x-enum-varnames:
+    - RevRecEntityTypeSubscription
+    - RevRecEntityTypeSubscriptionLineItem
+    - RevRecEntityTypeInvoice
+    - RevRecEntityTypeCreditNote
+    - RevRecEntityTypePayment
+    - RevRecEntityTypeRefund
+    - RevRecEntityTypePOB
   types.RevenueAllocationPolicy:
     enum:
     - billed
@@ -14426,6 +14956,16 @@ definitions:
     - RevenueGranularityDay
     - RevenueGranularityPeriod
     - RevenueGranularityTotal
+  types.RevenueReportGroupBy:
+    enum:
+    - customer_id
+    - contract_id
+    - pob_id
+    type: string
+    x-enum-varnames:
+    - RevenueReportGroupByCustomer
+    - RevenueReportGroupByContract
+    - RevenueReportGroupByPOB
   types.RoundType:
     enum:
     - up
@@ -14608,6 +15148,11 @@ definitions:
       start_field_id:
         type: string
     type: object
+  types.SettingsOverride:
+    properties:
+      subscription_config:
+        $ref: '#/definitions/types.SubscriptionConfigOverride'
+    type: object
   types.Shape:
     enum:
     - timeseries
@@ -14692,6 +15237,14 @@ definitions:
     - SubscriptionChangeTypeUpgrade
     - SubscriptionChangeTypeDowngrade
     - SubscriptionChangeTypeLateral
+  types.SubscriptionConfigOverride:
+    properties:
+      auto_cancellation_enabled:
+        type: boolean
+      grace_period_days:
+        minimum: 0
+        type: integer
+    type: object
   types.SubscriptionFilter:
     properties:
       active_at:
@@ -14966,6 +15519,44 @@ definitions:
       subscription:
         $ref: '#/definitions/types.EntitySyncConfig'
     type: object
+  types.SystemEntityType:
+    enum:
+    - feature
+    - customer
+    - plan
+    - subscription
+    - invoice
+    - payment
+    - credit_note
+    - refund
+    - wallet
+    - entitlement
+    - checkout_session
+    - payment_method
+    - price
+    - event
+    - commitment
+    - billing_term
+    - billing_instalment
+    type: string
+    x-enum-varnames:
+    - SystemEntityTypeFeature
+    - SystemEntityTypeCustomer
+    - SystemEntityTypePlan
+    - SystemEntityTypeSubscription
+    - SystemEntityTypeInvoice
+    - SystemEntityTypePayment
+    - SystemEntityTypeCreditNote
+    - SystemEntityTypeRefund
+    - SystemEntityTypeWallet
+    - SystemEntityTypeEntitlement
+    - SystemEntityTypeCheckoutSession
+    - SystemEntityTypePaymentMethod
+    - SystemEntityTypePrice
+    - SystemEntityTypeEvent
+    - SystemEntityTypeCommitment
+    - SystemEntityTypeBillingTerm
+    - SystemEntityTypeBillingInstalment
   types.TaskStatus:
     enum:
     - PENDING
@@ -15100,6 +15691,16 @@ definitions:
     x-enum-varnames:
     - TaxTreatmentTaxable
     - TaxTreatmentExempt
+  types.TenantInternalStatus:
+    enum:
+    - trialing
+    - active
+    - suspended
+    type: string
+    x-enum-varnames:
+    - TenantInternalStatusTrialing
+    - TenantInternalStatusActive
+    - TenantInternalStatusSuspended
   types.TimeOfDayBucket:
     properties:
       commitment_type:
@@ -15729,6 +16330,46 @@ definitions:
         type: string
       workflow_type:
         type: string
+    type: object
+  types.ZohoPayPalPaymentMethod:
+    enum:
+    - standard
+    - adaptive
+    type: string
+    x-enum-varnames:
+    - ZohoPayPalPaymentMethodStandard
+    - ZohoPayPalPaymentMethodAdaptive
+  types.ZohoPaymentGateway:
+    enum:
+    - paypal
+    - stripe
+    - authorize_net
+    - payflow_pro
+    - 2checkout
+    - braintree
+    - razorpay
+    type: string
+    x-enum-varnames:
+    - ZohoPaymentGatewayPayPal
+    - ZohoPaymentGatewayStripe
+    - ZohoPaymentGatewayAuthorizeNet
+    - ZohoPaymentGatewayPayflowPro
+    - ZohoPaymentGateway2Checkout
+    - ZohoPaymentGatewayBraintree
+    - ZohoPaymentGatewayRazorpay
+  types.ZohoPaymentGatewaySettings:
+    properties:
+      enabled:
+        type: boolean
+      gateways:
+        items:
+          $ref: '#/definitions/types.ZohoPaymentGateway'
+        type: array
+      paypal_payment_method:
+        allOf:
+        - $ref: '#/definitions/types.ZohoPayPalPaymentMethod'
+        description: Sent as additional_field1 on the PayPal gateway. Required when
+          PayPal is selected.
     type: object
   group.Group:
     properties:
@@ -16472,426 +17113,6 @@ definitions:
       updated_by:
         type: string
     type: object
-  types.AccountingPeriodStatus:
-    enum:
-    - open
-    - closed
-    type: string
-    x-enum-comments:
-      AccountingPeriodStatusClosed: reserved; close is deferred
-    x-enum-varnames:
-    - AccountingPeriodStatusOpen
-    - AccountingPeriodStatusClosed
-  types.ActiveWindow:
-    properties:
-      end:
-        $ref: '#/definitions/types.Bucket'
-      start:
-        $ref: '#/definitions/types.Bucket'
-    type: object
-  types.AddPaymentMethodOptions:
-    properties:
-      payment_method_types:
-        description: PaymentMethodTypes are the methods it sets up, e.g. ["enach"]
-          for Razorpay.
-        items:
-          type: string
-        type: array
-      sets_default:
-        description: SetsDefault reports whether it can make the saved method the
-          default (Stripe only).
-        type: boolean
-    type: object
-  types.AddonPriceOverrideRef:
-    properties:
-      override_price_id:
-        type: string
-      price_id:
-        type: string
-      quantity:
-        type: string
-    type: object
-  types.AmortizationMethod:
-    enum:
-    - daily
-    - period_even
-    - period_even_prorated
-    type: string
-    x-enum-varnames:
-    - AmortizationDaily
-    - AmortizationPeriodEven
-    - AmortizationPeriodEvenProrated
-  types.BillingAddress:
-    properties:
-      address_city:
-        type: string
-      address_country:
-        type: string
-      address_line1:
-        type: string
-      address_line2:
-        type: string
-      address_postal_code:
-        type: string
-      address_state:
-        type: string
-    type: object
-  types.BillingDetails:
-    properties:
-      address:
-        $ref: '#/definitions/types.BillingAddress'
-      email:
-        type: string
-      help_email:
-        type: string
-      phone:
-        type: string
-    type: object
-  types.BillingEntityMode:
-    enum:
-    - "off"
-    - enabling
-    - enabled
-    type: string
-    x-enum-varnames:
-    - BillingEntityModeOff
-    - BillingEntityModeEnabling
-    - BillingEntityModeEnabled
-  types.BillingTermKind:
-    enum:
-    - once
-    - recurring
-    type: string
-    x-enum-varnames:
-    - BillingTermKindOnce
-    - BillingTermKindRecurring
-  types.BillingTermOwnerType:
-    enum:
-    - commitment
-    type: string
-    x-enum-varnames:
-    - BillingTermOwnerCommitment
-  types.BillingTermSplit:
-    enum:
-    - even
-    - proportional
-    type: string
-    x-enum-varnames:
-    - BillingTermSplitEven
-    - BillingTermSplitProportional
-  types.BillingTermValueType:
-    description: fixed or remainder; percentage is reserved and rejected as not supported
-      yet
-    enum:
-    - fixed
-    - percentage
-    - remainder
-    type: string
-    x-enum-varnames:
-    - BillingTermValueFixed
-    - BillingTermValuePercentage
-    - BillingTermValueRemainder
-  types.CancellationFeeType:
-    description: fixed; percentage is reserved and rejected as not supported yet
-    enum:
-    - fixed
-    - percentage
-    type: string
-    x-enum-varnames:
-    - CancellationFeeFixed
-    - CancellationFeePercentage
-  types.CommitmentCollectionMethod:
-    enum:
-    - per_period
-    - billing_terms
-    type: string
-    x-enum-varnames:
-    - CommitmentCollectionPerPeriod
-    - CommitmentCollectionBillingTerms
-  types.CommitmentEarlyTermination:
-    enum:
-    - forfeit
-    - credit_note
-    - bill_remaining
-    type: string
-    x-enum-varnames:
-    - CommitmentTerminationForfeit
-    - CommitmentTerminationCreditNote
-    - CommitmentTerminationBillRemaining
-  types.CommitmentMeasurement:
-    enum:
-    - billing_period
-    - window
-    type: string
-    x-enum-varnames:
-    - CommitmentMeasurementBillingPeriod
-    - CommitmentMeasurementWindow
-  types.CommitmentScopeType:
-    enum:
-    - subscription
-    - group
-    - meter
-    - price
-    type: string
-    x-enum-varnames:
-    - CommitmentScopeSubscription
-    - CommitmentScopeGroup
-    - CommitmentScopeMeter
-    - CommitmentScopePrice
-  types.CommitmentStatus:
-    enum:
-    - active
-    - ended
-    - terminated
-    type: string
-    x-enum-varnames:
-    - CommitmentStatusActive
-    - CommitmentStatusEnded
-    - CommitmentStatusTerminated
-  types.ContractStatus:
-    enum:
-    - draft
-    - active
-    - ended
-    - cancelled
-    type: string
-    x-enum-varnames:
-    - ContractStatusDraft
-    - ContractStatusActive
-    - ContractStatusEnded
-    - ContractStatusCancelled
-  types.EmailDeliveryStatus:
-    enum:
-    - queued
-    - sent
-    - delivery_delayed
-    - delivered
-    - bounced
-    - complained
-    - failed
-    - suppressed
-    - skipped
-    type: string
-    x-enum-varnames:
-    - EmailDeliveryStatusQueued
-    - EmailDeliveryStatusSent
-    - EmailDeliveryStatusDeliveryDelayed
-    - EmailDeliveryStatusDelivered
-    - EmailDeliveryStatusBounced
-    - EmailDeliveryStatusComplained
-    - EmailDeliveryStatusFailed
-    - EmailDeliveryStatusSuppressed
-    - EmailDeliveryStatusSkipped
-  types.EmailLogFilter:
-    properties:
-      customer_ids:
-        items:
-          type: string
-        type: array
-      delivery_statuses:
-        items:
-          $ref: '#/definitions/types.EmailDeliveryStatus'
-        type: array
-      end_time:
-        type: string
-      entity_ids:
-        items:
-          type: string
-        type: array
-      entity_type:
-        $ref: '#/definitions/types.SystemEntityType'
-      expand:
-        type: string
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      sort:
-        type: string
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      triggers:
-        items:
-          $ref: '#/definitions/types.EmailTrigger'
-        type: array
-    type: object
-  types.EmailProvider:
-    enum:
-    - resend
-    - local
-    type: string
-    x-enum-varnames:
-    - EmailProviderResend
-    - EmailProviderLocal
-  types.EmailTemplateKey:
-    enum:
-    - invoice_finalized
-    type: string
-    x-enum-varnames:
-    - EmailTemplateInvoiceFinalized
-  types.EmailTrigger:
-    enum:
-    - auto
-    - manual
-    type: string
-    x-enum-varnames:
-    - EmailTriggerAuto
-    - EmailTriggerManual
-  types.EntitlementGrantScopeEntityType:
-    enum:
-    - feature
-    - subscription
-    - group
-    type: string
-    x-enum-varnames:
-    - EntitlementGrantScopeFeature
-    - EntitlementGrantScopeSubscription
-    - EntitlementGrantScopeGroup
-  types.ImprovementDirection:
-    enum:
-    - higher
-    - lower
-    type: string
-    x-enum-varnames:
-    - ImprovementHigher
-    - ImprovementLower
-  types.InstalmentBillTrigger:
-    enum:
-    - date
-    - manual
-    type: string
-    x-enum-varnames:
-    - InstalmentBillTriggerDate
-    - InstalmentBillTriggerManual
-  types.InstalmentDelivery:
-    enum:
-    - subscription_invoice
-    - separate_invoice
-    type: string
-    x-enum-varnames:
-    - InstalmentDeliverySubscriptionInvoice
-    - InstalmentDeliverySeparateInvoice
-  types.InstalmentKind:
-    enum:
-    - instalment
-    - settlement
-    - cancellation_fee
-    type: string
-    x-enum-varnames:
-    - InstalmentKindInstalment
-    - InstalmentKindSettlement
-    - InstalmentKindCancellationFee
-  types.InstalmentStatus:
-    enum:
-    - scheduled
-    - invoiced
-    - cancelled
-    type: string
-    x-enum-varnames:
-    - InstalmentStatusScheduled
-    - InstalmentStatusInvoiced
-    - InstalmentStatusCancelled
-  types.IntegrationCapabilityType:
-    enum:
-    - checkout
-    - auto_charge
-    - set_default_method
-    - payment_link
-    - payment_method_management
-    - invoice_sync
-    - list_payment_methods
-    - add_payment_method
-    - delete_payment_method
-    type: string
-    x-enum-varnames:
-    - IntegrationCapabilityCheckout
-    - IntegrationCapabilityAutoCharge
-    - IntegrationCapabilitySetDefaultMethod
-    - IntegrationCapabilityPaymentLink
-    - IntegrationCapabilityPaymentMethodManagement
-    - IntegrationCapabilityInvoiceSync
-    - IntegrationCapabilityListPaymentMethods
-    - IntegrationCapabilityAddPaymentMethod
-    - IntegrationCapabilityDeletePaymentMethod
-  types.InvoiceBillingEntity:
-    properties:
-      billing_details:
-        $ref: '#/definitions/types.BillingDetails'
-      billing_entity_id:
-        type: string
-      name:
-        type: string
-    type: object
-  types.InvoicePaymentFailureReason:
-    enum:
-    - payment_method_unavailable
-    - provider_error
-    - declined
-    type: string
-    x-enum-varnames:
-    - InvoicePaymentFailureReasonPaymentMethodUnavailable
-    - InvoicePaymentFailureReasonProviderError
-    - InvoicePaymentFailureReasonDeclined
-  types.JournalDirection:
-    enum:
-    - debit
-    - credit
-    type: string
-    x-enum-varnames:
-    - JournalDirectionDebit
-    - JournalDirectionCredit
-  types.JournalEventType:
-    enum:
-    - invoice_finalized
-    - invoice_voided
-    - credit_note_finalized
-    - credit_note_voided
-    - payment_succeeded
-    - payment_reversed
-    - refund_succeeded
-    - revenue_earned
-    - revenue_offset
-    type: string
-    x-enum-varnames:
-    - JournalEventInvoiceFinalized
-    - JournalEventInvoiceVoided
-    - JournalEventCreditNoteFinalized
-    - JournalEventCreditNoteVoided
-    - JournalEventPaymentSucceeded
-    - JournalEventPaymentReversed
-    - JournalEventRefundSucceeded
-    - JournalEventRevenueEarned
-    - JournalEventRevenueOffset
-  types.LedgerAccountKey:
-    enum:
-    - cash
-    - accounts_receivable
-    - unbilled_receivable
-    - deferred_revenue
-    - customer_credit
-    - tax_payable
-    - revenue
-    - contra_revenue
-    type: string
-    x-enum-varnames:
-    - LedgerAccountCash
-    - LedgerAccountReceivable
-    - LedgerAccountUnbilledReceivable
-    - LedgerAccountDeferredRevenue
-    - LedgerAccountCustomerCredit
-    - LedgerAccountTaxPayable
-    - LedgerAccountRevenue
-    - LedgerAccountContraRevenue
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -16904,191 +17125,6 @@ definitions:
   types.Metadata:
     additionalProperties:
       type: string
-    type: object
-  types.PerformanceObligationStatus:
-    enum:
-    - draft
-    - active
-    - satisfied
-    - cancelled
-    type: string
-    x-enum-varnames:
-    - PerformanceObligationStatusDraft
-    - PerformanceObligationStatusActive
-    - PerformanceObligationStatusSatisfied
-    - PerformanceObligationStatusCancelled
-  types.RecognitionMethod:
-    enum:
-    - point_in_time
-    - straight_line
-    - as_consumed
-    type: string
-    x-enum-varnames:
-    - RecognitionMethodPointInTime
-    - RecognitionMethodStraightLine
-    - RecognitionMethodAsConsumed
-  types.ReportCategory:
-    enum:
-    - billing
-    - receivables
-    - customers
-    - credits
-    - usage
-    type: string
-    x-enum-varnames:
-    - ReportCategoryBilling
-    - ReportCategoryReceivables
-    - ReportCategoryCustomers
-    - ReportCategoryCredits
-    - ReportCategoryUsage
-  types.ReportKind:
-    enum:
-    - flow
-    - ratio
-    - snapshot
-    type: string
-    x-enum-varnames:
-    - ReportKindFlow
-    - ReportKindRatio
-    - ReportKindSnapshot
-  types.ReportValueType:
-    enum:
-    - money
-    - count
-    - days
-    type: string
-    x-enum-varnames:
-    - ReportValueTypeMoney
-    - ReportValueTypeCount
-    - ReportValueTypeDays
-  types.RevRecEntityType:
-    enum:
-    - subscription
-    - subscription_line_item
-    - invoice
-    - credit_note
-    - payment
-    - refund
-    - pob
-    type: string
-    x-enum-varnames:
-    - RevRecEntityTypeSubscription
-    - RevRecEntityTypeSubscriptionLineItem
-    - RevRecEntityTypeInvoice
-    - RevRecEntityTypeCreditNote
-    - RevRecEntityTypePayment
-    - RevRecEntityTypeRefund
-    - RevRecEntityTypePOB
-  types.RevenueReportGroupBy:
-    enum:
-    - customer_id
-    - contract_id
-    - pob_id
-    type: string
-    x-enum-varnames:
-    - RevenueReportGroupByCustomer
-    - RevenueReportGroupByContract
-    - RevenueReportGroupByPOB
-  types.SettingsOverride:
-    properties:
-      subscription_config:
-        $ref: '#/definitions/types.SubscriptionConfigOverride'
-    type: object
-  types.SubscriptionConfigOverride:
-    properties:
-      auto_cancellation_enabled:
-        type: boolean
-      grace_period_days:
-        minimum: 0
-        type: integer
-    type: object
-  types.SystemEntityType:
-    enum:
-    - feature
-    - customer
-    - plan
-    - subscription
-    - invoice
-    - payment
-    - credit_note
-    - refund
-    - wallet
-    - entitlement
-    - checkout_session
-    - payment_method
-    - price
-    - event
-    - commitment
-    - billing_term
-    - billing_instalment
-    type: string
-    x-enum-varnames:
-    - SystemEntityTypeFeature
-    - SystemEntityTypeCustomer
-    - SystemEntityTypePlan
-    - SystemEntityTypeSubscription
-    - SystemEntityTypeInvoice
-    - SystemEntityTypePayment
-    - SystemEntityTypeCreditNote
-    - SystemEntityTypeRefund
-    - SystemEntityTypeWallet
-    - SystemEntityTypeEntitlement
-    - SystemEntityTypeCheckoutSession
-    - SystemEntityTypePaymentMethod
-    - SystemEntityTypePrice
-    - SystemEntityTypeEvent
-    - SystemEntityTypeCommitment
-    - SystemEntityTypeBillingTerm
-    - SystemEntityTypeBillingInstalment
-  types.TenantInternalStatus:
-    enum:
-    - trialing
-    - active
-    - suspended
-    type: string
-    x-enum-varnames:
-    - TenantInternalStatusTrialing
-    - TenantInternalStatusActive
-    - TenantInternalStatusSuspended
-  types.ZohoPayPalPaymentMethod:
-    enum:
-    - standard
-    - adaptive
-    type: string
-    x-enum-varnames:
-    - ZohoPayPalPaymentMethodStandard
-    - ZohoPayPalPaymentMethodAdaptive
-  types.ZohoPaymentGateway:
-    enum:
-    - paypal
-    - stripe
-    - authorize_net
-    - payflow_pro
-    - 2checkout
-    - braintree
-    - razorpay
-    type: string
-    x-enum-varnames:
-    - ZohoPaymentGatewayPayPal
-    - ZohoPaymentGatewayStripe
-    - ZohoPaymentGatewayAuthorizeNet
-    - ZohoPaymentGatewayPayflowPro
-    - ZohoPaymentGateway2Checkout
-    - ZohoPaymentGatewayBraintree
-    - ZohoPaymentGatewayRazorpay
-  types.ZohoPaymentGatewaySettings:
-    properties:
-      enabled:
-        type: boolean
-      gateways:
-        items:
-          $ref: '#/definitions/types.ZohoPaymentGateway'
-        type: array
-      paypal_payment_method:
-        allOf:
-        - $ref: '#/definitions/types.ZohoPayPalPaymentMethod'
-        description: Sent as additional_field1 on the PayPal gateway. Required when
-          PayPal is selected.
     type: object
   webhookDto.AlertWebhookPayload:
     properties:
