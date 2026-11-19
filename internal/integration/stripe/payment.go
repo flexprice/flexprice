@@ -404,7 +404,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreateStrip
 	params := &stripe.CheckoutSessionCreateParams{
 		LineItems:           lineItems,
 		Mode:                stripe.String("payment"),
-		AllowPromotionCodes: stripe.Bool(true),
+		AllowPromotionCodes: stripe.Bool(req.AllowPromotionCodes),
 		SuccessURL:          stripe.String(successURL),
 		CancelURL:           stripe.String(cancelURL),
 		Metadata:            metadata,

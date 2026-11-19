@@ -19,6 +19,7 @@ type CreateStripePaymentLinkRequest struct {
 	SaveCard               bool            `json:"save_card,omitempty"`
 	PaymentID              string          `json:"payment_id" validate:"required"`
 	TaxIDCollectionEnabled bool            `json:"tax_id_collection_enabled,omitempty"`
+	AllowPromotionCodes    bool            `json:"allow_promotion_codes,omitempty"`
 	ExpiresAt              *time.Time      `json:"expires_at,omitempty"`
 }
 
