@@ -478,6 +478,36 @@ func TestRemoteSummary_CancellationReselectsSubscription(t *testing.T) {
 	}
 }
 
+func TestRemoteSummary_GrandfatheredUsagePrice(t *testing.T) {
+	f := newFakeCloud(map[string]string{
+		"in:t1": "cust_1",
+	})
+	legacy := cloudPrice("legacy_price")
+	legacy["type"] = "USAGE"
+	legacy["meter_id"] = "meter_legacy"
+	legacy["end_date"] = time.Now().Add(-time.Hour).Format(time.RFC3339)
+	details := cloudSubscription(f, types.SubscriptionStatusActive)
+	details["line_items"] = []any{cloudLine("li_legacy", legacy)}
+	f.prices["legacy_price"] = map[string]any{
+		"id":       "legacy_price",
+		"end_date": legacy["end_date"],
+		"meter": map[string]any{
+			"id":   "meter_legacy",
+			"name": "Seats",
+			"aggregation": map[string]any{
+				"type":        "MAX",
+				"bucket_size": "HOUR",
+			},
+		},
+	}
+
+	got, err := newTestRemoteClient(t, f).Summary(context.Background(), "in:t1")
+
+	require.NoError(t, err)
+	require.Len(t, got.plan.Charges, 1)
+	assert.Equal(t, types.WindowSize("HOUR"), got.plan.Charges[0].BucketSize)
+}
+
 func TestRemoteSummary_EffectiveBucketSize(t *testing.T) {
 	for _, offered := range []bool{false, true} {
 		for _, priceBucket := range []string{"", "DAY"} {

@@ -15659,7 +15659,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "number",
+                        "type": "string",
                         "name": "credits_available_gt",
                         "in": "query"
                     },
@@ -23065,7 +23065,7 @@ const docTemplate = `{
             "properties": {
                 "commitment_amount": {
                     "description": "Deprecated: use POST /commitments instead.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_duration": {
                     "description": "Deprecated: use POST /commitments instead.",
@@ -23077,11 +23077,11 @@ const docTemplate = `{
                 },
                 "commitment_overage_factor": {
                     "description": "Deprecated: use POST /commitments instead.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_quantity": {
                     "description": "Deprecated: use POST /commitments instead.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_time_buckets": {
                     "description": "Deprecated: use POST /commitments instead.",
@@ -23139,7 +23139,7 @@ const docTemplate = `{
                     ]
                 },
                 "quantity": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "start_date": {
                     "type": "string"
@@ -25437,7 +25437,7 @@ const docTemplate = `{
                     }
                 },
                 "instalments": {
-                    "description": "Instalments lists, with expand \"instalments\", the instalments of the v2 commitments covering a queried meter that\nwere invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source\nfilters, or when no usage line runs in the range.",
+                    "description": "Instalments lists the commitment instalments in the range with expand \"instalments\": start \u003c= bill_on \u003c end,\nor start \u003c bill_on \u003c= end for an ARREAR one.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/UsageAnalyticInstalment"
@@ -26794,7 +26794,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "commitment_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_duration": {
                     "description": "CommitmentDuration allows a different period than billing (e.g. ANNUAL commitment on MONTHLY billing).",
@@ -26805,7 +26805,7 @@ const docTemplate = `{
                     ]
                 },
                 "commitment_quantity": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_time_buckets": {
                     "description": "CommitmentTimeBuckets scopes commitment to specific UTC-hour windows; requires IsWindowCommitment=true.",
@@ -26827,7 +26827,7 @@ const docTemplate = `{
                 },
                 "overage_factor": {
                     "description": "OverageFactor is a multiplier on usage beyond commitment; 1.0 = base rate.",
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -28853,17 +28853,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "billable_qty": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "day": {
                     "description": "Day is set for day granularity; PeriodStart/PeriodEnd for period.",
                     "type": "string"
                 },
                 "entitlement_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "entitlement_qty": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "group": {
                     "description": "Group holds the requested dimensions and their values for this bucket.",
@@ -28873,13 +28873,13 @@ const docTemplate = `{
                     }
                 },
                 "invoice_discount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "line_discount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "net_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "period_end": {
                     "type": "string"
@@ -28896,10 +28896,10 @@ const docTemplate = `{
                     ]
                 },
                 "tier_delta": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "usage_at_list_rate": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -32783,7 +32783,7 @@ const docTemplate = `{
                 },
                 "commitment_amount": {
                     "description": "Deprecated: use POST /commitments instead.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_duration": {
                     "description": "Deprecated: use POST /commitments instead.",
@@ -32795,11 +32795,11 @@ const docTemplate = `{
                 },
                 "commitment_overage_factor": {
                     "description": "Deprecated: use POST /commitments instead.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_quantity": {
                     "description": "Deprecated: use POST /commitments instead.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_time_buckets": {
                     "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).\n\nDeprecated: use POST /commitments instead.",
@@ -33137,10 +33137,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "instalment_status": {
-                    "description": "InstalmentStatus is invoiced, or scheduled for an instalment due in the range that no invoice has billed yet.",
+                    "$ref": "#/definitions/types.InstalmentStatus"
+                },
+                "invoice_cadence": {
+                    "description": "InvoiceCadence is the recurring term's cadence; empty for once terms, settlements and fees.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/types.InstalmentStatus"
+                            "$ref": "#/definitions/types.InvoiceCadence"
                         }
                     ]
                 },
@@ -33435,7 +33438,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
@@ -33468,7 +33471,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "quantity": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -34981,7 +34984,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "cooldown": {
                     "description": "Cooldown is an optional cooloff after a successful auto top-up before another may run.",
@@ -34998,7 +35001,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "threshold": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -36626,11 +36629,11 @@ const docTemplate = `{
             "properties": {
                 "amount_due_gt": {
                     "description": "amount_due_gt filters invoices with a total amount due greater than the specified value\nUseful for finding invoices above a certain threshold or identifying high-value invoices",
-                    "type": "number"
+                    "type": "string"
                 },
                 "amount_remaining_gt": {
                     "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts",
-                    "type": "number"
+                    "type": "string"
                 },
                 "billing_entity_id": {
                     "description": "billing_entity_id filters by the customer's billing entity",
@@ -37639,7 +37642,7 @@ const docTemplate = `{
             "properties": {
                 "conversion_rate": {
                     "description": "Multiplier: reporting_unit_value = unit_value * conversion_rate; must be \u003e 0",
-                    "type": "number"
+                    "type": "string"
                 },
                 "unit_plural": {
                     "description": "Display unit label, plural (e.g. \"seconds\")",
@@ -39017,7 +39020,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "credits_available_gt": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "end_time": {
                     "type": "string"
@@ -42737,10 +42740,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "credit_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "current_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "state": {
                     "type": "string"

@@ -295,9 +295,10 @@ func (c *remoteClient) hydratePricingMeter(ctx context.Context, p *sdktypes.Pric
 
 	// A price search, unlike a price read, leaves out the feature, whose reporting unit the SDK cannot decode.
 	resp, err := c.sdk.Prices.QueryPrice(ctx, sdktypes.PriceFilter{
-		PriceIds: []string{lo.FromPtr(p.ID)},
-		Expand:   lo.ToPtr(string(types.ExpandMeters)),
-		Limit:    lo.ToPtr(int64(1)),
+		PriceIds:           []string{lo.FromPtr(p.ID)},
+		Expand:             lo.ToPtr(string(types.ExpandMeters)),
+		Limit:              lo.ToPtr(int64(1)),
+		AllowExpiredPrices: lo.ToPtr(true),
 	})
 	if err != nil {
 		return cloudErr(err)

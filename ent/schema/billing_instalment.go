@@ -130,7 +130,5 @@ func (BillingInstalment) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "subscription_id", "instalment_status", "bill_on"),
 		index.Fields("tenant_id", "environment_id", "instalment_status", "delivery", "bill_on"),
 		index.Fields("tenant_id", "environment_id", "invoice_id"),
-		index.Fields("tenant_id", "environment_id", "owner_id", "invoiced_at").
-			StorageKey("idx_billing_instalments_tenant_env_owner_invoiced_at"),
 	}
 }

@@ -60,6 +60,15 @@ type commitmentAllocation struct {
 	UsedByLine []decimal.Decimal // aligned with the commitment's Lines
 	Capacity   decimal.Decimal
 	Unused     decimal.Decimal
+	Takes      []windowTake      // in window order
+	PoolsLeft  []decimal.Decimal // aligned with the commitment's Pools
+}
+
+// windowTake is the usage a commitment took from one of its lines in one window.
+type windowTake struct {
+	Window int
+	Line   int // index into the commitment's Lines
+	Usage  decimal.Decimal
 }
 
 // sortCommitmentStack orders commitments by priority, then earlier start, then lower id.
@@ -196,6 +205,7 @@ func allocate(stack *commitmentStack) (*allocation, error) {
 				}
 
 				got.UsedByLine[li] = got.UsedByLine[li].Add(take)
+				got.Takes = append(got.Takes, windowTake{Window: w, Line: li, Usage: take})
 			}
 		}
 	}
@@ -204,6 +214,7 @@ func allocate(stack *commitmentStack) (*allocation, error) {
 		got := &out.Commitments[ci]
 		got.Used = decimal.Sum(decimal.Zero, got.UsedByLine...)
 		got.Unused = got.Capacity.Sub(got.Used)
+		got.PoolsLeft = capacityLeft[ci]
 	}
 
 	return out, nil

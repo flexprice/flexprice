@@ -80,11 +80,11 @@ func (r *SubscriptionPhaseCreateRequest) ToSubscriptionPhase(ctx context.Context
 //
 // Deprecated: use the commitments API instead.
 type LineItemCommitmentConfig struct {
-	CommitmentAmount   *decimal.Decimal     `json:"commitment_amount,omitempty"`
-	CommitmentQuantity *decimal.Decimal     `json:"commitment_quantity,omitempty"`
+	CommitmentAmount   *decimal.Decimal     `json:"commitment_amount,omitempty" swaggertype:"string"`
+	CommitmentQuantity *decimal.Decimal     `json:"commitment_quantity,omitempty" swaggertype:"string"`
 	CommitmentType     types.CommitmentType `json:"commitment_type,omitempty"`
 	// OverageFactor is a multiplier on usage beyond commitment; 1.0 = base rate.
-	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
+	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
 	// EnableTrueUp charges the shortfall when usage is below commitment.
 	EnableTrueUp *bool `json:"enable_true_up,omitempty"`
 	// IsWindowCommitment applies commitment per window (e.g. per day) rather than per billing period.

@@ -18914,7 +18914,7 @@
             "name": "credits_available_gt",
             "in": "query",
             "schema": {
-              "type": "number"
+              "type": "string"
             }
           },
           {
@@ -24323,18 +24323,18 @@
         "type": "object",
         "properties": {
           "commitment_amount": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
           "commitment_overage_factor": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_quantity": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_time_buckets": {
@@ -24379,7 +24379,7 @@
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
           "quantity": {
-            "type": "number"
+            "type": "string"
           },
           "start_date": {
             "type": "string",
@@ -26597,7 +26597,7 @@
           },
           "instalments": {
             "type": "array",
-            "description": "Instalments lists, with expand \"instalments\", the instalments of the v2 commitments covering a queried meter that\nwere invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source\nfilters, or when no usage line runs in the range.",
+            "description": "Instalments lists the commitment instalments in the range with expand \"instalments\": start <= bill_on < end,\nor start < bill_on <= end for an ARREAR one.",
             "items": {
               "$ref": "#/components/schemas/UsageAnalyticInstalment"
             }
@@ -27892,13 +27892,13 @@
         "type": "object",
         "properties": {
           "commitment_amount": {
-            "type": "number"
+            "type": "string"
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
           "commitment_quantity": {
-            "type": "number"
+            "type": "string"
           },
           "commitment_time_buckets": {
             "type": "array",
@@ -27919,7 +27919,7 @@
             "description": "IsWindowCommitment applies commitment per window (e.g. per day) rather than per billing period."
           },
           "overage_factor": {
-            "type": "number",
+            "type": "string",
             "description": "OverageFactor is a multiplier on usage beyond commitment; 1.0 = base rate."
           }
         }
@@ -29862,17 +29862,17 @@
             "description": "AdjustmentType labels rows broken out by include_adjustments:\n\"commitment_trueup\", \"overage\" or \"revert\". Empty for plain rows."
           },
           "billable_qty": {
-            "type": "number"
+            "type": "string"
           },
           "day": {
             "type": "string",
             "description": "Day is set for day granularity; PeriodStart/PeriodEnd for period."
           },
           "entitlement_amount": {
-            "type": "number"
+            "type": "string"
           },
           "entitlement_qty": {
-            "type": "number"
+            "type": "string"
           },
           "group": {
             "type": "object",
@@ -29882,13 +29882,13 @@
             "description": "Group holds the requested dimensions and their values for this bucket."
           },
           "invoice_discount": {
-            "type": "number"
+            "type": "string"
           },
           "line_discount": {
-            "type": "number"
+            "type": "string"
           },
           "net_amount": {
-            "type": "number"
+            "type": "string"
           },
           "period_end": {
             "type": "string",
@@ -29902,10 +29902,10 @@
             "$ref": "#/components/schemas/types.FactStatus"
           },
           "tier_delta": {
-            "type": "number"
+            "type": "string"
           },
           "usage_at_list_rate": {
-            "type": "number"
+            "type": "string"
           }
         }
       },
@@ -33540,18 +33540,18 @@
             "$ref": "#/components/schemas/types.WindowSize"
           },
           "commitment_amount": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
           "commitment_overage_factor": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_quantity": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_time_buckets": {
@@ -33863,6 +33863,9 @@
           "instalment_status": {
             "$ref": "#/components/schemas/types.InstalmentStatus"
           },
+          "invoice_cadence": {
+            "$ref": "#/components/schemas/types.InvoiceCadence"
+          },
           "invoice_id": {
             "type": "string"
           },
@@ -34107,7 +34110,7 @@
         "type": "object",
         "properties": {
           "amount": {
-            "type": "number"
+            "type": "string"
           },
           "created_at": {
             "type": "string",
@@ -34143,7 +34146,7 @@
             "type": "string"
           },
           "quantity": {
-            "type": "number"
+            "type": "string"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -35672,7 +35675,7 @@
         "type": "object",
         "properties": {
           "amount": {
-            "type": "number"
+            "type": "string"
           },
           "cooldown": {
             "$ref": "#/components/schemas/types.Duration"
@@ -35684,7 +35687,7 @@
             "type": "boolean"
           },
           "threshold": {
-            "type": "number"
+            "type": "string"
           }
         },
         "x-speakeasy-name-override": "AutoTopup"
@@ -37403,11 +37406,11 @@
         "type": "object",
         "properties": {
           "amount_due_gt": {
-            "type": "number",
+            "type": "string",
             "description": "amount_due_gt filters invoices with a total amount due greater than the specified value\nUseful for finding invoices above a certain threshold or identifying high-value invoices"
           },
           "amount_remaining_gt": {
-            "type": "number",
+            "type": "string",
             "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts"
           },
           "billing_entity_id": {
@@ -38460,7 +38463,7 @@
         "type": "object",
         "properties": {
           "conversion_rate": {
-            "type": "number",
+            "type": "string",
             "description": "Multiplier: reporting_unit_value = unit_value * conversion_rate; must be > 0"
           },
           "unit_plural": {
@@ -39863,7 +39866,7 @@
             "type": "string"
           },
           "credits_available_gt": {
-            "type": "number"
+            "type": "string"
           },
           "end_time": {
             "type": "string",
@@ -43668,10 +43671,10 @@
             "type": "string"
           },
           "credit_balance": {
-            "type": "number"
+            "type": "string"
           },
           "current_balance": {
-            "type": "number"
+            "type": "string"
           },
           "state": {
             "type": "string"
