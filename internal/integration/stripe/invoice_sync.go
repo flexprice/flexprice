@@ -106,6 +106,12 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 	if err != nil {
 		return nil, err
 	}
+	if req.AlreadyPaid && finalizedInvoice.Status != stripe.InvoiceStatusPaid {
+		finalizedInvoice, err = s.markStripeInvoicePaid(ctx, stripeInvoiceID, req.PaymentIntentID)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// Step 8: Update FlexPrice invoice with Stripe data
 	if err := s.updateFlexPriceInvoiceFromStripe(ctx, req.InvoiceID, finalizedInvoice); err != nil {
@@ -363,6 +369,34 @@ func buildInvoiceItemParams(
 }
 
 // finalizeStripeInvoice finalizes the invoice in Stripe
+// markStripeInvoicePaid attaches the Stripe payment that settled the invoice, or marks it paid out of band.
+func (s *InvoiceSyncService) markStripeInvoicePaid(ctx context.Context, stripeInvoiceID string, paymentIntentID string) (*stripe.Invoice, error) {
+	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if paymentIntentID != "" {
+		paid, err := stripeClient.V1Invoices.AttachPayment(ctx, stripeInvoiceID, &stripe.InvoiceAttachPaymentParams{
+			PaymentIntent: stripe.String(paymentIntentID),
+		})
+		if err == nil {
+			return paid, nil
+		}
+		s.logger.Info(ctx, "could not attach payment to Stripe invoice, marking it paid out of band",
+			"stripe_invoice_id", stripeInvoiceID, "payment_intent_id", paymentIntentID, "reason", err.Error())
+	}
+
+	paid, err := stripeClient.V1Invoices.Pay(ctx, stripeInvoiceID, &stripe.InvoicePayParams{PaidOutOfBand: stripe.Bool(true)})
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Unable to mark the Stripe invoice paid").
+			WithReportableDetails(map[string]interface{}{"stripe_invoice_id": stripeInvoiceID}).
+			Mark(ierr.ErrSystem)
+	}
+	return paid, nil
+}
+
 func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeInvoiceID string, collectionMethod types.CollectionMethod, autoAdvance bool, sendInvoiceEmail bool) (*stripe.Invoice, error) {
 	stripeClient, _, err := s.client.GetStripeClient(ctx)
 	if err != nil {

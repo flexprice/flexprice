@@ -103,6 +103,10 @@ type StripeInvoiceSyncRequest struct {
 	LinkStripeProduct bool `json:"link_stripe_product,omitempty"`
 	AutoAdvance       bool `json:"auto_advance,omitempty"`
 	SendInvoiceEmail  bool `json:"send_invoice_email,omitempty"`
+	// AlreadyPaid syncs an invoice settled in Flexprice: the Stripe invoice is marked paid, never collected.
+	AlreadyPaid bool `json:"already_paid,omitempty"`
+	// PaymentIntentID is the Stripe payment that settled it, attached to the Stripe invoice when set.
+	PaymentIntentID string `json:"payment_intent_id,omitempty"`
 }
 
 // StripeInvoiceSyncResponse represents the response from syncing an invoice to Stripe

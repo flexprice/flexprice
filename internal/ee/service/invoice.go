@@ -2171,6 +2171,26 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 }
 
 // SyncInvoiceToStripeIfEnabled syncs the invoice to Stripe if Stripe connection is enabled.
+// stripePaymentIntentFor returns the Stripe payment that settled the invoice, or "" when Stripe did not collect it.
+func (s *invoiceService) stripePaymentIntentFor(ctx context.Context, invoiceID string) (string, error) {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentGateway = lo.ToPtr(string(types.PaymentGatewayTypeStripe))
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusSucceeded))
+	payments, err := s.PaymentRepo.List(ctx, filter)
+	if err != nil {
+		return "", err
+	}
+	paid, found := lo.Find(payments, func(p *payment.Payment) bool {
+		return lo.FromPtr(p.PaymentGateway) == string(types.PaymentGatewayTypeStripe) && lo.FromPtr(p.GatewayPaymentID) != ""
+	})
+	if !found {
+		return "", nil
+	}
+	return lo.FromPtr(paid.GatewayPaymentID), nil
+}
+
 func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoiceID string, collectionMethod string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
@@ -2182,14 +2202,7 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 		return err
 	}
 
-	// Stripe finalizes with auto-advance, so syncing a paid invoice would make Stripe collect it again.
-	if inv.PaymentStatus == types.PaymentStatusSucceeded ||
-		inv.PaymentStatus == types.PaymentStatusOverpaid {
-		s.Logger.Info(ctx, "invoice already paid, skipping Stripe sync",
-			"invoice_id", inv.ID,
-			"payment_status", inv.PaymentStatus)
-		return nil
-	}
+	alreadyPaid := inv.PaymentStatus == types.PaymentStatusSucceeded || inv.PaymentStatus == types.PaymentStatusOverpaid
 
 	// The marketplace collects for its subscriptions, so pushing to Stripe would charge the buyer twice.
 	if inv.SubscriptionID != nil {
@@ -2297,6 +2310,16 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 		LinkStripeProduct: conn.IsPriceOutboundEnabled(),
 		AutoAdvance:       *autoAdvance,
 		SendInvoiceEmail:  syncSettings.IsStripeSendInvoiceEmailEnabled(),
+	}
+	if alreadyPaid {
+		paymentIntentID, err := s.stripePaymentIntentFor(ctx, inv.ID)
+		if err != nil {
+			return err
+		}
+		syncRequest.AlreadyPaid = true
+		syncRequest.PaymentIntentID = paymentIntentID
+		syncRequest.AutoAdvance = false
+		syncRequest.SendInvoiceEmail = false
 	}
 
 	// Perform the sync
