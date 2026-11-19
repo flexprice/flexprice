@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
-	flexprice "github.com/flexprice/go-sdk/v2"
 	"github.com/flexprice/go-sdk/v2/models/dtos"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
@@ -49,9 +48,6 @@ func (c *dryRunClient) Events() EventOps {
 // Invoices are all read-only — delegate directly.
 func (c *dryRunClient) Invoices() InvoiceOps { return c.inner.Invoices() }
 
-func (c *dryRunClient) NewAsyncEventClient() AsyncEventClient {
-	return &dryRunAsync{inner: c.inner.NewAsyncEventClient(), lg: c.lg}
-}
 func (c *dryRunClient) Entitlements() EntitlementOps {
 	return &dryRunEntitlements{inner: c.inner.Entitlements(), lg: c.lg}
 }
@@ -70,6 +66,10 @@ func (c *dryRunClient) TaxAssociations() TaxAssociationOps {
 func (c *dryRunClient) Payments() PaymentOps {
 	return &dryRunPayments{inner: c.inner.Payments(), lg: c.lg}
 }
+
+// Alerts and Tenant are read-only — delegate directly.
+func (c *dryRunClient) Alerts() AlertOps  { return c.inner.Alerts() }
+func (c *dryRunClient) Tenant() TenantOps { return c.inner.Tenant() }
 
 func (c *dryRunClient) Raw() RawOps { return &dryRunRaw{inner: c.inner.Raw(), lg: c.lg} }
 
@@ -298,32 +298,12 @@ func (d *dryRunEvents) Ingest(ctx context.Context, req types.IngestEventRequest)
 func (d *dryRunEvents) GetUsageAnalytics(ctx context.Context, req types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	return d.inner.GetUsageAnalytics(ctx, req)
 }
-func (d *dryRunEvents) ListRaw(ctx context.Context, req types.GetEventsRequest) (*dtos.ListRawEventsResponse, error) {
-	return d.inner.ListRaw(ctx, req)
-}
-
-// ── AsyncEventClient ──────────────────────────────────────────────────
-
-type dryRunAsync struct {
-	inner AsyncEventClient
-	lg    *logger.Logger
-}
-
-func (d *dryRunAsync) Enqueue(eventName, externalCustomerID string, properties map[string]any) error {
-	dryLog(context.Background(), d.lg, "AsyncEventClient.Enqueue", "event_name", eventName, "external_customer_id", externalCustomerID)
+func (d *dryRunEvents) IngestBulk(ctx context.Context, req types.BulkIngestEventRequest) error {
+	dryLog(ctx, d.lg, "Events.IngestBulk", "events", len(req.Events))
 	return nil
 }
-func (d *dryRunAsync) EnqueueWithOptions(opts flexprice.EventOptions) error {
-	dryLog(context.Background(), d.lg, "AsyncEventClient.EnqueueWithOptions", "event_name", opts.EventName)
-	return nil
-}
-func (d *dryRunAsync) Flush() error {
-	dryLog(context.Background(), d.lg, "AsyncEventClient.Flush")
-	return nil
-}
-func (d *dryRunAsync) Close() error {
-	dryLog(context.Background(), d.lg, "AsyncEventClient.Close")
-	return nil
+func (d *dryRunEvents) GetUsageByMeter(ctx context.Context, req types.GetUsageByMeterRequest) (*types.GetUsageResponse, error) {
+	return d.inner.GetUsageByMeter(ctx, req)
 }
 
 // ── Entitlements ──────────────────────────────────────────────────────
