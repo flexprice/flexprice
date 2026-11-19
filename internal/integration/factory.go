@@ -23,6 +23,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
@@ -90,6 +91,7 @@ type Factory struct {
 	// paymentMethodProvider, when set, is returned by GetPaymentMethodProvider instead of
 	// constructing a live adapter. Tests use this; production never sets it.
 	paymentMethodProvider interfaces.PaymentMethodProvider
+	taxAppliedRepo        taxapplied.Repository
 }
 
 // NewFactory creates a new integration factory
@@ -111,6 +113,7 @@ func NewFactory(
 	temporalSvc temporalservice.TemporalService,
 	locker cache.Locker,
 	settingsRepo settings.Repository,
+	taxAppliedRepo taxapplied.Repository,
 ) *Factory {
 	return &Factory{
 		config:                       config,
@@ -131,6 +134,7 @@ func NewFactory(
 		locker:                       locker,
 		temporalSvc:                  temporalSvc,
 		settingsRepo:                 settingsRepo,
+		taxAppliedRepo:               taxAppliedRepo,
 	}
 }
 
@@ -170,6 +174,7 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		f.invoiceRepo,
 		f.entityIntegrationMappingRepo,
 		priceSyncSvc,
+		f.taxAppliedRepo,
 		f.logger,
 	)
 

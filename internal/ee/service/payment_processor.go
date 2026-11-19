@@ -342,7 +342,11 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 }
 
 func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
-	if shouldUseStripeHostedInvoicePage(paymentObj, invoice) {
+	syncOn, err := stripeInvoiceSyncEnabled(ctx, p.ConnectionRepo)
+	if err != nil {
+		return err
+	}
+	if syncOn && shouldUseStripeHostedInvoicePage(paymentObj, invoice) {
 		return p.startPaymentUsingHostedPage(ctx, paymentObj, invoice)
 	}
 

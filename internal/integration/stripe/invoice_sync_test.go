@@ -108,7 +108,7 @@ func TestBuildInvoiceItemsParams(t *testing.T) {
 		{"lines only", "0", "0", "0", map[string]int64{}},
 		{"discount", "10", "0", "0", map[string]int64{"Discount": -1000}},
 		{"prepaid credits", "0", "30.50", "0", map[string]int64{"Prepaid credits applied": -3050}},
-		{"tax", "0", "0", "18", map[string]int64{"Tax": 1800}},
+		{"exclusive tax", "0", "0", "18", map[string]int64{"Tax": 1800}},
 		{"all", "10", "30", "12.60", map[string]int64{"Discount": -1000, "Prepaid credits applied": -3000, "Tax": 1260}},
 	}
 	for _, tc := range cases {
@@ -117,13 +117,12 @@ func TestBuildInvoiceItemsParams(t *testing.T) {
 				ID: "inv_1", Currency: "USD",
 				TotalDiscount:              decimal.RequireFromString(tc.discount),
 				TotalPrepaidCreditsApplied: decimal.RequireFromString(tc.credits),
-				TotalTax:                   decimal.RequireFromString(tc.tax),
 				LineItems: []*invoice.InvoiceLineItem{
 					{ID: "li_1", Amount: decimal.NewFromInt(60), Currency: "USD", PrepaidCreditsApplied: decimal.NewFromInt(20)},
 					{ID: "li_2", Amount: decimal.NewFromInt(40), Currency: "USD", LineItemDiscount: decimal.NewFromInt(5)},
 				},
 			}
-			items := buildInvoiceItemsParams(inv, "cus_1", "in_1", nil)
+			items := buildInvoiceItemsParams(inv, decimal.RequireFromString(tc.tax), "cus_1", "in_1", nil)
 
 			require.Len(t, items, 2+len(tc.wantItems))
 			require.Equal(t, "li_1", items[0].Metadata["flexprice_line_item_id"])
@@ -138,7 +137,7 @@ func TestBuildInvoiceItemsParams(t *testing.T) {
 			}
 			require.Equal(t, tc.wantItems, gotItems)
 
-			retry := buildInvoiceItemsParams(inv, "cus_1", "in_1", nil)
+			retry := buildInvoiceItemsParams(inv, decimal.RequireFromString(tc.tax), "cus_1", "in_1", nil)
 			keys := map[string]bool{}
 			for i, item := range items {
 				require.Contains(t, *item.IdempotencyKey, "in_1")

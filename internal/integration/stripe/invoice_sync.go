@@ -14,6 +14,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -27,6 +28,7 @@ type InvoiceSyncService struct {
 	invoiceRepo                  invoice.Repository
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
 	priceSyncSvc                 *stripePriceSyncService
+	taxAppliedRepo               taxapplied.Repository
 	logger                       *logger.Logger
 }
 
@@ -37,6 +39,7 @@ func NewInvoiceSyncService(
 	invoiceRepo invoice.Repository,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	priceSyncSvc *stripePriceSyncService,
+	taxAppliedRepo taxapplied.Repository,
 	logger *logger.Logger,
 ) *InvoiceSyncService {
 	return &InvoiceSyncService{
@@ -45,6 +48,7 @@ func NewInvoiceSyncService(
 		invoiceRepo:                  invoiceRepo,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		priceSyncSvc:                 priceSyncSvc,
+		taxAppliedRepo:               taxAppliedRepo,
 		logger:                       logger,
 	}
 }
@@ -260,7 +264,17 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 			Mark(ierr.ErrSystem)
 	}
 
-	itemParams := buildInvoiceItemsParams(flexInvoice, customerID, stripeInvoiceID, productIDByPriceID)
+	taxes, err := s.taxAppliedRepo.List(ctx, &types.TaxAppliedFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		EntityType:  types.TaxRateEntityTypeInvoice,
+		EntityID:    flexInvoice.ID,
+	})
+	if err != nil {
+		return err
+	}
+	exclusiveTax := flexInvoice.AppliedTax(taxes, types.TaxBehaviorExclusive)
+
+	itemParams := buildInvoiceItemsParams(flexInvoice, exclusiveTax, customerID, stripeInvoiceID, productIDByPriceID)
 
 	s.logger.Info(ctx, "syncing line items to Stripe",
 		"invoice_id", flexInvoice.ID,
@@ -289,6 +303,7 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 
 func buildInvoiceItemsParams(
 	flexInvoice *invoice.Invoice,
+	exclusiveTax decimal.Decimal,
 	customerID string,
 	stripeInvoiceID string,
 	productIDByPriceID map[string]string,
@@ -304,7 +319,7 @@ func buildInvoiceItemsParams(
 	}{
 		{"Discount", -types.ToSmallestUnit(flexInvoice.TotalDiscount, currency)},
 		{"Prepaid credits applied", -types.ToSmallestUnit(flexInvoice.TotalPrepaidCreditsApplied, currency)},
-		{"Tax", types.ToSmallestUnit(flexInvoice.TotalTax, currency)},
+		{"Tax", types.ToSmallestUnit(exclusiveTax, currency)},
 	}
 	for _, adjustment := range adjustments {
 		if adjustment.amount == 0 {

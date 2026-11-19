@@ -11,6 +11,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -1443,16 +1444,31 @@ func (s *paymentService) voidOpenPaymentLinks(ctx context.Context, invoiceID str
 	return nil
 }
 
+// stripeInvoiceSyncEnabled reports whether the Stripe connection in scope pushes invoices to Stripe.
+func stripeInvoiceSyncEnabled(ctx context.Context, connectionRepo connection.Repository) (bool, error) {
+	conn, err := connectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if ierr.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return conn != nil && conn.IsInvoiceOutboundEnabled(), nil
+}
+
 // requireStripeHostedInvoicePage makes a Stripe payment link on an invoice synced to Stripe use its
 // hosted invoice page; without invoice sync the link stays a Checkout Session.
 func (s *paymentService) requireStripeHostedInvoicePage(ctx context.Context, inv *invoice.Invoice, p *payment.Payment) error {
+	if inv.InvoiceStatus != types.InvoiceStatusFinalized {
+		return nil
+	}
 	scopedCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
-	conn, err := s.ConnectionRepo.GetByProvider(scopedCtx, types.SecretProviderStripe)
-	if err != nil || conn == nil || !conn.IsInvoiceOutboundEnabled() {
-		return nil
+	syncOn, err := stripeInvoiceSyncEnabled(scopedCtx, s.ConnectionRepo)
+	if err != nil || !syncOn {
+		return err
 	}
 
 	if inv.Metadata[types.InvoiceMetadataKeyStripeHostedInvoiceURL] == "" {
