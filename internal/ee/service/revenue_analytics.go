@@ -37,14 +37,7 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 			Mark(ierr.ErrValidation)
 	}
 
-	// 1. Fetch cost analytics from the meter_usage-backed costsheet path.
-	costAnalytics, err := s.costsheetUsageTrackingService.GetCostAnalyticsFromMeterUsage(ctx, req)
-	if err != nil {
-		s.Logger.Info(ctx, "failed to fetch cost analytics", "error", err)
-		costAnalytics = nil
-	}
-
-	// 2. Fetch revenue analytics from meter usage.
+	// 1. Fetch revenue analytics from meter usage.
 	meterUsageService := NewMeterUsageService(s.ServiceParams)
 	revenueAnalytics, err := meterUsageService.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
 		TenantID:           types.GetTenantID(ctx),
@@ -59,6 +52,13 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// 2. Cost in the revenue's currency so the margin compares like with like.
+	costAnalytics, err := s.costsheetUsageTrackingService.GetCostAnalyticsFromMeterUsage(ctx, req, revenueAnalytics.Currency)
+	if err != nil {
+		s.Logger.Info(ctx, "failed to fetch cost analytics", "error", err)
+		costAnalytics = nil
 	}
 
 	// 3. Build response with derived metrics
