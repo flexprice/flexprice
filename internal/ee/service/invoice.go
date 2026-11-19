@@ -3919,6 +3919,13 @@ func (s *invoiceService) providerInvoicePDFURL(ctx context.Context, provider typ
 		}
 
 		return integration.InvoiceSvc.GetInvoicePDFURL(ctx, invoiceID)
+	case types.SecretProviderStripe:
+		integration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+		if err != nil {
+			return "", err
+		}
+
+		return integration.InvoiceSyncSvc.GetInvoicePDFURL(ctx, invoiceID)
 	default:
 		return "", ierr.NewErrorf("provider %s cannot serve invoice PDFs", provider).
 			WithHint("This provider has no on-demand invoice PDF").

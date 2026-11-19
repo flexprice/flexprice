@@ -683,6 +683,34 @@ func (s *InvoiceSyncService) updateStripeInvoiceMetadata(ctx context.Context, st
 	return nil
 }
 
+// GetInvoicePDFURL returns the PDF link of the Stripe invoice mapped to a Flexprice invoice.
+func (s *InvoiceSyncService) GetInvoicePDFURL(ctx context.Context, flexpriceInvoiceID string) (string, error) {
+	mapping, err := s.getExistingStripeMapping(ctx, flexpriceInvoiceID)
+	if err != nil {
+		return "", err
+	}
+
+	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	stripeInvoice, err := stripeClient.V1Invoices.Retrieve(ctx, mapping.ProviderEntityID, nil)
+	if err != nil {
+		return "", ierr.WithError(err).
+			WithHint("Unable to get invoice from Stripe").
+			Mark(ierr.ErrSystem)
+	}
+	if stripeInvoice.InvoicePDF == "" {
+		return "", ierr.NewError("stripe invoice has no pdf").
+			WithHint("Stripe has no PDF for a draft invoice").
+			WithReportableDetails(map[string]any{"invoice_id": flexpriceInvoiceID, "stripe_invoice_id": stripeInvoice.ID}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	return stripeInvoice.InvoicePDF, nil
+}
+
 // IsStripeInvoiceSettled reports whether the Stripe invoice synced for a FlexPrice invoice is already paid or voided.
 func (s *InvoiceSyncService) IsStripeInvoiceSettled(ctx context.Context, flexpriceInvoiceID string) (bool, error) {
 	mapping, err := s.getExistingStripeMapping(ctx, flexpriceInvoiceID)

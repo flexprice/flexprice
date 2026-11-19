@@ -11,6 +11,7 @@ import (
 
 var billingProviderCapabilities = map[types.SecretProvider][]types.IntegrationCapabilityType{
 	types.SecretProviderChargebee: {types.IntegrationCapabilityInvoiceSync},
+	types.SecretProviderStripe:    {types.IntegrationCapabilityInvoiceSync},
 }
 
 type BillingProviderResolver struct {
