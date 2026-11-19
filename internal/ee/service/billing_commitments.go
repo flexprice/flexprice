@@ -382,12 +382,13 @@ func (l *commitmentLoader) Stacks(ctx context.Context) ([]*commitmentStack, []*a
 	return stacks, allocs, nil
 }
 
-// commitmentBilling is one billing calculation: the allocated stacks, index-aligned with their allocations, and the
-// lines an invoice bills from them.
+// commitmentBilling is one billing calculation: the allocated stacks, index-aligned with their allocations, the lines
+// an invoice bills from them, and the cost that priced those lines.
 type commitmentBilling struct {
 	stacks []*commitmentStack
 	allocs []*allocation
 	lines  []dto.CreateInvoiceLineItemRequest
+	cost   lineCost
 }
 
 // BillingLines returns the commitment lines an invoice bills and their total: the usage lines, with those of
@@ -418,10 +419,14 @@ func (l *commitmentLoader) render(
 	stacks []*commitmentStack,
 	allocs []*allocation,
 ) []dto.CreateInvoiceLineItemRequest {
-	cost := func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
+	return commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, l.cost(ctx))
+}
+
+// cost prices usage through the price service, as normal billing prices it.
+func (l *commitmentLoader) cost(ctx context.Context) lineCost {
+	return func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
 		return l.priceSvc.CalculateCost(ctx, p, qty)
 	}
-	return commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost)
 }
 
 // bill allocates the stacks and renders what BillingLines returns, keeping the allocation for callers that place the
@@ -443,7 +448,7 @@ func (l *commitmentLoader) bill(ctx context.Context) (*commitmentBilling, error)
 		"lines", len(lines),
 		"total", total.String(),
 	)
-	return &commitmentBilling{stacks: stacks, allocs: allocs, lines: lines}, nil
+	return &commitmentBilling{stacks: stacks, allocs: allocs, lines: lines, cost: l.cost(ctx)}, nil
 }
 
 // coverWithBillingTerms zeroes the utilized rows and drops the true-up rows of commitments collected through
@@ -655,21 +660,20 @@ func (l *commitmentLoader) buildWindowStack(ctx context.Context, stack *commitme
 			sc.Pools = append(sc.Pools, sc.Value)
 		}
 
-		scope := l.scopeByCommitment[sc.ID]
-		elapsed := types.Period{Start: scope.accrualStart, End: l.periodStart}
 		current := types.Period{Start: l.periodStart, End: l.periodEnd}
-		before := l.activeBuckets(sc.Commitment, elapsed, bucket)
+		before := l.capacityBefore(sc, bucket)
 		sc.Period.ActiveBuckets = l.activeBuckets(sc.Commitment, current, bucket)
 		sc.Period.Capacity = sc.Value.Mul(decimal.NewFromInt(sc.Period.ActiveBuckets))
-		sc.Period.Amount = accruedAmount(
-			scope.amountOf,
-			sc.Value.Mul(decimal.NewFromInt(before)),
-			sc.Value.Mul(decimal.NewFromInt(before+sc.Period.ActiveBuckets)),
-			sc.Currency,
-		)
+		sc.Period.Amount = accruedAmount(l.scopeByCommitment[sc.ID].amountOf, before, before.Add(sc.Period.Capacity), sc.Currency)
 	}
 
 	return nil
+}
+
+// capacityBefore is the capacity sc's commitment period accrued before this calculation's start.
+func (l *commitmentLoader) capacityBefore(sc *stackedCommitment, bucket types.WindowSize) decimal.Decimal {
+	elapsed := types.Period{Start: l.scopeByCommitment[sc.ID].accrualStart, End: l.periodStart}
+	return sc.Value.Mul(decimal.NewFromInt(l.activeBuckets(sc.Commitment, elapsed, bucket)))
 }
 
 // activeBuckets counts the buckets of the usage grid ending within span that the commitment's capacity applies to.

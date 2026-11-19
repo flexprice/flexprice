@@ -75,6 +75,18 @@ type windowPlacer struct {
 	plain    map[string][]decimal.Decimal         // usage left where none does
 	placed   map[string][]types.CommitmentInfo    // by line item ID, per display window
 	unplaced map[string]bool                      // lines with a charge that no window drew
+
+	// What unused, covered and plain bill where that is not their units, under the same keys.
+	unusedValue  map[string][]decimal.Decimal
+	coveredValue map[string][]decimal.Decimal
+	plainValue   map[string][]decimal.Decimal
+}
+
+// rowWeights spreads a row over the display windows: its quantity by units, its amount by value, what the units bill,
+// or by units where value holds nothing.
+type rowWeights struct {
+	units []decimal.Decimal
+	value []decimal.Decimal
 }
 
 // newWindowPlacer cuts the buckets of b's window stacks into display windows of window, coarsened to the bucket as
@@ -97,6 +109,10 @@ func newWindowPlacer(
 		plain:    map[string][]decimal.Decimal{},
 		placed:   map[string][]types.CommitmentInfo{},
 		unplaced: map[string]bool{},
+
+		unusedValue:  map[string][]decimal.Decimal{},
+		coveredValue: map[string][]decimal.Decimal{},
+		plainValue:   map[string][]decimal.Decimal{},
 	}
 	keyOf := make([][]time.Time, len(b.stacks))
 	for si, stack := range b.stacks {
@@ -125,6 +141,14 @@ func newWindowPlacer(
 		index[start] = i
 	}
 
+	trueUps := map[string]decimal.Decimal{}
+	for _, line := range b.lines {
+		if types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind]) == types.CommitmentLineTrueUp {
+			trueUps[lo.FromPtr(line.CommitmentID)] = line.Amount
+		}
+	}
+
+	r := lineRenderer{cost: b.cost}
 	for si, stack := range b.stacks {
 		if keyOf[si] == nil {
 			continue
@@ -145,6 +169,10 @@ func newWindowPlacer(
 					addWeight(p.unused, sc.ID, len(p.starts), at(w), got.PoolsLeft[pool])
 				}
 			}
+
+			if value := p.trueUpValue(l, sc, keyOf[si], trueUps[sc.ID]); value != nil {
+				p.unusedValue[sc.ID] = value
+			}
 		}
 
 		for li, line := range stack.Lines {
@@ -153,17 +181,67 @@ func newWindowPlacer(
 					continue
 				}
 
-				target := p.plain
-				if stack.covers(line, w) {
-					target = p.covered
+				covered := stack.covers(line, w)
+				units, value := p.plain, p.plainValue
+				if covered {
+					units, value = p.covered, p.coveredValue
 				}
 
-				addWeight(target, line.Item.ID, len(p.starts), at(w), left)
+				// As overageLines bills it: a quantity line priced per window bills each window's margin, while units priced
+				// once for the period, at an overage price or across the line, are shared by quantity.
+				billed := left
+				if stack.Type == types.COMMITMENT_TYPE_QUANTITY && line.PerWindow && (!covered || line.OveragePrice == nil) {
+					billed = r.marginalCost(line.Price, line.Usage[w], left)
+				}
+
+				addWeight(units, line.Item.ID, len(p.starts), at(w), left)
+				addWeight(value, line.Item.ID, len(p.starts), at(w), billed)
 			}
 		}
 	}
 
 	return p
+}
+
+// trueUpValue weighs a commitment's true-up when buckets past the range hold capacity: they owe that capacity's value
+// priced on from the range's, and the range owes the rest by its unused capacity. Nil weighs the true-up by units.
+func (p *windowPlacer) trueUpValue(l *commitmentLoader, sc *stackedCommitment, keys []time.Time, trueUp decimal.Decimal) []decimal.Decimal {
+	inRange, past := decimal.Zero, decimal.Zero
+	for w, pool := range sc.PoolOf {
+		switch {
+		case pool == noPool:
+		case keys[w].Equal(p.end):
+			past = past.Add(sc.Pools[pool])
+		default:
+			inRange = inRange.Add(sc.Pools[pool])
+		}
+	}
+
+	if !past.IsPositive() || !trueUp.IsPositive() {
+		return nil
+	}
+
+	// Valued on cumulative capacity, as a clipped period is, so tiers price the range's capacity first.
+	scope := l.scopeByCommitment[sc.ID]
+	through := l.capacityBefore(sc, scope.bucket).Add(inRange)
+	worth := accruedAmount(scope.amountOf, through, through.Add(past), sc.Currency)
+	beyond := decimal.Min(trueUp, decimal.Max(worth, decimal.Zero))
+
+	unused := p.unused[sc.ID]
+	last := len(unused) - 1
+	rangeUnused := decimal.Sum(decimal.Zero, unused[:last]...)
+	value := make([]decimal.Decimal, len(unused))
+	if !rangeUnused.IsPositive() {
+		value[last] = decimal.NewFromInt(1)
+		return value
+	}
+
+	// Each side is scaled by the other's total, so the range and the buckets past it split the true-up as valued.
+	for i := range unused[:last] {
+		value[i] = unused[i].Mul(trueUp.Sub(beyond))
+	}
+	value[last] = beyond.Mul(rangeUnused)
+	return value
 }
 
 // addWeight adds v to key's weight in display window at.
@@ -179,34 +257,40 @@ func addWeight[K comparable](weights map[K][]decimal.Decimal, key K, size, at in
 
 // utilized places a commitment's utilized row on a line by the usage it took from the line in each window.
 func (p *windowPlacer) utilized(commitmentID, lineID string, amount, quantity decimal.Decimal) {
-	p.place(lineID, p.used[commitmentLine{commitmentID: commitmentID, lineID: lineID}], utilizedCharge, amount, quantity)
+	used := p.used[commitmentLine{commitmentID: commitmentID, lineID: lineID}]
+	p.place(lineID, rowWeights{units: used}, utilizedCharge, amount, quantity)
 }
 
 // overage places an overage or plain usage row on its line by the usage the waterfall left in each window it covers, or
 // in each window it does not.
 func (p *windowPlacer) overage(lineID string, kind types.CommitmentLineKind, amount, quantity decimal.Decimal) {
-	weights := p.covered[lineID]
+	by := rowWeights{units: p.covered[lineID], value: p.coveredValue[lineID]}
 	if kind == types.CommitmentLinePlain {
-		weights = p.plain[lineID]
+		by = rowWeights{units: p.plain[lineID], value: p.plainValue[lineID]}
 	}
 
-	p.place(lineID, weights, overageCharge, amount, quantity)
+	p.place(lineID, by, overageCharge, amount, quantity)
 }
 
 // trueUp places a line's share of a commitment's true-up by the capacity the commitment left unused in each window.
 func (p *windowPlacer) trueUp(commitmentID, lineID string, amount, quantity decimal.Decimal) {
-	p.place(lineID, p.unused[commitmentID], trueUpCharge, amount, quantity)
+	p.place(lineID, rowWeights{units: p.unused[commitmentID], value: p.unusedValue[commitmentID]}, trueUpCharge, amount, quantity)
 }
 
-// place shares one row of a line over the display windows by weights: amounts rounded to the currency, quantities not.
-func (p *windowPlacer) place(lineID string, weights []decimal.Decimal, charge int, amount, quantity decimal.Decimal) {
+// place shares one row of a line over the display windows: amounts rounded to the currency, quantities not.
+func (p *windowPlacer) place(lineID string, by rowWeights, charge int, amount, quantity decimal.Decimal) {
 	if !p.lines[lineID] || (amount.IsZero() && quantity.IsZero()) {
 		return
 	}
 
-	if !lo.SomeBy(weights, decimal.Decimal.IsPositive) {
+	if !lo.SomeBy(by.units, decimal.Decimal.IsPositive) {
 		p.unplaced[lineID] = true
 		return
+	}
+
+	value := by.value
+	if !lo.SomeBy(value, decimal.Decimal.IsPositive) {
+		value = by.units
 	}
 
 	placed := p.placed[lineID]
@@ -216,8 +300,8 @@ func (p *windowPlacer) place(lineID string, weights []decimal.Decimal, charge in
 	}
 
 	c := billedCharges[charge]
-	amounts := roundShares(allocateCostByWeight(amount, weights), p.currency)
-	quantities := allocateCostByWeight(quantity, weights)
+	amounts := roundShares(allocateCostByWeight(amount, value), p.currency)
+	quantities := allocateCostByWeight(quantity, by.units)
 	for i := range placed {
 		*c.amount(&placed[i]) = c.amount(&placed[i]).Add(amounts[i])
 		*c.quantity(&placed[i]) = c.quantity(&placed[i]).Add(quantities[i])
