@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -31,6 +33,50 @@ type SubscriptionLineItemServiceSuite struct {
 	}
 }
 
+type lineItemRepository interface {
+	subscription.LineItemRepository
+}
+
+type lineItemRepositoryWithTerminationHook struct {
+	lineItemRepository
+	targetID   string
+	endDate    time.Time
+	terminated bool
+}
+
+func newLineItemRepositoryWithTerminationHook(repo subscription.LineItemRepository, targetID string, endDate time.Time) *lineItemRepositoryWithTerminationHook {
+	if repo == nil {
+		return nil
+	}
+	return &lineItemRepositoryWithTerminationHook{
+		lineItemRepository: repo,
+		targetID:           targetID,
+		endDate:            endDate,
+	}
+}
+
+func (r *lineItemRepositoryWithTerminationHook) GetForUpdate(ctx context.Context, id string) (*subscription.SubscriptionLineItem, error) {
+	if r == nil || r.lineItemRepository == nil {
+		return nil, errors.New("subscription line item repository is required")
+	}
+	if id == r.targetID && !r.terminated {
+		item, err := r.lineItemRepository.Get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		item = subscription.NewSubscriptionLineItemBuilder(item).WithEndDate(r.endDate).Build()
+		if err := r.lineItemRepository.Update(ctx, item); err != nil {
+			return nil, err
+		}
+		r.terminated = true
+	}
+	return r.lineItemRepository.GetForUpdate(ctx, id)
+}
+
+func (r *lineItemRepositoryWithTerminationHook) wasTerminated() bool {
+	return r != nil && r.terminated
+}
+
 func TestSubscriptionLineItemService(t *testing.T) {
 	suite.Run(t, new(SubscriptionLineItemServiceSuite))
 }
@@ -53,6 +99,13 @@ func TestValidateLineItemEndDateChange(t *testing.T) {
 			name:          "no end date set - always allowed",
 			endDate:       time.Time{},
 			billingPeriod: types.BILLING_PERIOD_MONTHLY,
+			newDate:       before,
+			wantErr:       false,
+		},
+		{
+			name:          "onetime - no end date set - allowed",
+			endDate:       time.Time{},
+			billingPeriod: types.BILLING_PERIOD_ONETIME,
 			newDate:       before,
 			wantErr:       false,
 		},
@@ -1136,6 +1189,109 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Onetim
 	_, err := s.service.UpdateSubscriptionLineItem(ctx, onetimeItem.ID, req)
 	s.Error(err, "one-time line items must never be backdated")
 	s.Contains(err.Error(), "already terminated")
+
+	itemsBefore, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(ctx, s.testData.subscription)
+	s.NoError(err)
+	itemIDsBefore := lo.Map(itemsBefore, func(item *subscription.SubscriptionLineItem, _ int) string { return item.ID })
+
+	backdatedEffectiveFrom := onetimeItem.StartDate.Add(-24 * time.Hour)
+	s.True(s.testData.subscription.StartDate.Before(backdatedEffectiveFrom))
+	s.True(backdatedEffectiveFrom.Before(onetimeItem.StartDate))
+	req.EffectiveFrom = &backdatedEffectiveFrom
+
+	_, err = s.service.UpdateSubscriptionLineItem(ctx, onetimeItem.ID, req)
+	s.Require().Error(err, "one-time line items must remain excluded from backdated versioning")
+	s.Contains(err.Error(), "already terminated")
+
+	unchanged, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, onetimeItem.ID)
+	s.NoError(err)
+	s.Equal(types.StatusPublished, unchanged.Status)
+	s.Equal(onetimeItem.PriceID, unchanged.PriceID)
+	s.Equal(onetimeItem.StartDate, unchanged.StartDate)
+	s.Equal(onetimeItem.EndDate, unchanged.EndDate)
+	s.Nil(unchanged.SuccessorLineItemID)
+
+	itemsAfter, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(ctx, s.testData.subscription)
+	s.NoError(err)
+	itemIDsAfter := lo.Map(itemsAfter, func(item *subscription.SubscriptionLineItem, _ int) string { return item.ID })
+	s.ElementsMatch(itemIDsBefore, itemIDsAfter, "a rejected backdated update must not create a replacement")
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_OnetimeConcurrentTerminationRejected() {
+	ctx := s.GetContext()
+
+	onetimePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(25),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_ONETIME,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, onetimePrice))
+
+	onetimeItem := &subscription.SubscriptionLineItem{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID: s.testData.subscription.ID,
+		CustomerID:     s.testData.customer.ID,
+		EntityID:       s.testData.plan.ID,
+		EntityType:     types.SubscriptionLineItemEntityTypePlan,
+		PriceID:        onetimePrice.ID,
+		PriceType:      types.PRICE_TYPE_FIXED,
+		DisplayName:    "Onetime addon",
+		Quantity:       decimal.NewFromInt(1),
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_ONETIME,
+		InvoiceCadence: types.InvoiceCadenceAdvance,
+		StartDate:      s.testData.lineItem.StartDate,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, onetimeItem))
+	s.True(onetimeItem.EndDate.IsZero())
+
+	itemsBefore, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(ctx, s.testData.subscription)
+	s.Require().NoError(err)
+	itemIDsBefore := lo.Map(itemsBefore, func(item *subscription.SubscriptionLineItem, _ int) string { return item.ID })
+
+	effectiveFrom := onetimeItem.StartDate.Add(-24 * time.Hour)
+	s.True(s.testData.subscription.StartDate.Before(effectiveFrom))
+	s.True(effectiveFrom.Before(onetimeItem.StartDate))
+	newAmount := decimal.NewFromInt(300)
+	req := dto.UpdateSubscriptionLineItemRequest{
+		Amount:        &newAmount,
+		EffectiveFrom: &effectiveFrom,
+	}
+
+	baseRepo := s.GetStores().SubscriptionLineItemRepo
+	concurrentEndDate := time.Now().UTC().Add(24 * time.Hour)
+	repoWithHook := newLineItemRepositoryWithTerminationHook(baseRepo, onetimeItem.ID, concurrentEndDate)
+	s.Require().NotNil(repoWithHook)
+	service, ok := s.service.(*subscriptionService)
+	s.Require().True(ok)
+	service.SubscriptionLineItemRepo = repoWithHook
+
+	_, err = s.service.UpdateSubscriptionLineItem(ctx, onetimeItem.ID, req)
+	s.Require().Error(err, "termination that arrives before the locked read must reject backdated replacement")
+	s.Contains(err.Error(), "already terminated")
+	s.True(repoWithHook.wasTerminated(), "the repository hook must simulate termination before the locked read")
+
+	unchanged, err := baseRepo.Get(ctx, onetimeItem.ID)
+	s.Require().NoError(err)
+	s.Equal(types.StatusPublished, unchanged.Status)
+	s.Equal(onetimePrice.ID, unchanged.PriceID)
+	s.Equal(onetimeItem.StartDate, unchanged.StartDate)
+	s.Equal(concurrentEndDate, unchanged.EndDate)
+	s.Nil(unchanged.SuccessorLineItemID)
+
+	itemsAfter, err := baseRepo.ListBySubscription(ctx, s.testData.subscription)
+	s.Require().NoError(err)
+	itemIDsAfter := lo.Map(itemsAfter, func(item *subscription.SubscriptionLineItem, _ int) string { return item.ID })
+	s.ElementsMatch(itemIDsBefore, itemIDsAfter, "a rejected update must not create a replacement")
 }
 
 // TestUpdateSubscriptionLineItem_EffectiveFromEqualsExistingEndDate_Allowed verifies an effective

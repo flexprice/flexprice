@@ -1161,6 +1161,11 @@ func (s *subscriptionService) replaceLineItemVersionFrom(
 		} else if successor != nil {
 			return alreadyScheduledVersionError(lineItemID, successor.ID)
 		}
+		if locked.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+			if err := validateLineItemEndDateChange(locked, from); err != nil {
+				return err
+			}
+		}
 
 		// Retire before the override repoints locked's PriceID, so retired rows keep the price they billed with.
 		cut, retiredVersions, err := s.retireLineItemVersionsFrom(ctx, sub, locked, from)
