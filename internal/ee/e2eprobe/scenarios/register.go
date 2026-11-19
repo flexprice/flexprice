@@ -32,4 +32,5 @@ func Register(cat *scenario.Catalog) {
 		cat.Register(r.info, r.build)
 	}
 	registerUsage(cat)
+	registerBillingMatrix(cat)
 }
