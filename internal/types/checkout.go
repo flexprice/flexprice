@@ -169,6 +169,12 @@ func (p CheckoutPaymentProvider) SessionGrace() time.Duration {
 	return 5 * time.Minute
 }
 
+// ClosesLinkOnSessionEnd reports whether a session that ends unpaid closes its provider link,
+// so the customer cannot pay after the session is gone.
+func (p CheckoutPaymentProvider) ClosesLinkOnSessionEnd() bool {
+	return p == CheckoutPaymentProviderStripe
+}
+
 // SavedMethodSettlement is how long a charge on a saved method can take to settle.
 // Razorpay debits a mandate 24-36h after the pre-debit notice, and eNACH takes up to 2 working days more; zero means it settles at once.
 func (p CheckoutPaymentProvider) SavedMethodSettlement(method PaymentMethodType) time.Duration {
