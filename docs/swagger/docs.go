@@ -18934,6 +18934,14 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "email_types": {
+                    "description": "EmailTypes lists the emails this contact receives; \"invoice\" makes them an invoice email recipient.",
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                        "$ref": "#/definitions/types.ContactEmailType"
+                    }
+                },
                 "first_name": {
                     "type": "string",
                     "maxLength": 100
@@ -40634,6 +40642,15 @@ const docTemplate = `{
                 "CommitmentStatusActive",
                 "CommitmentStatusEnded",
                 "CommitmentStatusTerminated"
+            ]
+        },
+        "types.ContactEmailType": {
+            "type": "string",
+            "enum": [
+                "invoice"
+            ],
+            "x-enum-varnames": [
+                "ContactEmailTypeInvoice"
             ]
         },
         "types.ContractStatus": {

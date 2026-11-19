@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -148,9 +149,12 @@ func (s *AutoInvoiceEmailSuite) enableAutoSend() {
 	}))
 }
 
-func (s *AutoInvoiceEmailSuite) finalizedInvoice(customerEmail string, total int64) *invoice.Invoice {
+func (s *AutoInvoiceEmailSuite) finalizedInvoice(customerEmail string, total int64, contacts ...*customer.ContactPerson) *invoice.Invoice {
 	ctx := s.GetContext()
-	cust := &customer.Customer{ID: types.GenerateUUIDWithPrefix("cust"), Email: customerEmail, EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
+	cust := &customer.Customer{
+		ID: types.GenerateUUIDWithPrefix("cust"), Email: customerEmail, ContactPersons: contacts,
+		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
+	}
 	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
 	inv := &invoice.Invoice{
 		ID: types.GenerateUUIDWithPrefix("inv"), CustomerID: cust.ID, InvoiceStatus: types.InvoiceStatusFinalized,
@@ -208,4 +212,35 @@ func (s *AutoInvoiceEmailSuite) TestRecordsSkipReasons() {
 			s.Equal(tt.reason, lo.FromPtr(logs[0].StatusReason))
 		})
 	}
+}
+
+func (s *AutoInvoiceEmailSuite) TestSendsToInvoiceContacts() {
+	s.enableAutoSend()
+	invoiceType := []types.ContactEmailType{types.ContactEmailTypeInvoice}
+	contacts := []*customer.ContactPerson{
+		{ID: "cp_eng", FirstName: "Eng", Email: "eng@customer.test", IsPrimary: true},
+		{ID: "cp_ap", FirstName: "AP", Email: "AP@customer.test", EmailTypes: invoiceType},
+	}
+
+	s.Run("auto send", func() {
+		inv := s.finalizedInvoice("owner@customer.test", 100, contacts...)
+		s.Require().NoError(s.svc.SendAutoInvoiceEmail(s.GetContext(), inv.ID))
+		logs := s.emailsFor(inv.ID)
+		s.Require().Len(logs, 1)
+		s.Equal([]string{"ap@customer.test"}, logs[0].ToAddresses)
+	})
+
+	s.Run("manual send without to", func() {
+		inv := s.finalizedInvoice("owner@customer.test", 100, contacts...)
+		resp, err := s.svc.SendInvoiceEmail(s.GetContext(), inv.ID, &dto.SendInvoiceEmailRequest{})
+		s.Require().NoError(err)
+		s.Equal([]string{"ap@customer.test"}, resp.ToAddresses)
+	})
+
+	s.Run("manual send with to overrides contacts", func() {
+		inv := s.finalizedInvoice("owner@customer.test", 100, contacts...)
+		resp, err := s.svc.SendInvoiceEmail(s.GetContext(), inv.ID, &dto.SendInvoiceEmailRequest{To: []string{"other@customer.test"}})
+		s.Require().NoError(err)
+		s.Equal([]string{"other@customer.test"}, resp.ToAddresses)
+	})
 }

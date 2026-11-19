@@ -811,6 +811,13 @@ definitions:
         type: string
       email:
         type: string
+      email_types:
+        description: EmailTypes lists the emails this contact receives; "invoice"
+          makes them an invoice email recipient.
+        items:
+          $ref: '#/definitions/types.ContactEmailType'
+        maxItems: 10
+        type: array
       first_name:
         maxLength: 100
         type: string
@@ -16648,6 +16655,12 @@ definitions:
     - CommitmentStatusActive
     - CommitmentStatusEnded
     - CommitmentStatusTerminated
+  types.ContactEmailType:
+    enum:
+    - invoice
+    type: string
+    x-enum-varnames:
+    - ContactEmailTypeInvoice
   types.ContractStatus:
     enum:
     - draft

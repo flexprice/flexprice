@@ -20413,6 +20413,14 @@
           "email": {
             "type": "string"
           },
+          "email_types": {
+            "maxItems": 10,
+            "type": "array",
+            "description": "EmailTypes lists the emails this contact receives; \"invoice\" makes them an invoice email recipient.",
+            "items": {
+              "$ref": "#/components/schemas/types.ContactEmailType"
+            }
+          },
           "first_name": {
             "maxLength": 100,
             "type": "string"
@@ -41497,6 +41505,16 @@
         ],
         "x-speakeasy-name-override": "CommitmentStatus",
         "x-speakeasy-unknown-values": "allow"
+      },
+      "types.ContactEmailType": {
+        "type": "string",
+        "enum": [
+          "invoice"
+        ],
+        "x-enum-varnames": [
+          "ContactEmailTypeInvoice"
+        ],
+        "x-speakeasy-name-override": "ContactEmailType"
       },
       "types.ContractStatus": {
         "type": "string",

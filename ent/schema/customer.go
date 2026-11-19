@@ -131,6 +131,8 @@ type ContactPerson struct {
 	Mobile      string `json:"mobile,omitempty"`
 	Designation string `json:"designation,omitempty"`
 	Department  string `json:"department,omitempty"`
+	// EmailTypes lists the emails this contact receives.
+	EmailTypes []types.ContactEmailType `json:"email_types,omitempty"`
 }
 
 // Edges of the Customer.
