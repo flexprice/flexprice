@@ -27,3 +27,14 @@ func TestEphemerals_RegisterListArchiveCount(t *testing.T) {
 		t.Error("archiving an unknown id must be a no-op")
 	}
 }
+
+func TestEphemerals_RegisteredIsMonotonic(t *testing.T) {
+	e := NewEphemerals()
+	at := time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)
+	e.Register("customer", "a", at)
+	e.Register("customer", "b", at)
+	e.Archive("customer", "a")
+	if e.Registered("customer") != 2 || e.Count("customer") != 1 {
+		t.Errorf("registered=%d count=%d", e.Registered("customer"), e.Count("customer"))
+	}
+}

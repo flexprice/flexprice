@@ -14,18 +14,27 @@ type Entry struct {
 
 // Ephemerals is the in-memory registry of resources scenarios created.
 type Ephemerals struct {
-	mu      sync.Mutex
-	entries map[string][]Entry
+	mu         sync.Mutex
+	entries    map[string][]Entry
+	registered map[string]int
 }
 
 func NewEphemerals() *Ephemerals {
-	return &Ephemerals{entries: map[string][]Entry{}}
+	return &Ephemerals{entries: map[string][]Entry{}, registered: map[string]int{}}
 }
 
 func (e *Ephemerals) Register(kind, id string, at time.Time) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.entries[kind] = append(e.entries[kind], Entry{Kind: kind, ID: id, CreatedAt: at})
+	e.registered[kind]++
+}
+
+// Registered counts every registration since start, archived ones included.
+func (e *Ephemerals) Registered(kind string) int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.registered[kind]
 }
 
 func (e *Ephemerals) List(kind string) []Entry {
