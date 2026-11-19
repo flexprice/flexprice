@@ -249,6 +249,11 @@ func (a *CheckoutAdapter) ExpirePaymentLink(ctx context.Context, req interfaces.
 		return nil, ierr.NewError("gateway tracking id is required to expire a stripe checkout session").
 			Mark(ierr.ErrValidation)
 	}
+	if !strings.HasPrefix(req.GatewayTrackingID, checkoutSessionIDPrefix) {
+		return nil, ierr.NewError("stripe handle is not a checkout session").
+			WithReportableDetails(map[string]interface{}{"gateway_tracking_id": req.GatewayTrackingID}).
+			Mark(ierr.ErrNotImplemented)
+	}
 
 	stripeClient, _, err := a.Client.GetStripeClient(ctx)
 	if err != nil {

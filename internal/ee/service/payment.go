@@ -1449,7 +1449,7 @@ func (s *paymentService) closeProviderLink(ctx context.Context, invoiceID string
 	resp, err := s.expireOnGateway(ctx, invoiceID, p, checkoutProvider)
 	switch {
 	case err == nil && resp != nil && resp.AlreadyPaid:
-		s.Logger.Info(ctx, "payment link was paid before the invoice was voided, leaving it to the gateway webhook",
+		s.Logger.Info(ctx, "payment link was paid before it could be closed, leaving it to the gateway webhook",
 			"invoice_id", invoiceID, "payment_id", p.ID, "gateway", gateway)
 	case err == nil:
 		return true
