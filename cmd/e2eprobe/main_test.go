@@ -171,3 +171,13 @@ func TestDescribeCommand_PrintsMatrix(t *testing.T) {
 		t.Errorf("validate with a complete catalog: %v", err)
 	}
 }
+
+func TestValidateCommand_DefaultSuiteWithRealCatalog(t *testing.T) {
+	var out bytes.Buffer
+	if err := validateSuite("", newCatalog(), &out); err != nil {
+		t.Fatalf("the embedded suite must validate against the shipped catalog: %v", err)
+	}
+	if !strings.Contains(out.String(), "48 bindings") || !strings.Contains(out.String(), "28080 events/day") {
+		t.Errorf("summary = %q", out.String())
+	}
+}
