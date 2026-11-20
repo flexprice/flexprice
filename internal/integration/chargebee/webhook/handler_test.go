@@ -321,8 +321,8 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_AlreadyRefundedPaym
 	s.Empty(s.paymentSvc.updateReqs)
 }
 
-// Chargebee itself is the second guard: a transaction with nothing left to refund
-// must not receive another refund submission.
+// Chargebee itself is the second guard: an existing linked refund is recorded
+// locally without another provider submission.
 func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_FullyRefundedTransactionIsNotResubmitted() {
 	s.seedSession(types.CheckoutStatusExpired)
 	s.client.amountRefunded = 10000
@@ -333,7 +333,8 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_FullyRefundedTransa
 	s.True(handled)
 	s.Empty(s.client.refundCalls)
 	s.Require().Len(s.paymentSvc.updateReqs, 1, "the FlexPrice payment still has to be marked refunded")
-	s.Nil(s.paymentSvc.updateReqs[0].Metadata, "no refund id to record when nothing was submitted")
+	s.Require().NotNil(s.paymentSvc.updateReqs[0].Metadata)
+	s.Equal(types.Metadata{"chargebee_refund_id": "txn_refund_000"}, *s.paymentSvc.updateReqs[0].Metadata)
 }
 
 // A lookup failure must not silently fall through to the double-counting path.

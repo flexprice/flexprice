@@ -116,3 +116,16 @@ func AmountRefunded(txn *transactionModel.Transaction) int64 {
 	}
 	return total
 }
+
+func refundIDFromTransaction(txn *transactionModel.Transaction) string {
+	if txn == nil {
+		return ""
+	}
+	for i := len(txn.LinkedRefunds) - 1; i >= 0; i-- {
+		refund := txn.LinkedRefunds[i]
+		if refund != nil && refund.TxnStatus != transactionEnum.StatusFailure && refund.TxnId != "" {
+			return refund.TxnId
+		}
+	}
+	return ""
+}
