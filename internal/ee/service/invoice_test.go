@@ -1261,7 +1261,6 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtIts
 			}
 			s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
 
-			finalizeStart := time.Now().UTC()
 			s.Require().NoError(s.service.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
 			got, err := s.invoiceRepo.Get(ctx, draft.ID)
 			s.Require().NoError(err)
@@ -1271,7 +1270,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtIts
 			} else if tt.periodEnd == &boundary {
 				s.WithinDuration(boundary, *got.IssueDate, time.Second)
 			} else {
-				s.False(got.IssueDate.Before(finalizeStart))
+				s.True(got.IssueDate.Equal(*got.FinalizedAt), "future boundary capped at finalization")
 			}
 			if tt.wantDueRedated {
 				s.WithinDuration(got.IssueDate.AddDate(0, 0, 1), *got.DueDate, time.Second)
