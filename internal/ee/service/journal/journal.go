@@ -13,13 +13,11 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	domainJournal "github.com/flexprice/flexprice/internal/domain/journal"
 	"github.com/flexprice/flexprice/internal/domain/payment"
-	domainPOB "github.com/flexprice/flexprice/internal/domain/pob"
 	"github.com/flexprice/flexprice/internal/domain/refund"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -27,11 +25,11 @@ import (
 	accountingperiodsvc "github.com/flexprice/flexprice/internal/ee/service/accountingperiod"
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
+	"github.com/flexprice/flexprice/internal/ee/service/recognition"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
-	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
 )
@@ -67,7 +65,8 @@ type journalService struct {
 	journalRepo     journalRepo.Repository
 	periodService   accountingperiodsvc.AccountingPeriodService
 	pobService      pobsvc.PerformanceObligationService
-	pobRepo         pobRepo.Repository
+	contracts       recognition.ContractRecognizer
+	invoices        recognition.InvoiceRecognizer
 	contractService contractsvc.ContractService
 	contractRepo    contractRepo.Repository
 	subRepo         subscription.Repository
@@ -118,7 +117,8 @@ func NewJournalService(
 	journalRepo journalRepo.Repository,
 	periodService accountingperiodsvc.AccountingPeriodService,
 	pobService pobsvc.PerformanceObligationService,
-	pobRepo pobRepo.Repository,
+	contracts recognition.ContractRecognizer,
+	invoices recognition.InvoiceRecognizer,
 	contractService contractsvc.ContractService,
 	contractRepo contractRepo.Repository,
 	subRepo subscription.Repository,
@@ -135,7 +135,8 @@ func NewJournalService(
 		journalRepo:     journalRepo,
 		periodService:   periodService,
 		pobService:      pobService,
-		pobRepo:         pobRepo,
+		contracts:       contracts,
+		invoices:        invoices,
 		contractService: contractService,
 		contractRepo:    contractRepo,
 		subRepo:         subRepo,
@@ -149,13 +150,6 @@ func NewJournalService(
 	}
 }
 
-// posting is a signed amount on an account: positive credits, negative debits.
-type posting struct {
-	account types.LedgerAccountKey
-	amount  decimal.Decimal
-	pobID   string
-}
-
 // e.g. 100 + 18 tax with 20 credits: Dr AR 98, Dr customer_credit 20 / Cr deferred 100, Cr tax 18; void Cr AR 118.
 func (s *journalService) PostInvoice(ctx context.Context, inv *invoice.Invoice) error {
 	if inv.FinalizedAt == nil {
@@ -167,12 +161,12 @@ func (s *journalService) PostInvoice(ctx context.Context, inv *invoice.Invoice) 
 		return err
 	}
 
-	revenuePostings, err := s.invoiceRevenuePostings(ctx, inv, contractID)
+	revenuePostings, err := s.invoiceRevenuePostings(ctx, inv, s.pobFor(contractID))
 	if err != nil {
 		return err
 	}
 
-	entry := func(eventType types.JournalEventType, at time.Time, postings []posting, reversalOf string) *domainJournal.Entry {
+	entry := func(eventType types.JournalEventType, at time.Time, postings []domainJournal.Posting, reversalOf string) *domainJournal.Entry {
 		return domainJournal.NewBuilder(nil).
 			WithEventType(eventType).
 			WithSource(types.RevRecEntityTypeInvoice, inv.ID).
@@ -181,13 +175,13 @@ func (s *journalService) PostInvoice(ctx context.Context, inv *invoice.Invoice) 
 			WithCustomerID(inv.CustomerID).
 			WithContractID(contractID).
 			WithCurrency(inv.Currency).
-			WithLines(toLines(postings)).
+			WithLines(domainJournal.LinesFrom(postings)).
 			Build()
 	}
 
-	finalizePostings := append([]posting{
-		{account: types.LedgerAccountReceivable, amount: inv.Total.Neg()},
-		{account: types.LedgerAccountCustomerCredit, amount: inv.TotalPrepaidCreditsApplied.Neg()},
+	finalizePostings := append([]domainJournal.Posting{
+		{Account: types.LedgerAccountReceivable, Amount: inv.Total.Neg()},
+		{Account: types.LedgerAccountCustomerCredit, Amount: inv.TotalPrepaidCreditsApplied.Neg()},
 	}, revenuePostings...)
 
 	finalizeID, err := s.post(ctx, entry(types.JournalEventInvoiceFinalized, *inv.FinalizedAt, finalizePostings, ""))
@@ -199,38 +193,36 @@ func (s *journalService) PostInvoice(ctx context.Context, inv *invoice.Invoice) 
 		return nil
 	}
 
-	void := append([]posting{
-		{account: types.LedgerAccountReceivable, amount: inv.Total.Add(inv.TotalPrepaidCreditsApplied)},
-	}, reversed(revenuePostings)...)
+	void := append([]domainJournal.Posting{
+		{Account: types.LedgerAccountReceivable, Amount: inv.Total.Add(inv.TotalPrepaidCreditsApplied)},
+	}, domainJournal.Reversed(revenuePostings)...)
 
 	_, err = s.post(ctx, entry(types.JournalEventInvoiceVoided, *inv.VoidedAt, void, finalizeID))
 	return err
 }
 
-// invoiceRevenuePostings credits tax and each line's net: subscription lines to deferred (with their POB under a
-// contract), top-ups to customer credit, else revenue.
-func (s *journalService) invoiceRevenuePostings(ctx context.Context, inv *invoice.Invoice, contractID string) ([]posting, error) {
+// invoiceRevenuePostings credits tax and each line's net: subscription lines to deferred with the POB pobFor finds,
+// top-ups to customer credit, else revenue.
+func (s *journalService) invoiceRevenuePostings(ctx context.Context, inv *invoice.Invoice, pobFor pobFinder) ([]domainJournal.Posting, error) {
 	nets, err := s.lineNets(ctx, inv)
 	if err != nil {
 		return nil, err
 	}
 
-	postings := []posting{{account: types.LedgerAccountTaxPayable, amount: inv.TotalTax}}
+	postings := []domainJournal.Posting{{Account: types.LedgerAccountTaxPayable, Amount: inv.TotalTax}}
 	for _, li := range inv.LineItems {
-		p := posting{account: types.LedgerAccountRevenue, amount: nets[li.ID]}
+		p := domainJournal.Posting{Account: types.LedgerAccountRevenue, Amount: nets[li.ID]}
 
 		switch {
 		case inv.Metadata["wallet_transaction_id"] != "":
-			p.account = types.LedgerAccountCustomerCredit
-		case lo.FromPtr(li.SubscriptionLineItemID) != "" && contractID == "":
-			p.account = types.LedgerAccountDeferredRevenue
+			p.Account = types.LedgerAccountCustomerCredit
 		case lo.FromPtr(li.SubscriptionLineItemID) != "":
-			pobID, err := s.pobService.POBIDForInvoiceLine(ctx, li)
+			pobID, err := pobFor(ctx, li)
 			if err != nil {
 				return nil, err
 			}
 
-			p.account, p.pobID = types.LedgerAccountDeferredRevenue, pobID
+			p.Account, p.POBID = types.LedgerAccountDeferredRevenue, pobID
 		}
 
 		postings = append(postings, p)
@@ -249,6 +241,17 @@ func (s *journalService) lineNets(ctx context.Context, inv *invoice.Invoice) (ma
 		return nil, err
 	}
 	return inv.LineNets(taxes), nil
+}
+
+// pobFinder finds the POB a subscription invoice line credits.
+type pobFinder func(ctx context.Context, li *invoice.InvoiceLineItem) (string, error)
+
+// pobFor is how a source's lines find their POB: under a contract by lookup, a standalone subscription's lines have none.
+func (s *journalService) pobFor(contractID string) pobFinder {
+	if contractID == "" {
+		return func(context.Context, *invoice.InvoiceLineItem) (string, error) { return "", nil }
+	}
+	return s.pobService.POBIDForInvoiceLine
 }
 
 // e.g. 118 with 18 tax: Dr contra_revenue 100, Dr tax 18 / Cr AR 118; a void reverses it.
@@ -274,12 +277,12 @@ func (s *journalService) PostCreditNote(ctx context.Context, cn *creditnote.Cred
 		return err
 	}
 
-	contraPostings, err := s.creditNoteContraPostings(ctx, cn, cn.TotalAmount.Sub(tax), contractID)
+	contraPostings, err := s.creditNoteContraPostings(ctx, cn, cn.TotalAmount.Sub(tax), s.pobFor(contractID))
 	if err != nil {
 		return err
 	}
 
-	entry := func(eventType types.JournalEventType, at time.Time, postings []posting, reversalOf string) *domainJournal.Entry {
+	entry := func(eventType types.JournalEventType, at time.Time, postings []domainJournal.Posting, reversalOf string) *domainJournal.Entry {
 		return domainJournal.NewBuilder(nil).
 			WithEventType(eventType).
 			WithSource(types.RevRecEntityTypeCreditNote, cn.ID).
@@ -288,13 +291,13 @@ func (s *journalService) PostCreditNote(ctx context.Context, cn *creditnote.Cred
 			WithCustomerID(cn.CustomerID).
 			WithContractID(contractID).
 			WithCurrency(cn.Currency).
-			WithLines(toLines(postings)).
+			WithLines(domainJournal.LinesFrom(postings)).
 			Build()
 	}
 
-	finalizePostings := append([]posting{
-		{account: types.LedgerAccountReceivable, amount: cn.TotalAmount},
-		{account: types.LedgerAccountTaxPayable, amount: tax.Neg()},
+	finalizePostings := append([]domainJournal.Posting{
+		{Account: types.LedgerAccountReceivable, Amount: cn.TotalAmount},
+		{Account: types.LedgerAccountTaxPayable, Amount: tax.Neg()},
 	}, contraPostings...)
 
 	finalizeID, err := s.post(ctx, entry(types.JournalEventCreditNoteFinalized, *cn.FinalizedAt, finalizePostings, ""))
@@ -306,14 +309,14 @@ func (s *journalService) PostCreditNote(ctx context.Context, cn *creditnote.Cred
 		return nil
 	}
 
-	_, err = s.post(ctx, entry(types.JournalEventCreditNoteVoided, *cn.VoidedAt, reversed(finalizePostings), finalizeID))
+	_, err = s.post(ctx, entry(types.JournalEventCreditNoteVoided, *cn.VoidedAt, domainJournal.Reversed(finalizePostings), finalizeID))
 	return err
 }
 
-// creditNoteContraPostings debits contra revenue per line, with its POB under a contract, splitting net pro rata by
-// line amount.
+// creditNoteContraPostings debits contra revenue per line, with the POB pobFor finds, splitting net pro rata by line
+// amount.
 // e.g. lines 60 and 40 with net 88 → 52.80 and 35.20.
-func (s *journalService) creditNoteContraPostings(ctx context.Context, cn *creditnote.CreditNote, net decimal.Decimal, contractID string) ([]posting, error) {
+func (s *journalService) creditNoteContraPostings(ctx context.Context, cn *creditnote.CreditNote, net decimal.Decimal, pobFor pobFinder) ([]domainJournal.Posting, error) {
 	inv, err := s.invoiceRepo.Get(ctx, cn.InvoiceID)
 	if err != nil {
 		return nil, err
@@ -324,15 +327,13 @@ func (s *journalService) creditNoteContraPostings(ctx context.Context, cn *credi
 		return li.ID, li.Amount
 	}), net, types.GetCurrencyPrecision(cn.Currency))
 
-	postings := make([]posting, 0, len(cn.LineItems))
+	postings := make([]domainJournal.Posting, 0, len(cn.LineItems))
 	for _, li := range cn.LineItems {
-		p := posting{account: types.LedgerAccountContraRevenue, amount: amounts[li.ID].Neg()}
-		if contractID != "" {
-			if p.pobID, err = s.pobService.POBIDForInvoiceLine(ctx, invoiceLines[li.InvoiceLineItemID]); err != nil {
-				return nil, err
-			}
+		pobID, err := pobFor(ctx, invoiceLines[li.InvoiceLineItemID])
+		if err != nil {
+			return nil, err
 		}
-		postings = append(postings, p)
+		postings = append(postings, domainJournal.Posting{Account: types.LedgerAccountContraRevenue, Amount: amounts[li.ID].Neg(), POBID: pobID})
 	}
 	return postings, nil
 }
@@ -352,7 +353,7 @@ func (s *journalService) PostPayment(ctx context.Context, p *payment.Payment) er
 		return err
 	}
 
-	entry := func(eventType types.JournalEventType, at time.Time, postings []posting, reversalOf string) *domainJournal.Entry {
+	entry := func(eventType types.JournalEventType, at time.Time, postings []domainJournal.Posting, reversalOf string) *domainJournal.Entry {
 		return domainJournal.NewBuilder(nil).
 			WithEventType(eventType).
 			WithSource(types.RevRecEntityTypePayment, p.ID).
@@ -361,14 +362,14 @@ func (s *journalService) PostPayment(ctx context.Context, p *payment.Payment) er
 			WithCustomerID(inv.CustomerID).
 			WithContractID(contractID).
 			WithCurrency(p.Currency).
-			WithLines(toLines(postings)).
+			WithLines(domainJournal.LinesFrom(postings)).
 			Build()
 	}
 
 	debit := lo.Ternary(p.PaymentMethodType == types.PaymentMethodTypeCredits, types.LedgerAccountCustomerCredit, types.LedgerAccountCash)
-	succeededPostings := []posting{
-		{account: debit, amount: p.Amount.Neg()},
-		{account: types.LedgerAccountReceivable, amount: p.Amount},
+	succeededPostings := []domainJournal.Posting{
+		{Account: debit, Amount: p.Amount.Neg()},
+		{Account: types.LedgerAccountReceivable, Amount: p.Amount},
 	}
 
 	succeededID, err := s.post(ctx, entry(types.JournalEventPaymentSucceeded, *p.SucceededAt, succeededPostings, ""))
@@ -381,7 +382,7 @@ func (s *journalService) PostPayment(ctx context.Context, p *payment.Payment) er
 		return nil
 	}
 
-	_, err = s.post(ctx, entry(types.JournalEventPaymentReversed, *reversedAt, reversed(succeededPostings), succeededID))
+	_, err = s.post(ctx, entry(types.JournalEventPaymentReversed, *reversedAt, domainJournal.Reversed(succeededPostings), succeededID))
 	return err
 }
 
@@ -401,9 +402,9 @@ func (s *journalService) PostRefund(ctx context.Context, r *refund.Refund) error
 	}
 
 	credit := lo.Ternary(r.RefundDestination == types.RefundDestinationWallet, types.LedgerAccountCustomerCredit, types.LedgerAccountCash)
-	postings := []posting{
-		{account: types.LedgerAccountReceivable, amount: r.SettledAmount.Neg()},
-		{account: credit, amount: r.SettledAmount},
+	postings := []domainJournal.Posting{
+		{Account: types.LedgerAccountReceivable, Amount: r.SettledAmount.Neg()},
+		{Account: credit, Amount: r.SettledAmount},
 	}
 
 	_, err = s.post(ctx, domainJournal.NewBuilder(nil).
@@ -413,7 +414,7 @@ func (s *journalService) PostRefund(ctx context.Context, r *refund.Refund) error
 		WithCustomerID(inv.CustomerID).
 		WithContractID(contractID).
 		WithCurrency(r.Currency).
-		WithLines(toLines(postings)).
+		WithLines(domainJournal.LinesFrom(postings)).
 		Build())
 	return err
 }
@@ -421,133 +422,31 @@ func (s *journalService) PostRefund(ctx context.Context, r *refund.Refund) error
 // e.g. a $1,200 annual prepaid from Jan 1, run Feb 1: Dr unbilled 100 / Cr revenue 100 and Dr deferred 100 / Cr unbilled
 // 100, dated Jan 31; a backdated cut of January to 90 later posts −10 and −10 to January.
 func (s *journalService) Recognize(ctx context.Context, req RecognizeRequest) ([]*domainJournal.Entry, error) {
-	contractID := req.ContractID
-	c, err := s.contractRepo.GetByID(ctx, contractID)
-	if err != nil {
-		return nil, err
+	if req.DryRun {
+		return s.contracts.Recognize(ctx, req.ContractID, req.AsOf, true)
 	}
-	pobs, err := s.pobRepo.List(ctx, &pobRepo.Filter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-		ContractIDs: []string{contractID},
-		POBStatuses: []types.PerformanceObligationStatus{types.PerformanceObligationStatusActive, types.PerformanceObligationStatusSatisfied},
+	return s.recognize(ctx, s.contracts, req.ContractID, req.AsOf)
+}
+
+// recognize posts the entries the unit is missing as of asOf under its lock, and returns them.
+func (s *journalService) recognize(ctx context.Context, r recognition.Recognizer, id string, asOf time.Time) ([]*domainJournal.Entry, error) {
+	var missing []*domainJournal.Entry
+	err := s.db.WithTx(ctx, func(ctx context.Context) error {
+		if err := s.db.LockWithWait(ctx, postgres.LockRequest{Key: r.LockKey(id)}); err != nil {
+			return err
+		}
+		var err error
+		if missing, err = r.Recognize(ctx, id, asOf, false); err != nil {
+			return err
+		}
+		for _, e := range missing {
+			if _, err := s.post(ctx, e); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	if len(pobs) == 0 {
-		return nil, nil
-	}
-
-	sources, err := s.contractRepo.ListAssociations(ctx, contractID)
-	if err != nil {
-		return nil, err
-	}
-	sub, hasSub := lo.Find(sources, func(a *domainContract.Association) bool { return a.EntityType() == types.RevRecEntityTypeSubscription })
-	loc, _, err := s.sourceContext(ctx, c.CustomerID(), lo.Ternary(hasSub, lo.ToPtr(sub.EntityID()), nil))
-	if err != nil {
-		return nil, err
-	}
-
-	// e.g. a POB from Jan 15 run on Apr 2 → Feb 1, Mar 1, Apr 1: the ends of January, February and March
-	first := utils.LocalDay(lo.Earliest(lo.Map(pobs, func(p *domainPOB.PerformanceObligation, _ int) time.Time { return p.ServiceStart() })...), loc)
-	today := utils.LocalDay(req.AsOf, loc)
-	// Months ended in the customer's local time, not UTC: each month's start is the previous month's end.
-	monthEnds := lo.Drop(utils.Months(first, today), 1)
-
-	// A dry run ends the open month at today, e.g. Feb 15 → Feb 1–14; on the 1st the open month has no days yet.
-	if req.DryRun && today.Day() != 1 && today.After(first) {
-		monthEnds = append(monthEnds, today)
-	}
-	if len(monthEnds) == 0 {
-		return nil, nil
-	}
-
-	// EarnedToDate reads local days, so each month end is local midnight.
-	earned, err := s.pobService.EarnedToDate(ctx, contractID, lo.Map(monthEnds, func(m time.Time, _ int) time.Time {
-		return time.Date(m.Year(), m.Month(), m.Day(), 0, 0, 0, 0, loc)
-	}))
-	if err != nil {
-		return nil, err
-	}
-
-	precision := types.GetCurrencyPrecision(c.Currency())
-	var recognized []*domainJournal.Entry
-	var errs []error
-	for _, p := range pobs {
-		recognizePOB := func(ctx context.Context) error {
-			entries, err := s.journalRepo.List(ctx, &journalRepo.Filter{QueryFilter: types.NewNoLimitQueryFilter(), POBIDs: []string{p.ID()}})
-			if err != nil {
-				return err
-			}
-
-			entry := func(eventType types.JournalEventType, lastDay time.Time, postings []posting) *domainJournal.Entry {
-				return domainJournal.NewBuilder(nil).
-					WithEventType(eventType).
-					WithSource(types.RevRecEntityTypePOB, p.ID()).
-					WithBusinessDate(lastDay).
-					WithCustomerID(c.CustomerID()).
-					WithContractID(c.ID()).
-					WithCurrency(c.Currency()).
-					WithLines(toLines(postings)).
-					Build()
-			}
-
-			for i, monthEnd := range monthEnds {
-				lastDay := monthEnd.AddDate(0, 0, -1)
-				pos := positionAt(entries, p.ID(), lastDay)
-				toRecognize, toOffset := computeMonth(pos, earned[i][p.ID()].Round(precision))
-
-				// Zero amounts leave no lines, so post skips them; posted entries join the in-memory totals.
-				// e.g. arrears Feb 28: [revenue_earned Dr unbilled 250, revenue_offset Dr deferred 300 / Cr unbilled 300]
-				month := []*domainJournal.Entry{
-					entry(types.JournalEventRevenueEarned, lastDay, []posting{
-						{account: types.LedgerAccountUnbilledReceivable, amount: toRecognize.Neg(), pobID: p.ID()},
-						{account: types.LedgerAccountRevenue, amount: toRecognize, pobID: p.ID()},
-					}),
-					entry(types.JournalEventRevenueOffset, lastDay, []posting{
-						{account: types.LedgerAccountDeferredRevenue, amount: toOffset.Neg(), pobID: p.ID()},
-						{account: types.LedgerAccountUnbilledReceivable, amount: toOffset, pobID: p.ID()},
-					}),
-				}
-				// Billed ahead and fully earned with nothing in unbilled: unbilled would rise and fall by the same amount, so
-				// post one entry instead. e.g. prepaid Jan 31: revenue_earned Dr deferred 100 / Cr revenue 100
-				if toOffset.Equal(toRecognize) && pos.revenue.Equal(pos.offset) {
-					month = []*domainJournal.Entry{
-						entry(types.JournalEventRevenueEarned, lastDay, []posting{
-							{account: types.LedgerAccountDeferredRevenue, amount: toRecognize.Neg(), pobID: p.ID()},
-							{account: types.LedgerAccountRevenue, amount: toRecognize, pobID: p.ID()},
-						}),
-					}
-				}
-
-				if !req.DryRun {
-					for _, e := range month {
-						if _, err := s.post(ctx, e); err != nil {
-							return err
-						}
-					}
-				}
-				entries = append(entries, month...)
-				recognized = append(recognized, lo.Filter(month, func(e *domainJournal.Entry, _ int) bool { return len(e.Lines()) > 0 })...)
-			}
-			return nil
-		}
-
-		if req.DryRun {
-			errs = append(errs, sourceError("pob", p.ID(), recognizePOB(ctx)))
-			continue
-		}
-
-		err := s.db.WithTx(ctx, func(txCtx context.Context) error {
-			if err := s.db.LockWithWait(txCtx, postgres.LockRequest{Key: "revrec:pob:" + p.ID()}); err != nil {
-				return err
-			}
-			return recognizePOB(txCtx)
-		})
-		errs = append(errs, sourceError("pob", p.ID(), err))
-	}
-
-	return recognized, errors.Join(errs...)
+	return missing, err
 }
 
 // e.g. a retry resuming after contract_7 of env_2 skips env_1 and env_2's contracts up to contract_7.
@@ -620,10 +519,10 @@ func (s *journalService) Backfill(ctx context.Context, req BackfillRequest) erro
 	return errors.Join(syncErr, s.recognizeEnvironment(ctx, RecognitionRunRequest{AsOf: req.AsOf, OnProgress: req.OnProgress}, after))
 }
 
-// recognizeEnvironment repairs the POBs of each selected contract with an ID after `after`, posts missed billing (which
-// needs those POBs), then recognizes each contract.
+// recognizeEnvironment repairs the POBs of each due contract with an ID after `after`, posts missed billing (which needs
+// those POBs), then recognizes each contract and each due standalone invoice.
 func (s *journalService) recognizeEnvironment(ctx context.Context, req RecognitionRunRequest, after string) error {
-	contractIDs, err := s.recognitionContracts(ctx, req.Since, req.AsOf)
+	contractIDs, err := s.contracts.Due(ctx, req.Since, req.AsOf)
 	if err != nil {
 		return err
 	}
@@ -639,209 +538,21 @@ func (s *journalService) recognizeEnvironment(ctx context.Context, req Recogniti
 	errs = append(errs, s.Reconcile(ctx, req.Since))
 
 	for _, id := range contractIDs {
-		_, err := s.Recognize(ctx, RecognizeRequest{ContractID: id, AsOf: req.AsOf})
+		_, err := s.recognize(ctx, s.contracts, id, req.AsOf)
 		errs = append(errs, sourceError("contract", id, err))
 		req.OnProgress(RecognitionCursor{EnvironmentID: types.GetEnvironmentID(ctx), ContractID: id})
 	}
 
-	invoices, err := s.standaloneInvoices(ctx, req.Since, req.AsOf)
+	invoiceIDs, err := s.invoices.Due(ctx, req.Since, req.AsOf)
 	if err != nil {
 		return errors.Join(append(errs, err)...)
 	}
-	for _, inv := range invoices {
-		errs = append(errs, sourceError("invoice", inv.ID, s.recognizeInvoice(ctx, inv, req.AsOf)))
+	for _, id := range invoiceIDs {
+		_, err := s.recognize(ctx, s.invoices, id, req.AsOf)
+		errs = append(errs, sourceError("invoice", id, err))
 	}
 
 	return errors.Join(errs...)
-}
-
-// standaloneInvoices is every finalized or voided invoice of a subscription with no contract that changed since `since`
-// or whose period ended in the last two months (it may still owe its last month).
-func (s *journalService) standaloneInvoices(ctx context.Context, since, asOf time.Time) ([]*invoice.Invoice, error) {
-	list := func(f *types.InvoiceFilter) ([]*invoice.Invoice, error) {
-		f.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusFinalized, types.InvoiceStatusVoided}
-		return s.invoiceRepo.List(ctx, f)
-	}
-	changed := types.NewNoLimitInvoiceFilter()
-	changed.UpdatedAtGTE = &since
-	changedInvoices, err := list(changed)
-	if err != nil {
-		return nil, err
-	}
-	recent := types.NewNoLimitInvoiceFilter()
-	recent.PeriodEndGTE = lo.ToPtr(asOf.AddDate(0, -2, 0))
-	recentInvoices, err := list(recent)
-	if err != nil {
-		return nil, err
-	}
-
-	standalone := make(map[string]bool)
-	var invoices []*invoice.Invoice
-	for _, inv := range lo.UniqBy(append(changedInvoices, recentInvoices...), func(inv *invoice.Invoice) string { return inv.ID }) {
-		subID := lo.FromPtr(inv.SubscriptionID)
-		if subID == "" {
-			continue
-		}
-		if _, ok := standalone[subID]; !ok {
-			_, err := s.contractRepo.GetBySubscriptionID(ctx, subID)
-			if err != nil && !ierr.IsNotFound(err) {
-				return nil, err
-			}
-			standalone[subID] = ierr.IsNotFound(err)
-		}
-		if standalone[subID] {
-			invoices = append(invoices, inv)
-		}
-	}
-	sort.Slice(invoices, func(i, j int) bool { return invoices[i].ID < invoices[j].ID })
-	return invoices, nil
-}
-
-// recognizeInvoice recognizes a standalone invoice month by month from the month it was billed: the change in its
-// earned-to-date since the last month posts Dr deferred / Cr revenue on the month's last day. Nothing earns before it is
-// billed, so arrears catch up in that month.
-// e.g. a $1,200 annual invoice billed Jan 1: 100 on Jan 31; a Mar 1 arrears invoice for Jan–Feb: all of it on Mar 31.
-func (s *journalService) recognizeInvoice(ctx context.Context, inv *invoice.Invoice, asOf time.Time) error {
-	if inv.FinalizedAt == nil {
-		return nil
-	}
-	loc, _, err := s.sourceContext(ctx, inv.CustomerID, inv.SubscriptionID)
-	if err != nil {
-		return err
-	}
-	nets, err := s.lineNets(ctx, inv)
-	if err != nil {
-		return err
-	}
-
-	// e.g. billed Jan 15, run Apr 2 → Feb 1, Mar 1, Apr 1: the ends of January, February and March
-	monthEnds := lo.Drop(utils.Months(utils.LocalDay(lo.FromPtrOr(inv.IssueDate, *inv.FinalizedAt), loc), utils.LocalDay(asOf, loc)), 1)
-	if len(monthEnds) == 0 {
-		return nil
-	}
-	precision := types.GetCurrencyPrecision(inv.Currency)
-
-	return s.db.WithTx(ctx, func(ctx context.Context) error {
-		if err := s.db.LockWithWait(ctx, postgres.LockRequest{Key: "revrec:invoice:" + inv.ID}); err != nil {
-			return err
-		}
-		entries, err := s.journalRepo.List(ctx, &journalRepo.Filter{
-			QueryFilter:      types.NewNoLimitQueryFilter(),
-			EventTypes:       []types.JournalEventType{types.JournalEventRevenueEarned},
-			SourceEntityType: types.RevRecEntityTypeInvoice,
-			SourceEntityIDs:  []string{inv.ID},
-		})
-		if err != nil {
-			return err
-		}
-
-		for _, monthEnd := range monthEnds {
-			lastDay := monthEnd.AddDate(0, 0, -1)
-			earned := invoiceEarned(inv, nets, time.Date(monthEnd.Year(), monthEnd.Month(), monthEnd.Day(), 0, 0, 0, 0, loc), loc).Round(precision)
-			delta := earned.Sub(recognizedBy(entries, lastDay))
-
-			e := domainJournal.NewBuilder(nil).
-				WithEventType(types.JournalEventRevenueEarned).
-				WithSource(types.RevRecEntityTypeInvoice, inv.ID).
-				WithBusinessDate(lastDay).
-				WithCustomerID(inv.CustomerID).
-				WithCurrency(inv.Currency).
-				WithLines(toLines([]posting{
-					{account: types.LedgerAccountDeferredRevenue, amount: delta.Neg()},
-					{account: types.LedgerAccountRevenue, amount: delta},
-				})).
-				Build()
-			if _, err := s.post(ctx, e); err != nil {
-				return err
-			}
-			entries = append(entries, e)
-		}
-		return nil
-	})
-}
-
-// invoiceEarned is what the invoice's subscription lines earned before asOf's local day, each line's net ratably over
-// its service period; a top-up earns nothing here, and a voided invoice nothing from its void on.
-// e.g. a $300 line over [Jan 1, Apr 1) before Feb 1 → 102.22; voided Jan 20 → 0 at Jan 31.
-func invoiceEarned(inv *invoice.Invoice, nets map[string]decimal.Decimal, asOf time.Time, loc *time.Location) decimal.Decimal {
-	if inv.Metadata["wallet_transaction_id"] != "" {
-		return decimal.Zero
-	}
-	if inv.InvoiceStatus == types.InvoiceStatusVoided && inv.VoidedAt != nil && inv.VoidedAt.Before(asOf) {
-		return decimal.Zero
-	}
-
-	earned := decimal.Zero
-	for _, li := range inv.LineItems {
-		if lo.FromPtr(li.SubscriptionLineItemID) == "" {
-			continue
-		}
-		// e.g. a line with no period earns in full when the invoice is finalized
-		start := lo.FromPtrOr(li.PeriodStart, *inv.FinalizedAt)
-		end := lo.FromPtrOr(li.PeriodEnd, start)
-		earned = earned.Add(pobsvc.Earned(nets[li.ID], start, end, types.RecognitionMethodStraightLine, types.AmortizationDaily, asOf, loc))
-	}
-	return earned
-}
-
-// recognizedBy is the revenue credited by the entries dated on or before lastDay.
-func recognizedBy(entries []*domainJournal.Entry, lastDay time.Time) decimal.Decimal {
-	recognized := decimal.Zero
-	for _, e := range entries {
-		if e.BusinessDate().After(lastDay) {
-			continue
-		}
-		for _, l := range e.Lines() {
-			if l.Account() == types.LedgerAccountRevenue {
-				recognized = recognized.Add(l.Net())
-			}
-		}
-	}
-	return recognized
-}
-
-// recognitionContracts is, sorted by ID, every active contract, every contract ended in the last two months (it may
-// still owe its last month), and every contract of a subscription with an invoice changed since `since`.
-func (s *journalService) recognitionContracts(ctx context.Context, since, asOf time.Time) ([]string, error) {
-	active, err := s.contractRepo.List(ctx, &contractRepo.Filter{
-		QueryFilter:      types.NewNoLimitQueryFilter(),
-		ContractStatuses: []types.ContractStatus{types.ContractStatusActive},
-	})
-	if err != nil {
-		return nil, err
-	}
-	ended, err := s.contractRepo.List(ctx, &contractRepo.Filter{
-		QueryFilter:      types.NewNoLimitQueryFilter(),
-		ContractStatuses: []types.ContractStatus{types.ContractStatusEnded},
-		EndedAtGTE:       lo.ToPtr(asOf.AddDate(0, -2, 0)),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	invoiceFilter := types.NewNoLimitInvoiceFilter()
-	invoiceFilter.UpdatedAtGTE = &since
-	invoices, err := s.invoiceRepo.List(ctx, invoiceFilter)
-	if err != nil {
-		return nil, err
-	}
-	subscriptionIDs := lo.Uniq(lo.FilterMap(invoices, func(inv *invoice.Invoice, _ int) (string, bool) {
-		return lo.FromPtr(inv.SubscriptionID), lo.FromPtr(inv.SubscriptionID) != ""
-	}))
-
-	var billed []*domainContract.Contract
-	if len(subscriptionIDs) > 0 {
-		if billed, err = s.contractRepo.List(ctx, &contractRepo.Filter{
-			QueryFilter:     types.NewNoLimitQueryFilter(),
-			SubscriptionIDs: subscriptionIDs,
-		}); err != nil {
-			return nil, err
-		}
-	}
-
-	ids := lo.Uniq(lo.Map(append(append(active, ended...), billed...), func(c *domainContract.Contract, _ int) string { return c.ID() }))
-	sort.Strings(ids)
-	return ids, nil
 }
 
 // e.g. a finalize hook lost to a crash posts on the next run; posted entries are skipped by key.
@@ -995,84 +706,4 @@ func (s *journalService) post(ctx context.Context, e *domainJournal.Entry) (stri
 	}
 
 	return entry.ID(), nil
-}
-
-// pobPosition is a POB's journal sums over entries dated on or before a month's last day.
-type pobPosition struct {
-	billed  decimal.Decimal // deferred credits − debits on billing entries
-	revenue decimal.Decimal // revenue credits − debits on revenue_earned entries
-	offset  decimal.Decimal // deferred debits − credits on recognition entries (offsets and prepaid single entries)
-}
-
-// positionAt sums the POB's lines on entries dated on or before monthEnd.
-// e.g. a Jan 1 invoice crediting deferred 1,200 and a Jan 31 offset debiting it 100 → billed 1,200, offset 100.
-func positionAt(entries []*domainJournal.Entry, pobID string, monthEnd time.Time) pobPosition {
-	var pos pobPosition
-
-	for _, e := range entries {
-		if e.BusinessDate().After(monthEnd) {
-			continue
-		}
-
-		for _, l := range e.Lines() {
-			if l.POBID() != pobID {
-				continue
-			}
-
-			credit := l.Net()
-			switch {
-			case e.EventType() == types.JournalEventRevenueEarned || e.EventType() == types.JournalEventRevenueOffset:
-				// A prepaid month's single entry debits deferred directly, so it counts as offset too.
-				switch l.Account() {
-				case types.LedgerAccountRevenue:
-					pos.revenue = pos.revenue.Add(credit)
-				case types.LedgerAccountDeferredRevenue:
-					pos.offset = pos.offset.Sub(credit)
-				}
-			case l.Account() == types.LedgerAccountDeferredRevenue:
-				pos.billed = pos.billed.Add(credit)
-			}
-		}
-	}
-
-	return pos
-}
-
-// computeMonth is the month's recognition δ and offset given the position and the rounded earned-to-date at its end.
-// e.g. Example 1 January: earned 100, position{billed: 1,200} → δ 100, offset 100; a rerun gives 0, 0.
-func computeMonth(pos pobPosition, earned decimal.Decimal) (delta, offset decimal.Decimal) {
-	// Recognition posts only what the journal is missing.
-	delta = earned.Sub(pos.revenue)
-
-	// What is both billed and earned sits in deferred and unbilled at once; earlier offsets removed part of it.
-	billedAndEarned := decimal.Min(pos.billed, earned)
-	offset = billedAndEarned.Sub(pos.offset)
-
-	return delta, offset
-}
-
-// reversed negates every posting.
-func reversed(postings []posting) []posting {
-	return lo.Map(postings, func(p posting, _ int) posting {
-		return posting{account: p.account, amount: p.amount.Neg(), pobID: p.pobID}
-	})
-}
-
-// toLines turns postings into lines, dropping zeros.
-func toLines(postings []posting) []*domainJournal.Line {
-	var lines []*domainJournal.Line
-	for _, p := range postings {
-		if p.amount.IsZero() {
-			continue
-		}
-
-		lines = append(lines, domainJournal.NewLineBuilder(nil).
-			WithAccount(p.account).
-			WithDirection(lo.Ternary(p.amount.IsPositive(), types.JournalDirectionCredit, types.JournalDirectionDebit)).
-			WithAmount(p.amount.Abs()).
-			WithPOBID(p.pobID).
-			Build())
-	}
-
-	return lines
 }

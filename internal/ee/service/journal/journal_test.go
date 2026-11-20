@@ -21,6 +21,7 @@ import (
 	accountingperiodsvc "github.com/flexprice/flexprice/internal/ee/service/accountingperiod"
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
+	"github.com/flexprice/flexprice/internal/ee/service/recognition"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -591,6 +592,13 @@ type testSources struct {
 	creditNotes []*creditnote.CreditNote
 	payments    []*payment.Payment
 	refunds     []*refund.Refund
+	// pobs seeds more POBs, each with its association.
+	pobs []seededPOB
+}
+
+type seededPOB struct {
+	pob         *domainPOB.PerformanceObligation
+	association *domainPOB.Association
 }
 
 // newTestService seeds subs_1 and cust_1 (IST), contract_1 (active, usd), sli_1 under pob_1 (active, straight line, period
@@ -616,6 +624,10 @@ func newTestService(t *testing.T, ctx context.Context, src testSources) (Journal
 		WithServiceStart(inIST(time.January, 1)).WithPOBStatus(types.PerformanceObligationStatusActive).WithStatus(types.StatusPublished).Build(),
 		domainPOB.NewAssociationBuilder(nil).WithID("pob_assoc_1").WithEntityType(types.RevRecEntityTypeSubscriptionLineItem).WithEntityID("sli_1").WithStatus(types.StatusPublished).Build()))
 
+	for _, p := range src.pobs {
+		require.NoError(t, pobs.CreateWithAssociation(ctx, p.pob, p.association))
+	}
+
 	taxes := testutil.NewInMemoryTaxAppliedStore()
 	for _, ta := range src.taxes {
 		require.NoError(t, taxes.Create(ctx, ta))
@@ -638,82 +650,16 @@ func newTestService(t *testing.T, ctx context.Context, src testSources) (Journal
 	}
 
 	pobService := pobsvc.NewPerformanceObligationService(pobs, contracts, subs, invoices, taxes, testutil.NewInMemoryRevenueFactStore())
-	return NewJournalService(testutil.NewMockPostgresClient(nil), store, periods, pobService, pobs, contractsvc.NewContractService(contracts), contracts, subs, customers, invoices, creditNotes, payments, refunds, taxes, testutil.NewInMemorySettingsStore()), store
+	contractRecognizer := recognition.NewContractRecognizer(contracts, pobs, pobService, store, invoices, subs, customers)
+	invoiceRecognizer := recognition.NewInvoiceRecognizer(invoices, taxes, contracts, store, subs, customers)
+	return NewJournalService(testutil.NewMockPostgresClient(nil), store, periods, pobService, contractRecognizer, invoiceRecognizer,
+		contractsvc.NewContractService(contracts), contracts, subs, customers, invoices, creditNotes, payments, refunds, taxes, testutil.NewInMemorySettingsStore()), store
 }
 
 func lineSummary(e *domainJournal.Entry) []string {
 	return lo.Map(e.Lines(), func(l *domainJournal.Line, _ int) string {
 		return strings.TrimSpace(fmt.Sprintf("%s %s %s %s", l.Direction(), l.Account(), l.Amount(), l.POBID()))
 	})
-}
-
-func TestComputeMonth(t *testing.T) {
-	d := func(v int64) decimal.Decimal { return decimal.NewFromInt(v) }
-	tests := []struct {
-		name          string
-		pos           pobPosition
-		earned        decimal.Decimal
-		delta, offset decimal.Decimal
-	}{
-		{"example 1, Feb 1 run for January", pobPosition{billed: d(1200)}, d(100), d(100), d(100)},
-		{"example 1, Feb 2 rerun", pobPosition{billed: d(1200), revenue: d(100), offset: d(100)}, d(100), d(0), d(0)},
-		{"example 1, Mar 1 run for February", pobPosition{billed: d(1200), revenue: d(100), offset: d(100)}, d(200), d(100), d(100)},
-		{"example 1, backdated cut of January to 90", pobPosition{billed: d(1200), revenue: d(100), offset: d(100)}, d(90), d(-10), d(-10)},
-		{"example 2, January: nothing billed by Jan 31", pobPosition{}, d(300), d(300), d(0)},
-		{"example 2, February: 300 billed by Feb 28", pobPosition{billed: d(300), revenue: d(300)}, d(550), d(250), d(300)},
-		{"a void after the offset gives it back", pobPosition{billed: d(0), revenue: d(100), offset: d(100)}, d(100), d(0), d(-100)},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			delta, offset := computeMonth(tt.pos, tt.earned)
-			require.Equal(t, tt.delta.String(), delta.String(), "delta")
-			require.Equal(t, tt.offset.String(), offset.String(), "offset")
-		})
-	}
-}
-
-func TestPositionAt(t *testing.T) {
-	day := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 0, 0, 0, 0, time.UTC) }
-	entry := func(eventType types.JournalEventType, date time.Time, postings ...posting) *domainJournal.Entry {
-		return domainJournal.NewBuilder(nil).WithEventType(eventType).WithBusinessDate(date).WithLines(toLines(postings)).Build()
-	}
-	deferred := func(amount int64, pobID string) posting {
-		return posting{account: types.LedgerAccountDeferredRevenue, amount: decimal.NewFromInt(amount), pobID: pobID}
-	}
-	unbilled := func(amount int64) posting {
-		return posting{account: types.LedgerAccountUnbilledReceivable, amount: decimal.NewFromInt(amount), pobID: "pob_1"}
-	}
-	revenue := func(amount int64) posting {
-		return posting{account: types.LedgerAccountRevenue, amount: decimal.NewFromInt(amount), pobID: "pob_1"}
-	}
-	receivable := posting{account: types.LedgerAccountReceivable, amount: decimal.NewFromInt(-1200)}
-
-	entries := []*domainJournal.Entry{
-		entry(types.JournalEventInvoiceFinalized, day(1, 1), receivable, deferred(1200, "pob_1")),
-		entry(types.JournalEventInvoiceFinalized, day(1, 5), posting{account: types.LedgerAccountReceivable, amount: decimal.NewFromInt(-50)}, deferred(50, "pob_2")),
-		entry(types.JournalEventRevenueEarned, day(1, 31), unbilled(-100), revenue(100)),
-		entry(types.JournalEventRevenueOffset, day(1, 31), deferred(-100, "pob_1"), unbilled(100)),
-		entry(types.JournalEventInvoiceVoided, day(2, 10), deferred(-1200, "pob_1"), posting{account: types.LedgerAccountReceivable, amount: decimal.NewFromInt(1200)}),
-		entry(types.JournalEventRevenueEarned, day(2, 28), unbilled(-90), revenue(90)),
-	}
-
-	tests := []struct {
-		name                    string
-		monthEnd                time.Time
-		billed, revenue, offset int64
-	}{
-		{"before anything", day(12, 31).AddDate(-1, 0, 0), 0, 0, 0},
-		{"January: invoice, recognition and offset; other POBs ignored", day(1, 31), 1200, 100, 100},
-		{"February: the void nets billed to zero", day(2, 28), 0, 190, 100},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			pos := positionAt(entries, "pob_1", tt.monthEnd)
-			require.Equal(t, decimal.NewFromInt(tt.billed).String(), pos.billed.String(), "billed")
-			require.Equal(t, decimal.NewFromInt(tt.revenue).String(), pos.revenue.String(), "revenue")
-			require.Equal(t, decimal.NewFromInt(tt.offset).String(), pos.offset.String(), "offset")
-		})
-	}
 }
 
 // inIST is local midnight of a 2026 day in subs_1's timezone.
@@ -978,7 +924,7 @@ func TestRecognitionContracts(t *testing.T) {
 	changed.SubscriptionID = lo.ToPtr("subs_contract_invoiced")
 	require.NoError(t, s.invoiceRepo.CreateWithLineItems(ctx, changed))
 
-	ids, err := s.recognitionContracts(ctx, since, asOf)
+	ids, err := s.contracts.Due(ctx, since, asOf)
 	require.NoError(t, err)
 	require.Equal(t, []string{"contract_1", "contract_ended_march", "contract_invoiced"}, ids,
 		"active, ended in the last two months, and ended long ago but with a changed invoice; never draft")
@@ -987,7 +933,12 @@ func TestRecognitionContracts(t *testing.T) {
 // TestBackfill rebuilds a subscription created before enabling: no contract, no POB, a prepaid invoice never posted.
 func TestBackfill(t *testing.T) {
 	ctx := testutil.SetupContext()
-	svc, store := newTestService(t, ctx, testSources{})
+	svc, store := newTestService(t, ctx, testSources{pobs: []seededPOB{{
+		pob: domainPOB.NewBuilder(nil).WithID("pob_2").WithContractID("contract_2").WithName("Annual").WithRecognitionMethod(types.RecognitionMethodStraightLine).
+			WithAmortizationMethod(types.AmortizationPeriodEvenProrated).WithServiceStart(inIST(time.January, 1)).WithPOBStatus(types.PerformanceObligationStatusActive).
+			WithStatus(types.StatusPublished).Build(),
+		association: domainPOB.NewAssociationBuilder(nil).WithID("pob_assoc_2").WithEntityType(types.RevRecEntityTypeSubscriptionLineItem).WithEntityID("sli_2").WithStatus(types.StatusPublished).Build(),
+	}}})
 	s := svc.(*journalService)
 
 	require.NoError(t, s.subRepo.CreateWithLineItems(ctx, &subscription.Subscription{ID: "subs_2", CustomerID: "cust_1", Currency: "usd",
@@ -998,6 +949,9 @@ func TestBackfill(t *testing.T) {
 	annual.SubscriptionID = lo.ToPtr("subs_2")
 	annual.LineItems[0].SubscriptionLineItemID = lo.ToPtr("sli_2")
 	require.NoError(t, s.invoiceRepo.CreateWithLineItems(ctx, annual))
+	require.NoError(t, s.contractRepo.(*testutil.InMemoryContractStore).CreateWithAssociation(ctx,
+		domainContract.NewBuilder(nil).WithID("contract_2").WithContractStatus(types.ContractStatusActive).WithStatus(types.StatusPublished).Build(),
+		domainContract.NewAssociationBuilder(nil).WithID("contract_assoc_2").WithEntityType(types.RevRecEntityTypeSubscription).WithEntityID("subs_2").WithStatus(types.StatusPublished).Build()))
 
 	saved := func() []*domainJournal.Entry {
 		entries, err := store.List(ctx, &journalRepo.Filter{QueryFilter: types.NewNoLimitQueryFilter()})
