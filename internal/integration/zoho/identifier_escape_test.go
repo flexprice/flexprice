@@ -141,8 +141,8 @@ func TestResourceIDsArePathEscaped(t *testing.T) {
 			return err
 		}, base + "invoices/..%2Fx%3Fy=z/creditsapplied?"},
 		{"delete invoice applied credit", func(c *Client) error {
-			return c.DeleteInvoiceAppliedCredit(context.Background(), id, id)
-		}, base + "invoices/..%2Fx%3Fy=z/creditsapplied/..%2Fx%3Fy=z?"},
+			return c.DeleteInvoiceAppliedCredit(context.Background(), id, "../a?b=c")
+		}, base + "invoices/..%2Fx%3Fy=z/creditsapplied/..%2Fa%3Fb=c?"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

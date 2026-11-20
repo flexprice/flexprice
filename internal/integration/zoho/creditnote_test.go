@@ -698,7 +698,6 @@ func TestSyncCreditNoteToZoho_Void(t *testing.T) {
 		assert.Equal(t, []string{"zcn_1"}, f.client.voidedIDs)
 		require.Len(t, f.mappingRepo.updated, 1)
 		assert.Equal(t, "void", f.mappingRepo.updated[0].Metadata["zoho_status"])
-		assert.NotEmpty(t, f.mappingRepo.updated[0].Metadata["voided_at"])
 		assert.Equal(t, "CN-00001", f.mappingRepo.updated[0].Metadata["zoho_creditnote_number"])
 		assert.Equal(t, 0, f.client.createCalls)
 		assert.Empty(t, f.client.applyReqs)

@@ -252,8 +252,7 @@ voiding in Zoho removes that applied credit and voids the credit note. A refund 
 3. List the credits applied to the Zoho invoice and delete the one whose `creditnote_id` is ours. The delete
    takes `creditnotes_invoice_id`, the id of the application, which only this list returns.
 4. Void the Zoho credit note.
-5. Set `zoho_status` to `void` and `voided_at` in the mapping's `metadata`, only after Zoho accepted the
-   void.
+5. Set `zoho_status` to `void` in the mapping's `metadata`, only after Zoho accepted the void.
 
 Flexprice raises the invoice's `amount_due` back when the credit note is voided, and removing the applied
 credit raises the Zoho invoice balance by the same amount, so the two stay in step.

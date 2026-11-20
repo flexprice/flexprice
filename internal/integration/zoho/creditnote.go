@@ -380,7 +380,6 @@ func (s *creditNoteService) voidCreditNote(ctx context.Context, cn *creditnote.C
 		creditNoteMapping.Metadata = map[string]interface{}{}
 	}
 	creditNoteMapping.Metadata["zoho_status"] = zohoCreditNoteStatusVoid
-	creditNoteMapping.Metadata["voided_at"] = clock.Now().Format(time.RFC3339)
 	return s.mappingRepo.Update(ctx, creditNoteMapping)
 }
 
