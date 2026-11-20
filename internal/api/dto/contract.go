@@ -146,7 +146,7 @@ type CreatePOBRequest struct {
 	ProductLookupKey  string                  `json:"product_lookup_key,omitempty"`
 	RecognitionMethod types.RecognitionMethod `json:"recognition_method" validate:"required"`
 	ServiceStart      time.Time               `json:"service_start" validate:"required"`
-	ServiceEnd        *time.Time              `json:"service_end,omitempty"`
+	ServiceEnd        time.Time               `json:"service_end" validate:"required"`
 	AllocatedAmount   decimal.Decimal         `json:"allocated_amount" swaggertype:"string"`
 }
 
@@ -193,7 +193,7 @@ func (r *CreatePOBRequest) Validate() error {
 			WithReportableDetails(map[string]any{"name": r.Name}).
 			Mark(ierr.ErrValidation)
 	}
-	if r.ServiceEnd != nil && r.ServiceEnd.Before(r.ServiceStart) {
+	if r.ServiceEnd.Before(r.ServiceStart) {
 		return ierr.NewError("service_end is before service_start").
 			WithHint("A performance obligation's service must end after it starts").
 			WithReportableDetails(map[string]any{"name": r.Name}).

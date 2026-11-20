@@ -421,7 +421,7 @@ func completeRequest(activate bool, pobs ...dto.CreatePOBRequest) *dto.CompleteD
 
 func platformPOB(amount int64) dto.CreatePOBRequest {
 	return dto.CreatePOBRequest{Name: "Platform", ProductID: "prod_platform", RecognitionMethod: types.RecognitionMethodStraightLine,
-		ServiceStart: termStart, ServiceEnd: lo.ToPtr(termEnd), AllocatedAmount: decimal.NewFromInt(amount)}
+		ServiceStart: termStart, ServiceEnd: termEnd, AllocatedAmount: decimal.NewFromInt(amount)}
 }
 
 func TestCompleteDraft_AttachesDraftSubscriptionAndPOBs(t *testing.T) {
@@ -460,7 +460,7 @@ func TestCompleteDraft_CreatesCustomerAndCatalog(t *testing.T) {
 	ctx := testutil.SetupContext()
 	f := newCompleteFixture(t, ctx, draftContract())
 	req := completeRequest(false, dto.CreatePOBRequest{Name: "Agent usage", ProductLookupKey: "agent_usage",
-		RecognitionMethod: types.RecognitionMethodAsConsumed, ServiceStart: termStart})
+		RecognitionMethod: types.RecognitionMethodAsConsumed, ServiceStart: termStart, ServiceEnd: termEnd})
 	req.Contract.CustomerID = ""
 	req.Customer = &dto.CreateCustomerRequest{ExternalID: "acme", Name: "Acme"}
 	req.Products = []dto.CreateProductCatalogRequest{{

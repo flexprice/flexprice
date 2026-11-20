@@ -84,8 +84,8 @@ func (s *POBServiceSuite) TestCreateForContract() {
 	end := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
 
 	pobs, err := s.pobService.CreateForContract(s.ctx, s.contract, []dto.CreatePOBRequest{
-		{Name: "Platform", ProductID: "prod_platform", RecognitionMethod: types.RecognitionMethodStraightLine, ServiceStart: start, ServiceEnd: &end, AllocatedAmount: decimal.NewFromInt(60000)},
-		{Name: "API usage", ProductID: "prod_api", RecognitionMethod: types.RecognitionMethodAsConsumed, ServiceStart: start},
+		{Name: "Platform", ProductID: "prod_platform", RecognitionMethod: types.RecognitionMethodStraightLine, ServiceStart: start, ServiceEnd: end, AllocatedAmount: decimal.NewFromInt(60000)},
+		{Name: "API usage", ProductID: "prod_api", RecognitionMethod: types.RecognitionMethodAsConsumed, ServiceStart: start, ServiceEnd: end},
 	})
 	s.Require().NoError(err)
 	s.Require().Len(pobs, 2)
@@ -101,14 +101,13 @@ func (s *POBServiceSuite) TestCreateForContract() {
 	s.Equal("60000", got.AllocatedAmount().String())
 	s.Equal(types.PerformanceObligationStatusDraft, got.POBStatus(), "a draft contract's POBs are drafts")
 	s.True(pobs[1].AllocatedAmount().IsZero())
-	s.Nil(pobs[1].ServiceEnd())
 }
 
 func (s *POBServiceSuite) TestSyncForContractFollowsContract() {
 	past := time.Now().UTC().Add(-time.Hour)
 	pobs, err := s.pobService.CreateForContract(s.ctx, s.contract, []dto.CreatePOBRequest{
-		{Name: "Platform", ProductID: "prod_platform", RecognitionMethod: types.RecognitionMethodStraightLine, ServiceStart: past.AddDate(0, -1, 0)},
-		{Name: "Setup", ProductID: "prod_setup", RecognitionMethod: types.RecognitionMethodPointInTime, ServiceStart: past.AddDate(0, -1, 0), ServiceEnd: &past},
+		{Name: "Platform", ProductID: "prod_platform", RecognitionMethod: types.RecognitionMethodStraightLine, ServiceStart: past.AddDate(0, -1, 0), ServiceEnd: past.AddDate(1, 0, 0)},
+		{Name: "Setup", ProductID: "prod_setup", RecognitionMethod: types.RecognitionMethodPointInTime, ServiceStart: past.AddDate(0, -1, 0), ServiceEnd: past},
 	})
 	s.Require().NoError(err)
 
@@ -218,7 +217,8 @@ func TestEarnedByPOB(t *testing.T) {
 	}
 }
 
-// TestEarnedToDate runs the contract → POB → invoice/fact path through the in-memory stores.
+// TestEarnedToDate earns a straight-line POB from its allocation and an as-consumed POB from the invoice/fact path,
+// through the in-memory stores.
 func TestEarnedToDate(t *testing.T) {
 	ctx := testutil.SetupContext()
 	at := func(m time.Month, day int) time.Time { return time.Date(2026, m, day, 0, 0, 0, 0, time.UTC) }
@@ -242,13 +242,15 @@ func TestEarnedToDate(t *testing.T) {
 	c := domainContract.NewBuilder(nil).WithID("contract_1").WithContractStatus(types.ContractStatusActive).WithStatus(types.StatusPublished).Build()
 	require.NoError(t, contracts.CreateWithAssociation(ctx, c, domainContract.NewAssociationBuilder(nil).
 		WithID("contract_assoc_1").WithEntityType(types.RevRecEntityTypeSubscription).WithEntityID(sub.ID).WithStatus(types.StatusPublished).Build()))
-	// One POB per line item's Product: seats earn straight line, usage as consumed.
+	// One POB per line item's Product: seats earn their 90 allocated over April straight line, usage what it bills.
 	for _, li := range sub.LineItems {
 		productID := "prod_" + li.ID
+		usage := li.PriceType == types.PRICE_TYPE_USAGE
 		require.NoError(t, prices.Create(ctx, &price.Price{ID: li.PriceID, ProductID: productID, Type: li.PriceType,
 			BillingPeriod: types.BILLING_PERIOD_MONTHLY, BaseModel: types.GetDefaultBaseModel(ctx)}))
 		require.NoError(t, pobs.Create(ctx, domainPOB.NewBuilder(nil).WithID("pob_"+li.ID).WithContractID(c.ID()).WithProductID(productID).WithName(li.ID).
-			WithRecognitionMethod(lo.Ternary(li.PriceType == types.PRICE_TYPE_USAGE, types.RecognitionMethodAsConsumed, types.RecognitionMethodStraightLine)).
+			WithRecognitionMethod(lo.Ternary(usage, types.RecognitionMethodAsConsumed, types.RecognitionMethodStraightLine)).
+			WithAllocatedAmount(lo.Ternary(usage, decimal.Zero, decimal.NewFromInt(90))).WithServiceStart(at(4, 1)).WithServiceEnd(lo.ToPtr(at(5, 1))).
 			WithAmortizationMethod(types.AmortizationPeriodEvenProrated).WithPOBStatus(types.PerformanceObligationStatusActive).WithStatus(types.StatusPublished).Build()))
 	}
 
@@ -280,9 +282,9 @@ func TestEarnedToDate(t *testing.T) {
 	usage, err := pobs.GetByID(ctx, "pob_sli_usage")
 	require.NoError(t, err)
 	require.Len(t, earned, 2, "every POB of the contract is present")
-	require.Equal(t, "95", earned[seats.ID()].String(), "April invoice plus the May 2 accrual; the voided invoice never earns")
+	require.Equal(t, "90", earned[seats.ID()].String(), "seats earn their allocation over April, whatever is billed or accrued")
 	require.Equal(t, "57", earned[usage.ID()].String(), "usage: April's invoiced 50 plus the May 2 accrual of 7")
-	require.Equal(t, "45", midApril[seats.ID()].String(), "15 of April's 30 days; the May fact is not yet earned")
+	require.Equal(t, "45", midApril[seats.ID()].String(), "15 of April's 30 days of the allocation")
 	require.Equal(t, "25", midApril[usage.ID()].String(), "usage earns daily: 15 of April's 30 days")
 }
 
