@@ -252,3 +252,51 @@ func TestInvoiceSyncSettings_Stripe(t *testing.T) {
 		})
 	}
 }
+
+func TestSyncConfigValidateCreditNoteSync(t *testing.T) {
+	approvalOn := &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{SubmitForApproval: true}}
+	approvalOff := &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{DepositToAccountID: "460000000000358"}}
+	tests := []struct {
+		name    string
+		cfg     *SyncConfig
+		wantErr bool
+	}{
+		{"outbound credit note sync", &SyncConfig{CreditNote: &EntitySyncConfig{Outbound: true}}, false},
+		{"outbound credit note sync with submit for approval off", &SyncConfig{CreditNote: &EntitySyncConfig{Outbound: true}, InvoiceSyncSettings: approvalOff}, false},
+		{"inbound credit note sync", &SyncConfig{CreditNote: &EntitySyncConfig{Inbound: true}}, true},
+		{"inbound and outbound credit note sync", &SyncConfig{CreditNote: &EntitySyncConfig{Inbound: true, Outbound: true}}, true},
+		{"outbound credit note sync with submit for approval", &SyncConfig{CreditNote: &EntitySyncConfig{Outbound: true}, InvoiceSyncSettings: approvalOn}, true},
+		{"submit for approval with credit note sync off", &SyncConfig{CreditNote: &EntitySyncConfig{}, InvoiceSyncSettings: approvalOn}, false},
+		{"submit for approval without credit note config", &SyncConfig{InvoiceSyncSettings: approvalOn}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestZohoDepositToAccountID(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings *InvoiceSyncSettings
+		want     string
+	}{
+		{"nil settings", nil, ""},
+		{"not set", &InvoiceSyncSettings{}, ""},
+		{"set", &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{DepositToAccountID: "460000000000358"}}, "460000000000358"},
+		{"surrounding spaces trimmed", &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{DepositToAccountID: " 460000000000358 "}}, "460000000000358"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.settings.ZohoDepositToAccountID())
+		})
+	}
+}

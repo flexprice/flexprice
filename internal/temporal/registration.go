@@ -291,6 +291,13 @@ func RegisterWorkflowsAndActivities(
 		entityScope,
 		params.Logger,
 	)
+	zohoCreditNoteSyncActivities := zohoActivities.NewCreditNoteSyncActivities(
+		params.IntegrationFactory,
+		entityScope,
+		params.CreditNoteRepo,
+		params.RefundRepo,
+		params.Logger,
+	)
 	tabsInvoiceSyncActivities := tabsActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
 		entityScope,
@@ -365,7 +372,50 @@ func RegisterWorkflowsAndActivities(
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, addonActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessRawEventsActivities, replayDLQActivities, envActivities, beActivities, cronBundle, alertActs, marketplaceFlushActivities)
+		config := buildWorkerConfig(
+			taskQueue,
+			workflowTrackingActivities,
+			planActivities,
+			addonActivities,
+			prepareEventsActivities,
+			taskActivities,
+			taskActivity,
+			scheduledTaskActivity,
+			exportActivity,
+			hubspotDealSyncActivities,
+			hubspotInvoiceSyncActivities,
+			hubspotQuoteSyncActivities,
+			qbPriceSyncActivities,
+			nomodInvoiceSyncActivities,
+			nomodCustomerSyncActivities,
+			whopInvoiceSyncActivities,
+			moyasarInvoiceSyncActivities,
+			paddleInvoiceSyncActivities,
+			paddleCustomerSyncActivities,
+			paddleSubscriptionSyncActivities,
+			stripeInvoiceSyncActivities,
+			stripeCustomerSyncActivities,
+			razorpayInvoiceSyncActivities,
+			razorpayCustomerSyncActivities,
+			chargebeeInvoiceSyncActivities,
+			chargebeeCustomerSyncActivities,
+			qbInvoiceSyncActivities,
+			qbCustomerSyncActivities,
+			zohoInvoiceSyncActivities,
+			tabsInvoiceSyncActivities,
+			customerActivities,
+			scheduleBillingActivities,
+			billingActivities,
+			invoiceActs,
+			reprocessRawEventsActivities,
+			replayDLQActivities,
+			envActivities,
+			beActivities,
+			cronBundle,
+			alertActs,
+			marketplaceFlushActivities,
+			zohoCreditNoteSyncActivities,
+		)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -417,6 +467,7 @@ func buildWorkerConfig(
 	cron *cronActivityBundle,
 	alertActs *alertActivities.AlertActivities,
 	marketplaceFlushActivities *marketplaceActivities.FlushActivities,
+	zohoCreditNoteSyncActivities *zohoActivities.CreditNoteSyncActivities,
 ) WorkerConfig {
 	workflowsList := []interface{}{}
 	// Add tracking activity to all task queues
@@ -444,6 +495,7 @@ func buildWorkerConfig(
 			workflows.QuickBooksInvoiceSyncWorkflow,
 			workflows.ZohoBooksInvoiceSyncWorkflow,
 			workflows.ZohoBooksInvoiceMarkPaidWorkflow,
+			workflows.ZohoBooksCreditNoteSyncWorkflow,
 			workflows.TabsInvoiceSyncWorkflow,
 			workflows.StripeCustomerSyncWorkflow,
 			workflows.RazorpayCustomerSyncWorkflow,
@@ -472,6 +524,7 @@ func buildWorkerConfig(
 			qbInvoiceSyncActivities.SyncInvoiceToQuickBooks,
 			zohoInvoiceSyncActivities.SyncInvoiceToZoho,
 			zohoInvoiceSyncActivities.MarkZohoBooksInvoicePaid,
+			zohoCreditNoteSyncActivities.SyncCreditNoteToZoho,
 			tabsInvoiceSyncActivities.SyncInvoiceToTabs,
 			invoiceActs.PublishInvoiceSyncWebhookActivity,
 			stripeCustomerSyncActivities.SyncCustomerToStripe,

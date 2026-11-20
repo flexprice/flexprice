@@ -418,6 +418,12 @@ func (c *Connection) IsInvoiceOutboundEnabled() bool {
 	return config.Invoice != nil && config.Invoice.Outbound
 }
 
+// IsCreditNoteOutboundEnabled checks if credit note outbound sync is enabled
+func (c *Connection) IsCreditNoteOutboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.CreditNote != nil && config.CreditNote.Outbound
+}
+
 // IsPriceOutboundEnabled checks if price outbound sync is enabled
 func (c *Connection) IsPriceOutboundEnabled() bool {
 	config := c.GetSyncConfig()
