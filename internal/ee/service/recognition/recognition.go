@@ -15,14 +15,20 @@ import (
 
 // Recognizer computes the recognition entries the journal is missing for one kind of unit; it never posts them.
 type Recognizer interface {
-	// Due is, sorted, the units a run as of asOf recognizes: those that may still owe a month, and those whose billing
-	// changed since `since`.
-	Due(ctx context.Context, since, asOf time.Time) ([]string, error)
+	// Due is, sorted, the units a run as of asOf recognizes: within the scope, or else those that may still owe a month
+	// and those whose billing changed since `since`.
+	Due(ctx context.Context, since, asOf time.Time, scope Scope) ([]string, error)
 	// Recognize is the entries the unit is missing for the months ended before asOf's local day, in posting order; with
 	// openMonth it also counts the open month up to asOf.
 	Recognize(ctx context.Context, id string, asOf time.Time, openMonth bool) ([]*domainJournal.Entry, error)
 	// LockKey serializes recognizing and posting the unit.
 	LockKey(id string) string
+}
+
+// Scope limits a run to one contract or one customer; the zero value is the whole environment.
+type Scope struct {
+	ContractID string
+	CustomerID string
 }
 
 // ContractRecognizer recognizes a contract's POBs.

@@ -11533,6 +11533,119 @@ const docTemplate = `{
                 "x-scope": "write"
             }
         },
+        "/revenue_recognition/runs": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use to recognize revenue now instead of waiting for the daily run: for one contract, one customer, or the whole environment. Posts billing the hooks missed, then the recognition and offset entries due up to now. Runs in the background; poll GET /revenue_recognition/runs/{workflow_id}.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Revenue Recognition"
+                ],
+                "summary": "Start revenue recognition run",
+                "operationId": "startRevenueRecognitionRun",
+                "parameters": [
+                    {
+                        "description": "Scope: contract_id, customer_id, or empty for the whole environment",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/StartRevenueRecognitionRunRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/RevenueRecognitionRunResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Contract or customer not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "A run for this scope is already running",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/revenue_recognition/runs/{workflow_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use to follow a recognition run started from POST /revenue_recognition/runs: queued, running, completed or failed.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Revenue Recognition"
+                ],
+                "summary": "Get revenue recognition run",
+                "operationId": "getRevenueRecognitionRun",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workflow ID returned when the run started",
+                        "name": "workflow_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/RevenueRecognitionRunResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Run not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/revenue_reports/rollforward": {
             "post": {
                 "security": [
@@ -29639,6 +29752,44 @@ const docTemplate = `{
                 }
             }
         },
+        "RevenueRecognitionRunResponse": {
+            "type": "object",
+            "properties": {
+                "closed_at": {
+                    "type": "string"
+                },
+                "last_error": {
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/RevenueRecognitionRunStatus"
+                },
+                "workflow_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "RevenueRecognitionRunStatus": {
+            "type": "string",
+            "enum": [
+                "queued",
+                "running",
+                "completed",
+                "failed"
+            ],
+            "x-enum-varnames": [
+                "RevenueRecognitionRunStatusQueued",
+                "RevenueRecognitionRunStatusRunning",
+                "RevenueRecognitionRunStatusCompleted",
+                "RevenueRecognitionRunStatusFailed"
+            ]
+        },
         "RollforwardRequest": {
             "type": "object",
             "required": [
@@ -30331,6 +30482,17 @@ const docTemplate = `{
                 },
                 "usage": {
                     "description": "usage is the total usage amount from this source (optional, for additional context)",
+                    "type": "string"
+                }
+            }
+        },
+        "StartRevenueRecognitionRunRequest": {
+            "type": "object",
+            "properties": {
+                "contract_id": {
+                    "type": "string"
+                },
+                "customer_id": {
                     "type": "string"
                 }
             }

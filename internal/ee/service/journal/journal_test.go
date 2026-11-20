@@ -3,6 +3,7 @@ package journal
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -953,7 +954,7 @@ func TestRecognitionContracts(t *testing.T) {
 	changed.SubscriptionID = lo.ToPtr("subs_contract_invoiced")
 	require.NoError(t, s.invoiceRepo.CreateWithLineItems(ctx, changed))
 
-	ids, err := s.contracts.Due(ctx, since, asOf)
+	ids, err := s.contracts.Due(ctx, since, asOf, recognition.Scope{})
 	require.NoError(t, err)
 	require.Equal(t, []string{"contract_1", "contract_ended_march", "contract_invoiced"}, ids,
 		"active, ended in the last two months, and ended long ago but with a changed invoice; never draft")
@@ -1227,4 +1228,54 @@ func TestRecognizeAllocationNotBilling(t *testing.T) {
 		balances("pob_1"), "billed 18,000 against 20,000 earned")
 	require.Equal(t, map[types.LedgerAccountKey]string{types.LedgerAccountDeferredRevenue: "0", types.LedgerAccountUnbilledReceivable: "8000", types.LedgerAccountRevenue: "20000"},
 		balances("pob_b"), "billed 12,000 against 20,000 earned")
+}
+
+// TestRecognizeScoped runs recognition for one contract or one customer only.
+func TestRecognizeScoped(t *testing.T) {
+	asOf := inIST(time.March, 2).Add(2 * time.Hour)
+	tests := []struct {
+		name            string
+		scope           recognition.Scope
+		wantPOB         bool
+		wantInvoicesFor []string
+	}{
+		{name: "a contract: its POBs, no standalone invoices", scope: recognition.Scope{ContractID: "contract_1"}, wantPOB: true},
+		{name: "a customer: only that customer's standalone invoices", scope: recognition.Scope{CustomerID: "cust_2"}, wantInvoicesFor: []string{"inv_cust_2"}},
+		{name: "the environment: everything due", wantPOB: true, wantInvoicesFor: []string{"inv_cust_1", "inv_cust_2"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := testutil.SetupContext()
+			annual := subscriptionInvoice(ctx, "inv_annual", types.InvoiceTypeSubscription, 1200, inIST(time.January, 1), inIST(time.January, 1), inIST(time.January, 1).AddDate(1, 0, 0))
+			standalone := func(id, customerID string) *invoice.Invoice {
+				inv := subscriptionInvoice(ctx, id, types.InvoiceTypeSubscription, 300, inIST(time.January, 1), inIST(time.January, 1), inIST(time.April, 1))
+				inv.CustomerID, inv.SubscriptionID = customerID, lo.ToPtr("subs_standalone")
+				return inv
+			}
+			// Another customer's invoice whose billing cannot post: it fails the environment run, never a scoped one.
+			broken := standalone("inv_broken", "cust_3")
+			broken.SubscriptionID = lo.ToPtr("subs_missing")
+			svc, store := newTestService(t, ctx, testSources{invoices: []*invoice.Invoice{annual, standalone("inv_cust_1", "cust_1"), standalone("inv_cust_2", "cust_2"), broken}})
+			s := svc.(*journalService)
+			require.NoError(t, s.subRepo.Create(ctx, &subscription.Subscription{ID: "subs_standalone", Timezone: "Asia/Kolkata", BaseModel: types.GetDefaultBaseModel(ctx)}))
+			require.NoError(t, s.customerRepo.Create(ctx, &customer.Customer{ID: "cust_2", Timezone: "Asia/Kolkata", BaseModel: types.GetDefaultBaseModel(ctx)}))
+
+			err := s.recognizeEnvironment(ctx, RecognitionRunRequest{AsOf: asOf, Scope: tt.scope, OnProgress: func(RecognitionCursor) {}}, "")
+			if tt.scope == (recognition.Scope{}) {
+				require.ErrorContains(t, err, "invoice inv_broken")
+			} else {
+				require.NoError(t, err, "a scoped run posts only its customer's billing")
+			}
+
+			earned, err := store.List(ctx, &journalRepo.Filter{QueryFilter: types.NewNoLimitQueryFilter(), EventTypes: []types.JournalEventType{types.JournalEventRevenueEarned}})
+			require.NoError(t, err)
+			recognizedPOB := lo.ContainsBy(earned, func(e *domainJournal.Entry) bool { return e.SourceEntityType() == types.RevRecEntityTypePOB })
+			invoices := lo.Uniq(lo.FilterMap(earned, func(e *domainJournal.Entry, _ int) (string, bool) {
+				return e.SourceEntityID(), e.SourceEntityType() == types.RevRecEntityTypeInvoice
+			}))
+			sort.Strings(invoices)
+			require.Equal(t, tt.wantPOB, recognizedPOB, "contract_1's POB recognized")
+			require.Equal(t, tt.wantInvoicesFor, lo.Ternary(len(invoices) == 0, nil, invoices))
+		})
+	}
 }

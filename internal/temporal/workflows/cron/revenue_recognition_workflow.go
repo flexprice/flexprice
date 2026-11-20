@@ -40,7 +40,7 @@ func RevenueRecognitionWorkflow(ctx workflow.Context, in cronModels.RevenueRecog
 	})
 
 	return workflow.ExecuteActivity(ctx, ActivityRecognizeRevenue, cronModels.RecognizeRevenueActivityInput{
-		Since: since, AsOf: asOf, TenantID: in.TenantID, EnvironmentID: in.EnvironmentID,
+		Since: since, AsOf: asOf, TenantID: in.TenantID, EnvironmentID: in.EnvironmentID, ContractID: in.ContractID, CustomerID: in.CustomerID,
 	}).Get(ctx, nil)
 }
 
