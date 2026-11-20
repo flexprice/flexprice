@@ -162,12 +162,12 @@ func (s *journalService) PostInvoice(ctx context.Context, inv *invoice.Invoice) 
 		return nil
 	}
 
-	revenuePostings, err := s.invoiceRevenuePostings(ctx, inv)
+	loc, contractID, err := s.sourceContext(ctx, inv.CustomerID, inv.SubscriptionID)
 	if err != nil {
 		return err
 	}
 
-	loc, contractID, err := s.sourceContext(ctx, inv.CustomerID, inv.SubscriptionID)
+	revenuePostings, err := s.invoiceRevenuePostings(ctx, inv, contractID)
 	if err != nil {
 		return err
 	}
@@ -207,16 +207,13 @@ func (s *journalService) PostInvoice(ctx context.Context, inv *invoice.Invoice) 
 	return err
 }
 
-// invoiceRevenuePostings credits tax and each line's net: POB lines to deferred, top-ups to customer credit, else revenue.
-func (s *journalService) invoiceRevenuePostings(ctx context.Context, inv *invoice.Invoice) ([]posting, error) {
-	taxFilter := types.NewNoLimitTaxAppliedFilter()
-	taxFilter.EntityType = types.TaxRateEntityTypeInvoice
-	taxFilter.EntityIDs = []string{inv.ID}
-	taxes, err := s.taxAppliedRepo.List(ctx, taxFilter)
+// invoiceRevenuePostings credits tax and each line's net: subscription lines to deferred (with their POB under a
+// contract), top-ups to customer credit, else revenue.
+func (s *journalService) invoiceRevenuePostings(ctx context.Context, inv *invoice.Invoice, contractID string) ([]posting, error) {
+	nets, err := s.lineNets(ctx, inv)
 	if err != nil {
 		return nil, err
 	}
-	nets := inv.LineNets(taxes)
 
 	postings := []posting{{account: types.LedgerAccountTaxPayable, amount: inv.TotalTax}}
 	for _, li := range inv.LineItems {
@@ -225,6 +222,8 @@ func (s *journalService) invoiceRevenuePostings(ctx context.Context, inv *invoic
 		switch {
 		case inv.Metadata["wallet_transaction_id"] != "":
 			p.account = types.LedgerAccountCustomerCredit
+		case lo.FromPtr(li.SubscriptionLineItemID) != "" && contractID == "":
+			p.account = types.LedgerAccountDeferredRevenue
 		case lo.FromPtr(li.SubscriptionLineItemID) != "":
 			pobID, err := s.pobService.POBIDForInvoiceLine(ctx, li)
 			if err != nil {
@@ -238,6 +237,18 @@ func (s *journalService) invoiceRevenuePostings(ctx context.Context, inv *invoic
 	}
 
 	return postings, nil
+}
+
+// lineNets is each invoice line's net of discounts and tax, by line ID.
+func (s *journalService) lineNets(ctx context.Context, inv *invoice.Invoice) (map[string]decimal.Decimal, error) {
+	taxFilter := types.NewNoLimitTaxAppliedFilter()
+	taxFilter.EntityType = types.TaxRateEntityTypeInvoice
+	taxFilter.EntityIDs = []string{inv.ID}
+	taxes, err := s.taxAppliedRepo.List(ctx, taxFilter)
+	if err != nil {
+		return nil, err
+	}
+	return inv.LineNets(taxes), nil
 }
 
 // e.g. 118 with 18 tax: Dr contra_revenue 100, Dr tax 18 / Cr AR 118; a void reverses it.
@@ -258,12 +269,12 @@ func (s *journalService) PostCreditNote(ctx context.Context, cn *creditnote.Cred
 		tax = tax.Add(t.TaxAmount)
 	}
 
-	contraPostings, err := s.creditNoteContraPostings(ctx, cn, cn.TotalAmount.Sub(tax))
+	loc, contractID, err := s.sourceContext(ctx, cn.CustomerID, cn.SubscriptionID)
 	if err != nil {
 		return err
 	}
 
-	loc, contractID, err := s.sourceContext(ctx, cn.CustomerID, cn.SubscriptionID)
+	contraPostings, err := s.creditNoteContraPostings(ctx, cn, cn.TotalAmount.Sub(tax), contractID)
 	if err != nil {
 		return err
 	}
@@ -299,9 +310,10 @@ func (s *journalService) PostCreditNote(ctx context.Context, cn *creditnote.Cred
 	return err
 }
 
-// creditNoteContraPostings debits contra revenue per line, with its POB, splitting net pro rata by line amount.
+// creditNoteContraPostings debits contra revenue per line, with its POB under a contract, splitting net pro rata by
+// line amount.
 // e.g. lines 60 and 40 with net 88 → 52.80 and 35.20.
-func (s *journalService) creditNoteContraPostings(ctx context.Context, cn *creditnote.CreditNote, net decimal.Decimal) ([]posting, error) {
+func (s *journalService) creditNoteContraPostings(ctx context.Context, cn *creditnote.CreditNote, net decimal.Decimal, contractID string) ([]posting, error) {
 	inv, err := s.invoiceRepo.Get(ctx, cn.InvoiceID)
 	if err != nil {
 		return nil, err
@@ -314,11 +326,13 @@ func (s *journalService) creditNoteContraPostings(ctx context.Context, cn *credi
 
 	postings := make([]posting, 0, len(cn.LineItems))
 	for _, li := range cn.LineItems {
-		pobID, err := s.pobService.POBIDForInvoiceLine(ctx, invoiceLines[li.InvoiceLineItemID])
-		if err != nil {
-			return nil, err
+		p := posting{account: types.LedgerAccountContraRevenue, amount: amounts[li.ID].Neg()}
+		if contractID != "" {
+			if p.pobID, err = s.pobService.POBIDForInvoiceLine(ctx, invoiceLines[li.InvoiceLineItemID]); err != nil {
+				return nil, err
+			}
 		}
-		postings = append(postings, posting{account: types.LedgerAccountContraRevenue, amount: amounts[li.ID].Neg(), pobID: pobID})
+		postings = append(postings, p)
 	}
 	return postings, nil
 }
@@ -630,7 +644,160 @@ func (s *journalService) recognizeEnvironment(ctx context.Context, req Recogniti
 		req.OnProgress(RecognitionCursor{EnvironmentID: types.GetEnvironmentID(ctx), ContractID: id})
 	}
 
+	invoices, err := s.standaloneInvoices(ctx, req.Since, req.AsOf)
+	if err != nil {
+		return errors.Join(append(errs, err)...)
+	}
+	for _, inv := range invoices {
+		errs = append(errs, sourceError("invoice", inv.ID, s.recognizeInvoice(ctx, inv, req.AsOf)))
+	}
+
 	return errors.Join(errs...)
+}
+
+// standaloneInvoices is every finalized or voided invoice of a subscription with no contract that changed since `since`
+// or whose period ended in the last two months (it may still owe its last month).
+func (s *journalService) standaloneInvoices(ctx context.Context, since, asOf time.Time) ([]*invoice.Invoice, error) {
+	list := func(f *types.InvoiceFilter) ([]*invoice.Invoice, error) {
+		f.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusFinalized, types.InvoiceStatusVoided}
+		return s.invoiceRepo.List(ctx, f)
+	}
+	changed := types.NewNoLimitInvoiceFilter()
+	changed.UpdatedAtGTE = &since
+	changedInvoices, err := list(changed)
+	if err != nil {
+		return nil, err
+	}
+	recent := types.NewNoLimitInvoiceFilter()
+	recent.PeriodEndGTE = lo.ToPtr(asOf.AddDate(0, -2, 0))
+	recentInvoices, err := list(recent)
+	if err != nil {
+		return nil, err
+	}
+
+	standalone := make(map[string]bool)
+	var invoices []*invoice.Invoice
+	for _, inv := range lo.UniqBy(append(changedInvoices, recentInvoices...), func(inv *invoice.Invoice) string { return inv.ID }) {
+		subID := lo.FromPtr(inv.SubscriptionID)
+		if subID == "" {
+			continue
+		}
+		if _, ok := standalone[subID]; !ok {
+			_, err := s.contractRepo.GetBySubscriptionID(ctx, subID)
+			if err != nil && !ierr.IsNotFound(err) {
+				return nil, err
+			}
+			standalone[subID] = ierr.IsNotFound(err)
+		}
+		if standalone[subID] {
+			invoices = append(invoices, inv)
+		}
+	}
+	sort.Slice(invoices, func(i, j int) bool { return invoices[i].ID < invoices[j].ID })
+	return invoices, nil
+}
+
+// recognizeInvoice recognizes a standalone invoice month by month from the month it was billed: the change in its
+// earned-to-date since the last month posts Dr deferred / Cr revenue on the month's last day. Nothing earns before it is
+// billed, so arrears catch up in that month.
+// e.g. a $1,200 annual invoice billed Jan 1: 100 on Jan 31; a Mar 1 arrears invoice for Jan–Feb: all of it on Mar 31.
+func (s *journalService) recognizeInvoice(ctx context.Context, inv *invoice.Invoice, asOf time.Time) error {
+	if inv.FinalizedAt == nil {
+		return nil
+	}
+	loc, _, err := s.sourceContext(ctx, inv.CustomerID, inv.SubscriptionID)
+	if err != nil {
+		return err
+	}
+	nets, err := s.lineNets(ctx, inv)
+	if err != nil {
+		return err
+	}
+
+	// e.g. billed Jan 15, run Apr 2 → Feb 1, Mar 1, Apr 1: the ends of January, February and March
+	monthEnds := lo.Drop(utils.Months(utils.LocalDay(lo.FromPtrOr(inv.IssueDate, *inv.FinalizedAt), loc), utils.LocalDay(asOf, loc)), 1)
+	if len(monthEnds) == 0 {
+		return nil
+	}
+	precision := types.GetCurrencyPrecision(inv.Currency)
+
+	return s.db.WithTx(ctx, func(ctx context.Context) error {
+		if err := s.db.LockWithWait(ctx, postgres.LockRequest{Key: "revrec:invoice:" + inv.ID}); err != nil {
+			return err
+		}
+		entries, err := s.journalRepo.List(ctx, &journalRepo.Filter{
+			QueryFilter:      types.NewNoLimitQueryFilter(),
+			EventTypes:       []types.JournalEventType{types.JournalEventRevenueEarned},
+			SourceEntityType: types.RevRecEntityTypeInvoice,
+			SourceEntityIDs:  []string{inv.ID},
+		})
+		if err != nil {
+			return err
+		}
+
+		for _, monthEnd := range monthEnds {
+			lastDay := monthEnd.AddDate(0, 0, -1)
+			earned := invoiceEarned(inv, nets, time.Date(monthEnd.Year(), monthEnd.Month(), monthEnd.Day(), 0, 0, 0, 0, loc), loc).Round(precision)
+			delta := earned.Sub(recognizedBy(entries, lastDay))
+
+			e := domainJournal.NewBuilder(nil).
+				WithEventType(types.JournalEventRevenueEarned).
+				WithSource(types.RevRecEntityTypeInvoice, inv.ID).
+				WithBusinessDate(lastDay).
+				WithCustomerID(inv.CustomerID).
+				WithCurrency(inv.Currency).
+				WithLines(toLines([]posting{
+					{account: types.LedgerAccountDeferredRevenue, amount: delta.Neg()},
+					{account: types.LedgerAccountRevenue, amount: delta},
+				})).
+				Build()
+			if _, err := s.post(ctx, e); err != nil {
+				return err
+			}
+			entries = append(entries, e)
+		}
+		return nil
+	})
+}
+
+// invoiceEarned is what the invoice's subscription lines earned before asOf's local day, each line's net ratably over
+// its service period; a top-up earns nothing here, and a voided invoice nothing from its void on.
+// e.g. a $300 line over [Jan 1, Apr 1) before Feb 1 → 102.22; voided Jan 20 → 0 at Jan 31.
+func invoiceEarned(inv *invoice.Invoice, nets map[string]decimal.Decimal, asOf time.Time, loc *time.Location) decimal.Decimal {
+	if inv.Metadata["wallet_transaction_id"] != "" {
+		return decimal.Zero
+	}
+	if inv.InvoiceStatus == types.InvoiceStatusVoided && inv.VoidedAt != nil && inv.VoidedAt.Before(asOf) {
+		return decimal.Zero
+	}
+
+	earned := decimal.Zero
+	for _, li := range inv.LineItems {
+		if lo.FromPtr(li.SubscriptionLineItemID) == "" {
+			continue
+		}
+		// e.g. a line with no period earns in full when the invoice is finalized
+		start := lo.FromPtrOr(li.PeriodStart, *inv.FinalizedAt)
+		end := lo.FromPtrOr(li.PeriodEnd, start)
+		earned = earned.Add(pobsvc.Earned(nets[li.ID], start, end, types.RecognitionMethodStraightLine, types.AmortizationDaily, asOf, loc))
+	}
+	return earned
+}
+
+// recognizedBy is the revenue credited by the entries dated on or before lastDay.
+func recognizedBy(entries []*domainJournal.Entry, lastDay time.Time) decimal.Decimal {
+	recognized := decimal.Zero
+	for _, e := range entries {
+		if e.BusinessDate().After(lastDay) {
+			continue
+		}
+		for _, l := range e.Lines() {
+			if l.Account() == types.LedgerAccountRevenue {
+				recognized = recognized.Add(l.Net())
+			}
+		}
+	}
+	return recognized
 }
 
 // recognitionContracts is, sorted by ID, every active contract, every contract ended in the last two months (it may
@@ -771,7 +938,7 @@ func (s *journalService) GetJournalEntries(ctx context.Context, filter *journalR
 	}, nil
 }
 
-// sourceContext is the source's timezone (subscription, else customer) and contract ID, empty without a subscription.
+// sourceContext is the source's timezone (subscription, else customer) and contract ID, empty without a contract.
 func (s *journalService) sourceContext(ctx context.Context, customerID string, subscriptionID *string) (*time.Location, string, error) {
 	if subscriptionID == nil {
 		c, err := s.customerRepo.Get(ctx, customerID)
@@ -785,8 +952,9 @@ func (s *journalService) sourceContext(ctx context.Context, customerID string, s
 	if err != nil {
 		return nil, "", err
 	}
+	// A standalone subscription has no contract.
 	c, err := s.contractRepo.GetBySubscriptionID(ctx, sub.ID)
-	if err != nil {
+	if err != nil && !ierr.IsNotFound(err) {
 		return nil, "", err
 	}
 

@@ -1098,3 +1098,125 @@ func TestBackfillCoversEverySubscriptionStatus(t *testing.T) {
 		})
 	}
 }
+
+// TestRecognizeStandaloneInvoices recognizes invoices of a subscription with no contract from their own lines.
+func TestRecognizeStandaloneInvoices(t *testing.T) {
+	asOf := inIST(time.April, 2).Add(2 * time.Hour)
+	standaloneInvoice := func(ctx context.Context, id string, amount int64, finalizedAt, start, end time.Time) *invoice.Invoice {
+		inv := subscriptionInvoice(ctx, id, types.InvoiceTypeSubscription, amount, finalizedAt, start, end)
+		inv.SubscriptionID = lo.ToPtr("subs_standalone")
+		inv.LineItems[0].SubscriptionLineItemID = lo.ToPtr("sli_standalone")
+		return inv
+	}
+	byDate := func(entries []*domainJournal.Entry, account types.LedgerAccountKey) map[string]string {
+		amounts := map[string]decimal.Decimal{}
+		for _, e := range entries {
+			for _, l := range e.Lines() {
+				if l.Account() == account {
+					day := e.BusinessDate().Format("2006-01-02")
+					amounts[day] = amounts[day].Add(l.Net())
+				}
+			}
+		}
+		return lo.MapValues(amounts, func(d decimal.Decimal, _ string) string { return d.String() })
+	}
+
+	tests := []struct {
+		name        string
+		invoice     func(context.Context) *invoice.Invoice
+		wantRevenue map[string]string
+	}{
+		{
+			name: "annual prepaid earns daily from January",
+			invoice: func(ctx context.Context) *invoice.Invoice {
+				return standaloneInvoice(ctx, "inv_annual", 1200, inIST(time.January, 1), inIST(time.January, 1), inIST(time.January, 1).AddDate(1, 0, 0))
+			},
+			// 31, 59 and 90 of 365 days: 101.92, 193.97 and 295.89 to date
+			wantRevenue: map[string]string{"2026-01-31": "101.92", "2026-02-28": "92.05", "2026-03-31": "101.92"},
+		},
+		{
+			name: "arrears catch up in the month billed",
+			invoice: func(ctx context.Context) *invoice.Invoice {
+				return standaloneInvoice(ctx, "inv_arrears", 590, inIST(time.March, 1), inIST(time.January, 1), inIST(time.March, 1))
+			},
+			wantRevenue: map[string]string{"2026-03-31": "590"},
+		},
+		{
+			name: "a void reverses what was recognized",
+			invoice: func(ctx context.Context) *invoice.Invoice {
+				inv := standaloneInvoice(ctx, "inv_voided", 1200, inIST(time.January, 1), inIST(time.January, 1), inIST(time.January, 1).AddDate(1, 0, 0))
+				inv.InvoiceStatus, inv.VoidedAt = types.InvoiceStatusVoided, lo.ToPtr(inIST(time.February, 10))
+				return inv
+			},
+			wantRevenue: map[string]string{"2026-01-31": "101.92", "2026-02-28": "-101.92"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := testutil.SetupContext()
+			inv := tt.invoice(ctx)
+			svc, store := newTestService(t, ctx, testSources{invoices: []*invoice.Invoice{inv}})
+			s := svc.(*journalService)
+			require.NoError(t, s.subRepo.Create(ctx, &subscription.Subscription{ID: "subs_standalone", Timezone: "Asia/Kolkata", BaseModel: types.GetDefaultBaseModel(ctx)}))
+
+			run := func() []*domainJournal.Entry {
+				require.NoError(t, s.recognizeEnvironment(ctx, RecognitionRunRequest{AsOf: asOf, OnProgress: func(RecognitionCursor) {}}, ""))
+				entries, err := store.List(ctx, &journalRepo.Filter{QueryFilter: types.NewNoLimitQueryFilter(),
+					SourceEntityType: types.RevRecEntityTypeInvoice, SourceEntityIDs: []string{inv.ID}})
+				require.NoError(t, err)
+				return entries
+			}
+			entries := run()
+
+			billing := lo.Filter(entries, func(e *domainJournal.Entry, _ int) bool { return e.EventType() == types.JournalEventInvoiceFinalized })
+			require.Len(t, billing, 1)
+			require.Empty(t, billing[0].ContractID())
+			for _, l := range billing[0].Lines() {
+				require.Empty(t, l.POBID(), "a standalone line defers without a POB")
+			}
+			earned := lo.Filter(entries, func(e *domainJournal.Entry, _ int) bool { return e.EventType() == types.JournalEventRevenueEarned })
+			require.Equal(t, tt.wantRevenue, byDate(earned, types.LedgerAccountRevenue))
+
+			deferred := decimal.Zero
+			for _, e := range entries {
+				for _, l := range e.Lines() {
+					if l.Account() == types.LedgerAccountDeferredRevenue {
+						deferred = deferred.Add(l.Net())
+					}
+				}
+			}
+			recognized := decimal.Zero
+			for _, amount := range byDate(earned, types.LedgerAccountRevenue) {
+				recognized = recognized.Add(decimal.RequireFromString(amount))
+			}
+			if inv.InvoiceStatus == types.InvoiceStatusVoided {
+				require.True(t, deferred.IsZero(), "the void and its reversal clear deferred, got %s", deferred)
+			} else {
+				require.Equal(t, decimal.NewFromInt(inv.Total.IntPart()).Sub(recognized).String(), deferred.String(), "deferred is what is left to earn")
+			}
+
+			require.Len(t, run(), len(entries), "a rerun posts nothing")
+		})
+	}
+}
+
+func TestPostCreditNoteStandalone(t *testing.T) {
+	ctx := testutil.SetupContext()
+	base := types.GetDefaultBaseModel(ctx)
+	inv := subscriptionInvoice(ctx, "inv_standalone", types.InvoiceTypeSubscription, 100, finalizedAt, finalizedAt, finalizedAt.AddDate(0, 1, 0))
+	inv.SubscriptionID = lo.ToPtr("subs_standalone")
+	cn := &creditnote.CreditNote{ID: "cn_standalone", InvoiceID: inv.ID, CustomerID: "cust_1", SubscriptionID: lo.ToPtr("subs_standalone"),
+		CreditNoteStatus: types.CreditNoteStatusFinalized, CreditNoteType: types.CreditNoteTypeAdjustment, Currency: "usd",
+		TotalAmount: decimal.NewFromInt(10), FinalizedAt: lo.ToPtr(finalizedAt), BaseModel: base,
+		LineItems: []*creditnote.CreditNoteLineItem{{ID: "cnl_standalone", InvoiceLineItemID: inv.LineItems[0].ID, Amount: decimal.NewFromInt(10), BaseModel: base}}}
+	svc, store := newTestService(t, ctx, testSources{invoices: []*invoice.Invoice{inv}})
+	require.NoError(t, svc.(*journalService).subRepo.Create(ctx, &subscription.Subscription{ID: "subs_standalone", Timezone: "Asia/Kolkata", BaseModel: base}))
+
+	require.NoError(t, svc.PostCreditNote(ctx, cn))
+	entries, err := store.List(ctx, &journalRepo.Filter{QueryFilter: types.NewNoLimitQueryFilter(), SourceEntityIDs: []string{cn.ID}})
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	contra := lo.Filter(entries[0].Lines(), func(l *domainJournal.Line, _ int) bool { return l.Account() == types.LedgerAccountContraRevenue })
+	require.Len(t, contra, 1)
+	require.Empty(t, contra[0].POBID())
+}
