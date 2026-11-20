@@ -35982,6 +35982,10 @@ const docTemplate = `{
                         "desc"
                     ]
                 },
+                "search_query": {
+                    "description": "search_query matches customers whose name, email, or external_id contains the\ntext (case-insensitive), or whose id equals it. ANDed with the other filters.",
+                    "type": "string"
+                },
                 "sort": {
                     "type": "array",
                     "items": {

@@ -13102,6 +13102,11 @@ definitions:
         - asc
         - desc
         type: string
+      search_query:
+        description: |-
+          search_query matches customers whose name, email, or external_id contains
+          the text (case-insensitive), or whose id equals it. ANDed with the other filters.
+        type: string
       sort:
         items:
           $ref: '#/definitions/types.SortCondition'
