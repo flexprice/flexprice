@@ -2,14 +2,20 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
@@ -440,6 +446,69 @@ func (s *InvoiceConversionSuite) TestOneOffConverts() {
 		s.Require().NotNil(li.FxConversion)
 		s.Equal("usd", li.FxConversion.ChargeCurrency)
 	}
+}
+
+func (s *InvoiceConversionSuite) TestOneOffExternalTaxRetaxInBillingCurrency() {
+	s.seedCustomer("cust_external", lo.ToPtr("inr"))
+	cust, err := s.GetStores().CustomerRepo.Get(s.ctx(), "cust_external")
+	s.Require().NoError(err)
+	cust.Metadata = types.Metadata{"stripe_customer_id": "cus_external"}
+	s.Require().NoError(s.GetStores().CustomerRepo.Update(s.ctx(), cust))
+	s.Require().NoError(s.GetStores().SettingsRepo.Create(s.ctx(), &settings.Setting{
+		ID: "setting_external_tax", Key: types.SettingKeyTaxConfig,
+		Value:         map[string]interface{}{"enabled": true, "provider": "stripe"},
+		EnvironmentID: types.GetEnvironmentID(s.ctx()), BaseModel: types.GetDefaultBaseModel(s.ctx()),
+	}))
+	s.Require().NoError(s.GetStores().ConnectionRepo.Create(s.ctx(), &connection.Connection{
+		ID: "conn_external", Name: "Stripe", ProviderType: types.SecretProviderStripe,
+		EnvironmentID: types.GetEnvironmentID(s.ctx()), BaseModel: types.GetDefaultBaseModel(s.ctx()),
+	}))
+	s.svc.IntegrationFactory = s.GetIntegrationFactory()
+	calculation := calculationWith("taxcalc_converted", 0, 149400,
+		breakdown(149400, 830000, "standard_rated"))
+	response, err := json.Marshal(calculation)
+	s.Require().NoError(err)
+	previousTransport := http.DefaultTransport
+	s.T().Cleanup(func() { http.DefaultTransport = previousTransport })
+	calls := 0
+	http.DefaultTransport = conversionTaxTransport(func(req *http.Request) (*http.Response, error) {
+		calls++
+		s.Equal("/v1/tax/calculations", req.URL.Path)
+		s.NoError(req.ParseForm())
+		s.Equal("inr", req.Form.Get("currency"))
+		s.Equal("830000", req.Form.Get("line_items[0][amount]"))
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header),
+			Body: io.NopCloser(strings.NewReader(string(response)))}, nil
+	})
+	s.seedTenantRate("usd", "inr", "83")
+	inv := s.seedDraftInvoice("inv_external", "cust_external", "usd", types.InvoiceTypeOneOff, nil,
+		[]*invoice.InvoiceLineItem{line("il_external", "100")})
+	s.Require().NoError(s.GetStores().TaxAppliedRepo.Create(s.ctx(), &taxapplied.TaxApplied{
+		ID: "tax_external", EntityType: types.TaxRateEntityTypeInvoice, EntityID: inv.ID,
+		Provider: types.TaxProviderStripe, Currency: "usd",
+		TaxableAmount: dec("100"), TaxAmount: dec("18"), TaxBehavior: types.TaxBehaviorExclusive,
+		EnvironmentID: types.GetEnvironmentID(s.ctx()), BaseModel: types.GetDefaultBaseModel(s.ctx()),
+	}))
+	s.Require().NoError(s.svc.convertToBillingCurrency(s.ctx(), inv))
+	s.Equal(1, calls)
+	s.True(dec("1494").Equal(inv.TotalTax), "tax got %s", inv.TotalTax)
+	filter := types.NewNoLimitTaxAppliedFilter()
+	filter.EntityType = types.TaxRateEntityTypeInvoice
+	filter.EntityID = inv.ID
+	rows, err := s.GetStores().TaxAppliedRepo.List(s.ctx(), filter)
+	s.Require().NoError(err)
+	s.Require().Len(rows, 1)
+	s.Nil(rows[0].TaxRateID)
+	s.Equal(types.TaxProviderStripe, rows[0].Provider)
+	s.Equal("inr", rows[0].Currency)
+	s.True(dec("1494").Equal(rows[0].TaxAmount))
+	s.True(dec("8300").Equal(rows[0].TaxableAmount))
+}
+
+type conversionTaxTransport func(*http.Request) (*http.Response, error)
+
+func (f conversionTaxTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
 func (s *InvoiceConversionSuite) TestMissingRateStaysDraft() {

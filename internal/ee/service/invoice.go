@@ -5149,6 +5149,10 @@ func (s *invoiceService) customCurrencyFiatTarget(ctx context.Context, ccCfg typ
 }
 
 func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) (*invoice.Invoice, error) {
+	return s.recalculateTaxes(ctx, inv, dto.InvoiceComputeRequest{})
+}
+
+func (s *invoiceService) recalculateTaxes(ctx context.Context, inv *invoice.Invoice, req dto.InvoiceComputeRequest) (*invoice.Invoice, error) {
 	// Draft is the only status whose tax may still move. Rewriting a sealed invoice's tax
 	// makes the Flexprice record disagree with the provider's, and nothing reconciles the two.
 	if inv.InvoiceStatus != types.InvoiceStatusDraft {
@@ -5160,10 +5164,6 @@ func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *inv
 			}).
 			Mark(ierr.ErrValidation)
 	}
-
-	// Create a minimal request for tax preparation
-	// applyTaxesToInvoice gets subscription ID and customer ID from the invoice itself
-	req := dto.InvoiceComputeRequest{}
 
 	// Archiving the old records and writing the new ones has to land with the totals they
 	// produced, or the invoice reports a tax its records do not add up to.
