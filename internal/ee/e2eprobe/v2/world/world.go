@@ -23,16 +23,17 @@ const (
 
 // World holds the live state behind a suite.
 type World struct {
-	client   e2eprobe.Client
-	suite    *suite.Suite
-	runID    string
-	lg       *logger.Logger
-	mu       sync.RWMutex
-	fixtures *Fixtures
-	personas map[string]*Persona
-	eph      *Ephemerals
-	sweepers []OrphanSweeper
-	now      func() time.Time
+	client       e2eprobe.Client
+	suite        *suite.Suite
+	runID        string
+	lg           *logger.Logger
+	mu           sync.RWMutex
+	fixtures     *Fixtures
+	personas     map[string]*Persona
+	eph          *Ephemerals
+	sweepers     map[string]OrphanSweeper
+	sweeperOrder []string
+	now          func() time.Time
 }
 
 func New(c e2eprobe.Client, s *suite.Suite, runID string, lg *logger.Logger) *World {

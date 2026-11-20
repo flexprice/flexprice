@@ -125,7 +125,7 @@ internal/ee/e2eprobe/v2/
   error.go          CheckError and SDK error enrichment (kept)
   client*.go        SDK adapters (kept; EventOps drops ListRaw and gains IngestBulk)
   otel.go           tracer provider (kept)
-  bootstrap/        airgapped signup bootstrap (kept)
+  (bootstrap/ and billingmatrix/ stay at internal/ee/e2eprobe/ and are shared with the old probe)
   suite/            suite file types, loader with embedded default, validation, Describe
   world/            traits, persona specs, live bindings, provisioning, ephemeral clones, janitor
   ledger/           event profiles, deterministic schedule, bulk sender, oracle
@@ -133,9 +133,8 @@ internal/ee/e2eprobe/v2/
   incident/         result stream to incident state machine, notifiers (log, Slack, OTEL), digest, state file
   scenario/         Scenario, Context, Binding, Catalog, Runner, /status
   scenarios/        one file per scenario
-  billingmatrix/    kept; adapted to the Result type and wrapped as one scenario per family
 cmd/e2eprobe/v2/
-  main.go           run (default) | validate | describe
+  main.go           run (default) | once | validate | describe
   suite.example.yaml
 ```
 
@@ -375,8 +374,8 @@ misconfigured gateway shows as one preflight incident plus explicit coverage gap
 - The `usage` scenario reads one `POST /events/analytics` per persona per run (every meter of the
   profile, bounded to the last closed hour) and compares each against the oracle. Eight ClickHouse
   reads per 15 minutes for the default suite.
-- No scenario polls immediately after ingest except the alert and preview flows, which are bounded
-  and infrequent.
+- No scenario polls immediately after ingest except the alert, wallet-debit and preview flows, which
+  are bounded and infrequent.
 
 ### 5.10 Coexistence and migration
 
@@ -404,9 +403,11 @@ the old probe's incidents keep flowing meanwhile.
 - `E2EPROBE_CHECK_*`, `E2EPROBE_PAYMENTS_*`, `E2EPROBE_BILLING_MATRIX_*`, `E2EPROBE_EVENT_INGEST_*`,
   `E2EPROBE_HEARTBEAT_INTERVAL` and `E2EPROBE_JANITOR_MAX_AGE` are not read by v2; the suite carries
   them. Startup logs a warning for each one still set, naming the suite key that replaces it.
-- Swap, once trusted: delete the old Go files, `templates/probe`, `Dockerfile.e2eprobe` and its
-  workflow; move `v2/` up and drop `/v2` from import paths; rename `e2eprobeV2` to `e2eprobe` in
-  values and region files; point the image name back. Nothing in v2 depends on the old code.
+- Swap, once trusted: delete the old Go files and docs, `templates/probe`, `Dockerfile.e2eprobe`
+  and its workflow; move `v2/` up and drop `/v2` from import paths; rename `e2eprobeV2` to
+  `e2eprobe` in values, region files and `helm-validate.yml`; point the image name back; fold the
+  `-v2` make targets, `.gitignore` exception and security-scan comment into their plain names.
+  Nothing in v2 depends on the old code.
 
 ### 5.11 Scenario catalog (ported coverage)
 
@@ -434,7 +435,7 @@ the old probe's incidents keep flowing meanwhile.
 ### 5.12 Visibility surfaces
 
 - `e2eprobe describe [--suite file]`: coverage matrix (persona × trait × scenario with interval),
-  event profiles and the computed daily budget, tenant expectations, expected webhooks.
+  event profiles and the computed daily budget split into profiles and flows, tenant expectations.
 - `e2eprobe validate [--suite file]`: exit non-zero with every validation error.
 - `GET /status`: bindings with last result and next run, open incidents, inbox stats, ledger stats.
 - Hourly heartbeat log line and daily Slack digest.

@@ -91,9 +91,6 @@ func (f *fakeSubOps) ActivateSubscription(_ context.Context, _ string, _ types.A
 func (f *fakeSubOps) GetEntitlements(_ context.Context, _ string, _ []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
 	return &dtos.GetSubscriptionEntitlementsResponse{}, nil
 }
-func (f *fakeSubOps) GetUsage(_ context.Context, _ types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
-	return &dtos.GetSubscriptionUsageResponse{}, nil
-}
 func (f *fakeSubOps) CreateLineItem(_ context.Context, _ string, _ types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.CreateSubscriptionLineItemResponse{}, nil

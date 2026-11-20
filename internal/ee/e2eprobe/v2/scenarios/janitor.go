@@ -9,8 +9,9 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/scenario"
 )
 
-// janitor removes ephemerals past the suite's max age; deletes that fail are
-// mismatches so a tenant that refuses cleanup becomes visible.
+// janitor removes ephemerals past the suite's max age. A delete the tenant
+// refuses is a mismatch; an outage during the sweep is an infrastructure failure
+// and joins the rollup instead of paging on its own.
 type janitor struct{}
 
 func newJanitor(scenario.Deps) *janitor { return &janitor{} }
@@ -30,7 +31,10 @@ func (*janitor) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Result {
 		sc.Attr("legacy_fixtures", strings.Join(report.Legacy, ","))
 	}
 	for _, failure := range report.Failures {
-		sc.Truth(failure, false)
+		if e2eprobe.IsInfra(failure) {
+			return sc.Fail("sweep", failure)
+		}
+		sc.Truth(failure.Error(), false)
 	}
 	return sc.Result("sweep")
 }

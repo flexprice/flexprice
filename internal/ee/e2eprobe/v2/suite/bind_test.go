@@ -103,11 +103,11 @@ func TestBindings_SortedAndSkipDisabled(t *testing.T) {
 }
 
 func TestEventsPerDay(t *testing.T) {
-	if got := Default().EventsPerDay(newFakeCatalog()); got != 53568 {
-		t.Errorf("events/day = %d, want 53568 (28080 from profiles + 25488 from flows)", got)
+	if got := Default().EventsPerDay(newFakeCatalog()); got != 53472 {
+		t.Errorf("events/day = %d, want 53472 (28080 from profiles + 25392 from flows)", got)
 	}
 	profiles, flows := Default().Ingest(newFakeCatalog())
-	if profiles != 28080 || flows != 25488 {
-		t.Errorf("ingest split = %d profiles, %d flows; want 28080 and 25488", profiles, flows)
+	if profiles != 28080 || flows != 25392 {
+		t.Errorf("ingest split = %d profiles, %d flows; want 28080 and 25392", profiles, flows)
 	}
 }

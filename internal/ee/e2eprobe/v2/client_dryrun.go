@@ -240,9 +240,6 @@ func (d *dryRunSubscriptions) ActivateSubscription(ctx context.Context, id strin
 func (d *dryRunSubscriptions) GetEntitlements(ctx context.Context, id string, featureIDs []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
 	return d.inner.GetEntitlements(ctx, id, featureIDs)
 }
-func (d *dryRunSubscriptions) GetUsage(ctx context.Context, req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
-	return d.inner.GetUsage(ctx, req)
-}
 func (d *dryRunSubscriptions) CreateLineItem(ctx context.Context, id string, _ types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
 	dryLog(ctx, d.lg, "Subscriptions.CreateLineItem", "id", id)
 	return &dtos.CreateSubscriptionLineItemResponse{}, nil

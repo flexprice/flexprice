@@ -57,13 +57,33 @@ func (p pollWindow) until(ctx context.Context, attempt func() error) error {
 	}
 }
 
-// awaitSubscriptionUsage polls the clone's usage read until it answers: a fresh
-// subscription is readable only once the usage pipeline knows it.
-func awaitSubscriptionUsage(ctx context.Context, sc *scenario.Context, p pollWindow, subID string) error {
-	return p.until(ctx, func() error {
-		_, err := sc.Client().Subscriptions().GetUsage(ctx, types.GetUsageBySubscriptionRequest{SubscriptionID: subID})
-		return err
+// awaitCloneUsage polls analytics for the clone's meter until it reports at
+// least want units and returns what it saw. Analytics is the one ClickHouse
+// read the probe makes: served from meter_usage, bounded here to the clone's
+// own day, and the same store the invoice preview bills from.
+func awaitCloneUsage(ctx context.Context, sc *scenario.Context, p pollWindow, eph *world.Ephemeral, meterKey string, want decimal.Decimal) (decimal.Decimal, error) {
+	featureID := sc.World().Fixtures().FeatureID(meterKey)
+	ext := eph.ExternalID()
+	var seen decimal.Decimal
+	err := p.until(ctx, func() error {
+		end := sc.Now().UTC().Add(time.Minute)
+		start := end.Add(-24 * time.Hour)
+		resp, err := sc.Client().Events().GetUsageAnalytics(ctx, types.GetUsageAnalyticsRequest{
+			ExternalCustomerID: &ext,
+			FeatureIds:         []string{featureID},
+			StartTime:          &start,
+			EndTime:            &end,
+		})
+		if err != nil {
+			return err
+		}
+		seen = usageByFeature(resp.GetGetUsageAnalyticsResponse().GetItems(), eph.SubscriptionID())[featureID]
+		if seen.LessThan(want) {
+			return fmt.Errorf("usage %s has not reached %s units", seen, want)
+		}
+		return nil
 	})
+	return seen, err
 }
 
 // usageBatch is the usage a flow sends its clone: events of one meter, each
@@ -160,9 +180,11 @@ func (s *lifecycle) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Resu
 	if err := sc.Client().Events().IngestBulk(ctx, types.BulkIngestEventRequest{Events: batch}); err != nil {
 		return sc.Fail("ingest_bulk", err)
 	}
-	if err := awaitSubscriptionUsage(ctx, sc, s.poll, eph.SubscriptionID()); err != nil {
+	got, err := awaitCloneUsage(ctx, sc, s.poll, eph, s.batch.meter, s.batch.units())
+	if err != nil {
 		return sc.Fail("poll_usage", err)
 	}
+	sc.Quantity("count usage", s.batch.units(), got)
 	// Delivery is webhook-wiring's verdict; here the webhook is only recorded.
 	webhook := "no"
 	if len(sc.Inbox().Find(inbox.Match{EventType: "customer.created", CustomerID: eph.CustomerID()})) > 0 {

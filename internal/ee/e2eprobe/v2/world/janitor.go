@@ -2,6 +2,7 @@ package world
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -21,14 +22,30 @@ type SweepReport struct {
 	Orphans         int      // ephemeral customers found in the tenant and deleted
 	TaxAssociations int      // associations whose subscription is gone
 	Swept           int      // resources removed by registered sweepers
-	Failures        []string // deletes that failed and will be retried
+	Failures        []error  // deletes that failed and will be retried
 	Legacy          []string // the previous generation's customers, reported but never deleted
 }
 
-func (w *World) AddSweeper(s OrphanSweeper) {
+// AddSweeper registers a scenario's own cleanup under a name; a second
+// registration under the same name is ignored, so every family of one engine
+// shares a single sweep.
+func (w *World) AddSweeper(name string, s OrphanSweeper) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.sweepers = append(w.sweepers, s)
+	if w.sweepers == nil {
+		w.sweepers = map[string]OrphanSweeper{}
+	}
+	if _, dup := w.sweepers[name]; dup {
+		return
+	}
+	w.sweepers[name] = s
+	w.sweeperOrder = append(w.sweeperOrder, name)
+}
+
+func (w *World) Sweepers() int {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return len(w.sweepers)
 }
 
 // Sweep removes ephemerals older than cutoff: registered ones first, then any
@@ -40,12 +57,17 @@ func (w *World) Sweep(ctx context.Context, cutoff time.Time) SweepReport {
 	w.sweepOrphans(ctx, cutoff, &report)
 	w.sweepTaxAssociations(ctx, &report)
 	w.mu.RLock()
-	sweepers := append([]OrphanSweeper(nil), w.sweepers...)
+	sweepers := make([]OrphanSweeper, 0, len(w.sweeperOrder))
+	for _, name := range w.sweeperOrder {
+		sweepers = append(sweepers, w.sweepers[name])
+	}
 	w.mu.RUnlock()
 	for _, s := range sweepers {
 		removed, failed := s.SweepOrphans(ctx, cutoff)
 		report.Swept += removed
-		report.Failures = append(report.Failures, failed...)
+		for _, f := range failed {
+			report.Failures = append(report.Failures, errors.New(f))
+		}
 	}
 	return report
 }
@@ -59,11 +81,11 @@ func (w *World) sweepRegistry(ctx context.Context, cutoff time.Time, report *Swe
 		switch {
 		case IsNotFound(err):
 		case err != nil:
-			report.Failures = append(report.Failures, fmt.Sprintf("customer %s: %v", e.ID, err))
+			report.Failures = append(report.Failures, fmt.Errorf("customer %s: %w", e.ID, err))
 			continue
 		case resp.CustomerResponse != nil && resp.CustomerResponse.ID != nil:
 			if err := w.deleteCustomer(ctx, *resp.CustomerResponse.ID, e.ID); err != nil {
-				report.Failures = append(report.Failures, fmt.Sprintf("customer %s: %v", e.ID, err))
+				report.Failures = append(report.Failures, fmt.Errorf("customer %s: %w", e.ID, err))
 				continue
 			}
 		}
@@ -101,7 +123,7 @@ func isLegacyEphemeral(c types.CustomerResponse) bool {
 func (w *World) sweepOrphans(ctx context.Context, cutoff time.Time, report *SweepReport) {
 	resp, err := w.client.Customers().Query(ctx, types.CustomerFilter{Limit: ptr(int64(1000))})
 	if err != nil {
-		report.Failures = append(report.Failures, fmt.Sprintf("query customers: %v", err))
+		report.Failures = append(report.Failures, fmt.Errorf("query customers: %w", err))
 		return
 	}
 	if resp.ListCustomersResponse == nil {
@@ -129,7 +151,7 @@ func (w *World) sweepOrphans(ctx context.Context, cutoff time.Time, report *Swee
 			continue
 		}
 		if err := w.deleteCustomer(ctx, *cust.ID, ext); err != nil {
-			report.Failures = append(report.Failures, fmt.Sprintf("orphan %s: %v", ext, err))
+			report.Failures = append(report.Failures, fmt.Errorf("orphan %s: %w", ext, err))
 			continue
 		}
 		report.Orphans++
@@ -193,7 +215,7 @@ func (w *World) sweepTaxAssociations(ctx context.Context, report *SweepReport) {
 	entityType := string(types.TaxRateEntityTypeSubscription)
 	resp, err := w.client.TaxAssociations().List(ctx, &entityType, nil, nil, &taxRateID)
 	if err != nil {
-		report.Failures = append(report.Failures, fmt.Sprintf("list tax associations: %v", err))
+		report.Failures = append(report.Failures, fmt.Errorf("list tax associations: %w", err))
 		return
 	}
 	if resp == nil || resp.ListTaxAssociationsResponse == nil {
@@ -207,7 +229,7 @@ func (w *World) sweepTaxAssociations(ctx context.Context, report *SweepReport) {
 			continue
 		}
 		if _, err := w.client.TaxAssociations().Delete(ctx, *ta.ID); err != nil && !IsNotFound(err) {
-			report.Failures = append(report.Failures, fmt.Sprintf("tax association %s: %v", *ta.ID, err))
+			report.Failures = append(report.Failures, fmt.Errorf("tax association %s: %w", *ta.ID, err))
 			continue
 		}
 		report.TaxAssociations++

@@ -170,41 +170,78 @@ func validateSuite(path string, cat *scenario.Catalog, out io.Writer) error {
 	return nil
 }
 
-func describeSuite(path string, cat *scenario.Catalog, out io.Writer) error {
-	s, err := loadSuite(path, cat)
+// describeSuite renders the suite first, so an operator sees what a suite
+// would run even when validation then rejects it.
+func describeSuite(path string, cat *scenario.Catalog, out, errOut io.Writer) error {
+	s, err := suite.Load(path)
 	if err != nil {
 		return err
 	}
-	return suite.Describe(out, s, cat)
+	renderErr := suite.Describe(out, s, cat)
+	if err := suite.Validate(s, cat); err != nil {
+		fmt.Fprintf(errOut, "suite has problems:\n%v\n", err)
+		return err
+	}
+	return renderErr
 }
 
-func main() {
-	command, args := "run", os.Args[1:]
+// cliOptions is what the command line selects; each command parses only its own flags.
+type cliOptions struct {
+	suitePath string
+	only      []string
+	scenario  string
+	persona   string
+	asJSON    bool
+}
+
+// parseCommandLine reads "command flags"; flags with no command mean run.
+func parseCommandLine(usage io.Writer, args []string) (string, cliOptions, error) {
+	command := "run"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		command, args = args[0], args[1:]
 	}
-	fs := flag.NewFlagSet(command, flag.ExitOnError)
-	suitePath := fs.String("suite", os.Getenv("E2EPROBE_SUITE_FILE"), "suite file; empty uses the embedded default")
-	only := fs.String("only", "", "run: comma-separated scenario names to run; every other binding is left out")
-	scenarioName := fs.String("scenario", "", "once: scenario to run")
-	personaName := fs.String("persona", "", "once: persona to run it on; optional when the suite binds the scenario to one persona")
-	asJSON := fs.Bool("json", false, "once: print the result as JSON")
-	_ = fs.Parse(args)
+	fs := flag.NewFlagSet(command, flag.ContinueOnError)
+	fs.SetOutput(usage)
+	var opts cliOptions
+	fs.StringVar(&opts.suitePath, "suite", os.Getenv("E2EPROBE_SUITE_FILE"), "suite file; empty uses the embedded default")
+	var only string
+	switch command {
+	case "run":
+		fs.StringVar(&only, "only", "", "comma-separated scenario names to run; other bindings are left out and their tracker state is dropped")
+	case "once":
+		fs.StringVar(&opts.scenario, "scenario", "", "scenario to run")
+		fs.StringVar(&opts.persona, "persona", "", "persona to run it on; optional when the suite binds the scenario to one persona")
+		fs.BoolVar(&opts.asJSON, "json", false, "print the result as JSON")
+	case "validate", "describe":
+	default:
+		return command, opts, fmt.Errorf("unknown command %q (run | once | validate | describe)", command)
+	}
+	if err := fs.Parse(args); err != nil {
+		return command, opts, err
+	}
+	opts.only = splitList(only)
+	return command, opts, nil
+}
 
+func main() {
+	command, opts, err := parseCommandLine(os.Stderr, os.Args[1:])
+	if errors.Is(err, flag.ErrHelp) {
+		return
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(2)
+	}
 	cat := newCatalog()
-	var err error
 	switch command {
 	case "validate":
-		err = validateSuite(*suitePath, cat, os.Stdout)
+		err = validateSuite(opts.suitePath, cat, os.Stdout)
 	case "describe":
-		err = describeSuite(*suitePath, cat, os.Stdout)
+		err = describeSuite(opts.suitePath, cat, os.Stdout, os.Stderr)
 	case "run":
-		err = run(cat, *suitePath, splitList(*only))
+		err = run(cat, opts.suitePath, opts.only)
 	case "once":
-		err = once(cat, *suitePath, *scenarioName, *personaName, *asJSON, os.Stdout)
-	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q (run | once | validate | describe)\n", command)
-		os.Exit(2)
+		err = once(cat, opts.suitePath, opts.scenario, opts.persona, opts.asJSON, os.Stdout, os.Stderr)
 	}
 	if err != nil {
 		if !errors.Is(err, errScenarioFailed) {
@@ -386,13 +423,16 @@ func run(cat *scenario.Catalog, suitePath string, only []string) error {
 // once provisions the suite and runs one binding, for developing a scenario
 // or confirming a region by hand: Slack stays quiet, incident state stays in
 // memory and the exit status says whether the run passed.
-func once(cat *scenario.Catalog, suitePath, scenarioName, personaName string, asJSON bool, out io.Writer) error {
+func once(cat *scenario.Catalog, suitePath, scenarioName, personaName string, asJSON bool, out, errOut io.Writer) error {
 	if scenarioName == "" {
 		return errors.New("once: --scenario is required (see describe for the bindings)")
 	}
 	cfg, err := e2eprobe.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
+	}
+	if cfg.APIKey == "" {
+		return errors.New("once needs E2EPROBE_API_KEY; the signup bootstrap applies to run only")
 	}
 	s, err := loadSuite(orDefault(suitePath, cfg.SuiteFile), cat)
 	if err != nil {
@@ -409,16 +449,18 @@ func once(cat *scenario.Catalog, suitePath, scenarioName, personaName string, as
 	if err != nil {
 		return err
 	}
-	return runOnce(ctx, rt, scenarioName, personaName, asJSON, out)
+	return runOnce(ctx, rt, scenarioName, personaName, asJSON, out, errOut)
 }
 
-func runOnce(ctx context.Context, rt *runtime, scenarioName, personaName string, asJSON bool, out io.Writer) error {
+// runOnce provisions, runs one binding and prints its result to out; notes
+// that are not the result go to errOut so JSON output stays one document.
+func runOnce(ctx context.Context, rt *runtime, scenarioName, personaName string, asJSON bool, out, errOut io.Writer) error {
 	b, err := resolveBinding(rt.bindings, scenarioName, personaName)
 	if err != nil {
 		return err
 	}
 	if err := rt.world.Provision(ctx); err != nil {
-		fmt.Fprintf(out, "provisioning incomplete: %v\n", err)
+		fmt.Fprintf(errOut, "provisioning incomplete: %v\n", err)
 	}
 	res := rt.runner.RunOnce(ctx, b)
 	if asJSON {

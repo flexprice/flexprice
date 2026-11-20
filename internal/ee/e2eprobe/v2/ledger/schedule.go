@@ -8,7 +8,8 @@ import (
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
-// TickEnd is the end of the tick that contains now.
+// TickEnd is the end of the most recent tick that has closed, so every event
+// stamped inside it lies in the past.
 func TickEnd(now time.Time, interval time.Duration) time.Time {
 	return now.UTC().Truncate(interval)
 }

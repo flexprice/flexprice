@@ -136,10 +136,21 @@ func TestWalletDebit_SkipsPersonaWithoutWallet(t *testing.T) {
 func TestRegisterWallet_RegistersBothScenarios(t *testing.T) {
 	cat := scenario.NewCatalog()
 	registerWallet(cat)
-	for name, every := range map[string]time.Duration{"wallet-debit": 30 * time.Minute, "low-balance-alert": 10 * time.Minute} {
+	for name, every := range map[string]time.Duration{"wallet-debit": 30 * time.Minute, "low-balance-alert": 30 * time.Minute} {
 		info, ok := cat.Scenario(name)
 		if !ok || info.Every != every || info.Kind != e2eprobe.KindProbe {
 			t.Errorf("%s = %+v (registered %v)", name, info, ok)
 		}
+	}
+}
+
+func TestWalletDebit_CachedFallbackBalanceIsInfra(t *testing.T) {
+	d := newTestDeps(t)
+	d.fc.Wallet.Balance = func(string) (*dtos.GetWalletBalanceResponse, error) {
+		return &dtos.GetWalletBalanceResponse{WalletBalanceResponse: &types.WalletBalanceResponse{RealTimeBalance: probetest.Ptr("100.00"), IsCachedFallback: probetest.Ptr(true)}}, nil
+	}
+	r := run(t, d, newWalletDebit(d.Deps), "wallet-a")
+	if r.Status != e2eprobe.StatusFail || !r.Infra {
+		t.Fatalf("a cached balance is a degraded server, not a billing mismatch: %+v", r)
 	}
 }

@@ -1,6 +1,8 @@
-# Example e2eprobe suite. This is the embedded default with every key spelled
-# out; copy it, trim what a region does not run, and point E2EPROBE_SUITE_FILE
-# at it (or set it as e2eprobe.suite in the Helm values). Validate with:
+# Example e2eprobe suite: the embedded default with every key spelled out, plus
+# the two things a region adds by hand — a payer persona for its gateway and
+# external_id lines adopting the previous generation's customers. Copy it, trim
+# what a region does not run, and point E2EPROBE_SUITE_FILE at it (or set it as
+# e2eprobeV2.suite in the Helm values). Validate with:
 #   go run ./cmd/e2eprobe/v2 validate --suite suite.yaml
 #   go run ./cmd/e2eprobe/v2 describe --suite suite.yaml
 #
@@ -27,7 +29,7 @@ defaults:
     renotify_every: 6h       # reminders while an incident stays open
     skip_after: 24h          # a scenario skipping this long is a coverage incident
   load:
-    max_events_per_day: 50000
+    max_events_per_day: 100000 # profile batches plus every flow's ingest; describe shows the split
   janitor:
     max_age: 1h              # ephemeral customers older than this are removed
   digest:
@@ -35,6 +37,8 @@ defaults:
 
 tenant:
   connections: [stripe]      # preflight verifies these providers are connected
+  settings:                  # JSON subsets preflight expects in tenant settings
+    wallet_balance_alert_config: { alert_enabled: true }   # the canary's alerts need this on
   webhooks:
     silence_after: 6h        # no webhook of any kind for this long is one incident
 
@@ -92,11 +96,12 @@ scenarios:
   - { name: webhook-wiring, every: 15m }
   - { name: ingest }                                   # runs every tick
   - { name: usage, every: 15m }
-  - { name: wallet-debit, every: 30m, personas: [wallet-a] }
-  - { name: invoice-freshness, every: 1h }
-  - { name: invoice, every: 1h, families: [tax, coupon, commitment, multi-cadence] }
+  - { name: wallet-debit, every: 1h, personas: [wallet-a] }   # 500 events a run
+  - { name: invoice-freshness, every: 1h, alert: { skip_after: 840h } }   # the first invoice lands after one cycle
+  - { name: invoice, every: 1h, families: [tax, coupon, commitment], alert: { skip_after: 840h } }
+  - { name: invoice-multi-cadence, every: 1h, alert: { skip_after: 2280h } }   # quarterly: first invoice after ~90 days
   - { name: entitlement-usage, every: 30m }
-  - { name: low-balance-alert, every: 10m }
+  - { name: low-balance-alert, every: 30m }   # one drive, an 8-minute wait for the webhook, one refill
   - { name: lifecycle, every: 30m, personas: [baseline-a] }
   - { name: cancel, every: 1h, personas: [baseline-a] }
   - { name: line-item-change, every: 1h, personas: [baseline-a] }

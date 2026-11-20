@@ -58,7 +58,7 @@ func New() *Client {
 	c.TaxAssoc = &TaxAssociations{client: c}
 	c.Payment = &Payments{}
 	c.Alert = &Alerts{}
-	c.TenantOps = &Tenant{Settings: map[string]map[string]any{}}
+	c.TenantOps = &Tenant{Settings: map[string]map[string]any{"wallet_balance_alert_config": {"alert_enabled": true}}}
 	c.RawOps = &Raw{}
 	return c
 }
@@ -425,7 +425,6 @@ type Subscriptions struct {
 	GetErr       error
 	CancelErr    error
 	Entitlements func(subID string) (*dtos.GetSubscriptionEntitlementsResponse, error)
-	Usage        func(req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error)
 
 	// CancelStatus is the status Cancel leaves a subscription in; empty means cancelled.
 	CancelStatus types.SubscriptionStatus
@@ -587,14 +586,6 @@ func (f *Subscriptions) GetEntitlements(_ context.Context, id string, _ []string
 		return f.Entitlements(id)
 	}
 	return &dtos.GetSubscriptionEntitlementsResponse{}, nil
-}
-
-func (f *Subscriptions) GetUsage(_ context.Context, req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
-	if f.Usage != nil {
-		return f.Usage(req)
-	}
-	amount := 0.0
-	return &dtos.GetSubscriptionUsageResponse{GetUsageBySubscriptionResponse: &types.GetUsageBySubscriptionResponse{Amount: &amount}}, nil
 }
 
 func (f *Subscriptions) CreateLineItem(_ context.Context, id string, req types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {

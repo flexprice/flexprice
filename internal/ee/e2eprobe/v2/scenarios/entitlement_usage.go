@@ -122,7 +122,11 @@ func awaitUsage(ctx context.Context, sc *scenario.Context, customerID, featureID
 	defer deadline.Stop()
 	var last types.FeatureUsageSummary
 	for {
-		resp, err := sc.Client().Customers().GetUsageSummary(ctx, dtos.GetCustomerUsageSummaryRequest{CustomerID: &customerID, FeatureIds: []string{featureID}})
+		// refresh_grants makes the server measure grant windows now; without it a
+		// fresh clone's grant-backed usage stays at zero until the debounced alert
+		// workflow runs.
+		refresh := true
+		resp, err := sc.Client().Customers().GetUsageSummary(ctx, dtos.GetCustomerUsageSummaryRequest{CustomerID: &customerID, FeatureIds: []string{featureID}, RefreshGrants: &refresh})
 		if err != nil {
 			return last, err
 		}

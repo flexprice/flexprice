@@ -52,7 +52,7 @@ func TestValidate(t *testing.T) {
 		{"concurrency", func(s *Suite) { s.Defaults.Concurrency = 0 }, "concurrency"},
 		{"tick", func(s *Suite) { s.Defaults.Tick = Duration{30 * time.Second} }, "tick"},
 		{"scenario every", func(s *Suite) { mustScenario(s, "usage").Every = Duration{10 * time.Second} }, "every"},
-		{"budget", func(s *Suite) { s.Defaults.Load.MaxEventsPerDay = 1000 }, "53568 events/day exceeds 1000"},
+		{"budget", func(s *Suite) { s.Defaults.Load.MaxEventsPerDay = 1000 }, "53472 events/day exceeds 1000"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

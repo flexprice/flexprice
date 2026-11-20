@@ -7,7 +7,7 @@ them a **deterministic event schedule**, and runs **scenarios** that compare wha
 the API reports against what the schedule predicts: usage, wallet balances,
 invoices, entitlements, alerts, webhooks and checkouts.
 
-Design: [`docs/design/2026-11-19-e2eprobe-redesign.md`](../../../docs/design/2026-11-19-e2eprobe-redesign.md).
+Design: [`docs/design/2026-11-19-e2eprobe-redesign.md`](../../../../docs/design/2026-11-19-e2eprobe-redesign.md).
 Contributor guide: [`AGENTS.md`](AGENTS.md).
 
 ## Quick start
@@ -61,8 +61,10 @@ Each still set logs a warning naming the suite key that replaces it.
 
 ### The suite file
 
-[`cmd/e2eprobe/v2/suite.example.yaml`](../../../cmd/e2eprobe/v2/suite.example.yaml) is
-the embedded default with every key explained. In short:
+[`cmd/e2eprobe/v2/suite.example.yaml`](../../../../cmd/e2eprobe/v2/suite.example.yaml) is
+a superset of the embedded default with every key explained: it adds a Stripe
+payer persona and shows `external_id` adopting the previous generation's
+customers. In short:
 
 ```yaml
 defaults:   tick, concurrency, alert {after_failures, after_duration, renotify_every, skip_after}, load.max_events_per_day, janitor.max_age, digest.every
@@ -74,7 +76,7 @@ scenarios:  name, every, enabled, personas (explicit list), alert (override), fa
 A scenario runs on every persona carrying its required traits unless it names
 personas. The loader rejects unknown scenarios, traits or profiles, a persona
 missing a required trait, a trait-bound scenario with no persona, and a schedule
-above `max_events_per_day`. In Kubernetes set `e2eprobe.suite` in the chart
+above `max_events_per_day`. In Kubernetes set `e2eprobeV2.suite` in the chart
 values; it renders into a ConfigMap mounted at `/etc/e2eprobe/suite.yaml`.
 
 ## Personas and traits
@@ -96,10 +98,11 @@ skip on a gap with that reason instead of failing.
 | `multi_cadence` | quarterly subscription with monthly items |
 | `payment` | gateway connection expected; optional fixed customer with hand-saved cards |
 
-Default personas: `baseline-a`, `baseline-b`, `taxed` (tax + multi_cadence, adopts
-`e2eprobe-cust-persistent-0`), `couponed`, `committed`, `wallet-a`, `alert-canary`,
-`entitled`, `granted`, `bucketed`, `payer-stripe`. Adopting the previous
-generation's customers keeps their invoice history feeding the invariants.
+Default personas: `baseline-a`, `baseline-b`, `taxed` (tax + multi_cadence),
+`couponed`, `committed`, `wallet-a`, `alert-canary`, `entitled`, `granted`,
+`bucketed`; each is a fresh customer named `e2eprobe-<name>`. The example suite
+adds `payer-stripe` and shows `external_id` adopting the previous generation's
+customers, which keeps their invoice history feeding the invariants.
 
 ## Event schedule and oracle
 
@@ -186,6 +189,20 @@ a ConfigMap whose checksum rolls the pod when the suite changes. Image:
 `ghcr.io/flexprice/e2eprobe-v2`, built by
 `.github/workflows/publish-e2eprobe-v2-image.yml` from `Dockerfile.e2eprobe-v2`.
 
+The chart sets no API host: pass it through `e2eprobeV2.env`, and create the
+secret before enabling the component.
+
+```bash
+kubectl create secret generic e2eprobe-v2-secrets -n <namespace> \
+  --from-literal=api-key=sk_... \
+  --from-literal=slack-webhook-url=https://hooks.slack.com/... \
+  --from-literal=webhook-token=<random string>
+helm upgrade flexprice internal/ee/infrastructure/helm/flexprice -n <namespace> --reuse-values \
+  --set e2eprobeV2.enabled=true \
+  --set e2eprobeV2.image.tag=<sha tag> \
+  --set e2eprobeV2.env.E2EPROBE_API_HOST=https://<region api>/v1
+```
+
 ## Running beside the current probe
 
 This module is the second generation. The current probe keeps running
@@ -208,10 +225,13 @@ only `bootstrap/` and `billingmatrix/` are shared.
 - Prefer a separate environment (and API key) for v2 while both run. That also
   exercises provisioning from nothing, which the old customers never did.
 
-Swapping over: delete `internal/ee/e2eprobe/*.go`, `checks/`, `cmd/e2eprobe/*.go`,
-`templates/probe`, `Dockerfile.e2eprobe` and the old workflow; move `v2/` up one
-level and drop `/v2` from the import paths; rename `e2eprobeV2` to `e2eprobe` in
-values and region files; point the image name back. Nothing in this module
+Swapping over: delete `internal/ee/e2eprobe/*.go`, `checks/`, the old
+`README.md` and `AGENTS.md` there, `cmd/e2eprobe/*.go`, `templates/probe`,
+`Dockerfile.e2eprobe` and `publish-e2eprobe-image.yml`; move `v2/` up one level
+and drop `/v2` from the import paths; rename `e2eprobeV2` to `e2eprobe` in
+values, region files and `helm-validate.yml`; point the image name back; fold
+the `-v2` make targets, the `.gitignore` exception and the
+`pr-security-scan.yml` comment into their plain names. Nothing in this module
 depends on the old code.
 
 ## Live checks

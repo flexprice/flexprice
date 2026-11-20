@@ -42,7 +42,7 @@ func newFakeCatalog() fakeCatalog {
 		{Name: "invoice-commitment", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitCommitment), Every: time.Hour},
 		{Name: "invoice-multi-cadence", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitMultiCadence), Every: time.Hour},
 		{Name: "entitlement-usage", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitSoftLimit, e2eprobe.TraitEvents), Every: 30 * time.Minute},
-		{Name: "low-balance-alert", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitAlerts), Every: 10 * time.Minute, EventsPerRun: 1},
+		{Name: "low-balance-alert", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitAlerts), Every: 30 * time.Minute, EventsPerRun: 1},
 		{Name: "lifecycle", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitSubscription), Every: 30 * time.Minute, EventsPerRun: 3},
 		{Name: "cancel", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitSubscription), Every: time.Hour},
 		{Name: "line-item-change", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitSubscription), Every: time.Hour},

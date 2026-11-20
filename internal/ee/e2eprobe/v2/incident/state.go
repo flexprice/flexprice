@@ -42,14 +42,22 @@ type BindingState struct {
 	Incident      *Incident       `json:"incident,omitempty"`
 }
 
+// Resolution is a recovery message that was not delivered yet.
+type Resolution struct {
+	Incident Incident     `json:"incident"`
+	Binding  BindingState `json:"binding"`
+	ClosedAt time.Time    `json:"closed_at"`
+}
+
 // State is the snapshot persisted across restarts.
 type State struct {
 	Bindings map[string]*BindingState `json:"bindings"`
 	Infra    *Incident                `json:"infra,omitempty"`
 	// InfraSeen is when each binding last failed on infrastructure; it feeds the
 	// rollup and survives restarts so an outage is not declared over on boot.
-	InfraSeen map[string]time.Time `json:"infra_seen,omitempty"`
-	SavedAt   time.Time            `json:"saved_at"`
+	InfraSeen       map[string]time.Time `json:"infra_seen,omitempty"`
+	PendingResolved []Resolution         `json:"pending_resolved,omitempty"`
+	SavedAt         time.Time            `json:"saved_at"`
 }
 
 func newState() *State {
@@ -80,6 +88,7 @@ func (s *State) clone() State {
 		inc := *s.Infra
 		out.Infra = &inc
 	}
+	out.PendingResolved = append([]Resolution(nil), s.PendingResolved...)
 	return out
 }
 

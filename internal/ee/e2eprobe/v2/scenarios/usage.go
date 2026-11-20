@@ -2,6 +2,7 @@ package scenarios
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
@@ -41,6 +42,11 @@ func (*usage) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Result {
 	sc.Attr("window", w.Start.Format(time.RFC3339)+".."+w.End.Format(time.RFC3339))
 	if !sc.Ledger().Complete(p.Name(), w, sc.Tick()) {
 		return sc.Skip("window", "partial hour: probe did not send every tick")
+	}
+	if landed, ok := sc.Ledger().LastRecordedAt(p.Name(), w); ok {
+		if since := sc.Now().Sub(landed); since < aggregationGrace {
+			return sc.Skip("window", fmt.Sprintf("last batch landed %s ago; waiting %s for aggregation", since.Round(time.Second), aggregationGrace))
+		}
 	}
 	meters := profileMeters(profile)
 	if len(meters) == 0 {

@@ -71,6 +71,7 @@ func TestRegisterFlows_RegistersEveryFlow(t *testing.T) {
 
 func TestLifecycle_ClonesIngestsAndPasses(t *testing.T) {
 	d := newTestDeps(t)
+	d.fc.Event.Analytics = analyticsFromIngested(d)
 	s := newLifecycle(d.Deps)
 	s.poll = fastPoll
 	r := run(t, d, s, "baseline-a")
@@ -104,6 +105,7 @@ func TestLifecycle_ClonesIngestsAndPasses(t *testing.T) {
 
 func TestLifecycle_RecordsWebhookAttr(t *testing.T) {
 	d := newTestDeps(t)
+	d.fc.Event.Analytics = analyticsFromIngested(d)
 	d.Inbox.Record(inbox.Event{ReceivedAt: d.now, EventType: "customer.created", CustomerID: nextCustomerID(d)})
 	s := newLifecycle(d.Deps)
 	s.poll = fastPoll
@@ -115,9 +117,7 @@ func TestLifecycle_RecordsWebhookAttr(t *testing.T) {
 
 func TestLifecycle_UsageNeverAnswersIsInfra(t *testing.T) {
 	d := newTestDeps(t)
-	d.fc.Subscription.Usage = func(types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
-		return nil, probetest.ServerError(503)
-	}
+	d.fc.Event.Analytics = analyticsError(503)
 	s := newLifecycle(d.Deps)
 	s.poll = fastPoll
 	r := run(t, d, s, "baseline-a")
@@ -167,6 +167,7 @@ func TestPollWindow_Until(t *testing.T) {
 
 func TestLifecycle_BacklogCountsOnlyItsOwnClones(t *testing.T) {
 	d := newTestDeps(t)
+	d.fc.Event.Analytics = analyticsFromIngested(d)
 	for i := 0; i < 5; i++ {
 		d.World.Ephemerals().Register("customer", fmt.Sprintf("%stax-preview-%d", world.EphemeralPrefix, i), d.now)
 	}
@@ -185,5 +186,19 @@ func TestLifecycle_BacklogCountsOnlyItsOwnClones(t *testing.T) {
 	}
 	if len(d.fc.Customer.Created) != created || len(d.fc.Event.Batches) != batches {
 		t.Error("a skipped run must not clone or ingest")
+	}
+}
+
+func TestLifecycle_ComparesUsageWithTheBatch(t *testing.T) {
+	d := newTestDeps(t)
+	featureID := d.World.Fixtures().FeatureID("count")
+	d.fc.Event.Analytics = func(types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
+		return &dtos.GetUsageAnalyticsResponse{GetUsageAnalyticsResponse: &types.GetUsageAnalyticsResponse{Items: []types.UsageAnalyticItem{{FeatureID: probetest.Ptr(featureID), TotalUsage: probetest.Ptr("2")}}}}, nil
+	}
+	s := newLifecycle(d.Deps)
+	s.poll = fastPoll
+	r := run(t, d, s, "baseline-a")
+	if r.Status != e2eprobe.StatusFail || r.Infra || r.Step != "poll_usage" {
+		t.Fatalf("two of three events landing is a stalled pipeline: %+v", r)
 	}
 }

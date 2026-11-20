@@ -74,3 +74,23 @@ func TestLedger_Last(t *testing.T) {
 		t.Errorf("Last = %s %v", last, ok)
 	}
 }
+
+func TestLedger_LastRecordedAtTracksWhenTheBatchLanded(t *testing.T) {
+	l := NewLedger(48 * time.Hour)
+	clock := time.Date(2026, 11, 19, 10, 3, 0, 0, time.UTC)
+	l.SetClock(func() time.Time { return clock })
+	tick := time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)
+	l.Record("taxed", tick)
+	w := Window{Start: tick.Add(-time.Hour), End: tick}
+	if at, ok := l.LastRecordedAt("taxed", w); !ok || !at.Equal(clock) {
+		t.Fatalf("recorded at = %v ok=%v, want %v", at, ok, clock)
+	}
+	if _, ok := l.LastRecordedAt("taxed", Window{Start: tick, End: tick.Add(time.Hour)}); ok {
+		t.Fatal("no batch of the next hour has landed")
+	}
+	earlier := clock.Add(-20 * time.Minute)
+	l.RecordAt("taxed", tick.Add(-10*time.Minute), earlier)
+	if at, _ := l.LastRecordedAt("taxed", w); !at.Equal(clock) {
+		t.Fatalf("the newest landing wins, got %v", at)
+	}
+}

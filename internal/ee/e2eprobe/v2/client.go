@@ -17,10 +17,8 @@ import (
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
-// GrantEntitlementInput mirrors internal/api/dto/entitlement.go:CreateEntitlementRequest
-// for the grant subset that SDK v2.0.24 doesn't cover. When the SDK is
-// regenerated with grant fields on CreateEntitlementRequest, delete this
-// and use the SDK's typed Create.
+// GrantEntitlementInput mirrors the server's CreateEntitlementRequest for the
+// grant fields the generated SDK request does not expose yet; delete it once it does.
 type GrantEntitlementInput struct {
 	FeatureID          string
 	FeatureType        string // "metered"
@@ -121,7 +119,6 @@ type SubscriptionOps interface {
 	Query(ctx context.Context, filter types.SubscriptionFilter) (*dtos.QuerySubscriptionResponse, error)
 	ActivateSubscription(ctx context.Context, id string, body types.ActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error)
 	GetEntitlements(ctx context.Context, id string, featureIDs []string) (*dtos.GetSubscriptionEntitlementsResponse, error)
-	GetUsage(ctx context.Context, req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error)
 	CreateLineItem(ctx context.Context, id string, body types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error)
 	UpdateLineItem(ctx context.Context, id string, body types.UpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error)
 }
@@ -173,9 +170,8 @@ type EntitlementOps interface {
 	Query(ctx context.Context, req types.EntitlementFilter) (*dtos.QueryEntitlementResponse, error)
 	Delete(ctx context.Context, id string) (*dtos.DeleteEntitlementResponse, error)
 
-	// CreateWithGrant sends a grant-config-enabled entitlement create via
-	// raw HTTP. SDK v2.0.24's CreateEntitlementRequest doesn't expose grant
-	// fields; when the SDK regenerates, delete this and use Create.
+	// CreateWithGrant creates an entitlement with grant fields over raw HTTP,
+	// since the generated SDK request does not expose them yet.
 	CreateWithGrant(ctx context.Context, req GrantEntitlementInput) (id string, err error)
 
 	// GetRaw fetches an entitlement by ID via raw HTTP so callers can
@@ -285,11 +281,8 @@ type sdkClient struct {
 	http *http.Client
 	// apiHost + apiKey are captured here so raw-HTTP methods
 	// (EntitlementOps.CreateWithGrant + GetRaw, PriceOps.CreateBucketed)
-	// can bypass the SDK's
-	// generated typed request/response for endpoints where the SDK
-	// doesn't cover fields the server accepts. When SDK v2.0.24 is
-	// regenerated with those fields, delete the raw-HTTP methods and
-	// remove these captures.
+	// bypass the generated request types where the server accepts fields the
+	// SDK does not expose yet; delete them when it does.
 	apiHost string
 	apiKey  string
 }
@@ -526,9 +519,6 @@ func (o subscriptionOps) ActivateSubscription(ctx context.Context, id string, bo
 func (o subscriptionOps) GetEntitlements(ctx context.Context, id string, featureIDs []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
 	return o.s.GetSubscriptionEntitlements(ctx, id, featureIDs, nil)
 }
-func (o subscriptionOps) GetUsage(ctx context.Context, req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
-	return o.s.GetSubscriptionUsage(ctx, req)
-}
 func (o subscriptionOps) CreateLineItem(ctx context.Context, id string, body types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
 	return o.s.CreateSubscriptionLineItem(ctx, id, body)
 }
@@ -598,9 +588,8 @@ func (o entitlementOps) Delete(ctx context.Context, id string) (*dtos.DeleteEnti
 	return o.s.DeleteEntitlement(ctx, id)
 }
 
-// CreateWithGrant POSTs a hand-rolled JSON body to /entitlements matching
-// the server's dto.CreateEntitlementRequest schema, including grant fields
-// that SDK v2.0.24's CreateEntitlementRequest doesn't expose.
+// CreateWithGrant POSTs the server's CreateEntitlementRequest shape, grant
+// fields included, which the generated SDK request lacks.
 func (o entitlementOps) CreateWithGrant(ctx context.Context, req GrantEntitlementInput) (string, error) {
 	body := map[string]any{
 		"feature_id":           req.FeatureID,

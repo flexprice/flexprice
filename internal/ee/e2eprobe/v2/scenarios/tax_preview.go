@@ -11,7 +11,8 @@ import (
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
-// taxPreviewEvents makes a $1.00 taxable usage line at the plan's $0.01 a unit.
+// taxPreviewEvents makes a $1.00 usage line at the plan's $0.01 a unit on the
+// entitlement-free meter, so the usage itself is taxable, not just the base fee.
 const taxPreviewEvents = 100
 
 // taxPreview puts usage on a clone carrying the shared tax association and
@@ -23,7 +24,7 @@ type taxPreview struct {
 
 func newTaxPreview(scenario.Deps) *taxPreview {
 	return &taxPreview{
-		batch: usageBatch{meter: "sum", events: taxPreviewEvents, value: "1"},
+		batch: usageBatch{meter: "sum_commit", events: taxPreviewEvents, value: "1"},
 		poll:  pollWindow{every: 5 * time.Second, within: 90 * time.Second},
 	}
 }
@@ -45,7 +46,7 @@ func (s *taxPreview) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Res
 	if err := sc.Client().Events().IngestBulk(ctx, types.BulkIngestEventRequest{Events: batch}); err != nil {
 		return sc.Fail("ingest_bulk", err)
 	}
-	if err := awaitSubscriptionUsage(ctx, sc, s.poll, eph.SubscriptionID()); err != nil {
+	if _, err := awaitCloneUsage(ctx, sc, s.poll, eph, s.batch.meter, s.batch.units()); err != nil {
 		return sc.Fail("poll_usage", err)
 	}
 	inv, err := previewOf(ctx, sc, eph.SubscriptionID())

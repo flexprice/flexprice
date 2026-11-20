@@ -71,7 +71,7 @@ func (s *billingMatrix) setup(sc *scenario.Context) {
 		s.perRun = billingMatrixPerRun
 	}
 	s.engine = billingmatrix.NewEngine(sc.Client().Raw(), sc.RunID(), cfg.AssertKnownIssues)
-	sc.World().AddSweeper(s.engine)
+	sc.World().AddSweeper(billingMatrixEntry, s.engine)
 }
 
 // logSkip reports a known-issue skip the first time each scenario hits it.

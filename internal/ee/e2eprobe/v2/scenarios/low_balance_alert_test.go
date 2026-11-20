@@ -42,11 +42,14 @@ func TestLowBalanceAlert_PassesWhenWebhookArrives(t *testing.T) {
 	if ev.Timestamp == nil || *ev.Timestamp != testNow.Format(time.RFC3339Nano) {
 		t.Errorf("event timestamp = %v, want the scenario clock", ev.Timestamp)
 	}
-	if r.Attrs["leg"] != "drop" || r.Attrs["webhook_at"] == "" || r.Attrs["wallet_id"] != canary.WalletID() || r.Attrs["drive_units"] != "3500" {
+	if r.Attrs["webhook_at"] == "" || r.Attrs["wallet_id"] != canary.WalletID() || r.Attrs["drive_units"] != "3500" || r.Attrs["refilled_to"] != "30.00" {
 		t.Errorf("attrs = %v", r.Attrs)
 	}
 	if len(d.fc.Alert.Queries) != 0 {
 		t.Errorf("a delivered webhook needs no alert log lookup, got %d queries", len(d.fc.Alert.Queries))
+	}
+	if n := len(d.fc.Wallet.TopUps); n == 0 || d.fc.Wallet.TopUps[n-1] != (probetest.TopUp{WalletID: canary.WalletID(), Amount: "30.00"}) {
+		t.Errorf("the canary must be refilled after the drop: %+v", d.fc.Wallet.TopUps)
 	}
 }
 
@@ -82,20 +85,34 @@ func TestLowBalanceAlert_AttributesToAlertPipelineWhenNoLog(t *testing.T) {
 	}
 }
 
-func TestLowBalanceAlert_RecoversWhenInAlarm(t *testing.T) {
+func TestLowBalanceAlert_RefillsFirstWhenLeftInAlarm(t *testing.T) {
 	d := newTestDeps(t)
 	canary, _ := d.World.Persona("alert-canary")
 	d.fc.Wallet.AlertStates[canary.WalletID()] = types.AlertStateInAlarm
+	d.Inbox.Record(inbox.Event{ReceivedAt: d.now.Add(time.Second), EventType: "wallet.ongoing_balance.dropped", WalletID: canary.WalletID()})
 	topUps := len(d.fc.Wallet.TopUps)
 	r := run(t, d, fastLowBalanceAlert(d), "alert-canary")
-	if r.Status != e2eprobe.StatusPass || r.Attrs["leg"] != "recover" || r.Attrs["alert_state"] != "in_alarm" {
+	if r.Status != e2eprobe.StatusPass || r.Attrs["refilled_first"] != "yes" || r.Attrs["alert_state"] != "in_alarm" {
 		t.Fatalf("result = %+v", r)
 	}
-	if len(d.fc.Wallet.TopUps) != topUps+1 || d.fc.Wallet.TopUps[topUps] != (probetest.TopUp{WalletID: canary.WalletID(), Amount: "30.00"}) {
-		t.Errorf("top-ups = %+v", d.fc.Wallet.TopUps)
+	if len(d.fc.Wallet.TopUps) != topUps+2 || d.fc.Wallet.TopUps[topUps] != (probetest.TopUp{WalletID: canary.WalletID(), Amount: "30.00"}) {
+		t.Errorf("a canary left in alarm is refilled before the drive and again after it: %+v", d.fc.Wallet.TopUps)
 	}
-	if len(d.fc.Event.Ingested) != 0 {
-		t.Error("the recovery leg must not drive usage")
+	if len(d.fc.Event.Ingested) != 1 {
+		t.Error("the drive still happens after the first refill")
+	}
+}
+
+func TestLowBalanceAlert_RefillsEvenWhenTheWebhookNeverComes(t *testing.T) {
+	d := newTestDeps(t)
+	canary, _ := d.World.Persona("alert-canary")
+	topUps := len(d.fc.Wallet.TopUps)
+	r := run(t, d, fastLowBalanceAlert(d), "alert-canary")
+	if r.Status != e2eprobe.StatusFail || r.Step != "alert_not_fired" {
+		t.Fatalf("result = %+v", r)
+	}
+	if len(d.fc.Wallet.TopUps) != topUps+1 || d.fc.Wallet.TopUps[topUps].WalletID != canary.WalletID() {
+		t.Errorf("a missed alert must not leave the canary drained: %+v", d.fc.Wallet.TopUps)
 	}
 }
 

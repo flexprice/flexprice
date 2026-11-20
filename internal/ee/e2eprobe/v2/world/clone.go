@@ -39,7 +39,7 @@ func (w *World) Clone(ctx context.Context, p *Persona, scenario string) (*Epheme
 	metadata["e2eprobe_scenario"] = scenario
 	created, err := w.client.Customers().Create(ctx, types.CreateCustomerRequest{
 		ExternalID: ext,
-		Name:       "E2EProbe Ephemeral " + scenario,
+		Name:       "E2EProbe clone " + scenario,
 		Metadata:   metadata,
 	})
 	if err != nil {

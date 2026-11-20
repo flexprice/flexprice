@@ -21,6 +21,9 @@ defaults:
 tenant:
   # No payment gateway is assumed: a region that has one adds a payer persona
   # and lists the provider here (see cmd/e2eprobe/v2/suite.example.yaml).
+  settings:
+    # The canary's low-balance alerts need wallet alerts on; preflight checks it.
+    wallet_balance_alert_config: { alert_enabled: true }
   webhooks:
     silence_after: 6h        # no webhook of any kind for this long is one incident
 
@@ -70,10 +73,11 @@ scenarios:
   - { name: ingest }                                   # runs every tick
   - { name: usage, every: 15m }
   - { name: wallet-debit, every: 1h, personas: [wallet-a] }   # 500 events a run
-  - { name: invoice-freshness, every: 1h }
-  - { name: invoice, every: 1h, families: [tax, coupon, commitment, multi-cadence] }
+  - { name: invoice-freshness, every: 1h, alert: { skip_after: 840h } }   # the first invoice lands after one cycle
+  - { name: invoice, every: 1h, families: [tax, coupon, commitment], alert: { skip_after: 840h } }
+  - { name: invoice-multi-cadence, every: 1h, alert: { skip_after: 2280h } }   # quarterly: first invoice after ~90 days
   - { name: entitlement-usage, every: 30m }
-  - { name: low-balance-alert, every: 10m }
+  - { name: low-balance-alert, every: 30m }   # one drive, an 8-minute wait for the webhook, one refill
   - { name: lifecycle, every: 30m, personas: [baseline-a] }
   - { name: cancel, every: 1h, personas: [baseline-a] }
   - { name: line-item-change, every: 1h, personas: [baseline-a] }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -99,11 +100,19 @@ func (r *Runner) every(b suite.Binding) time.Duration {
 	return r.deps.Tick
 }
 
-// Start runs every binding on its interval until ctx ends.
+// Start runs every binding on its interval until ctx ends. Tracker state for
+// bindings the suite no longer schedules is dropped first, closing their incidents.
 func (r *Runner) Start(ctx context.Context) {
 	r.mu.Lock()
 	r.started = r.deps.now()
 	r.mu.Unlock()
+	keys := make([]incident.Key, 0, len(r.items))
+	for _, key := range r.order {
+		keys = append(keys, bindingKey(r.items[key].binding))
+	}
+	if dropped := r.tracker.Prune(ctx, keys); len(dropped) > 0 && r.deps.Logger != nil {
+		r.deps.Logger.Info(ctx, "e2eprobe forgot bindings the suite no longer schedules", "bindings", strings.Join(dropped, ","))
+	}
 	var wg sync.WaitGroup
 	for _, key := range r.order {
 		it := r.items[key]
@@ -144,6 +153,7 @@ func (r *Runner) loop(ctx context.Context, it *item) {
 	if every <= 0 {
 		every = time.Minute
 	}
+	r.scheduleNext(it, every)
 	r.execute(ctx, it)
 	t := time.NewTicker(every)
 	defer t.Stop()
@@ -152,9 +162,17 @@ func (r *Runner) loop(ctx context.Context, it *item) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			r.scheduleNext(it, every)
 			r.execute(ctx, it)
 		}
 	}
+}
+
+// scheduleNext records when the ticker fires again, independent of how long the run takes.
+func (r *Runner) scheduleNext(it *item, every time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.status[bindingKey(it.binding).String()].NextRun = r.deps.now().Add(every)
 }
 
 // housekeeping drives the tracker clock, the heartbeat log and the digest.
@@ -276,7 +294,6 @@ func (r *Runner) record(it *item, res e2eprobe.Result) {
 		st.Passes++
 	}
 	st.LastRun = now
-	st.NextRun = now.Add(r.every(it.binding))
 	st.Last = res
 }
 

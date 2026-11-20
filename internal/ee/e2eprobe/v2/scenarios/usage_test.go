@@ -2,6 +2,7 @@ package scenarios
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,9 +48,10 @@ func (f *usageFixture) hourTicks() []time.Time {
 	return out
 }
 
+// send records each batch as landing right at its tick, long before the window is read.
 func (f *usageFixture) send(ticks []time.Time) {
 	for _, tick := range ticks {
-		f.d.Ledger.Record(f.persona.Name(), tick)
+		f.d.Ledger.RecordAt(f.persona.Name(), tick, tick)
 	}
 }
 
@@ -221,5 +223,19 @@ func TestUsage_BucketedMetersReadThroughAnalytics(t *testing.T) {
 	f.d.fc.Event.Analytics = analyticsOf(items)
 	if r := run(t, f.d, newUsage(f.d.Deps), "bucketed"); r.Status != e2eprobe.StatusFail || len(r.Mismatches) != 1 || r.Mismatches[0] != "max_15min usage: want "+f.expect("max_15min").String()+", got 7" {
 		t.Errorf("result = %+v", r)
+	}
+}
+
+func TestUsage_WaitsForTheLastBatchToSettle(t *testing.T) {
+	f := newUsageFixture(t, "taxed")
+	ticks := f.hourTicks()
+	f.send(ticks[:len(ticks)-1])
+	f.d.Ledger.RecordAt(f.persona.Name(), ticks[len(ticks)-1], f.d.now.Add(-time.Minute))
+	r := run(t, f.d, newUsage(f.d.Deps), "taxed")
+	if r.Status != e2eprobe.StatusSkip || r.Step != "window" || !strings.Contains(r.Reason, "landed") {
+		t.Fatalf("a batch that landed a minute ago has not aggregated yet: %+v", r)
+	}
+	if len(f.d.fc.Event.AnalyticsRequests) != 0 {
+		t.Error("an unsettled window must not be read")
 	}
 }

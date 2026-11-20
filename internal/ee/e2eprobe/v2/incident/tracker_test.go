@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -405,5 +406,80 @@ func TestTracker_RetriesOpenedUntilDelivered(t *testing.T) {
 	}
 	if open := tr.Open(); open[0].LastNotified.IsZero() {
 		t.Error("a delivered open must stamp last_notified")
+	}
+}
+
+func TestTracker_RetriesResolvedUntilDelivered(t *testing.T) {
+	tr, rec, clock := newTestTracker(t, FileStore(""))
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		tr.Observe(ctx, usageTaxed, fail("assert"))
+		clock.Advance(10 * time.Minute)
+	}
+	rec.failNext = 1
+	tr.Observe(ctx, usageTaxed, e2eprobe.Pass())
+	if len(rec.events) != 2 || rec.events[1] != "rejected:resolved:usage · taxed:failure" {
+		t.Fatalf("setup: %v", rec.events)
+	}
+	tr.Tick(ctx)
+	if len(rec.events) != 3 || rec.events[2] != "resolved:usage · taxed:failure" {
+		t.Fatalf("the next tick retries the recovery message, got %v", rec.events)
+	}
+	tr.Tick(ctx)
+	if len(rec.events) != 3 {
+		t.Fatalf("a delivered recovery is not repeated: %v", rec.events)
+	}
+}
+
+func TestTracker_PruneDropsBindingsNoLongerScheduled(t *testing.T) {
+	tr, rec, clock := newTestTracker(t, FileStore(t.TempDir()+"/state.json"))
+	ctx := context.Background()
+	stale := Key{Scenario: "usage", Persona: "gone"}
+	for i := 0; i < 3; i++ {
+		tr.Observe(ctx, stale, fail("assert"))
+		clock.Advance(10 * time.Minute)
+	}
+	tr.Observe(ctx, usageTaxed, e2eprobe.Skip("window", "partial"))
+	if len(rec.events) != 1 {
+		t.Fatalf("setup: %v", rec.events)
+	}
+	if dropped := tr.Prune(ctx, []Key{usageTaxed}); !reflect.DeepEqual(dropped, []string{stale.String()}) {
+		t.Fatalf("dropped = %v, want the retired binding", dropped)
+	}
+	if len(rec.events) != 2 || rec.events[1] != "resolved:usage · gone:failure" {
+		t.Fatalf("an open incident on a retired binding is closed, got %v", rec.events)
+	}
+	clock.Advance(25 * time.Hour)
+	tr.Tick(ctx)
+	if len(rec.events) != 3 || rec.events[2] != "opened:usage · taxed:coverage" {
+		t.Fatalf("only live bindings keep producing incidents, got %v", rec.events)
+	}
+	if _, still := tr.Snapshot().Bindings[stale.String()]; still {
+		t.Error("pruned state must not come back")
+	}
+}
+
+func TestTracker_RollupResolvesWhenOutageNarrows(t *testing.T) {
+	tr, rec, clock := newTestTracker(t, FileStore(""))
+	ctx := context.Background()
+	infra := e2eprobe.Fail("get", sdkerrors.NewAPIError("down", 503, "", nil), nil)
+	keys := []Key{{Scenario: "usage", Persona: "a"}, {Scenario: "usage", Persona: "b"}, {Scenario: "low-balance-alert", Persona: "alert-canary"}}
+	for i := 0; i < 3; i++ {
+		for _, k := range keys {
+			tr.Observe(ctx, k, infra)
+		}
+		tr.Tick(ctx)
+		clock.Advance(10 * time.Minute)
+	}
+	if len(rec.events) != 1 || rec.events[0] != "opened:api:infra" {
+		t.Fatalf("setup: %v", rec.events)
+	}
+	tr.Observe(ctx, keys[0], e2eprobe.Pass())
+	tr.Observe(ctx, keys[1], e2eprobe.Pass())
+	tr.Observe(ctx, keys[2], infra)
+	tr.Tick(ctx)
+	want := []string{"opened:api:infra", "resolved:api:infra", "opened:low-balance-alert · alert-canary:failure"}
+	if !reflect.DeepEqual(rec.events, want) {
+		t.Fatalf("one endpoint left failing becomes its own incident, got %v", rec.events)
 	}
 }

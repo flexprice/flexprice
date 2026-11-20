@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/scenario"
+	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	"github.com/flexprice/go-sdk/v2/models/types"
 	"github.com/shopspring/decimal"
 )
@@ -27,7 +28,7 @@ var (
 func registerWallet(cat *scenario.Catalog) {
 	for _, r := range []registration{
 		entry("wallet-debit", e2eprobe.KindProbe, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newWalletDebit(d) }, e2eprobe.TraitWallet).ingests(walletDebitEvents),
-		entry("low-balance-alert", e2eprobe.KindProbe, 10*time.Minute, func(d scenario.Deps) scenario.Scenario { return newLowBalanceAlert(d) }, e2eprobe.TraitAlerts).ingests(1),
+		entry("low-balance-alert", e2eprobe.KindProbe, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newLowBalanceAlert(d) }, e2eprobe.TraitAlerts).ingests(1),
 	} {
 		cat.Register(r.info, r.build)
 	}
@@ -133,6 +134,11 @@ func walletRealTimeBalance(ctx context.Context, sc *scenario.Context, walletID s
 	}
 	if resp == nil || resp.WalletBalanceResponse == nil || resp.WalletBalanceResponse.RealTimeBalance == nil {
 		return decimal.Zero, errors.New("no real_time_balance")
+	}
+	if fallback := resp.WalletBalanceResponse.IsCachedFallback; fallback != nil && *fallback {
+		// The server could not compute the balance and served a cached one: that
+		// is a degraded platform, not a wrong debit.
+		return decimal.Zero, sdkerrors.NewAPIError("wallet balance served from cache fallback", 503, "", nil)
 	}
 	return decimal.NewFromString(*resp.WalletBalanceResponse.RealTimeBalance)
 }

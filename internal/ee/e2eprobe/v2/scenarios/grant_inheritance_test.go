@@ -47,9 +47,18 @@ func grantScenario(d *testDeps) *grantInheritance {
 func TestGrantInheritance_Passes(t *testing.T) {
 	d := newTestDeps(t)
 	s := grantScenario(d)
+	var last dtos.GetCustomerUsageSummaryRequest
+	inner := d.fc.Customer.UsageSummary
+	d.fc.Customer.UsageSummary = func(req dtos.GetCustomerUsageSummaryRequest) (*dtos.GetCustomerUsageSummaryResponse, error) {
+		last = req
+		return inner(req)
+	}
 	r := run(t, d, s, "granted")
 	if r.Status != e2eprobe.StatusPass {
 		t.Fatalf("result = %+v", r)
+	}
+	if last.RefreshGrants == nil || !*last.RefreshGrants {
+		t.Error("grant usage must be read with refresh_grants, or a fresh clone reports zero until the alert workflow runs")
 	}
 	grantID := d.World.Fixtures().GrantEntitlementID()
 	if calls := d.fc.Entitlement.GetRawCalls; calls[len(calls)-1] != grantID || r.Attrs["entitlement_id"] != grantID {

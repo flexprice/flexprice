@@ -135,9 +135,9 @@ func TestSweep_RemovesOrphanTaxAssociations(t *testing.T) {
 func TestSweep_RunsRegisteredSweepers(t *testing.T) {
 	w, _ := newWorld(t, suite.Default())
 	s := &stubSweeper{removed: 2, failed: []string{"plan_x: 409"}}
-	w.AddSweeper(s)
+	w.AddSweeper("stub", s)
 	report := w.Sweep(context.Background(), testStart)
-	if !s.called || len(report.Failures) != 1 || report.Failures[0] != "plan_x: 409" {
+	if !s.called || len(report.Failures) != 1 || report.Failures[0].Error() != "plan_x: 409" {
 		t.Errorf("report = %+v called=%v", report, s.called)
 	}
 }
@@ -166,5 +166,26 @@ func TestSweep_TaxCleanupSparesCustomerAssociations(t *testing.T) {
 	report := w.Sweep(ctx, testStart)
 	if report.TaxAssociations != 0 || len(fc.TaxAssoc.Deleted) != 0 {
 		t.Fatalf("a customer-level association is never the probe's to delete: %+v deleted=%v", report, fc.TaxAssoc.Deleted)
+	}
+}
+
+type countingSweeper struct{ runs int }
+
+func (c *countingSweeper) SweepOrphans(context.Context, time.Time) (int, []string) {
+	c.runs++
+	return 0, nil
+}
+
+func TestAddSweeper_IgnoresDuplicates(t *testing.T) {
+	w, _ := newWorld(t, suite.Default())
+	s := &countingSweeper{}
+	w.AddSweeper("billing-matrix", s)
+	w.AddSweeper("billing-matrix", &countingSweeper{})
+	if w.Sweepers() != 1 {
+		t.Fatalf("sweepers = %d, want the same sweeper registered once", w.Sweepers())
+	}
+	w.Sweep(context.Background(), testStart)
+	if s.runs != 1 {
+		t.Fatalf("runs = %d, want 1", s.runs)
 	}
 }

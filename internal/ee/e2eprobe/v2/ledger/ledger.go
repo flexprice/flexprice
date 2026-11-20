@@ -6,12 +6,14 @@ import (
 	"time"
 )
 
-// Ledger remembers which ticks were sent for each persona, so a window with a
-// missing batch is reported as partial instead of asserted against a wrong total.
+// Ledger remembers which ticks were sent for each persona and when each batch
+// landed, so a window with a missing batch is reported as partial and one whose
+// last batch is still aggregating is not asserted yet.
 type Ledger struct {
 	mu        sync.Mutex
 	retention time.Duration
-	sent      map[string]map[time.Time]bool
+	now       func() time.Time
+	sent      map[string]map[time.Time]time.Time // tick end → when the batch was recorded
 }
 
 type PersonaStats struct {
@@ -24,18 +26,33 @@ type Stats struct {
 }
 
 func NewLedger(retention time.Duration) *Ledger {
-	return &Ledger{retention: retention, sent: map[string]map[time.Time]bool{}}
+	return &Ledger{retention: retention, now: time.Now, sent: map[string]map[time.Time]time.Time{}}
+}
+
+// SetClock replaces the wall clock that stamps when a batch landed.
+func (l *Ledger) SetClock(now func() time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.now = now
 }
 
 func (l *Ledger) Record(persona string, tickEnd time.Time) {
 	l.mu.Lock()
+	now := l.now()
+	l.mu.Unlock()
+	l.RecordAt(persona, tickEnd, now)
+}
+
+// RecordAt records a tick's batch as landed at a given instant.
+func (l *Ledger) RecordAt(persona string, tickEnd, at time.Time) {
+	l.mu.Lock()
 	defer l.mu.Unlock()
 	ticks := l.sent[persona]
 	if ticks == nil {
-		ticks = map[time.Time]bool{}
+		ticks = map[time.Time]time.Time{}
 		l.sent[persona] = ticks
 	}
-	ticks[tickEnd.UTC()] = true
+	ticks[tickEnd.UTC()] = at
 	newest := tickEnd.UTC()
 	for t := range ticks {
 		if t.After(newest) {
@@ -52,7 +69,21 @@ func (l *Ledger) Record(persona string, tickEnd time.Time) {
 func (l *Ledger) Recorded(persona string, tickEnd time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.sent[persona][tickEnd.UTC()]
+	_, ok := l.sent[persona][tickEnd.UTC()]
+	return ok
+}
+
+// LastRecordedAt is when the newest batch inside the window landed.
+func (l *Ledger) LastRecordedAt(persona string, w Window) (time.Time, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var last time.Time
+	for t, at := range l.sent[persona] {
+		if t.After(w.Start) && !t.After(w.End) && at.After(last) {
+			last = at
+		}
+	}
+	return last, !last.IsZero()
 }
 
 // Last is the newest tick recorded for the persona.
@@ -91,7 +122,7 @@ func (l *Ledger) Complete(persona string, w Window, interval time.Duration) bool
 		return false
 	}
 	for t := w.Start.UTC().Truncate(interval).Add(interval); !t.After(w.End); t = t.Add(interval) {
-		if !ticks[t] {
+		if _, ok := ticks[t]; !ok {
 			return false
 		}
 	}

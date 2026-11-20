@@ -79,7 +79,7 @@ func TestInvoiceFreshness_FailOldSubNoInvoice(t *testing.T) {
 		subInvoice(p, "sub_other", "inv_other", types.InvoiceStatusFinalized, d.now.Add(-time.Hour)),
 	}
 	r := run(t, d, newInvoiceFreshness(d.Deps), "baseline-a")
-	if r.Status != e2eprobe.StatusFail || r.Step != "freshness" || !strings.Contains(r.Reason, "no invoice after 2 cycles") {
+	if r.Status != e2eprobe.StatusFail || r.Step != "freshness" || !strings.Contains(r.Reason, "no invoice after one cycle") {
 		t.Fatalf("result = %+v", r)
 	}
 }

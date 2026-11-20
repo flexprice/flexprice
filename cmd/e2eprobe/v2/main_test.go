@@ -3,7 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -156,10 +159,10 @@ func TestValidateCommand_RejectsUnknownScenario(t *testing.T) {
 func TestDescribeCommand_PrintsMatrix(t *testing.T) {
 	cat := newCatalog()
 	var out bytes.Buffer
-	if err := describeSuite("", cat, &out); err != nil {
+	if err := describeSuite("", cat, &out, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "events/day: 53568") || !strings.Contains(out.String(), "taxed") {
+	if !strings.Contains(out.String(), "events/day: 53472") || !strings.Contains(out.String(), "taxed") {
 		t.Errorf("describe output:\n%s", out.String())
 	}
 	if err := validateSuite("", cat, &out); err != nil {
@@ -172,7 +175,7 @@ func TestValidateCommand_DefaultSuiteWithRealCatalog(t *testing.T) {
 	if err := validateSuite("", newCatalog(), &out); err != nil {
 		t.Fatalf("the embedded suite must validate against the shipped catalog: %v", err)
 	}
-	if !strings.Contains(out.String(), "45 bindings") || !strings.Contains(out.String(), "53568 events/day") {
+	if !strings.Contains(out.String(), "45 bindings") || !strings.Contains(out.String(), "53472 events/day") {
 		t.Errorf("summary = %q", out.String())
 	}
 }
@@ -212,14 +215,14 @@ func TestRunOnce_RunsOneBindingAgainstTheFake(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := runOnce(context.Background(), rt, "ingest", "taxed", false, &out); err != nil {
+	if err := runOnce(context.Background(), rt, "ingest", "taxed", false, &out, &out); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
 	if !strings.Contains(out.String(), "ingest · taxed: PASS") || len(fc.Event.Batches) != 1 {
 		t.Fatalf("output = %q, batches = %d", out.String(), len(fc.Event.Batches))
 	}
 	var js bytes.Buffer
-	_ = runOnce(context.Background(), rt, "preflight", "", true, &js)
+	_ = runOnce(context.Background(), rt, "preflight", "", true, &js, &bytes.Buffer{})
 	if !strings.Contains(js.String(), `"status"`) {
 		t.Fatalf("json output = %q", js.String())
 	}
@@ -228,5 +231,73 @@ func TestRunOnce_RunsOneBindingAgainstTheFake(t *testing.T) {
 	}
 	if _, err := resolveBinding(rt.bindings, "usage", ""); err == nil {
 		t.Fatal("usage binds to several personas in the default suite")
+	}
+}
+
+func TestValidateCommand_ExampleSuite(t *testing.T) {
+	var out bytes.Buffer
+	if err := validateSuite("suite.example.yaml", newCatalog(), &out); err != nil {
+		t.Fatalf("the shipped example must validate against the shipped catalog: %v", err)
+	}
+}
+
+func TestDescribeCommand_RendersBeforeReportingValidationErrors(t *testing.T) {
+	path := t.TempDir() + "/suite.yaml"
+	if err := os.WriteFile(path, []byte("version: 1\ndefaults:\n  load:\n    max_events_per_day: 1000\npersonas:\n  - name: solo\n    traits: [subscription]\n    events: standard\nscenarios:\n  - { name: ingest }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	err := describeSuite(path, newCatalog(), &out, &errOut)
+	if err == nil || !strings.Contains(errOut.String(), "exceeds") {
+		t.Fatalf("an over-budget suite must still be reported: err=%v stderr=%q", err, errOut.String())
+	}
+	if !strings.Contains(out.String(), "solo") || !strings.Contains(out.String(), "events/day") {
+		t.Fatalf("describe must render the suite before judging it:\n%s", out.String())
+	}
+}
+
+func TestOnceCommand_RequiresAnAPIKey(t *testing.T) {
+	t.Setenv("E2EPROBE_API_HOST", "https://api.example.test/v1")
+	t.Setenv("E2EPROBE_API_KEY", "")
+	t.Setenv("E2EPROBE_EMAIL", "probe@example.test")
+	t.Setenv("E2EPROBE_PASSWORD", "password12345")
+	err := once(newCatalog(), "", "preflight", "", false, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "E2EPROBE_API_KEY") {
+		t.Fatalf("once must not run unauthenticated on bootstrap credentials, got %v", err)
+	}
+}
+
+func TestRunOnce_ProvisioningNoteStaysOffStdout(t *testing.T) {
+	fc := probetest.New()
+	fc.Customer.CreateErr = probetest.ServerError(503)
+	rt, err := newRuntime(newCatalog(), &e2eprobe.Config{}, suite.Default(), fc, logger.NewNoopLogger(), "run-test", runtimeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	_ = runOnce(context.Background(), rt, "preflight", "", true, &out, &errOut)
+	var doc map[string]any
+	if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
+		t.Fatalf("stdout must be one JSON document: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(errOut.String(), "provisioning incomplete") {
+		t.Fatalf("the provisioning note belongs on stderr, got %q", errOut.String())
+	}
+}
+
+func TestParseCommandLine_RejectsFlagsOfOtherCommands(t *testing.T) {
+	if _, _, err := parseCommandLine(io.Discard, []string{"once", "--only", "usage"}); err == nil {
+		t.Fatal("once must not accept run's --only")
+	}
+	if _, _, err := parseCommandLine(io.Discard, []string{"run", "--scenario", "usage"}); err == nil {
+		t.Fatal("run must not accept once's --scenario")
+	}
+	cmd, opts, err := parseCommandLine(io.Discard, []string{"--suite", "x.yaml"})
+	if err != nil || cmd != "run" || opts.suitePath != "x.yaml" {
+		t.Fatalf("flags without a command mean run: %q %+v %v", cmd, opts, err)
+	}
+	cmd, opts, err = parseCommandLine(io.Discard, []string{"once", "--scenario", "usage", "--persona", "taxed", "--json"})
+	if err != nil || cmd != "once" || opts.scenario != "usage" || opts.persona != "taxed" || !opts.asJSON {
+		t.Fatalf("once flags: %q %+v %v", cmd, opts, err)
 	}
 }

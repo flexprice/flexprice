@@ -23,17 +23,8 @@ type CheckError struct {
 func (e *CheckError) Error() string { return e.Err.Error() }
 func (e *CheckError) Unwrap() error { return e.Err }
 
-// Errorf is a convenience constructor that wraps a fmt.Errorf-style message
-// with structured key/value attributes for the failure report.
-//
-// If the wrapped error chain contains a Flexprice SDK error type, Errorf
-// auto-populates `status_code` and `error_body` attributes. This makes
-// otherwise-opaque "%s: {}" alerts (where the SDK's ErrorResponse.Error()
-// marshals to the literal string "{}") actionable: callers don't have to
-// reach into the SDK type at every alert site.
-//
-// Caller-provided attributes win on key conflicts — Errorf only fills in
-// `status_code` / `error_body` when they're absent.
+// Errorf wraps a formatted message with attributes for the failure report; an
+// SDK error in the chain adds status_code and error_body unless already set.
 func Errorf(attrs map[string]string, format string, args ...any) error {
 	if attrs == nil {
 		attrs = map[string]string{}
@@ -56,18 +47,8 @@ func AttributesFrom(err error) map[string]string {
 	return nil
 }
 
-// enrichWithSDKError walks the error chain for known Flexprice SDK error
-// types and mutates attrs to include their structured detail. Recognized
-// types:
-//
-//   - *sdkerrors.APIError — generic SDK API errors. Has explicit Body and
-//     StatusCode fields.
-//   - *sdkerrors.ErrorResponse — typed error response. Status code
-//     lives on HTTPMeta.Response; the body marshals via json.Marshal of the
-//     struct (often "{}" when the server returns an unparseable response).
-//
-// Caller-provided keys are never overwritten — this is enrichment, not
-// replacement.
+// enrichWithSDKError adds the status and body of an SDK error in the chain to
+// attrs without overwriting what the caller set.
 func enrichWithSDKError(err error, attrs map[string]string) {
 	var api *sdkerrors.APIError
 	if errors.As(err, &api) && api != nil {

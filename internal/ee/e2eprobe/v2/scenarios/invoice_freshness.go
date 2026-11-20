@@ -26,8 +26,13 @@ func registerInvoices(cat *scenario.Catalog) {
 	}
 }
 
+// freshnessGrace is how long after a cycle closes its invoice may still be on
+// its way before the cycle counts as stalled.
+const freshnessGrace = 3 * 24 * time.Hour
+
 // invoiceFreshness notices a subscription whose cycle invoicing stalled: the
-// latest invoice's period end may lag now by at most two billing cycles.
+// latest invoice's period end may lag now by at most one billing cycle plus
+// the grace.
 type invoiceFreshness struct{}
 
 func newInvoiceFreshness(scenario.Deps) *invoiceFreshness { return &invoiceFreshness{} }
@@ -56,17 +61,17 @@ func (*invoiceFreshness) Run(ctx context.Context, sc *scenario.Context) e2eprobe
 	latest := latestInvoice(invoices)
 	if latest == nil {
 		age := subscriptionAge(sc.Now(), sub)
-		if age <= 2*cycle {
-			return sc.Skip("young", fmt.Sprintf("subscription is %s old; its first invoice is due within 2 cycles of %s", age.Round(time.Hour), cycle))
+		if age <= cycle+freshnessGrace {
+			return sc.Skip("young", fmt.Sprintf("subscription is %s old; its first invoice is due within one cycle of %s plus %s", age.Round(time.Hour), cycle, freshnessGrace))
 		}
-		sc.Truth(fmt.Sprintf("no invoice after 2 cycles (subscription is %s old, cycle %s)", age.Round(time.Hour), cycle), false)
+		sc.Truth(fmt.Sprintf("no invoice after one cycle (subscription is %s old, cycle %s)", age.Round(time.Hour), cycle), false)
 		return sc.Result("freshness")
 	}
 	end := invoiceTime(*latest).UTC()
 	lag := sc.Now().Sub(end)
 	sc.Attr("latest_period_end", end.Format(time.RFC3339))
 	sc.Attr("lag", lag.Round(time.Minute).String())
-	sc.Truth(fmt.Sprintf("invoice freshness: latest period end %s lags %s, over 2 cycles of %s", end.Format(time.RFC3339), lag.Round(time.Minute), cycle), lag <= 2*cycle)
+	sc.Truth(fmt.Sprintf("invoice freshness: latest period end %s lags %s, over one cycle of %s plus %s", end.Format(time.RFC3339), lag.Round(time.Minute), cycle, freshnessGrace), lag <= cycle+freshnessGrace)
 	return sc.Result("freshness")
 }
 

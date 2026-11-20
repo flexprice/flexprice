@@ -2,7 +2,6 @@ package scenarios
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -76,25 +75,11 @@ func (s *commitmentPreview) Run(ctx context.Context, sc *scenario.Context) e2epr
 	if err := sc.Client().Events().IngestBulk(ctx, types.BulkIngestEventRequest{Events: events}); err != nil {
 		return sc.Fail("ingest_bulk", err)
 	}
-	// Usage is read back before the preview; a preview computed early would bill too little.
+	// Usage must have landed before the preview; a preview computed early would bill too little.
 	raw := perUnit.Mul(batch.units())
-	seen := decimal.Zero
-	err = s.poll.until(ctx, func() error {
-		resp, err := sc.Client().Subscriptions().GetUsage(ctx, types.GetUsageBySubscriptionRequest{SubscriptionID: eph.SubscriptionID()})
-		if err != nil {
-			return err
-		}
-		if resp.GetUsageBySubscriptionResponse == nil || resp.GetUsageBySubscriptionResponse.Amount == nil {
-			return errors.New("usage read has no amount")
-		}
-		seen = decimal.NewFromFloat(*resp.GetUsageBySubscriptionResponse.Amount)
-		if seen.Round(2).LessThan(raw) {
-			return fmt.Errorf("usage %s has not reached %s", seen.StringFixed(2), raw.StringFixed(2))
-		}
-		return nil
-	})
+	seen, err := awaitCloneUsage(ctx, sc, s.poll, eph, batch.meter, batch.units())
 	if err != nil {
-		sc.Attr("usage_amount", seen.StringFixed(2))
+		sc.Attr("usage_units", seen.String())
 		return sc.Fail("poll_usage", err)
 	}
 	inv, err := previewOf(ctx, sc, eph.SubscriptionID())

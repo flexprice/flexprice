@@ -38,10 +38,12 @@ func newTestDeps(t *testing.T) *testDeps {
 	if err := w.Provision(context.Background()); err != nil {
 		t.Fatalf("provision: %v", err)
 	}
+	lg := ledger.NewLedger(48 * time.Hour)
+	lg.SetClock(func() time.Time { return d.now })
 	d.Deps = scenario.Deps{
 		Client:    d.fc,
 		World:     w,
-		Ledger:    ledger.NewLedger(48 * time.Hour),
+		Ledger:    lg,
 		Inbox:     inbox.New(inbox.Options{}),
 		Suite:     s,
 		Logger:    logger.NewNoopLogger(),

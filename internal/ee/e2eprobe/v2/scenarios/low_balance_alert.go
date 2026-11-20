@@ -15,7 +15,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Units of the $0.01 meter driven per drop leg: enough to clear a fresh canary,
+// Units of the $0.01 meter driven per run: enough to clear a fresh canary,
 // headroom past the critical threshold, and a cap against a corrupt balance read.
 const (
 	alertDriveMinUnits    = 3500
@@ -25,15 +25,16 @@ const (
 
 const droppedWebhook = "wallet.ongoing_balance.dropped"
 
-// lowBalanceAlert alternates two legs on the canary wallet: drive its balance
-// below the critical threshold and wait for the dropped webhook, then, finding
-// it in alarm on the next run, refill it so the cycle can repeat.
+// lowBalanceAlert drives the canary wallet below its critical threshold, waits
+// for the dropped webhook and refills the wallet, so one run exercises the whole
+// alert path and leaves the canary ready for the next. The wait covers the
+// server's debounced usage-alert evaluation.
 type lowBalanceAlert struct {
 	webhookWait time.Duration
 }
 
 func newLowBalanceAlert(scenario.Deps) *lowBalanceAlert {
-	return &lowBalanceAlert{webhookWait: 2 * time.Minute}
+	return &lowBalanceAlert{webhookWait: 8 * time.Minute}
 }
 
 func (*lowBalanceAlert) Name() string               { return "low-balance-alert" }
@@ -49,13 +50,56 @@ func (s *lowBalanceAlert) Run(ctx context.Context, sc *scenario.Context) e2eprob
 	if gap := p.Gap(e2eprobe.TraitAlerts); gap != "" {
 		return sc.Skip("alerts", gap)
 	}
+	spec := p.Spec().Wallet
+	if spec == nil || spec.Balance == "" {
+		return sc.Skip("wallet", "persona declares no wallet balance to refill to")
+	}
 	sc.Attr("wallet_id", walletID)
-	resp, err := sc.Client().Wallets().GetBalance(ctx, walletID)
+	balance, state, err := s.balance(ctx, sc, walletID)
 	if err != nil {
 		return sc.Fail("balance", err)
 	}
+	sc.Attr("alert_state", string(state))
+	sc.Attr("real_time_balance", balance)
+	if state != types.AlertStateOk {
+		// A previous run left the canary in alarm; restore it before driving it down again.
+		if err := walletTopUp(ctx, sc, walletID, spec.Balance, "e2eprobe alert canary recovery"); err != nil {
+			return sc.Fail("top_up", err)
+		}
+		sc.Attr("refilled_first", "yes")
+		balance = spec.Balance
+	}
+	units := computeDriveUnits(balance)
+	sc.Attr("drive_units", strconv.Itoa(units))
+	t0 := sc.Now()
+	if err := s.drive(ctx, sc, units, t0); err != nil {
+		return sc.Fail("ingest", err)
+	}
+	ev, waitErr := sc.Inbox().Await(ctx, inbox.Match{EventType: droppedWebhook, WalletID: walletID, After: t0}, s.webhookWait)
+	if waitErr == nil {
+		sc.Attr("webhook_at", ev.ReceivedAt.UTC().Format(time.RFC3339))
+	}
+	// Refill whatever happened, so the next run starts from the declared balance.
+	if err := walletTopUp(ctx, sc, walletID, spec.Balance, "e2eprobe alert canary recovery"); err != nil {
+		return sc.Fail("top_up", err)
+	}
+	sc.Attr("refilled_to", spec.Balance)
+	switch {
+	case errors.Is(waitErr, inbox.ErrTimeout):
+		return s.explainMissingWebhook(ctx, sc, walletID, t0)
+	case waitErr != nil:
+		return sc.Fail("webhook", waitErr)
+	}
+	return sc.Result("alert")
+}
+
+func (*lowBalanceAlert) balance(ctx context.Context, sc *scenario.Context, walletID string) (string, types.AlertState, error) {
+	resp, err := sc.Client().Wallets().GetBalance(ctx, walletID)
+	if err != nil {
+		return "", "", err
+	}
 	if resp == nil || resp.WalletBalanceResponse == nil {
-		return sc.Fail("balance", errors.New("empty balance response"))
+		return "", "", errors.New("empty balance response")
 	}
 	bal := resp.WalletBalanceResponse
 	state := types.AlertStateOk
@@ -66,33 +110,12 @@ func (s *lowBalanceAlert) Run(ctx context.Context, sc *scenario.Context) e2eprob
 	if bal.RealTimeBalance != nil {
 		realTime = *bal.RealTimeBalance
 	}
-	sc.Attr("alert_state", string(state))
-	sc.Attr("real_time_balance", realTime)
-	if state != types.AlertStateOk {
-		return s.refill(ctx, sc, walletID)
-	}
-	return s.drop(ctx, sc, walletID, computeDriveUnits(realTime))
+	return realTime, state, nil
 }
 
-// refill restores the declared balance; the recovery webhook is not asserted here.
-func (*lowBalanceAlert) refill(ctx context.Context, sc *scenario.Context, walletID string) e2eprobe.Result {
-	sc.Attr("leg", "recover")
-	spec := sc.Persona().Spec().Wallet
-	if spec == nil || spec.Balance == "" {
-		return sc.Skip("recover", "persona declares no wallet balance to refill to")
-	}
-	if err := walletTopUp(ctx, sc, walletID, spec.Balance, "e2eprobe alert canary recovery"); err != nil {
-		return sc.Fail("top_up", err)
-	}
-	return sc.Result("recover")
-}
-
-// drop ingests one event large enough to cross the critical threshold and waits
-// for its webhook; a miss is attributed to the alert pipeline or to delivery.
-func (s *lowBalanceAlert) drop(ctx context.Context, sc *scenario.Context, walletID string, units int) e2eprobe.Result {
-	sc.Attr("leg", "drop")
-	sc.Attr("drive_units", strconv.Itoa(units))
-	ext, t0 := sc.Persona().ExternalID(), sc.Now()
+// drive ingests one event large enough to cross the critical threshold.
+func (*lowBalanceAlert) drive(ctx context.Context, sc *scenario.Context, units int, t0 time.Time) error {
+	ext := sc.Persona().ExternalID()
 	id := fmt.Sprintf("%s-alert-%d", ext, t0.Unix())
 	ts := t0.UTC().Format(time.RFC3339Nano)
 	_, err := sc.Client().Events().Ingest(ctx, types.IngestEventRequest{
@@ -107,18 +130,7 @@ func (s *lowBalanceAlert) drop(ctx context.Context, sc *scenario.Context, wallet
 			"e2eprobe_run_id": sc.RunID(),
 		},
 	})
-	if err != nil {
-		return sc.Fail("ingest", err)
-	}
-	ev, err := sc.Inbox().Await(ctx, inbox.Match{EventType: droppedWebhook, WalletID: walletID, After: t0}, s.webhookWait)
-	switch {
-	case errors.Is(err, inbox.ErrTimeout):
-		return s.explainMissingWebhook(ctx, sc, walletID, t0)
-	case err != nil:
-		return sc.Fail("webhook", err)
-	}
-	sc.Attr("webhook_at", ev.ReceivedAt.UTC().Format(time.RFC3339))
-	return sc.Result("drop")
+	return err
 }
 
 // explainMissingWebhook separates an alert the server never raised from one

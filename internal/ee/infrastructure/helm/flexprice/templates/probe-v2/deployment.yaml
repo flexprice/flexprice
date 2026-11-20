@@ -177,13 +177,19 @@ spec:
               value: {{ .Values.e2eprobeV2.service.port | quote }}
             - name: TMPDIR
               value: "/tmp"
-          # /healthz is served by the inbox listener from the first second, so a
-          # wedged process is restarted instead of silently skipping every tick.
+          # /healthz is served once the listener is up, which comes after the
+          # signup bootstrap; the startup probe gives that path ten minutes
+          # before liveness takes over and restarts a wedged process.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: webhook
+            periodSeconds: 10
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /healthz
               port: webhook
-            initialDelaySeconds: 10
             periodSeconds: 30
           readinessProbe:
             httpGet:

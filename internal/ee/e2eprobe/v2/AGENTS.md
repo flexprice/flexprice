@@ -28,9 +28,11 @@ Design and the reasoning behind every choice: `docs/design/2026-11-19-e2eprobe-r
 
 1. Create `scenarios/<name>.go` with a private struct implementing
    `scenario.Scenario`: `Name()`, `Kind()` (`KindProbe` reads a persona's state;
-   `KindFlow` clones and acts), `Requires()` (traits the persona must carry; empty
+   `KindFlow` clones and acts; `KindMaintenance` and `KindPreflight` are
+   tenant-level housekeeping), `Requires()` (traits the persona must carry; empty
    means tenant-level) and `Run(ctx, sc)`.
-2. Register it in `scenarios/register.go` with its default `Every`. If a run
+2. Register it with `entry(...)` in the `register<Group>` function of its file
+   (or in `scenarios/register.go` for a new group) with its default `Every`. If a run
    ingests events, declare how many with `.ingests(n)` so the suite's daily
    budget counts them; prefer more units per event over more events.
 3. Add it to the default suite (`suite/default.yaml`) and to
