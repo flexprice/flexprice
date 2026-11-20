@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent/contract"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // ContractUpdate is the builder for updating Contract entities.
@@ -126,6 +127,26 @@ func (_u *ContractUpdate) SetNillableTermStart(v *time.Time) *ContractUpdate {
 // ClearTermStart clears the value of the "term_start" field.
 func (_u *ContractUpdate) ClearTermStart() *ContractUpdate {
 	_u.mutation.ClearTermStart()
+	return _u
+}
+
+// SetContractValue sets the "contract_value" field.
+func (_u *ContractUpdate) SetContractValue(v decimal.Decimal) *ContractUpdate {
+	_u.mutation.SetContractValue(v)
+	return _u
+}
+
+// SetNillableContractValue sets the "contract_value" field if the given value is not nil.
+func (_u *ContractUpdate) SetNillableContractValue(v *decimal.Decimal) *ContractUpdate {
+	if v != nil {
+		_u.SetContractValue(*v)
+	}
+	return _u
+}
+
+// ClearContractValue clears the value of the "contract_value" field.
+func (_u *ContractUpdate) ClearContractValue() *ContractUpdate {
+	_u.mutation.ClearContractValue()
 	return _u
 }
 
@@ -384,6 +405,12 @@ func (_u *ContractUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.TermStartCleared() {
 		_spec.ClearField(contract.FieldTermStart, field.TypeTime)
 	}
+	if value, ok := _u.mutation.ContractValue(); ok {
+		_spec.SetField(contract.FieldContractValue, field.TypeOther, value)
+	}
+	if _u.mutation.ContractValueCleared() {
+		_spec.ClearField(contract.FieldContractValue, field.TypeOther)
+	}
 	if value, ok := _u.mutation.TermEnd(); ok {
 		_spec.SetField(contract.FieldTermEnd, field.TypeTime, value)
 	}
@@ -552,6 +579,26 @@ func (_u *ContractUpdateOne) SetNillableTermStart(v *time.Time) *ContractUpdateO
 // ClearTermStart clears the value of the "term_start" field.
 func (_u *ContractUpdateOne) ClearTermStart() *ContractUpdateOne {
 	_u.mutation.ClearTermStart()
+	return _u
+}
+
+// SetContractValue sets the "contract_value" field.
+func (_u *ContractUpdateOne) SetContractValue(v decimal.Decimal) *ContractUpdateOne {
+	_u.mutation.SetContractValue(v)
+	return _u
+}
+
+// SetNillableContractValue sets the "contract_value" field if the given value is not nil.
+func (_u *ContractUpdateOne) SetNillableContractValue(v *decimal.Decimal) *ContractUpdateOne {
+	if v != nil {
+		_u.SetContractValue(*v)
+	}
+	return _u
+}
+
+// ClearContractValue clears the value of the "contract_value" field.
+func (_u *ContractUpdateOne) ClearContractValue() *ContractUpdateOne {
+	_u.mutation.ClearContractValue()
 	return _u
 }
 
@@ -839,6 +886,12 @@ func (_u *ContractUpdateOne) sqlSave(ctx context.Context) (_node *Contract, err 
 	}
 	if _u.mutation.TermStartCleared() {
 		_spec.ClearField(contract.FieldTermStart, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ContractValue(); ok {
+		_spec.SetField(contract.FieldContractValue, field.TypeOther, value)
+	}
+	if _u.mutation.ContractValueCleared() {
+		_spec.ClearField(contract.FieldContractValue, field.TypeOther)
 	}
 	if value, ok := _u.mutation.TermEnd(); ok {
 		_spec.SetField(contract.FieldTermEnd, field.TypeTime, value)

@@ -3416,6 +3416,87 @@
         "x-scope": "read"
       }
     },
+    "/contracts/{id}/activate": {
+      "post": {
+        "tags": [
+          "Contracts"
+        ],
+        "summary": "Activate contract",
+        "description": "Use when a completed draft contract starts. Activates its draft subscriptions from term_start; the contract and its performance obligations become active with them.",
+        "operationId": "activateContract",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Contract ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Term start",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateContractRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/contracts/{id}/complete-draft": {
       "post": {
         "tags": [
@@ -20912,6 +20993,18 @@
           }
         }
       },
+      "ActivateContractRequest": {
+        "required": [
+          "term_start"
+        ],
+        "type": "object",
+        "properties": {
+          "term_start": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ActivateDraftSubscriptionRequest": {
         "required": [
           "start_date"
@@ -22850,6 +22943,9 @@
           "contract_status": {
             "$ref": "#/components/schemas/types.ContractStatus"
           },
+          "contract_value": {
+            "type": "string"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -23707,6 +23803,10 @@
         ],
         "type": "object",
         "properties": {
+          "contract_value": {
+            "type": "string",
+            "description": "ContractValue is the agreed total; the performance obligations' allocations must add up to it."
+          },
           "currency": {
             "type": "string"
           },

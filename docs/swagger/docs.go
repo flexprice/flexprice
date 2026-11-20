@@ -2923,6 +2923,72 @@ const docTemplate = `{
                 "x-scope": "read"
             }
         },
+        "/contracts/{id}/activate": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when a completed draft contract starts. Activates its draft subscriptions from term_start; the contract and its performance obligations become active with them.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Contracts"
+                ],
+                "summary": "Activate contract",
+                "operationId": "activateContract",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Contract ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Term start",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ActivateContractRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ContractResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
         "/contracts/{id}/complete-draft": {
             "post": {
                 "security": [
@@ -19342,6 +19408,17 @@ const docTemplate = `{
                 }
             }
         },
+        "ActivateContractRequest": {
+            "type": "object",
+            "required": [
+                "term_start"
+            ],
+            "properties": {
+                "term_start": {
+                    "type": "string"
+                }
+            }
+        },
         "ActivateDraftSubscriptionRequest": {
             "type": "object",
             "required": [
@@ -21396,6 +21473,9 @@ const docTemplate = `{
                 "contract_status": {
                     "$ref": "#/definitions/types.ContractStatus"
                 },
+                "contract_value": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -22261,6 +22341,10 @@ const docTemplate = `{
                 "term_end"
             ],
             "properties": {
+                "contract_value": {
+                    "description": "ContractValue is the agreed total; the performance obligations' allocations must add up to it.",
+                    "type": "string"
+                },
                 "currency": {
                     "type": "string"
                 },

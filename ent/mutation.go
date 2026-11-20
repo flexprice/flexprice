@@ -18183,6 +18183,7 @@ type ContractMutation struct {
 	customer_id       *string
 	currency          *string
 	term_start        *time.Time
+	contract_value    *decimal.Decimal
 	term_end          *time.Time
 	ended_at          *time.Time
 	contract_status   *string
@@ -18741,6 +18742,55 @@ func (m *ContractMutation) ResetTermStart() {
 	delete(m.clearedFields, contract.FieldTermStart)
 }
 
+// SetContractValue sets the "contract_value" field.
+func (m *ContractMutation) SetContractValue(d decimal.Decimal) {
+	m.contract_value = &d
+}
+
+// ContractValue returns the value of the "contract_value" field in the mutation.
+func (m *ContractMutation) ContractValue() (r decimal.Decimal, exists bool) {
+	v := m.contract_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContractValue returns the old "contract_value" field's value of the Contract entity.
+// If the Contract object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContractMutation) OldContractValue(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContractValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContractValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContractValue: %w", err)
+	}
+	return oldValue.ContractValue, nil
+}
+
+// ClearContractValue clears the value of the "contract_value" field.
+func (m *ContractMutation) ClearContractValue() {
+	m.contract_value = nil
+	m.clearedFields[contract.FieldContractValue] = struct{}{}
+}
+
+// ContractValueCleared returns if the "contract_value" field was cleared in this mutation.
+func (m *ContractMutation) ContractValueCleared() bool {
+	_, ok := m.clearedFields[contract.FieldContractValue]
+	return ok
+}
+
+// ResetContractValue resets all changes to the "contract_value" field.
+func (m *ContractMutation) ResetContractValue() {
+	m.contract_value = nil
+	delete(m.clearedFields, contract.FieldContractValue)
+}
+
 // SetTermEnd sets the "term_end" field.
 func (m *ContractMutation) SetTermEnd(t time.Time) {
 	m.term_end = &t
@@ -19210,7 +19260,7 @@ func (m *ContractMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ContractMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 20)
 	if m.tenant_id != nil {
 		fields = append(fields, contract.FieldTenantID)
 	}
@@ -19240,6 +19290,9 @@ func (m *ContractMutation) Fields() []string {
 	}
 	if m.term_start != nil {
 		fields = append(fields, contract.FieldTermStart)
+	}
+	if m.contract_value != nil {
+		fields = append(fields, contract.FieldContractValue)
 	}
 	if m.term_end != nil {
 		fields = append(fields, contract.FieldTermEnd)
@@ -19296,6 +19349,8 @@ func (m *ContractMutation) Field(name string) (ent.Value, bool) {
 		return m.Currency()
 	case contract.FieldTermStart:
 		return m.TermStart()
+	case contract.FieldContractValue:
+		return m.ContractValue()
 	case contract.FieldTermEnd:
 		return m.TermEnd()
 	case contract.FieldEndedAt:
@@ -19343,6 +19398,8 @@ func (m *ContractMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldCurrency(ctx)
 	case contract.FieldTermStart:
 		return m.OldTermStart(ctx)
+	case contract.FieldContractValue:
+		return m.OldContractValue(ctx)
 	case contract.FieldTermEnd:
 		return m.OldTermEnd(ctx)
 	case contract.FieldEndedAt:
@@ -19439,6 +19496,13 @@ func (m *ContractMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTermStart(v)
+		return nil
+	case contract.FieldContractValue:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContractValue(v)
 		return nil
 	case contract.FieldTermEnd:
 		v, ok := value.(time.Time)
@@ -19566,6 +19630,9 @@ func (m *ContractMutation) ClearedFields() []string {
 	if m.FieldCleared(contract.FieldTermStart) {
 		fields = append(fields, contract.FieldTermStart)
 	}
+	if m.FieldCleared(contract.FieldContractValue) {
+		fields = append(fields, contract.FieldContractValue)
+	}
 	if m.FieldCleared(contract.FieldTermEnd) {
 		fields = append(fields, contract.FieldTermEnd)
 	}
@@ -19618,6 +19685,9 @@ func (m *ContractMutation) ClearField(name string) error {
 		return nil
 	case contract.FieldTermStart:
 		m.ClearTermStart()
+		return nil
+	case contract.FieldContractValue:
+		m.ClearContractValue()
 		return nil
 	case contract.FieldTermEnd:
 		m.ClearTermEnd()
@@ -19677,6 +19747,9 @@ func (m *ContractMutation) ResetField(name string) error {
 		return nil
 	case contract.FieldTermStart:
 		m.ResetTermStart()
+		return nil
+	case contract.FieldContractValue:
+		m.ResetContractValue()
 		return nil
 	case contract.FieldTermEnd:
 		m.ResetTermEnd()

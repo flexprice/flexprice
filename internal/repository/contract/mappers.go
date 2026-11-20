@@ -20,6 +20,7 @@ func FromEnt(e *ent.Contract) *domainContract.Contract {
 		WithCurrency(e.Currency).
 		WithTermStart(e.TermStart).
 		WithTermEnd(e.TermEnd).
+		WithContractValue(e.ContractValue).
 		WithEndedAt(e.EndedAt).
 		WithContractStatus(types.ContractStatus(e.ContractStatus)).
 		WithStatus(types.Status(e.Status)).

@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/shopspring/decimal"
 )
 
 // ID filters vertices based on their ID field.
@@ -112,6 +113,11 @@ func Currency(v string) predicate.Contract {
 // TermStart applies equality check predicate on the "term_start" field. It's identical to TermStartEQ.
 func TermStart(v time.Time) predicate.Contract {
 	return predicate.Contract(sql.FieldEQ(FieldTermStart, v))
+}
+
+// ContractValue applies equality check predicate on the "contract_value" field. It's identical to ContractValueEQ.
+func ContractValue(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldContractValue, v))
 }
 
 // TermEnd applies equality check predicate on the "term_end" field. It's identical to TermEndEQ.
@@ -777,6 +783,56 @@ func TermStartIsNil() predicate.Contract {
 // TermStartNotNil applies the NotNil predicate on the "term_start" field.
 func TermStartNotNil() predicate.Contract {
 	return predicate.Contract(sql.FieldNotNull(FieldTermStart))
+}
+
+// ContractValueEQ applies the EQ predicate on the "contract_value" field.
+func ContractValueEQ(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldContractValue, v))
+}
+
+// ContractValueNEQ applies the NEQ predicate on the "contract_value" field.
+func ContractValueNEQ(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldNEQ(FieldContractValue, v))
+}
+
+// ContractValueIn applies the In predicate on the "contract_value" field.
+func ContractValueIn(vs ...decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldIn(FieldContractValue, vs...))
+}
+
+// ContractValueNotIn applies the NotIn predicate on the "contract_value" field.
+func ContractValueNotIn(vs ...decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldNotIn(FieldContractValue, vs...))
+}
+
+// ContractValueGT applies the GT predicate on the "contract_value" field.
+func ContractValueGT(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldGT(FieldContractValue, v))
+}
+
+// ContractValueGTE applies the GTE predicate on the "contract_value" field.
+func ContractValueGTE(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldGTE(FieldContractValue, v))
+}
+
+// ContractValueLT applies the LT predicate on the "contract_value" field.
+func ContractValueLT(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldLT(FieldContractValue, v))
+}
+
+// ContractValueLTE applies the LTE predicate on the "contract_value" field.
+func ContractValueLTE(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldLTE(FieldContractValue, v))
+}
+
+// ContractValueIsNil applies the IsNil predicate on the "contract_value" field.
+func ContractValueIsNil() predicate.Contract {
+	return predicate.Contract(sql.FieldIsNull(FieldContractValue))
+}
+
+// ContractValueNotNil applies the NotNil predicate on the "contract_value" field.
+func ContractValueNotNil() predicate.Contract {
+	return predicate.Contract(sql.FieldNotNull(FieldContractValue))
 }
 
 // TermEndEQ applies the EQ predicate on the "term_end" field.

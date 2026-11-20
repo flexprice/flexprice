@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Contract is the accounting agreement a subscription establishes.
@@ -16,6 +17,7 @@ type Contract struct {
 	currency         string
 	termStart        *time.Time
 	termEnd          *time.Time
+	contractValue    *decimal.Decimal
 	endedAt          *time.Time
 	contractStatus   types.ContractStatus
 	status           types.Status
@@ -76,6 +78,14 @@ func (c *Contract) TermEnd() *time.Time {
 		return nil
 	}
 	return c.termEnd
+}
+
+// ContractValue is the agreed total its POBs' allocations add up to; nil until the contract is completed.
+func (c *Contract) ContractValue() *decimal.Decimal {
+	if c == nil {
+		return nil
+	}
+	return c.contractValue
 }
 
 func (c *Contract) EndedAt() *time.Time {
@@ -201,6 +211,11 @@ func (b *Builder) WithTermStart(termStart *time.Time) *Builder {
 
 func (b *Builder) WithTermEnd(termEnd *time.Time) *Builder {
 	b.contract.termEnd = termEnd
+	return b
+}
+
+func (b *Builder) WithContractValue(contractValue *decimal.Decimal) *Builder {
+	b.contract.contractValue = contractValue
 	return b
 }
 
