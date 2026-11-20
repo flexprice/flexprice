@@ -20,6 +20,7 @@ import (
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
+	recognitionsvc "github.com/flexprice/flexprice/internal/ee/service/recognition"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -613,7 +614,9 @@ func newE2EStack(t *testing.T, pobs ...e2ePOB) *e2eStack {
 
 	pobService := pobsvc.NewPerformanceObligationService(pobStore, contracts, subs, invoices, taxes, testutil.NewInMemoryRevenueFactStore())
 	journal := journalsvc.NewJournalService(testutil.NewMockPostgresClient(nil), store, accountingperiodsvc.NewAccountingPeriodService(periodStore),
-		pobService, pobStore, contractsvc.NewContractService(contracts), contracts, subs, customers, invoices, testutil.NewInMemoryCreditNoteStore(),
+		pobService, recognitionsvc.NewContractRecognizer(contracts, pobStore, pobService, store, invoices, subs, customers),
+		recognitionsvc.NewInvoiceRecognizer(invoices, taxes, contracts, store, subs, customers),
+		contractsvc.NewContractService(contracts), contracts, subs, customers, invoices, testutil.NewInMemoryCreditNoteStore(),
 		testutil.NewInMemoryPaymentStore(), testutil.NewInMemoryRefundStore(), taxes, testutil.NewInMemorySettingsStore())
 	return &e2eStack{t: t, ctx: ctx, journal: journal, reports: NewRevenueReportService(store, journal, contracts),
 		store: store, invoices: invoices, taxes: taxes}

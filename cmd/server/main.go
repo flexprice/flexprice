@@ -31,6 +31,7 @@ import (
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
+	recognitionsvc "github.com/flexprice/flexprice/internal/ee/service/recognition"
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
 	revenuereportsvc "github.com/flexprice/flexprice/internal/ee/service/revenuereport"
 	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
@@ -359,6 +360,8 @@ func main() {
 			contractsvc.NewContractIngestService,
 			pobsvc.NewPerformanceObligationService,
 			accountingperiodsvc.NewAccountingPeriodService,
+			recognitionsvc.NewContractRecognizer,
+			recognitionsvc.NewInvoiceRecognizer,
 			journalsvc.NewJournalService,
 			revenuereportsvc.NewRevenueReportService,
 			service.NewSettingsService,
