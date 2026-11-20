@@ -691,6 +691,10 @@ func (r *MeterUsageRepository) GetMeterTotals(ctx context.Context, params *event
 		}
 		totals = append(totals, t)
 	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to read meter totals rows").Mark(ierr.ErrDatabase)
+	}
 	SetSpanSuccess(span)
 	return totals, nil
 }
