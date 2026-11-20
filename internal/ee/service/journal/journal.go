@@ -246,12 +246,15 @@ func (s *journalService) lineNets(ctx context.Context, inv *invoice.Invoice) (ma
 // pobFinder finds the POB a subscription invoice line credits.
 type pobFinder func(ctx context.Context, li *invoice.InvoiceLineItem) (string, error)
 
-// pobFor is how a source's lines find their POB: under a contract by lookup, a standalone subscription's lines have none.
+// pobFor is how a source's lines find their POB: the contract's POB for the line's price, none for a standalone
+// subscription's lines.
 func (s *journalService) pobFor(contractID string) pobFinder {
 	if contractID == "" {
 		return func(context.Context, *invoice.InvoiceLineItem) (string, error) { return "", nil }
 	}
-	return s.pobService.POBIDForInvoiceLine
+	return func(ctx context.Context, li *invoice.InvoiceLineItem) (string, error) {
+		return s.pobService.POBIDForInvoiceLine(ctx, contractID, li)
+	}
 }
 
 // e.g. 118 with 18 tax: Dr contra_revenue 100, Dr tax 18 / Cr AR 118; a void reverses it.

@@ -29425,24 +29425,6 @@
           }
         }
       },
-      "PerformanceObligationAssociationResponse": {
-        "type": "object",
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "entity_id": {
-            "type": "string"
-          },
-          "entity_type": {
-            "$ref": "#/components/schemas/types.RevRecEntityType"
-          },
-          "id": {
-            "type": "string"
-          }
-        }
-      },
       "PerformanceObligationResponse": {
         "type": "object",
         "properties": {
@@ -29451,12 +29433,6 @@
           },
           "amortization_method": {
             "$ref": "#/components/schemas/types.AmortizationMethod"
-          },
-          "associations": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PerformanceObligationAssociationResponse"
-            }
           },
           "contract_id": {
             "type": "string"

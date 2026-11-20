@@ -9,9 +9,11 @@ import (
 	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	domainPOB "github.com/flexprice/flexprice/internal/domain/pob"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -69,7 +71,7 @@ func (s *POBServiceSuite) SetupTest() {
 	s.ctx = testutil.SetupContext()
 	contracts := testutil.NewInMemoryContractStore()
 	s.pobRepo = testutil.NewInMemoryPOBStore(contracts)
-	s.pobService = NewPerformanceObligationService(s.pobRepo, contracts, nil, nil, nil, nil)
+	s.pobService = NewPerformanceObligationService(s.pobRepo, contracts, nil, nil, nil, nil, nil)
 	s.contract = domainContract.NewBuilder(nil).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT)).
 		WithContractStatus(types.ContractStatusDraft).
@@ -128,16 +130,16 @@ func TestEarnedByPOB(t *testing.T) {
 	at := func(m time.Month, day int) time.Time { return time.Date(2026, m, day, 0, 0, 0, 0, time.UTC) }
 	seats := domainPOB.NewBuilder(nil).WithID("pob_seats").WithRecognitionMethod(types.RecognitionMethodStraightLine).WithAmortizationMethod(types.AmortizationDaily).Build()
 	setup := domainPOB.NewBuilder(nil).WithID("pob_setup").WithRecognitionMethod(types.RecognitionMethodPointInTime).WithAmortizationMethod(types.AmortizationDaily).Build()
-	lineItemPOBs := map[string]*domainPOB.PerformanceObligation{"sli_seats": seats, "sli_setup": setup}
+	pricePOBs := map[string]*domainPOB.PerformanceObligation{"price_sli_seats": seats, "price_sli_setup": setup}
 
 	line := func(id, sli, amount string, start, end *time.Time) *invoice.InvoiceLineItem {
-		return &invoice.InvoiceLineItem{ID: id, SubscriptionLineItemID: lo.ToPtr(sli), Amount: d(amount), PeriodStart: start, PeriodEnd: end}
+		return &invoice.InvoiceLineItem{ID: id, SubscriptionLineItemID: lo.ToPtr(sli), PriceID: lo.ToPtr("price_" + sli), Amount: d(amount), PeriodStart: start, PeriodEnd: end}
 	}
 	inv := func(id string, invoiceType types.InvoiceType, finalizedAt time.Time, lines ...*invoice.InvoiceLineItem) *invoice.Invoice {
 		return &invoice.Invoice{ID: id, InvoiceType: invoiceType, Currency: "usd", FinalizedAt: lo.ToPtr(finalizedAt), LineItems: lines}
 	}
 	fact := func(sli, net string, day time.Time) *revenuefact.RevenueFact {
-		return &revenuefact.RevenueFact{SubLineItemID: lo.ToPtr(sli), NetAmount: d(net), Day: day, DecompositionMode: types.Marginal}
+		return &revenuefact.RevenueFact{SubLineItemID: lo.ToPtr(sli), PriceID: lo.ToPtr("price_" + sli), NetAmount: d(net), Day: day, DecompositionMode: types.Marginal}
 	}
 
 	april := inv("inv_apr", types.InvoiceTypeSubscription, at(4, 1),
@@ -187,7 +189,7 @@ func TestEarnedByPOB(t *testing.T) {
 		{
 			name: "a period_only fact spreads over its period",
 			inputs: &earningInputs{facts: []*revenuefact.RevenueFact{{
-				SubLineItemID: lo.ToPtr("sli_seats"), NetAmount: d("31"), DecompositionMode: types.PeriodOnly,
+				SubLineItemID: lo.ToPtr("sli_seats"), PriceID: lo.ToPtr("price_sli_seats"), NetAmount: d("31"), DecompositionMode: types.PeriodOnly,
 				Day: at(5, 1), PeriodStart: at(5, 1), PeriodEnd: at(5, 31),
 			}}},
 			asOf: at(5, 11),
@@ -206,7 +208,7 @@ func TestEarnedByPOB(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := earnedByPOB(lineItemPOBs, tt.inputs, tt.asOf, time.UTC)
+			got := earnedByPOB(pricePOBs, tt.inputs, tt.asOf, time.UTC)
 
 			require.Len(t, got, len(tt.want))
 			for id, want := range tt.want {
@@ -226,7 +228,8 @@ func TestEarnedToDate(t *testing.T) {
 	subs := testutil.NewInMemorySubscriptionStore()
 	invoices := testutil.NewInMemoryInvoiceStore()
 	facts := testutil.NewInMemoryRevenueFactStore()
-	service := NewPerformanceObligationService(pobs, contracts, subs, invoices, testutil.NewInMemoryTaxAppliedStore(), facts)
+	prices := testutil.NewInMemoryPriceStore()
+	service := NewPerformanceObligationService(pobs, contracts, subs, invoices, testutil.NewInMemoryTaxAppliedStore(), facts, prices)
 
 	sub := &subscription.Subscription{ID: "subs_1", Timezone: "UTC", BaseModel: types.GetDefaultBaseModel(ctx)}
 	require.NoError(t, subs.Create(ctx, sub))
@@ -239,12 +242,14 @@ func TestEarnedToDate(t *testing.T) {
 	c := domainContract.NewBuilder(nil).WithID("contract_1").WithContractStatus(types.ContractStatusActive).WithStatus(types.StatusPublished).Build()
 	require.NoError(t, contracts.CreateWithAssociation(ctx, c, domainContract.NewAssociationBuilder(nil).
 		WithID("contract_assoc_1").WithEntityType(types.RevRecEntityTypeSubscription).WithEntityID(sub.ID).WithStatus(types.StatusPublished).Build()))
-	// Earning still reads line items through associations; seed one POB per line item.
+	// One POB per line item's Product: seats earn straight line, usage as consumed.
 	for _, li := range sub.LineItems {
-		require.NoError(t, pobs.CreateWithAssociation(ctx,
-			domainPOB.NewBuilder(nil).WithID("pob_"+li.ID).WithContractID(c.ID()).WithName(li.ID).WithRecognitionMethod(lo.Ternary(li.PriceType == types.PRICE_TYPE_USAGE, types.RecognitionMethodAsConsumed, types.RecognitionMethodStraightLine)).
-				WithAmortizationMethod(types.AmortizationPeriodEvenProrated).WithPOBStatus(types.PerformanceObligationStatusActive).WithStatus(types.StatusPublished).Build(),
-			domainPOB.NewAssociationBuilder(nil).WithID("pob_assoc_"+li.ID).WithEntityType(types.RevRecEntityTypeSubscriptionLineItem).WithEntityID(li.ID).WithStatus(types.StatusPublished).Build()))
+		productID := "prod_" + li.ID
+		require.NoError(t, prices.Create(ctx, &price.Price{ID: li.PriceID, ProductID: productID, Type: li.PriceType,
+			BillingPeriod: types.BILLING_PERIOD_MONTHLY, BaseModel: types.GetDefaultBaseModel(ctx)}))
+		require.NoError(t, pobs.Create(ctx, domainPOB.NewBuilder(nil).WithID("pob_"+li.ID).WithContractID(c.ID()).WithProductID(productID).WithName(li.ID).
+			WithRecognitionMethod(lo.Ternary(li.PriceType == types.PRICE_TYPE_USAGE, types.RecognitionMethodAsConsumed, types.RecognitionMethodStraightLine)).
+			WithAmortizationMethod(types.AmortizationPeriodEvenProrated).WithPOBStatus(types.PerformanceObligationStatusActive).WithStatus(types.StatusPublished).Build()))
 	}
 
 	newInvoice := func(id string, status types.InvoiceStatus, lines ...*invoice.InvoiceLineItem) *invoice.Invoice {
@@ -252,7 +257,7 @@ func TestEarnedToDate(t *testing.T) {
 			Currency: "usd", FinalizedAt: lo.ToPtr(at(4, 1)), LineItems: lines, EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
 	}
 	newLine := func(id, sli, amount string) *invoice.InvoiceLineItem {
-		return &invoice.InvoiceLineItem{ID: id, SubscriptionLineItemID: lo.ToPtr(sli), Amount: decimal.RequireFromString(amount),
+		return &invoice.InvoiceLineItem{ID: id, SubscriptionLineItemID: lo.ToPtr(sli), PriceID: lo.ToPtr("price_" + sli), Amount: decimal.RequireFromString(amount),
 			PeriodStart: lo.ToPtr(at(4, 1)), PeriodEnd: lo.ToPtr(at(5, 1)), EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
 	}
 	require.NoError(t, invoices.CreateWithLineItems(ctx, newInvoice("inv_apr", types.InvoiceStatusFinalized, newLine("l_seats", "sli_seats", "90"), newLine("l_usage", "sli_usage", "50"))))
@@ -270,9 +275,9 @@ func TestEarnedToDate(t *testing.T) {
 	require.Len(t, byDate, 2, "one map per asOf")
 	midApril, earned := byDate[0], byDate[1]
 
-	seats, err := pobs.GetByLineItemID(ctx, "sli_seats")
+	seats, err := pobs.GetByID(ctx, "pob_sli_seats")
 	require.NoError(t, err)
-	usage, err := pobs.GetByLineItemID(ctx, "sli_usage")
+	usage, err := pobs.GetByID(ctx, "pob_sli_usage")
 	require.NoError(t, err)
 	require.Len(t, earned, 2, "every POB of the contract is present")
 	require.Equal(t, "95", earned[seats.ID()].String(), "April invoice plus the May 2 accrual; the voided invoice never earns")
@@ -285,7 +290,7 @@ func TestReconcileAndRead(t *testing.T) {
 	ctx := testutil.SetupContext()
 	contracts := testutil.NewInMemoryContractStore()
 	pobs := testutil.NewInMemoryPOBStore(contracts)
-	service := NewPerformanceObligationService(pobs, contracts, nil, nil, nil, nil)
+	service := NewPerformanceObligationService(pobs, contracts, nil, nil, nil, nil, nil)
 
 	c := domainContract.NewBuilder(nil).WithID("contract_1").WithCustomerID("cust_1").WithContractStatus(types.ContractStatusActive).WithStatus(types.StatusPublished).Build()
 	require.NoError(t, contracts.Create(ctx, c))
@@ -319,4 +324,57 @@ func TestReconcileAndRead(t *testing.T) {
 	none, err := service.GetPerformanceObligations(ctx, filter)
 	require.NoError(t, err)
 	require.Empty(t, none.Items)
+}
+
+func TestPOBIDForInvoiceLine(t *testing.T) {
+	ctx := testutil.SetupContext()
+	contracts := testutil.NewInMemoryContractStore()
+	pobs := testutil.NewInMemoryPOBStore(contracts)
+	prices := testutil.NewInMemoryPriceStore()
+	service := NewPerformanceObligationService(pobs, contracts, nil, nil, nil, nil, prices)
+
+	for id, pr := range map[string]*price.Price{
+		"price_monthly": {ProductID: "prod_platform", Type: types.PRICE_TYPE_FIXED, BillingPeriod: types.BILLING_PERIOD_MONTHLY},
+		"price_setup":   {ProductID: "prod_platform", Type: types.PRICE_TYPE_FIXED, BillingPeriod: types.BILLING_PERIOD_ONETIME},
+		"price_api":     {ProductID: "prod_api", Type: types.PRICE_TYPE_USAGE, BillingPeriod: types.BILLING_PERIOD_MONTHLY},
+		"price_other":   {ProductID: "prod_other", Type: types.PRICE_TYPE_FIXED, BillingPeriod: types.BILLING_PERIOD_MONTHLY},
+	} {
+		pr.ID, pr.BaseModel = id, types.GetDefaultBaseModel(ctx)
+		require.NoError(t, prices.Create(ctx, pr))
+	}
+	for id, key := range map[string]struct {
+		productID string
+		method    types.RecognitionMethod
+	}{
+		"pob_access": {"prod_platform", types.RecognitionMethodStraightLine},
+		"pob_setup":  {"prod_platform", types.RecognitionMethodPointInTime},
+		"pob_api":    {"prod_api", types.RecognitionMethodAsConsumed},
+	} {
+		require.NoError(t, pobs.Create(ctx, domainPOB.NewBuilder(nil).WithID(id).WithContractID("contract_1").WithProductID(key.productID).
+			WithRecognitionMethod(key.method).WithStatus(types.StatusPublished).Build()))
+	}
+
+	tests := []struct {
+		name    string
+		line    *invoice.InvoiceLineItem
+		want    string
+		wantErr bool
+	}{
+		{name: "recurring fee of a product → its straight-line POB", line: &invoice.InvoiceLineItem{SubscriptionLineItemID: lo.ToPtr("sli_1"), PriceID: lo.ToPtr("price_monthly")}, want: "pob_access"},
+		{name: "one-time fee of the same product → its point-in-time POB", line: &invoice.InvoiceLineItem{SubscriptionLineItemID: lo.ToPtr("sli_2"), PriceID: lo.ToPtr("price_setup")}, want: "pob_setup"},
+		{name: "usage → its as-consumed POB", line: &invoice.InvoiceLineItem{SubscriptionLineItemID: lo.ToPtr("sli_3"), PriceID: lo.ToPtr("price_api")}, want: "pob_api"},
+		{name: "no subscription line item has no POB", line: &invoice.InvoiceLineItem{PriceID: lo.ToPtr("price_monthly")}, want: ""},
+		{name: "a product with no POB in the contract is not found", line: &invoice.InvoiceLineItem{SubscriptionLineItemID: lo.ToPtr("sli_4"), PriceID: lo.ToPtr("price_other")}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := service.POBIDForInvoiceLine(ctx, "contract_1", tt.line)
+			if tt.wantErr {
+				require.True(t, ierr.IsNotFound(err), "got %v", err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
 }

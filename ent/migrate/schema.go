@@ -2353,41 +2353,6 @@ var (
 			},
 		},
 	}
-	// PerformanceObligationAssociationsColumns holds the columns for the "performance_obligation_associations" table.
-	PerformanceObligationAssociationsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "created_by", Type: field.TypeString, Nullable: true},
-		{Name: "updated_by", Type: field.TypeString, Nullable: true},
-		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "pob_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-	}
-	// PerformanceObligationAssociationsTable holds the schema information for the "performance_obligation_associations" table.
-	PerformanceObligationAssociationsTable = &schema.Table{
-		Name:       "performance_obligation_associations",
-		Columns:    PerformanceObligationAssociationsColumns,
-		PrimaryKey: []*schema.Column{PerformanceObligationAssociationsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "idx_pob_association_unique",
-				Unique:  true,
-				Columns: []*schema.Column{PerformanceObligationAssociationsColumns[1], PerformanceObligationAssociationsColumns[7], PerformanceObligationAssociationsColumns[9], PerformanceObligationAssociationsColumns[10]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "((status)::text = 'published'::text)",
-				},
-			},
-			{
-				Name:    "idx_pob_association_pob_id",
-				Unique:  false,
-				Columns: []*schema.Column{PerformanceObligationAssociationsColumns[1], PerformanceObligationAssociationsColumns[7], PerformanceObligationAssociationsColumns[8]},
-			},
-		},
-	}
 	// PlansColumns holds the columns for the "plans" table.
 	PlansColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -3802,7 +3767,6 @@ var (
 		PaymentAttemptsTable,
 		PaymentMethodsTable,
 		PerformanceObligationsTable,
-		PerformanceObligationAssociationsTable,
 		PlansTable,
 		PricesTable,
 		PriceUnitsTable,

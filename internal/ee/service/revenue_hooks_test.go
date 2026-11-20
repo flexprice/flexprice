@@ -222,7 +222,7 @@ func TestNotifySubscriptionChanged_SyncsOnlyWhenRevRecEnabled(t *testing.T) {
 				SettingsRepo:    settingsRepo,
 				ContractService: contractsvc.NewContractService(contractRepo),
 				POBService: pobsvc.NewPerformanceObligationService(testutil.NewInMemoryPOBStore(contractRepo), contractRepo, subRepo,
-					testutil.NewInMemoryInvoiceStore(), testutil.NewInMemoryTaxAppliedStore(), testutil.NewInMemoryRevenueFactStore()),
+					testutil.NewInMemoryInvoiceStore(), testutil.NewInMemoryTaxAppliedStore(), testutil.NewInMemoryRevenueFactStore(), testutil.NewInMemoryPriceStore()),
 			}
 			NotifySubscriptionChanged(ctx, params, sub.ID)
 

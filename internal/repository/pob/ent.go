@@ -11,7 +11,6 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	entContract "github.com/flexprice/flexprice/ent/contract"
 	entPOB "github.com/flexprice/flexprice/ent/performanceobligation"
-	entPOBAssociation "github.com/flexprice/flexprice/ent/performanceobligationassociation"
 	"github.com/flexprice/flexprice/ent/predicate"
 	domainPOB "github.com/flexprice/flexprice/internal/domain/pob"
 	"github.com/flexprice/flexprice/internal/dsl"
@@ -92,58 +91,6 @@ func (r *repository) GetByID(ctx context.Context, id string) (*domainPOB.Perform
 
 	entRepo.SetSpanSuccess(span)
 	return FromEnt(p), nil
-}
-
-// GetByLineItemID returns the performance obligation linked to the line item by a published association, in any status.
-func (r *repository) GetByLineItemID(ctx context.Context, lineItemID string) (*domainPOB.PerformanceObligation, error) {
-	span := entRepo.StartRepositorySpan(ctx, "performance_obligation", "get_by_line_item_id", map[string]interface{}{
-		"line_item_id": lineItemID,
-	})
-	defer entRepo.FinishSpan(span)
-
-	a, err := r.client.Reader(ctx).PerformanceObligationAssociation.Query().
-		Where(
-			entPOBAssociation.TenantID(types.GetTenantID(ctx)),
-			entPOBAssociation.EnvironmentID(types.GetEnvironmentID(ctx)),
-			entPOBAssociation.EntityType(string(types.RevRecEntityTypeSubscriptionLineItem)),
-			entPOBAssociation.EntityID(lineItemID),
-			entPOBAssociation.Status(string(types.StatusPublished)),
-		).
-		Only(ctx)
-	if err != nil {
-		entRepo.SetSpanError(span, err)
-		return nil, r.readError(err, "line_item_id", lineItemID)
-	}
-
-	entRepo.SetSpanSuccess(span)
-	return r.GetByID(ctx, a.PobID)
-}
-
-// ListAssociations returns the performance obligation's published associations, oldest first.
-func (r *repository) ListAssociations(ctx context.Context, pobID string) ([]*domainPOB.Association, error) {
-	span := entRepo.StartRepositorySpan(ctx, "performance_obligation", "list_associations", map[string]interface{}{
-		"pob_id": pobID,
-	})
-	defer entRepo.FinishSpan(span)
-
-	associations, err := r.client.Reader(ctx).PerformanceObligationAssociation.Query().
-		Where(
-			entPOBAssociation.TenantID(types.GetTenantID(ctx)),
-			entPOBAssociation.EnvironmentID(types.GetEnvironmentID(ctx)),
-			entPOBAssociation.PobID(pobID),
-			entPOBAssociation.Status(string(types.StatusPublished)),
-		).
-		Order(ent.Asc(entPOBAssociation.FieldCreatedAt)).
-		All(ctx)
-	if err != nil {
-		entRepo.SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list performance obligation associations").
-			Mark(ierr.ErrDatabase)
-	}
-
-	entRepo.SetSpanSuccess(span)
-	return AssociationFromEntList(associations), nil
 }
 
 func (r *repository) List(ctx context.Context, filter *Filter) ([]*domainPOB.PerformanceObligation, error) {

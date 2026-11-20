@@ -7303,27 +7303,12 @@ definitions:
       voided_at:
         type: string
     type: object
-  PerformanceObligationAssociationResponse:
-    properties:
-      created_at:
-        type: string
-      entity_id:
-        type: string
-      entity_type:
-        $ref: '#/definitions/types.RevRecEntityType'
-      id:
-        type: string
-    type: object
   PerformanceObligationResponse:
     properties:
       allocated_amount:
         type: string
       amortization_method:
         $ref: '#/definitions/types.AmortizationMethod'
-      associations:
-        items:
-          $ref: '#/definitions/PerformanceObligationAssociationResponse'
-        type: array
       contract_id:
         type: string
       created_at:

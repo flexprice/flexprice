@@ -400,7 +400,7 @@ func newCompleteFixture(t *testing.T, ctx context.Context, contract *domainContr
 	subs := &fakeSubscriptions{}
 	require.NoError(t, contracts.Create(ctx, contract.WithID("contract_1").WithStatus(types.StatusPublished).Build()))
 
-	pobService := pobsvc.NewPerformanceObligationService(pobs, contracts, nil, nil, nil, nil)
+	pobService := pobsvc.NewPerformanceObligationService(pobs, contracts, nil, nil, nil, nil, nil)
 	svc := NewContractIngestService(contracts, testutil.NewMockPostgresClient(nil), subs, NewContractService(contracts), pobService,
 		nil, nil, nil, fakeCatalogServices{}, fakeCatalogServices{}, &config.Configuration{}, logger.NewNoopLogger()).(*contractIngestService)
 	return &completeFixture{svc: svc, pobs: pobs, subs: subs}

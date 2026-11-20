@@ -54,7 +54,8 @@ func TestReportsAtScale(t *testing.T) {
 	taxes := entRepo.NewTaxAppliedRepository(client, log, redis)
 	journals := journalRepo.NewRepository(client, log)
 	pobs := pobRepo.NewRepository(client, log)
-	pobService := pobsvc.NewPerformanceObligationService(pobs, contracts, subs, invoices, taxes, entRepo.NewRevenueFactRepository(client, log))
+	pobService := pobsvc.NewPerformanceObligationService(pobs, contracts, subs, invoices, taxes, entRepo.NewRevenueFactRepository(client, log),
+		entRepo.NewPriceRepository(client, log, redis))
 	journal := journalsvc.NewJournalService(client, journals, accountingperiodsvc.NewAccountingPeriodService(accountingPeriodRepo.NewRepository(client, log)),
 		pobService, recognitionsvc.NewContractRecognizer(contracts, pobs, pobService, journals, invoices, subs, entRepo.NewCustomerRepository(client, log, redis)),
 		recognitionsvc.NewInvoiceRecognizer(invoices, taxes, contracts, journals, subs, entRepo.NewCustomerRepository(client, log, redis)),
