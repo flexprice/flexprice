@@ -977,7 +977,7 @@ func TestRecognitionContracts(t *testing.T) {
 	s := svc.(*journalService)
 
 	add := func(id string, status types.ContractStatus, endedAt *time.Time) {
-		require.NoError(t, s.contractRepo.CreateWithAssociation(ctx,
+		require.NoError(t, s.contractRepo.(*testutil.InMemoryContractStore).CreateWithAssociation(ctx,
 			domainContract.NewBuilder(nil).WithID(id).WithContractStatus(status).WithEndedAt(endedAt).WithStatus(types.StatusPublished).Build(),
 			domainContract.NewAssociationBuilder(nil).WithID(id+"_assoc").WithEntityType(types.RevRecEntityTypeSubscription).WithEntityID("subs_"+id).WithStatus(types.StatusPublished).Build()))
 	}
@@ -997,7 +997,7 @@ func TestRecognitionContracts(t *testing.T) {
 		"active, ended in the last two months, and ended long ago but with a changed invoice; never draft")
 }
 
-// TestBackfill rebuilds a subscription created before enabling: no contract, no POB, a prepaid invoice never posted.
+// TestBackfill rebuilds a contract's subscription created before enabling: a prepaid invoice never posted or recognized.
 func TestBackfill(t *testing.T) {
 	ctx := testutil.SetupContext()
 	svc, store := newTestService(t, ctx, testSources{})
@@ -1011,6 +1011,14 @@ func TestBackfill(t *testing.T) {
 	annual.SubscriptionID = lo.ToPtr("subs_2")
 	annual.LineItems[0].SubscriptionLineItemID = lo.ToPtr("sli_2")
 	require.NoError(t, s.invoiceRepo.CreateWithLineItems(ctx, annual))
+	require.NoError(t, s.contractRepo.(*testutil.InMemoryContractStore).CreateWithAssociation(ctx,
+		domainContract.NewBuilder(nil).WithID("contract_2").WithContractStatus(types.ContractStatusActive).WithStatus(types.StatusPublished).Build(),
+		domainContract.NewAssociationBuilder(nil).WithID("contract_assoc_2").WithEntityType(types.RevRecEntityTypeSubscription).WithEntityID("subs_2").WithStatus(types.StatusPublished).Build()))
+	require.NoError(t, s.pobRepo.(*testutil.InMemoryPOBStore).CreateWithAssociation(ctx,
+		domainPOB.NewBuilder(nil).WithID("pob_2").WithContractID("contract_2").WithName("Annual").WithRecognitionMethod(types.RecognitionMethodStraightLine).
+			WithAmortizationMethod(types.AmortizationPeriodEvenProrated).WithServiceStart(inIST(time.January, 1)).WithPOBStatus(types.PerformanceObligationStatusActive).
+			WithStatus(types.StatusPublished).Build(),
+		domainPOB.NewAssociationBuilder(nil).WithID("pob_assoc_2").WithEntityType(types.RevRecEntityTypeSubscriptionLineItem).WithEntityID("sli_2").WithStatus(types.StatusPublished).Build()))
 
 	saved := func() []*domainJournal.Entry {
 		entries, err := store.List(ctx, &journalRepo.Filter{QueryFilter: types.NewNoLimitQueryFilter()})
@@ -1023,9 +1031,9 @@ func TestBackfill(t *testing.T) {
 
 	backfill()
 	c, err := s.contractRepo.GetBySubscriptionID(ctx, "subs_2")
-	require.NoError(t, err, "the contract was created")
+	require.NoError(t, err)
 	p, err := s.pobService.POBIDForInvoiceLine(ctx, annual.LineItems[0])
-	require.NoError(t, err, "the POB was created")
+	require.NoError(t, err)
 
 	balances := map[types.LedgerAccountKey]decimal.Decimal{}
 	for _, e := range saved() {
@@ -1060,35 +1068,33 @@ func TestBackfillCoversEverySubscriptionStatus(t *testing.T) {
 	svc, _ := newTestService(t, ctx, testSources{})
 	s := svc.(*journalService)
 	s.subRepo = activeByDefault{s.subRepo}
+	contracts := s.contractRepo.(*testutil.InMemoryContractStore)
 
 	tests := []struct {
-		status types.SubscriptionStatus
-		amount int64
+		status      types.SubscriptionStatus
+		cancelledAt *time.Time
+		want        types.ContractStatus
 	}{
-		{types.SubscriptionStatusCancelled, 100},
-		{types.SubscriptionStatusTrialing, 0},
+		{types.SubscriptionStatusCancelled, lo.ToPtr(inIST(time.February, 1)), types.ContractStatusEnded},
+		{types.SubscriptionStatusPaused, nil, types.ContractStatusActive},
 	}
-	invoices := map[types.SubscriptionStatus]*invoice.Invoice{}
 	for _, tt := range tests {
-		subID, lineID := "subs_"+string(tt.status), "sli_"+string(tt.status)
+		subID := "subs_" + string(tt.status)
 		require.NoError(t, s.subRepo.CreateWithLineItems(ctx, &subscription.Subscription{ID: subID, CustomerID: "cust_1", Currency: "usd",
-			Timezone: "Asia/Kolkata", SubscriptionStatus: tt.status, StartDate: inIST(time.January, 1), BaseModel: types.GetDefaultBaseModel(ctx)},
-			[]*subscription.SubscriptionLineItem{{ID: lineID, SubscriptionID: subID, PriceID: "price_" + string(tt.status), PriceType: types.PRICE_TYPE_FIXED,
-				BillingPeriod: types.BILLING_PERIOD_MONTHLY, StartDate: inIST(time.January, 1), BaseModel: types.GetDefaultBaseModel(ctx)}}))
-		inv := subscriptionInvoice(ctx, "inv_"+string(tt.status), types.InvoiceTypeSubscription, tt.amount, inIST(time.January, 1), inIST(time.January, 1), inIST(time.February, 1))
-		inv.SubscriptionID = lo.ToPtr(subID)
-		inv.LineItems[0].SubscriptionLineItemID = lo.ToPtr(lineID)
-		require.NoError(t, s.invoiceRepo.CreateWithLineItems(ctx, inv))
-		invoices[tt.status] = inv
+			Timezone: "Asia/Kolkata", SubscriptionStatus: tt.status, StartDate: inIST(time.January, 1), CancelledAt: tt.cancelledAt,
+			BaseModel: types.GetDefaultBaseModel(ctx)}, nil))
+		require.NoError(t, contracts.CreateWithAssociation(ctx,
+			domainContract.NewBuilder(nil).WithID("contract_"+string(tt.status)).WithContractStatus(types.ContractStatusDraft).WithStatus(types.StatusPublished).Build(),
+			domainContract.NewAssociationBuilder(nil).WithID("assoc_"+string(tt.status)).WithEntityType(types.RevRecEntityTypeSubscription).
+				WithEntityID(subID).WithStatus(types.StatusPublished).Build()))
 	}
 
 	require.NoError(t, s.Backfill(ctx, BackfillRequest{AsOf: inIST(time.March, 1), OnProgress: func(RecognitionCursor) {}}))
 	for _, tt := range tests {
 		t.Run(string(tt.status), func(t *testing.T) {
-			_, err := s.contractRepo.GetBySubscriptionID(ctx, "subs_"+string(tt.status))
-			require.NoError(t, err, "the contract was created")
-			_, err = s.pobService.POBIDForInvoiceLine(ctx, invoices[tt.status].LineItems[0])
-			require.NoError(t, err, "the POB was created")
+			c, err := s.contractRepo.GetBySubscriptionID(ctx, "subs_"+string(tt.status))
+			require.NoError(t, err)
+			require.Equal(t, tt.want, c.ContractStatus(), "backfill synced the contract")
 		})
 	}
 }

@@ -7,17 +7,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
+	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
 	contractagent "github.com/flexprice/flexprice/internal/ee/agents/services/extraction/contract"
+	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/storage/storagetypes"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
 
@@ -159,7 +166,7 @@ func newIngestFixture() *ingestFixture {
 		FlexpriceS3Imports: config.FlexpriceS3ImportsConfig{KeyPrefix: "/imports/"},
 		CustomerMatch:      config.CustomerMatchConfig{Enabled: true},
 	}
-	svc := NewContractIngestService(f.contracts, &memResolver{store: f.store}, f.extractor, f.matcher, &storeCustomerService{store: f.customers}, f.products, cfg, logger.NewNoopLogger()).(*contractIngestService)
+	svc := NewContractIngestService(f.contracts, nil, nil, NewContractService(f.contracts), nil, &memResolver{store: f.store}, f.extractor, f.matcher, &storeCustomerService{store: f.customers}, f.products, cfg, logger.NewNoopLogger()).(*contractIngestService)
 	svc.starter = f.starter
 	f.svc = svc
 	return f
@@ -343,4 +350,205 @@ func TestMarkFailed(t *testing.T) {
 
 func newBuilderWithoutDocument(c *domainContract.Contract) *domainContract.Contract {
 	return domainContract.NewBuilder(c).WithDocument(nil).Build()
+}
+
+// fakeSubscriptions stands in for the subscription service: it records the subscription it creates and activates.
+type fakeSubscriptions struct {
+	interfaces.SubscriptionService
+	created   []dto.CreateSubscriptionRequest
+	activated []dto.ActivateDraftSubscriptionRequest
+}
+
+func (f *fakeSubscriptions) CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
+	f.created = append(f.created, req)
+	return &dto.SubscriptionResponse{Subscription: &subscription.Subscription{ID: "subs_1", CustomerID: req.CustomerID, BaseModel: types.GetDefaultBaseModel(ctx)}}, nil
+}
+
+func (f *fakeSubscriptions) ActivateDraftSubscription(_ context.Context, _ string, req dto.ActivateDraftSubscriptionRequest) (*dto.SubscriptionResponse, error) {
+	f.activated = append(f.activated, req)
+	return &dto.SubscriptionResponse{}, nil
+}
+
+// fakeCatalogServices creates customers and products with IDs from their external ID and lookup key.
+type fakeCatalogServices struct {
+	interfaces.CustomerService
+	interfaces.ProductService
+}
+
+func (fakeCatalogServices) CreateCustomer(_ context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error) {
+	return &dto.CustomerResponse{Customer: &customer.Customer{ID: "cust_" + req.ExternalID}}, nil
+}
+
+func (fakeCatalogServices) CreateProduct(_ context.Context, req dto.CreateProductRequest) (*dto.ProductResponse, error) {
+	return &dto.ProductResponse{ID: "prod_" + req.LookupKey, LookupKey: req.LookupKey}, nil
+}
+
+var (
+	termStart = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	termEnd   = time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
+)
+
+type completeFixture struct {
+	svc  *contractIngestService
+	pobs *testutil.InMemoryPOBStore
+	subs *fakeSubscriptions
+}
+
+func newCompleteFixture(t *testing.T, ctx context.Context, contract *domainContract.Builder) *completeFixture {
+	contracts := testutil.NewInMemoryContractStore()
+	pobs := testutil.NewInMemoryPOBStore(contracts)
+	subs := &fakeSubscriptions{}
+	require.NoError(t, contracts.Create(ctx, contract.WithID("contract_1").WithStatus(types.StatusPublished).Build()))
+
+	pobService := pobsvc.NewPerformanceObligationService(pobs, contracts, nil, nil, nil, nil)
+	svc := NewContractIngestService(contracts, testutil.NewMockPostgresClient(nil), subs, NewContractService(contracts), pobService,
+		nil, nil, nil, fakeCatalogServices{}, fakeCatalogServices{}, &config.Configuration{}, logger.NewNoopLogger()).(*contractIngestService)
+	return &completeFixture{svc: svc, pobs: pobs, subs: subs}
+}
+
+func draftContract() *domainContract.Builder {
+	return domainContract.NewBuilder(nil).WithContractStatus(types.ContractStatusDraft)
+}
+
+func completeRequest(activate bool, pobs ...dto.CreatePOBRequest) *dto.CompleteDraftRequest {
+	return &dto.CompleteDraftRequest{
+		Contract:               dto.CreateContractRequest{CustomerID: "cust_1", Currency: "usd", TermStart: lo.ToPtr(termStart), TermEnd: termEnd},
+		Subscriptions:          []dto.CreateSubscriptionRequest{{PlanID: "plan_1", BillingPeriod: types.BILLING_PERIOD_MONTHLY}},
+		PerformanceObligations: pobs,
+		Activate:               activate,
+	}
+}
+
+func platformPOB(amount int64) dto.CreatePOBRequest {
+	return dto.CreatePOBRequest{Name: "Platform", ProductID: "prod_platform", RecognitionMethod: types.RecognitionMethodStraightLine,
+		ServiceStart: termStart, ServiceEnd: lo.ToPtr(termEnd), AllocatedAmount: decimal.NewFromInt(amount)}
+}
+
+func TestCompleteDraft_AttachesDraftSubscriptionAndPOBs(t *testing.T) {
+	ctx := testutil.SetupContext()
+	f := newCompleteFixture(t, ctx, draftContract())
+
+	resp, err := f.svc.CompleteDraft(ctx, "contract_1", completeRequest(false, platformPOB(120)))
+	require.NoError(t, err)
+
+	require.Equal(t, types.ContractStatusDraft, resp.ContractStatus)
+	require.Equal(t, "cust_1", resp.CustomerID)
+	require.Equal(t, "usd", resp.Currency)
+	require.True(t, resp.TermStart.Equal(termStart))
+	require.True(t, resp.TermEnd.Equal(termEnd))
+	require.Len(t, resp.Associations, 1)
+	require.Equal(t, "subs_1", resp.Associations[0].EntityID)
+	require.Empty(t, f.subs.activated)
+
+	require.Len(t, f.subs.created, 1)
+	sub := f.subs.created[0]
+	require.Equal(t, types.SubscriptionStatusDraft, sub.SubscriptionStatus)
+	require.Equal(t, "cust_1", sub.CustomerID)
+	require.Equal(t, "usd", sub.Currency)
+	require.True(t, sub.StartDate.Equal(termStart), "the subscription starts with the term")
+	require.True(t, sub.EndDate.Equal(termEnd), "the subscription ends with the term")
+
+	pobs, err := f.pobs.List(ctx, nil)
+	require.NoError(t, err)
+	require.Len(t, pobs, 1)
+	require.Equal(t, "prod_platform", pobs[0].ProductID())
+	require.Equal(t, "120", pobs[0].AllocatedAmount().String())
+	require.Equal(t, types.PerformanceObligationStatusDraft, pobs[0].POBStatus())
+}
+
+func TestCompleteDraft_CreatesCustomerAndCatalog(t *testing.T) {
+	ctx := testutil.SetupContext()
+	f := newCompleteFixture(t, ctx, draftContract())
+	req := completeRequest(false, dto.CreatePOBRequest{Name: "Agent usage", ProductLookupKey: "agent_usage",
+		RecognitionMethod: types.RecognitionMethodAsConsumed, ServiceStart: termStart})
+	req.Contract.CustomerID = ""
+	req.Customer = &dto.CreateCustomerRequest{ExternalID: "acme", Name: "Acme"}
+	req.Products = []dto.CreateProductCatalogRequest{{
+		Product: dto.CreateProductRequest{Name: "Agent usage", LookupKey: "agent_usage"},
+		Prices: []dto.SubscriptionPriceCreateRequest{
+			{Type: types.PRICE_TYPE_USAGE, PriceUnitType: types.PRICE_UNIT_TYPE_FIAT, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+				BillingModel: types.BILLING_MODEL_FLAT_FEE, InvoiceCadence: types.InvoiceCadenceArrear, MeterID: "meter_1", Amount: lo.ToPtr(decimal.NewFromInt(1))},
+		},
+	}}
+
+	resp, err := f.svc.CompleteDraft(ctx, "contract_1", req)
+	require.NoError(t, err)
+
+	require.Equal(t, "cust_acme", resp.CustomerID)
+	sub := f.subs.created[0]
+	require.Equal(t, "cust_acme", sub.CustomerID)
+	require.Len(t, sub.LineItems, 1)
+	require.Equal(t, "prod_agent_usage", sub.LineItems[0].Price.ProductID, "the price belongs to the created product")
+
+	pobs, err := f.pobs.List(ctx, nil)
+	require.NoError(t, err)
+	require.Len(t, pobs, 1)
+	require.Equal(t, "prod_agent_usage", pobs[0].ProductID(), "the POB names the created product by lookup key")
+}
+
+func TestCompleteDraft_ActivatesFromTermStart(t *testing.T) {
+	ctx := testutil.SetupContext()
+	f := newCompleteFixture(t, ctx, draftContract())
+
+	_, err := f.svc.CompleteDraft(ctx, "contract_1", completeRequest(true))
+	require.NoError(t, err)
+	require.Len(t, f.subs.activated, 1)
+	require.True(t, f.subs.activated[0].StartDate.Equal(termStart))
+}
+
+func TestCompleteDraft_Rejects(t *testing.T) {
+	tests := []struct {
+		name     string
+		contract *domainContract.Builder
+		req      func(*dto.CompleteDraftRequest)
+		twice    bool
+		wantErr  func(error) bool
+	}{
+		{name: "no customer", contract: draftContract(), wantErr: ierr.IsValidation, req: func(r *dto.CompleteDraftRequest) { r.Contract.CustomerID = "" }},
+		{name: "customer twice", contract: draftContract(), wantErr: ierr.IsValidation, req: func(r *dto.CompleteDraftRequest) {
+			r.Customer = &dto.CreateCustomerRequest{ExternalID: "acme"}
+		}},
+		{name: "two subscriptions", contract: draftContract(), wantErr: ierr.IsValidation, req: func(r *dto.CompleteDraftRequest) {
+			r.Subscriptions = append(r.Subscriptions, r.Subscriptions[0])
+		}},
+		{name: "activate without term start", contract: draftContract(), wantErr: ierr.IsValidation, req: func(r *dto.CompleteDraftRequest) {
+			r.Activate, r.Contract.TermStart = true, nil
+		}},
+		{name: "term ends before it starts", contract: draftContract(), wantErr: ierr.IsValidation, req: func(r *dto.CompleteDraftRequest) {
+			r.Contract.TermEnd = termStart.AddDate(0, 0, -1)
+		}},
+		{name: "negative allocation", contract: draftContract(), wantErr: ierr.IsValidation, req: func(r *dto.CompleteDraftRequest) {
+			r.PerformanceObligations = []dto.CreatePOBRequest{platformPOB(-1)}
+		}},
+		{name: "POB with product id and lookup key", contract: draftContract(), wantErr: ierr.IsValidation, req: func(r *dto.CompleteDraftRequest) {
+			p := platformPOB(0)
+			p.ProductLookupKey = "platform"
+			r.PerformanceObligations = []dto.CreatePOBRequest{p}
+		}},
+		{name: "unknown product lookup key", contract: draftContract(), wantErr: ierr.IsValidation, req: func(r *dto.CompleteDraftRequest) {
+			p := platformPOB(0)
+			p.ProductID, p.ProductLookupKey = "", "missing"
+			r.PerformanceObligations = []dto.CreatePOBRequest{p}
+		}},
+		{name: "currency mismatch", contract: draftContract().WithCurrency("eur"), wantErr: ierr.IsValidation},
+		{name: "not a draft", contract: domainContract.NewBuilder(nil).WithContractStatus(types.ContractStatusActive), wantErr: ierr.IsInvalidOperation},
+		{name: "already completed", contract: draftContract(), twice: true, wantErr: ierr.IsInvalidOperation},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := testutil.SetupContext()
+			f := newCompleteFixture(t, ctx, tt.contract)
+			req := completeRequest(false)
+			if tt.req != nil {
+				tt.req(req)
+			}
+			if tt.twice {
+				_, err := f.svc.CompleteDraft(ctx, "contract_1", req)
+				require.NoError(t, err)
+			}
+
+			_, err := f.svc.CompleteDraft(ctx, "contract_1", req)
+			require.True(t, tt.wantErr(err), "got %v", err)
+		})
+	}
 }

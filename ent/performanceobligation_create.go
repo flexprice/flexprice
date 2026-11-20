@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/performanceobligation"
+	"github.com/shopspring/decimal"
 )
 
 // PerformanceObligationCreate is the builder for creating a PerformanceObligation entity.
@@ -160,6 +161,34 @@ func (_c *PerformanceObligationCreate) SetPobStatus(v string) *PerformanceObliga
 	return _c
 }
 
+// SetProductID sets the "product_id" field.
+func (_c *PerformanceObligationCreate) SetProductID(v string) *PerformanceObligationCreate {
+	_c.mutation.SetProductID(v)
+	return _c
+}
+
+// SetNillableProductID sets the "product_id" field if the given value is not nil.
+func (_c *PerformanceObligationCreate) SetNillableProductID(v *string) *PerformanceObligationCreate {
+	if v != nil {
+		_c.SetProductID(*v)
+	}
+	return _c
+}
+
+// SetAllocatedAmount sets the "allocated_amount" field.
+func (_c *PerformanceObligationCreate) SetAllocatedAmount(v decimal.Decimal) *PerformanceObligationCreate {
+	_c.mutation.SetAllocatedAmount(v)
+	return _c
+}
+
+// SetNillableAllocatedAmount sets the "allocated_amount" field if the given value is not nil.
+func (_c *PerformanceObligationCreate) SetNillableAllocatedAmount(v *decimal.Decimal) *PerformanceObligationCreate {
+	if v != nil {
+		_c.SetAllocatedAmount(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *PerformanceObligationCreate) SetID(v string) *PerformanceObligationCreate {
 	_c.mutation.SetID(v)
@@ -216,6 +245,10 @@ func (_c *PerformanceObligationCreate) defaults() {
 	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := performanceobligation.DefaultEnvironmentID
 		_c.mutation.SetEnvironmentID(v)
+	}
+	if _, ok := _c.mutation.AllocatedAmount(); !ok {
+		v := performanceobligation.DefaultAllocatedAmount
+		_c.mutation.SetAllocatedAmount(v)
 	}
 }
 
@@ -280,6 +313,9 @@ func (_c *PerformanceObligationCreate) check() error {
 		if err := performanceobligation.PobStatusValidator(v); err != nil {
 			return &ValidationError{Name: "pob_status", err: fmt.Errorf(`ent: validator failed for field "PerformanceObligation.pob_status": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.AllocatedAmount(); !ok {
+		return &ValidationError{Name: "allocated_amount", err: errors.New(`ent: missing required field "PerformanceObligation.allocated_amount"`)}
 	}
 	return nil
 }
@@ -371,6 +407,14 @@ func (_c *PerformanceObligationCreate) createSpec() (*PerformanceObligation, *sq
 	if value, ok := _c.mutation.PobStatus(); ok {
 		_spec.SetField(performanceobligation.FieldPobStatus, field.TypeString, value)
 		_node.PobStatus = value
+	}
+	if value, ok := _c.mutation.ProductID(); ok {
+		_spec.SetField(performanceobligation.FieldProductID, field.TypeString, value)
+		_node.ProductID = value
+	}
+	if value, ok := _c.mutation.AllocatedAmount(); ok {
+		_spec.SetField(performanceobligation.FieldAllocatedAmount, field.TypeOther, value)
+		_node.AllocatedAmount = value
 	}
 	return _node, _spec
 }

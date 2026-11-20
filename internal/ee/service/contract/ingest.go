@@ -16,15 +16,18 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/agents/services/customermatch"
 	"github.com/flexprice/flexprice/internal/ee/agents/services/extraction"
 	contractagent "github.com/flexprice/flexprice/internal/ee/agents/services/extraction/contract"
+	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/postgres"
 	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/storage/storagetypes"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 const (
@@ -42,6 +45,8 @@ type ContractIngestService interface {
 	DeriveTerms(ctx context.Context, contractID string, req *dto.DeriveContractTermsRequest) (*extraction.Derived, error)
 	GetReview(ctx context.Context, contractID string) (*dto.ContractReviewResponse, error)
 	SaveReviewStep(ctx context.Context, contractID, step string, req *dto.SaveContractReviewRequest) (*dto.ContractReviewResponse, error)
+	// CompleteDraft attaches a draft subscription and draft POBs to the draft contract, and activates the subscription when asked.
+	CompleteDraft(ctx context.Context, contractID string, req *dto.CompleteDraftRequest) (*dto.ContractResponse, error)
 }
 
 type UploadRequest struct {
@@ -55,6 +60,12 @@ type WorkflowStarter interface {
 
 type contractIngestService struct {
 	contracts       contractRepo.Repository
+	db              postgres.IClient
+	subscriptions   interfaces.SubscriptionService
+	contractService ContractService
+	pobs            pobsvc.PerformanceObligationService
+	customers       interfaces.CustomerService
+	products        interfaces.ProductService
 	storage         storage.Resolver
 	extractor       extraction.ExtractionServiceInterface
 	matcher         customermatch.CustomerMatchServiceInterface
@@ -68,6 +79,10 @@ type contractIngestService struct {
 
 func NewContractIngestService(
 	contracts contractRepo.Repository,
+	db postgres.IClient,
+	subscriptions interfaces.SubscriptionService,
+	contractService ContractService,
+	pobs pobsvc.PerformanceObligationService,
 	storageResolver storage.Resolver,
 	extractor extraction.ExtractionServiceInterface,
 	matcher customermatch.CustomerMatchServiceInterface,
@@ -78,6 +93,12 @@ func NewContractIngestService(
 ) ContractIngestService {
 	return &contractIngestService{
 		contracts:       contracts,
+		db:              db,
+		subscriptions:   subscriptions,
+		contractService: contractService,
+		pobs:            pobs,
+		customers:       customers,
+		products:        products,
 		storage:         storageResolver,
 		extractor:       extractor,
 		matcher:         matcher,
@@ -311,4 +332,154 @@ func (c *contractIngestService) uploadFileName(name string) string {
 		return n
 	}
 	return "contract.pdf"
+}
+
+func (c *contractIngestService) CompleteDraft(ctx context.Context, contractID string, req *dto.CompleteDraftRequest) (*dto.ContractResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	contract, err := c.contracts.GetByID(ctx, contractID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.canCompleteDraft(ctx, contract, req); err != nil {
+		return nil, err
+	}
+
+	var subID string
+	err = c.db.WithTx(ctx, func(ctx context.Context) error {
+		customerID := req.Contract.CustomerID
+		if req.Customer != nil {
+			customer, err := c.customers.CreateCustomer(ctx, *req.Customer)
+			if err != nil {
+				return err
+			}
+			customerID = customer.ID
+		}
+
+		productIDs, lineItems, err := c.createCatalog(ctx, req.Products)
+		if err != nil {
+			return err
+		}
+
+		subReq := req.Subscriptions[0]
+		subReq.CustomerID = customerID
+		subReq.Currency = req.Contract.Currency
+		subReq.StartDate = req.Contract.TermStart
+		subReq.EndDate = lo.ToPtr(req.Contract.TermEnd)
+		subReq.SubscriptionStatus = types.SubscriptionStatusDraft
+		subReq.LineItems = append(subReq.LineItems, lineItems...)
+		sub, err := c.subscriptions.CreateSubscription(ctx, subReq)
+		if err != nil {
+			return err
+		}
+		subID = sub.ID
+
+		if err := c.contracts.CreateAssociation(ctx, domainContract.NewAssociationBuilder(nil).
+			WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT_ASSOCIATION)).
+			WithContractID(contract.ID()).
+			WithEntityType(types.RevRecEntityTypeSubscription).
+			WithEntityID(sub.ID).
+			WithStatus(types.StatusPublished).
+			WithCreatedAt(clock.Now()).
+			Build()); err != nil {
+			return err
+		}
+
+		completed := domainContract.NewBuilder(contract).
+			WithCustomerID(customerID).
+			WithCurrency(req.Contract.Currency).
+			WithTermStart(req.Contract.TermStart).
+			WithTermEnd(lo.ToPtr(req.Contract.TermEnd)).
+			Build()
+		if err := c.contracts.Update(ctx, completed); err != nil {
+			return err
+		}
+
+		pobs, err := c.resolvePOBProducts(req.PerformanceObligations, productIDs)
+		if err != nil {
+			return err
+		}
+		_, err = c.pobs.CreateForContract(ctx, completed, pobs)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Activate {
+		if _, err := c.subscriptions.ActivateDraftSubscription(ctx, subID, dto.ActivateDraftSubscriptionRequest{StartDate: req.Contract.TermStart}); err != nil {
+			return nil, err
+		}
+	}
+	return c.contractService.GetContract(ctx, contractID)
+}
+
+// canCompleteDraft checks the contract is a draft with no subscription yet, and agrees with the requested currency.
+func (c *contractIngestService) canCompleteDraft(ctx context.Context, contract *domainContract.Contract, req *dto.CompleteDraftRequest) error {
+	if contract.ContractStatus() != types.ContractStatusDraft {
+		return ierr.NewError("contract is not a draft").
+			WithHint("Only a draft contract can be completed").
+			WithReportableDetails(map[string]any{"contract_status": contract.ContractStatus()}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	if contract.Currency() != "" && !strings.EqualFold(contract.Currency(), req.Contract.Currency) {
+		return ierr.NewError("currency does not match the contract").
+			WithHintf("Use the contract's currency %s", contract.Currency()).
+			Mark(ierr.ErrValidation)
+	}
+
+	linked, err := c.contracts.ListAssociations(ctx, contract.ID())
+	if err != nil {
+		return err
+	}
+
+	if len(linked) > 0 {
+		return ierr.NewError("contract is already completed").
+			WithHint("The contract already has a subscription").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	return nil
+}
+
+// createCatalog creates each product and returns its ID by lookup key, with its prices as subscription line items.
+func (c *contractIngestService) createCatalog(ctx context.Context, catalogs []dto.CreateProductCatalogRequest) (map[string]string, []dto.CreateSubscriptionLineItemRequest, error) {
+	productIDs := make(map[string]string, len(catalogs))
+	var lineItems []dto.CreateSubscriptionLineItemRequest
+	for _, catalog := range catalogs {
+		product, err := c.products.CreateProduct(ctx, catalog.Product)
+		if err != nil {
+			return nil, nil, err
+		}
+		productIDs[product.LookupKey] = product.ID
+
+		for _, price := range catalog.Prices {
+			price.ProductID = product.ID
+			lineItems = append(lineItems, dto.CreateSubscriptionLineItemRequest{Price: &price})
+		}
+	}
+
+	return productIDs, lineItems, nil
+}
+
+// resolvePOBProducts fills in the product ID of each POB named by the lookup key of a product created in the request.
+func (c *contractIngestService) resolvePOBProducts(reqs []dto.CreatePOBRequest, productIDs map[string]string) ([]dto.CreatePOBRequest, error) {
+	resolved := make([]dto.CreatePOBRequest, 0, len(reqs))
+	for _, req := range reqs {
+		if req.ProductLookupKey != "" {
+			id, ok := productIDs[req.ProductLookupKey]
+			if !ok {
+				return nil, ierr.NewError("no product created with the lookup key").
+					WithHint("product_lookup_key must match a product in the request's products").
+					WithReportableDetails(map[string]any{"product_lookup_key": req.ProductLookupKey}).
+					Mark(ierr.ErrValidation)
+			}
+			req.ProductID = id
+		}
+		resolved = append(resolved, req)
+	}
+
+	return resolved, nil
 }

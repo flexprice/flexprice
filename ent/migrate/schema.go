@@ -1274,7 +1274,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[9], EmailLogsColumns[11]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "\"trigger\" = 'auto'",
+					Where: "((trigger)::text = 'auto'::text)",
 				},
 			},
 			{
@@ -1295,7 +1295,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[3]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "delivery_status = 'queued'",
+					Where: "((delivery_status)::text = 'queued'::text)",
 				},
 			},
 		},
@@ -2337,6 +2337,8 @@ var (
 		{Name: "service_start", Type: field.TypeTime},
 		{Name: "service_end", Type: field.TypeTime, Nullable: true},
 		{Name: "pob_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "product_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "allocated_amount", Type: field.TypeOther, Default: "0", SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 	}
 	// PerformanceObligationsTable holds the schema information for the "performance_obligations" table.
 	PerformanceObligationsTable = &schema.Table{

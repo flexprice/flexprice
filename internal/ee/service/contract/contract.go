@@ -16,7 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// ContractService keeps each subscription's contract in step with the subscription.
+// ContractService keeps each linked subscription's contract in step with the subscription.
 type ContractService interface {
 	SyncForSubscription(ctx context.Context, sub *subscription.Subscription) (*domainContract.Contract, error)
 	ArchiveForSubscription(ctx context.Context, subscriptionID string) error
@@ -32,11 +32,12 @@ func NewContractService(contractRepo contractRepo.Repository) ContractService {
 	return &contractService{contractRepo: contractRepo}
 }
 
-// SyncForSubscription creates the subscription's contract if missing and derives its status; it is idempotent.
+// SyncForSubscription derives the status of the subscription's contract; nil for a subscription with no contract.
+// It is idempotent.
 func (s *contractService) SyncForSubscription(ctx context.Context, sub *subscription.Subscription) (*domainContract.Contract, error) {
 	existing, err := s.contractRepo.GetBySubscriptionID(ctx, sub.ID)
 	if ierr.IsNotFound(err) {
-		existing, err = s.createForSubscription(ctx, sub)
+		return nil, nil
 	}
 	if err != nil {
 		return nil, err
@@ -106,38 +107,6 @@ func (s *contractService) GetContracts(ctx context.Context, filter *contractRepo
 		}),
 		Pagination: types.NewPaginationResponse(count, filter.GetLimit(), filter.GetOffset()),
 	}, nil
-}
-
-func (s *contractService) createForSubscription(ctx context.Context, sub *subscription.Subscription) (*domainContract.Contract, error) {
-	now := clock.Now()
-	c := domainContract.NewBuilder(nil).
-		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT)).
-		WithCustomerID(sub.CustomerID).
-		WithCurrency(sub.Currency).
-		WithTermEnd(sub.EndDate).
-		WithContractStatus(types.ContractStatusDraft).
-		WithStatus(types.StatusPublished).
-		WithCreatedAt(now).
-		WithUpdatedAt(now).
-		Build()
-
-	a := domainContract.NewAssociationBuilder(nil).
-		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT_ASSOCIATION)).
-		WithContractID(c.ID()).
-		WithEntityType(types.RevRecEntityTypeSubscription).
-		WithEntityID(sub.ID).
-		WithStatus(types.StatusPublished).
-		WithCreatedAt(now).
-		Build()
-
-	err := s.contractRepo.CreateWithAssociation(ctx, c, a)
-	if ierr.IsAlreadyExists(err) {
-		return s.contractRepo.GetBySubscriptionID(ctx, sub.ID)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 // deriveContractStatus returns the contract after applying the subscription's current state.

@@ -406,6 +406,7 @@ func NewRouter(
 			contract.POST("/:id/derive", handlers.Contract.DeriveContractTerms)
 			contract.GET("/:id/review", handlers.Contract.GetContractReview)
 			contract.PUT("/:id/review/:step", handlers.Contract.SaveContractReviewStep)
+			contract.POST("/:id/complete-draft", write(types.EntitySubscription, types.ActionWrite), handlers.Contract.CompleteDraft)
 		}
 
 		performanceObligation := v1Private.Group("/performance_obligations")

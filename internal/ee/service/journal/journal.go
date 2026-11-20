@@ -596,8 +596,8 @@ func (s *journalService) Backfill(ctx context.Context, req BackfillRequest) erro
 		}
 
 		c, err := s.contractService.SyncForSubscription(ctx, sub)
-		if err == nil {
-			_, err = s.pobService.SyncForSubscription(ctx, sub, c)
+		if err == nil && c != nil {
+			_, err = s.pobService.SyncForContract(ctx, c)
 		}
 
 		return sourceError("subscription", sub.ID, err)

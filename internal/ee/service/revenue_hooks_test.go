@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
@@ -170,15 +171,17 @@ func TestAsyncRevenueFactsUpdate_RunsImmediatelyOutsideTransaction(t *testing.T)
 	}
 }
 
-func TestNotifySubscriptionChanged_WritesOnlyWhenRevRecEnabled(t *testing.T) {
+func TestNotifySubscriptionChanged_SyncsOnlyWhenRevRecEnabled(t *testing.T) {
 	tests := []struct {
-		name          string
-		setting       map[string]interface{}
-		wantContracts int
+		name       string
+		setting    map[string]interface{}
+		linked     bool
+		wantActive bool
 	}{
-		{name: "no setting", wantContracts: 0},
-		{name: "disabled", setting: map[string]interface{}{"enabled": false}, wantContracts: 0},
-		{name: "enabled", setting: map[string]interface{}{"enabled": true}, wantContracts: 1},
+		{name: "no setting", linked: true},
+		{name: "disabled", setting: map[string]interface{}{"enabled": false}, linked: true},
+		{name: "enabled", setting: map[string]interface{}{"enabled": true}, linked: true, wantActive: true},
+		{name: "enabled, no contract", setting: map[string]interface{}{"enabled": true}},
 	}
 
 	for _, tt := range tests {
@@ -193,17 +196,7 @@ func TestNotifySubscriptionChanged_WritesOnlyWhenRevRecEnabled(t *testing.T) {
 				BaseModel:          types.GetDefaultBaseModel(ctx),
 			}
 			require.NoError(t, subRepo.Create(ctx, sub))
-			lineItemRepo := testutil.NewInMemorySubscriptionLineItemStore()
-			subRepo.SetLineItemStore(lineItemRepo)
-			require.NoError(t, lineItemRepo.Create(ctx, &subscription.SubscriptionLineItem{
-				ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-				SubscriptionID: sub.ID,
-				PriceID:        "price_1",
-				// Usage has no period segment, so the gate test needs no billing engine.
-				PriceType:     types.PRICE_TYPE_USAGE,
-				BillingPeriod: types.BILLING_PERIOD_MONTHLY,
-				BaseModel:     types.GetDefaultBaseModel(ctx),
-			}))
+			subRepo.SetLineItemStore(testutil.NewInMemorySubscriptionLineItemStore())
 
 			settingsRepo := testutil.NewInMemorySettingsStore()
 			if tt.setting != nil {
@@ -217,35 +210,42 @@ func TestNotifySubscriptionChanged_WritesOnlyWhenRevRecEnabled(t *testing.T) {
 			}
 
 			contractRepo := testutil.NewInMemoryContractStore()
-			pobRepo := testutil.NewInMemoryPOBStore(contractRepo)
+			if tt.linked {
+				require.NoError(t, contractRepo.CreateWithAssociation(ctx,
+					domainContract.NewBuilder(nil).WithID("contract_1").WithContractStatus(types.ContractStatusDraft).WithStatus(types.StatusPublished).Build(),
+					domainContract.NewAssociationBuilder(nil).WithID("contract_assoc_1").WithEntityType(types.RevRecEntityTypeSubscription).
+						WithEntityID(sub.ID).WithStatus(types.StatusPublished).Build()))
+			}
 			params := ServiceParams{
 				Logger:          logger.NewNoopLogger(),
 				SubRepo:         subRepo,
 				SettingsRepo:    settingsRepo,
 				ContractService: contractsvc.NewContractService(contractRepo),
-				POBService: pobsvc.NewPerformanceObligationService(pobRepo, contractRepo, subRepo, testutil.NewInMemoryInvoiceStore(),
-					testutil.NewInMemoryTaxAppliedStore(), testutil.NewInMemoryRevenueFactStore()),
+				POBService: pobsvc.NewPerformanceObligationService(testutil.NewInMemoryPOBStore(contractRepo), contractRepo, subRepo,
+					testutil.NewInMemoryInvoiceStore(), testutil.NewInMemoryTaxAppliedStore(), testutil.NewInMemoryRevenueFactStore()),
 			}
 			NotifySubscriptionChanged(ctx, params, sub.ID)
 
+			contractStatus := func() types.ContractStatus {
+				c, err := contractRepo.GetByID(ctx, "contract_1")
+				require.NoError(t, err)
+				return c.ContractStatus()
+			}
 			countContracts := func() int {
 				count, err := contractRepo.Count(ctx, nil)
 				require.NoError(t, err)
 				return count
 			}
-			countPOBs := func() int {
-				count, err := pobRepo.Count(ctx, nil)
-				require.NoError(t, err)
-				return count
-			}
-			// One line item, so one POB alongside the contract.
-			if tt.wantContracts > 0 {
-				require.Eventually(t, func() bool { return countContracts() == tt.wantContracts && countPOBs() == tt.wantContracts }, 5*time.Second, 10*time.Millisecond)
+			if tt.wantActive {
+				require.Eventually(t, func() bool { return contractStatus() == types.ContractStatusActive }, 5*time.Second, 10*time.Millisecond)
 				return
 			}
 			time.Sleep(300 * time.Millisecond)
-			require.Equal(t, 0, countContracts())
-			require.Equal(t, 0, countPOBs())
+			if tt.linked {
+				require.Equal(t, types.ContractStatusDraft, contractStatus())
+				return
+			}
+			require.Equal(t, 0, countContracts(), "a subscription with no contract gets none")
 		})
 	}
 }

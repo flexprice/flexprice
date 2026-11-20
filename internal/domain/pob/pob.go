@@ -4,12 +4,15 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
-// PerformanceObligation is a continuing promise inside a contract, made of one or more subscription line items.
+// PerformanceObligation is a promise inside a contract: one per Product and recognition method.
 type PerformanceObligation struct {
 	id                 string
 	contractID         string
+	productID          string
+	allocatedAmount    decimal.Decimal
 	name               string
 	recognitionMethod  types.RecognitionMethod
 	amortizationMethod types.AmortizationMethod
@@ -33,6 +36,21 @@ func (p *PerformanceObligation) ContractID() string {
 		return ""
 	}
 	return p.contractID
+}
+
+func (p *PerformanceObligation) ProductID() string {
+	if p == nil {
+		return ""
+	}
+	return p.productID
+}
+
+// AllocatedAmount is the fixed consideration allocated to the POB; 0 for a variable-only POB.
+func (p *PerformanceObligation) AllocatedAmount() decimal.Decimal {
+	if p == nil {
+		return decimal.Zero
+	}
+	return p.allocatedAmount
 }
 
 func (p *PerformanceObligation) Name() string {
@@ -119,6 +137,16 @@ func (b *Builder) WithID(id string) *Builder {
 
 func (b *Builder) WithContractID(contractID string) *Builder {
 	b.pob.contractID = contractID
+	return b
+}
+
+func (b *Builder) WithProductID(productID string) *Builder {
+	b.pob.productID = productID
+	return b
+}
+
+func (b *Builder) WithAllocatedAmount(allocatedAmount decimal.Decimal) *Builder {
+	b.pob.allocatedAmount = allocatedAmount
 	return b
 }
 

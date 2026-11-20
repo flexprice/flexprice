@@ -133,7 +133,7 @@ func NotifySubscriptionChanged(ctx context.Context, params ServiceParams, subscr
 	})
 }
 
-// syncSubscriptionRevRec creates or updates the subscription's contract and POBs; safe to run concurrently.
+// syncSubscriptionRevRec updates the subscription's contract and POBs, if it has a contract; safe to run concurrently.
 func syncSubscriptionRevRec(ctx context.Context, params ServiceParams, subscriptionID string) error {
 	sub, _, err := params.SubRepo.GetWithLineItems(ctx, subscriptionID)
 	if err != nil {
@@ -141,11 +141,11 @@ func syncSubscriptionRevRec(ctx context.Context, params ServiceParams, subscript
 	}
 
 	c, err := params.ContractService.SyncForSubscription(ctx, sub)
-	if err != nil {
+	if err != nil || c == nil {
 		return err
 	}
 
-	_, err = params.POBService.SyncForSubscription(ctx, sub, c)
+	_, err = params.POBService.SyncForContract(ctx, c)
 	return err
 }
 

@@ -6,11 +6,14 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/pob"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type PerformanceObligationResponse struct {
 	ID                 string                                      `json:"id"`
 	ContractID         string                                      `json:"contract_id"`
+	ProductID          string                                      `json:"product_id,omitempty"`
+	AllocatedAmount    decimal.Decimal                             `json:"allocated_amount" swaggertype:"string"`
 	Name               string                                      `json:"name"`
 	RecognitionMethod  types.RecognitionMethod                     `json:"recognition_method"`
 	AmortizationMethod types.AmortizationMethod                    `json:"amortization_method"`
@@ -37,6 +40,8 @@ func NewPerformanceObligationResponse(p *pob.PerformanceObligation) *Performance
 	return &PerformanceObligationResponse{
 		ID:                 p.ID(),
 		ContractID:         p.ContractID(),
+		ProductID:          p.ProductID(),
+		AllocatedAmount:    p.AllocatedAmount(),
 		Name:               p.Name(),
 		RecognitionMethod:  p.RecognitionMethod(),
 		AmortizationMethod: p.AmortizationMethod(),
