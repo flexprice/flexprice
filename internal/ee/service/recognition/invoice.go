@@ -50,29 +50,46 @@ func (r *invoiceRecognizer) LockKey(id string) string {
 	return "revrec:invoice:" + id
 }
 
-// Due is every finalized or voided invoice of a subscription with no contract that changed since `since` or whose
-// period ended in the last two months (it may still owe its last month).
-func (r *invoiceRecognizer) Due(ctx context.Context, since, asOf time.Time) ([]string, error) {
+// Due is every finalized or voided invoice of a subscription with no contract: all of the scoped customer's, none for a
+// scoped contract, else those that changed since `since` or whose period ended in the last two months (they may still
+// owe their last month).
+func (r *invoiceRecognizer) Due(ctx context.Context, since, asOf time.Time, scope Scope) ([]string, error) {
+	if scope.ContractID != "" {
+		return nil, nil
+	}
 	list := func(f *types.InvoiceFilter) ([]*invoice.Invoice, error) {
 		f.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusFinalized, types.InvoiceStatusVoided}
+		f.CustomerID = scope.CustomerID
 		return r.invoiceRepo.List(ctx, f)
 	}
-	changed := types.NewNoLimitInvoiceFilter()
-	changed.UpdatedAtGTE = &since
-	changedInvoices, err := list(changed)
-	if err != nil {
-		return nil, err
-	}
-	recent := types.NewNoLimitInvoiceFilter()
-	recent.PeriodEndGTE = lo.ToPtr(asOf.AddDate(0, -2, 0))
-	recentInvoices, err := list(recent)
-	if err != nil {
-		return nil, err
+
+	var candidates []*invoice.Invoice
+	if scope.CustomerID != "" {
+		all, err := list(types.NewNoLimitInvoiceFilter())
+		if err != nil {
+			return nil, err
+		}
+		candidates = all
+	} else {
+		changed := types.NewNoLimitInvoiceFilter()
+		changed.UpdatedAtGTE = &since
+		changedInvoices, err := list(changed)
+		if err != nil {
+			return nil, err
+		}
+		recent := types.NewNoLimitInvoiceFilter()
+		recent.PeriodEndGTE = lo.ToPtr(asOf.AddDate(0, -2, 0))
+		recentInvoices, err := list(recent)
+		if err != nil {
+			return nil, err
+		}
+		candidates = lo.UniqBy(append(changedInvoices, recentInvoices...), func(inv *invoice.Invoice) string { return inv.ID })
 	}
 
 	standalone := make(map[string]bool)
 	var ids []string
-	for _, inv := range lo.UniqBy(append(changedInvoices, recentInvoices...), func(inv *invoice.Invoice) string { return inv.ID }) {
+	var err error
+	for _, inv := range candidates {
 		subID := lo.FromPtr(inv.SubscriptionID)
 		if subID == "" {
 			continue

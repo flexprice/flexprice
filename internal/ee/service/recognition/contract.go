@@ -54,9 +54,23 @@ func (r *contractRecognizer) LockKey(id string) string {
 	return "revrec:contract:" + id
 }
 
-// Due is every active contract, every contract ended in the last two months (it may still owe its last month), and
-// every contract of a subscription with an invoice changed since `since`.
-func (r *contractRecognizer) Due(ctx context.Context, since, asOf time.Time) ([]string, error) {
+// Due is the scoped contract, or every contract of the scoped customer; else every active contract, every contract
+// ended in the last two months (it may still owe its last month), and every contract of a subscription with an
+// invoice changed since `since`.
+func (r *contractRecognizer) Due(ctx context.Context, since, asOf time.Time, scope Scope) ([]string, error) {
+	if scope.ContractID != "" {
+		return []string{scope.ContractID}, nil
+	}
+	if scope.CustomerID != "" {
+		contracts, err := r.contractRepo.List(ctx, &contractRepo.Filter{QueryFilter: types.NewNoLimitQueryFilter(), CustomerIDs: []string{scope.CustomerID}})
+		if err != nil {
+			return nil, err
+		}
+		ids := lo.Map(contracts, func(c *domainContract.Contract, _ int) string { return c.ID() })
+		sort.Strings(ids)
+		return ids, nil
+	}
+
 	active, err := r.contractRepo.List(ctx, &contractRepo.Filter{
 		QueryFilter:      types.NewNoLimitQueryFilter(),
 		ContractStatuses: []types.ContractStatus{types.ContractStatusActive},

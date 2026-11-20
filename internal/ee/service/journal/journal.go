@@ -108,8 +108,10 @@ type RecognitionRunRequest struct {
 	// TenantID and EnvironmentID, when set, limit the run to them; empty runs every enabled environment.
 	TenantID      string
 	EnvironmentID string
-	Resume        *RecognitionCursor
-	OnProgress    func(RecognitionCursor)
+	// Scope limits the run within the environment to one contract or one customer.
+	Scope      recognition.Scope
+	Resume     *RecognitionCursor
+	OnProgress func(RecognitionCursor)
 }
 
 func NewJournalService(
@@ -526,7 +528,7 @@ func (s *journalService) Backfill(ctx context.Context, req BackfillRequest) erro
 // recognizeEnvironment repairs the POBs of each due contract with an ID after `after`, posts missed billing (which needs
 // those POBs), then recognizes each contract and each due standalone invoice.
 func (s *journalService) recognizeEnvironment(ctx context.Context, req RecognitionRunRequest, after string) error {
-	contractIDs, err := s.contracts.Due(ctx, req.Since, req.AsOf)
+	contractIDs, err := s.contracts.Due(ctx, req.Since, req.AsOf, req.Scope)
 	if err != nil {
 		return err
 	}
@@ -539,7 +541,7 @@ func (s *journalService) recognizeEnvironment(ctx context.Context, req Recogniti
 		errs = append(errs, sourceError("contract", id, s.pobService.Reconcile(ctx, id)))
 		req.OnProgress(unchanged)
 	}
-	errs = append(errs, s.Reconcile(ctx, req.Since))
+	errs = append(errs, s.reconcileFor(ctx, req.Since, req.Scope))
 
 	for _, id := range contractIDs {
 		_, err := s.recognize(ctx, s.contracts, id, req.AsOf)
@@ -547,7 +549,7 @@ func (s *journalService) recognizeEnvironment(ctx context.Context, req Recogniti
 		req.OnProgress(RecognitionCursor{EnvironmentID: types.GetEnvironmentID(ctx), ContractID: id})
 	}
 
-	invoiceIDs, err := s.invoices.Due(ctx, req.Since, req.AsOf)
+	invoiceIDs, err := s.invoices.Due(ctx, req.Since, req.AsOf, req.Scope)
 	if err != nil {
 		return errors.Join(append(errs, err)...)
 	}
@@ -557,6 +559,31 @@ func (s *journalService) recognizeEnvironment(ctx context.Context, req Recogniti
 	}
 
 	return errors.Join(errs...)
+}
+
+// reconcileFor posts the billing a run recognizes from: every source changed since `since`, or for a scoped run only the
+// invoices of its customer (a contract's customer for a contract), so other customers' failures do not fail it.
+func (s *journalService) reconcileFor(ctx context.Context, since time.Time, scope recognition.Scope) error {
+	if scope == (recognition.Scope{}) {
+		return s.Reconcile(ctx, since)
+	}
+	customerID := scope.CustomerID
+	if scope.ContractID != "" {
+		c, err := s.contractRepo.GetByID(ctx, scope.ContractID)
+		if err != nil {
+			return err
+		}
+		customerID = c.CustomerID()
+	}
+	if customerID == "" {
+		return nil
+	}
+
+	return postChanged(func(page *types.QueryFilter) ([]*invoice.Invoice, error) {
+		f := types.NewNoLimitInvoiceFilter()
+		f.QueryFilter, f.UpdatedAtGTE, f.CustomerID = page, &since, customerID
+		return s.invoiceRepo.List(ctx, f)
+	}, func(inv *invoice.Invoice) error { return sourceError("invoice", inv.ID, s.PostInvoice(ctx, inv)) })
 }
 
 // e.g. a finalize hook lost to a crash posts on the next run; posted entries are skipped by key.

@@ -13506,6 +13506,145 @@
         "x-scope": "write"
       }
     },
+    "/revenue_recognition/runs": {
+      "post": {
+        "tags": [
+          "Revenue Recognition"
+        ],
+        "summary": "Start revenue recognition run",
+        "description": "Use to recognize revenue now instead of waiting for the daily run: for one contract, one customer, or the whole environment. Posts billing the hooks missed, then the recognition and offset entries due up to now. Runs in the background; poll GET /revenue_recognition/runs/{workflow_id}.",
+        "operationId": "startRevenueRecognitionRun",
+        "requestBody": {
+          "description": "Scope: contract_id, customer_id, or empty for the whole environment",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRevenueRecognitionRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevenueRecognitionRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Contract or customer not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A run for this scope is already running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
+      }
+    },
+    "/revenue_recognition/runs/{workflow_id}": {
+      "get": {
+        "tags": [
+          "Revenue Recognition"
+        ],
+        "summary": "Get revenue recognition run",
+        "description": "Use to follow a recognition run started from POST /revenue_recognition/runs: queued, running, completed or failed.",
+        "operationId": "getRevenueRecognitionRun",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "description": "Workflow ID returned when the run started",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevenueRecognitionRunResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/revenue_reports/rollforward": {
       "post": {
         "tags": [
@@ -30748,6 +30887,46 @@
           }
         }
       },
+      "RevenueRecognitionRunResponse": {
+        "type": "object",
+        "properties": {
+          "closed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RevenueRecognitionRunStatus"
+          },
+          "workflow_id": {
+            "type": "string"
+          }
+        }
+      },
+      "RevenueRecognitionRunStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "completed",
+          "failed"
+        ],
+        "x-enum-varnames": [
+          "RevenueRecognitionRunStatusQueued",
+          "RevenueRecognitionRunStatusRunning",
+          "RevenueRecognitionRunStatusCompleted",
+          "RevenueRecognitionRunStatusFailed"
+        ]
+      },
       "RollforwardRequest": {
         "required": [
           "currency",
@@ -31433,6 +31612,17 @@
           "usage": {
             "type": "string",
             "description": "usage is the total usage amount from this source (optional, for additional context)"
+          }
+        }
+      },
+      "StartRevenueRecognitionRunRequest": {
+        "type": "object",
+        "properties": {
+          "contract_id": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
           }
         }
       },

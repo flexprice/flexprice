@@ -8246,6 +8246,33 @@ definitions:
         description: actual + pending + scheduled
         type: string
     type: object
+  RevenueRecognitionRunResponse:
+    properties:
+      closed_at:
+        type: string
+      last_error:
+        type: string
+      run_id:
+        type: string
+      started_at:
+        type: string
+      status:
+        $ref: '#/definitions/RevenueRecognitionRunStatus'
+      workflow_id:
+        type: string
+    type: object
+  RevenueRecognitionRunStatus:
+    enum:
+    - queued
+    - running
+    - completed
+    - failed
+    type: string
+    x-enum-varnames:
+    - RevenueRecognitionRunStatusQueued
+    - RevenueRecognitionRunStatusRunning
+    - RevenueRecognitionRunStatusCompleted
+    - RevenueRecognitionRunStatusFailed
   RollforwardRequest:
     properties:
       accounts:
@@ -8727,6 +8754,13 @@ definitions:
       usage:
         description: usage is the total usage amount from this source (optional, for
           additional context)
+        type: string
+    type: object
+  StartRevenueRecognitionRunRequest:
+    properties:
+      contract_id:
+        type: string
+      customer_id:
         type: string
     type: object
   StripePaymentGatewayOptions:
@@ -26414,6 +26448,83 @@ paths:
       tags:
       - Refunds
       x-scope: write
+  /revenue_recognition/runs:
+    post:
+      consumes:
+      - application/json
+      description: 'Use to recognize revenue now instead of waiting for the daily
+        run: for one contract, one customer, or the whole environment. Posts billing
+        the hooks missed, then the recognition and offset entries due up to now. Runs
+        in the background; poll GET /revenue_recognition/runs/{workflow_id}.'
+      operationId: startRevenueRecognitionRun
+      parameters:
+      - description: 'Scope: contract_id, customer_id, or empty for the whole environment'
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/StartRevenueRecognitionRunRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/RevenueRecognitionRunResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Contract or customer not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: A run for this scope is already running
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Start revenue recognition run
+      tags:
+      - Revenue Recognition
+      x-scope: write
+  /revenue_recognition/runs/{workflow_id}:
+    get:
+      description: 'Use to follow a recognition run started from POST /revenue_recognition/runs:
+        queued, running, completed or failed.'
+      operationId: getRevenueRecognitionRun
+      parameters:
+      - description: Workflow ID returned when the run started
+        in: path
+        name: workflow_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/RevenueRecognitionRunResponse'
+        "404":
+          description: Run not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get revenue recognition run
+      tags:
+      - Revenue Recognition
+      x-scope: read
   /revenue_reports/rollforward:
     post:
       consumes:
