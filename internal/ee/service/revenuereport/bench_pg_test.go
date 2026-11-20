@@ -17,6 +17,7 @@ import (
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
+	recognitionsvc "github.com/flexprice/flexprice/internal/ee/service/recognition"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	accountingPeriodRepo "github.com/flexprice/flexprice/internal/repository/accountingperiod"
@@ -53,9 +54,12 @@ func TestReportsAtScale(t *testing.T) {
 	taxes := entRepo.NewTaxAppliedRepository(client, log, redis)
 	journals := journalRepo.NewRepository(client, log)
 	pobs := pobRepo.NewRepository(client, log)
-	pobService := pobsvc.NewPerformanceObligationService(pobs, contracts, subs, invoices, taxes, entRepo.NewRevenueFactRepository(client, log))
+	pobService := pobsvc.NewPerformanceObligationService(pobs, contracts, subs, invoices, taxes, entRepo.NewRevenueFactRepository(client, log),
+		entRepo.NewPriceRepository(client, log, redis))
 	journal := journalsvc.NewJournalService(client, journals, accountingperiodsvc.NewAccountingPeriodService(accountingPeriodRepo.NewRepository(client, log)),
-		pobService, pobs, contractsvc.NewContractService(contracts), contracts, subs, entRepo.NewCustomerRepository(client, log, redis), invoices,
+		pobService, recognitionsvc.NewContractRecognizer(contracts, pobs, pobService, journals, invoices, subs, entRepo.NewCustomerRepository(client, log, redis)),
+		recognitionsvc.NewInvoiceRecognizer(invoices, taxes, contracts, journals, subs, entRepo.NewCustomerRepository(client, log, redis)),
+		contractsvc.NewContractService(contracts), contracts, subs, entRepo.NewCustomerRepository(client, log, redis), invoices,
 		entRepo.NewCreditNoteRepository(client, log, redis), entRepo.NewPaymentRepository(client, log, redis), entRepo.NewRefundRepository(client, log),
 		taxes, entRepo.NewSettingsRepository(client, log, cache.NewInMemoryCache()))
 	reports := NewRevenueReportService(journals, journal, contracts)

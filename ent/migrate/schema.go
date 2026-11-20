@@ -610,6 +610,7 @@ var (
 		{Name: "customer_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "currency", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(3)"}},
 		{Name: "term_start", Type: field.TypeTime, Nullable: true},
+		{Name: "contract_value", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "term_end", Type: field.TypeTime, Nullable: true},
 		{Name: "ended_at", Type: field.TypeTime, Nullable: true},
 		{Name: "contract_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
@@ -1274,7 +1275,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[9], EmailLogsColumns[11]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "\"trigger\" = 'auto'",
+					Where: "((trigger)::text = 'auto'::text)",
 				},
 			},
 			{
@@ -1295,7 +1296,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[3]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "delivery_status = 'queued'",
+					Where: "((delivery_status)::text = 'queued'::text)",
 				},
 			},
 		},
@@ -2337,6 +2338,8 @@ var (
 		{Name: "service_start", Type: field.TypeTime},
 		{Name: "service_end", Type: field.TypeTime, Nullable: true},
 		{Name: "pob_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "product_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "allocated_amount", Type: field.TypeOther, Default: "0", SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 	}
 	// PerformanceObligationsTable holds the schema information for the "performance_obligations" table.
 	PerformanceObligationsTable = &schema.Table{
@@ -2348,41 +2351,6 @@ var (
 				Name:    "performanceobligation_tenant_id_environment_id_contract_id",
 				Unique:  false,
 				Columns: []*schema.Column{PerformanceObligationsColumns[1], PerformanceObligationsColumns[7], PerformanceObligationsColumns[8]},
-			},
-		},
-	}
-	// PerformanceObligationAssociationsColumns holds the columns for the "performance_obligation_associations" table.
-	PerformanceObligationAssociationsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "created_by", Type: field.TypeString, Nullable: true},
-		{Name: "updated_by", Type: field.TypeString, Nullable: true},
-		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "pob_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-	}
-	// PerformanceObligationAssociationsTable holds the schema information for the "performance_obligation_associations" table.
-	PerformanceObligationAssociationsTable = &schema.Table{
-		Name:       "performance_obligation_associations",
-		Columns:    PerformanceObligationAssociationsColumns,
-		PrimaryKey: []*schema.Column{PerformanceObligationAssociationsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "idx_pob_association_unique",
-				Unique:  true,
-				Columns: []*schema.Column{PerformanceObligationAssociationsColumns[1], PerformanceObligationAssociationsColumns[7], PerformanceObligationAssociationsColumns[9], PerformanceObligationAssociationsColumns[10]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "((status)::text = 'published'::text)",
-				},
-			},
-			{
-				Name:    "idx_pob_association_pob_id",
-				Unique:  false,
-				Columns: []*schema.Column{PerformanceObligationAssociationsColumns[1], PerformanceObligationAssociationsColumns[7], PerformanceObligationAssociationsColumns[8]},
 			},
 		},
 	}
@@ -3800,7 +3768,6 @@ var (
 		PaymentAttemptsTable,
 		PaymentMethodsTable,
 		PerformanceObligationsTable,
-		PerformanceObligationAssociationsTable,
 		PlansTable,
 		PricesTable,
 		PriceUnitsTable,

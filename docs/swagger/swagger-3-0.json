@@ -3416,6 +3416,168 @@
         "x-scope": "read"
       }
     },
+    "/contracts/{id}/activate": {
+      "post": {
+        "tags": [
+          "Contracts"
+        ],
+        "summary": "Activate contract",
+        "description": "Use when a completed draft contract starts. Activates its draft subscriptions from term_start; the contract and its performance obligations become active with them.",
+        "operationId": "activateContract",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Contract ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Term start",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateContractRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
+      }
+    },
+    "/contracts/{id}/complete-draft": {
+      "post": {
+        "tags": [
+          "Contracts"
+        ],
+        "summary": "Complete draft contract",
+        "description": "Use after reviewing a draft contract. Creates its subscription as a draft and the given performance obligations as drafts. With activate true, also activates the subscription; the contract and its performance obligations follow it.",
+        "operationId": "completeContractDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Contract ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Subscription, performance obligations and activation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/contracts/{id}/derive": {
       "post": {
         "tags": [
@@ -13344,6 +13506,145 @@
         "x-scope": "write"
       }
     },
+    "/revenue_recognition/runs": {
+      "post": {
+        "tags": [
+          "Revenue Recognition"
+        ],
+        "summary": "Start revenue recognition run",
+        "description": "Use to recognize revenue now instead of waiting for the daily run: for one contract, one customer, or the whole environment. Posts billing the hooks missed, then the recognition and offset entries due up to now. Runs in the background; poll GET /revenue_recognition/runs/{workflow_id}.",
+        "operationId": "startRevenueRecognitionRun",
+        "requestBody": {
+          "description": "Scope: contract_id, customer_id, or empty for the whole environment",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRevenueRecognitionRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevenueRecognitionRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Contract or customer not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A run for this scope is already running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
+      }
+    },
+    "/revenue_recognition/runs/{workflow_id}": {
+      "get": {
+        "tags": [
+          "Revenue Recognition"
+        ],
+        "summary": "Get revenue recognition run",
+        "description": "Use to follow a recognition run started from POST /revenue_recognition/runs: queued, running, completed or failed.",
+        "operationId": "getRevenueRecognitionRun",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "description": "Workflow ID returned when the run started",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevenueRecognitionRunResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/revenue_reports/rollforward": {
       "post": {
         "tags": [
@@ -20831,6 +21132,18 @@
           }
         }
       },
+      "ActivateContractRequest": {
+        "required": [
+          "term_start"
+        ],
+        "type": "object",
+        "properties": {
+          "term_start": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ActivateDraftSubscriptionRequest": {
         "required": [
           "start_date"
@@ -22657,6 +22970,41 @@
           }
         }
       },
+      "CompleteDraftRequest": {
+        "type": "object",
+        "properties": {
+          "activate": {
+            "type": "boolean",
+            "description": "Activate also activates the subscriptions from the contract's term start."
+          },
+          "contract": {
+            "$ref": "#/components/schemas/CreateContractRequest"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/CreateCustomerRequest"
+          },
+          "performance_obligations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatePOBRequest"
+            }
+          },
+          "products": {
+            "type": "array",
+            "description": "Products creates products; each of their prices is added to the subscription as a line item.",
+            "items": {
+              "$ref": "#/components/schemas/CreateProductCatalogRequest"
+            }
+          },
+          "subscriptions": {
+            "type": "array",
+            "description": "Subscriptions run over the contract's term in its customer and currency; one for now.",
+            "items": {
+              "$ref": "#/components/schemas/CreateSubscriptionRequest"
+            }
+          }
+        }
+      },
       "ConfigurationDetails": {
         "type": "object",
         "properties": {
@@ -22733,6 +23081,9 @@
           },
           "contract_status": {
             "$ref": "#/components/schemas/types.ContractStatus"
+          },
+          "contract_value": {
+            "type": "string"
           },
           "created_at": {
             "type": "string",
@@ -23584,6 +23935,34 @@
           }
         }
       },
+      "CreateContractRequest": {
+        "required": [
+          "currency",
+          "term_end"
+        ],
+        "type": "object",
+        "properties": {
+          "contract_value": {
+            "type": "string",
+            "description": "ContractValue is the agreed total; the performance obligations' allocations must add up to it."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "term_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "term_start": {
+            "type": "string",
+            "description": "TermStart is required to activate.",
+            "format": "date-time"
+          }
+        }
+      },
       "CreateCostsheetRequest": {
         "required": [
           "name"
@@ -24417,6 +24796,40 @@
           }
         }
       },
+      "CreatePOBRequest": {
+        "required": [
+          "name",
+          "recognition_method",
+          "service_end",
+          "service_start"
+        ],
+        "type": "object",
+        "properties": {
+          "allocated_amount": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "product_lookup_key": {
+            "type": "string"
+          },
+          "recognition_method": {
+            "$ref": "#/components/schemas/types.RecognitionMethod"
+          },
+          "service_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "service_start": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "CreatePaymentRequest": {
         "required": [
           "currency",
@@ -24709,6 +25122,20 @@
           },
           "updated_by": {
             "type": "string"
+          }
+        }
+      },
+      "CreateProductCatalogRequest": {
+        "type": "object",
+        "properties": {
+          "prices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionPriceCreateRequest"
+            }
+          },
+          "product": {
+            "$ref": "#/components/schemas/CreateProductRequest"
           }
         }
       },
@@ -29238,35 +29665,14 @@
           }
         }
       },
-      "PerformanceObligationAssociationResponse": {
-        "type": "object",
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "entity_id": {
-            "type": "string"
-          },
-          "entity_type": {
-            "$ref": "#/components/schemas/types.RevRecEntityType"
-          },
-          "id": {
-            "type": "string"
-          }
-        }
-      },
       "PerformanceObligationResponse": {
         "type": "object",
         "properties": {
+          "allocated_amount": {
+            "type": "string"
+          },
           "amortization_method": {
             "$ref": "#/components/schemas/types.AmortizationMethod"
-          },
-          "associations": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PerformanceObligationAssociationResponse"
-            }
           },
           "contract_id": {
             "type": "string"
@@ -29283,6 +29689,9 @@
           },
           "pob_status": {
             "$ref": "#/components/schemas/types.PerformanceObligationStatus"
+          },
+          "product_id": {
+            "type": "string"
           },
           "recognition_method": {
             "$ref": "#/components/schemas/types.RecognitionMethod"
@@ -30478,6 +30887,46 @@
           }
         }
       },
+      "RevenueRecognitionRunResponse": {
+        "type": "object",
+        "properties": {
+          "closed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RevenueRecognitionRunStatus"
+          },
+          "workflow_id": {
+            "type": "string"
+          }
+        }
+      },
+      "RevenueRecognitionRunStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "completed",
+          "failed"
+        ],
+        "x-enum-varnames": [
+          "RevenueRecognitionRunStatusQueued",
+          "RevenueRecognitionRunStatusRunning",
+          "RevenueRecognitionRunStatusCompleted",
+          "RevenueRecognitionRunStatusFailed"
+        ]
+      },
       "RollforwardRequest": {
         "required": [
           "currency",
@@ -31163,6 +31612,17 @@
           "usage": {
             "type": "string",
             "description": "usage is the total usage amount from this source (optional, for additional context)"
+          }
+        }
+      },
+      "StartRevenueRecognitionRunRequest": {
+        "type": "object",
+        "properties": {
+          "contract_id": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
           }
         }
       },
@@ -32227,6 +32687,9 @@
           },
           "price_unit_type": {
             "$ref": "#/components/schemas/types.PriceUnitType"
+          },
+          "product_id": {
+            "type": "string"
           },
           "start_date": {
             "type": "string",

@@ -4,12 +4,15 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
-// PerformanceObligation is a continuing promise inside a contract, made of one or more subscription line items.
+// PerformanceObligation is a promise inside a contract: one per Product and recognition method.
 type PerformanceObligation struct {
 	id                 string
 	contractID         string
+	productID          string
+	allocatedAmount    decimal.Decimal
 	name               string
 	recognitionMethod  types.RecognitionMethod
 	amortizationMethod types.AmortizationMethod
@@ -33,6 +36,21 @@ func (p *PerformanceObligation) ContractID() string {
 		return ""
 	}
 	return p.contractID
+}
+
+func (p *PerformanceObligation) ProductID() string {
+	if p == nil {
+		return ""
+	}
+	return p.productID
+}
+
+// AllocatedAmount is the fixed consideration allocated to the POB; 0 for a variable-only POB.
+func (p *PerformanceObligation) AllocatedAmount() decimal.Decimal {
+	if p == nil {
+		return decimal.Zero
+	}
+	return p.allocatedAmount
 }
 
 func (p *PerformanceObligation) Name() string {
@@ -122,6 +140,16 @@ func (b *Builder) WithContractID(contractID string) *Builder {
 	return b
 }
 
+func (b *Builder) WithProductID(productID string) *Builder {
+	b.pob.productID = productID
+	return b
+}
+
+func (b *Builder) WithAllocatedAmount(allocatedAmount decimal.Decimal) *Builder {
+	b.pob.allocatedAmount = allocatedAmount
+	return b
+}
+
 func (b *Builder) WithName(name string) *Builder {
 	b.pob.name = name
 	return b
@@ -170,105 +198,4 @@ func (b *Builder) WithUpdatedAt(updatedAt time.Time) *Builder {
 func (b *Builder) Build() *PerformanceObligation {
 	p := b.pob
 	return &p
-}
-
-// Association links a performance obligation to an entity it covers, such as a subscription line item.
-type Association struct {
-	id         string
-	pobID      string
-	entityType types.RevRecEntityType
-	entityID   string
-	status     types.Status
-	createdAt  time.Time
-}
-
-func (a *Association) ID() string {
-	if a == nil {
-		return ""
-	}
-	return a.id
-}
-
-func (a *Association) POBID() string {
-	if a == nil {
-		return ""
-	}
-	return a.pobID
-}
-
-func (a *Association) EntityType() types.RevRecEntityType {
-	if a == nil {
-		return ""
-	}
-	return a.entityType
-}
-
-func (a *Association) EntityID() string {
-	if a == nil {
-		return ""
-	}
-	return a.entityID
-}
-
-func (a *Association) Status() types.Status {
-	if a == nil {
-		return ""
-	}
-	return a.status
-}
-
-func (a *Association) CreatedAt() time.Time {
-	if a == nil {
-		return time.Time{}
-	}
-	return a.createdAt
-}
-
-// AssociationBuilder copies an existing association and applies field updates to the copy.
-type AssociationBuilder struct {
-	association Association
-}
-
-// NewAssociationBuilder returns a builder seeded from a; a nil a starts empty.
-func NewAssociationBuilder(a *Association) *AssociationBuilder {
-	b := &AssociationBuilder{}
-	if a != nil {
-		b.association = *a
-	}
-	return b
-}
-
-func (b *AssociationBuilder) WithID(id string) *AssociationBuilder {
-	b.association.id = id
-	return b
-}
-
-func (b *AssociationBuilder) WithPOBID(pobID string) *AssociationBuilder {
-	b.association.pobID = pobID
-	return b
-}
-
-func (b *AssociationBuilder) WithEntityType(entityType types.RevRecEntityType) *AssociationBuilder {
-	b.association.entityType = entityType
-	return b
-}
-
-func (b *AssociationBuilder) WithEntityID(entityID string) *AssociationBuilder {
-	b.association.entityID = entityID
-	return b
-}
-
-func (b *AssociationBuilder) WithStatus(status types.Status) *AssociationBuilder {
-	b.association.status = status
-	return b
-}
-
-func (b *AssociationBuilder) WithCreatedAt(createdAt time.Time) *AssociationBuilder {
-	b.association.createdAt = createdAt
-	return b
-}
-
-func (b *AssociationBuilder) Build() *Association {
-	a := b.association
-	return &a
 }

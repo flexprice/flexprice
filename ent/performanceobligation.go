@@ -10,6 +10,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/performanceobligation"
+	"github.com/shopspring/decimal"
 )
 
 // PerformanceObligation is the model entity for the PerformanceObligation schema.
@@ -44,8 +45,12 @@ type PerformanceObligation struct {
 	// ServiceEnd holds the value of the "service_end" field.
 	ServiceEnd *time.Time `json:"service_end,omitempty"`
 	// PobStatus holds the value of the "pob_status" field.
-	PobStatus    string `json:"pob_status,omitempty"`
-	selectValues sql.SelectValues
+	PobStatus string `json:"pob_status,omitempty"`
+	// ProductID holds the value of the "product_id" field.
+	ProductID string `json:"product_id,omitempty"`
+	// AllocatedAmount holds the value of the "allocated_amount" field.
+	AllocatedAmount decimal.Decimal `json:"allocated_amount,omitempty"`
+	selectValues    sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -53,7 +58,9 @@ func (*PerformanceObligation) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case performanceobligation.FieldID, performanceobligation.FieldTenantID, performanceobligation.FieldStatus, performanceobligation.FieldCreatedBy, performanceobligation.FieldUpdatedBy, performanceobligation.FieldEnvironmentID, performanceobligation.FieldContractID, performanceobligation.FieldName, performanceobligation.FieldRecognitionMethod, performanceobligation.FieldAmortizationMethod, performanceobligation.FieldPobStatus:
+		case performanceobligation.FieldAllocatedAmount:
+			values[i] = new(decimal.Decimal)
+		case performanceobligation.FieldID, performanceobligation.FieldTenantID, performanceobligation.FieldStatus, performanceobligation.FieldCreatedBy, performanceobligation.FieldUpdatedBy, performanceobligation.FieldEnvironmentID, performanceobligation.FieldContractID, performanceobligation.FieldName, performanceobligation.FieldRecognitionMethod, performanceobligation.FieldAmortizationMethod, performanceobligation.FieldPobStatus, performanceobligation.FieldProductID:
 			values[i] = new(sql.NullString)
 		case performanceobligation.FieldCreatedAt, performanceobligation.FieldUpdatedAt, performanceobligation.FieldServiceStart, performanceobligation.FieldServiceEnd:
 			values[i] = new(sql.NullTime)
@@ -163,6 +170,18 @@ func (_m *PerformanceObligation) assignValues(columns []string, values []any) er
 			} else if value.Valid {
 				_m.PobStatus = value.String
 			}
+		case performanceobligation.FieldProductID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field product_id", values[i])
+			} else if value.Valid {
+				_m.ProductID = value.String
+			}
+		case performanceobligation.FieldAllocatedAmount:
+			if value, ok := values[i].(*decimal.Decimal); !ok {
+				return fmt.Errorf("unexpected type %T for field allocated_amount", values[i])
+			} else if value != nil {
+				_m.AllocatedAmount = *value
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -242,6 +261,12 @@ func (_m *PerformanceObligation) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("pob_status=")
 	builder.WriteString(_m.PobStatus)
+	builder.WriteString(", ")
+	builder.WriteString("product_id=")
+	builder.WriteString(_m.ProductID)
+	builder.WriteString(", ")
+	builder.WriteString("allocated_amount=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AllocatedAmount))
 	builder.WriteByte(')')
 	return builder.String()
 }

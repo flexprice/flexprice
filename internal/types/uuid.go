@@ -139,7 +139,6 @@ const (
 	UUID_PREFIX_CONTRACT                   = "contract"
 	UUID_PREFIX_CONTRACT_ASSOCIATION       = "contract_assoc"
 	UUID_PREFIX_PERFORMANCE_OBLIGATION     = "pob"
-	UUID_PREFIX_POB_ASSOCIATION            = "pob_assoc"
 	UUID_PREFIX_ACCOUNTING_PERIOD          = "acct_period"
 	UUID_PREFIX_JOURNAL_ENTRY              = "je"
 	UUID_PREFIX_JOURNAL_LINE               = "jl"

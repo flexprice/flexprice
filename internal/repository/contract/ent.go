@@ -52,6 +52,7 @@ func (r *repository) Create(ctx context.Context, c *domainContract.Contract) err
 		SetStatus(string(c.Status())).
 		SetNillableTermStart(c.TermStart()).
 		SetNillableTermEnd(c.TermEnd()).
+		SetNillableContractValue(c.ContractValue()).
 		SetNillableEndedAt(c.EndedAt()).
 		SetContractStatus(string(c.ContractStatus())).
 		SetCreatedBy(types.GetUserID(ctx)).
@@ -88,50 +89,27 @@ func (r *repository) Create(ctx context.Context, c *domainContract.Contract) err
 	return nil
 }
 
-func (r *repository) CreateWithAssociation(ctx context.Context, c *domainContract.Contract, a *domainContract.Association) error {
-	span := entRepo.StartRepositorySpan(ctx, "contract", "create_with_association", map[string]interface{}{
-		"contract_id": c.ID(),
+func (r *repository) CreateAssociation(ctx context.Context, a *domainContract.Association) error {
+	span := entRepo.StartRepositorySpan(ctx, "contract", "create_association", map[string]interface{}{
+		"contract_id": a.ContractID(),
 		"entity_type": a.EntityType(),
 		"entity_id":   a.EntityID(),
 	})
 	defer entRepo.FinishSpan(span)
 
-	err := r.client.WithTx(ctx, func(txCtx context.Context) error {
-		_, err := r.client.Writer(txCtx).Contract.Create().
-			SetID(c.ID()).
-			SetTenantID(types.GetTenantID(txCtx)).
-			SetEnvironmentID(types.GetEnvironmentID(txCtx)).
-			SetStatus(string(c.Status())).
-			SetCustomerID(c.CustomerID()).
-			SetCurrency(c.Currency()).
-			SetNillableTermStart(c.TermStart()).
-			SetNillableTermEnd(c.TermEnd()).
-			SetNillableEndedAt(c.EndedAt()).
-			SetContractStatus(string(c.ContractStatus())).
-			SetCreatedBy(types.GetUserID(txCtx)).
-			SetUpdatedBy(types.GetUserID(txCtx)).
-			SetCreatedAt(c.CreatedAt()).
-			SetUpdatedAt(c.UpdatedAt()).
-			Save(txCtx)
-		if err != nil {
-			return err
-		}
-
-		_, err = r.client.Writer(txCtx).ContractAssociation.Create().
-			SetID(a.ID()).
-			SetTenantID(types.GetTenantID(txCtx)).
-			SetEnvironmentID(types.GetEnvironmentID(txCtx)).
-			SetStatus(string(a.Status())).
-			SetContractID(c.ID()).
-			SetEntityType(string(a.EntityType())).
-			SetEntityID(a.EntityID()).
-			SetCreatedBy(types.GetUserID(txCtx)).
-			SetUpdatedBy(types.GetUserID(txCtx)).
-			SetCreatedAt(a.CreatedAt()).
-			SetUpdatedAt(a.CreatedAt()).
-			Save(txCtx)
-		return err
-	})
+	_, err := r.client.Writer(ctx).ContractAssociation.Create().
+		SetID(a.ID()).
+		SetTenantID(types.GetTenantID(ctx)).
+		SetEnvironmentID(types.GetEnvironmentID(ctx)).
+		SetStatus(string(a.Status())).
+		SetContractID(a.ContractID()).
+		SetEntityType(string(a.EntityType())).
+		SetEntityID(a.EntityID()).
+		SetCreatedBy(types.GetUserID(ctx)).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetCreatedAt(a.CreatedAt()).
+		SetUpdatedAt(a.CreatedAt()).
+		Save(ctx)
 	if err != nil {
 		entRepo.SetSpanError(span, err)
 		var pqErr *pq.Error
@@ -146,7 +124,7 @@ func (r *repository) CreateWithAssociation(ctx context.Context, c *domainContrac
 				Mark(ierr.ErrAlreadyExists)
 		}
 		return ierr.WithError(err).
-			WithHint("Failed to create contract").
+			WithHint("Failed to link the contract").
 			Mark(ierr.ErrDatabase)
 	}
 
@@ -295,6 +273,14 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 		SetStatus(string(c.Status())).
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
+	if c.CustomerID() == "" {
+		update.ClearCustomerID()
+	} else {
+		update.SetCustomerID(c.CustomerID())
+	}
+	if c.Currency() != "" {
+		update.SetCurrency(c.Currency())
+	}
 	if c.TermStart() == nil {
 		update.ClearTermStart()
 	} else {
@@ -304,6 +290,11 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 		update.ClearTermEnd()
 	} else {
 		update.SetTermEnd(*c.TermEnd())
+	}
+	if c.ContractValue() == nil {
+		update.ClearContractValue()
+	} else {
+		update.SetContractValue(*c.ContractValue())
 	}
 	if c.EndedAt() == nil {
 		update.ClearEndedAt()

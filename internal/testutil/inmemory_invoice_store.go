@@ -675,6 +675,10 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		}
 	}
 
+	if f.UpdatedAtGTE != nil && inv.UpdatedAt.Before(*f.UpdatedAtGTE) {
+		return false
+	}
+
 	// Filter by period_end_gte (periodEnd >= value)
 	if f.PeriodEndGTE != nil {
 		if inv.PeriodEnd == nil || inv.PeriodEnd.Before(*f.PeriodEndGTE) {

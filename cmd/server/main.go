@@ -31,6 +31,7 @@ import (
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
+	recognitionsvc "github.com/flexprice/flexprice/internal/ee/service/recognition"
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
 	revenuereportsvc "github.com/flexprice/flexprice/internal/ee/service/revenuereport"
 	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
@@ -359,6 +360,9 @@ func main() {
 			contractsvc.NewContractIngestService,
 			pobsvc.NewPerformanceObligationService,
 			accountingperiodsvc.NewAccountingPeriodService,
+			recognitionsvc.NewContractRecognizer,
+			recognitionsvc.NewInvoiceRecognizer,
+			recognitionsvc.NewRunService,
 			journalsvc.NewJournalService,
 			revenuereportsvc.NewRevenueReportService,
 			service.NewSettingsService,
@@ -464,6 +468,7 @@ func provideHandlers(
 	accountingPeriodService accountingperiodsvc.AccountingPeriodService,
 	journalService journalsvc.JournalService,
 	revenueReportService revenuereportsvc.RevenueReportService,
+	recognitionRunService recognitionsvc.RunService,
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
 	subscriptionModificationService service.SubscriptionModificationService,
@@ -544,6 +549,7 @@ func provideHandlers(
 		AccountingPeriod:         v1.NewAccountingPeriodHandler(accountingPeriodService, logger),
 		JournalEntry:             v1.NewJournalEntryHandler(journalService, logger),
 		RevenueReport:            v1.NewRevenueReportHandler(revenueReportService, logger),
+		RevenueRecognition:       v1.NewRevenueRecognitionHandler(recognitionRunService, logger),
 		Commitment:               v1.NewCommitmentHandler(commitmentService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, billingEntityService, cfg, logger),

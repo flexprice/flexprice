@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/shopspring/decimal"
 )
 
 // ID filters vertices based on their ID field.
@@ -132,6 +133,16 @@ func ServiceEnd(v time.Time) predicate.PerformanceObligation {
 // PobStatus applies equality check predicate on the "pob_status" field. It's identical to PobStatusEQ.
 func PobStatus(v string) predicate.PerformanceObligation {
 	return predicate.PerformanceObligation(sql.FieldEQ(FieldPobStatus, v))
+}
+
+// ProductID applies equality check predicate on the "product_id" field. It's identical to ProductIDEQ.
+func ProductID(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldEQ(FieldProductID, v))
+}
+
+// AllocatedAmount applies equality check predicate on the "allocated_amount" field. It's identical to AllocatedAmountEQ.
+func AllocatedAmount(v decimal.Decimal) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldEQ(FieldAllocatedAmount, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -982,6 +993,121 @@ func PobStatusEqualFold(v string) predicate.PerformanceObligation {
 // PobStatusContainsFold applies the ContainsFold predicate on the "pob_status" field.
 func PobStatusContainsFold(v string) predicate.PerformanceObligation {
 	return predicate.PerformanceObligation(sql.FieldContainsFold(FieldPobStatus, v))
+}
+
+// ProductIDEQ applies the EQ predicate on the "product_id" field.
+func ProductIDEQ(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldEQ(FieldProductID, v))
+}
+
+// ProductIDNEQ applies the NEQ predicate on the "product_id" field.
+func ProductIDNEQ(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldNEQ(FieldProductID, v))
+}
+
+// ProductIDIn applies the In predicate on the "product_id" field.
+func ProductIDIn(vs ...string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldIn(FieldProductID, vs...))
+}
+
+// ProductIDNotIn applies the NotIn predicate on the "product_id" field.
+func ProductIDNotIn(vs ...string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldNotIn(FieldProductID, vs...))
+}
+
+// ProductIDGT applies the GT predicate on the "product_id" field.
+func ProductIDGT(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldGT(FieldProductID, v))
+}
+
+// ProductIDGTE applies the GTE predicate on the "product_id" field.
+func ProductIDGTE(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldGTE(FieldProductID, v))
+}
+
+// ProductIDLT applies the LT predicate on the "product_id" field.
+func ProductIDLT(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldLT(FieldProductID, v))
+}
+
+// ProductIDLTE applies the LTE predicate on the "product_id" field.
+func ProductIDLTE(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldLTE(FieldProductID, v))
+}
+
+// ProductIDContains applies the Contains predicate on the "product_id" field.
+func ProductIDContains(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldContains(FieldProductID, v))
+}
+
+// ProductIDHasPrefix applies the HasPrefix predicate on the "product_id" field.
+func ProductIDHasPrefix(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldHasPrefix(FieldProductID, v))
+}
+
+// ProductIDHasSuffix applies the HasSuffix predicate on the "product_id" field.
+func ProductIDHasSuffix(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldHasSuffix(FieldProductID, v))
+}
+
+// ProductIDIsNil applies the IsNil predicate on the "product_id" field.
+func ProductIDIsNil() predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldIsNull(FieldProductID))
+}
+
+// ProductIDNotNil applies the NotNil predicate on the "product_id" field.
+func ProductIDNotNil() predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldNotNull(FieldProductID))
+}
+
+// ProductIDEqualFold applies the EqualFold predicate on the "product_id" field.
+func ProductIDEqualFold(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldEqualFold(FieldProductID, v))
+}
+
+// ProductIDContainsFold applies the ContainsFold predicate on the "product_id" field.
+func ProductIDContainsFold(v string) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldContainsFold(FieldProductID, v))
+}
+
+// AllocatedAmountEQ applies the EQ predicate on the "allocated_amount" field.
+func AllocatedAmountEQ(v decimal.Decimal) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldEQ(FieldAllocatedAmount, v))
+}
+
+// AllocatedAmountNEQ applies the NEQ predicate on the "allocated_amount" field.
+func AllocatedAmountNEQ(v decimal.Decimal) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldNEQ(FieldAllocatedAmount, v))
+}
+
+// AllocatedAmountIn applies the In predicate on the "allocated_amount" field.
+func AllocatedAmountIn(vs ...decimal.Decimal) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldIn(FieldAllocatedAmount, vs...))
+}
+
+// AllocatedAmountNotIn applies the NotIn predicate on the "allocated_amount" field.
+func AllocatedAmountNotIn(vs ...decimal.Decimal) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldNotIn(FieldAllocatedAmount, vs...))
+}
+
+// AllocatedAmountGT applies the GT predicate on the "allocated_amount" field.
+func AllocatedAmountGT(v decimal.Decimal) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldGT(FieldAllocatedAmount, v))
+}
+
+// AllocatedAmountGTE applies the GTE predicate on the "allocated_amount" field.
+func AllocatedAmountGTE(v decimal.Decimal) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldGTE(FieldAllocatedAmount, v))
+}
+
+// AllocatedAmountLT applies the LT predicate on the "allocated_amount" field.
+func AllocatedAmountLT(v decimal.Decimal) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldLT(FieldAllocatedAmount, v))
+}
+
+// AllocatedAmountLTE applies the LTE predicate on the "allocated_amount" field.
+func AllocatedAmountLTE(v decimal.Decimal) predicate.PerformanceObligation {
+	return predicate.PerformanceObligation(sql.FieldLTE(FieldAllocatedAmount, v))
 }
 
 // And groups predicates with the AND operator between them.

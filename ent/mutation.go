@@ -58,7 +58,6 @@ import (
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
 	"github.com/flexprice/flexprice/ent/performanceobligation"
-	"github.com/flexprice/flexprice/ent/performanceobligationassociation"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/price"
@@ -100,79 +99,78 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeAccountingPeriod                 = "AccountingPeriod"
-	TypeAddon                            = "Addon"
-	TypeAddonAssociation                 = "AddonAssociation"
-	TypeAlertLogs                        = "AlertLogs"
-	TypeAlertSettings                    = "AlertSettings"
-	TypeAnalyticsView                    = "AnalyticsView"
-	TypeAuth                             = "Auth"
-	TypeBillingEntity                    = "BillingEntity"
-	TypeBillingInstalment                = "BillingInstalment"
-	TypeBillingSequence                  = "BillingSequence"
-	TypeBillingTerm                      = "BillingTerm"
-	TypeCheckoutSession                  = "CheckoutSession"
-	TypeCommitment                       = "Commitment"
-	TypeConnection                       = "Connection"
-	TypeContract                         = "Contract"
-	TypeContractAssociation              = "ContractAssociation"
-	TypeCostsheet                        = "Costsheet"
-	TypeCoupon                           = "Coupon"
-	TypeCouponApplication                = "CouponApplication"
-	TypeCouponAssociation                = "CouponAssociation"
-	TypeCreditGrant                      = "CreditGrant"
-	TypeCreditGrantApplication           = "CreditGrantApplication"
-	TypeCreditNote                       = "CreditNote"
-	TypeCreditNoteLineItem               = "CreditNoteLineItem"
-	TypeCustomer                         = "Customer"
-	TypeEmailLog                         = "EmailLog"
-	TypeEntitlement                      = "Entitlement"
-	TypeEntitlementGrant                 = "EntitlementGrant"
-	TypeEntityIntegrationMapping         = "EntityIntegrationMapping"
-	TypeEnvironment                      = "Environment"
-	TypeEventDeletionRequest             = "EventDeletionRequest"
-	TypeFXRate                           = "FXRate"
-	TypeFeature                          = "Feature"
-	TypeGroup                            = "Group"
-	TypeHostedInvoiceToken               = "HostedInvoiceToken"
-	TypeIncomingWebhookEvent             = "IncomingWebhookEvent"
-	TypeInvoice                          = "Invoice"
-	TypeInvoiceLineItem                  = "InvoiceLineItem"
-	TypeInvoiceSequence                  = "InvoiceSequence"
-	TypeJournalEntry                     = "JournalEntry"
-	TypeJournalLine                      = "JournalLine"
-	TypeMeter                            = "Meter"
-	TypeMeterUsageCheckpoint             = "MeterUsageCheckpoint"
-	TypePayment                          = "Payment"
-	TypePaymentAttempt                   = "PaymentAttempt"
-	TypePaymentMethod                    = "PaymentMethod"
-	TypePerformanceObligation            = "PerformanceObligation"
-	TypePerformanceObligationAssociation = "PerformanceObligationAssociation"
-	TypePlan                             = "Plan"
-	TypePrice                            = "Price"
-	TypePriceUnit                        = "PriceUnit"
-	TypeProduct                          = "Product"
-	TypeRefund                           = "Refund"
-	TypeRevenueFact                      = "RevenueFact"
-	TypeScheduledTask                    = "ScheduledTask"
-	TypeSecret                           = "Secret"
-	TypeSettings                         = "Settings"
-	TypeSubscription                     = "Subscription"
-	TypeSubscriptionLineItem             = "SubscriptionLineItem"
-	TypeSubscriptionPause                = "SubscriptionPause"
-	TypeSubscriptionPhase                = "SubscriptionPhase"
-	TypeSubscriptionSchedule             = "SubscriptionSchedule"
-	TypeSystemEvent                      = "SystemEvent"
-	TypeTask                             = "Task"
-	TypeTaxApplied                       = "TaxApplied"
-	TypeTaxAssociation                   = "TaxAssociation"
-	TypeTaxRate                          = "TaxRate"
-	TypeTenant                           = "Tenant"
-	TypeUsageRecord                      = "UsageRecord"
-	TypeUser                             = "User"
-	TypeWallet                           = "Wallet"
-	TypeWalletTransaction                = "WalletTransaction"
-	TypeWorkflowExecution                = "WorkflowExecution"
+	TypeAccountingPeriod         = "AccountingPeriod"
+	TypeAddon                    = "Addon"
+	TypeAddonAssociation         = "AddonAssociation"
+	TypeAlertLogs                = "AlertLogs"
+	TypeAlertSettings            = "AlertSettings"
+	TypeAnalyticsView            = "AnalyticsView"
+	TypeAuth                     = "Auth"
+	TypeBillingEntity            = "BillingEntity"
+	TypeBillingInstalment        = "BillingInstalment"
+	TypeBillingSequence          = "BillingSequence"
+	TypeBillingTerm              = "BillingTerm"
+	TypeCheckoutSession          = "CheckoutSession"
+	TypeCommitment               = "Commitment"
+	TypeConnection               = "Connection"
+	TypeContract                 = "Contract"
+	TypeContractAssociation      = "ContractAssociation"
+	TypeCostsheet                = "Costsheet"
+	TypeCoupon                   = "Coupon"
+	TypeCouponApplication        = "CouponApplication"
+	TypeCouponAssociation        = "CouponAssociation"
+	TypeCreditGrant              = "CreditGrant"
+	TypeCreditGrantApplication   = "CreditGrantApplication"
+	TypeCreditNote               = "CreditNote"
+	TypeCreditNoteLineItem       = "CreditNoteLineItem"
+	TypeCustomer                 = "Customer"
+	TypeEmailLog                 = "EmailLog"
+	TypeEntitlement              = "Entitlement"
+	TypeEntitlementGrant         = "EntitlementGrant"
+	TypeEntityIntegrationMapping = "EntityIntegrationMapping"
+	TypeEnvironment              = "Environment"
+	TypeEventDeletionRequest     = "EventDeletionRequest"
+	TypeFXRate                   = "FXRate"
+	TypeFeature                  = "Feature"
+	TypeGroup                    = "Group"
+	TypeHostedInvoiceToken       = "HostedInvoiceToken"
+	TypeIncomingWebhookEvent     = "IncomingWebhookEvent"
+	TypeInvoice                  = "Invoice"
+	TypeInvoiceLineItem          = "InvoiceLineItem"
+	TypeInvoiceSequence          = "InvoiceSequence"
+	TypeJournalEntry             = "JournalEntry"
+	TypeJournalLine              = "JournalLine"
+	TypeMeter                    = "Meter"
+	TypeMeterUsageCheckpoint     = "MeterUsageCheckpoint"
+	TypePayment                  = "Payment"
+	TypePaymentAttempt           = "PaymentAttempt"
+	TypePaymentMethod            = "PaymentMethod"
+	TypePerformanceObligation    = "PerformanceObligation"
+	TypePlan                     = "Plan"
+	TypePrice                    = "Price"
+	TypePriceUnit                = "PriceUnit"
+	TypeProduct                  = "Product"
+	TypeRefund                   = "Refund"
+	TypeRevenueFact              = "RevenueFact"
+	TypeScheduledTask            = "ScheduledTask"
+	TypeSecret                   = "Secret"
+	TypeSettings                 = "Settings"
+	TypeSubscription             = "Subscription"
+	TypeSubscriptionLineItem     = "SubscriptionLineItem"
+	TypeSubscriptionPause        = "SubscriptionPause"
+	TypeSubscriptionPhase        = "SubscriptionPhase"
+	TypeSubscriptionSchedule     = "SubscriptionSchedule"
+	TypeSystemEvent              = "SystemEvent"
+	TypeTask                     = "Task"
+	TypeTaxApplied               = "TaxApplied"
+	TypeTaxAssociation           = "TaxAssociation"
+	TypeTaxRate                  = "TaxRate"
+	TypeTenant                   = "Tenant"
+	TypeUsageRecord              = "UsageRecord"
+	TypeUser                     = "User"
+	TypeWallet                   = "Wallet"
+	TypeWalletTransaction        = "WalletTransaction"
+	TypeWorkflowExecution        = "WorkflowExecution"
 )
 
 // AccountingPeriodMutation represents an operation that mutates the AccountingPeriod nodes in the graph.
@@ -18185,6 +18183,7 @@ type ContractMutation struct {
 	customer_id       *string
 	currency          *string
 	term_start        *time.Time
+	contract_value    *decimal.Decimal
 	term_end          *time.Time
 	ended_at          *time.Time
 	contract_status   *string
@@ -18743,6 +18742,55 @@ func (m *ContractMutation) ResetTermStart() {
 	delete(m.clearedFields, contract.FieldTermStart)
 }
 
+// SetContractValue sets the "contract_value" field.
+func (m *ContractMutation) SetContractValue(d decimal.Decimal) {
+	m.contract_value = &d
+}
+
+// ContractValue returns the value of the "contract_value" field in the mutation.
+func (m *ContractMutation) ContractValue() (r decimal.Decimal, exists bool) {
+	v := m.contract_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContractValue returns the old "contract_value" field's value of the Contract entity.
+// If the Contract object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContractMutation) OldContractValue(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContractValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContractValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContractValue: %w", err)
+	}
+	return oldValue.ContractValue, nil
+}
+
+// ClearContractValue clears the value of the "contract_value" field.
+func (m *ContractMutation) ClearContractValue() {
+	m.contract_value = nil
+	m.clearedFields[contract.FieldContractValue] = struct{}{}
+}
+
+// ContractValueCleared returns if the "contract_value" field was cleared in this mutation.
+func (m *ContractMutation) ContractValueCleared() bool {
+	_, ok := m.clearedFields[contract.FieldContractValue]
+	return ok
+}
+
+// ResetContractValue resets all changes to the "contract_value" field.
+func (m *ContractMutation) ResetContractValue() {
+	m.contract_value = nil
+	delete(m.clearedFields, contract.FieldContractValue)
+}
+
 // SetTermEnd sets the "term_end" field.
 func (m *ContractMutation) SetTermEnd(t time.Time) {
 	m.term_end = &t
@@ -19212,7 +19260,7 @@ func (m *ContractMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ContractMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 20)
 	if m.tenant_id != nil {
 		fields = append(fields, contract.FieldTenantID)
 	}
@@ -19242,6 +19290,9 @@ func (m *ContractMutation) Fields() []string {
 	}
 	if m.term_start != nil {
 		fields = append(fields, contract.FieldTermStart)
+	}
+	if m.contract_value != nil {
+		fields = append(fields, contract.FieldContractValue)
 	}
 	if m.term_end != nil {
 		fields = append(fields, contract.FieldTermEnd)
@@ -19298,6 +19349,8 @@ func (m *ContractMutation) Field(name string) (ent.Value, bool) {
 		return m.Currency()
 	case contract.FieldTermStart:
 		return m.TermStart()
+	case contract.FieldContractValue:
+		return m.ContractValue()
 	case contract.FieldTermEnd:
 		return m.TermEnd()
 	case contract.FieldEndedAt:
@@ -19345,6 +19398,8 @@ func (m *ContractMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldCurrency(ctx)
 	case contract.FieldTermStart:
 		return m.OldTermStart(ctx)
+	case contract.FieldContractValue:
+		return m.OldContractValue(ctx)
 	case contract.FieldTermEnd:
 		return m.OldTermEnd(ctx)
 	case contract.FieldEndedAt:
@@ -19441,6 +19496,13 @@ func (m *ContractMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTermStart(v)
+		return nil
+	case contract.FieldContractValue:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContractValue(v)
 		return nil
 	case contract.FieldTermEnd:
 		v, ok := value.(time.Time)
@@ -19568,6 +19630,9 @@ func (m *ContractMutation) ClearedFields() []string {
 	if m.FieldCleared(contract.FieldTermStart) {
 		fields = append(fields, contract.FieldTermStart)
 	}
+	if m.FieldCleared(contract.FieldContractValue) {
+		fields = append(fields, contract.FieldContractValue)
+	}
 	if m.FieldCleared(contract.FieldTermEnd) {
 		fields = append(fields, contract.FieldTermEnd)
 	}
@@ -19620,6 +19685,9 @@ func (m *ContractMutation) ClearField(name string) error {
 		return nil
 	case contract.FieldTermStart:
 		m.ClearTermStart()
+		return nil
+	case contract.FieldContractValue:
+		m.ClearContractValue()
 		return nil
 	case contract.FieldTermEnd:
 		m.ClearTermEnd()
@@ -19679,6 +19747,9 @@ func (m *ContractMutation) ResetField(name string) error {
 		return nil
 	case contract.FieldTermStart:
 		m.ResetTermStart()
+		return nil
+	case contract.FieldContractValue:
+		m.ResetContractValue()
 		return nil
 	case contract.FieldTermEnd:
 		m.ResetTermEnd()
@@ -66602,6 +66673,8 @@ type PerformanceObligationMutation struct {
 	service_start       *time.Time
 	service_end         *time.Time
 	pob_status          *string
+	product_id          *string
+	allocated_amount    *decimal.Decimal
 	clearedFields       map[string]struct{}
 	done                bool
 	oldValue            func(context.Context) (*PerformanceObligation, error)
@@ -67268,6 +67341,91 @@ func (m *PerformanceObligationMutation) ResetPobStatus() {
 	m.pob_status = nil
 }
 
+// SetProductID sets the "product_id" field.
+func (m *PerformanceObligationMutation) SetProductID(s string) {
+	m.product_id = &s
+}
+
+// ProductID returns the value of the "product_id" field in the mutation.
+func (m *PerformanceObligationMutation) ProductID() (r string, exists bool) {
+	v := m.product_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductID returns the old "product_id" field's value of the PerformanceObligation entity.
+// If the PerformanceObligation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PerformanceObligationMutation) OldProductID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductID: %w", err)
+	}
+	return oldValue.ProductID, nil
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (m *PerformanceObligationMutation) ClearProductID() {
+	m.product_id = nil
+	m.clearedFields[performanceobligation.FieldProductID] = struct{}{}
+}
+
+// ProductIDCleared returns if the "product_id" field was cleared in this mutation.
+func (m *PerformanceObligationMutation) ProductIDCleared() bool {
+	_, ok := m.clearedFields[performanceobligation.FieldProductID]
+	return ok
+}
+
+// ResetProductID resets all changes to the "product_id" field.
+func (m *PerformanceObligationMutation) ResetProductID() {
+	m.product_id = nil
+	delete(m.clearedFields, performanceobligation.FieldProductID)
+}
+
+// SetAllocatedAmount sets the "allocated_amount" field.
+func (m *PerformanceObligationMutation) SetAllocatedAmount(d decimal.Decimal) {
+	m.allocated_amount = &d
+}
+
+// AllocatedAmount returns the value of the "allocated_amount" field in the mutation.
+func (m *PerformanceObligationMutation) AllocatedAmount() (r decimal.Decimal, exists bool) {
+	v := m.allocated_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllocatedAmount returns the old "allocated_amount" field's value of the PerformanceObligation entity.
+// If the PerformanceObligation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PerformanceObligationMutation) OldAllocatedAmount(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllocatedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllocatedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllocatedAmount: %w", err)
+	}
+	return oldValue.AllocatedAmount, nil
+}
+
+// ResetAllocatedAmount resets all changes to the "allocated_amount" field.
+func (m *PerformanceObligationMutation) ResetAllocatedAmount() {
+	m.allocated_amount = nil
+}
+
 // Where appends a list predicates to the PerformanceObligationMutation builder.
 func (m *PerformanceObligationMutation) Where(ps ...predicate.PerformanceObligation) {
 	m.predicates = append(m.predicates, ps...)
@@ -67302,7 +67460,7 @@ func (m *PerformanceObligationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PerformanceObligationMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 16)
 	if m.tenant_id != nil {
 		fields = append(fields, performanceobligation.FieldTenantID)
 	}
@@ -67345,6 +67503,12 @@ func (m *PerformanceObligationMutation) Fields() []string {
 	if m.pob_status != nil {
 		fields = append(fields, performanceobligation.FieldPobStatus)
 	}
+	if m.product_id != nil {
+		fields = append(fields, performanceobligation.FieldProductID)
+	}
+	if m.allocated_amount != nil {
+		fields = append(fields, performanceobligation.FieldAllocatedAmount)
+	}
 	return fields
 }
 
@@ -67381,6 +67545,10 @@ func (m *PerformanceObligationMutation) Field(name string) (ent.Value, bool) {
 		return m.ServiceEnd()
 	case performanceobligation.FieldPobStatus:
 		return m.PobStatus()
+	case performanceobligation.FieldProductID:
+		return m.ProductID()
+	case performanceobligation.FieldAllocatedAmount:
+		return m.AllocatedAmount()
 	}
 	return nil, false
 }
@@ -67418,6 +67586,10 @@ func (m *PerformanceObligationMutation) OldField(ctx context.Context, name strin
 		return m.OldServiceEnd(ctx)
 	case performanceobligation.FieldPobStatus:
 		return m.OldPobStatus(ctx)
+	case performanceobligation.FieldProductID:
+		return m.OldProductID(ctx)
+	case performanceobligation.FieldAllocatedAmount:
+		return m.OldAllocatedAmount(ctx)
 	}
 	return nil, fmt.Errorf("unknown PerformanceObligation field %s", name)
 }
@@ -67525,6 +67697,20 @@ func (m *PerformanceObligationMutation) SetField(name string, value ent.Value) e
 		}
 		m.SetPobStatus(v)
 		return nil
+	case performanceobligation.FieldProductID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductID(v)
+		return nil
+	case performanceobligation.FieldAllocatedAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllocatedAmount(v)
+		return nil
 	}
 	return fmt.Errorf("unknown PerformanceObligation field %s", name)
 }
@@ -67567,6 +67753,9 @@ func (m *PerformanceObligationMutation) ClearedFields() []string {
 	if m.FieldCleared(performanceobligation.FieldServiceEnd) {
 		fields = append(fields, performanceobligation.FieldServiceEnd)
 	}
+	if m.FieldCleared(performanceobligation.FieldProductID) {
+		fields = append(fields, performanceobligation.FieldProductID)
+	}
 	return fields
 }
 
@@ -67592,6 +67781,9 @@ func (m *PerformanceObligationMutation) ClearField(name string) error {
 		return nil
 	case performanceobligation.FieldServiceEnd:
 		m.ClearServiceEnd()
+		return nil
+	case performanceobligation.FieldProductID:
+		m.ClearProductID()
 		return nil
 	}
 	return fmt.Errorf("unknown PerformanceObligation nullable field %s", name)
@@ -67643,6 +67835,12 @@ func (m *PerformanceObligationMutation) ResetField(name string) error {
 	case performanceobligation.FieldPobStatus:
 		m.ResetPobStatus()
 		return nil
+	case performanceobligation.FieldProductID:
+		m.ResetProductID()
+		return nil
+	case performanceobligation.FieldAllocatedAmount:
+		m.ResetAllocatedAmount()
+		return nil
 	}
 	return fmt.Errorf("unknown PerformanceObligation field %s", name)
 }
@@ -67693,884 +67891,6 @@ func (m *PerformanceObligationMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *PerformanceObligationMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown PerformanceObligation edge %s", name)
-}
-
-// PerformanceObligationAssociationMutation represents an operation that mutates the PerformanceObligationAssociation nodes in the graph.
-type PerformanceObligationAssociationMutation struct {
-	config
-	op             Op
-	typ            string
-	id             *string
-	tenant_id      *string
-	status         *string
-	created_at     *time.Time
-	updated_at     *time.Time
-	created_by     *string
-	updated_by     *string
-	environment_id *string
-	pob_id         *string
-	entity_type    *string
-	entity_id      *string
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*PerformanceObligationAssociation, error)
-	predicates     []predicate.PerformanceObligationAssociation
-}
-
-var _ ent.Mutation = (*PerformanceObligationAssociationMutation)(nil)
-
-// performanceobligationassociationOption allows management of the mutation configuration using functional options.
-type performanceobligationassociationOption func(*PerformanceObligationAssociationMutation)
-
-// newPerformanceObligationAssociationMutation creates new mutation for the PerformanceObligationAssociation entity.
-func newPerformanceObligationAssociationMutation(c config, op Op, opts ...performanceobligationassociationOption) *PerformanceObligationAssociationMutation {
-	m := &PerformanceObligationAssociationMutation{
-		config:        c,
-		op:            op,
-		typ:           TypePerformanceObligationAssociation,
-		clearedFields: make(map[string]struct{}),
-	}
-	for _, opt := range opts {
-		opt(m)
-	}
-	return m
-}
-
-// withPerformanceObligationAssociationID sets the ID field of the mutation.
-func withPerformanceObligationAssociationID(id string) performanceobligationassociationOption {
-	return func(m *PerformanceObligationAssociationMutation) {
-		var (
-			err   error
-			once  sync.Once
-			value *PerformanceObligationAssociation
-		)
-		m.oldValue = func(ctx context.Context) (*PerformanceObligationAssociation, error) {
-			once.Do(func() {
-				if m.done {
-					err = errors.New("querying old values post mutation is not allowed")
-				} else {
-					value, err = m.Client().PerformanceObligationAssociation.Get(ctx, id)
-				}
-			})
-			return value, err
-		}
-		m.id = &id
-	}
-}
-
-// withPerformanceObligationAssociation sets the old PerformanceObligationAssociation of the mutation.
-func withPerformanceObligationAssociation(node *PerformanceObligationAssociation) performanceobligationassociationOption {
-	return func(m *PerformanceObligationAssociationMutation) {
-		m.oldValue = func(context.Context) (*PerformanceObligationAssociation, error) {
-			return node, nil
-		}
-		m.id = &node.ID
-	}
-}
-
-// Client returns a new `ent.Client` from the mutation. If the mutation was
-// executed in a transaction (ent.Tx), a transactional client is returned.
-func (m PerformanceObligationAssociationMutation) Client() *Client {
-	client := &Client{config: m.config}
-	client.init()
-	return client
-}
-
-// Tx returns an `ent.Tx` for mutations that were executed in transactions;
-// it returns an error otherwise.
-func (m PerformanceObligationAssociationMutation) Tx() (*Tx, error) {
-	if _, ok := m.driver.(*txDriver); !ok {
-		return nil, errors.New("ent: mutation is not running in a transaction")
-	}
-	tx := &Tx{config: m.config}
-	tx.init()
-	return tx, nil
-}
-
-// SetID sets the value of the id field. Note that this
-// operation is only accepted on creation of PerformanceObligationAssociation entities.
-func (m *PerformanceObligationAssociationMutation) SetID(id string) {
-	m.id = &id
-}
-
-// ID returns the ID value in the mutation. Note that the ID is only available
-// if it was provided to the builder or after it was returned from the database.
-func (m *PerformanceObligationAssociationMutation) ID() (id string, exists bool) {
-	if m.id == nil {
-		return
-	}
-	return *m.id, true
-}
-
-// IDs queries the database and returns the entity ids that match the mutation's predicate.
-// That means, if the mutation is applied within a transaction with an isolation level such
-// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
-// or updated by the mutation.
-func (m *PerformanceObligationAssociationMutation) IDs(ctx context.Context) ([]string, error) {
-	switch {
-	case m.op.Is(OpUpdateOne | OpDeleteOne):
-		id, exists := m.ID()
-		if exists {
-			return []string{id}, nil
-		}
-		fallthrough
-	case m.op.Is(OpUpdate | OpDelete):
-		return m.Client().PerformanceObligationAssociation.Query().Where(m.predicates...).IDs(ctx)
-	default:
-		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
-	}
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (m *PerformanceObligationAssociationMutation) SetTenantID(s string) {
-	m.tenant_id = &s
-}
-
-// TenantID returns the value of the "tenant_id" field in the mutation.
-func (m *PerformanceObligationAssociationMutation) TenantID() (r string, exists bool) {
-	v := m.tenant_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTenantID returns the old "tenant_id" field's value of the PerformanceObligationAssociation entity.
-// If the PerformanceObligationAssociation object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PerformanceObligationAssociationMutation) OldTenantID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTenantID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
-	}
-	return oldValue.TenantID, nil
-}
-
-// ResetTenantID resets all changes to the "tenant_id" field.
-func (m *PerformanceObligationAssociationMutation) ResetTenantID() {
-	m.tenant_id = nil
-}
-
-// SetStatus sets the "status" field.
-func (m *PerformanceObligationAssociationMutation) SetStatus(s string) {
-	m.status = &s
-}
-
-// Status returns the value of the "status" field in the mutation.
-func (m *PerformanceObligationAssociationMutation) Status() (r string, exists bool) {
-	v := m.status
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldStatus returns the old "status" field's value of the PerformanceObligationAssociation entity.
-// If the PerformanceObligationAssociation object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PerformanceObligationAssociationMutation) OldStatus(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldStatus requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
-	}
-	return oldValue.Status, nil
-}
-
-// ResetStatus resets all changes to the "status" field.
-func (m *PerformanceObligationAssociationMutation) ResetStatus() {
-	m.status = nil
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (m *PerformanceObligationAssociationMutation) SetCreatedAt(t time.Time) {
-	m.created_at = &t
-}
-
-// CreatedAt returns the value of the "created_at" field in the mutation.
-func (m *PerformanceObligationAssociationMutation) CreatedAt() (r time.Time, exists bool) {
-	v := m.created_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCreatedAt returns the old "created_at" field's value of the PerformanceObligationAssociation entity.
-// If the PerformanceObligationAssociation object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PerformanceObligationAssociationMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
-	}
-	return oldValue.CreatedAt, nil
-}
-
-// ResetCreatedAt resets all changes to the "created_at" field.
-func (m *PerformanceObligationAssociationMutation) ResetCreatedAt() {
-	m.created_at = nil
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (m *PerformanceObligationAssociationMutation) SetUpdatedAt(t time.Time) {
-	m.updated_at = &t
-}
-
-// UpdatedAt returns the value of the "updated_at" field in the mutation.
-func (m *PerformanceObligationAssociationMutation) UpdatedAt() (r time.Time, exists bool) {
-	v := m.updated_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldUpdatedAt returns the old "updated_at" field's value of the PerformanceObligationAssociation entity.
-// If the PerformanceObligationAssociation object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PerformanceObligationAssociationMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
-	}
-	return oldValue.UpdatedAt, nil
-}
-
-// ResetUpdatedAt resets all changes to the "updated_at" field.
-func (m *PerformanceObligationAssociationMutation) ResetUpdatedAt() {
-	m.updated_at = nil
-}
-
-// SetCreatedBy sets the "created_by" field.
-func (m *PerformanceObligationAssociationMutation) SetCreatedBy(s string) {
-	m.created_by = &s
-}
-
-// CreatedBy returns the value of the "created_by" field in the mutation.
-func (m *PerformanceObligationAssociationMutation) CreatedBy() (r string, exists bool) {
-	v := m.created_by
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCreatedBy returns the old "created_by" field's value of the PerformanceObligationAssociation entity.
-// If the PerformanceObligationAssociation object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PerformanceObligationAssociationMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
-	}
-	return oldValue.CreatedBy, nil
-}
-
-// ClearCreatedBy clears the value of the "created_by" field.
-func (m *PerformanceObligationAssociationMutation) ClearCreatedBy() {
-	m.created_by = nil
-	m.clearedFields[performanceobligationassociation.FieldCreatedBy] = struct{}{}
-}
-
-// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
-func (m *PerformanceObligationAssociationMutation) CreatedByCleared() bool {
-	_, ok := m.clearedFields[performanceobligationassociation.FieldCreatedBy]
-	return ok
-}
-
-// ResetCreatedBy resets all changes to the "created_by" field.
-func (m *PerformanceObligationAssociationMutation) ResetCreatedBy() {
-	m.created_by = nil
-	delete(m.clearedFields, performanceobligationassociation.FieldCreatedBy)
-}
-
-// SetUpdatedBy sets the "updated_by" field.
-func (m *PerformanceObligationAssociationMutation) SetUpdatedBy(s string) {
-	m.updated_by = &s
-}
-
-// UpdatedBy returns the value of the "updated_by" field in the mutation.
-func (m *PerformanceObligationAssociationMutation) UpdatedBy() (r string, exists bool) {
-	v := m.updated_by
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldUpdatedBy returns the old "updated_by" field's value of the PerformanceObligationAssociation entity.
-// If the PerformanceObligationAssociation object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PerformanceObligationAssociationMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
-	}
-	return oldValue.UpdatedBy, nil
-}
-
-// ClearUpdatedBy clears the value of the "updated_by" field.
-func (m *PerformanceObligationAssociationMutation) ClearUpdatedBy() {
-	m.updated_by = nil
-	m.clearedFields[performanceobligationassociation.FieldUpdatedBy] = struct{}{}
-}
-
-// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
-func (m *PerformanceObligationAssociationMutation) UpdatedByCleared() bool {
-	_, ok := m.clearedFields[performanceobligationassociation.FieldUpdatedBy]
-	return ok
-}
-
-// ResetUpdatedBy resets all changes to the "updated_by" field.
-func (m *PerformanceObligationAssociationMutation) ResetUpdatedBy() {
-	m.updated_by = nil
-	delete(m.clearedFields, performanceobligationassociation.FieldUpdatedBy)
-}
-
-// SetEnvironmentID sets the "environment_id" field.
-func (m *PerformanceObligationAssociationMutation) SetEnvironmentID(s string) {
-	m.environment_id = &s
-}
-
-// EnvironmentID returns the value of the "environment_id" field in the mutation.
-func (m *PerformanceObligationAssociationMutation) EnvironmentID() (r string, exists bool) {
-	v := m.environment_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEnvironmentID returns the old "environment_id" field's value of the PerformanceObligationAssociation entity.
-// If the PerformanceObligationAssociation object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PerformanceObligationAssociationMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
-	}
-	return oldValue.EnvironmentID, nil
-}
-
-// ClearEnvironmentID clears the value of the "environment_id" field.
-func (m *PerformanceObligationAssociationMutation) ClearEnvironmentID() {
-	m.environment_id = nil
-	m.clearedFields[performanceobligationassociation.FieldEnvironmentID] = struct{}{}
-}
-
-// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
-func (m *PerformanceObligationAssociationMutation) EnvironmentIDCleared() bool {
-	_, ok := m.clearedFields[performanceobligationassociation.FieldEnvironmentID]
-	return ok
-}
-
-// ResetEnvironmentID resets all changes to the "environment_id" field.
-func (m *PerformanceObligationAssociationMutation) ResetEnvironmentID() {
-	m.environment_id = nil
-	delete(m.clearedFields, performanceobligationassociation.FieldEnvironmentID)
-}
-
-// SetPobID sets the "pob_id" field.
-func (m *PerformanceObligationAssociationMutation) SetPobID(s string) {
-	m.pob_id = &s
-}
-
-// PobID returns the value of the "pob_id" field in the mutation.
-func (m *PerformanceObligationAssociationMutation) PobID() (r string, exists bool) {
-	v := m.pob_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPobID returns the old "pob_id" field's value of the PerformanceObligationAssociation entity.
-// If the PerformanceObligationAssociation object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PerformanceObligationAssociationMutation) OldPobID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPobID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPobID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPobID: %w", err)
-	}
-	return oldValue.PobID, nil
-}
-
-// ResetPobID resets all changes to the "pob_id" field.
-func (m *PerformanceObligationAssociationMutation) ResetPobID() {
-	m.pob_id = nil
-}
-
-// SetEntityType sets the "entity_type" field.
-func (m *PerformanceObligationAssociationMutation) SetEntityType(s string) {
-	m.entity_type = &s
-}
-
-// EntityType returns the value of the "entity_type" field in the mutation.
-func (m *PerformanceObligationAssociationMutation) EntityType() (r string, exists bool) {
-	v := m.entity_type
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEntityType returns the old "entity_type" field's value of the PerformanceObligationAssociation entity.
-// If the PerformanceObligationAssociation object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PerformanceObligationAssociationMutation) OldEntityType(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEntityType requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEntityType: %w", err)
-	}
-	return oldValue.EntityType, nil
-}
-
-// ResetEntityType resets all changes to the "entity_type" field.
-func (m *PerformanceObligationAssociationMutation) ResetEntityType() {
-	m.entity_type = nil
-}
-
-// SetEntityID sets the "entity_id" field.
-func (m *PerformanceObligationAssociationMutation) SetEntityID(s string) {
-	m.entity_id = &s
-}
-
-// EntityID returns the value of the "entity_id" field in the mutation.
-func (m *PerformanceObligationAssociationMutation) EntityID() (r string, exists bool) {
-	v := m.entity_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEntityID returns the old "entity_id" field's value of the PerformanceObligationAssociation entity.
-// If the PerformanceObligationAssociation object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PerformanceObligationAssociationMutation) OldEntityID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEntityID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEntityID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEntityID: %w", err)
-	}
-	return oldValue.EntityID, nil
-}
-
-// ResetEntityID resets all changes to the "entity_id" field.
-func (m *PerformanceObligationAssociationMutation) ResetEntityID() {
-	m.entity_id = nil
-}
-
-// Where appends a list predicates to the PerformanceObligationAssociationMutation builder.
-func (m *PerformanceObligationAssociationMutation) Where(ps ...predicate.PerformanceObligationAssociation) {
-	m.predicates = append(m.predicates, ps...)
-}
-
-// WhereP appends storage-level predicates to the PerformanceObligationAssociationMutation builder. Using this method,
-// users can use type-assertion to append predicates that do not depend on any generated package.
-func (m *PerformanceObligationAssociationMutation) WhereP(ps ...func(*sql.Selector)) {
-	p := make([]predicate.PerformanceObligationAssociation, len(ps))
-	for i := range ps {
-		p[i] = ps[i]
-	}
-	m.Where(p...)
-}
-
-// Op returns the operation name.
-func (m *PerformanceObligationAssociationMutation) Op() Op {
-	return m.op
-}
-
-// SetOp allows setting the mutation operation.
-func (m *PerformanceObligationAssociationMutation) SetOp(op Op) {
-	m.op = op
-}
-
-// Type returns the node type of this mutation (PerformanceObligationAssociation).
-func (m *PerformanceObligationAssociationMutation) Type() string {
-	return m.typ
-}
-
-// Fields returns all fields that were changed during this mutation. Note that in
-// order to get all numeric fields that were incremented/decremented, call
-// AddedFields().
-func (m *PerformanceObligationAssociationMutation) Fields() []string {
-	fields := make([]string, 0, 10)
-	if m.tenant_id != nil {
-		fields = append(fields, performanceobligationassociation.FieldTenantID)
-	}
-	if m.status != nil {
-		fields = append(fields, performanceobligationassociation.FieldStatus)
-	}
-	if m.created_at != nil {
-		fields = append(fields, performanceobligationassociation.FieldCreatedAt)
-	}
-	if m.updated_at != nil {
-		fields = append(fields, performanceobligationassociation.FieldUpdatedAt)
-	}
-	if m.created_by != nil {
-		fields = append(fields, performanceobligationassociation.FieldCreatedBy)
-	}
-	if m.updated_by != nil {
-		fields = append(fields, performanceobligationassociation.FieldUpdatedBy)
-	}
-	if m.environment_id != nil {
-		fields = append(fields, performanceobligationassociation.FieldEnvironmentID)
-	}
-	if m.pob_id != nil {
-		fields = append(fields, performanceobligationassociation.FieldPobID)
-	}
-	if m.entity_type != nil {
-		fields = append(fields, performanceobligationassociation.FieldEntityType)
-	}
-	if m.entity_id != nil {
-		fields = append(fields, performanceobligationassociation.FieldEntityID)
-	}
-	return fields
-}
-
-// Field returns the value of a field with the given name. The second boolean
-// return value indicates that this field was not set, or was not defined in the
-// schema.
-func (m *PerformanceObligationAssociationMutation) Field(name string) (ent.Value, bool) {
-	switch name {
-	case performanceobligationassociation.FieldTenantID:
-		return m.TenantID()
-	case performanceobligationassociation.FieldStatus:
-		return m.Status()
-	case performanceobligationassociation.FieldCreatedAt:
-		return m.CreatedAt()
-	case performanceobligationassociation.FieldUpdatedAt:
-		return m.UpdatedAt()
-	case performanceobligationassociation.FieldCreatedBy:
-		return m.CreatedBy()
-	case performanceobligationassociation.FieldUpdatedBy:
-		return m.UpdatedBy()
-	case performanceobligationassociation.FieldEnvironmentID:
-		return m.EnvironmentID()
-	case performanceobligationassociation.FieldPobID:
-		return m.PobID()
-	case performanceobligationassociation.FieldEntityType:
-		return m.EntityType()
-	case performanceobligationassociation.FieldEntityID:
-		return m.EntityID()
-	}
-	return nil, false
-}
-
-// OldField returns the old value of the field from the database. An error is
-// returned if the mutation operation is not UpdateOne, or the query to the
-// database failed.
-func (m *PerformanceObligationAssociationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
-	switch name {
-	case performanceobligationassociation.FieldTenantID:
-		return m.OldTenantID(ctx)
-	case performanceobligationassociation.FieldStatus:
-		return m.OldStatus(ctx)
-	case performanceobligationassociation.FieldCreatedAt:
-		return m.OldCreatedAt(ctx)
-	case performanceobligationassociation.FieldUpdatedAt:
-		return m.OldUpdatedAt(ctx)
-	case performanceobligationassociation.FieldCreatedBy:
-		return m.OldCreatedBy(ctx)
-	case performanceobligationassociation.FieldUpdatedBy:
-		return m.OldUpdatedBy(ctx)
-	case performanceobligationassociation.FieldEnvironmentID:
-		return m.OldEnvironmentID(ctx)
-	case performanceobligationassociation.FieldPobID:
-		return m.OldPobID(ctx)
-	case performanceobligationassociation.FieldEntityType:
-		return m.OldEntityType(ctx)
-	case performanceobligationassociation.FieldEntityID:
-		return m.OldEntityID(ctx)
-	}
-	return nil, fmt.Errorf("unknown PerformanceObligationAssociation field %s", name)
-}
-
-// SetField sets the value of a field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *PerformanceObligationAssociationMutation) SetField(name string, value ent.Value) error {
-	switch name {
-	case performanceobligationassociation.FieldTenantID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTenantID(v)
-		return nil
-	case performanceobligationassociation.FieldStatus:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetStatus(v)
-		return nil
-	case performanceobligationassociation.FieldCreatedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCreatedAt(v)
-		return nil
-	case performanceobligationassociation.FieldUpdatedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetUpdatedAt(v)
-		return nil
-	case performanceobligationassociation.FieldCreatedBy:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCreatedBy(v)
-		return nil
-	case performanceobligationassociation.FieldUpdatedBy:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetUpdatedBy(v)
-		return nil
-	case performanceobligationassociation.FieldEnvironmentID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEnvironmentID(v)
-		return nil
-	case performanceobligationassociation.FieldPobID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPobID(v)
-		return nil
-	case performanceobligationassociation.FieldEntityType:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEntityType(v)
-		return nil
-	case performanceobligationassociation.FieldEntityID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEntityID(v)
-		return nil
-	}
-	return fmt.Errorf("unknown PerformanceObligationAssociation field %s", name)
-}
-
-// AddedFields returns all numeric fields that were incremented/decremented during
-// this mutation.
-func (m *PerformanceObligationAssociationMutation) AddedFields() []string {
-	return nil
-}
-
-// AddedField returns the numeric value that was incremented/decremented on a field
-// with the given name. The second boolean return value indicates that this field
-// was not set, or was not defined in the schema.
-func (m *PerformanceObligationAssociationMutation) AddedField(name string) (ent.Value, bool) {
-	return nil, false
-}
-
-// AddField adds the value to the field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *PerformanceObligationAssociationMutation) AddField(name string, value ent.Value) error {
-	switch name {
-	}
-	return fmt.Errorf("unknown PerformanceObligationAssociation numeric field %s", name)
-}
-
-// ClearedFields returns all nullable fields that were cleared during this
-// mutation.
-func (m *PerformanceObligationAssociationMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(performanceobligationassociation.FieldCreatedBy) {
-		fields = append(fields, performanceobligationassociation.FieldCreatedBy)
-	}
-	if m.FieldCleared(performanceobligationassociation.FieldUpdatedBy) {
-		fields = append(fields, performanceobligationassociation.FieldUpdatedBy)
-	}
-	if m.FieldCleared(performanceobligationassociation.FieldEnvironmentID) {
-		fields = append(fields, performanceobligationassociation.FieldEnvironmentID)
-	}
-	return fields
-}
-
-// FieldCleared returns a boolean indicating if a field with the given name was
-// cleared in this mutation.
-func (m *PerformanceObligationAssociationMutation) FieldCleared(name string) bool {
-	_, ok := m.clearedFields[name]
-	return ok
-}
-
-// ClearField clears the value of the field with the given name. It returns an
-// error if the field is not defined in the schema.
-func (m *PerformanceObligationAssociationMutation) ClearField(name string) error {
-	switch name {
-	case performanceobligationassociation.FieldCreatedBy:
-		m.ClearCreatedBy()
-		return nil
-	case performanceobligationassociation.FieldUpdatedBy:
-		m.ClearUpdatedBy()
-		return nil
-	case performanceobligationassociation.FieldEnvironmentID:
-		m.ClearEnvironmentID()
-		return nil
-	}
-	return fmt.Errorf("unknown PerformanceObligationAssociation nullable field %s", name)
-}
-
-// ResetField resets all changes in the mutation for the field with the given name.
-// It returns an error if the field is not defined in the schema.
-func (m *PerformanceObligationAssociationMutation) ResetField(name string) error {
-	switch name {
-	case performanceobligationassociation.FieldTenantID:
-		m.ResetTenantID()
-		return nil
-	case performanceobligationassociation.FieldStatus:
-		m.ResetStatus()
-		return nil
-	case performanceobligationassociation.FieldCreatedAt:
-		m.ResetCreatedAt()
-		return nil
-	case performanceobligationassociation.FieldUpdatedAt:
-		m.ResetUpdatedAt()
-		return nil
-	case performanceobligationassociation.FieldCreatedBy:
-		m.ResetCreatedBy()
-		return nil
-	case performanceobligationassociation.FieldUpdatedBy:
-		m.ResetUpdatedBy()
-		return nil
-	case performanceobligationassociation.FieldEnvironmentID:
-		m.ResetEnvironmentID()
-		return nil
-	case performanceobligationassociation.FieldPobID:
-		m.ResetPobID()
-		return nil
-	case performanceobligationassociation.FieldEntityType:
-		m.ResetEntityType()
-		return nil
-	case performanceobligationassociation.FieldEntityID:
-		m.ResetEntityID()
-		return nil
-	}
-	return fmt.Errorf("unknown PerformanceObligationAssociation field %s", name)
-}
-
-// AddedEdges returns all edge names that were set/added in this mutation.
-func (m *PerformanceObligationAssociationMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// AddedIDs returns all IDs (to other nodes) that were added for the given edge
-// name in this mutation.
-func (m *PerformanceObligationAssociationMutation) AddedIDs(name string) []ent.Value {
-	return nil
-}
-
-// RemovedEdges returns all edge names that were removed in this mutation.
-func (m *PerformanceObligationAssociationMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
-// the given name in this mutation.
-func (m *PerformanceObligationAssociationMutation) RemovedIDs(name string) []ent.Value {
-	return nil
-}
-
-// ClearedEdges returns all edge names that were cleared in this mutation.
-func (m *PerformanceObligationAssociationMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// EdgeCleared returns a boolean which indicates if the edge with the given name
-// was cleared in this mutation.
-func (m *PerformanceObligationAssociationMutation) EdgeCleared(name string) bool {
-	return false
-}
-
-// ClearEdge clears the value of the edge with the given name. It returns an error
-// if that edge is not defined in the schema.
-func (m *PerformanceObligationAssociationMutation) ClearEdge(name string) error {
-	return fmt.Errorf("unknown PerformanceObligationAssociation unique edge %s", name)
-}
-
-// ResetEdge resets all changes to the edge with the given name in this mutation.
-// It returns an error if the edge is not defined in the schema.
-func (m *PerformanceObligationAssociationMutation) ResetEdge(name string) error {
-	return fmt.Errorf("unknown PerformanceObligationAssociation edge %s", name)
 }
 
 // PlanMutation represents an operation that mutates the Plan nodes in the graph.

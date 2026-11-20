@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/contract"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // ContractCreate is the builder for creating a Contract entity.
@@ -149,6 +150,20 @@ func (_c *ContractCreate) SetTermStart(v time.Time) *ContractCreate {
 func (_c *ContractCreate) SetNillableTermStart(v *time.Time) *ContractCreate {
 	if v != nil {
 		_c.SetTermStart(*v)
+	}
+	return _c
+}
+
+// SetContractValue sets the "contract_value" field.
+func (_c *ContractCreate) SetContractValue(v decimal.Decimal) *ContractCreate {
+	_c.mutation.SetContractValue(v)
+	return _c
+}
+
+// SetNillableContractValue sets the "contract_value" field if the given value is not nil.
+func (_c *ContractCreate) SetNillableContractValue(v *decimal.Decimal) *ContractCreate {
+	if v != nil {
+		_c.SetContractValue(*v)
 	}
 	return _c
 }
@@ -419,6 +434,10 @@ func (_c *ContractCreate) createSpec() (*Contract, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TermStart(); ok {
 		_spec.SetField(contract.FieldTermStart, field.TypeTime, value)
 		_node.TermStart = &value
+	}
+	if value, ok := _c.mutation.ContractValue(); ok {
+		_spec.SetField(contract.FieldContractValue, field.TypeOther, value)
+		_node.ContractValue = &value
 	}
 	if value, ok := _c.mutation.TermEnd(); ok {
 		_spec.SetField(contract.FieldTermEnd, field.TypeTime, value)

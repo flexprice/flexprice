@@ -35,12 +35,19 @@ func (s *InMemoryContractStore) Create(ctx context.Context, c *contract.Contract
 	return s.InMemoryStore.Create(ctx, c.ID(), contract.NewBuilder(c).Build())
 }
 
+func (s *InMemoryContractStore) CreateAssociation(ctx context.Context, a *contract.Association) error {
+	if err := s.associations.Create(ctx, associationKey(a.EntityType(), a.EntityID()), contract.NewAssociationBuilder(a).Build()); err != nil {
+		return ierr.WithError(err).WithHint("Entity already belongs to a contract").Mark(ierr.ErrAlreadyExists)
+	}
+	return nil
+}
+
+// CreateWithAssociation seeds a contract linked to an entity, for tests.
 func (s *InMemoryContractStore) CreateWithAssociation(ctx context.Context, c *contract.Contract, a *contract.Association) error {
-	a = contract.NewAssociationBuilder(a).WithContractID(c.ID()).Build()
-	if err := s.associations.Create(ctx, associationKey(a.EntityType(), a.EntityID()), a); err != nil {
+	if err := s.CreateAssociation(ctx, contract.NewAssociationBuilder(a).WithContractID(c.ID()).Build()); err != nil {
 		return err
 	}
-	return s.InMemoryStore.Create(ctx, c.ID(), contract.NewBuilder(c).Build())
+	return s.Create(ctx, c)
 }
 
 func (s *InMemoryContractStore) GetByID(ctx context.Context, id string) (*contract.Contract, error) {

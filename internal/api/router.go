@@ -64,6 +64,7 @@ type Handlers struct {
 	AccountingPeriod         *v1.AccountingPeriodHandler
 	JournalEntry             *v1.JournalEntryHandler
 	RevenueReport            *v1.RevenueReportHandler
+	RevenueRecognition       *v1.RevenueRecognitionHandler
 	Integration              *v1.IntegrationHandler
 	Paddle                   *v1.PaddleHandler
 	Settings                 *v1.SettingsHandler
@@ -406,6 +407,8 @@ func NewRouter(
 			contract.POST("/:id/derive", handlers.Contract.DeriveContractTerms)
 			contract.GET("/:id/review", handlers.Contract.GetContractReview)
 			contract.PUT("/:id/review/:step", handlers.Contract.SaveContractReviewStep)
+			contract.POST("/:id/complete-draft", write(types.EntitySubscription, types.ActionWrite), handlers.Contract.CompleteDraft)
+			contract.POST("/:id/activate", write(types.EntitySubscription, types.ActionWrite), handlers.Contract.Activate)
 		}
 
 		performanceObligation := v1Private.Group("/performance_obligations")
@@ -429,6 +432,12 @@ func NewRouter(
 		{
 			revenueReport.POST("/rollforward", handlers.RevenueReport.GetRollforward)
 			revenueReport.POST("/waterfall", handlers.RevenueReport.GetWaterfall)
+		}
+
+		revenueRecognition := v1Private.Group("/revenue_recognition")
+		{
+			revenueRecognition.POST("/runs", handlers.RevenueRecognition.StartRun)
+			revenueRecognition.GET("/runs/:workflow_id", handlers.RevenueRecognition.GetRun)
 		}
 
 		group := v1Private.Group("/groups")

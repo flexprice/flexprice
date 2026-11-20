@@ -871,6 +871,13 @@ definitions:
       updated_at:
         type: string
     type: object
+  ActivateContractRequest:
+    properties:
+      term_start:
+        type: string
+    required:
+    - term_start
+    type: object
   ActivateDraftSubscriptionRequest:
     properties:
       start_date:
@@ -2205,6 +2212,35 @@ definitions:
       quantity:
         type: string
     type: object
+  CompleteDraftRequest:
+    properties:
+      activate:
+        description: Activate also activates the subscriptions from the contract's
+          term start.
+        type: boolean
+      contract:
+        $ref: '#/definitions/CreateContractRequest'
+      customer:
+        allOf:
+        - $ref: '#/definitions/CreateCustomerRequest'
+        description: Customer creates the contract's customer; set either it or contract.customer_id.
+      performance_obligations:
+        items:
+          $ref: '#/definitions/CreatePOBRequest'
+        type: array
+      products:
+        description: Products creates products; each of their prices is added to the
+          subscription as a line item.
+        items:
+          $ref: '#/definitions/CreateProductCatalogRequest'
+        type: array
+      subscriptions:
+        description: Subscriptions run over the contract's term in its customer and
+          currency; one for now.
+        items:
+          $ref: '#/definitions/CreateSubscriptionRequest'
+        type: array
+    type: object
   ConfigurationDetails:
     properties:
       plan_change:
@@ -2255,6 +2291,8 @@ definitions:
         type: array
       contract_status:
         $ref: '#/definitions/types.ContractStatus'
+      contract_value:
+        type: string
       created_at:
         type: string
       currency:
@@ -2844,6 +2882,25 @@ definitions:
     - scope
     - start_date
     - type
+    type: object
+  CreateContractRequest:
+    properties:
+      contract_value:
+        description: ContractValue is the agreed total; the performance obligations'
+          allocations must add up to it.
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      term_end:
+        type: string
+      term_start:
+        description: TermStart is required to activate.
+        type: string
+    required:
+    - currency
+    - term_end
     type: object
   CreateCostsheetRequest:
     properties:
@@ -3571,6 +3628,28 @@ definitions:
     - name
     - reset_usage
     type: object
+  CreatePOBRequest:
+    properties:
+      allocated_amount:
+        type: string
+      name:
+        type: string
+      product_id:
+        type: string
+      product_lookup_key:
+        type: string
+      recognition_method:
+        $ref: '#/definitions/types.RecognitionMethod'
+      service_end:
+        type: string
+      service_start:
+        type: string
+    required:
+    - name
+    - recognition_method
+    - service_end
+    - service_start
+    type: object
   CreatePaymentRequest:
     properties:
       amount:
@@ -3798,6 +3877,15 @@ definitions:
         type: string
       updated_by:
         type: string
+    type: object
+  CreateProductCatalogRequest:
+    properties:
+      prices:
+        items:
+          $ref: '#/definitions/SubscriptionPriceCreateRequest'
+        type: array
+      product:
+        $ref: '#/definitions/CreateProductRequest'
     type: object
   CreateProductRequest:
     properties:
@@ -7229,25 +7317,12 @@ definitions:
       voided_at:
         type: string
     type: object
-  PerformanceObligationAssociationResponse:
-    properties:
-      created_at:
-        type: string
-      entity_id:
-        type: string
-      entity_type:
-        $ref: '#/definitions/types.RevRecEntityType'
-      id:
-        type: string
-    type: object
   PerformanceObligationResponse:
     properties:
+      allocated_amount:
+        type: string
       amortization_method:
         $ref: '#/definitions/types.AmortizationMethod'
-      associations:
-        items:
-          $ref: '#/definitions/PerformanceObligationAssociationResponse'
-        type: array
       contract_id:
         type: string
       created_at:
@@ -7258,6 +7333,8 @@ definitions:
         type: string
       pob_status:
         $ref: '#/definitions/types.PerformanceObligationStatus'
+      product_id:
+        type: string
       recognition_method:
         $ref: '#/definitions/types.RecognitionMethod'
       service_end:
@@ -8169,6 +8246,33 @@ definitions:
         description: actual + pending + scheduled
         type: string
     type: object
+  RevenueRecognitionRunResponse:
+    properties:
+      closed_at:
+        type: string
+      last_error:
+        type: string
+      run_id:
+        type: string
+      started_at:
+        type: string
+      status:
+        $ref: '#/definitions/RevenueRecognitionRunStatus'
+      workflow_id:
+        type: string
+    type: object
+  RevenueRecognitionRunStatus:
+    enum:
+    - queued
+    - running
+    - completed
+    - failed
+    type: string
+    x-enum-varnames:
+    - RevenueRecognitionRunStatusQueued
+    - RevenueRecognitionRunStatusRunning
+    - RevenueRecognitionRunStatusCompleted
+    - RevenueRecognitionRunStatusFailed
   RollforwardRequest:
     properties:
       accounts:
@@ -8650,6 +8754,13 @@ definitions:
       usage:
         description: usage is the total usage amount from this source (optional, for
           additional context)
+        type: string
+    type: object
+  StartRevenueRecognitionRunRequest:
+    properties:
+      contract_id:
+        type: string
+      customer_id:
         type: string
     type: object
   StripePaymentGatewayOptions:
@@ -9472,6 +9583,8 @@ definitions:
         $ref: '#/definitions/PriceUnitConfig'
       price_unit_type:
         $ref: '#/definitions/types.PriceUnitType'
+      product_id:
+        type: string
       start_date:
         type: string
       tier_mode:
@@ -20511,6 +20624,97 @@ paths:
       tags:
       - Contracts
       x-scope: read
+  /contracts/{id}/activate:
+    post:
+      consumes:
+      - application/json
+      description: Use when a completed draft contract starts. Activates its draft
+        subscriptions from term_start; the contract and its performance obligations
+        become active with them.
+      operationId: activateContract
+      parameters:
+      - description: Contract ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Term start
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ActivateContractRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ContractResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Activate contract
+      tags:
+      - Contracts
+      x-scope: write
+  /contracts/{id}/complete-draft:
+    post:
+      consumes:
+      - application/json
+      description: Use after reviewing a draft contract. Creates its subscription
+        as a draft and the given performance obligations as drafts. With activate
+        true, also activates the subscription; the contract and its performance obligations
+        follow it.
+      operationId: completeContractDraft
+      parameters:
+      - description: Contract ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Subscription, performance obligations and activation
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CompleteDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ContractResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Complete draft contract
+      tags:
+      - Contracts
+      x-scope: write
   /contracts/{id}/derive:
     post:
       consumes:
@@ -26244,6 +26448,83 @@ paths:
       tags:
       - Refunds
       x-scope: write
+  /revenue_recognition/runs:
+    post:
+      consumes:
+      - application/json
+      description: 'Use to recognize revenue now instead of waiting for the daily
+        run: for one contract, one customer, or the whole environment. Posts billing
+        the hooks missed, then the recognition and offset entries due up to now. Runs
+        in the background; poll GET /revenue_recognition/runs/{workflow_id}.'
+      operationId: startRevenueRecognitionRun
+      parameters:
+      - description: 'Scope: contract_id, customer_id, or empty for the whole environment'
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/StartRevenueRecognitionRunRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/RevenueRecognitionRunResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Contract or customer not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: A run for this scope is already running
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Start revenue recognition run
+      tags:
+      - Revenue Recognition
+      x-scope: write
+  /revenue_recognition/runs/{workflow_id}:
+    get:
+      description: 'Use to follow a recognition run started from POST /revenue_recognition/runs:
+        queued, running, completed or failed.'
+      operationId: getRevenueRecognitionRun
+      parameters:
+      - description: Workflow ID returned when the run started
+        in: path
+        name: workflow_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/RevenueRecognitionRunResponse'
+        "404":
+          description: Run not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get revenue recognition run
+      tags:
+      - Revenue Recognition
+      x-scope: read
   /revenue_reports/rollforward:
     post:
       consumes:
