@@ -23204,6 +23204,7 @@ const docTemplate = `{
             "required": [
                 "name",
                 "recognition_method",
+                "service_end",
                 "service_start"
             ],
             "properties": {

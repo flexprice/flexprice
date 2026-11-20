@@ -3634,6 +3634,7 @@ definitions:
     required:
     - name
     - recognition_method
+    - service_end
     - service_start
     type: object
   CreatePaymentRequest:

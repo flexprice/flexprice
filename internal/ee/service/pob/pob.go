@@ -83,7 +83,7 @@ func (s *performanceObligationService) CreateForContract(ctx context.Context, c 
 			WithRecognitionMethod(req.RecognitionMethod).
 			WithAmortizationMethod(types.AmortizationPeriodEvenProrated).
 			WithServiceStart(req.ServiceStart).
-			WithServiceEnd(req.ServiceEnd).
+			WithServiceEnd(lo.ToPtr(req.ServiceEnd)).
 			WithStatus(types.StatusPublished).
 			WithCreatedAt(now).
 			WithUpdatedAt(now).
@@ -171,8 +171,8 @@ func (s *performanceObligationService) GetPerformanceObligations(ctx context.Con
 	}, nil
 }
 
-// EarnedToDate earns every POB of the contract from its subscriptions' invoices and facts, one load per subscription
-// for all asOfs.
+// EarnedToDate earns every POB of the contract for each asOf: a straight-line or point-in-time POB its allocation over
+// its service dates, an as-consumed POB what its subscriptions bill and accrue, one load per subscription for all asOfs.
 func (s *performanceObligationService) EarnedToDate(ctx context.Context, contractID string, asOfs []time.Time) ([]map[string]decimal.Decimal, error) {
 	pobs, err := s.pobRepo.List(ctx, &pobRepo.Filter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
@@ -185,7 +185,6 @@ func (s *performanceObligationService) EarnedToDate(ctx context.Context, contrac
 	earned := lo.Map(asOfs, func(time.Time, int) map[string]decimal.Decimal {
 		return lo.SliceToMap(pobs, func(p *domainPOB.PerformanceObligation) (string, decimal.Decimal) { return p.ID(), decimal.Zero })
 	})
-
 	if len(pobs) == 0 || len(asOfs) == 0 {
 		return earned, nil
 	}
@@ -194,21 +193,40 @@ func (s *performanceObligationService) EarnedToDate(ctx context.Context, contrac
 	if err != nil {
 		return nil, err
 	}
+	var subs []*subscription.Subscription
 	for _, source := range sources {
 		if source.EntityType() != types.RevRecEntityTypeSubscription {
 			continue
 		}
-
 		sub, err := s.subRepo.Get(ctx, source.EntityID())
 		if err != nil {
 			return nil, err
 		}
+		subs = append(subs, sub)
+	}
 
+	// The contract's months are its subscription's local months.
+	loc := time.UTC
+	if len(subs) > 0 {
+		loc = types.LoadTimezone(subs[0].Timezone)
+	}
+	allocated, billed := lo.FilterReject(pobs, func(p *domainPOB.PerformanceObligation, _ int) bool { return earnsAllocation(p) })
+	for _, p := range allocated {
+		end := lo.FromPtrOr(p.ServiceEnd(), p.ServiceStart())
+		for i, asOf := range asOfs {
+			earned[i][p.ID()] = Earned(p.AllocatedAmount(), p.ServiceStart(), end, p.RecognitionMethod(), p.AmortizationMethod(), asOf, loc)
+		}
+	}
+	if len(billed) == 0 {
+		return earned, nil
+	}
+
+	for _, sub := range subs {
 		inputs, err := s.loadEarningInputs(ctx, sub, lo.Latest(asOfs...))
 		if err != nil {
 			return nil, err
 		}
-		pricePOBs, err := s.pobsByPrice(ctx, pobs, inputs.priceIDs())
+		pricePOBs, err := s.pobsByPrice(ctx, billed, inputs.priceIDs())
 		if err != nil {
 			return nil, err
 		}
@@ -221,6 +239,13 @@ func (s *performanceObligationService) EarnedToDate(ctx context.Context, contrac
 	}
 
 	return earned, nil
+}
+
+// earnsAllocation reports whether the POB earns its allocation over its service dates rather than what is billed: every
+// POB but an as-consumed one.
+// e.g. a 60,000 straight-line POB over 2026 earns 5,000 a month however it is billed.
+func earnsAllocation(p *domainPOB.PerformanceObligation) bool {
+	return p.RecognitionMethod() != types.RecognitionMethodAsConsumed
 }
 
 // earningInputs is what a subscription's POBs earn from: its finalized invoices, their applied taxes, and the
