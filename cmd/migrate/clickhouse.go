@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,11 +26,14 @@ func newClickHouseCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "clickhouse",
-		Short: "Run ClickHouse migrations (migrations/clickhouse/*.sql)",
+		Short: "Run ClickHouse migrations (dbmate when clickhouse.replicated)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.NewConfig()
 			if err != nil {
 				log.Fatalf("Failed to load config: %v", err)
+			}
+			if cfg.ClickHouse.Replicated {
+				return runClickHouseReplicated(cfg.ClickHouse)
 			}
 
 			l, err := logger.NewLogger(cfg)
@@ -263,4 +267,81 @@ func checkNoMarkersInLiterals(sql string) error {
 		}
 	}
 	return nil
+}
+
+const chReplicatedDir = "migrations/versioned/clickhouse/replicated"
+
+func clickhouseMigrationURL(c config.ClickHouseConfig) string {
+	scheme := "clickhouse"
+	if c.Protocol == "http" {
+		scheme = "clickhouse+http"
+		if c.TLS {
+			scheme = "clickhouse+https"
+		}
+	}
+
+	q := url.Values{}
+	q.Set("max_memory_usage", "96636764160")
+	if c.TLS {
+		q.Set("secure", "true")
+		if c.TLSSkipVerify {
+			q.Set("skip_verify", "true")
+		}
+	}
+	q.Set("on_cluster", "true")
+	q.Set("cluster_macro", "{cluster}")
+	q.Set("replica_macro", "{replica}")
+	q.Set("zoo_path", "/clickhouse/tables/{installation}/{shard}/"+c.Database+"/schema_migrations")
+	q.Set("insert_quorum", "auto")
+	q.Set("insert_quorum_parallel", "0")
+	q.Set("select_sequential_consistency", "1")
+
+	u := url.URL{
+		Scheme:   scheme,
+		User:     url.UserPassword(c.Username, c.Password),
+		Host:     c.Address,
+		Path:     "/" + c.Database,
+		RawQuery: q.Encode(),
+	}
+	return u.String()
+}
+
+func runClickHouseReplicated(c config.ClickHouseConfig) error {
+	bin, err := resolveDbmate()
+	if err != nil {
+		return err
+	}
+	if err := assertClickHouseAdopted(c); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "dbmate up against clickhouse %s/%s (dir %s)\n", c.Address, c.Database, chReplicatedDir)
+	return runDbmate(bin, clickhouseMigrationURL(c), chReplicatedDir, "up")
+}
+
+// Existing tables without a ledger need adoption.
+func assertClickHouseAdopted(c config.ClickHouseConfig) error {
+	opts := c.GetClientOptions()
+	opts.Addr = []string{c.Address}
+	opts.Auth.Database = "default"
+	conn, err := clickhouse_go.Open(opts)
+	if err != nil {
+		return fmt.Errorf("open clickhouse: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var ledger, tables uint64
+	err = conn.QueryRow(ctx, `SELECT countIf(name = 'schema_migrations'), count()
+FROM system.tables WHERE database = ?
+SETTINGS max_memory_usage = 96636764160`, c.Database).Scan(&ledger, &tables)
+	if err != nil {
+		return fmt.Errorf("inspect database %s: %w", c.Database, err)
+	}
+	if ledger > 0 || tables == 0 {
+		return nil
+	}
+	return fmt.Errorf("database %s has %d tables but no schema_migrations ledger; "+
+		"adopt it first by recording the existing versions in schema_migrations", c.Database, tables)
 }
