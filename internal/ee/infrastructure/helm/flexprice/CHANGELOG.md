@@ -9,6 +9,20 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.11.0] - 2026-11-21
+
+### Added
+- **`e2eprobeV2`** — the suite-driven synthetic probe (`internal/ee/e2eprobe/v2`,
+  image `ghcr.io/flexprice/e2eprobe-v2`) as its own component in
+  `templates/probe-v2`, mirroring `templates/probe` so both generations run side
+  by side until the old one is retired. Off by default. Adds a suite ConfigMap
+  (`e2eprobeV2.suite`, mounted at `/etc/e2eprobe/suite.yaml`, pod rolls on a
+  checksum change), the `webhook-token` secret key for the inbox, liveness and
+  readiness probes on `/healthz`, and a fixed `E2EPROBE_STATE_FILE` under the
+  `tmp` volume.
+
+Inert: with `e2eprobeV2.enabled` false nothing new renders.
+
 ## [1.7.0] - 2026-10-01
 
 ### Added

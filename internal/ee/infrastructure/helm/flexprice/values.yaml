@@ -795,6 +795,47 @@ e2eprobe:
   nodeSelector: {}
   tolerations: []
 
+# e2eprobe v2 — the suite-driven probe (internal/ee/e2eprobe/v2). Runs beside
+# e2eprobe above until that generation is retired; both are off by default.
+# Give it its own API key (ideally for its own environment) so the two never
+# write to one customer, and its own Secret so neither can read the other's.
+e2eprobeV2:
+  enabled: false
+  image:
+    repository: ghcr.io/flexprice/e2eprobe-v2
+    # Pin an explicit tag or digest per region; empty falls back to appVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+  # replicas is hardcoded to 1 in templates/probe-v2/deployment.yaml: a second
+  # sender breaks the oracle's exact usage totals.
+  existingSecret: e2eprobe-v2-secrets
+  secretKeys:
+    apiKey: api-key
+    slackWebhookUrl: slack-webhook-url
+    # Optional shared secret the webhook inbox requires; configure the same value
+    # as the X-E2EProbe-Token header on the tenant's webhook endpoint.
+    webhookToken: webhook-token
+  # Signup bootstrap for airgapped deployments; same contract as e2eprobe.bootstrap.
+  bootstrap:
+    enabled: false
+    secretName: e2eprobe-v2-bootstrap
+    secretKey: api-key
+    existingCredentialsSecret: e2eprobe-v2-bootstrap-credentials
+    emailKey: email
+    passwordKey: password
+  env: {}                 # E2EPROBE_* non-secret vars, set per region
+  # Suite file for this region: personas, scenarios, tenant expectations and
+  # alert thresholds. Empty runs the suite embedded in the image; see
+  # cmd/e2eprobe/v2/suite.example.yaml for every key. Rendered into a ConfigMap
+  # mounted at /etc/e2eprobe/suite.yaml; a change rolls the pod.
+  suite: {}
+  service: {port: 8765}
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {memory: 512Mi}
+  nodeSelector: {}
+  tolerations: []
+
 # Frontend ingress — serves the UI at its own hostname
 frontendIngress:
   enabled: false

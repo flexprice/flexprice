@@ -40,7 +40,7 @@ jobs:
           format: table
           exit-code: '1'
 
-      # Dockerfile / IaC misconfiguration (Dockerfile, Dockerfile.e2eprobe).
+      # Dockerfile / IaC misconfiguration (Dockerfile, Dockerfile.e2eprobe, Dockerfile.e2eprobe-v2).
       # Hard gate: HIGH/CRITICAL baseline is 0 on develop, so a new Dockerfile
       # misconfig blocks the PR.
       - name: Trivy config scan (Dockerfile misconfig)
