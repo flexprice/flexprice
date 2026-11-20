@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -36,6 +37,55 @@ func NewRepository(client postgres.IClient, log *logger.Logger) Repository {
 		log:       log,
 		queryOpts: queryOptions{},
 	}
+}
+
+func (r *repository) Create(ctx context.Context, c *domainContract.Contract) error {
+	span := entRepo.StartRepositorySpan(ctx, "contract", "create", map[string]interface{}{
+		"contract_id": c.ID(),
+	})
+	defer entRepo.FinishSpan(span)
+
+	create := r.client.Writer(ctx).Contract.Create().
+		SetID(c.ID()).
+		SetTenantID(types.GetTenantID(ctx)).
+		SetEnvironmentID(types.GetEnvironmentID(ctx)).
+		SetStatus(string(c.Status())).
+		SetNillableTermStart(c.TermStart()).
+		SetNillableTermEnd(c.TermEnd()).
+		SetNillableEndedAt(c.EndedAt()).
+		SetContractStatus(string(c.ContractStatus())).
+		SetCreatedBy(types.GetUserID(ctx)).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetCreatedAt(c.CreatedAt()).
+		SetUpdatedAt(c.UpdatedAt())
+	if c.CustomerID() != "" {
+		create.SetCustomerID(c.CustomerID())
+	}
+	if c.Currency() != "" {
+		create.SetCurrency(c.Currency())
+	}
+	if c.Document() != nil {
+		create.SetDocument(c.Document())
+	}
+	if c.ExtractionStatus() != "" {
+		create.SetExtractionStatus(string(c.ExtractionStatus()))
+	}
+	if len(c.Extraction()) > 0 {
+		create.SetExtraction(types.NewContractJSON(c.Extraction()))
+	}
+	if c.ExtractionError() != "" {
+		create.SetExtractionError(c.ExtractionError())
+	}
+
+	if _, err := create.Save(ctx); err != nil {
+		entRepo.SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to create contract").
+			Mark(ierr.ErrDatabase)
+	}
+
+	entRepo.SetSpanSuccess(span)
+	return nil
 }
 
 func (r *repository) CreateWithAssociation(ctx context.Context, c *domainContract.Contract, a *domainContract.Association) error {
@@ -260,6 +310,26 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 	} else {
 		update.SetEndedAt(*c.EndedAt())
 	}
+	if c.Document() == nil {
+		update.ClearDocument()
+	} else {
+		update.SetDocument(c.Document())
+	}
+	if c.ExtractionStatus() == "" {
+		update.ClearExtractionStatus()
+	} else {
+		update.SetExtractionStatus(string(c.ExtractionStatus()))
+	}
+	if len(c.Extraction()) == 0 {
+		update.ClearExtraction()
+	} else {
+		update.SetExtraction(types.NewContractJSON(c.Extraction()))
+	}
+	if c.ExtractionError() == "" {
+		update.ClearExtractionError()
+	} else {
+		update.SetExtractionError(c.ExtractionError())
+	}
 
 	if _, err := update.Save(ctx); err != nil {
 		entRepo.SetSpanError(span, err)
@@ -273,6 +343,45 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 
 	entRepo.SetSpanSuccess(span)
 	return nil
+}
+
+func (r *repository) UpdateReview(ctx context.Context, id string, review json.RawMessage, version int) (int, error) {
+	span := entRepo.StartRepositorySpan(ctx, "contract", "update_review", map[string]interface{}{
+		"contract_id": id,
+	})
+	defer entRepo.FinishSpan(span)
+
+	_, err := r.client.Writer(ctx).Contract.UpdateOneID(id).
+		Where(
+			entContract.TenantID(types.GetTenantID(ctx)),
+			entContract.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entContract.ReviewVersion(version),
+		).
+		SetReview(types.NewContractJSON(review)).
+		SetReviewVersion(version + 1).
+		SetUpdatedAt(clock.Now()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+	if ent.IsNotFound(err) {
+		if _, getErr := r.GetByID(ctx, id); getErr != nil {
+			entRepo.SetSpanError(span, getErr)
+			return 0, getErr
+		}
+		entRepo.SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("The review was changed by someone else. Reload it and try again").
+			WithReportableDetails(map[string]any{"contract_id": id, "version": version}).
+			Mark(ierr.ErrVersionConflict)
+	}
+	if err != nil {
+		entRepo.SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to save the contract review").
+			Mark(ierr.ErrDatabase)
+	}
+
+	entRepo.SetSpanSuccess(span)
+	return version + 1, nil
 }
 
 func (r *repository) readError(err error, key, value string) error {

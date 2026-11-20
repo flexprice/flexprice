@@ -3269,6 +3269,84 @@
         "x-codegen-request-body-name": "filter"
       }
     },
+    "/contracts/upload": {
+      "post": {
+        "tags": [
+          "Contracts"
+        ],
+        "summary": "Upload contract",
+        "description": "Use when you have a signed contract file to read. Stores the file, creates a draft contract with extraction_status pending and queues AI extraction. Poll GET /contracts/{id} until extraction_status is completed or failed.",
+        "operationId": "uploadContract",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "description": "Contract file (PDF, PNG or JPG, up to 20 MB)",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Contract processing unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write"
+      }
+    },
     "/contracts/{id}": {
       "get": {
         "tags": [
@@ -3336,6 +3414,261 @@
           }
         ],
         "x-scope": "read"
+      }
+    },
+    "/contracts/{id}/derive": {
+      "post": {
+        "tags": [
+          "Contracts"
+        ],
+        "summary": "Recompute derived contract terms",
+        "description": "Use while reviewing an uploaded contract to see the end date, notice deadline and invoice schedules that follow from edited terms. Omitted fields keep the extracted value; charges line up with extraction.result.charges by position. Nothing is saved.",
+        "operationId": "deriveContractTerms",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Contract ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Edited terms",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeriveContractTermsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeriveContractTermsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "request"
+      }
+    },
+    "/contracts/{id}/review": {
+      "get": {
+        "tags": [
+          "Contracts"
+        ],
+        "summary": "Get contract review",
+        "description": "Use to load the reviewer's working copy of an uploaded contract's terms, with derived values and what is left to check. Before the first save it is the extraction, at version 0.",
+        "operationId": "getContractReview",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Contract ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractReviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
+    "/contracts/{id}/review/{step}": {
+      "put": {
+        "tags": [
+          "Contracts"
+        ],
+        "summary": "Save contract review step",
+        "description": "Use to save one review step (customer, charges or billing) of an uploaded contract: edited term values, confirmed terms and, on the customer step, the customer decision. Send the version you loaded; a 409 means the review changed since.",
+        "operationId": "saveContractReviewStep",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Contract ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "step",
+            "in": "path",
+            "description": "Review step",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "customer",
+                "charges",
+                "billing"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Step edits",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveContractReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractReviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Review changed since it was loaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
       }
     },
     "/costs": {
@@ -22350,6 +22683,45 @@
           }
         }
       },
+      "ContractProductCandidate": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "lookup_key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason is exact_name, lookup_key or similar_name."
+          }
+        }
+      },
+      "ContractProductMatch": {
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractProductCandidate"
+            }
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Status is matched, possible, new or unavailable."
+          }
+        }
+      },
       "ContractResponse": {
         "type": "object",
         "properties": {
@@ -22372,15 +22744,34 @@
           "customer_id": {
             "type": "string"
           },
+          "document": {
+            "$ref": "#/components/schemas/types.ContractDocument"
+          },
           "ended_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "extraction": {
+            "type": "object",
+            "properties": {}
+          },
+          "extraction_error": {
+            "type": "string"
+          },
+          "extraction_status": {
+            "$ref": "#/components/schemas/types.ContractExtractionStatus"
           },
           "id": {
             "type": "string"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
+            "type": "string"
           },
           "term_end": {
             "type": "string",
@@ -22393,6 +22784,85 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "ContractReviewCustomer": {
+        "required": [
+          "choice"
+        ],
+        "type": "object",
+        "properties": {
+          "choice": {
+            "type": "string",
+            "enum": [
+              "existing",
+              "new"
+            ]
+          },
+          "customer_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ContractReviewProduct": {
+        "required": [
+          "choice"
+        ],
+        "type": "object",
+        "properties": {
+          "choice": {
+            "type": "string",
+            "enum": [
+              "existing",
+              "new"
+            ]
+          },
+          "product_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ContractReviewResponse": {
+        "type": "object",
+        "properties": {
+          "confirmed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "contract_id": {
+            "type": "string"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/ContractReviewCustomer"
+          },
+          "edited": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "product_matches": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ContractProductMatch"
+            },
+            "description": "ProductMatches suggests existing products for every charge, by charge path."
+          },
+          "products": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ContractReviewProduct"
+            },
+            "description": "Products holds the saved product decisions by charge path."
+          },
+          "result": {
+            "$ref": "#/components/schemas/extraction.Result"
+          },
+          "version": {
+            "type": "integer"
           }
         }
       },
@@ -25526,6 +25996,60 @@
             "$ref": "#/components/schemas/types.IntegrationEntityType"
           },
           "provider_type": {
+            "type": "string"
+          }
+        }
+      },
+      "DeriveChargeInputs": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "amount_period": {
+            "type": "string"
+          },
+          "billing_period": {
+            "type": "string"
+          },
+          "billing_timing": {
+            "type": "string"
+          }
+        }
+      },
+      "DeriveContractTermsRequest": {
+        "type": "object",
+        "properties": {
+          "charges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeriveChargeInputs"
+            }
+          },
+          "term": {
+            "$ref": "#/components/schemas/DeriveTermInputs"
+          }
+        }
+      },
+      "DeriveContractTermsResponse": {
+        "type": "object",
+        "properties": {
+          "derived": {
+            "$ref": "#/components/schemas/extraction.Derived"
+          }
+        }
+      },
+      "DeriveTermInputs": {
+        "type": "object",
+        "properties": {
+          "effective_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "notice_days": {
+            "type": "string"
+          },
+          "term_months": {
             "type": "string"
           }
         }
@@ -30074,6 +30598,39 @@
           },
           "pob_id": {
             "type": "string"
+          }
+        }
+      },
+      "SaveContractReviewRequest": {
+        "type": "object",
+        "properties": {
+          "confirmed": {
+            "type": "array",
+            "description": "Confirmed replaces the step's confirmed term paths; omit it to keep them.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "customer": {
+            "$ref": "#/components/schemas/ContractReviewCustomer"
+          },
+          "products": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ContractReviewProduct"
+            },
+            "description": "Products replaces the product decisions by charge path, e.g. \"charges[0]\"; charges step only.\nOmit it to keep them."
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Values sets terms of this step by path, e.g. \"charges[0].amount\": \"184000\". \"\" clears a term."
+          },
+          "version": {
+            "minimum": 0,
+            "type": "integer"
           }
         }
       },
@@ -34805,6 +35362,424 @@
           "ErrCodeNotImplemented"
         ],
         "x-speakeasy-name-override": "ErrorCode"
+      },
+      "extraction.Billing": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "invoice_day": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "late_fee": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "payment_terms": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "structure": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "tax": {
+            "$ref": "#/components/schemas/extraction.Term"
+          }
+        }
+      },
+      "extraction.Box": {
+        "type": "object",
+        "properties": {
+          "height": {
+            "type": "number"
+          },
+          "left": {
+            "type": "number"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "top": {
+            "type": "number"
+          },
+          "width": {
+            "type": "number"
+          }
+        }
+      },
+      "extraction.Charge": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "amount_period": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "billing_period": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "billing_timing": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "included_quantity": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "revenue_recognition": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "tier_mode": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "tiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/extraction.Tier"
+            }
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/extraction.Term"
+          }
+        }
+      },
+      "extraction.Commitment": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "covers": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "period": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "shortfall": {
+            "$ref": "#/components/schemas/extraction.Term"
+          }
+        }
+      },
+      "extraction.ContractTerm": {
+        "type": "object",
+        "properties": {
+          "auto_renew": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "cancellation": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "effective_date": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "notice_days": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "renewal_price_change": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "renewal_term_months": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "signed_date": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "term_months": {
+            "$ref": "#/components/schemas/extraction.Term"
+          }
+        }
+      },
+      "extraction.Credit": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "expiry": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/extraction.Term"
+          }
+        }
+      },
+      "extraction.Customer": {
+        "type": "object",
+        "properties": {
+          "billing_address": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "billing_email": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "legal_name": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "primary_contact": {
+            "$ref": "#/components/schemas/extraction.Term"
+          }
+        }
+      },
+      "extraction.CustomerMatch": {
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/extraction.MatchCandidate"
+            }
+          },
+          "confidence": {
+            "type": "integer"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "matched_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "model": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "integer"
+          }
+        }
+      },
+      "extraction.Derived": {
+        "type": "object",
+        "properties": {
+          "end_date": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "invoice_schedules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/extraction.InvoiceSchedule"
+            }
+          },
+          "notice_deadline": {
+            "$ref": "#/components/schemas/extraction.Term"
+          }
+        }
+      },
+      "extraction.Document": {
+        "type": "object",
+        "properties": {
+          "page_end": {
+            "type": "integer"
+          },
+          "page_start": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "extraction.InvoiceSchedule": {
+        "type": "object",
+        "properties": {
+          "amount_per_invoice": {
+            "type": "string"
+          },
+          "charge_index": {
+            "type": "integer"
+          },
+          "charge_name": {
+            "type": "string"
+          },
+          "dates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "extraction.MatchCandidate": {
+        "type": "object",
+        "properties": {
+          "confidence": {
+            "type": "integer"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "matched_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "extraction.Result": {
+        "type": "object",
+        "properties": {
+          "billing": {
+            "$ref": "#/components/schemas/extraction.Billing"
+          },
+          "charges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/extraction.Charge"
+            }
+          },
+          "commitments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/extraction.Commitment"
+            }
+          },
+          "contract_type": {
+            "$ref": "#/components/schemas/extraction.Term"
+          },
+          "credits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/extraction.Credit"
+            }
+          },
+          "customer": {
+            "$ref": "#/components/schemas/extraction.Customer"
+          },
+          "customer_match": {
+            "$ref": "#/components/schemas/extraction.CustomerMatch"
+          },
+          "derived": {
+            "$ref": "#/components/schemas/extraction.Derived"
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/extraction.Document"
+            }
+          },
+          "doubts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "service_levels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/extraction.ServiceLevel"
+            }
+          },
+          "term": {
+            "$ref": "#/components/schemas/extraction.ContractTerm"
+          },
+          "to_check": {
+            "$ref": "#/components/schemas/extraction.ToCheck"
+          }
+        }
+      },
+      "extraction.ServiceLevel": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "$ref": "#/components/schemas/extraction.Term"
+          }
+        }
+      },
+      "extraction.Term": {
+        "type": "object",
+        "properties": {
+          "boxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/extraction.Box"
+            }
+          },
+          "confidence": {
+            "type": "integer"
+          },
+          "derived": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "quote": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "extraction.Tier": {
+        "type": "object",
+        "properties": {
+          "flat_amount": {
+            "type": "string"
+          },
+          "unit_amount": {
+            "type": "string"
+          },
+          "up_to": {
+            "type": "string"
+          }
+        }
+      },
+      "extraction.ToCheck": {
+        "type": "object",
+        "properties": {
+          "billing": {
+            "type": "integer"
+          },
+          "charges": {
+            "type": "integer"
+          },
+          "customer": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        }
       },
       "Addon": {
         "type": "object",
@@ -42119,6 +43094,43 @@
             "type": "string"
           }
         }
+      },
+      "types.ContractDocument": {
+        "type": "object",
+        "properties": {
+          "file_name": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "media_type": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer"
+          }
+        },
+        "x-speakeasy-name-override": "ContractDocument"
+      },
+      "types.ContractExtractionStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "processing",
+          "completed",
+          "failed"
+        ],
+        "x-enum-varnames": [
+          "ContractExtractionStatusPending",
+          "ContractExtractionStatusProcessing",
+          "ContractExtractionStatusCompleted",
+          "ContractExtractionStatusFailed"
+        ],
+        "x-speakeasy-name-override": "ContractExtractionStatus"
       },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",

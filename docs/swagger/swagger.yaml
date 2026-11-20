@@ -2221,6 +2221,32 @@ definitions:
       id:
         type: string
     type: object
+  ContractProductCandidate:
+    properties:
+      description:
+        type: string
+      lookup_key:
+        type: string
+      name:
+        type: string
+      product_id:
+        type: string
+      reason:
+        description: Reason is exact_name, lookup_key or similar_name.
+        type: string
+    type: object
+  ContractProductMatch:
+    properties:
+      candidates:
+        items:
+          $ref: '#/definitions/ContractProductCandidate'
+        type: array
+      product_id:
+        type: string
+      status:
+        description: Status is matched, possible, new or unavailable.
+        type: string
+    type: object
   ContractResponse:
     properties:
       associations:
@@ -2235,18 +2261,84 @@ definitions:
         type: string
       customer_id:
         type: string
+      document:
+        $ref: '#/definitions/types.ContractDocument'
       ended_at:
         type: string
+      environment_id:
+        type: string
+      extraction:
+        type: object
+      extraction_error:
+        type: string
+      extraction_status:
+        $ref: '#/definitions/types.ContractExtractionStatus'
       id:
         type: string
       status:
         $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
       term_end:
         type: string
       term_start:
         type: string
       updated_at:
         type: string
+    type: object
+  ContractReviewCustomer:
+    properties:
+      choice:
+        enum:
+        - existing
+        - new
+        type: string
+      customer_id:
+        type: string
+    required:
+    - choice
+    type: object
+  ContractReviewProduct:
+    properties:
+      choice:
+        enum:
+        - existing
+        - new
+        type: string
+      product_id:
+        type: string
+    required:
+    - choice
+    type: object
+  ContractReviewResponse:
+    properties:
+      confirmed:
+        items:
+          type: string
+        type: array
+      contract_id:
+        type: string
+      customer:
+        $ref: '#/definitions/ContractReviewCustomer'
+      edited:
+        items:
+          type: string
+        type: array
+      product_matches:
+        additionalProperties:
+          $ref: '#/definitions/ContractProductMatch'
+        description: ProductMatches suggests existing products for every charge, by
+          charge path.
+        type: object
+      products:
+        additionalProperties:
+          $ref: '#/definitions/ContractReviewProduct'
+        description: Products holds the saved product decisions by charge path.
+        type: object
+      result:
+        $ref: '#/definitions/extraction.Result'
+      version:
+        type: integer
     type: object
   CostAnalyticItem:
     properties:
@@ -4752,6 +4844,40 @@ definitions:
     - entity_id
     - entity_type
     - provider_type
+    type: object
+  DeriveChargeInputs:
+    properties:
+      amount:
+        type: string
+      amount_period:
+        type: string
+      billing_period:
+        type: string
+      billing_timing:
+        type: string
+    type: object
+  DeriveContractTermsRequest:
+    properties:
+      charges:
+        items:
+          $ref: '#/definitions/DeriveChargeInputs'
+        type: array
+      term:
+        $ref: '#/definitions/DeriveTermInputs'
+    type: object
+  DeriveContractTermsResponse:
+    properties:
+      derived:
+        $ref: '#/definitions/extraction.Derived'
+    type: object
+  DeriveTermInputs:
+    properties:
+      effective_date:
+        type: string
+      notice_days:
+        type: string
+      term_months:
+        type: string
     type: object
   EmailLogResponse:
     properties:
@@ -8127,6 +8253,36 @@ definitions:
         type: string
       pob_id:
         type: string
+    type: object
+  SaveContractReviewRequest:
+    properties:
+      confirmed:
+        description: Confirmed replaces the step's confirmed term paths; omit it to
+          keep them.
+        items:
+          type: string
+        type: array
+      customer:
+        allOf:
+        - $ref: '#/definitions/ContractReviewCustomer'
+        description: Customer is the customer decision, saved on the customer step
+          only.
+      products:
+        additionalProperties:
+          $ref: '#/definitions/ContractReviewProduct'
+        description: |-
+          Products replaces the product decisions by charge path, e.g. "charges[0]"; charges step only.
+          Omit it to keep them.
+        type: object
+      values:
+        additionalProperties:
+          type: string
+        description: 'Values sets terms of this step by path, e.g. "charges[0].amount":
+          "184000". "" clears a term.'
+        type: object
+      version:
+        minimum: 0
+        type: integer
     type: object
   SavedBankAccountDetails:
     properties:
@@ -11758,6 +11914,279 @@ definitions:
     - ErrCodeServiceUnavailable
     - ErrCodeTooManyRequests
     - ErrCodeNotImplemented
+  extraction.Billing:
+    properties:
+      currency:
+        $ref: '#/definitions/extraction.Term'
+      invoice_day:
+        $ref: '#/definitions/extraction.Term'
+      late_fee:
+        $ref: '#/definitions/extraction.Term'
+      payment_terms:
+        $ref: '#/definitions/extraction.Term'
+      structure:
+        $ref: '#/definitions/extraction.Term'
+      tax:
+        $ref: '#/definitions/extraction.Term'
+    type: object
+  extraction.Box:
+    properties:
+      height:
+        type: number
+      left:
+        type: number
+      page:
+        type: integer
+      top:
+        type: number
+      width:
+        type: number
+    type: object
+  extraction.Charge:
+    properties:
+      amount:
+        $ref: '#/definitions/extraction.Term'
+      amount_period:
+        $ref: '#/definitions/extraction.Term'
+      billing_period:
+        $ref: '#/definitions/extraction.Term'
+      billing_timing:
+        $ref: '#/definitions/extraction.Term'
+      included_quantity:
+        $ref: '#/definitions/extraction.Term'
+      kind:
+        type: string
+      name:
+        $ref: '#/definitions/extraction.Term'
+      revenue_recognition:
+        $ref: '#/definitions/extraction.Term'
+      tier_mode:
+        $ref: '#/definitions/extraction.Term'
+      tiers:
+        items:
+          $ref: '#/definitions/extraction.Tier'
+        type: array
+      trigger:
+        $ref: '#/definitions/extraction.Term'
+      unit:
+        $ref: '#/definitions/extraction.Term'
+    type: object
+  extraction.Commitment:
+    properties:
+      amount:
+        $ref: '#/definitions/extraction.Term'
+      covers:
+        $ref: '#/definitions/extraction.Term'
+      period:
+        $ref: '#/definitions/extraction.Term'
+      shortfall:
+        $ref: '#/definitions/extraction.Term'
+    type: object
+  extraction.ContractTerm:
+    properties:
+      auto_renew:
+        $ref: '#/definitions/extraction.Term'
+      cancellation:
+        $ref: '#/definitions/extraction.Term'
+      effective_date:
+        $ref: '#/definitions/extraction.Term'
+      notice_days:
+        $ref: '#/definitions/extraction.Term'
+      renewal_price_change:
+        $ref: '#/definitions/extraction.Term'
+      renewal_term_months:
+        $ref: '#/definitions/extraction.Term'
+      signed_date:
+        $ref: '#/definitions/extraction.Term'
+      term_months:
+        $ref: '#/definitions/extraction.Term'
+    type: object
+  extraction.Credit:
+    properties:
+      amount:
+        $ref: '#/definitions/extraction.Term'
+      expiry:
+        $ref: '#/definitions/extraction.Term'
+      kind:
+        $ref: '#/definitions/extraction.Term'
+    type: object
+  extraction.Customer:
+    properties:
+      billing_address:
+        $ref: '#/definitions/extraction.Term'
+      billing_email:
+        $ref: '#/definitions/extraction.Term'
+      legal_name:
+        $ref: '#/definitions/extraction.Term'
+      primary_contact:
+        $ref: '#/definitions/extraction.Term'
+    type: object
+  extraction.CustomerMatch:
+    properties:
+      candidates:
+        items:
+          $ref: '#/definitions/extraction.MatchCandidate'
+        type: array
+      confidence:
+        type: integer
+      customer_id:
+        type: string
+      matched_on:
+        items:
+          type: string
+        type: array
+      model:
+        type: string
+      name:
+        type: string
+      reason:
+        type: string
+      status:
+        type: string
+      steps:
+        type: integer
+    type: object
+  extraction.Derived:
+    properties:
+      end_date:
+        $ref: '#/definitions/extraction.Term'
+      invoice_schedules:
+        items:
+          $ref: '#/definitions/extraction.InvoiceSchedule'
+        type: array
+      notice_deadline:
+        $ref: '#/definitions/extraction.Term'
+    type: object
+  extraction.Document:
+    properties:
+      page_end:
+        type: integer
+      page_start:
+        type: integer
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  extraction.InvoiceSchedule:
+    properties:
+      amount_per_invoice:
+        type: string
+      charge_index:
+        type: integer
+      charge_name:
+        type: string
+      dates:
+        items:
+          type: string
+        type: array
+    type: object
+  extraction.MatchCandidate:
+    properties:
+      confidence:
+        type: integer
+      customer_id:
+        type: string
+      email:
+        type: string
+      matched_on:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      reason:
+        type: string
+    type: object
+  extraction.Result:
+    properties:
+      billing:
+        $ref: '#/definitions/extraction.Billing'
+      charges:
+        items:
+          $ref: '#/definitions/extraction.Charge'
+        type: array
+      commitments:
+        items:
+          $ref: '#/definitions/extraction.Commitment'
+        type: array
+      contract_type:
+        $ref: '#/definitions/extraction.Term'
+      credits:
+        items:
+          $ref: '#/definitions/extraction.Credit'
+        type: array
+      customer:
+        $ref: '#/definitions/extraction.Customer'
+      customer_match:
+        $ref: '#/definitions/extraction.CustomerMatch'
+      derived:
+        $ref: '#/definitions/extraction.Derived'
+      documents:
+        items:
+          $ref: '#/definitions/extraction.Document'
+        type: array
+      doubts:
+        items:
+          type: string
+        type: array
+      service_levels:
+        items:
+          $ref: '#/definitions/extraction.ServiceLevel'
+        type: array
+      term:
+        $ref: '#/definitions/extraction.ContractTerm'
+      to_check:
+        $ref: '#/definitions/extraction.ToCheck'
+    type: object
+  extraction.ServiceLevel:
+    properties:
+      description:
+        $ref: '#/definitions/extraction.Term'
+    type: object
+  extraction.Term:
+    properties:
+      boxes:
+        items:
+          $ref: '#/definitions/extraction.Box'
+        type: array
+      confidence:
+        type: integer
+      derived:
+        type: boolean
+      note:
+        type: string
+      options:
+        items:
+          type: string
+        type: array
+      page:
+        type: integer
+      quote:
+        type: string
+      value:
+        type: string
+    type: object
+  extraction.Tier:
+    properties:
+      flat_amount:
+        type: string
+      unit_amount:
+        type: string
+      up_to:
+        type: string
+    type: object
+  extraction.ToCheck:
+    properties:
+      billing:
+        type: integer
+      charges:
+        type: integer
+      customer:
+        type: integer
+      total:
+        type: integer
+    type: object
   Addon:
     properties:
       created_at:
@@ -17109,6 +17538,31 @@ definitions:
       updated_by:
         type: string
     type: object
+  types.ContractDocument:
+    properties:
+      file_name:
+        type: string
+      key:
+        type: string
+      media_type:
+        type: string
+      sha256:
+        type: string
+      size_bytes:
+        type: integer
+    type: object
+  types.ContractExtractionStatus:
+    enum:
+    - pending
+    - processing
+    - completed
+    - failed
+    type: string
+    x-enum-varnames:
+    - ContractExtractionStatusPending
+    - ContractExtractionStatusProcessing
+    - ContractExtractionStatusCompleted
+    - ContractExtractionStatusFailed
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -20057,6 +20511,148 @@ paths:
       tags:
       - Contracts
       x-scope: read
+  /contracts/{id}/derive:
+    post:
+      consumes:
+      - application/json
+      description: Use while reviewing an uploaded contract to see the end date, notice
+        deadline and invoice schedules that follow from edited terms. Omitted fields
+        keep the extracted value; charges line up with extraction.result.charges by
+        position. Nothing is saved.
+      operationId: deriveContractTerms
+      parameters:
+      - description: Contract ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Edited terms
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/DeriveContractTermsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/DeriveContractTermsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Recompute derived contract terms
+      tags:
+      - Contracts
+      x-scope: read
+  /contracts/{id}/review:
+    get:
+      description: Use to load the reviewer's working copy of an uploaded contract's
+        terms, with derived values and what is left to check. Before the first save
+        it is the extraction, at version 0.
+      operationId: getContractReview
+      parameters:
+      - description: Contract ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ContractReviewResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get contract review
+      tags:
+      - Contracts
+      x-scope: read
+  /contracts/{id}/review/{step}:
+    put:
+      consumes:
+      - application/json
+      description: 'Use to save one review step (customer, charges or billing) of
+        an uploaded contract: edited term values, confirmed terms and, on the customer
+        step, the customer decision. Send the version you loaded; a 409 means the
+        review changed since.'
+      operationId: saveContractReviewStep
+      parameters:
+      - description: Contract ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Review step
+        enum:
+        - customer
+        - charges
+        - billing
+        in: path
+        name: step
+        required: true
+        type: string
+      - description: Step edits
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/SaveContractReviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ContractReviewResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Review changed since it was loaded
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Save contract review step
+      tags:
+      - Contracts
+      x-scope: write
   /contracts/search:
     post:
       consumes:
@@ -20092,6 +20688,45 @@ paths:
       tags:
       - Contracts
       x-scope: read
+  /contracts/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Use when you have a signed contract file to read. Stores the file,
+        creates a draft contract with extraction_status pending and queues AI extraction.
+        Poll GET /contracts/{id} until extraction_status is completed or failed.
+      operationId: uploadContract
+      parameters:
+      - description: Contract file (PDF, PNG or JPG, up to 20 MB)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/ContractResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "503":
+          description: Contract processing unavailable
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Upload contract
+      tags:
+      - Contracts
+      x-scope: write
   /costs:
     post:
       consumes:

@@ -5,6 +5,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Contract holds the schema definition for the Contract entity.
@@ -35,14 +36,14 @@ func (Contract) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			Immutable().
-			NotEmpty(),
+			Optional(),
 
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(3)",
 			}).
 			Immutable().
-			NotEmpty(),
+			Optional(),
 
 		field.Time("term_start").
 			Optional().
@@ -61,6 +62,40 @@ func (Contract) Fields() []ent.Field {
 				"postgres": "varchar(20)",
 			}).
 			NotEmpty(),
+
+		field.JSON("document", &types.ContractDocument{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
+
+		field.String("extraction_status").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Optional().
+			Nillable(),
+
+		field.JSON("extraction", &types.ContractJSON{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
+
+		field.Text("extraction_error").
+			Optional().
+			Nillable(),
+
+		// review holds the reviewer's changes to the extracted terms, saved step by step.
+		field.JSON("review", &types.ContractJSON{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
+
+		field.Int("review_version").
+			Default(0).
+			NonNegative(),
 	}
 }
 

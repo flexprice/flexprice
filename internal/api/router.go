@@ -400,8 +400,12 @@ func NewRouter(
 
 		contract := v1Private.Group("/contracts")
 		{
+			contract.POST("/upload", write(types.EntityAI, types.ActionWrite), handlers.Contract.UploadContract)
 			contract.POST("/search", handlers.Contract.QueryContracts)
 			contract.GET("/:id", handlers.Contract.GetContract)
+			contract.POST("/:id/derive", handlers.Contract.DeriveContractTerms)
+			contract.GET("/:id/review", handlers.Contract.GetContractReview)
+			contract.PUT("/:id/review/:step", handlers.Contract.SaveContractReviewStep)
 		}
 
 		performanceObligation := v1Private.Group("/performance_obligations")
