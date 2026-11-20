@@ -75,8 +75,10 @@ correctness, not just liveness. Today it cannot carry that weight:
   time window no wider than one day.
 - **Ingest load** is declared and budgeted. Default cadence is one bulk batch per persona every
   10 minutes; the computed daily total must stay under the suite's `max_events_per_day`.
-- **Deployment surface stays.** The chart, image, GHCR workflow and `make run-e2eprobe` keep their
-  names. Secrets stay in env: `E2EPROBE_API_HOST`, `E2EPROBE_API_KEY`, Slack webhook or bot token,
+- **Deployment surface stays, twice.** The previous generation keeps its chart component, image,
+  GHCR workflow and `make run-e2eprobe` untouched while this one runs beside it from
+  `internal/ee/e2eprobe/v2` with its own (`e2eprobeV2.*`, `ghcr.io/flexprice/e2eprobe-v2`,
+  `publish-e2eprobe-v2-image.yml`, `make run-e2eprobe-v2`). Secrets stay in env: `E2EPROBE_API_HOST`, `E2EPROBE_API_KEY`, Slack webhook or bot token,
   tenant and environment ids, bootstrap credentials. Everything optional moves to the suite file.
 - **SDK v2.1.51** is the client. Fields the SDK does not carry go through `RawOps`.
 - **Single replica.** Personas are shared mutable fixtures.
@@ -239,9 +241,9 @@ Rules:
   instead of failing.
 - Event profiles (`standard`, `bucketed`) are defined in Go next to the oracle because the expected
   aggregate depends on the exact values sent. The suite picks a profile; `describe` prints it.
-- The default suite is embedded in the binary so `make run-e2eprobe` works with no file.
-  `E2EPROBE_SUITE_FILE` points at an override; the chart renders `e2eprobe.suite` into a ConfigMap
-  mounted at `/etc/e2eprobe/suite.yaml`.
+- The default suite is embedded in the binary so `make run-e2eprobe-v2` works with no file.
+  `E2EPROBE_SUITE_FILE` points at an override; the chart renders `e2eprobeV2.suite` into a ConfigMap
+  mounted at `/etc/e2eprobe/suite.yaml` and rolls the pod when its checksum changes.
 
 ### 5.3 World: traits, personas, clones
 
@@ -289,7 +291,9 @@ Default `standard` profile per tick: count 5, sum 3 at amount 10, avg 2, max 2 a
 count-unique 4 over 3 users, latest 2 ending at 9, sum-with-multiplier 2 at amount 5,
 filtered sum 3 of which 2 match `source=api`, and 2 each on the two price-bucketed meters. That
 is 27 events per persona per tick; seven standard personas plus the bucketed persona at a
-10-minute tick is about 28k events a day, down from about 430k, in eight HTTP calls per tick.
+10-minute tick is about 28k events a day in eight HTTP calls per tick. Flows that drive their own
+usage declare it at registration (`ingests(n)`) and add about 25k, so the default suite is about
+54k a day against a 100k cap, down from about 430k.
 Offsets inside the tick are fractions, so the schedule stays valid for any tick length.
 
 ### 5.5 Scenario framework
@@ -336,6 +340,12 @@ container restart keeps open incidents and their start times.
 A daily digest (Slack) carries the coverage matrix, open incidents, skipping bindings with reasons,
 pass rates, inbox counts by event type, event budget used, and legacy fixtures found in the tenant.
 
+Delivery is part of the contract: a `Notifier` returns the delivery error, the tracker stamps
+`last_notified` only on success and retries an undelivered open or reminder on its next tick.
+Infrastructure failures never page from `Observe`; the tick evaluates the region rollup first and
+pages a binding only when no rollup covers it, and the rollup's observation window is persisted
+with the rest of the state so a restart inside an outage does not announce a recovery.
+
 ### 5.7 Inbox
 
 `POST /webhook` accepts any Flexprice envelope, stores `{received_at, event_type, customer_id,
@@ -359,24 +369,44 @@ misconfigured gateway shows as one preflight incident plus explicit coverage gap
 
 ### 5.9 Load and read discipline
 
-- `suite.Validate` computes events per day from personas, profiles and `tick`; `run` refuses to
-  start above `max_events_per_day` and `describe` prints the figure.
+- `suite.Validate` computes events per day from personas, profiles and `tick` plus every enabled
+  binding's declared ingest per run at its interval; `run` refuses to start above
+  `max_events_per_day` and `describe` prints the split between profiles and flows.
 - The `usage` scenario reads one `POST /events/analytics` per persona per run (every meter of the
   profile, bounded to the last closed hour) and compares each against the oracle. Eight ClickHouse
   reads per 15 minutes for the default suite.
 - No scenario polls immediately after ingest except the alert and preview flows, which are bounded
   and infrequent.
 
-### 5.10 Migration and compatibility
+### 5.10 Coexistence and migration
 
-- Default persona `external_id`s adopt the old persistent customers 0, 1, 2 and the alert canary,
-  so invoice history is kept. Old persistent customers 3 to 9 are listed as legacy fixtures in the
-  digest; removing them is a manual decision.
+Both generations run side by side until this one has earned trust, so the move is reversible and
+the old probe's incidents keep flowing meanwhile.
+
+- The old code stays byte for byte at `internal/ee/e2eprobe` and `cmd/e2eprobe`; this generation
+  lives in `internal/ee/e2eprobe/v2` and `cmd/e2eprobe/v2` and shares only `bootstrap/` and
+  `billingmatrix/`. Chart component `templates/probe-v2` with `e2eprobeV2.*` values, image
+  `ghcr.io/flexprice/e2eprobe-v2`, workflow `publish-e2eprobe-v2-image.yml` and
+  `Dockerfile.e2eprobe-v2` mirror the old ones; the old publish workflow ignores `v2/` paths.
+- Every default persona is its own customer (`e2eprobe-<name>`), so the two generations never write
+  to one customer and the oracle's totals stay exact. `external_id` on a persona still adopts an
+  existing customer for a region that wants the old invoice history after the old probe is gone.
+- The janitor deletes only customers carrying this generation's markers (`e2eprobe-eph-` prefix or
+  the ephemeral cohort tag). The old probe's ephemerals and persistent customers are listed as
+  legacy in the sweep report and digest; removing them is a manual decision.
+- Shared by lookup key and reconciled the same way by both generations: the plan and its prices,
+  meters, features, entitlements, coupon and tax rate. Neither deletes them.
+- The default suite assumes no payment gateway. A region adds a payer persona and
+  `tenant.connections`; the hand-provisioned cards customer is shared with the old probe, so the
+  payment scenarios run in one generation at a time.
+- A separate environment and API key for v2 is the recommended way to run both, and it exercises
+  provisioning from nothing, which adopting the old customers never did.
 - `E2EPROBE_CHECK_*`, `E2EPROBE_PAYMENTS_*`, `E2EPROBE_BILLING_MATRIX_*`, `E2EPROBE_EVENT_INGEST_*`,
-  `E2EPROBE_HEARTBEAT_INTERVAL` and `E2EPROBE_JANITOR_MAX_AGE` are removed; the suite carries them.
-  Startup logs a warning for each one still set, naming the suite key that replaces it.
-- Chart: `e2eprobe.suite` (YAML map) renders into a ConfigMap and `E2EPROBE_SUITE_FILE` joins the
-  reserved env list. Unset, the embedded default suite applies.
+  `E2EPROBE_HEARTBEAT_INTERVAL` and `E2EPROBE_JANITOR_MAX_AGE` are not read by v2; the suite carries
+  them. Startup logs a warning for each one still set, naming the suite key that replaces it.
+- Swap, once trusted: delete the old Go files, `templates/probe`, `Dockerfile.e2eprobe` and its
+  workflow; move `v2/` up and drop `/v2` from import paths; rename `e2eprobeV2` to `e2eprobe` in
+  values and region files; point the image name back. Nothing in v2 depends on the old code.
 
 ### 5.11 Scenario catalog (ported coverage)
 
@@ -409,6 +439,10 @@ misconfigured gateway shows as one preflight incident plus explicit coverage gap
 - `GET /status`: bindings with last result and next run, open incidents, inbox stats, ledger stats.
 - Hourly heartbeat log line and daily Slack digest.
 
+`once --scenario <name> [--persona <p>] [--json]` provisions the suite and runs one binding with
+Slack quiet and incident state in memory, exiting 1 on failure; `run --only a,b` narrows a
+region's suite while debugging.
+
 ## 6. Testing
 
 - Unit tests per file with the fake client (`scenarios/fakeclient_test.go`), no network.
@@ -428,6 +462,10 @@ misconfigured gateway shows as one preflight incident plus explicit coverage gap
 
 ## 8. Rollout
 
-1. Land the module and chart change behind the embedded default suite; staging runs it first.
-2. Copy each region's connected gateways into its `e2eprobe.suite`.
-3. Watch one digest cycle; then remove the legacy env from region values.
+1. Land v2 beside the current probe; nothing changes for regions until `e2eprobeV2.enabled` is set.
+2. Enable v2 on staging with its own API key, ideally in its own environment; run `describe` and
+   `once --scenario preflight` first, then watch one digest cycle for false pages and skips.
+3. Add the staging gateway to a payer persona in `e2eprobeV2.suite`; move the payment scenarios
+   over by disabling them in the old probe's env for that region.
+4. Repeat per region. When every region runs v2 and the old probe has been quiet for a cycle, do
+   the swap in §5.10 and delete the legacy customers the digest lists.
