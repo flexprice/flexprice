@@ -19,8 +19,9 @@ belongs to, and then settle it in Zoho the same way it was settled in Flexprice:
   reduces the invoice balance by the same amount Flexprice reduced its amount due.
 
 In both cases the Zoho credit note ends in **Closed** on its own
-([Change Status of Credit Note](https://www.zoho.com/us/books/kb/credits/change-status-closed-cn.html)). The
-sync is one-way, Flexprice to Zoho.
+([Change Status of Credit Note](https://www.zoho.com/us/books/kb/credits/change-status-closed-cn.html)). When
+an adjustment credit note is voided in Flexprice after it was synced, its applied credit is removed from the
+Zoho invoice and the Zoho credit note is voided. The sync is one-way, Flexprice to Zoho.
 
 ## 2. Problem statement
 
@@ -111,7 +112,7 @@ sequenceDiagram
     EV->>WF: Start sync (scoped to the invoice's billing entity)
     WF->>WF: Look up Zoho invoice id from mapping
     WF->>Z: GET /invoices/{id} (customer_id)
-    WF->>Z: POST /creditnotes?invoice_id=... (is_draft false)
+    WF->>Z: POST /creditnotes?invoice_id=... (is_draft false, exchange_rate)
     Z-->>WF: creditnote_id, status open, balance
     WF->>WF: Save credit_note mapping
 
@@ -123,6 +124,29 @@ sequenceDiagram
         WF->>Z: POST /creditnotes/{id}/invoices (amount_applied = balance)
     end
     Z-->>WF: Credit note closed
+```
+
+### 3.3 Void sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant FP as Flexprice credit note service
+    participant EV as Integration events handler
+    participant WF as Zoho credit note sync workflow
+    participant Z as Zoho Books
+
+    FP->>FP: Void credit note, raise invoice amount_due
+    FP->>EV: credit_note.updated (VOIDED)
+    EV->>WF: Start the same sync workflow (scoped to the invoice's billing entity)
+    WF->>WF: Look up credit_note mapping (none: log and stop)
+    WF->>Z: GET /creditnotes/{id} (status)
+    opt Not void yet
+        WF->>Z: GET /invoices/{id}/creditsapplied
+        WF->>Z: DELETE /invoices/{id}/creditsapplied/{creditnotes_invoice_id}
+        WF->>Z: POST /creditnotes/{id}/status/void
+    end
+    WF->>WF: Set zoho_status void on the mapping
 ```
 
 ## 4. How it works today
@@ -142,6 +166,9 @@ sequenceDiagram
 - On finalize, an `ADJUSTMENT` credit note creates no refund rows. It raises the invoice's
   `adjustment_amount` and lowers `amount_due` and `amount_remaining`. Finalize publishes
   `credit_note.updated` for both types.
+- A draft credit note can be voided. A finalized credit note can be voided only when it is an `ADJUSTMENT`
+  credit note. A finalized `REFUND` credit note is rejected ("cannot void completed refund"). Voiding a
+  finalized credit note recalculates the invoice amounts and publishes `credit_note.updated`.
 
 ### 4.2 Zoho Books sync
 
@@ -157,12 +184,20 @@ sequenceDiagram
 
 | Step | API | Body |
 |---|---|---|
-| Create | [`POST /creditnotes`](https://www.zoho.com/books/api/v3/credit-notes/#create-a-credit-note) with query `invoice_id` | `customer_id`, `date`, `is_draft: false`, `reference_number` (Flexprice credit note id), `line_items[]` with `item_id`, `invoice_id`, `quantity`, `rate` |
-| Refund (refund credit note) | [`POST /creditnotes/{id}/refunds`](https://www.zoho.com/books/api/v3/credit-notes/#refund-credit-note) | `date`, `refund_mode`, `amount`, `from_account_id`, `reference_number` (Flexprice refund id) |
+| Create | [`POST /creditnotes`](https://www.zoho.com/books/api/v3/credit-notes/#create-a-credit-note) with query `invoice_id` | `customer_id`, `date`, `is_draft: false`, `exchange_rate`, `reference_number` (Flexprice credit note id), `line_items[]` with `item_id`, `invoice_id`, `quantity`, `rate` |
+| Refund (refund credit note) | [`POST /creditnotes/{id}/refunds`](https://www.zoho.com/books/api/v3/credit-notes/#refund-credit-note) | `date`, `refund_mode`, `amount`, `exchange_rate`, `from_account_id`, `reference_number` (Flexprice refund id) |
 | Apply (adjustment credit note) | [`POST /creditnotes/{id}/invoices`](https://www.zoho.com/books/api/v3/credit-notes/#credit-to-an-invoice) | `invoices: [{ invoice_id, amount_applied }]` |
+| Read status (void) | [`GET /creditnotes/{id}`](https://www.zoho.com/books/api/v3/credit-notes/#get-a-credit-note) | none |
+| List applied credits (void) | [`GET /invoices/{id}/creditsapplied`](https://www.zoho.com/books/api/v3/invoices/#list-credits-applied) | none |
+| Remove applied credit (void) | [`DELETE /invoices/{id}/creditsapplied/{creditnotes_invoice_id}`](https://www.zoho.com/books/api/v3/invoices/#delete-applied-credit) | none |
+| Void | [`POST /creditnotes/{id}/status/void`](https://www.zoho.com/books/api/v3/credit-notes/#void-a-credit-note) | none |
 
 `is_draft: false` creates the credit note as Open. `refund_mode` is a free-text field in Zoho. We send the
 gateway name for a gateway refund (for example `razorpay`) and `prepaid_wallet` for a wallet refund.
+
+Zoho requires `exchange_rate` when the credit note's currency differs from the organization's base currency.
+The rate is resolved once per sync the same way invoice sync resolves it: 1 for the base currency, otherwise
+the rate set in Zoho Settings → Currencies. The credit note and its refunds use the same rate.
 
 ### 5.2 Linking to the invoice
 
@@ -180,6 +215,10 @@ If the invoice has no Zoho mapping, it was never synced, and the credit note is 
 |---|---|---|
 | `REFUND` | `refund.succeeded`, and no refund row for the credit note is still `PENDING` or `PROCESSING` | Create, then one refund per `SUCCEEDED` row |
 | `ADJUSTMENT` | `credit_note.updated` with status `FINALIZED` | Create, then apply to the invoice |
+| Any type, voided | `credit_note.updated` with status `VOIDED` | Remove the applied credit, then void |
+
+Both run in the same sync workflow and activity, which branches on the credit note status. A credit note
+voided as a draft was never synced, so it has no mapping and the void stops there.
 
 Waiting for every refund row matters because one credit note can split across several payments, plus a
 wallet remainder, and a failed gateway row is replaced by a new wallet row. The credit note is created in Zoho
@@ -193,16 +232,33 @@ only once the final refund outcome is known, so Zoho never shows a refund that l
 
 ### 5.5 Retries
 
-The sync makes only the three calls above, each using the response of the one before it. Nothing is read
-back or listed from Zoho.
-
 - If a credit note mapping (`entity_type = credit_note`) already exists, the credit note was synced and the
   sync is skipped.
 - A Zoho rejection is not retried. A network failure is retried by Temporal. If the failure comes after the
-  credit note was created, the retry sees the mapping and skips, so a refund or apply that did not go
-  through must be recorded in Zoho by hand.
+  mapping was saved, the retry sees the mapping and skips, so a refund or apply that did not go through must
+  be recorded in Zoho by hand.
+- A sync for a credit note that is still running makes a later event for the same credit note retry, since
+  create and void share one workflow id. A void that arrives while the create is running waits for it.
 
-### 5.6 Configuration and scope
+### 5.6 Void
+
+Only a finalized `ADJUSTMENT` credit note can be voided, and it was applied to its invoice when it synced. So
+voiding in Zoho removes that applied credit and voids the credit note. A refund never has to be deleted.
+
+1. Read the credit note mapping. If there is none (a draft void, sync turned on after the credit note was
+   created, the invoice was never synced, or Zoho rejected the create), log and stop.
+2. Read the Zoho credit note. If it is already void, skip to step 5. This is what a retry after a successful
+   void sees.
+3. List the credits applied to the Zoho invoice and delete the one whose `creditnote_id` is ours. The delete
+   takes `creditnotes_invoice_id`, the id of the application, which only this list returns.
+4. Void the Zoho credit note.
+5. Set `zoho_status` to `void` and `voided_at` in the mapping's `metadata`, only after Zoho accepted the
+   void.
+
+Flexprice raises the invoice's `amount_due` back when the credit note is voided, and removing the applied
+credit raises the Zoho invoice balance by the same amount, so the two stay in step.
+
+### 5.7 Configuration and scope
 
 - A new `credit_note` entry in the connection `sync_config` (`Outbound` only) turns the feature on. It
   requires invoice outbound sync, since a credit note needs a synced invoice. `sync_config` is JSON, so no
@@ -254,7 +310,7 @@ of 100, so mark-paid records exactly the 100 that was paid.
 
 ## 7. Testing scenarios
 
-All three start with a ₹200 invoice synced to Zoho and a ₹100 credit note on it.
+All scenarios start with a ₹200 invoice synced to Zoho and a ₹100 credit note on it.
 
 1. **Invoice not paid.** The credit note is an `ADJUSTMENT` credit note, and finalizing it lowers the
    invoice's amount due to ₹100 in Flexprice. Zoho gets an Open credit note on the invoice, which is then
@@ -269,12 +325,17 @@ All three start with a ₹200 invoice synced to Zoho and a ₹100 credit note on
    `BACK_TO_SOURCE` on a Razorpay-paid invoice. Nothing reaches Zoho until the Razorpay refund webhook
    confirms the refund. Then Zoho gets an Open credit note on the invoice and a ₹100 refund with the Flexprice
    refund id as `reference_number`. The credit note is Closed and the customer's Zoho balance is zero.
+4. **Adjustment credit note voided.** Scenario 1 runs, then the credit note is voided in Flexprice and the
+   invoice's amount due goes back to ₹200. The applied credit is removed from the Zoho invoice, whose balance
+   goes back to ₹200, and the Zoho credit note is Void. The credit note mapping shows `zoho_status: void`.
 
 ## 8. References
 
 - Zoho Books API, Credit Notes: [create](https://www.zoho.com/books/api/v3/credit-notes/#create-a-credit-note),
   [credit to an invoice](https://www.zoho.com/books/api/v3/credit-notes/#credit-to-an-invoice),
-  [refund credit note](https://www.zoho.com/books/api/v3/credit-notes/#refund-credit-note)
+  [refund credit note](https://www.zoho.com/books/api/v3/credit-notes/#refund-credit-note),
+  [void a credit note](https://www.zoho.com/books/api/v3/credit-notes/#void-a-credit-note)
+- Zoho Books API, Invoices: [delete applied credit](https://www.zoho.com/books/api/v3/invoices/#delete-applied-credit)
 - Zoho Books help: [Apply Credits to Invoices](https://www.zoho.com/in/books/help/credit-note/apply-credits.html),
   [Refund Credits](https://www.zoho.com/in/books/help/credit-note/refund-credits.html),
   [Change Status of Credit Note](https://www.zoho.com/us/books/kb/credits/change-status-closed-cn.html)

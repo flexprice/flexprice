@@ -502,6 +502,7 @@ type CreditNoteCreateRequest struct {
 	CustomerID      string               `json:"customer_id"`
 	Date            string               `json:"date"`
 	IsDraft         bool                 `json:"is_draft"`
+	ExchangeRate    float64              `json:"exchange_rate,omitempty"`
 	ReferenceNumber string               `json:"reference_number,omitempty"`
 	LineItems       []CreditNoteLineItem `json:"line_items"`
 }
@@ -528,6 +529,7 @@ type CreditNoteRefundRequest struct {
 	Date            string          `json:"date"`
 	RefundMode      string          `json:"refund_mode,omitempty"`
 	Amount          decimal.Decimal `json:"amount"`
+	ExchangeRate    float64         `json:"exchange_rate,omitempty"`
 	FromAccountID   string          `json:"from_account_id,omitempty"`
 	ReferenceNumber string          `json:"reference_number,omitempty"`
 }
@@ -544,4 +546,11 @@ type CreditNoteApplyRequest struct {
 type CreditNoteInvoiceApply struct {
 	InvoiceID     string          `json:"invoice_id"`
 	AmountApplied decimal.Decimal `json:"amount_applied"`
+}
+
+// InvoiceCreditApplied is one credit note applied to an invoice, from GET /books/v3/invoices/{id}/creditsapplied.
+type InvoiceCreditApplied struct {
+	CreditNoteID         string          `json:"creditnote_id"`
+	CreditNotesInvoiceID string          `json:"creditnotes_invoice_id"`
+	AmountApplied        decimal.Decimal `json:"amount_applied"`
 }

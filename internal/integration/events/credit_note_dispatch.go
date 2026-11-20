@@ -18,8 +18,8 @@ import (
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
-// DispatchCreditNoteVendorSync starts the Zoho Books credit note sync for a finalized
-// adjustment credit note. Used on credit_note.updated.
+// DispatchCreditNoteVendorSync starts the Zoho Books credit note sync for a finalized adjustment
+// credit note, and for any voided credit note. Used on credit_note.updated.
 func DispatchCreditNoteVendorSync(
 	ctx context.Context,
 	cfg *config.Configuration,
@@ -48,7 +48,8 @@ func DispatchCreditNoteVendorSync(
 	if err != nil {
 		return err
 	}
-	if cn.CreditNoteType != types.CreditNoteTypeAdjustment || cn.CreditNoteStatus != types.CreditNoteStatusFinalized {
+	finalizedAdjustment := cn.CreditNoteType == types.CreditNoteTypeAdjustment && cn.CreditNoteStatus == types.CreditNoteStatusFinalized
+	if !finalizedAdjustment && cn.CreditNoteStatus != types.CreditNoteStatusVoided {
 		return nil
 	}
 

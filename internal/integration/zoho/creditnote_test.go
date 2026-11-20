@@ -31,6 +31,8 @@ type cnFakeMappingRepo struct {
 	listCalls  []*types.EntityIntegrationMappingFilter
 	createErr  error
 	createdIDs []string
+	updateErr  error
+	updated    []*entityintegrationmapping.EntityIntegrationMapping
 }
 
 func (f *cnFakeMappingRepo) List(_ context.Context, filter *types.EntityIntegrationMappingFilter) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
@@ -50,6 +52,14 @@ func (f *cnFakeMappingRepo) Create(_ context.Context, m *entityintegrationmappin
 	}
 	f.mappings = append(f.mappings, m)
 	f.createdIDs = append(f.createdIDs, m.EntityID)
+	return nil
+}
+
+func (f *cnFakeMappingRepo) Update(_ context.Context, m *entityintegrationmapping.EntityIntegrationMapping) error {
+	if f.updateErr != nil {
+		return f.updateErr
+	}
+	f.updated = append(f.updated, m)
 	return nil
 }
 
@@ -83,6 +93,49 @@ type cnFakeZohoClient struct {
 	refundReqs      []*CreditNoteRefundRequest
 	applyCNIDs      []string
 	applyReqs       []*CreditNoteApplyRequest
+
+	exchangeRate     float64
+	currencyErr      error
+	resolvedCurrency string
+
+	zohoCreditNoteStatus string
+	getCreditNoteErr     error
+	getCreditNoteIDs     []string
+	creditsApplied       []InvoiceCreditApplied
+	listCreditsErr       error
+	listCreditsInvoices  []string
+	deleteErr            error
+	deletedCredits       []string
+	voidErr              error
+	voidedIDs            []string
+}
+
+func (f *cnFakeZohoClient) ResolveInvoiceCurrency(_ context.Context, currency string) (string, float64, error) {
+	f.resolvedCurrency = currency
+	return strings.ToUpper(currency), f.exchangeRate, f.currencyErr
+}
+
+func (f *cnFakeZohoClient) GetCreditNote(_ context.Context, zohoCreditNoteID string) (*CreditNoteResponse, error) {
+	f.getCreditNoteIDs = append(f.getCreditNoteIDs, zohoCreditNoteID)
+	if f.getCreditNoteErr != nil {
+		return nil, f.getCreditNoteErr
+	}
+	return &CreditNoteResponse{CreditNoteID: zohoCreditNoteID, Status: f.zohoCreditNoteStatus}, nil
+}
+
+func (f *cnFakeZohoClient) ListInvoiceCreditsApplied(_ context.Context, zohoInvoiceID string) ([]InvoiceCreditApplied, error) {
+	f.listCreditsInvoices = append(f.listCreditsInvoices, zohoInvoiceID)
+	return f.creditsApplied, f.listCreditsErr
+}
+
+func (f *cnFakeZohoClient) DeleteInvoiceAppliedCredit(_ context.Context, zohoInvoiceID, creditNotesInvoiceID string) error {
+	f.deletedCredits = append(f.deletedCredits, zohoInvoiceID+"/"+creditNotesInvoiceID)
+	return f.deleteErr
+}
+
+func (f *cnFakeZohoClient) VoidCreditNote(_ context.Context, zohoCreditNoteID string) error {
+	f.voidedIDs = append(f.voidedIDs, zohoCreditNoteID)
+	return f.voidErr
 }
 
 func (f *cnFakeZohoClient) GetConnection(_ context.Context) (*connection.Connection, error) {
@@ -154,6 +207,7 @@ func newCreditNoteFixture(cnType types.CreditNoteType) *cnFixture {
 			Total:            decimal.NewFromInt(118),
 			Balance:          decimal.NewFromInt(118),
 		},
+		exchangeRate: 1,
 	}
 	mappingRepo := &cnFakeMappingRepo{mappings: []*entityintegrationmapping.EntityIntegrationMapping{
 		{EntityType: types.IntegrationEntityTypeInvoice, EntityID: "inv_1", ProviderEntityID: "zinv_1"},
@@ -171,6 +225,7 @@ func newCreditNoteFixture(cnType types.CreditNoteType) *cnFixture {
 			CreditNoteType:   cnType,
 			CreditNoteStatus: types.CreditNoteStatusFinalized,
 			FinalizedAt:      &finalizedAt,
+			Currency:         "inr",
 			TotalAmount:      decimal.NewFromInt(100),
 			LineItems: []*creditnote.CreditNoteLineItem{
 				{ID: "cnli_1", InvoiceLineItemID: "li_2", DisplayName: "Seats", Amount: decimal.NewFromInt(100)},
@@ -204,7 +259,7 @@ func TestSyncCreditNoteToZoho_SkippedBeforeAnyZohoCall(t *testing.T) {
 	}{
 		{"nil credit note", func(f *cnFixture) { f.creditNote = nil }},
 		{"draft credit note", func(f *cnFixture) { f.creditNote.CreditNoteStatus = types.CreditNoteStatusDraft }},
-		{"voided credit note", func(f *cnFixture) { f.creditNote.CreditNoteStatus = types.CreditNoteStatusVoided }},
+		{"voided credit note never synced to Zoho", func(f *cnFixture) { f.creditNote.CreditNoteStatus = types.CreditNoteStatusVoided }},
 		{"invoice not synced to Zoho", func(f *cnFixture) {
 			f.mappingRepo.mappings = lo.Reject(f.mappingRepo.mappings, func(m *entityintegrationmapping.EntityIntegrationMapping, _ int) bool {
 				return m.EntityType == types.IntegrationEntityTypeInvoice
@@ -228,6 +283,8 @@ func TestSyncCreditNoteToZoho_SkippedBeforeAnyZohoCall(t *testing.T) {
 				assert.Equal(t, 0, f.client.createCalls)
 				assert.Empty(t, f.client.refundReqs)
 				assert.Empty(t, f.client.applyReqs)
+				assert.Empty(t, f.client.getCreditNoteIDs)
+				assert.Empty(t, f.client.voidedIDs)
 				assert.Empty(t, f.mappingRepo.createdIDs)
 			})
 		}
@@ -312,6 +369,7 @@ func TestSyncCreditNoteToZoho_LineItems(t *testing.T) {
 		require.Len(t, priceLookups, 1)
 		assert.Equal(t, []string{"price_2"}, priceLookups[0].EntityIDs)
 		assert.Equal(t, "conn_test", priceLookups[0].ConnectionID)
+		assert.Nil(t, priceLookups[0].QueryFilter.Limit, "every credited price is looked up, not just the first page")
 
 		require.Len(t, f.client.createReq.LineItems, 2)
 		assert.Equal(t, "zitem_2", f.client.createReq.LineItems[0].ItemID)
@@ -581,6 +639,154 @@ func TestSyncCreditNoteToZoho_RefundFailureStopsAndRetrySkips(t *testing.T) {
 	assert.Len(t, f.client.refundReqs, 1)
 }
 
+func TestSyncCreditNoteToZoho_ExchangeRate(t *testing.T) {
+	t.Run("rate is sent on the credit note and every refund", func(t *testing.T) {
+		f := newCreditNoteFixture(types.CreditNoteTypeRefund)
+		f.client.exchangeRate = 83.25
+
+		require.NoError(t, f.sync(
+			succeededRefund("ref_1", types.RefundDestinationWallet, nil),
+			succeededRefund("ref_2", types.RefundDestinationGateway, lo.ToPtr("razorpay")),
+		))
+
+		assert.Equal(t, "inr", f.client.resolvedCurrency)
+		assert.Equal(t, 83.25, f.client.createReq.ExchangeRate)
+		require.Len(t, f.client.refundReqs, 2)
+		for _, req := range f.client.refundReqs {
+			assert.Equal(t, 83.25, req.ExchangeRate)
+		}
+	})
+
+	t.Run("a currency resolution failure stops before the credit note is created", func(t *testing.T) {
+		f := newCreditNoteFixture(types.CreditNoteTypeAdjustment)
+		f.client.currencyErr = errors.New("currency not enabled in Zoho")
+
+		require.ErrorIs(t, f.sync(), f.client.currencyErr)
+
+		assert.Equal(t, 0, f.client.createCalls)
+		assert.Empty(t, f.mappingRepo.createdIDs)
+	})
+}
+
+// newVoidFixture is the fixture's adjustment credit note voided after it was synced as zcn_1.
+func newVoidFixture() *cnFixture {
+	f := newCreditNoteFixture(types.CreditNoteTypeAdjustment)
+	f.creditNote.CreditNoteStatus = types.CreditNoteStatusVoided
+	f.mappingRepo.mappings = append(f.mappingRepo.mappings, &entityintegrationmapping.EntityIntegrationMapping{
+		EntityType:       types.IntegrationEntityTypeCreditNote,
+		EntityID:         "cn_1",
+		ProviderEntityID: " zcn_1 ",
+		Metadata:         map[string]interface{}{"zoho_status": "open", "zoho_creditnote_number": "CN-00001"},
+	})
+	f.client.zohoCreditNoteStatus = "closed"
+	f.client.creditsApplied = []InvoiceCreditApplied{
+		{CreditNoteID: "zcn_other", CreditNotesInvoiceID: "cni_other", AmountApplied: decimal.NewFromInt(20)},
+		{CreditNoteID: "zcn_1", CreditNotesInvoiceID: "cni_1", AmountApplied: decimal.NewFromInt(118)},
+	}
+	return f
+}
+
+func TestSyncCreditNoteToZoho_Void(t *testing.T) {
+	t.Run("removes only this credit note's applied credit, voids it and records the void", func(t *testing.T) {
+		f := newVoidFixture()
+
+		require.NoError(t, f.sync())
+
+		assert.Equal(t, []string{"zcn_1"}, f.client.getCreditNoteIDs)
+		assert.Equal(t, []string{"zinv_1"}, f.client.listCreditsInvoices)
+		assert.Equal(t, []string{"zinv_1/cni_1"}, f.client.deletedCredits)
+		assert.Equal(t, []string{"zcn_1"}, f.client.voidedIDs)
+		require.Len(t, f.mappingRepo.updated, 1)
+		assert.Equal(t, "void", f.mappingRepo.updated[0].Metadata["zoho_status"])
+		assert.NotEmpty(t, f.mappingRepo.updated[0].Metadata["voided_at"])
+		assert.Equal(t, "CN-00001", f.mappingRepo.updated[0].Metadata["zoho_creditnote_number"])
+		assert.Equal(t, 0, f.client.createCalls)
+		assert.Empty(t, f.client.applyReqs)
+	})
+
+	t.Run("no applied credit left voids without a delete", func(t *testing.T) {
+		f := newVoidFixture()
+		f.client.creditsApplied = f.client.creditsApplied[:1]
+
+		require.NoError(t, f.sync())
+
+		assert.Empty(t, f.client.deletedCredits)
+		assert.Equal(t, []string{"zcn_1"}, f.client.voidedIDs)
+		require.Len(t, f.mappingRepo.updated, 1)
+	})
+
+	t.Run("already void in Zoho only records the void", func(t *testing.T) {
+		f := newVoidFixture()
+		f.client.zohoCreditNoteStatus = "void"
+
+		require.NoError(t, f.sync())
+
+		assert.Empty(t, f.client.listCreditsInvoices)
+		assert.Empty(t, f.client.deletedCredits)
+		assert.Empty(t, f.client.voidedIDs)
+		require.Len(t, f.mappingRepo.updated, 1)
+		assert.Equal(t, "void", f.mappingRepo.updated[0].Metadata["zoho_status"])
+	})
+
+	t.Run("mapping without metadata gets it", func(t *testing.T) {
+		f := newVoidFixture()
+		f.mappingRepo.creditNoteMappings()[0].Metadata = nil
+
+		require.NoError(t, f.sync())
+
+		require.Len(t, f.mappingRepo.updated, 1)
+		assert.Equal(t, "void", f.mappingRepo.updated[0].Metadata["zoho_status"])
+	})
+
+	t.Run("invoice not mapped voids without reading applied credits", func(t *testing.T) {
+		f := newVoidFixture()
+		f.mappingRepo.mappings = lo.Reject(f.mappingRepo.mappings, func(m *entityintegrationmapping.EntityIntegrationMapping, _ int) bool {
+			return m.EntityType == types.IntegrationEntityTypeInvoice
+		})
+
+		require.NoError(t, f.sync())
+
+		assert.Empty(t, f.client.listCreditsInvoices)
+		assert.Equal(t, []string{"zcn_1"}, f.client.voidedIDs)
+	})
+}
+
+func TestSyncCreditNoteToZoho_VoidFailures(t *testing.T) {
+	failure := errors.New("zoho request failed")
+	tests := []struct {
+		name       string
+		mutate     func(f *cnFixture)
+		wantDelete bool
+		wantVoid   bool
+	}{
+		{"reading the Zoho credit note fails", func(f *cnFixture) { f.client.getCreditNoteErr = failure }, false, false},
+		{"listing applied credits fails", func(f *cnFixture) { f.client.listCreditsErr = failure }, false, false},
+		{"deleting the applied credit fails", func(f *cnFixture) { f.client.deleteErr = failure }, true, false},
+		{"voiding fails", func(f *cnFixture) { f.client.voidErr = failure }, true, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newVoidFixture()
+			tt.mutate(f)
+
+			require.ErrorIs(t, f.sync(), failure)
+
+			assert.Equal(t, tt.wantDelete, len(f.client.deletedCredits) > 0)
+			assert.Equal(t, tt.wantVoid, len(f.client.voidedIDs) > 0)
+			assert.Empty(t, f.mappingRepo.updated, "the void is recorded only after Zoho accepted it")
+		})
+	}
+
+	t.Run("recording the void fails", func(t *testing.T) {
+		f := newVoidFixture()
+		f.mappingRepo.updateErr = failure
+
+		require.ErrorIs(t, f.sync(), failure)
+		assert.Equal(t, []string{"zcn_1"}, f.client.voidedIDs)
+	})
+}
+
 type creditNoteRT struct {
 	method   string
 	url      string
@@ -700,4 +906,62 @@ func TestClientApplyCreditNoteToInvoices(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "zinv_1", applied["invoice_id"])
 	assert.Equal(t, "90", applied["amount_applied"], "decimals go out as strings, like invoice and payment amounts")
+}
+
+func TestClientCreditNoteRequestsCarryExchangeRate(t *testing.T) {
+	c, rt := newCreditNoteClient(`{"code":0,"creditnote":{"creditnote_id":"zcn_1"}}`)
+	_, err := c.CreateCreditNote(context.Background(), "zinv_1", &CreditNoteCreateRequest{ExchangeRate: 83.25})
+	require.NoError(t, err)
+	assert.Equal(t, 83.25, rt.body["exchange_rate"])
+
+	c, rt = newCreditNoteClient(`{"code":0,"creditnote_refund":{"creditnote_refund_id":"zref_1"}}`)
+	_, err = c.RefundCreditNote(context.Background(), "zcn_1", &CreditNoteRefundRequest{ExchangeRate: 83.25})
+	require.NoError(t, err)
+	assert.Equal(t, 83.25, rt.body["exchange_rate"])
+}
+
+func TestClientGetCreditNote(t *testing.T) {
+	c, rt := newCreditNoteClient(`{"code":0,"creditnote":{"creditnote_id":"zcn_1","status":"closed","total":118,"balance":0}}`)
+
+	resp, err := c.GetCreditNote(context.Background(), "zcn_1")
+	require.NoError(t, err)
+
+	assert.Equal(t, http.MethodGet, rt.method)
+	assert.True(t, strings.HasPrefix(rt.url, "https://www.zohoapis.in/books/v3/creditnotes/zcn_1?"), rt.url)
+	assert.Equal(t, "closed", resp.Status)
+	assert.True(t, resp.Total.Equal(decimal.NewFromInt(118)))
+	assert.True(t, resp.Balance.IsZero())
+}
+
+func TestClientVoidCreditNote(t *testing.T) {
+	c, rt := newCreditNoteClient(`{"code":0,"message":"The credit note has been voided."}`)
+
+	require.NoError(t, c.VoidCreditNote(context.Background(), "zcn_1"))
+
+	assert.Equal(t, http.MethodPost, rt.method)
+	assert.True(t, strings.HasPrefix(rt.url, "https://www.zohoapis.in/books/v3/creditnotes/zcn_1/status/void?"), rt.url)
+	assert.Contains(t, rt.url, "organization_id=60001")
+}
+
+func TestClientListInvoiceCreditsApplied(t *testing.T) {
+	c, rt := newCreditNoteClient(`{"code":0,"credits":[{"creditnote_id":"zcn_1","creditnotes_invoice_id":"cni_1","creditnotes_number":"CN-00001","amount_applied":118}]}`)
+
+	credits, err := c.ListInvoiceCreditsApplied(context.Background(), "zinv_1")
+	require.NoError(t, err)
+
+	assert.Equal(t, http.MethodGet, rt.method)
+	assert.True(t, strings.HasPrefix(rt.url, "https://www.zohoapis.in/books/v3/invoices/zinv_1/creditsapplied?"), rt.url)
+	require.Len(t, credits, 1)
+	assert.Equal(t, "zcn_1", credits[0].CreditNoteID)
+	assert.Equal(t, "cni_1", credits[0].CreditNotesInvoiceID)
+	assert.True(t, credits[0].AmountApplied.Equal(decimal.NewFromInt(118)))
+}
+
+func TestClientDeleteInvoiceAppliedCredit(t *testing.T) {
+	c, rt := newCreditNoteClient(`{"code":0,"message":"Credits applied to an invoice have been deleted."}`)
+
+	require.NoError(t, c.DeleteInvoiceAppliedCredit(context.Background(), "zinv_1", "cni_1"))
+
+	assert.Equal(t, http.MethodDelete, rt.method)
+	assert.True(t, strings.HasPrefix(rt.url, "https://www.zohoapis.in/books/v3/invoices/zinv_1/creditsapplied/cni_1?"), rt.url)
 }

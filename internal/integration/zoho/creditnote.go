@@ -21,12 +21,14 @@ import (
 const (
 	zohoDateLayout              = "2006-01-02"
 	zohoRefundModePrepaidWallet = "prepaid_wallet"
+	zohoCreditNoteStatusVoid    = "void"
 )
 
 type ZohoCreditNoteService interface {
 	// SyncCreditNoteToZoho creates the credit note on its synced Zoho invoice, then records
 	// its succeeded refunds (refund credit note) or applies it to the invoice (adjustment
-	// credit note). A credit note already mapped to Zoho is skipped.
+	// credit note). A credit note already mapped to Zoho is skipped. A voided credit note that
+	// was synced has its applied credit removed and is voided in Zoho.
 	SyncCreditNoteToZoho(ctx context.Context, req ZohoCreditNoteSyncRequest) error
 }
 
@@ -59,50 +61,69 @@ func NewCreditNoteService(
 
 func (s *creditNoteService) SyncCreditNoteToZoho(ctx context.Context, req ZohoCreditNoteSyncRequest) error {
 	cn := req.CreditNote
-	if cn == nil || cn.CreditNoteStatus != types.CreditNoteStatusFinalized {
+	if cn == nil {
 		return nil
 	}
 
+	switch cn.CreditNoteStatus {
+	case types.CreditNoteStatusFinalized:
+		return s.syncFinalizedCreditNote(ctx, cn, req.Refunds)
+	case types.CreditNoteStatusVoided:
+		return s.voidCreditNote(ctx, cn)
+	default:
+		return nil
+	}
+}
+
+func (s *creditNoteService) syncFinalizedCreditNote(ctx context.Context, cn *creditnote.CreditNote, refunds []*refund.Refund) error {
 	conn, err := s.client.GetConnection(ctx)
 	if err != nil {
 		return err
 	}
 
-	zohoInvoiceID, err := s.providerEntityID(ctx, types.IntegrationEntityTypeInvoice, cn.InvoiceID, conn.ID)
+	invoiceMapping, err := s.findMapping(ctx, types.IntegrationEntityTypeInvoice, cn.InvoiceID, conn.ID)
 	if err != nil {
 		return err
 	}
-	if zohoInvoiceID == "" {
+	if invoiceMapping == nil {
 		s.logger.Info(ctx, "invoice is not synced to Zoho, skipping credit note sync",
 			"credit_note_id", cn.ID,
 			"invoice_id", cn.InvoiceID)
 		return nil
 	}
+	zohoInvoiceID := strings.TrimSpace(invoiceMapping.ProviderEntityID)
 
 	settings, err := s.getInvoiceSyncSettings(ctx)
 	if err != nil {
 		return err
 	}
 
-	zohoCreditNoteID, err := s.providerEntityID(ctx, types.IntegrationEntityTypeCreditNote, cn.ID, conn.ID)
+	creditNoteMapping, err := s.findMapping(ctx, types.IntegrationEntityTypeCreditNote, cn.ID, conn.ID)
 	if err != nil {
 		return err
 	}
-	if zohoCreditNoteID != "" {
+	if creditNoteMapping != nil {
 		s.logger.Info(ctx, "credit note already synced to Zoho, skipping",
 			"credit_note_id", cn.ID,
-			"zoho_credit_note_id", zohoCreditNoteID)
+			"zoho_credit_note_id", creditNoteMapping.ProviderEntityID)
 		return nil
 	}
 
-	zohoCreditNote, err := s.createCreditNote(ctx, cn, zohoInvoiceID, conn.ID)
+	// Zoho requires the exchange rate when the credit note's currency differs from the
+	// organization's base currency. The credit note and its refunds use the same rate.
+	_, exchangeRate, err := s.client.ResolveInvoiceCurrency(ctx, cn.Currency)
+	if err != nil {
+		return err
+	}
+
+	zohoCreditNote, err := s.createCreditNote(ctx, cn, zohoInvoiceID, conn.ID, exchangeRate)
 	if err != nil {
 		return err
 	}
 
 	switch cn.CreditNoteType {
 	case types.CreditNoteTypeRefund:
-		return s.recordRefunds(ctx, cn, zohoCreditNote.CreditNoteID, req.Refunds, settings)
+		return s.recordRefunds(ctx, cn, zohoCreditNote.CreditNoteID, refunds, settings, exchangeRate)
 	case types.CreditNoteTypeAdjustment:
 		return s.applyToInvoice(ctx, cn, zohoCreditNote.CreditNoteID, zohoInvoiceID, zohoCreditNote.Balance)
 	default:
@@ -111,7 +132,7 @@ func (s *creditNoteService) SyncCreditNoteToZoho(ctx context.Context, req ZohoCr
 }
 
 // createCreditNote creates the Open Zoho credit note on the invoice and saves its mapping.
-func (s *creditNoteService) createCreditNote(ctx context.Context, cn *creditnote.CreditNote, zohoInvoiceID, connectionID string) (*CreditNoteResponse, error) {
+func (s *creditNoteService) createCreditNote(ctx context.Context, cn *creditnote.CreditNote, zohoInvoiceID, connectionID string, exchangeRate float64) (*CreditNoteResponse, error) {
 	flexInvoice, err := s.invoiceRepo.Get(ctx, cn.InvoiceID)
 	if err != nil {
 		return nil, err
@@ -141,6 +162,7 @@ func (s *creditNoteService) createCreditNote(ctx context.Context, cn *creditnote
 		CustomerID:      zohoInvoice.CustomerID,
 		Date:            date.Format(zohoDateLayout),
 		IsDraft:         false,
+		ExchangeRate:    exchangeRate,
 		ReferenceNumber: cn.ID,
 		LineItems:       lineItems,
 	})
@@ -196,7 +218,7 @@ func (s *creditNoteService) buildCreditNoteLineItems(ctx context.Context, cn *cr
 		priceIDs[i] = *invoiceLine.PriceID
 	}
 
-	filter := types.NewEntityIntegrationMappingFilter()
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityType = types.IntegrationEntityTypePrice
 	filter.EntityIDs = lo.Uniq(priceIDs)
 	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
@@ -231,7 +253,7 @@ func (s *creditNoteService) buildCreditNoteLineItems(ctx context.Context, cn *cr
 }
 
 // recordRefunds records one Zoho refund per succeeded refund row.
-func (s *creditNoteService) recordRefunds(ctx context.Context, cn *creditnote.CreditNote, zohoCreditNoteID string, refunds []*refund.Refund, settings *types.InvoiceSyncSettings) error {
+func (s *creditNoteService) recordRefunds(ctx context.Context, cn *creditnote.CreditNote, zohoCreditNoteID string, refunds []*refund.Refund, settings *types.InvoiceSyncSettings, exchangeRate float64) error {
 	for _, r := range refunds {
 		if r == nil || r.RefundStatus != types.RefundStatusSucceeded || lo.FromPtr(r.CreditNoteID) != cn.ID {
 			continue
@@ -251,6 +273,7 @@ func (s *creditNoteService) recordRefunds(ctx context.Context, cn *creditnote.Cr
 			Date:            date.Format(zohoDateLayout),
 			RefundMode:      refundMode,
 			Amount:          r.SettledAmount,
+			ExchangeRate:    exchangeRate,
 			FromAccountID:   settings.ZohoDepositToAccountID(),
 			ReferenceNumber: r.ID,
 		})
@@ -290,8 +313,79 @@ func (s *creditNoteService) applyToInvoice(ctx context.Context, cn *creditnote.C
 	return nil
 }
 
-// providerEntityID returns the Zoho id mapped to a Flexprice entity on this connection, or "".
-func (s *creditNoteService) providerEntityID(ctx context.Context, entityType types.IntegrationEntityType, entityID, connectionID string) (string, error) {
+// voidCreditNote removes the credit note's applied credit from the Zoho invoice and voids it in
+// Zoho, then records the void on its mapping. A credit note never synced to Zoho is skipped.
+func (s *creditNoteService) voidCreditNote(ctx context.Context, cn *creditnote.CreditNote) error {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
+	creditNoteMapping, err := s.findMapping(ctx, types.IntegrationEntityTypeCreditNote, cn.ID, conn.ID)
+	if err != nil {
+		return err
+	}
+	if creditNoteMapping == nil {
+		s.logger.Info(ctx, "credit note was never synced to Zoho, skipping void",
+			"credit_note_id", cn.ID,
+			"invoice_id", cn.InvoiceID)
+		return nil
+	}
+	zohoCreditNoteID := strings.TrimSpace(creditNoteMapping.ProviderEntityID)
+
+	zohoCreditNote, err := s.client.GetCreditNote(ctx, zohoCreditNoteID)
+	if err != nil {
+		return err
+	}
+
+	if zohoCreditNote.Status == zohoCreditNoteStatusVoid {
+		s.logger.Info(ctx, "Zoho credit note is already void",
+			"credit_note_id", cn.ID,
+			"zoho_credit_note_id", zohoCreditNoteID)
+	} else {
+		// The delete takes the application's id, which only the invoice's applied credits list returns.
+		invoiceMapping, err := s.findMapping(ctx, types.IntegrationEntityTypeInvoice, cn.InvoiceID, conn.ID)
+		if err != nil {
+			return err
+		}
+		if invoiceMapping != nil {
+			zohoInvoiceID := strings.TrimSpace(invoiceMapping.ProviderEntityID)
+			credits, err := s.client.ListInvoiceCreditsApplied(ctx, zohoInvoiceID)
+			if err != nil {
+				return err
+			}
+			for _, credit := range credits {
+				if credit.CreditNoteID != zohoCreditNoteID {
+					continue
+				}
+				if err := s.client.DeleteInvoiceAppliedCredit(ctx, zohoInvoiceID, credit.CreditNotesInvoiceID); err != nil {
+					return err
+				}
+				s.logger.Info(ctx, "removed Zoho credit note's applied credit from invoice",
+					"credit_note_id", cn.ID,
+					"zoho_credit_note_id", zohoCreditNoteID,
+					"zoho_invoice_id", zohoInvoiceID,
+					"amount", credit.AmountApplied.String())
+			}
+		}
+		if err := s.client.VoidCreditNote(ctx, zohoCreditNoteID); err != nil {
+			return err
+		}
+		s.logger.Info(ctx, "voided Zoho credit note",
+			"credit_note_id", cn.ID,
+			"zoho_credit_note_id", zohoCreditNoteID)
+	}
+
+	if creditNoteMapping.Metadata == nil {
+		creditNoteMapping.Metadata = map[string]interface{}{}
+	}
+	creditNoteMapping.Metadata["zoho_status"] = zohoCreditNoteStatusVoid
+	creditNoteMapping.Metadata["voided_at"] = clock.Now().Format(time.RFC3339)
+	return s.mappingRepo.Update(ctx, creditNoteMapping)
+}
+
+// findMapping returns the published Zoho mapping of a Flexprice entity on this connection, or nil.
+func (s *creditNoteService) findMapping(ctx context.Context, entityType types.IntegrationEntityType, entityID, connectionID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityType = entityType
 	filter.EntityID = entityID
@@ -300,12 +394,12 @@ func (s *creditNoteService) providerEntityID(ctx context.Context, entityType typ
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	mappings, err := s.mappingRepo.List(ctx, filter)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if len(mappings) == 0 {
-		return "", nil
+		return nil, nil
 	}
-	return strings.TrimSpace(mappings[0].ProviderEntityID), nil
+	return mappings[0], nil
 }
 
 func (s *creditNoteService) getInvoiceSyncSettings(ctx context.Context) (*types.InvoiceSyncSettings, error) {
