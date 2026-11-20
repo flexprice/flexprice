@@ -8,6 +8,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -84,6 +85,49 @@ func TestGetPaymentLinkStatus(t *testing.T) {
 			if got.Status != tt.wantStatus || got.RazorpayPaymentID != tt.wantPayment {
 				t.Fatalf("got %+v, want status=%s payment_id=%s", got, tt.wantStatus, tt.wantPayment)
 			}
+		})
+	}
+}
+
+type fakeLinkWithOrderClient struct {
+	fakePaymentLinkClient
+	orderPayments []map[string]interface{}
+	orderErr      error
+}
+
+func (c *fakeLinkWithOrderClient) FetchOrderPayments(context.Context, string) ([]map[string]interface{}, error) {
+	return c.orderPayments, c.orderErr
+}
+
+func TestGetPaymentLinkStatus_FailedPaymentsFromOrder(t *testing.T) {
+	link := map[string]interface{}{"status": "created", "order_id": "order_1", "payments": []interface{}{}}
+	tests := []struct {
+		name       string
+		payments   []map[string]interface{}
+		orderErr   error
+		wantFailed []string
+	}{
+		{
+			name: "failed order payments are reported, open and captured ones are not",
+			payments: []map[string]interface{}{
+				{"id": "pay_open", "status": "created"},
+				{"id": "pay_declined", "status": "failed"},
+				{"id": "pay_ok", "status": "captured"},
+			},
+			wantFailed: []string{"pay_declined"},
+		},
+		{name: "order fetch failure still returns the link status", orderErr: errors.New("razorpay unavailable")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &PaymentService{
+				client: &fakeLinkWithOrderClient{fakePaymentLinkClient: fakePaymentLinkClient{resp: link}, orderPayments: tt.payments, orderErr: tt.orderErr},
+				logger: logger.NewNoopLogger(),
+			}
+			got, err := svc.GetPaymentLinkStatus(context.Background(), "plink_test")
+			require.NoError(t, err)
+			assert.Equal(t, "created", got.Status)
+			assert.Equal(t, tt.wantFailed, got.FailedPaymentIDs)
 		})
 	}
 }
@@ -205,4 +249,52 @@ func TestGetPaymentStatus(t *testing.T) {
 			assert.Equal(t, tt.wantError, gatewayError)
 		})
 	}
+}
+
+type fakeAttemptClient struct {
+	RazorpayClient
+	resp map[string]map[string]interface{}
+}
+
+func (c *fakeAttemptClient) FetchPayment(_ context.Context, id string) (map[string]interface{}, error) {
+	if r, ok := c.resp[id]; ok {
+		return r, nil
+	}
+	return nil, errors.New("razorpay unavailable")
+}
+
+func TestGetAttemptDetails(t *testing.T) {
+	client := &fakeAttemptClient{resp: map[string]map[string]interface{}{
+		"pay_card": {"status": "captured", "method": "card", "vpa": nil, "email": "a@b.c", "contact": "+91999",
+			"card": map[string]interface{}{"network": "Visa", "issuer": "ICIC", "last4": "1111", "type": "credit"}},
+		"pay_upi": {"status": "captured", "method": "upi", "vpa": "user@okhdfc", "upi": map[string]interface{}{"vpa": "user@okhdfc"}},
+		"pay_nb":  {"status": "captured", "method": "netbanking", "bank": "HDFC", "card": nil},
+		"pay_failed": {"status": "failed", "method": "card", "error_code": "BAD_REQUEST_ERROR", "error_description": "Card declined",
+			"error_source": "bank", "error_step": "payment_authorization", "error_reason": "card_declined",
+			"card": map[string]interface{}{"network": "MasterCard", "issuer": "HDFC", "last4": "4444", "type": "debit"}},
+	}}
+	adapter := NewPaymentMethodAdapter(client, nil, nil)
+
+	tests := []struct {
+		id   string
+		want *dto.PaymentAttemptDetails
+	}{
+		{id: "pay_card", want: &dto.PaymentAttemptDetails{PaymentMethod: &dto.PaymentAttemptMethod{Type: "card", Card: &dto.PaymentAttemptCard{Network: "Visa", Issuer: "ICIC", Last4: "1111", Type: "credit"}}}},
+		{id: "pay_upi", want: &dto.PaymentAttemptDetails{PaymentMethod: &dto.PaymentAttemptMethod{Type: "upi"}}},
+		{id: "pay_nb", want: &dto.PaymentAttemptDetails{PaymentMethod: &dto.PaymentAttemptMethod{Type: "netbanking", Bank: "HDFC"}}},
+		{id: "pay_failed", want: &dto.PaymentAttemptDetails{
+			PaymentMethod: &dto.PaymentAttemptMethod{Type: "card", Card: &dto.PaymentAttemptCard{Network: "MasterCard", Issuer: "HDFC", Last4: "4444", Type: "debit"}},
+			Error:         &dto.PaymentAttemptError{Code: "BAD_REQUEST_ERROR", Source: "bank", Step: "payment_authorization", Reason: "card_declined"},
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			got, err := adapter.GetAttemptDetails(context.Background(), tt.id)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+
+	_, err := adapter.GetAttemptDetails(context.Background(), "pay_down")
+	assert.Error(t, err)
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -69,11 +70,15 @@ type attemptTestPaymentService struct {
 
 func (s *attemptTestPaymentService) GetAttempt(_ context.Context, id string) (*dto.PaymentAttemptResponse, error) {
 	return &dto.PaymentAttemptResponse{ID: id, AttemptNumber: 2, TenantID: "tenant_01",
-		Metadata: types.Metadata{"error_reason": "incorrect_card_details"}}, nil
+		PaymentMethod: &dto.PaymentAttemptMethod{Type: "card", Card: &dto.PaymentAttemptCard{Network: "Visa", Last4: "1111"}},
+		Error:         &dto.PaymentAttemptError{Reason: "incorrect_card_details"}}, nil
 }
 
-func (s *attemptTestPaymentService) ListPayments(_ context.Context, _ *types.PaymentFilter) (*dto.ListPaymentsResponse, error) {
-	return &dto.ListPaymentsResponse{Items: s.payments}, nil
+func (s *attemptTestPaymentService) GetPayment(_ context.Context, req dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
+	if len(s.payments) == 0 || !req.SkipGatewaySync {
+		return nil, ierr.NewError("payment not found").Mark(ierr.ErrNotFound)
+	}
+	return s.payments[0], nil
 }
 
 type attemptTestCheckoutService struct {
@@ -121,7 +126,9 @@ func TestPaymentAttemptPayloadBuilder_BuildPayload(t *testing.T) {
 			attempt := got["attempt"].(map[string]any)
 			assert.Equal(t, "inv_01", got["payment"].(map[string]any)["destination_id"])
 			assert.Equal(t, "attempt_02", attempt["id"])
-			assert.Equal(t, "incorrect_card_details", attempt["metadata"].(map[string]any)["error_reason"])
+			assert.Equal(t, "incorrect_card_details", attempt["error"].(map[string]any)["reason"])
+			assert.Equal(t, "1111", attempt["payment_method"].(map[string]any)["card"].(map[string]any)["last4"])
+			assert.NotContains(t, attempt, "metadata")
 			assert.NotContains(t, attempt, "tenant_id")
 			if tt.sessions != nil {
 				assert.Equal(t, "cust_01", got["checkout_session"].(map[string]any)["customer_id"])

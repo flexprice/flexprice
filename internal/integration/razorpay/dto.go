@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -235,4 +236,32 @@ func (f *flexInt) UnmarshalJSON(b []byte) error {
 	}
 	*f = flexInt(i)
 	return nil
+}
+
+type paymentEntity struct {
+	Method      string `json:"method"`
+	Bank        string `json:"bank"`
+	Wallet      string `json:"wallet"`
+	ErrorCode   string `json:"error_code"`
+	ErrorSource string `json:"error_source"`
+	ErrorStep   string `json:"error_step"`
+	ErrorReason string `json:"error_reason"`
+	Card        *struct {
+		Network string `json:"network"`
+		Issuer  string `json:"issuer"`
+		Last4   string `json:"last4"`
+		Type    string `json:"type"`
+	} `json:"card"`
+}
+
+func (e paymentEntity) toAttemptDetails() *dto.PaymentAttemptDetails {
+	method := dto.PaymentAttemptMethod{Type: e.Method, Bank: e.Bank, Wallet: e.Wallet}
+	if e.Card != nil {
+		method.Card = &dto.PaymentAttemptCard{Network: e.Card.Network, Issuer: e.Card.Issuer, Last4: e.Card.Last4, Type: e.Card.Type}
+	}
+	attemptError := dto.PaymentAttemptError{Code: e.ErrorCode, Source: e.ErrorSource, Step: e.ErrorStep, Reason: e.ErrorReason}
+	return &dto.PaymentAttemptDetails{
+		PaymentMethod: lo.Ternary(method != (dto.PaymentAttemptMethod{}), &method, nil),
+		Error:         lo.Ternary(attemptError != (dto.PaymentAttemptError{}), &attemptError, nil),
+	}
 }

@@ -69,6 +69,7 @@ type PaymentLinkStatus struct {
 	// backfill gateway_payment_id and cut over to the direct payment-status path
 	// on subsequent syncs.
 	RazorpayPaymentID string
+	FailedPaymentIDs  []string
 }
 
 // PaymentService handles Razorpay payment operations
@@ -668,6 +669,16 @@ func (s *PaymentService) createExternalPaymentRecord(
 		return err
 	}
 
+	if err := paymentService.RecordAttempt(ctx, paymentResp.ID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusSucceeded,
+		GatewayAttemptID: razorpayPaymentID,
+	}); err != nil {
+		s.logger.Error(ctx, "failed to record external payment attempt",
+			"error", err,
+			"payment_id", paymentResp.ID,
+			"razorpay_payment_id", razorpayPaymentID)
+	}
+
 	s.logger.Info(ctx, "successfully created external payment record",
 		"payment_id", paymentResp.ID,
 		"razorpay_payment_id", razorpayPaymentID,
@@ -1004,6 +1015,16 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		return nil
 	}
 
+	if err := paymentService.RecordAttempt(ctx, flexpricePaymentID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusSucceeded,
+		GatewayAttemptID: razorpayPaymentID,
+	}); err != nil {
+		s.logger.Error(ctx, "failed to record late-captured payment attempt",
+			"error", err,
+			"payment_id", flexpricePaymentID,
+			"razorpay_payment_id", razorpayPaymentID)
+	}
+
 	refundID, err := s.ensureRefunded(ctx, razorpayPaymentID, toPaise(existingPayment.Amount))
 	if err != nil {
 		return ierr.WithError(err).
@@ -1158,6 +1179,20 @@ func (s *PaymentService) GetPaymentLinkStatus(ctx context.Context, paymentLinkID
 				out.RazorpayPaymentID = id
 				break
 			}
+		}
+	}
+	// The link lists only captured payments; its order lists every attempt.
+	orderID, _ := result["order_id"].(string)
+	if orderID == "" {
+		return out, nil
+	}
+	orderPayments, err := s.client.FetchOrderPayments(ctx, orderID)
+	if err != nil {
+		return out, nil
+	}
+	for _, pm := range orderPayments {
+		if id, _ := pm["id"].(string); id != "" && pm["status"] == "failed" {
+			out.FailedPaymentIDs = append(out.FailedPaymentIDs, id)
 		}
 	}
 	return out, nil

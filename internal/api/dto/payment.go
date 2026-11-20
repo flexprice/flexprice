@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -110,6 +111,8 @@ type RecordAttemptRequest struct {
 	ErrorMessage     string              `json:"error_message,omitempty"`
 	GatewayAttemptID string              `json:"gateway_attempt_id,omitempty"`
 	Metadata         types.Metadata      `json:"metadata,omitempty"`
+	// Details is used when the gateway can't be asked for them.
+	Details *PaymentAttemptDetails `json:"details,omitempty"`
 }
 
 // GetPaymentRequest reads one payment. SkipGatewaySync returns it as saved, without syncing an in-flight payment from the gateway.
@@ -194,17 +197,74 @@ func (p *PaymentResponse) ToPayment() *payment.Payment {
 
 // PaymentAttemptResponse represents a payment attempt response
 type PaymentAttemptResponse struct {
-	ID               string         `json:"id"`
-	PaymentID        string         `json:"payment_id"`
-	AttemptNumber    int            `json:"attempt_number"`
-	GatewayAttemptID *string        `json:"gateway_attempt_id,omitempty"`
-	ErrorMessage     *string        `json:"error_message,omitempty"`
-	Metadata         types.Metadata `json:"metadata,omitempty"`
-	TenantID         string         `json:"tenant_id"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	CreatedBy        string         `json:"created_by"`
-	UpdatedBy        string         `json:"updated_by"`
+	ID               string                `json:"id"`
+	PaymentID        string                `json:"payment_id"`
+	PaymentStatus    types.PaymentStatus   `json:"payment_status"`
+	AttemptNumber    int                   `json:"attempt_number"`
+	GatewayAttemptID *string               `json:"gateway_attempt_id,omitempty"`
+	ErrorMessage     *string               `json:"error_message,omitempty"`
+	Metadata         types.Metadata        `json:"-"`
+	TenantID         string                `json:"tenant_id"`
+	CreatedAt        time.Time             `json:"created_at"`
+	UpdatedAt        time.Time             `json:"updated_at"`
+	CreatedBy        string                `json:"created_by"`
+	UpdatedBy        string                `json:"updated_by"`
+	PaymentMethod    *PaymentAttemptMethod `json:"payment_method,omitempty"`
+	Error            *PaymentAttemptError  `json:"error,omitempty"`
+}
+
+// PaymentAttemptDetails is how the gateway took one attempt, in a gateway-neutral shape.
+type PaymentAttemptDetails struct {
+	PaymentMethod *PaymentAttemptMethod `json:"payment_method,omitempty"`
+	Error         *PaymentAttemptError  `json:"error,omitempty"`
+}
+
+// NewPaymentAttemptDetails reads the details stored in attempt metadata; nil when there are none.
+func NewPaymentAttemptDetails(m types.Metadata) *PaymentAttemptDetails {
+	raw := m[types.MetadataKeyAttemptDetails]
+	if raw == "" {
+		return nil
+	}
+	var details PaymentAttemptDetails
+	if err := json.Unmarshal([]byte(raw), &details); err != nil {
+		return nil
+	}
+	return &details
+}
+
+// ToMetadata stores the details as JSON under one attempt metadata key.
+func (d *PaymentAttemptDetails) ToMetadata() types.Metadata {
+	if d == nil {
+		return nil
+	}
+	raw, err := json.Marshal(d)
+	if err != nil {
+		return nil
+	}
+	return types.Metadata{types.MetadataKeyAttemptDetails: string(raw)}
+}
+
+// PaymentAttemptMethod is how the customer paid on one attempt.
+type PaymentAttemptMethod struct {
+	Type   string              `json:"type,omitempty"`
+	Card   *PaymentAttemptCard `json:"card,omitempty"`
+	Bank   string              `json:"bank,omitempty"`
+	Wallet string              `json:"wallet,omitempty"`
+}
+
+type PaymentAttemptCard struct {
+	Network string `json:"network,omitempty"`
+	Issuer  string `json:"issuer,omitempty"`
+	Last4   string `json:"last4,omitempty"`
+	Type    string `json:"type,omitempty"`
+}
+
+// PaymentAttemptError is the gateway's reason for a failed attempt.
+type PaymentAttemptError struct {
+	Code   string `json:"code,omitempty"`
+	Source string `json:"source,omitempty"`
+	Step   string `json:"step,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // ListPaymentsResponse represents a paginated list of payments
@@ -271,19 +331,25 @@ func NewPaymentResponse(p *payment.Payment) *PaymentResponse {
 
 // NewPaymentAttemptResponse creates a new payment attempt response from a payment attempt
 func NewPaymentAttemptResponse(a *payment.PaymentAttempt) *PaymentAttemptResponse {
-	return &PaymentAttemptResponse{
+	resp := &PaymentAttemptResponse{
 		ID:               a.ID,
 		PaymentID:        a.PaymentID,
+		PaymentStatus:    a.PaymentStatus,
 		AttemptNumber:    a.AttemptNumber,
 		GatewayAttemptID: a.GatewayAttemptID,
 		ErrorMessage:     a.ErrorMessage,
-		Metadata:         a.Metadata,
+		Metadata:         lo.OmitByKeys(a.Metadata, []string{types.MetadataKeyAttemptDetails}),
 		TenantID:         a.TenantID,
 		CreatedAt:        a.CreatedAt,
 		UpdatedAt:        a.UpdatedAt,
 		CreatedBy:        a.CreatedBy,
 		UpdatedBy:        a.UpdatedBy,
 	}
+	if details := NewPaymentAttemptDetails(a.Metadata); details != nil {
+		resp.PaymentMethod = details.PaymentMethod
+		resp.Error = details.Error
+	}
+	return resp
 }
 
 // ToPayment converts a create payment request to a payment

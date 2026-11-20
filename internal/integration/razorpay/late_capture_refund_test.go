@@ -69,6 +69,10 @@ func (p *lateCapturePayments) UpdatePayment(_ context.Context, _ string, req dto
 	return &dto.PaymentResponse{ID: "pay_fp", PaymentStatus: target}, nil
 }
 
+func (p *lateCapturePayments) RecordAttempt(context.Context, string, dto.RecordAttemptRequest) error {
+	return nil
+}
+
 func TestRefundLateCapturedPayment(t *testing.T) {
 	tests := []struct {
 		name        string

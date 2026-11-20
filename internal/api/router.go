@@ -567,6 +567,7 @@ func NewRouter(
 		checkoutSessions := v1Private.Group("/checkout/sessions")
 		{
 			checkoutSessions.POST("", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.Create)
+			checkoutSessions.POST("/search", observe(types.EntityCheckoutSession), handlers.CheckoutSession.Query)
 			checkoutSessions.GET("/:id", observe(types.EntityCheckoutSession), handlers.CheckoutSession.Get)
 			checkoutSessions.POST("/:id/cancel", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.Cancel)
 			checkoutSessions.DELETE("/:id", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.Delete)

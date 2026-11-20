@@ -64,6 +64,9 @@ const (
 	PaymentTriggerInvoiceAutoCharge = "invoice_auto_charge"
 )
 
+// MetadataKeyAttemptDetails holds an attempt's PaymentAttemptDetails as JSON.
+const MetadataKeyAttemptDetails = "attempt_details"
+
 // GatewayMetadataKeyStripeInvoiceID is the Stripe invoice whose hosted page collects the payment.
 const GatewayMetadataKeyStripeInvoiceID = "stripe_invoice_id"
 
