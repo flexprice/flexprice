@@ -13,9 +13,11 @@ import (
 	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	domainPOB "github.com/flexprice/flexprice/internal/domain/pob"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
 	"github.com/flexprice/flexprice/internal/types"
@@ -30,8 +32,9 @@ type PerformanceObligationService interface {
 	// with every POB of the contract present. It is the one place recognition and reports read earned revenue from.
 	EarnedToDate(ctx context.Context, contractID string, asOfs []time.Time) ([]map[string]decimal.Decimal, error)
 	Reconcile(ctx context.Context, contractID string) error
-	// POBIDForInvoiceLine is the line's POB, empty without a subscription line item; NotFound before the sync.
-	POBIDForInvoiceLine(ctx context.Context, li *invoice.InvoiceLineItem) (string, error)
+	// POBIDForInvoiceLine is the contract's POB for the line's price, empty without a subscription line item; NotFound
+	// when the contract has none for it.
+	POBIDForInvoiceLine(ctx context.Context, contractID string, li *invoice.InvoiceLineItem) (string, error)
 	GetPerformanceObligation(ctx context.Context, id string) (*dto.PerformanceObligationResponse, error)
 	GetPerformanceObligations(ctx context.Context, filter *pobRepo.Filter) (*dto.ListPerformanceObligationsResponse, error)
 }
@@ -43,6 +46,7 @@ type performanceObligationService struct {
 	invoiceRepo     invoice.Repository
 	taxAppliedRepo  taxapplied.Repository
 	revenueFactRepo revenuefact.Repository
+	priceRepo       price.Repository
 }
 
 func NewPerformanceObligationService(
@@ -52,6 +56,7 @@ func NewPerformanceObligationService(
 	invoiceRepo invoice.Repository,
 	taxAppliedRepo taxapplied.Repository,
 	revenueFactRepo revenuefact.Repository,
+	priceRepo price.Repository,
 ) PerformanceObligationService {
 	return &performanceObligationService{
 		pobRepo:         pobRepo,
@@ -60,6 +65,7 @@ func NewPerformanceObligationService(
 		invoiceRepo:     invoiceRepo,
 		taxAppliedRepo:  taxAppliedRepo,
 		revenueFactRepo: revenueFactRepo,
+		priceRepo:       priceRepo,
 	}
 }
 
@@ -127,17 +133,13 @@ func (s *performanceObligationService) Reconcile(ctx context.Context, contractID
 	return err
 }
 
-// GetPerformanceObligation returns the POB with its associations.
+// GetPerformanceObligation returns the POB.
 func (s *performanceObligationService) GetPerformanceObligation(ctx context.Context, id string) (*dto.PerformanceObligationResponse, error) {
 	p, err := s.pobRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	associations, err := s.pobRepo.ListAssociations(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return dto.NewPerformanceObligationResponse(p).WithAssociations(associations), nil
+	return dto.NewPerformanceObligationResponse(p), nil
 }
 
 func (s *performanceObligationService) GetPerformanceObligations(ctx context.Context, filter *pobRepo.Filter) (*dto.ListPerformanceObligationsResponse, error) {
@@ -184,17 +186,7 @@ func (s *performanceObligationService) EarnedToDate(ctx context.Context, contrac
 		return lo.SliceToMap(pobs, func(p *domainPOB.PerformanceObligation) (string, decimal.Decimal) { return p.ID(), decimal.Zero })
 	})
 
-	lineItemPOBs := make(map[string]*domainPOB.PerformanceObligation)
-	for _, p := range pobs {
-		associations, err := s.pobRepo.ListAssociations(ctx, p.ID())
-		if err != nil {
-			return nil, err
-		}
-		for _, a := range associations {
-			lineItemPOBs[a.EntityID()] = p
-		}
-	}
-	if len(lineItemPOBs) == 0 || len(asOfs) == 0 {
+	if len(pobs) == 0 || len(asOfs) == 0 {
 		return earned, nil
 	}
 
@@ -216,9 +208,13 @@ func (s *performanceObligationService) EarnedToDate(ctx context.Context, contrac
 		if err != nil {
 			return nil, err
 		}
+		pricePOBs, err := s.pobsByPrice(ctx, pobs, inputs.priceIDs())
+		if err != nil {
+			return nil, err
+		}
 
 		for i, asOf := range asOfs {
-			for pobID, amount := range earnedByPOB(lineItemPOBs, inputs, asOf, types.LoadTimezone(sub.Timezone)) {
+			for pobID, amount := range earnedByPOB(pricePOBs, inputs, asOf, types.LoadTimezone(sub.Timezone)) {
 				earned[i][pobID] = earned[i][pobID].Add(amount)
 			}
 		}
@@ -233,6 +229,20 @@ type earningInputs struct {
 	invoices []*invoice.Invoice
 	taxes    []*taxapplied.TaxApplied
 	facts    []*revenuefact.RevenueFact
+}
+
+// priceIDs is every price the inputs' invoice lines and facts bill.
+func (in *earningInputs) priceIDs() []string {
+	var ids []string
+	for _, inv := range in.invoices {
+		for _, line := range inv.LineItems {
+			ids = append(ids, lo.FromPtr(line.PriceID))
+		}
+	}
+	for _, fact := range in.facts {
+		ids = append(ids, lo.FromPtr(fact.PriceID))
+	}
+	return ids
 }
 
 // loadEarningInputs reads the subscription's finalized invoices (voided and draft ones never earn) with all their lines,
@@ -269,12 +279,12 @@ func (s *performanceObligationService) loadEarningInputs(ctx context.Context, su
 	return &earningInputs{invoices: invoices, taxes: taxes, facts: facts}, nil
 }
 
-// earnedByPOB is what each POB earned before asOf's local day, keyed by POB ID. lineItemPOBs maps each subscription line
-// item to its POB. Each finalized invoice line earns its LineNets amount over its own service period with the POB's
-// methods, usage daily (a line with no period earns at finalization); proration lines simply add. A PROVISIONAL fact earns on its
-// day (a period_only fact evenly over its period), unless a SUBSCRIPTION invoice line already covers that day.
+// earnedByPOB is what each POB earned before asOf's local day, keyed by POB ID. pricePOBs maps each price to its POB.
+// Each finalized invoice line earns its LineNets amount over its own service period with the POB's methods, usage daily
+// (a line with no period earns at finalization); proration lines simply add. A PROVISIONAL fact earns on its day (a
+// period_only fact evenly over its period), unless a SUBSCRIPTION invoice line already covers that day.
 // e.g. a $90 April line, a −$30 and a +$40 proration line over [Apr 21, May 1), and a $5 fact for May 2: by May 3 → 105.
-func earnedByPOB(lineItemPOBs map[string]*domainPOB.PerformanceObligation, inputs *earningInputs, asOf time.Time, loc *time.Location) map[string]decimal.Decimal {
+func earnedByPOB(pricePOBs map[string]*domainPOB.PerformanceObligation, inputs *earningInputs, asOf time.Time, loc *time.Location) map[string]decimal.Decimal {
 	earned := make(map[string]decimal.Decimal)
 	// e.g. sli_1 → [Apr 1, May 1) once its April SUBSCRIPTION invoice line is finalized
 	invoiced := make(map[string][]dayRange)
@@ -282,7 +292,7 @@ func earnedByPOB(lineItemPOBs map[string]*domainPOB.PerformanceObligation, input
 	for _, inv := range inputs.invoices {
 		nets := inv.LineNets(inputs.taxes)
 		for _, line := range inv.LineItems {
-			p, ok := lineItemPOBs[lo.FromPtr(line.SubscriptionLineItemID)]
+			p, ok := pricePOBs[lo.FromPtr(line.PriceID)]
 			if !ok {
 				continue
 			}
@@ -305,7 +315,7 @@ func earnedByPOB(lineItemPOBs map[string]*domainPOB.PerformanceObligation, input
 	asOfDay := utils.LocalDay(asOf, loc)
 	for _, fact := range inputs.facts {
 		lineItemID := lo.FromPtr(fact.SubLineItemID)
-		p, ok := lineItemPOBs[lineItemID]
+		p, ok := pricePOBs[lo.FromPtr(fact.PriceID)]
 		if !ok || lo.ContainsBy(invoiced[lineItemID], func(r dayRange) bool { return r.contains(fact.Day) }) {
 			continue
 		}
@@ -321,15 +331,69 @@ func earnedByPOB(lineItemPOBs map[string]*domainPOB.PerformanceObligation, input
 	return earned
 }
 
-func (s *performanceObligationService) POBIDForInvoiceLine(ctx context.Context, li *invoice.InvoiceLineItem) (string, error) {
+func (s *performanceObligationService) POBIDForInvoiceLine(ctx context.Context, contractID string, li *invoice.InvoiceLineItem) (string, error) {
 	if li == nil || lo.FromPtr(li.SubscriptionLineItemID) == "" {
 		return "", nil
 	}
-	p, err := s.pobRepo.GetByLineItemID(ctx, *li.SubscriptionLineItemID)
+	pobs, err := s.pobRepo.List(ctx, &pobRepo.Filter{QueryFilter: types.NewNoLimitQueryFilter(), ContractIDs: []string{contractID}})
 	if err != nil {
 		return "", err
 	}
+	pricePOBs, err := s.pobsByPrice(ctx, pobs, []string{lo.FromPtr(li.PriceID)})
+	if err != nil {
+		return "", err
+	}
+	p, ok := pricePOBs[lo.FromPtr(li.PriceID)]
+	if !ok {
+		return "", ierr.NewError("performance obligation not found").
+			WithHint("The contract has no performance obligation for the line's product and recognition method").
+			WithReportableDetails(map[string]any{"contract_id": contractID, "invoice_line_item_id": li.ID, "price_id": lo.FromPtr(li.PriceID)}).
+			Mark(ierr.ErrNotFound)
+	}
 	return p.ID(), nil
+}
+
+// pobsByPrice maps each price to the POB for its Product and the recognition method it earns by; a price with no such
+// POB is left out.
+// e.g. a usage price of prod_api → the (prod_api, as_consumed) POB.
+func (s *performanceObligationService) pobsByPrice(ctx context.Context, pobs []*domainPOB.PerformanceObligation, priceIDs []string) (map[string]*domainPOB.PerformanceObligation, error) {
+	priceIDs = lo.Compact(lo.Uniq(priceIDs))
+	if len(pobs) == 0 || len(priceIDs) == 0 {
+		return map[string]*domainPOB.PerformanceObligation{}, nil
+	}
+	prices, err := s.priceRepo.ListByIDs(ctx, priceIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	type key struct {
+		productID string
+		method    types.RecognitionMethod
+	}
+	byKey := lo.SliceToMap(pobs, func(p *domainPOB.PerformanceObligation) (key, *domainPOB.PerformanceObligation) {
+		return key{productID: p.ProductID(), method: p.RecognitionMethod()}, p
+	})
+
+	pricePOBs := make(map[string]*domainPOB.PerformanceObligation, len(prices))
+	for _, pr := range prices {
+		if p, ok := byKey[key{productID: pr.ProductID, method: recognitionMethod(pr)}]; ok && pr.ProductID != "" {
+			pricePOBs[pr.ID] = p
+		}
+	}
+	return pricePOBs, nil
+}
+
+// recognitionMethod is how a price's charge earns: usage as consumed, a one-time charge at a point in time, else
+// straight line.
+func recognitionMethod(p *price.Price) types.RecognitionMethod {
+	switch {
+	case p.Type == types.PRICE_TYPE_USAGE:
+		return types.RecognitionMethodAsConsumed
+	case p.BillingPeriod == types.BILLING_PERIOD_ONETIME:
+		return types.RecognitionMethodPointInTime
+	default:
+		return types.RecognitionMethodStraightLine
+	}
 }
 
 // derivePOB returns the POB with its status derived from the contract and its service end.

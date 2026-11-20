@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	domainJournal "github.com/flexprice/flexprice/internal/domain/journal"
 	domainPOB "github.com/flexprice/flexprice/internal/domain/pob"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	accountingperiodsvc "github.com/flexprice/flexprice/internal/ee/service/accountingperiod"
@@ -569,7 +570,7 @@ func TestGetWaterfallScheduled(t *testing.T) {
 }
 
 // e2eStack is the reports over a real journal service and in-memory stores: cust_1 (UTC) with subs_1 under contract_1
-// (usd), one POB per subscription line item.
+// (usd), one POB per subscription line item, each with its own Product and price.
 type e2eStack struct {
 	t        *testing.T
 	ctx      context.Context
@@ -604,15 +605,17 @@ func newE2EStack(t *testing.T, pobs ...e2ePOB) *e2eStack {
 		WithContractStatus(types.ContractStatusActive).WithStatus(types.StatusPublished).Build()
 	require.NoError(t, contracts.CreateWithAssociation(ctx, c, domainContract.NewAssociationBuilder(nil).
 		WithID("contract_assoc_1").WithEntityType(types.RevRecEntityTypeSubscription).WithEntityID("subs_1").WithStatus(types.StatusPublished).Build()))
+	// Each POB has its own Product, billed by price_<sli>.
+	prices := testutil.NewInMemoryPriceStore()
 	for _, p := range pobs {
-		require.NoError(t, pobStore.CreateWithAssociation(ctx, domainPOB.NewBuilder(nil).WithID(p.id).WithContractID(c.ID()).
+		require.NoError(t, prices.Create(ctx, &price.Price{ID: "price_" + p.sli, ProductID: "prod_" + p.sli, Type: types.PRICE_TYPE_FIXED,
+			BillingPeriod: types.BILLING_PERIOD_MONTHLY, BaseModel: types.GetDefaultBaseModel(ctx)}))
+		require.NoError(t, pobStore.Create(ctx, domainPOB.NewBuilder(nil).WithID(p.id).WithContractID(c.ID()).WithProductID("prod_"+p.sli).
 			WithRecognitionMethod(types.RecognitionMethodStraightLine).WithAmortizationMethod(p.method).
-			WithServiceStart(p.start).WithPOBStatus(types.PerformanceObligationStatusActive).WithStatus(types.StatusPublished).Build(),
-			domainPOB.NewAssociationBuilder(nil).WithID("assoc_"+p.id).WithEntityType(types.RevRecEntityTypeSubscriptionLineItem).
-				WithEntityID(p.sli).WithStatus(types.StatusPublished).Build()))
+			WithServiceStart(p.start).WithPOBStatus(types.PerformanceObligationStatusActive).WithStatus(types.StatusPublished).Build()))
 	}
 
-	pobService := pobsvc.NewPerformanceObligationService(pobStore, contracts, subs, invoices, taxes, testutil.NewInMemoryRevenueFactStore())
+	pobService := pobsvc.NewPerformanceObligationService(pobStore, contracts, subs, invoices, taxes, testutil.NewInMemoryRevenueFactStore(), prices)
 	journal := journalsvc.NewJournalService(testutil.NewMockPostgresClient(nil), store, accountingperiodsvc.NewAccountingPeriodService(periodStore),
 		pobService, recognitionsvc.NewContractRecognizer(contracts, pobStore, pobService, store, invoices, subs, customers),
 		recognitionsvc.NewInvoiceRecognizer(invoices, taxes, contracts, store, subs, customers),
@@ -627,7 +630,7 @@ func (e *e2eStack) invoice(id, sli string, amount int64, finalized, start, end t
 	inv := &invoice.Invoice{ID: id, CustomerID: "cust_1", SubscriptionID: lo.ToPtr("subs_1"), InvoiceType: types.InvoiceTypeSubscription,
 		InvoiceStatus: types.InvoiceStatusFinalized, Currency: "usd", Subtotal: decimal.NewFromInt(amount), Total: decimal.NewFromInt(amount),
 		FinalizedAt: lo.ToPtr(finalized), EnvironmentID: types.GetEnvironmentID(e.ctx), BaseModel: types.GetDefaultBaseModel(e.ctx),
-		LineItems: []*invoice.InvoiceLineItem{{ID: id + "_line", SubscriptionLineItemID: lo.ToPtr(sli), Amount: decimal.NewFromInt(amount),
+		LineItems: []*invoice.InvoiceLineItem{{ID: id + "_line", SubscriptionLineItemID: lo.ToPtr(sli), PriceID: lo.ToPtr("price_" + sli), Amount: decimal.NewFromInt(amount),
 			PeriodStart: lo.ToPtr(start), PeriodEnd: lo.ToPtr(end), EnvironmentID: types.GetEnvironmentID(e.ctx), BaseModel: types.GetDefaultBaseModel(e.ctx)}}}
 	if edit != nil {
 		edit(inv)

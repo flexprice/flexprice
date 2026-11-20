@@ -28249,23 +28249,6 @@ const docTemplate = `{
                 }
             }
         },
-        "PerformanceObligationAssociationResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "entity_id": {
-                    "type": "string"
-                },
-                "entity_type": {
-                    "$ref": "#/definitions/types.RevRecEntityType"
-                },
-                "id": {
-                    "type": "string"
-                }
-            }
-        },
         "PerformanceObligationResponse": {
             "type": "object",
             "properties": {
@@ -28274,12 +28257,6 @@ const docTemplate = `{
                 },
                 "amortization_method": {
                     "$ref": "#/definitions/types.AmortizationMethod"
-                },
-                "associations": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/PerformanceObligationAssociationResponse"
-                    }
                 },
                 "contract_id": {
                     "type": "string"
