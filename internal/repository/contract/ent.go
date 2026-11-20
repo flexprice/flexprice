@@ -52,6 +52,7 @@ func (r *repository) Create(ctx context.Context, c *domainContract.Contract) err
 		SetStatus(string(c.Status())).
 		SetNillableTermStart(c.TermStart()).
 		SetNillableTermEnd(c.TermEnd()).
+		SetNillableContractValue(c.ContractValue()).
 		SetNillableEndedAt(c.EndedAt()).
 		SetContractStatus(string(c.ContractStatus())).
 		SetCreatedBy(types.GetUserID(ctx)).
@@ -289,6 +290,11 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 		update.ClearTermEnd()
 	} else {
 		update.SetTermEnd(*c.TermEnd())
+	}
+	if c.ContractValue() == nil {
+		update.ClearContractValue()
+	} else {
+		update.SetContractValue(*c.ContractValue())
 	}
 	if c.EndedAt() == nil {
 		update.ClearEndedAt()

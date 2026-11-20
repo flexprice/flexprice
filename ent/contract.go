@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/contract"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Contract is the model entity for the Contract schema.
@@ -39,6 +40,8 @@ type Contract struct {
 	Currency string `json:"currency,omitempty"`
 	// TermStart holds the value of the "term_start" field.
 	TermStart *time.Time `json:"term_start,omitempty"`
+	// ContractValue holds the value of the "contract_value" field.
+	ContractValue *decimal.Decimal `json:"contract_value,omitempty"`
 	// TermEnd holds the value of the "term_end" field.
 	TermEnd *time.Time `json:"term_end,omitempty"`
 	// EndedAt holds the value of the "ended_at" field.
@@ -65,6 +68,8 @@ func (*Contract) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case contract.FieldContractValue:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case contract.FieldDocument, contract.FieldExtraction, contract.FieldReview:
 			values[i] = new([]byte)
 		case contract.FieldReviewVersion:
@@ -154,6 +159,13 @@ func (_m *Contract) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.TermStart = new(time.Time)
 				*_m.TermStart = value.Time
+			}
+		case contract.FieldContractValue:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field contract_value", values[i])
+			} else if value.Valid {
+				_m.ContractValue = new(decimal.Decimal)
+				*_m.ContractValue = *value.S.(*decimal.Decimal)
 			}
 		case contract.FieldTermEnd:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -285,6 +297,11 @@ func (_m *Contract) String() string {
 	if v := _m.TermStart; v != nil {
 		builder.WriteString("term_start=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ContractValue; v != nil {
+		builder.WriteString("contract_value=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	if v := _m.TermEnd; v != nil {

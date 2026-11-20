@@ -47,6 +47,8 @@ type ContractIngestService interface {
 	SaveReviewStep(ctx context.Context, contractID, step string, req *dto.SaveContractReviewRequest) (*dto.ContractReviewResponse, error)
 	// CompleteDraft attaches a draft subscription and draft POBs to the draft contract, and activates the subscription when asked.
 	CompleteDraft(ctx context.Context, contractID string, req *dto.CompleteDraftRequest) (*dto.ContractResponse, error)
+	// Activate starts a completed draft contract's subscriptions on the term start; the contract and its POBs follow them.
+	Activate(ctx context.Context, contractID string, req *dto.ActivateContractRequest) (*dto.ContractResponse, error)
 }
 
 type UploadRequest struct {
@@ -346,7 +348,6 @@ func (c *contractIngestService) CompleteDraft(ctx context.Context, contractID st
 		return nil, err
 	}
 
-	var subID string
 	err = c.db.WithTx(ctx, func(ctx context.Context) error {
 		customerID := req.Contract.CustomerID
 		if req.Customer != nil {
@@ -373,7 +374,6 @@ func (c *contractIngestService) CompleteDraft(ctx context.Context, contractID st
 		if err != nil {
 			return err
 		}
-		subID = sub.ID
 
 		if err := c.contracts.CreateAssociation(ctx, domainContract.NewAssociationBuilder(nil).
 			WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT_ASSOCIATION)).
@@ -389,6 +389,7 @@ func (c *contractIngestService) CompleteDraft(ctx context.Context, contractID st
 		completed := domainContract.NewBuilder(contract).
 			WithCustomerID(customerID).
 			WithCurrency(req.Contract.Currency).
+			WithContractValue(lo.ToPtr(req.Contract.ContractValue)).
 			WithTermStart(req.Contract.TermStart).
 			WithTermEnd(lo.ToPtr(req.Contract.TermEnd)).
 			Build()
@@ -408,9 +409,57 @@ func (c *contractIngestService) CompleteDraft(ctx context.Context, contractID st
 	}
 
 	if req.Activate {
-		if _, err := c.subscriptions.ActivateDraftSubscription(ctx, subID, dto.ActivateDraftSubscriptionRequest{StartDate: req.Contract.TermStart}); err != nil {
-			return nil, err
+		return c.Activate(ctx, contractID, &dto.ActivateContractRequest{TermStart: *req.Contract.TermStart})
+	}
+	return c.contractService.GetContract(ctx, contractID)
+}
+
+func (c *contractIngestService) Activate(ctx context.Context, contractID string, req *dto.ActivateContractRequest) (*dto.ContractResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	contract, err := c.contracts.GetByID(ctx, contractID)
+	if err != nil {
+		return nil, err
+	}
+	if contract.ContractStatus() != types.ContractStatusDraft {
+		return nil, ierr.NewError("contract is not a draft").
+			WithHint("Only a draft contract can be activated").
+			WithReportableDetails(map[string]any{"contract_status": contract.ContractStatus()}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+	if contract.TermEnd() != nil && !contract.TermEnd().After(req.TermStart) {
+		return nil, ierr.NewError("term_start must be before the contract's term end").
+			WithHint("Start the contract before its term ends").
+			Mark(ierr.ErrValidation)
+	}
+
+	linked, err := c.contracts.ListAssociations(ctx, contractID)
+	if err != nil {
+		return nil, err
+	}
+	subIDs := lo.FilterMap(linked, func(a *domainContract.Association, _ int) (string, bool) {
+		return a.EntityID(), a.EntityType() == types.RevRecEntityTypeSubscription
+	})
+	if len(subIDs) == 0 {
+		return nil, ierr.NewError("contract is not completed").
+			WithHint("Complete the draft contract before activating it").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	err = c.db.WithTx(ctx, func(ctx context.Context) error {
+		if err := c.contracts.Update(ctx, domainContract.NewBuilder(contract).WithTermStart(lo.ToPtr(req.TermStart)).Build()); err != nil {
+			return err
 		}
+		for _, id := range subIDs {
+			if _, err := c.subscriptions.ActivateDraftSubscription(ctx, id, dto.ActivateDraftSubscriptionRequest{StartDate: lo.ToPtr(req.TermStart)}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return c.contractService.GetContract(ctx, contractID)
 }

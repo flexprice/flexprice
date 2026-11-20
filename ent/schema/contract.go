@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Contract holds the schema definition for the Contract entity.
@@ -45,6 +46,12 @@ func (Contract) Fields() []ent.Field {
 			Optional(),
 
 		field.Time("term_start").
+			Optional().
+			Nillable(),
+
+		// contract_value is the agreed total its POBs' allocations add up to; set when the contract is completed.
+		field.Other("contract_value", decimal.Decimal{}).
+			SchemaType(map[string]string{"postgres": "numeric(20,8)"}).
 			Optional().
 			Nillable(),
 

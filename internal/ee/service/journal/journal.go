@@ -428,6 +428,7 @@ func (s *journalService) Recognize(ctx context.Context, req RecognizeRequest) ([
 	if req.DryRun {
 		return s.contracts.Recognize(ctx, req.ContractID, req.AsOf, true)
 	}
+
 	return s.recognize(ctx, s.contracts, req.ContractID, req.AsOf)
 }
 

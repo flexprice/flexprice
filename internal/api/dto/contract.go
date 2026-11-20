@@ -21,6 +21,7 @@ type ContractResponse struct {
 	Currency         string                         `json:"currency"`
 	TermStart        *time.Time                     `json:"term_start,omitempty"`
 	TermEnd          *time.Time                     `json:"term_end,omitempty"`
+	ContractValue    *decimal.Decimal               `json:"contract_value,omitempty" swaggertype:"string"`
 	EndedAt          *time.Time                     `json:"ended_at,omitempty"`
 	ContractStatus   types.ContractStatus           `json:"contract_status"`
 	Status           types.Status                   `json:"status"`
@@ -52,6 +53,7 @@ func NewContractResponse(c *contract.Contract) *ContractResponse {
 		Currency:         c.Currency(),
 		TermStart:        c.TermStart(),
 		TermEnd:          c.TermEnd(),
+		ContractValue:    c.ContractValue(),
 		EndedAt:          c.EndedAt(),
 		ContractStatus:   c.ContractStatus(),
 		Status:           c.Status(),
@@ -128,6 +130,8 @@ type CompleteDraftRequest struct {
 type CreateContractRequest struct {
 	CustomerID string `json:"customer_id,omitempty"`
 	Currency   string `json:"currency" validate:"required,len=3"`
+	// ContractValue is the agreed total; the performance obligations' allocations must add up to it.
+	ContractValue decimal.Decimal `json:"contract_value" swaggertype:"string"`
 	// TermStart is required to activate.
 	TermStart *time.Time `json:"term_start,omitempty"`
 	TermEnd   time.Time  `json:"term_end" validate:"required"`
@@ -169,12 +173,29 @@ func (r *CompleteDraftRequest) Validate() error {
 			WithHint("Set the term start the subscription begins on").
 			Mark(ierr.ErrValidation)
 	}
+	allocated := decimal.Zero
 	for _, p := range r.PerformanceObligations {
 		if err := p.Validate(); err != nil {
 			return err
 		}
+		allocated = allocated.Add(p.AllocatedAmount)
+	}
+	if r.Contract.ContractValue.IsNegative() || !allocated.Equal(r.Contract.ContractValue) {
+		return ierr.NewError("performance obligation allocations must add up to the contract value").
+			WithHint("Allocate the whole contract value across the performance obligations").
+			WithReportableDetails(map[string]any{"contract_value": r.Contract.ContractValue, "allocated": allocated}).
+			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// ActivateContractRequest starts a completed draft contract and its subscriptions.
+type ActivateContractRequest struct {
+	TermStart time.Time `json:"term_start" validate:"required"`
+}
+
+func (r *ActivateContractRequest) Validate() error {
+	return validator.ValidateRequest(r)
 }
 
 func (r *CreatePOBRequest) Validate() error {

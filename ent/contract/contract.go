@@ -33,6 +33,8 @@ const (
 	FieldCurrency = "currency"
 	// FieldTermStart holds the string denoting the term_start field in the database.
 	FieldTermStart = "term_start"
+	// FieldContractValue holds the string denoting the contract_value field in the database.
+	FieldContractValue = "contract_value"
 	// FieldTermEnd holds the string denoting the term_end field in the database.
 	FieldTermEnd = "term_end"
 	// FieldEndedAt holds the string denoting the ended_at field in the database.
@@ -68,6 +70,7 @@ var Columns = []string{
 	FieldCustomerID,
 	FieldCurrency,
 	FieldTermStart,
+	FieldContractValue,
 	FieldTermEnd,
 	FieldEndedAt,
 	FieldContractStatus,
@@ -166,6 +169,11 @@ func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
 // ByTermStart orders the results by the term_start field.
 func ByTermStart(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTermStart, opts...).ToFunc()
+}
+
+// ByContractValue orders the results by the contract_value field.
+func ByContractValue(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContractValue, opts...).ToFunc()
 }
 
 // ByTermEnd orders the results by the term_end field.

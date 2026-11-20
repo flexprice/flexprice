@@ -410,9 +410,14 @@ func draftContract() *domainContract.Builder {
 	return domainContract.NewBuilder(nil).WithContractStatus(types.ContractStatusDraft)
 }
 
+// completeRequest completes contract_1 for cust_1 over the term, its contract value the POBs' allocations.
 func completeRequest(activate bool, pobs ...dto.CreatePOBRequest) *dto.CompleteDraftRequest {
+	value := decimal.Zero
+	for _, p := range pobs {
+		value = value.Add(p.AllocatedAmount)
+	}
 	return &dto.CompleteDraftRequest{
-		Contract:               dto.CreateContractRequest{CustomerID: "cust_1", Currency: "usd", TermStart: lo.ToPtr(termStart), TermEnd: termEnd},
+		Contract:               dto.CreateContractRequest{CustomerID: "cust_1", Currency: "usd", ContractValue: value, TermStart: lo.ToPtr(termStart), TermEnd: termEnd},
 		Subscriptions:          []dto.CreateSubscriptionRequest{{PlanID: "plan_1", BillingPeriod: types.BILLING_PERIOD_MONTHLY}},
 		PerformanceObligations: pobs,
 		Activate:               activate,
@@ -434,6 +439,7 @@ func TestCompleteDraft_AttachesDraftSubscriptionAndPOBs(t *testing.T) {
 	require.Equal(t, types.ContractStatusDraft, resp.ContractStatus)
 	require.Equal(t, "cust_1", resp.CustomerID)
 	require.Equal(t, "usd", resp.Currency)
+	require.Equal(t, "120", resp.ContractValue.String())
 	require.True(t, resp.TermStart.Equal(termStart))
 	require.True(t, resp.TermEnd.Equal(termEnd))
 	require.Len(t, resp.Associations, 1)
@@ -520,6 +526,10 @@ func TestCompleteDraft_Rejects(t *testing.T) {
 		{name: "negative allocation", contract: draftContract(), wantErr: ierr.IsValidation, req: func(r *dto.CompleteDraftRequest) {
 			r.PerformanceObligations = []dto.CreatePOBRequest{platformPOB(-1)}
 		}},
+		{name: "allocations short of the contract value", contract: draftContract(), wantErr: ierr.IsValidation, req: func(r *dto.CompleteDraftRequest) {
+			r.PerformanceObligations = []dto.CreatePOBRequest{platformPOB(100)}
+			r.Contract.ContractValue = decimal.NewFromInt(120)
+		}},
 		{name: "POB with product id and lookup key", contract: draftContract(), wantErr: ierr.IsValidation, req: func(r *dto.CompleteDraftRequest) {
 			p := platformPOB(0)
 			p.ProductLookupKey = "platform"
@@ -549,6 +559,43 @@ func TestCompleteDraft_Rejects(t *testing.T) {
 
 			_, err := f.svc.CompleteDraft(ctx, "contract_1", req)
 			require.True(t, tt.wantErr(err), "got %v", err)
+		})
+	}
+}
+
+func TestActivate(t *testing.T) {
+	later := termStart.AddDate(0, 2, 0)
+	tests := []struct {
+		name     string
+		complete bool
+		start    time.Time
+		wantErr  func(error) bool
+	}{
+		{name: "starts a completed draft on its term start", complete: true, start: later},
+		{name: "a draft not yet completed", start: later, wantErr: ierr.IsInvalidOperation},
+		{name: "a start after the term ends", complete: true, start: termEnd.AddDate(0, 0, 1), wantErr: ierr.IsValidation},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := testutil.SetupContext()
+			f := newCompleteFixture(t, ctx, draftContract().WithTermEnd(lo.ToPtr(termEnd)))
+			if tt.complete {
+				req := completeRequest(false)
+				req.Contract.TermStart = nil
+				_, err := f.svc.CompleteDraft(ctx, "contract_1", req)
+				require.NoError(t, err)
+			}
+
+			resp, err := f.svc.Activate(ctx, "contract_1", &dto.ActivateContractRequest{TermStart: tt.start})
+			if tt.wantErr != nil {
+				require.True(t, tt.wantErr(err), "got %v", err)
+				require.Empty(t, f.subs.activated)
+				return
+			}
+			require.NoError(t, err)
+			require.True(t, resp.TermStart.Equal(tt.start))
+			require.Len(t, f.subs.activated, 1)
+			require.True(t, f.subs.activated[0].StartDate.Equal(tt.start), "the subscription starts with the contract")
 		})
 	}
 }

@@ -871,6 +871,13 @@ definitions:
       updated_at:
         type: string
     type: object
+  ActivateContractRequest:
+    properties:
+      term_start:
+        type: string
+    required:
+    - term_start
+    type: object
   ActivateDraftSubscriptionRequest:
     properties:
       start_date:
@@ -2284,6 +2291,8 @@ definitions:
         type: array
       contract_status:
         $ref: '#/definitions/types.ContractStatus'
+      contract_value:
+        type: string
       created_at:
         type: string
       currency:
@@ -2876,6 +2885,10 @@ definitions:
     type: object
   CreateContractRequest:
     properties:
+      contract_value:
+        description: ContractValue is the agreed total; the performance obligations'
+          allocations must add up to it.
+        type: string
       currency:
         type: string
       customer_id:
@@ -20577,6 +20590,51 @@ paths:
       tags:
       - Contracts
       x-scope: read
+  /contracts/{id}/activate:
+    post:
+      consumes:
+      - application/json
+      description: Use when a completed draft contract starts. Activates its draft
+        subscriptions from term_start; the contract and its performance obligations
+        become active with them.
+      operationId: activateContract
+      parameters:
+      - description: Contract ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Term start
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ActivateContractRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ContractResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Activate contract
+      tags:
+      - Contracts
+      x-scope: write
   /contracts/{id}/complete-draft:
     post:
       consumes:

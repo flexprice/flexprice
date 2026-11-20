@@ -254,3 +254,36 @@ func (h *ContractHandler) CompleteDraft(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+// @Summary Activate contract
+// @ID activateContract
+// @Description Use when a completed draft contract starts. Activates its draft subscriptions from term_start; the contract and its performance obligations become active with them.
+// @Tags Contracts
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "write"
+// @Param id path string true "Contract ID"
+// @Param request body dto.ActivateContractRequest true "Term start"
+// @Success 200 {object} dto.ContractResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /contracts/{id}/activate [post]
+func (h *ContractHandler) Activate(c *gin.Context) {
+	var req dto.ActivateContractRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request body").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.ingest.Activate(c.Request.Context(), c.Param("id"), &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
