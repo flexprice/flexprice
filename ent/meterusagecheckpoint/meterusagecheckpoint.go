@@ -37,6 +37,8 @@ const (
 	FieldTotal = "total"
 	// FieldAggregatedUntil holds the string denoting the aggregated_until field in the database.
 	FieldAggregatedUntil = "aggregated_until"
+	// FieldPeriodStart holds the string denoting the period_start field in the database.
+	FieldPeriodStart = "period_start"
 	// FieldInvoiceID holds the string denoting the invoice_id field in the database.
 	FieldInvoiceID = "invoice_id"
 	// Table holds the table name of the meterusagecheckpoint in the database.
@@ -58,6 +60,7 @@ var Columns = []string{
 	FieldAggregationType,
 	FieldTotal,
 	FieldAggregatedUntil,
+	FieldPeriodStart,
 	FieldInvoiceID,
 }
 
@@ -158,6 +161,11 @@ func ByTotal(opts ...sql.OrderTermOption) OrderOption {
 // ByAggregatedUntil orders the results by the aggregated_until field.
 func ByAggregatedUntil(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAggregatedUntil, opts...).ToFunc()
+}
+
+// ByPeriodStart orders the results by the period_start field.
+func ByPeriodStart(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPeriodStart, opts...).ToFunc()
 }
 
 // ByInvoiceID orders the results by the invoice_id field.

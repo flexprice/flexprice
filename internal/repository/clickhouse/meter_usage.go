@@ -651,6 +651,54 @@ func (r *MeterUsageRepository) fetchBucketedComboPoints(
 	return pts, nil
 }
 
+func (r *MeterUsageRepository) GetMeterTotals(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterTotals, error) {
+	if params == nil || len(params.ExternalCustomerIDs) == 0 || params.StartTime.IsZero() || params.EndTime.IsZero() {
+		return nil, ierr.NewError("external customer ids and a start and end time are required").Mark(ierr.ErrValidation)
+	}
+
+	span := StartRepositorySpan(ctx, "meter_usage", "get_meter_totals", map[string]interface{}{
+		"external_customer_ids": len(params.ExternalCustomerIDs),
+	})
+	defer FinishSpan(span)
+
+	where, args := r.qb.BuildWhereClause(params)
+	finalClause, finalSettings := r.qb.BuildFinalClause(params.UseFinal)
+	settings := "SETTINGS max_memory_usage = 96636764160"
+	if finalSettings != "" {
+		settings = finalSettings + ", max_memory_usage = 96636764160"
+	}
+	query := fmt.Sprintf(`
+		SELECT external_customer_id, meter_id, SUM(qty_total), COUNT(DISTINCT id), MAX(qty_total)
+		FROM meter_usage %s
+		WHERE %s
+		GROUP BY external_customer_id, meter_id
+		%s
+	`, finalClause, where, settings)
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to query meter totals from meter_usage").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var totals []*events.MeterTotals
+	for rows.Next() {
+		t := &events.MeterTotals{}
+		if err := rows.Scan(&t.ExternalCustomerID, &t.MeterID, &t.Sum, &t.Count, &t.Max); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).WithHint("Failed to scan meter totals row").Mark(ierr.ErrDatabase)
+		}
+		totals = append(totals, t)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to read meter totals rows").Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+	return totals, nil
+}
+
 // GetDistinctMeterIDs returns the set of meter_ids that have data in meter_usage
 // for the given customer(s) and time range.
 func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *events.MeterUsageQueryParams) ([]string, error) {

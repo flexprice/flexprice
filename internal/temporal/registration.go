@@ -71,6 +71,7 @@ type cronActivityBundle struct {
 	revenueRollup                *cronActivities.RevenueRollupActivities
 	revenueRecognition           *cronActivities.RevenueRecognitionActivities
 	selfBillingHourly            *cronActivities.SelfBillingHourlyActivities
+	usageCheckpoint              *cronActivities.UsageCheckpointActivities
 	commitment                   *cronActivities.CommitmentCronActivities
 	emailDispatch                *cronActivities.EmailDispatchActivities
 }
@@ -359,6 +360,7 @@ func RegisterWorkflowsAndActivities(
 		revenueRollup:                cronActivities.NewRevenueRollupActivities(revenue.New(params), params.Config, params.Logger),
 		revenueRecognition:           cronActivities.NewRevenueRecognitionActivities(params.JournalService, params.Logger),
 		selfBillingHourly:            cronActivities.NewSelfBillingHourlyActivities(selfbilling.New(params), params.Logger),
+		usageCheckpoint:              cronActivities.NewUsageCheckpointActivities(service.NewUsageCheckpointService(params), tenantService, environmentService, params.Config, params.Logger),
 		commitment:                   cronActivities.NewCommitmentCronActivities(service.NewCommitmentService(params), params.Logger),
 		emailDispatch:                cronActivities.NewEmailDispatchActivities(service.NewEmailNotificationService(params), params.Logger),
 	}
@@ -618,6 +620,7 @@ func buildWorkerConfig(
 			cronWorkflows.RevenueRecognitionWorkflow,
 			cronWorkflows.RevenueRecognitionBackfillWorkflow,
 			cronWorkflows.SelfBillingHourlyWorkflow,
+			cronWorkflows.UsageCheckpointWorkflow,
 			cronWorkflows.BillingInstalmentsDueWorkflow,
 			cronWorkflows.EmailDispatchWorkflow,
 		)
@@ -644,6 +647,8 @@ func buildWorkerConfig(
 			cron.revenueRecognition.RecognizeRevenueActivity,
 			cron.revenueRecognition.BackfillRevenueActivity,
 			cron.selfBillingHourly.SelfBillingHourlyActivity,
+			cron.usageCheckpoint.ListUsageCheckpointEnvironmentsActivity,
+			cron.usageCheckpoint.UsageCheckpointEnvironmentActivity,
 			cron.commitment.BillDueInstalmentsActivity,
 			cron.emailDispatch.DispatchEmailsActivity,
 		)

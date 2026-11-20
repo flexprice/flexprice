@@ -220,6 +220,15 @@ type PropertyLookupParams struct {
 	Limit              int
 }
 
+// MeterTotals is one customer's usage of one meter in a window, aggregated every way a checkpoint can need.
+type MeterTotals struct {
+	ExternalCustomerID string
+	MeterID            string
+	Sum                decimal.Decimal
+	Count              uint64
+	Max                decimal.Decimal
+}
+
 // MeterUsageRepository defines read/write operations on the meter_usage ClickHouse table
 type MeterUsageRepository interface {
 	// BulkInsertMeterUsage inserts multiple meter usage records in batches
@@ -249,6 +258,10 @@ type MeterUsageRepository interface {
 	// path to populate expand:"source" without polluting MeterUsageQueryParams with an
 	// analytics-only concern.
 	GetSourcesForBucketedMeter(ctx context.Context, params *MeterUsageQueryParams) ([]string, error)
+
+	// GetMeterTotals returns, per customer and meter, SUM(qty_total), COUNT(DISTINCT id) and
+	// MAX(qty_total) for the params' ExternalCustomerIDs and window, read with FINAL.
+	GetMeterTotals(ctx context.Context, params *MeterUsageQueryParams) ([]*MeterTotals, error)
 
 	// GetDistinctMeterIDs returns the set of meter_ids that have data in the meter_usage table
 	// for the given customer(s) and time range. Used to skip meters with zero usage.

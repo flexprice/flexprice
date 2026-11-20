@@ -136,3 +136,16 @@ func mergeHourlyUsage(usage []aggregatedusage.HourlyUsage) []aggregatedusage.Hou
 	}
 	return result
 }
+
+func (s *hourlyUsageRepository) ListActiveCustomers(ctx context.Context, hour time.Time) ([]string, error) {
+	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	if tenantID == "" || environmentID == "" {
+		return nil, fmt.Errorf("aggregated usage active customers: tenant and environment are required")
+	}
+	key := newAggregatedUsageKeys(s.keyPrefix, tenantID, environmentID, aggregatedusage.HourlyUsage{Hour: hour}).active
+	customers, err := s.client.SMembers(ctx, key).Result()
+	if err != nil {
+		return nil, fmt.Errorf("aggregated usage active customers: %w", err)
+	}
+	return customers, nil
+}

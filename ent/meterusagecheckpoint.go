@@ -43,6 +43,8 @@ type MeterUsageCheckpoint struct {
 	Total decimal.Decimal `json:"total,omitempty"`
 	// AggregatedUntil holds the value of the "aggregated_until" field.
 	AggregatedUntil time.Time `json:"aggregated_until,omitempty"`
+	// PeriodStart holds the value of the "period_start" field.
+	PeriodStart *time.Time `json:"period_start,omitempty"`
 	// InvoiceID holds the value of the "invoice_id" field.
 	InvoiceID    *string `json:"invoice_id,omitempty"`
 	selectValues sql.SelectValues
@@ -57,7 +59,7 @@ func (*MeterUsageCheckpoint) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case meterusagecheckpoint.FieldID, meterusagecheckpoint.FieldTenantID, meterusagecheckpoint.FieldStatus, meterusagecheckpoint.FieldCreatedBy, meterusagecheckpoint.FieldUpdatedBy, meterusagecheckpoint.FieldEnvironmentID, meterusagecheckpoint.FieldCustomerID, meterusagecheckpoint.FieldMeterID, meterusagecheckpoint.FieldAggregationType, meterusagecheckpoint.FieldInvoiceID:
 			values[i] = new(sql.NullString)
-		case meterusagecheckpoint.FieldCreatedAt, meterusagecheckpoint.FieldUpdatedAt, meterusagecheckpoint.FieldAggregatedUntil:
+		case meterusagecheckpoint.FieldCreatedAt, meterusagecheckpoint.FieldUpdatedAt, meterusagecheckpoint.FieldAggregatedUntil, meterusagecheckpoint.FieldPeriodStart:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -152,6 +154,13 @@ func (_m *MeterUsageCheckpoint) assignValues(columns []string, values []any) err
 			} else if value.Valid {
 				_m.AggregatedUntil = value.Time
 			}
+		case meterusagecheckpoint.FieldPeriodStart:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field period_start", values[i])
+			} else if value.Valid {
+				_m.PeriodStart = new(time.Time)
+				*_m.PeriodStart = value.Time
+			}
 		case meterusagecheckpoint.FieldInvoiceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_id", values[i])
@@ -230,6 +239,11 @@ func (_m *MeterUsageCheckpoint) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("aggregated_until=")
 	builder.WriteString(_m.AggregatedUntil.Format(time.ANSIC))
+	builder.WriteString(", ")
+	if v := _m.PeriodStart; v != nil {
+		builder.WriteString("period_start=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	if v := _m.InvoiceID; v != nil {
 		builder.WriteString("invoice_id=")
