@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -218,11 +217,18 @@ func (f *paymentFlow) createWallet(ctx context.Context) error {
 	return nil
 }
 
+// walletReadRetries bounds the 404 retries in credits.
+const walletReadRetries = 3
+
 func (f *paymentFlow) credits(ctx context.Context) (decimal.Decimal, error) {
+	// A wallet created moments ago can 404 until the read replica catches up.
 	resp, err := f.client.Wallets().GetBalance(ctx, f.walletID)
-	var apiErr *sdkerrors.APIError
-	if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
-		time.Sleep(f.opts.pollInterval())
+	for attempt := 0; attempt < walletReadRetries && isNotFound(err); attempt++ {
+		select {
+		case <-ctx.Done():
+			return decimal.Zero, ctx.Err()
+		case <-time.After(f.opts.pollInterval()):
+		}
 		resp, err = f.client.Wallets().GetBalance(ctx, f.walletID)
 	}
 	if err != nil {
