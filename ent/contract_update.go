@@ -69,6 +69,46 @@ func (_u *ContractUpdate) ClearUpdatedBy() *ContractUpdate {
 	return _u
 }
 
+// SetCustomerID sets the "customer_id" field.
+func (_u *ContractUpdate) SetCustomerID(v string) *ContractUpdate {
+	_u.mutation.SetCustomerID(v)
+	return _u
+}
+
+// SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
+func (_u *ContractUpdate) SetNillableCustomerID(v *string) *ContractUpdate {
+	if v != nil {
+		_u.SetCustomerID(*v)
+	}
+	return _u
+}
+
+// ClearCustomerID clears the value of the "customer_id" field.
+func (_u *ContractUpdate) ClearCustomerID() *ContractUpdate {
+	_u.mutation.ClearCustomerID()
+	return _u
+}
+
+// SetCurrency sets the "currency" field.
+func (_u *ContractUpdate) SetCurrency(v string) *ContractUpdate {
+	_u.mutation.SetCurrency(v)
+	return _u
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (_u *ContractUpdate) SetNillableCurrency(v *string) *ContractUpdate {
+	if v != nil {
+		_u.SetCurrency(*v)
+	}
+	return _u
+}
+
+// ClearCurrency clears the value of the "currency" field.
+func (_u *ContractUpdate) ClearCurrency() *ContractUpdate {
+	_u.mutation.ClearCurrency()
+	return _u
+}
+
 // SetTermStart sets the "term_start" field.
 func (_u *ContractUpdate) SetTermStart(v time.Time) *ContractUpdate {
 	_u.mutation.SetTermStart(v)
@@ -326,8 +366,14 @@ func (_u *ContractUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(contract.FieldEnvironmentID, field.TypeString)
 	}
+	if value, ok := _u.mutation.CustomerID(); ok {
+		_spec.SetField(contract.FieldCustomerID, field.TypeString, value)
+	}
 	if _u.mutation.CustomerIDCleared() {
 		_spec.ClearField(contract.FieldCustomerID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Currency(); ok {
+		_spec.SetField(contract.FieldCurrency, field.TypeString, value)
 	}
 	if _u.mutation.CurrencyCleared() {
 		_spec.ClearField(contract.FieldCurrency, field.TypeString)
@@ -446,6 +492,46 @@ func (_u *ContractUpdateOne) SetNillableUpdatedBy(v *string) *ContractUpdateOne 
 // ClearUpdatedBy clears the value of the "updated_by" field.
 func (_u *ContractUpdateOne) ClearUpdatedBy() *ContractUpdateOne {
 	_u.mutation.ClearUpdatedBy()
+	return _u
+}
+
+// SetCustomerID sets the "customer_id" field.
+func (_u *ContractUpdateOne) SetCustomerID(v string) *ContractUpdateOne {
+	_u.mutation.SetCustomerID(v)
+	return _u
+}
+
+// SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
+func (_u *ContractUpdateOne) SetNillableCustomerID(v *string) *ContractUpdateOne {
+	if v != nil {
+		_u.SetCustomerID(*v)
+	}
+	return _u
+}
+
+// ClearCustomerID clears the value of the "customer_id" field.
+func (_u *ContractUpdateOne) ClearCustomerID() *ContractUpdateOne {
+	_u.mutation.ClearCustomerID()
+	return _u
+}
+
+// SetCurrency sets the "currency" field.
+func (_u *ContractUpdateOne) SetCurrency(v string) *ContractUpdateOne {
+	_u.mutation.SetCurrency(v)
+	return _u
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (_u *ContractUpdateOne) SetNillableCurrency(v *string) *ContractUpdateOne {
+	if v != nil {
+		_u.SetCurrency(*v)
+	}
+	return _u
+}
+
+// ClearCurrency clears the value of the "currency" field.
+func (_u *ContractUpdateOne) ClearCurrency() *ContractUpdateOne {
+	_u.mutation.ClearCurrency()
 	return _u
 }
 
@@ -736,8 +822,14 @@ func (_u *ContractUpdateOne) sqlSave(ctx context.Context) (_node *Contract, err 
 	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(contract.FieldEnvironmentID, field.TypeString)
 	}
+	if value, ok := _u.mutation.CustomerID(); ok {
+		_spec.SetField(contract.FieldCustomerID, field.TypeString, value)
+	}
 	if _u.mutation.CustomerIDCleared() {
 		_spec.ClearField(contract.FieldCustomerID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Currency(); ok {
+		_spec.SetField(contract.FieldCurrency, field.TypeString, value)
 	}
 	if _u.mutation.CurrencyCleared() {
 		_spec.ClearField(contract.FieldCurrency, field.TypeString)

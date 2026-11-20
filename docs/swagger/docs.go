@@ -2923,6 +2923,72 @@ const docTemplate = `{
                 "x-scope": "read"
             }
         },
+        "/contracts/{id}/complete-draft": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use after reviewing a draft contract. Creates its subscription as a draft and the given performance obligations as drafts. With activate true, also activates the subscription; the contract and its performance obligations follow it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Contracts"
+                ],
+                "summary": "Complete draft contract",
+                "operationId": "completeContractDraft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Contract ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Subscription, performance obligations and activation",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CompleteDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ContractResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
         "/contracts/{id}/derive": {
             "post": {
                 "security": [
@@ -21214,6 +21280,46 @@ const docTemplate = `{
                 }
             }
         },
+        "CompleteDraftRequest": {
+            "type": "object",
+            "properties": {
+                "activate": {
+                    "description": "Activate also activates the subscriptions from the contract's term start.",
+                    "type": "boolean"
+                },
+                "contract": {
+                    "$ref": "#/definitions/CreateContractRequest"
+                },
+                "customer": {
+                    "description": "Customer creates the contract's customer; set either it or contract.customer_id.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CreateCustomerRequest"
+                        }
+                    ]
+                },
+                "performance_obligations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CreatePOBRequest"
+                    }
+                },
+                "products": {
+                    "description": "Products creates products; each of their prices is added to the subscription as a line item.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CreateProductCatalogRequest"
+                    }
+                },
+                "subscriptions": {
+                    "description": "Subscriptions run over the contract's term in its customer and currency; one for now.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CreateSubscriptionRequest"
+                    }
+                }
+            }
+        },
         "ConfigurationDetails": {
             "type": "object",
             "properties": {
@@ -22148,6 +22254,28 @@ const docTemplate = `{
                 }
             }
         },
+        "CreateContractRequest": {
+            "type": "object",
+            "required": [
+                "currency",
+                "term_end"
+            ],
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "term_end": {
+                    "type": "string"
+                },
+                "term_start": {
+                    "description": "TermStart is required to activate.",
+                    "type": "string"
+                }
+            }
+        },
         "CreateCostsheetRequest": {
             "type": "object",
             "required": [
@@ -23071,6 +23199,37 @@ const docTemplate = `{
                 }
             }
         },
+        "CreatePOBRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "recognition_method",
+                "service_start"
+            ],
+            "properties": {
+                "allocated_amount": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "product_lookup_key": {
+                    "type": "string"
+                },
+                "recognition_method": {
+                    "$ref": "#/definitions/types.RecognitionMethod"
+                },
+                "service_end": {
+                    "type": "string"
+                },
+                "service_start": {
+                    "type": "string"
+                }
+            }
+        },
         "CreatePaymentRequest": {
             "type": "object",
             "required": [
@@ -23370,6 +23529,20 @@ const docTemplate = `{
                 },
                 "updated_by": {
                     "type": "string"
+                }
+            }
+        },
+        "CreateProductCatalogRequest": {
+            "type": "object",
+            "properties": {
+                "prices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionPriceCreateRequest"
+                    }
+                },
+                "product": {
+                    "$ref": "#/definitions/CreateProductRequest"
                 }
             }
         },
@@ -28096,6 +28269,9 @@ const docTemplate = `{
         "PerformanceObligationResponse": {
             "type": "object",
             "properties": {
+                "allocated_amount": {
+                    "type": "string"
+                },
                 "amortization_method": {
                     "$ref": "#/definitions/types.AmortizationMethod"
                 },
@@ -28119,6 +28295,9 @@ const docTemplate = `{
                 },
                 "pob_status": {
                     "$ref": "#/definitions/types.PerformanceObligationStatus"
+                },
+                "product_id": {
+                    "type": "string"
                 },
                 "recognition_method": {
                     "$ref": "#/definitions/types.RecognitionMethod"
@@ -31274,6 +31453,9 @@ const docTemplate = `{
                 },
                 "price_unit_type": {
                     "$ref": "#/definitions/types.PriceUnitType"
+                },
+                "product_id": {
+                    "type": "string"
                 },
                 "start_date": {
                     "type": "string"

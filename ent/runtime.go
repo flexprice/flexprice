@@ -2335,6 +2335,10 @@ func init() {
 	performanceobligationDescPobStatus := performanceobligationFields[7].Descriptor()
 	// performanceobligation.PobStatusValidator is a validator for the "pob_status" field. It is called by the builders before save.
 	performanceobligation.PobStatusValidator = performanceobligationDescPobStatus.Validators[0].(func(string) error)
+	// performanceobligationDescAllocatedAmount is the schema descriptor for allocated_amount field.
+	performanceobligationDescAllocatedAmount := performanceobligationFields[9].Descriptor()
+	// performanceobligation.DefaultAllocatedAmount holds the default value on creation for the allocated_amount field.
+	performanceobligation.DefaultAllocatedAmount = performanceobligationDescAllocatedAmount.Default.(decimal.Decimal)
 	performanceobligationassociationMixin := schema.PerformanceObligationAssociation{}.Mixin()
 	performanceobligationassociationMixinFields0 := performanceobligationassociationMixin[0].Fields()
 	_ = performanceobligationassociationMixinFields0

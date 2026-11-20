@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -41,6 +42,10 @@ const (
 	FieldServiceEnd = "service_end"
 	// FieldPobStatus holds the string denoting the pob_status field in the database.
 	FieldPobStatus = "pob_status"
+	// FieldProductID holds the string denoting the product_id field in the database.
+	FieldProductID = "product_id"
+	// FieldAllocatedAmount holds the string denoting the allocated_amount field in the database.
+	FieldAllocatedAmount = "allocated_amount"
 	// Table holds the table name of the performanceobligation in the database.
 	Table = "performance_obligations"
 )
@@ -62,6 +67,8 @@ var Columns = []string{
 	FieldServiceStart,
 	FieldServiceEnd,
 	FieldPobStatus,
+	FieldProductID,
+	FieldAllocatedAmount,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -97,6 +104,8 @@ var (
 	AmortizationMethodValidator func(string) error
 	// PobStatusValidator is a validator for the "pob_status" field. It is called by the builders before save.
 	PobStatusValidator func(string) error
+	// DefaultAllocatedAmount holds the default value on creation for the "allocated_amount" field.
+	DefaultAllocatedAmount decimal.Decimal
 )
 
 // OrderOption defines the ordering options for the PerformanceObligation queries.
@@ -175,4 +184,14 @@ func ByServiceEnd(opts ...sql.OrderTermOption) OrderOption {
 // ByPobStatus orders the results by the pob_status field.
 func ByPobStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPobStatus, opts...).ToFunc()
+}
+
+// ByProductID orders the results by the product_id field.
+func ByProductID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProductID, opts...).ToFunc()
+}
+
+// ByAllocatedAmount orders the results by the allocated_amount field.
+func ByAllocatedAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAllocatedAmount, opts...).ToFunc()
 }

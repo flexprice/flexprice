@@ -66602,6 +66602,8 @@ type PerformanceObligationMutation struct {
 	service_start       *time.Time
 	service_end         *time.Time
 	pob_status          *string
+	product_id          *string
+	allocated_amount    *decimal.Decimal
 	clearedFields       map[string]struct{}
 	done                bool
 	oldValue            func(context.Context) (*PerformanceObligation, error)
@@ -67268,6 +67270,91 @@ func (m *PerformanceObligationMutation) ResetPobStatus() {
 	m.pob_status = nil
 }
 
+// SetProductID sets the "product_id" field.
+func (m *PerformanceObligationMutation) SetProductID(s string) {
+	m.product_id = &s
+}
+
+// ProductID returns the value of the "product_id" field in the mutation.
+func (m *PerformanceObligationMutation) ProductID() (r string, exists bool) {
+	v := m.product_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductID returns the old "product_id" field's value of the PerformanceObligation entity.
+// If the PerformanceObligation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PerformanceObligationMutation) OldProductID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductID: %w", err)
+	}
+	return oldValue.ProductID, nil
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (m *PerformanceObligationMutation) ClearProductID() {
+	m.product_id = nil
+	m.clearedFields[performanceobligation.FieldProductID] = struct{}{}
+}
+
+// ProductIDCleared returns if the "product_id" field was cleared in this mutation.
+func (m *PerformanceObligationMutation) ProductIDCleared() bool {
+	_, ok := m.clearedFields[performanceobligation.FieldProductID]
+	return ok
+}
+
+// ResetProductID resets all changes to the "product_id" field.
+func (m *PerformanceObligationMutation) ResetProductID() {
+	m.product_id = nil
+	delete(m.clearedFields, performanceobligation.FieldProductID)
+}
+
+// SetAllocatedAmount sets the "allocated_amount" field.
+func (m *PerformanceObligationMutation) SetAllocatedAmount(d decimal.Decimal) {
+	m.allocated_amount = &d
+}
+
+// AllocatedAmount returns the value of the "allocated_amount" field in the mutation.
+func (m *PerformanceObligationMutation) AllocatedAmount() (r decimal.Decimal, exists bool) {
+	v := m.allocated_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllocatedAmount returns the old "allocated_amount" field's value of the PerformanceObligation entity.
+// If the PerformanceObligation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PerformanceObligationMutation) OldAllocatedAmount(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllocatedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllocatedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllocatedAmount: %w", err)
+	}
+	return oldValue.AllocatedAmount, nil
+}
+
+// ResetAllocatedAmount resets all changes to the "allocated_amount" field.
+func (m *PerformanceObligationMutation) ResetAllocatedAmount() {
+	m.allocated_amount = nil
+}
+
 // Where appends a list predicates to the PerformanceObligationMutation builder.
 func (m *PerformanceObligationMutation) Where(ps ...predicate.PerformanceObligation) {
 	m.predicates = append(m.predicates, ps...)
@@ -67302,7 +67389,7 @@ func (m *PerformanceObligationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PerformanceObligationMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 16)
 	if m.tenant_id != nil {
 		fields = append(fields, performanceobligation.FieldTenantID)
 	}
@@ -67345,6 +67432,12 @@ func (m *PerformanceObligationMutation) Fields() []string {
 	if m.pob_status != nil {
 		fields = append(fields, performanceobligation.FieldPobStatus)
 	}
+	if m.product_id != nil {
+		fields = append(fields, performanceobligation.FieldProductID)
+	}
+	if m.allocated_amount != nil {
+		fields = append(fields, performanceobligation.FieldAllocatedAmount)
+	}
 	return fields
 }
 
@@ -67381,6 +67474,10 @@ func (m *PerformanceObligationMutation) Field(name string) (ent.Value, bool) {
 		return m.ServiceEnd()
 	case performanceobligation.FieldPobStatus:
 		return m.PobStatus()
+	case performanceobligation.FieldProductID:
+		return m.ProductID()
+	case performanceobligation.FieldAllocatedAmount:
+		return m.AllocatedAmount()
 	}
 	return nil, false
 }
@@ -67418,6 +67515,10 @@ func (m *PerformanceObligationMutation) OldField(ctx context.Context, name strin
 		return m.OldServiceEnd(ctx)
 	case performanceobligation.FieldPobStatus:
 		return m.OldPobStatus(ctx)
+	case performanceobligation.FieldProductID:
+		return m.OldProductID(ctx)
+	case performanceobligation.FieldAllocatedAmount:
+		return m.OldAllocatedAmount(ctx)
 	}
 	return nil, fmt.Errorf("unknown PerformanceObligation field %s", name)
 }
@@ -67525,6 +67626,20 @@ func (m *PerformanceObligationMutation) SetField(name string, value ent.Value) e
 		}
 		m.SetPobStatus(v)
 		return nil
+	case performanceobligation.FieldProductID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductID(v)
+		return nil
+	case performanceobligation.FieldAllocatedAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllocatedAmount(v)
+		return nil
 	}
 	return fmt.Errorf("unknown PerformanceObligation field %s", name)
 }
@@ -67567,6 +67682,9 @@ func (m *PerformanceObligationMutation) ClearedFields() []string {
 	if m.FieldCleared(performanceobligation.FieldServiceEnd) {
 		fields = append(fields, performanceobligation.FieldServiceEnd)
 	}
+	if m.FieldCleared(performanceobligation.FieldProductID) {
+		fields = append(fields, performanceobligation.FieldProductID)
+	}
 	return fields
 }
 
@@ -67592,6 +67710,9 @@ func (m *PerformanceObligationMutation) ClearField(name string) error {
 		return nil
 	case performanceobligation.FieldServiceEnd:
 		m.ClearServiceEnd()
+		return nil
+	case performanceobligation.FieldProductID:
+		m.ClearProductID()
 		return nil
 	}
 	return fmt.Errorf("unknown PerformanceObligation nullable field %s", name)
@@ -67642,6 +67763,12 @@ func (m *PerformanceObligationMutation) ResetField(name string) error {
 		return nil
 	case performanceobligation.FieldPobStatus:
 		m.ResetPobStatus()
+		return nil
+	case performanceobligation.FieldProductID:
+		m.ResetProductID()
+		return nil
+	case performanceobligation.FieldAllocatedAmount:
+		m.ResetAllocatedAmount()
 		return nil
 	}
 	return fmt.Errorf("unknown PerformanceObligation field %s", name)

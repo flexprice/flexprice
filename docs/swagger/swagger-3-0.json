@@ -3416,6 +3416,87 @@
         "x-scope": "read"
       }
     },
+    "/contracts/{id}/complete-draft": {
+      "post": {
+        "tags": [
+          "Contracts"
+        ],
+        "summary": "Complete draft contract",
+        "description": "Use after reviewing a draft contract. Creates its subscription as a draft and the given performance obligations as drafts. With activate true, also activates the subscription; the contract and its performance obligations follow it.",
+        "operationId": "completeContractDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Contract ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Subscription, performance obligations and activation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/contracts/{id}/derive": {
       "post": {
         "tags": [
@@ -22657,6 +22738,41 @@
           }
         }
       },
+      "CompleteDraftRequest": {
+        "type": "object",
+        "properties": {
+          "activate": {
+            "type": "boolean",
+            "description": "Activate also activates the subscriptions from the contract's term start."
+          },
+          "contract": {
+            "$ref": "#/components/schemas/CreateContractRequest"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/CreateCustomerRequest"
+          },
+          "performance_obligations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatePOBRequest"
+            }
+          },
+          "products": {
+            "type": "array",
+            "description": "Products creates products; each of their prices is added to the subscription as a line item.",
+            "items": {
+              "$ref": "#/components/schemas/CreateProductCatalogRequest"
+            }
+          },
+          "subscriptions": {
+            "type": "array",
+            "description": "Subscriptions run over the contract's term in its customer and currency; one for now.",
+            "items": {
+              "$ref": "#/components/schemas/CreateSubscriptionRequest"
+            }
+          }
+        }
+      },
       "ConfigurationDetails": {
         "type": "object",
         "properties": {
@@ -23584,6 +23700,30 @@
           }
         }
       },
+      "CreateContractRequest": {
+        "required": [
+          "currency",
+          "term_end"
+        ],
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "term_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "term_start": {
+            "type": "string",
+            "description": "TermStart is required to activate.",
+            "format": "date-time"
+          }
+        }
+      },
       "CreateCostsheetRequest": {
         "required": [
           "name"
@@ -24417,6 +24557,39 @@
           }
         }
       },
+      "CreatePOBRequest": {
+        "required": [
+          "name",
+          "recognition_method",
+          "service_start"
+        ],
+        "type": "object",
+        "properties": {
+          "allocated_amount": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "product_lookup_key": {
+            "type": "string"
+          },
+          "recognition_method": {
+            "$ref": "#/components/schemas/types.RecognitionMethod"
+          },
+          "service_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "service_start": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "CreatePaymentRequest": {
         "required": [
           "currency",
@@ -24709,6 +24882,20 @@
           },
           "updated_by": {
             "type": "string"
+          }
+        }
+      },
+      "CreateProductCatalogRequest": {
+        "type": "object",
+        "properties": {
+          "prices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionPriceCreateRequest"
+            }
+          },
+          "product": {
+            "$ref": "#/components/schemas/CreateProductRequest"
           }
         }
       },
@@ -29259,6 +29446,9 @@
       "PerformanceObligationResponse": {
         "type": "object",
         "properties": {
+          "allocated_amount": {
+            "type": "string"
+          },
           "amortization_method": {
             "$ref": "#/components/schemas/types.AmortizationMethod"
           },
@@ -29283,6 +29473,9 @@
           },
           "pob_status": {
             "$ref": "#/components/schemas/types.PerformanceObligationStatus"
+          },
+          "product_id": {
+            "type": "string"
           },
           "recognition_method": {
             "$ref": "#/components/schemas/types.RecognitionMethod"
@@ -32227,6 +32420,9 @@
           },
           "price_unit_type": {
             "$ref": "#/components/schemas/types.PriceUnitType"
+          },
+          "product_id": {
+            "type": "string"
           },
           "start_date": {
             "type": "string",

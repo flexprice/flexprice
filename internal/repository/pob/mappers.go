@@ -15,6 +15,8 @@ func FromEnt(e *ent.PerformanceObligation) *domainPOB.PerformanceObligation {
 	return domainPOB.NewBuilder(nil).
 		WithID(e.ID).
 		WithContractID(e.ContractID).
+		WithProductID(e.ProductID).
+		WithAllocatedAmount(e.AllocatedAmount).
 		WithName(e.Name).
 		WithRecognitionMethod(types.RecognitionMethod(e.RecognitionMethod)).
 		WithAmortizationMethod(types.AmortizationMethod(e.AmortizationMethod)).

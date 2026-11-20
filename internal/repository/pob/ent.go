@@ -2,12 +2,10 @@ package pob
 
 import (
 	"context"
-	"errors"
 
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/lib/pq"
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
@@ -15,7 +13,6 @@ import (
 	entPOB "github.com/flexprice/flexprice/ent/performanceobligation"
 	entPOBAssociation "github.com/flexprice/flexprice/ent/performanceobligationassociation"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/ent/schema"
 	domainPOB "github.com/flexprice/flexprice/internal/domain/pob"
 	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -39,79 +36,40 @@ func NewRepository(client postgres.IClient, log *logger.Logger) Repository {
 	}
 }
 
-func (r *repository) CreateWithAssociation(ctx context.Context, p *domainPOB.PerformanceObligation, a *domainPOB.Association) error {
-	span := entRepo.StartRepositorySpan(ctx, "performance_obligation", "create_with_association", map[string]interface{}{
-		"pob_id":      p.ID(),
-		"entity_type": a.EntityType(),
-		"entity_id":   a.EntityID(),
+func (r *repository) Create(ctx context.Context, p *domainPOB.PerformanceObligation) error {
+	span := entRepo.StartRepositorySpan(ctx, "performance_obligation", "create", map[string]interface{}{
+		"pob_id": p.ID(),
 	})
 	defer entRepo.FinishSpan(span)
 
-	err := r.client.WithTx(ctx, func(txCtx context.Context) error {
-		_, err := r.client.Writer(txCtx).PerformanceObligation.Create().
-			SetID(p.ID()).
-			SetTenantID(types.GetTenantID(txCtx)).
-			SetEnvironmentID(types.GetEnvironmentID(txCtx)).
-			SetStatus(string(p.Status())).
-			SetContractID(p.ContractID()).
-			SetName(p.Name()).
-			SetRecognitionMethod(string(p.RecognitionMethod())).
-			SetAmortizationMethod(string(p.AmortizationMethod())).
-			SetServiceStart(p.ServiceStart()).
-			SetNillableServiceEnd(p.ServiceEnd()).
-			SetPobStatus(string(p.POBStatus())).
-			SetCreatedBy(types.GetUserID(txCtx)).
-			SetUpdatedBy(types.GetUserID(txCtx)).
-			SetCreatedAt(p.CreatedAt()).
-			SetUpdatedAt(p.UpdatedAt()).
-			Save(txCtx)
-		if err != nil {
-			return err
-		}
-		return r.createAssociation(txCtx, domainPOB.NewAssociationBuilder(a).WithPOBID(p.ID()).Build())
-	})
-	if err != nil {
-		entRepo.SetSpanError(span, err)
-		return r.createError(err, a, "Failed to create performance obligation")
-	}
-
-	entRepo.SetSpanSuccess(span)
-	return nil
-}
-
-// CreateAssociation links another entity to an existing performance obligation.
-func (r *repository) CreateAssociation(ctx context.Context, a *domainPOB.Association) error {
-	span := entRepo.StartRepositorySpan(ctx, "performance_obligation", "create_association", map[string]interface{}{
-		"pob_id":      a.POBID(),
-		"entity_type": a.EntityType(),
-		"entity_id":   a.EntityID(),
-	})
-	defer entRepo.FinishSpan(span)
-
-	if err := r.createAssociation(ctx, a); err != nil {
-		entRepo.SetSpanError(span, err)
-		return r.createError(err, a, "Failed to create performance obligation association")
-	}
-
-	entRepo.SetSpanSuccess(span)
-	return nil
-}
-
-func (r *repository) createAssociation(ctx context.Context, a *domainPOB.Association) error {
-	_, err := r.client.Writer(ctx).PerformanceObligationAssociation.Create().
-		SetID(a.ID()).
+	_, err := r.client.Writer(ctx).PerformanceObligation.Create().
+		SetID(p.ID()).
 		SetTenantID(types.GetTenantID(ctx)).
 		SetEnvironmentID(types.GetEnvironmentID(ctx)).
-		SetStatus(string(a.Status())).
-		SetPobID(a.POBID()).
-		SetEntityType(string(a.EntityType())).
-		SetEntityID(a.EntityID()).
+		SetStatus(string(p.Status())).
+		SetContractID(p.ContractID()).
+		SetProductID(p.ProductID()).
+		SetAllocatedAmount(p.AllocatedAmount()).
+		SetName(p.Name()).
+		SetRecognitionMethod(string(p.RecognitionMethod())).
+		SetAmortizationMethod(string(p.AmortizationMethod())).
+		SetServiceStart(p.ServiceStart()).
+		SetNillableServiceEnd(p.ServiceEnd()).
+		SetPobStatus(string(p.POBStatus())).
 		SetCreatedBy(types.GetUserID(ctx)).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetCreatedAt(a.CreatedAt()).
-		SetUpdatedAt(a.CreatedAt()).
+		SetCreatedAt(p.CreatedAt()).
+		SetUpdatedAt(p.UpdatedAt()).
 		Save(ctx)
-	return err
+	if err != nil {
+		entRepo.SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to create performance obligation").
+			Mark(ierr.ErrDatabase)
+	}
+
+	entRepo.SetSpanSuccess(span)
+	return nil
 }
 
 func (r *repository) GetByID(ctx context.Context, id string) (*domainPOB.PerformanceObligation, error) {
@@ -251,6 +209,7 @@ func (r *repository) Update(ctx context.Context, p *domainPOB.PerformanceObligat
 			entPOB.TenantID(types.GetTenantID(ctx)),
 			entPOB.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
+		SetAllocatedAmount(p.AllocatedAmount()).
 		SetName(p.Name()).
 		SetRecognitionMethod(string(p.RecognitionMethod())).
 		SetAmortizationMethod(string(p.AmortizationMethod())).
@@ -277,24 +236,6 @@ func (r *repository) Update(ctx context.Context, p *domainPOB.PerformanceObligat
 
 	entRepo.SetSpanSuccess(span)
 	return nil
-}
-
-// createError marks a duplicate published association as ErrAlreadyExists.
-func (r *repository) createError(err error, a *domainPOB.Association, hint string) error {
-	var pqErr *pq.Error
-	if ent.IsConstraintError(err) && errors.As(err, &pqErr) &&
-		pqErr.Constraint == schema.PerformanceObligationAssociationUniqueConstraint {
-		return ierr.WithError(err).
-			WithHint("Entity already belongs to a performance obligation").
-			WithReportableDetails(map[string]any{
-				"entity_type": a.EntityType(),
-				"entity_id":   a.EntityID(),
-			}).
-			Mark(ierr.ErrAlreadyExists)
-	}
-	return ierr.WithError(err).
-		WithHint(hint).
-		Mark(ierr.ErrDatabase)
 }
 
 func (r *repository) readError(err error, key, value string) error {

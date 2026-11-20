@@ -221,3 +221,36 @@ func (h *ContractHandler) SaveContractReviewStep(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+// @Summary Complete draft contract
+// @ID completeContractDraft
+// @Description Use after reviewing a draft contract. Creates its subscription as a draft and the given performance obligations as drafts. With activate true, also activates the subscription; the contract and its performance obligations follow it.
+// @Tags Contracts
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "write"
+// @Param id path string true "Contract ID"
+// @Param request body dto.CompleteDraftRequest true "Subscription, performance obligations and activation"
+// @Success 200 {object} dto.ContractResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /contracts/{id}/complete-draft [post]
+func (h *ContractHandler) CompleteDraft(c *gin.Context) {
+	var req dto.CompleteDraftRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request body").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.ingest.CompleteDraft(c.Request.Context(), c.Param("id"), &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

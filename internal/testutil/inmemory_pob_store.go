@@ -32,6 +32,11 @@ func pobAssociationKey(entityType types.RevRecEntityType, entityID string) strin
 	return string(entityType) + ":" + entityID
 }
 
+func (s *InMemoryPOBStore) Create(ctx context.Context, p *pob.PerformanceObligation) error {
+	return s.InMemoryStore.Create(ctx, p.ID(), pob.NewBuilder(p).Build())
+}
+
+// CreateWithAssociation seeds a POB linked to an entity, for tests.
 func (s *InMemoryPOBStore) CreateWithAssociation(ctx context.Context, p *pob.PerformanceObligation, a *pob.Association) error {
 	if err := s.CreateAssociation(ctx, pob.NewAssociationBuilder(a).WithPOBID(p.ID()).Build()); err != nil {
 		return err
@@ -39,6 +44,7 @@ func (s *InMemoryPOBStore) CreateWithAssociation(ctx context.Context, p *pob.Per
 	return s.InMemoryStore.Create(ctx, p.ID(), pob.NewBuilder(p).Build())
 }
 
+// CreateAssociation seeds an association, for tests.
 func (s *InMemoryPOBStore) CreateAssociation(ctx context.Context, a *pob.Association) error {
 	return s.associations.Create(ctx, pobAssociationKey(a.EntityType(), a.EntityID()), pob.NewAssociationBuilder(a).Build())
 }

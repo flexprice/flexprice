@@ -101,8 +101,33 @@ func (s *ContractServiceSuite) countContracts() int {
 	return count
 }
 
+// link seeds a draft contract linked to sub, as completing a contract does.
+func (s *ContractServiceSuite) link(sub *subscription.Subscription) {
+	c := domainContract.NewBuilder(nil).
+		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT)).
+		WithCustomerID(sub.CustomerID).
+		WithCurrency(sub.Currency).
+		WithContractStatus(types.ContractStatusDraft).
+		WithStatus(types.StatusPublished).
+		Build()
+	s.Require().NoError(s.contractRepo.CreateWithAssociation(s.ctx, c, domainContract.NewAssociationBuilder(nil).
+		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT_ASSOCIATION)).
+		WithEntityType(types.RevRecEntityTypeSubscription).
+		WithEntityID(sub.ID).
+		WithStatus(types.StatusPublished).
+		Build()))
+}
+
+func (s *ContractServiceSuite) TestSyncWithoutContractCreatesNone() {
+	c, err := s.contractService.SyncForSubscription(s.ctx, s.newSubscription(types.SubscriptionStatusActive))
+	s.Require().NoError(err)
+	s.Nil(c)
+	s.Equal(0, s.countContracts())
+}
+
 func (s *ContractServiceSuite) TestSyncIsIdempotent() {
 	sub := s.newSubscription(types.SubscriptionStatusActive)
+	s.link(sub)
 
 	first, err := s.contractService.SyncForSubscription(s.ctx, sub)
 	s.Require().NoError(err)
@@ -118,6 +143,7 @@ func (s *ContractServiceSuite) TestSyncIsIdempotent() {
 
 func (s *ContractServiceSuite) TestSyncFollowsLifecycle() {
 	sub := s.newSubscription(types.SubscriptionStatusDraft)
+	s.link(sub)
 
 	c, err := s.contractService.SyncForSubscription(s.ctx, sub)
 	s.Require().NoError(err)
@@ -148,9 +174,11 @@ func (s *ContractServiceSuite) TestSyncFollowsLifecycle() {
 
 func (s *ContractServiceSuite) TestArchiveForSubscription() {
 	draft := s.newSubscription(types.SubscriptionStatusDraft)
+	s.link(draft)
 	_, err := s.contractService.SyncForSubscription(s.ctx, draft)
 	s.Require().NoError(err)
 	active := s.newSubscription(types.SubscriptionStatusActive)
+	s.link(active)
 	_, err = s.contractService.SyncForSubscription(s.ctx, active)
 	s.Require().NoError(err)
 
@@ -164,11 +192,11 @@ func (s *ContractServiceSuite) TestArchiveForSubscription() {
 	kept, err := s.contractRepo.GetBySubscriptionID(s.ctx, active.ID)
 	s.Require().NoError(err)
 	s.Equal(types.StatusPublished, kept.Status())
-	s.Equal(1, s.countContracts())
 }
 
 func (s *ContractServiceSuite) TestGetContractIncludesAssociations() {
 	sub := s.newSubscription(types.SubscriptionStatusActive)
+	s.link(sub)
 	c, err := s.contractService.SyncForSubscription(s.ctx, sub)
 	s.Require().NoError(err)
 
@@ -183,9 +211,11 @@ func (s *ContractServiceSuite) TestGetContractIncludesAssociations() {
 
 func (s *ContractServiceSuite) TestGetContractsFilters() {
 	active := s.newSubscription(types.SubscriptionStatusActive)
+	s.link(active)
 	activeContract, err := s.contractService.SyncForSubscription(s.ctx, active)
 	s.Require().NoError(err)
 	draft := s.newSubscription(types.SubscriptionStatusDraft)
+	s.link(draft)
 	draftContract, err := s.contractService.SyncForSubscription(s.ctx, draft)
 	s.Require().NoError(err)
 

@@ -31,18 +31,17 @@ func (Contract) Fields() []ent.Field {
 			Unique().
 			Immutable(),
 
+		// customer_id and currency are set when the contract is completed; currency never changes once set.
 		field.String("customer_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Immutable().
 			Optional(),
 
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(3)",
 			}).
-			Immutable().
 			Optional(),
 
 		field.Time("term_start").
