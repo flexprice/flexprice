@@ -127,13 +127,15 @@ period's end, as invoices bill it. A covered line's periods without a commitment
 Each period's charges stay on that period's groups, shared by the usage billing priced: a bucketed price's summed
 buckets, not a window's peak. A window commitment's lines then lay each charge on the display window it fell in, as the
 waterfall drew it (`windowPlacer`): utilized where a commitment took the line's usage, overage and plain usage where
-usage was left, and the true-up where a bucket's capacity went unused, so an idle window carries its own unused
-capacity. Buckets past the range, the rest of a projected open period, are left out of the windows and the line's
-total: the range does not owe them yet. A group keeps
+usage was left, each window's amount at the margin it bills there, and the true-up where a bucket's capacity went
+unused, so an idle window carries its own unused capacity. Buckets past the range, the rest of a projected open period,
+are left out of the windows and the line's total: the range does not owe them yet. They take the part of the true-up
+their capacity is worth priced on from the range's (`accruedAmount`), so a tiered committed price values the range's
+capacity at its first tiers, as a closed range does. A group keeps
 its share of the period, so its total does not depend on the display window; it lays its utilized and overage where its
 own usage fell and its true-up by the line's unused capacity (`placeGroupShares`). A line a charge cannot be placed for,
 or a period commitment's line, whose pool spans the period, has its charges shared over its points by usage.
-Amounts are rounded to the currency on their running total (`roundShares`), so shares sum to what was billed; quantities share by the same weights unrounded. A point belongs to the period holding
+Amounts are rounded to the currency on their running total (`roundShares`), so shares sum to what was billed; quantities share by units, unrounded. A point belongs to the period holding
 the middle of its window (`pointWindows`, with each window's real length, in UTC as the usage queries cut them), so windows cut on other edges or in another
 timezone land on the period they mostly cover. A period without a point of its own takes the first window whose middle it holds or, when
 it is shorter than a window, the window holding its own middle, reusing a point already there. A range no commitment
