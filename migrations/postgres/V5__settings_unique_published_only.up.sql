@@ -15,8 +15,19 @@
 -- the drop has to be explicit — without it both exist and the collision
 -- remains.
 
-CREATE UNIQUE INDEX IF NOT EXISTS settings_tenant_id_environment_id_key
-    ON public.settings USING btree (tenant_id, environment_id, key)
-    WHERE ((status)::text = 'published'::text);
+-- docker-compose mounts this folder into initdb.d, where Ent has not created
+-- public.settings yet. Skip until the table exists; Ent creates the new index
+-- itself, so only the drop of the old index is needed on existing databases.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'settings'
+    ) THEN
+        CREATE UNIQUE INDEX IF NOT EXISTS settings_tenant_id_environment_id_key
+            ON public.settings USING btree (tenant_id, environment_id, key)
+            WHERE ((status)::text = 'published'::text);
 
-DROP INDEX IF EXISTS settings_tenant_id_environment_id_status_key;
+        DROP INDEX IF EXISTS settings_tenant_id_environment_id_status_key;
+    END IF;
+END $$;
