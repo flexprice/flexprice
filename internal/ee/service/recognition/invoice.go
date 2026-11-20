@@ -78,11 +78,9 @@ func (r *invoiceRecognizer) Due(ctx context.Context, since, asOf time.Time) ([]s
 			continue
 		}
 		if _, ok := standalone[subID]; !ok {
-			_, err := r.contractRepo.GetBySubscriptionID(ctx, subID)
-			if err != nil && !ierr.IsNotFound(err) {
+			if standalone[subID], err = r.isStandalone(ctx, subID); err != nil {
 				return nil, err
 			}
-			standalone[subID] = ierr.IsNotFound(err)
 		}
 		if standalone[subID] {
 			ids = append(ids, inv.ID)
@@ -90,6 +88,22 @@ func (r *invoiceRecognizer) Due(ctx context.Context, since, asOf time.Time) ([]s
 	}
 	sort.Strings(ids)
 	return ids, nil
+}
+
+// isStandalone reports whether the subscription has no contract. An archived subscription is not, since its invoices
+// never post billing either.
+func (r *invoiceRecognizer) isStandalone(ctx context.Context, subscriptionID string) (bool, error) {
+	if _, err := r.timezones.subRepo.Get(ctx, subscriptionID); err != nil {
+		if ierr.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	_, err := r.contractRepo.GetBySubscriptionID(ctx, subscriptionID)
+	if ierr.IsNotFound(err) {
+		return true, nil
+	}
+	return false, err
 }
 
 // Recognize is, for each month from the month the invoice was billed, the change in its earned-to-date as Dr deferred /
