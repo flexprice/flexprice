@@ -184,7 +184,7 @@ func (s *checkoutSessionService) GetByPaymentID(ctx context.Context, paymentID s
 	return dto.ToCheckoutSessionResponse(session), nil
 }
 
-func (s *checkoutSessionService) GetAndReconcile(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error) {
+func (s *checkoutSessionService) GetAndReconcile(ctx context.Context, id string, expand types.Expand) (*dto.CheckoutSessionResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("id is required").
 			WithHint("checkout session ID cannot be empty").
@@ -206,7 +206,49 @@ func (s *checkoutSessionService) GetAndReconcile(ctx context.Context, id string)
 		}
 	}
 
-	return s.toPollableResponse(ctx, session, reconciled.stale), nil
+	resp := s.toPollableResponse(ctx, session, reconciled.stale)
+	if err := s.expandCheckoutSessions(ctx, []*dto.CheckoutSessionResponse{resp}, expand); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// expandCheckoutSessions attaches the sessions' invoices and payments, one query per expanded field.
+func (s *checkoutSessionService) expandCheckoutSessions(ctx context.Context, sessions []*dto.CheckoutSessionResponse, expand types.Expand) error {
+	invoiceIDs := lo.Uniq(lo.FilterMap(sessions, func(r *dto.CheckoutSessionResponse, _ int) (string, bool) {
+		return lo.FromPtr(r.CheckoutInvoiceID), r.CheckoutInvoiceID != nil
+	}))
+	if expand.Has(types.ExpandInvoice) && len(invoiceIDs) > 0 {
+		invoices, err := NewInvoiceService(s.ServiceParams).ListInvoices(ctx, &types.InvoiceFilter{
+			QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(len(invoiceIDs))},
+			InvoiceIDs:  invoiceIDs,
+		})
+		if err != nil {
+			return err
+		}
+		byID := lo.KeyBy(invoices.Items, func(inv *dto.InvoiceResponse) string { return inv.ID })
+		for _, r := range sessions {
+			r.CheckoutInvoice = byID[lo.FromPtr(r.CheckoutInvoiceID)]
+		}
+	}
+
+	paymentIDs := lo.Uniq(lo.FilterMap(sessions, func(r *dto.CheckoutSessionResponse, _ int) (string, bool) {
+		return lo.FromPtr(r.CheckoutPaymentID), r.CheckoutPaymentID != nil
+	}))
+	if expand.Has(types.ExpandPayment) && len(paymentIDs) > 0 {
+		payments, err := NewPaymentService(s.ServiceParams).ListPayments(ctx, &types.PaymentFilter{
+			QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(len(paymentIDs))},
+			PaymentIDs:  paymentIDs,
+		})
+		if err != nil {
+			return err
+		}
+		byID := lo.KeyBy(payments.Items, func(p *dto.PaymentResponse) string { return p.ID })
+		for _, r := range sessions {
+			r.CheckoutPayment = byID[lo.FromPtr(r.CheckoutPaymentID)]
+		}
+	}
+	return nil
 }
 
 // toPollableResponse adds the fields a client needs to poll: whether the session is
@@ -275,6 +317,9 @@ func (s *checkoutSessionService) List(ctx context.Context, filter *types.Checkou
 	items := make([]*dto.CheckoutSessionResponse, len(sessions))
 	for i, sess := range sessions {
 		items[i] = dto.ToCheckoutSessionResponse(sess)
+	}
+	if err := s.expandCheckoutSessions(ctx, items, filter.GetExpand()); err != nil {
+		return nil, err
 	}
 
 	result := types.NewListResponse(items, count, filter.GetLimit(), filter.GetOffset())

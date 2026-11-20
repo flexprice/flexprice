@@ -1907,8 +1907,14 @@ definitions:
         type: string
       cancelled_at:
         type: string
+      checkout_invoice:
+        allOf:
+        - $ref: '#/definitions/InvoiceResponse'
+        description: CheckoutInvoice and CheckoutPayment are returned only when expanded.
       checkout_invoice_id:
         type: string
+      checkout_payment:
+        $ref: '#/definitions/PaymentResponse'
       checkout_payment_id:
         type: string
       checkout_status:
@@ -6677,6 +6683,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListCheckoutSessionsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/CheckoutSessionResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListCostsheetResponse:
     properties:
       items:
@@ -6989,6 +7004,39 @@ definitions:
       subscription:
         $ref: '#/definitions/SubscriptionResponse'
     type: object
+  PaymentAttemptCard:
+    properties:
+      issuer:
+        type: string
+      last4:
+        type: string
+      network:
+        type: string
+      type:
+        type: string
+    type: object
+  PaymentAttemptError:
+    properties:
+      code:
+        type: string
+      reason:
+        type: string
+      source:
+        type: string
+      step:
+        type: string
+    type: object
+  PaymentAttemptMethod:
+    properties:
+      bank:
+        type: string
+      card:
+        $ref: '#/definitions/PaymentAttemptCard'
+      type:
+        type: string
+      wallet:
+        type: string
+    type: object
   PaymentAttemptResponse:
     properties:
       attempt_number:
@@ -6997,16 +7045,20 @@ definitions:
         type: string
       created_by:
         type: string
+      error:
+        $ref: '#/definitions/PaymentAttemptError'
       error_message:
         type: string
       gateway_attempt_id:
         type: string
       id:
         type: string
-      metadata:
-        $ref: '#/definitions/types.Metadata'
       payment_id:
         type: string
+      payment_method:
+        $ref: '#/definitions/PaymentAttemptMethod'
+      payment_status:
+        $ref: '#/definitions/types.PaymentStatus'
       tenant_id:
         type: string
       updated_at:
@@ -16134,6 +16186,7 @@ definitions:
     - payment.updated
     - payment.failed
     - payment.attempt.failed
+    - payment.attempt.succeeded
     - payment.success
     - payment.pending
     - refund.created
@@ -16215,6 +16268,7 @@ definitions:
     - WebhookEventPaymentUpdated
     - WebhookEventPaymentFailed
     - WebhookEventPaymentAttemptFailed
+    - WebhookEventPaymentAttemptSucceeded
     - WebhookEventPaymentSuccess
     - WebhookEventPaymentPending
     - WebhookEventRefundCreated
@@ -17113,6 +17167,64 @@ definitions:
       updated_by:
         type: string
     type: object
+  types.CheckoutConfigurationFilter:
+    properties:
+      subscription_id:
+        type: string
+      wallet_id:
+        type: string
+    type: object
+  types.CheckoutSessionFilter:
+    properties:
+      actions:
+        items:
+          $ref: '#/definitions/types.CheckoutAction'
+        type: array
+      checkout_invoice_ids:
+        items:
+          type: string
+        type: array
+      checkout_payment_ids:
+        items:
+          type: string
+        type: array
+      checkout_statuses:
+        items:
+          $ref: '#/definitions/types.CheckoutStatus'
+        type: array
+      configuration:
+        $ref: '#/definitions/types.CheckoutConfigurationFilter'
+      customer_ids:
+        items:
+          type: string
+        type: array
+      expand:
+        type: string
+      expires_at_gt:
+        type: string
+      expires_at_lt:
+        type: string
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      payment_providers:
+        items:
+          $ref: '#/definitions/types.CheckoutPaymentProvider'
+        type: array
+      sort:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -17706,6 +17818,8 @@ definitions:
         type: integer
       created_at:
         type: string
+      error:
+        $ref: '#/definitions/PaymentAttemptError'
       error_message:
         type: string
       gateway_attempt_id:
@@ -17714,6 +17828,10 @@ definitions:
         type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
+      payment_method:
+        $ref: '#/definitions/PaymentAttemptMethod'
+      payment_status:
+        $ref: '#/definitions/types.PaymentStatus'
     type: object
   webhookDto.PaymentAttemptWebhookPayload:
     properties:
@@ -19513,6 +19631,10 @@ paths:
         name: id
         required: true
         type: string
+      - description: 'Comma-separated fields to expand: invoice, payment'
+        in: query
+        name: expand
+        type: string
       produces:
       - application/json
       responses:
@@ -19520,6 +19642,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/CheckoutSessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
         "404":
           description: Not Found
           schema:
@@ -19566,6 +19692,41 @@ paths:
       summary: Cancel checkout session
       tags:
       - Checkout
+  /checkout/sessions/search:
+    post:
+      consumes:
+      - application/json
+      description: Use when listing checkout sessions, e.g. a customer's sessions
+        with their invoice, payment and attempts. Set expand to "invoice,payment".
+      operationId: queryCheckoutSession
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.CheckoutSessionFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListCheckoutSessionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query checkout sessions
+      tags:
+      - Checkout
+      x-scope: read
   /commitments:
     post:
       consumes:
@@ -29465,6 +29626,21 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.PaymentAttemptWebhookPayload'
       summary: payment.attempt.failed
+      tags:
+      - Payment and refund
+  /webhook-events/payment.attempt.succeeded:
+    post:
+      consumes:
+      - application/json
+      description: Fired when one charge attempt succeeds. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.PaymentAttemptWebhookPayload'
+      summary: payment.attempt.succeeded
       tags:
       - Payment and refund
   /webhook-events/payment.created:

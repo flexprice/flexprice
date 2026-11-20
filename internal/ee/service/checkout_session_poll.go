@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -102,6 +103,22 @@ func (s *checkoutSessionService) refreshSessionFromGateway(
 		// No handles recorded, or this provider has no read API: the session was not
 		// checked against the gateway, so the answer is stored state.
 		return reconcileResult{stale: true}
+	}
+
+	failedIDs := state.FailedGatewayPaymentIDs
+	if state.Status == types.PaymentStatusFailed && state.GatewayPaymentID != "" {
+		failedIDs = append(failedIDs, state.GatewayPaymentID)
+	}
+	for _, id := range failedIDs {
+		if err := NewPaymentService(s.ServiceParams).RecordAttempt(ctx, *session.CheckoutPaymentID, dto.RecordAttemptRequest{
+			PaymentStatus:    types.PaymentStatusFailed,
+			GatewayAttemptID: id,
+		}); err != nil {
+			s.Logger.Error(ctx, "failed to record polled failed attempt",
+				"error", err,
+				"session_id", session.ID,
+				"gateway_attempt_id", id)
+		}
 	}
 
 	// Success transitions only. A declined payment is deliberately left PENDING — the

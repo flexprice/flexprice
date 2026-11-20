@@ -2070,6 +2070,65 @@
         }
       }
     },
+    "payment.attempt.succeeded": {
+      "post": {
+        "tags": [
+          "Payment and refund"
+        ],
+        "summary": "payment.attempt.succeeded",
+        "description": "Fired when one charge attempt succeeds.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SvixId"
+          },
+          {
+            "$ref": "#/components/parameters/SvixTimestamp"
+          },
+          {
+            "$ref": "#/components/parameters/SvixSignature"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attempt": {
+                    "$ref": "#/components/schemas/webhookDto.PaymentAttempt"
+                  },
+                  "checkout_session": {
+                    "$ref": "#/components/schemas/webhookDto.CheckoutSession"
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "payment.attempt.succeeded"
+                    ]
+                  },
+                  "payment": {
+                    "$ref": "#/components/schemas/webhookDto.Payment"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Return any 2xx status to acknowledge receipt."
+          }
+        },
+        "x-mint": {
+          "metadata": {
+            "title": "Payment attempt succeeded",
+            "sidebarTitle": "payment.attempt.succeeded"
+          },
+          "href": "/api-reference/webhook-events/paymentattemptsucceeded"
+        }
+      }
+    },
     "payment.created": {
       "post": {
         "tags": [
@@ -4679,6 +4738,57 @@
           }
         }
       },
+      "PaymentAttemptCard": {
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string"
+          },
+          "last4": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "PaymentAttemptError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          }
+        }
+      },
+      "PaymentAttemptMethod": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "type": "string"
+          },
+          "card": {
+            "$ref": "#/components/schemas/PaymentAttemptCard"
+          },
+          "type": {
+            "type": "string"
+          },
+          "wallet": {
+            "type": "string"
+          }
+        }
+      },
       "TaxExemptionSummary": {
         "type": "object",
         "properties": {
@@ -7030,6 +7140,9 @@
             "type": "string",
             "format": "date-time"
           },
+          "error": {
+            "$ref": "#/components/schemas/PaymentAttemptError"
+          },
           "error_message": {
             "type": "string"
           },
@@ -7041,6 +7154,12 @@
           },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentAttemptMethod"
+          },
+          "payment_status": {
+            "$ref": "#/components/schemas/types.PaymentStatus"
           }
         }
       },

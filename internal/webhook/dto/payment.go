@@ -65,12 +65,15 @@ func NewPaymentWebhookPayload(payment *dto.PaymentResponse, eventType types.Webh
 }
 
 type PaymentAttempt struct {
-	ID               string         `json:"id"`
-	AttemptNumber    int            `json:"attempt_number"`
-	GatewayAttemptID *string        `json:"gateway_attempt_id,omitempty"`
-	ErrorMessage     *string        `json:"error_message,omitempty"`
-	Metadata         types.Metadata `json:"metadata,omitempty"`
-	CreatedAt        time.Time      `json:"created_at"`
+	ID               string                    `json:"id"`
+	PaymentStatus    types.PaymentStatus       `json:"payment_status"`
+	AttemptNumber    int                       `json:"attempt_number"`
+	GatewayAttemptID *string                   `json:"gateway_attempt_id,omitempty"`
+	ErrorMessage     *string                   `json:"error_message,omitempty"`
+	Metadata         types.Metadata            `json:"metadata,omitempty"`
+	PaymentMethod    *dto.PaymentAttemptMethod `json:"payment_method,omitempty"`
+	Error            *dto.PaymentAttemptError  `json:"error,omitempty"`
+	CreatedAt        time.Time                 `json:"created_at"`
 }
 
 func NewPaymentAttempt(resp *dto.PaymentAttemptResponse) *PaymentAttempt {
@@ -79,10 +82,13 @@ func NewPaymentAttempt(resp *dto.PaymentAttemptResponse) *PaymentAttempt {
 	}
 	return &PaymentAttempt{
 		ID:               resp.ID,
+		PaymentStatus:    resp.PaymentStatus,
 		AttemptNumber:    resp.AttemptNumber,
 		GatewayAttemptID: resp.GatewayAttemptID,
 		ErrorMessage:     resp.ErrorMessage,
 		Metadata:         resp.Metadata,
+		PaymentMethod:    resp.PaymentMethod,
+		Error:            resp.Error,
 		CreatedAt:        resp.CreatedAt,
 	}
 }

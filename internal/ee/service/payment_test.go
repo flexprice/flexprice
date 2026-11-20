@@ -2,6 +2,8 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
+	"sort"
 	"sync"
 	"testing"
 
@@ -345,6 +347,7 @@ func (s *PaymentServiceSuite) TestGatewayPaymentStatus_ReconcilesCheckoutAndStan
 					PaymentStatus: status, Amount: inv.AmountDue, Currency: inv.Currency,
 					PaymentGateway:    lo.ToPtr(string(types.PaymentGatewayTypeRazorpay)),
 					GatewayTrackingID: lo.ToPtr("plink_checkout"),
+					TrackAttempts:     true,
 					BaseModel:         types.GetDefaultBaseModel(ctx),
 				}
 				if checkout {
@@ -360,6 +363,11 @@ func (s *PaymentServiceSuite) TestGatewayPaymentStatus_ReconcilesCheckoutAndStan
 				stored, err := s.GetStores().PaymentRepo.Get(ctx, p.ID)
 				s.Require().NoError(err)
 				s.Equal(types.PaymentStatusSucceeded, stored.PaymentStatus)
+				attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, p.ID)
+				s.Require().NoError(err)
+				s.Require().Len(attempts, 1)
+				s.Equal(types.PaymentStatusSucceeded, attempts[0].PaymentStatus)
+				s.Equal("pay_captured", lo.FromPtr(attempts[0].GatewayAttemptID))
 				after, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
 				s.Require().NoError(err)
 				s.Equal(inv.InvoiceStatus, after.InvoiceStatus)
@@ -1078,7 +1086,7 @@ func (s *PaymentServiceSuite) TestRecordAttempt_FailedPublishesAttemptFailed() {
 		PaymentStatus:    types.PaymentStatusFailed,
 		ErrorMessage:     "card declined",
 		GatewayAttemptID: "pay_rzp_001",
-		Metadata:         types.Metadata{"error_reason": "incorrect_card_details"},
+		Details:          &dto.PaymentAttemptDetails{Error: &dto.PaymentAttemptError{Reason: "incorrect_card_details"}},
 	}
 	s.NoError(s.service.RecordAttempt(ctx, p.ID, req))
 
@@ -1094,7 +1102,180 @@ func (s *PaymentServiceSuite) TestRecordAttempt_FailedPublishesAttemptFailed() {
 	s.NoError(err)
 	s.Equal(1, stored.AttemptNumber)
 	s.Equal("pay_rzp_001", lo.FromPtr(stored.GatewayAttemptID))
-	s.Equal("incorrect_card_details", stored.Metadata["error_reason"])
+	s.Equal("incorrect_card_details", dto.NewPaymentAttemptDetails(stored.Metadata).Error.Reason)
+}
+
+func (s *PaymentServiceSuite) TestRecordAttempt_DedupesByGatewayAttemptID() {
+	tests := []struct {
+		name          string
+		trackAttempts bool
+		requests      []dto.RecordAttemptRequest
+		wantStatuses  []types.PaymentStatus
+	}{
+		{
+			name:          "new attempt",
+			trackAttempts: true,
+			requests:      []dto.RecordAttemptRequest{{PaymentStatus: types.PaymentStatusFailed, GatewayAttemptID: "pay_a"}},
+			wantStatuses:  []types.PaymentStatus{types.PaymentStatusFailed},
+		},
+		{
+			name:          "duplicate is a no-op",
+			trackAttempts: true,
+			requests: []dto.RecordAttemptRequest{
+				{PaymentStatus: types.PaymentStatusFailed, GatewayAttemptID: "pay_a"},
+				{PaymentStatus: types.PaymentStatusFailed, GatewayAttemptID: "pay_a"},
+			},
+			wantStatuses: []types.PaymentStatus{types.PaymentStatusFailed},
+		},
+		{
+			name:          "status change updates the attempt",
+			trackAttempts: true,
+			requests: []dto.RecordAttemptRequest{
+				{PaymentStatus: types.PaymentStatusFailed, GatewayAttemptID: "pay_a"},
+				{PaymentStatus: types.PaymentStatusSucceeded, GatewayAttemptID: "pay_a"},
+			},
+			wantStatuses: []types.PaymentStatus{types.PaymentStatusSucceeded},
+		},
+		{
+			name:          "distinct gateway ids add attempts",
+			trackAttempts: true,
+			requests: []dto.RecordAttemptRequest{
+				{PaymentStatus: types.PaymentStatusFailed, GatewayAttemptID: "pay_a"},
+				{PaymentStatus: types.PaymentStatusSucceeded, GatewayAttemptID: "pay_b"},
+			},
+			wantStatuses: []types.PaymentStatus{types.PaymentStatusFailed, types.PaymentStatusSucceeded},
+		},
+		{
+			name:          "attempts without gateway id are not deduped",
+			trackAttempts: true,
+			requests: []dto.RecordAttemptRequest{
+				{PaymentStatus: types.PaymentStatusFailed},
+				{PaymentStatus: types.PaymentStatusFailed},
+			},
+			wantStatuses: []types.PaymentStatus{types.PaymentStatusFailed, types.PaymentStatusFailed},
+		},
+		{
+			name:          "track_attempts off records nothing",
+			trackAttempts: false,
+			requests:      []dto.RecordAttemptRequest{{PaymentStatus: types.PaymentStatusFailed, GatewayAttemptID: "pay_a"}},
+			wantStatuses:  []types.PaymentStatus{},
+		},
+	}
+
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			p := &payment.Payment{
+				ID:                fmt.Sprintf("pay_dedup_%d", i),
+				DestinationType:   types.PaymentDestinationTypeInvoice,
+				DestinationID:     s.testData.invoice.ID,
+				PaymentMethodType: types.PaymentMethodTypePaymentLink,
+				PaymentStatus:     types.PaymentStatusPending,
+				TrackAttempts:     tt.trackAttempts,
+				Amount:            decimal.NewFromFloat(100),
+				Currency:          "inr",
+				BaseModel:         types.GetDefaultBaseModel(ctx),
+			}
+			s.NoError(s.GetStores().PaymentRepo.Create(ctx, p))
+
+			for _, req := range tt.requests {
+				s.NoError(s.service.RecordAttempt(ctx, p.ID, req))
+			}
+
+			attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, p.ID)
+			s.NoError(err)
+			sort.Slice(attempts, func(a, b int) bool { return attempts[a].AttemptNumber < attempts[b].AttemptNumber })
+			s.Equal(tt.wantStatuses, lo.Map(attempts, func(a *payment.PaymentAttempt, _ int) types.PaymentStatus { return a.PaymentStatus }))
+			s.Equal(lo.RangeFrom(1, len(attempts)), lo.Map(attempts, func(a *payment.PaymentAttempt, _ int) int { return a.AttemptNumber }))
+		})
+	}
+}
+
+func (s *PaymentServiceSuite) TestRecordAttempt_PublishesAttemptEventPerStatus() {
+	ctx := s.GetContext()
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	p := &payment.Payment{
+		ID:                "pay_attempt_events",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentStatus:     types.PaymentStatusPending,
+		TrackAttempts:     true,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "inr",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PaymentRepo.Create(ctx, p))
+	publisher.Reset()
+
+	s.NoError(s.service.RecordAttempt(ctx, p.ID, dto.RecordAttemptRequest{PaymentStatus: types.PaymentStatusFailed, GatewayAttemptID: "pay_a"}))
+	s.NoError(s.service.RecordAttempt(ctx, p.ID, dto.RecordAttemptRequest{PaymentStatus: types.PaymentStatusSucceeded, GatewayAttemptID: "pay_a"}))
+	s.NoError(s.service.RecordAttempt(ctx, p.ID, dto.RecordAttemptRequest{PaymentStatus: types.PaymentStatusSucceeded, GatewayAttemptID: "pay_a"}))
+	s.NoError(s.service.RecordAttempt(ctx, p.ID, dto.RecordAttemptRequest{PaymentStatus: types.PaymentStatusSucceeded, GatewayAttemptID: "pay_b"}))
+
+	s.Equal([]types.WebhookEventName{
+		types.WebhookEventPaymentAttemptFailed,
+		types.WebhookEventPaymentAttemptSucceeded,
+		types.WebhookEventPaymentAttemptSucceeded,
+	}, lo.Map(publisher.Events(), func(e *types.WebhookEvent, _ int) types.WebhookEventName { return e.EventName }))
+}
+
+func (s *PaymentServiceSuite) TestRecordAttempt_SavesAttemptDetails() {
+	gatewayDetails := &dto.PaymentAttemptDetails{
+		PaymentMethod: &dto.PaymentAttemptMethod{Type: "card", Card: &dto.PaymentAttemptCard{Network: "Visa", Last4: "1111"}},
+		Error:         &dto.PaymentAttemptError{Code: "BAD_REQUEST_ERROR", Reason: "from_gateway"},
+	}
+	callerDetails := &dto.PaymentAttemptDetails{Error: &dto.PaymentAttemptError{Reason: "from_webhook"}}
+
+	tests := []struct {
+		name    string
+		gateway *dto.PaymentAttemptDetails
+		want    *dto.PaymentAttemptDetails
+	}{
+		{name: "gateway details win", gateway: gatewayDetails, want: gatewayDetails},
+		{name: "caller details when the gateway can't say", want: callerDetails},
+	}
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.GetIntegrationFactory().SetPaymentMethodProvider(&stubPaymentMethodProvider{attemptDetails: tt.gateway})
+			p := &payment.Payment{
+				ID:                fmt.Sprintf("pay_attempt_details_%d", i),
+				DestinationType:   types.PaymentDestinationTypeInvoice,
+				DestinationID:     s.testData.invoice.ID,
+				PaymentMethodType: types.PaymentMethodTypePaymentLink,
+				PaymentStatus:     types.PaymentStatusPending,
+				PaymentGateway:    lo.ToPtr(string(types.PaymentGatewayTypeRazorpay)),
+				TrackAttempts:     true,
+				Amount:            decimal.NewFromFloat(100),
+				Currency:          "inr",
+				BaseModel:         types.GetDefaultBaseModel(ctx),
+			}
+			s.NoError(s.GetStores().PaymentRepo.Create(ctx, p))
+
+			svc := s.service.(*paymentService)
+			svc.IntegrationFactory = s.GetIntegrationFactory()
+			s.NoError(svc.RecordAttempt(ctx, p.ID, dto.RecordAttemptRequest{
+				PaymentStatus:    types.PaymentStatusFailed,
+				GatewayAttemptID: "pay_rzp_details",
+				Metadata:         types.Metadata{"error_reason": "from_webhook"},
+				Details:          callerDetails,
+			}))
+
+			attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, p.ID)
+			s.NoError(err)
+			s.Require().Len(attempts, 1)
+			s.Equal(tt.want, dto.NewPaymentAttemptDetails(attempts[0].Metadata))
+			resp := dto.NewPaymentAttemptResponse(attempts[0])
+			s.Equal(tt.want.PaymentMethod, resp.PaymentMethod)
+			s.Equal(tt.want.Error, resp.Error)
+			s.Equal(types.Metadata{"error_reason": "from_webhook"}, resp.Metadata)
+			raw, err := json.Marshal(resp)
+			s.NoError(err)
+			s.NotContains(string(raw), "metadata")
+			s.Equal(types.Metadata{"error_reason": "from_webhook"}, webhookDto.NewPaymentAttempt(resp).Metadata)
+		})
+	}
 }
 
 // TestPaymentEvents_PublishedPerPath pins the exact payment webhook sequence of each path.

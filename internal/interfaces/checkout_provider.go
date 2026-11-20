@@ -76,7 +76,8 @@ type PaymentState struct {
 	// transition" — not a failure.
 	Status types.PaymentStatus
 	// GatewayPaymentID is the provider's payment id, empty before anyone has paid.
-	GatewayPaymentID string
+	GatewayPaymentID        string
+	FailedGatewayPaymentIDs []string
 }
 
 // CheckoutProviderRequest is the unified input for all checkout provider adapters.

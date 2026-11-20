@@ -2220,6 +2220,66 @@
         "x-codegen-request-body-name": "session"
       }
     },
+    "/checkout/sessions/search": {
+      "post": {
+        "tags": [
+          "Checkout"
+        ],
+        "summary": "Query checkout sessions",
+        "description": "Use when listing checkout sessions, e.g. a customer's sessions with their invoice, payment and attempts. Set expand to \"invoice,payment\".",
+        "operationId": "queryCheckoutSession",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/types.CheckoutSessionFilter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCheckoutSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
     "/checkout/sessions/{id}": {
       "get": {
         "tags": [
@@ -2236,6 +2296,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "description": "Comma-separated fields to expand: invoice, payment",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2245,6 +2313,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CheckoutSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
                 }
               }
             }
@@ -21934,8 +22012,14 @@
             "type": "string",
             "format": "date-time"
           },
+          "checkout_invoice": {
+            "$ref": "#/components/schemas/InvoiceResponse"
+          },
           "checkout_invoice_id": {
             "type": "string"
+          },
+          "checkout_payment": {
+            "$ref": "#/components/schemas/PaymentResponse"
           },
           "checkout_payment_id": {
             "type": "string"
@@ -28102,6 +28186,20 @@
           }
         }
       },
+      "ListCheckoutSessionsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckoutSessionResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListCostsheetResponse": {
         "type": "object",
         "properties": {
@@ -28537,6 +28635,57 @@
         },
         "description": "The paused subscription and its pause"
       },
+      "PaymentAttemptCard": {
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string"
+          },
+          "last4": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "PaymentAttemptError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          }
+        }
+      },
+      "PaymentAttemptMethod": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "type": "string"
+          },
+          "card": {
+            "$ref": "#/components/schemas/PaymentAttemptCard"
+          },
+          "type": {
+            "type": "string"
+          },
+          "wallet": {
+            "type": "string"
+          }
+        }
+      },
       "PaymentAttemptResponse": {
         "type": "object",
         "properties": {
@@ -28550,6 +28699,9 @@
           "created_by": {
             "type": "string"
           },
+          "error": {
+            "$ref": "#/components/schemas/PaymentAttemptError"
+          },
           "error_message": {
             "type": "string"
           },
@@ -28559,11 +28711,14 @@
           "id": {
             "type": "string"
           },
-          "metadata": {
-            "$ref": "#/components/schemas/types.Metadata"
-          },
           "payment_id": {
             "type": "string"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentAttemptMethod"
+          },
+          "payment_status": {
+            "$ref": "#/components/schemas/types.PaymentStatus"
           },
           "tenant_id": {
             "type": "string"
@@ -40873,6 +41028,7 @@
           "payment.updated",
           "payment.failed",
           "payment.attempt.failed",
+          "payment.attempt.succeeded",
           "payment.success",
           "payment.pending",
           "refund.created",
@@ -40954,6 +41110,7 @@
           "WebhookEventPaymentUpdated",
           "WebhookEventPaymentFailed",
           "WebhookEventPaymentAttemptFailed",
+          "WebhookEventPaymentAttemptSucceeded",
           "WebhookEventPaymentSuccess",
           "WebhookEventPaymentPending",
           "WebhookEventRefundCreated",
@@ -42124,6 +42281,94 @@
           }
         }
       },
+      "types.CheckoutConfigurationFilter": {
+        "type": "object",
+        "properties": {
+          "subscription_id": {
+            "type": "string"
+          },
+          "wallet_id": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "CheckoutConfigurationFilter"
+      },
+      "types.CheckoutSessionFilter": {
+        "type": "object",
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CheckoutAction"
+            }
+          },
+          "checkout_invoice_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "checkout_payment_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "checkout_statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CheckoutStatus"
+            }
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/types.CheckoutConfigurationFilter"
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expand": {
+            "type": "string"
+          },
+          "expires_at_gt": {
+            "type": "string"
+          },
+          "expires_at_lt": {
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "payment_providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CheckoutPaymentProvider"
+            }
+          },
+          "sort": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          }
+        },
+        "x-speakeasy-name-override": "CheckoutSessionFilter"
+      },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
         "properties": {
@@ -43059,6 +43304,9 @@
             "type": "string",
             "format": "date-time"
           },
+          "error": {
+            "$ref": "#/components/schemas/PaymentAttemptError"
+          },
           "error_message": {
             "type": "string"
           },
@@ -43070,6 +43318,12 @@
           },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentAttemptMethod"
+          },
+          "payment_status": {
+            "$ref": "#/components/schemas/types.PaymentStatus"
           }
         }
       },

@@ -1956,6 +1956,59 @@ const docTemplate = `{
                 }
             }
         },
+        "/checkout/sessions/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when listing checkout sessions, e.g. a customer's sessions with their invoice, payment and attempts. Set expand to \"invoice,payment\".",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "Query checkout sessions",
+                "operationId": "queryCheckoutSession",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.CheckoutSessionFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListCheckoutSessionsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/checkout/sessions/{id}": {
             "get": {
                 "security": [
@@ -1978,6 +2031,12 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated fields to expand: invoice, payment",
+                        "name": "expand",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1985,6 +2044,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/CheckoutSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
@@ -16824,6 +16889,29 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/payment.attempt.succeeded": {
+            "post": {
+                "description": "Fired when one charge attempt succeeds. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payment and refund"
+                ],
+                "summary": "payment.attempt.succeeded",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.PaymentAttemptWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/payment.created": {
             "post": {
                 "description": "Fired when a new payment is created. Doc-only for parsing.",
@@ -20532,8 +20620,19 @@ const docTemplate = `{
                 "cancelled_at": {
                     "type": "string"
                 },
+                "checkout_invoice": {
+                    "description": "CheckoutInvoice and CheckoutPayment are returned only when expanded.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/InvoiceResponse"
+                        }
+                    ]
+                },
                 "checkout_invoice_id": {
                     "type": "string"
+                },
+                "checkout_payment": {
+                    "$ref": "#/definitions/PaymentResponse"
                 },
                 "checkout_payment_id": {
                     "type": "string"
@@ -27006,6 +27105,20 @@ const docTemplate = `{
                 }
             }
         },
+        "ListCheckoutSessionsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CheckoutSessionResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "ListCostsheetResponse": {
             "type": "object",
             "properties": {
@@ -27457,6 +27570,57 @@ const docTemplate = `{
                 }
             }
         },
+        "PaymentAttemptCard": {
+            "type": "object",
+            "properties": {
+                "issuer": {
+                    "type": "string"
+                },
+                "last4": {
+                    "type": "string"
+                },
+                "network": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "PaymentAttemptError": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "step": {
+                    "type": "string"
+                }
+            }
+        },
+        "PaymentAttemptMethod": {
+            "type": "object",
+            "properties": {
+                "bank": {
+                    "type": "string"
+                },
+                "card": {
+                    "$ref": "#/definitions/PaymentAttemptCard"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "wallet": {
+                    "type": "string"
+                }
+            }
+        },
         "PaymentAttemptResponse": {
             "type": "object",
             "properties": {
@@ -27469,6 +27633,9 @@ const docTemplate = `{
                 "created_by": {
                     "type": "string"
                 },
+                "error": {
+                    "$ref": "#/definitions/PaymentAttemptError"
+                },
                 "error_message": {
                     "type": "string"
                 },
@@ -27478,11 +27645,14 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "metadata": {
-                    "$ref": "#/definitions/types.Metadata"
-                },
                 "payment_id": {
                     "type": "string"
+                },
+                "payment_method": {
+                    "$ref": "#/definitions/PaymentAttemptMethod"
+                },
+                "payment_status": {
+                    "$ref": "#/definitions/types.PaymentStatus"
                 },
                 "tenant_id": {
                     "type": "string"
@@ -39961,6 +40131,7 @@ const docTemplate = `{
                 "payment.updated",
                 "payment.failed",
                 "payment.attempt.failed",
+                "payment.attempt.succeeded",
                 "payment.success",
                 "payment.pending",
                 "refund.created",
@@ -40042,6 +40213,7 @@ const docTemplate = `{
                 "WebhookEventPaymentUpdated",
                 "WebhookEventPaymentFailed",
                 "WebhookEventPaymentAttemptFailed",
+                "WebhookEventPaymentAttemptSucceeded",
                 "WebhookEventPaymentSuccess",
                 "WebhookEventPaymentPending",
                 "WebhookEventRefundCreated",
@@ -41233,6 +41405,92 @@ const docTemplate = `{
                 }
             }
         },
+        "types.CheckoutConfigurationFilter": {
+            "type": "object",
+            "properties": {
+                "subscription_id": {
+                    "type": "string"
+                },
+                "wallet_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.CheckoutSessionFilter": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutAction"
+                    }
+                },
+                "checkout_invoice_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "checkout_payment_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "checkout_statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutStatus"
+                    }
+                },
+                "configuration": {
+                    "$ref": "#/definitions/types.CheckoutConfigurationFilter"
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "expires_at_gt": {
+                    "type": "string"
+                },
+                "expires_at_lt": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "payment_providers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutPaymentProvider"
+                    }
+                },
+                "sort": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",
             "properties": {
@@ -42138,6 +42396,9 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "error": {
+                    "$ref": "#/definitions/PaymentAttemptError"
+                },
                 "error_message": {
                     "type": "string"
                 },
@@ -42149,6 +42410,12 @@ const docTemplate = `{
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
+                },
+                "payment_method": {
+                    "$ref": "#/definitions/PaymentAttemptMethod"
+                },
+                "payment_status": {
+                    "$ref": "#/definitions/types.PaymentStatus"
                 }
             }
         },

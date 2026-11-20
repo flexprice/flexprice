@@ -342,6 +342,7 @@ func (s *PaymentLifecycleSuite) TestRecordFailedAttempt_IncrementsAttemptNumber(
 		ErrorMessage:       "insufficient funds",
 	}
 	s.NoError(s.lifecycle.RecordFailedAttempt(ctx, declineParams))
+	declineParams.GatewayPaymentID = "gw_pay_022"
 	s.NoError(s.lifecycle.RecordFailedAttempt(ctx, declineParams))
 
 	attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, id)

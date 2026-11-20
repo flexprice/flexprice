@@ -2,8 +2,11 @@ package razorpay
 
 import (
 	"context"
-	"github.com/flexprice/flexprice/internal/domain/customer"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/utils"
 
 	"github.com/flexprice/flexprice/internal/clock"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -104,4 +107,16 @@ func errMandateManagedAtCheckout() error {
 	return ierr.NewError("razorpay saved payment methods cannot be managed here").
 		WithHint("Razorpay mandates are set up at checkout").
 		Mark(ierr.ErrValidation)
+}
+
+func (a *PaymentMethodAdapter) GetAttemptDetails(ctx context.Context, razorpayPaymentID string) (*dto.PaymentAttemptDetails, error) {
+	raw, err := a.client.FetchPayment(ctx, razorpayPaymentID)
+	if err != nil {
+		return nil, err
+	}
+	entity, err := utils.ToStruct[paymentEntity](raw)
+	if err != nil {
+		return nil, err
+	}
+	return entity.toAttemptDetails(), nil
 }

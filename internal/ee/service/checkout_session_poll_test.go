@@ -618,7 +618,7 @@ func (s *CheckoutPollSuite) TestGet_ReconcilesAndReportsTerminal() {
 		GatewayPaymentID: "pay_rzp_001",
 	}
 
-	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
+	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID, types.NewExpand(""))
 	s.Require().NoError(err)
 
 	s.Equal(types.CheckoutStatusCompleted, resp.CheckoutStatus,
@@ -631,16 +631,58 @@ func (s *CheckoutPollSuite) TestGet_ReconcilesAndReportsTerminal() {
 	s.Equal(types.PaymentStatusSucceeded, resp.Payment.Status)
 }
 
+func (s *CheckoutPollSuite) TestGet_ExpandsInvoiceAndPaymentWithPolledAttempts() {
+	ctx := s.GetContext()
+	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
+	p, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+	s.Require().NoError(err)
+	p.TrackAttempts = true
+	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, p))
+	s.provider.state = &interfaces.PaymentState{
+		Status:                  types.PaymentStatusSucceeded,
+		GatewayPaymentID:        "pay_rzp_ok",
+		FailedGatewayPaymentIDs: []string{"pay_rzp_declined"},
+	}
+
+	resp, err := s.svc.GetAndReconcile(ctx, session.ID, types.NewExpand("invoice,payment"))
+	s.Require().NoError(err)
+
+	s.Require().NotNil(resp.CheckoutInvoice)
+	s.Equal(*session.CheckoutInvoiceID, resp.CheckoutInvoice.ID)
+	s.Require().NotNil(resp.CheckoutPayment)
+	s.Equal(p.ID, resp.CheckoutPayment.ID)
+	stored, err := s.GetStores().PaymentRepo.ListAttempts(ctx, p.ID)
+	s.Require().NoError(err)
+	attempts := lo.SliceToMap(stored, func(a *payment.PaymentAttempt) (string, types.PaymentStatus) {
+		return lo.FromPtr(a.GatewayAttemptID), a.PaymentStatus
+	})
+	s.Equal(map[string]types.PaymentStatus{"pay_rzp_declined": types.PaymentStatusFailed, "pay_rzp_ok": types.PaymentStatusSucceeded}, attempts)
+
+	plain, err := s.svc.GetAndReconcile(ctx, session.ID, types.NewExpand(""))
+	s.Require().NoError(err)
+	s.Nil(plain.CheckoutInvoice)
+	s.Nil(plain.CheckoutPayment)
+
+	listed, err := s.svc.List(ctx, &types.CheckoutSessionFilter{
+		QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(10), Offset: lo.ToPtr(0), Expand: lo.ToPtr("invoice,payment")},
+		CustomerIDs: []string{session.CustomerID},
+	})
+	s.Require().NoError(err)
+	s.Require().Len(listed.Items, 1)
+	s.Equal(*session.CheckoutInvoiceID, listed.Items[0].CheckoutInvoice.ID)
+	s.Equal(p.ID, listed.Items[0].CheckoutPayment.ID)
+}
+
 // A read that could not be checked against the gateway must say so, and must keep
 // telling the client when to come back.
 func (s *CheckoutPollSuite) TestGet_DebouncedReadIsStaleAndKeepsPolling() {
 	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
 	s.provider.state = &interfaces.PaymentState{Status: types.PaymentStatusPending}
 
-	_, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
+	_, err := s.svc.GetAndReconcile(s.GetContext(), session.ID, types.NewExpand(""))
 	s.Require().NoError(err)
 
-	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
+	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID, types.NewExpand(""))
 	s.Require().NoError(err)
 
 	s.True(resp.Stale)
@@ -654,7 +696,7 @@ func (s *CheckoutPollSuite) TestGet_SurvivesGatewayOutage() {
 	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
 	s.provider.err = ierr.NewError("razorpay unavailable").Mark(ierr.ErrHTTPClient)
 
-	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
+	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID, types.NewExpand(""))
 
 	s.Require().NoError(err, "the read must not fail because the gateway did")
 	s.True(resp.Stale)
